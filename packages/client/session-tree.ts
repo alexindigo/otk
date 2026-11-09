@@ -53,10 +53,12 @@ export function sessionTree<T extends SessionStructure>(
   tasks: readonly TaskRecord[],
   directory: string,
   query = "",
+  directories: readonly string[] = [directory],
 ): SessionTreeGroup<T>[] {
-  const sessions = entries.filter((e) => e.directory === directory);
+  const scopes = new Set(directories);
+  const sessions = entries.filter((e) => scopes.has(e.directory));
   const byID = new Map(sessions.map((e) => [e.id, e]));
-  const ordered = tasks.filter((t) => t.directory === directory)
+  const ordered = tasks.filter((t) => scopes.has(t.directory))
     .sort((a, b) => a.order - b.order);
   const explicit = new Map<string, string>();
   for (const task of ordered) {
@@ -148,13 +150,16 @@ export function createSessionTree(): {
     tasks: readonly TaskRecord[],
     directory: string,
     query?: string,
+    directories?: readonly string[],
   ): SessionListRow[];
 } {
   let previousEntries: readonly SessionStructure[] | undefined;
   let previousTasks: readonly TaskRecord[] | undefined;
   let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
+  let previousScopes = "";
   return {
-    rows(entries, tasks, directory, query = "") {
+    rows(entries, tasks, directory, query = "", directories = [directory]) {
+      const scopes = JSON.stringify(directories);
       const needle = query.trim().toLocaleLowerCase();
       const sameEntries = entries === previousEntries ||
         (!!previousEntries && entries.length === previousEntries.length &&
@@ -177,13 +182,14 @@ export function createSessionTree(): {
           }));
       if (
         sameEntries && sameTasks && directory === previousDirectory &&
-        needle === previousQuery
+        needle === previousQuery && scopes === previousScopes
       ) return result;
       previousEntries = entries;
       previousTasks = tasks;
       previousDirectory = directory;
       previousQuery = needle;
-      const groups = sessionTree(entries, tasks, directory, query);
+      previousScopes = scopes;
+      const groups = sessionTree(entries, tasks, directory, query, directories);
       const size = groups.reduce((sum, group) => sum + group.rows.length, 0);
       let position = 0;
       result = groups.flatMap(

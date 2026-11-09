@@ -291,11 +291,14 @@ export function createSessionLists(
       list.visible = keys;
       advance(list);
     },
-    activate(input: SessionListInput) {
+    activate(input: SessionListInput | readonly SessionListInput[]) {
+      const inputs = Array.isArray(input) ? input : [input as SessionListInput];
       for (const list of lists.values()) {
         if (
-          list.input.directory === input.directory &&
-          (list.input.query ?? "") === (input.query ?? "")
+          inputs.some((scope) =>
+            list.input.directory === scope.directory &&
+            (list.input.query ?? "") === (scope.query ?? "")
+          )
         ) continue;
         list.active = false;
         progress.reset(sessionListKey(list.input));

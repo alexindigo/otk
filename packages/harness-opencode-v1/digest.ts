@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { runningDirectories } from "./db-hints.ts";
-import { projectFileMatches, projectSeeds } from "./project-seeds.ts";
+import {
+  projectFileMatches,
+  projectSeeds,
+  projectTopologyAt,
+} from "./project-seeds.ts";
 import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { HistoryReader } from "./history.ts";
@@ -769,7 +773,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (!native) return { projects };
     try {
       const reported = await this.#client.json<
-        { id: string; worktree: string }[]
+        import("./project-seeds.ts").NativeProjectRoot[]
       >("/project", { signal });
       if (!projectFileMatches(native.db, reported)) return { projects };
       this.#projectVerified = true;
@@ -785,6 +789,7 @@ export class OpencodeV1DigestSink implements DigestSink {
           after,
           this.policy.batch,
           directory,
+          reported,
         );
         if (!page.length) break;
         projects.push(...page);
@@ -797,6 +802,33 @@ export class OpencodeV1DigestSink implements DigestSink {
         after = page.at(-1)!.directory;
         await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
       }
+      if (directory === undefined) {
+        const known = new Set(projects.map((seed) => seed.directory));
+        for (const project of reported) {
+          if (project.id === "global" || project.worktree === "/") continue;
+          for (const root of [project.worktree, ...project.sandboxes ?? []]) {
+            if (known.has(root)) continue;
+            known.add(root);
+            const empty: import("@otk/harness").ProjectSeed = {
+              directory: root,
+              hasSessions: false,
+              sessionCount: 0,
+              lastActivity: null,
+              authority: "current",
+              topology: {
+                repoID: project.id,
+                canonicalRoot: project.worktree,
+                leafDirectory: root,
+                ...(root !== project.worktree
+                  ? { parentDirectory: project.worktree }
+                  : {}),
+              },
+            };
+            projects.push(empty);
+            await publish?.([empty]);
+          }
+        }
+      }
       if (directory !== undefined && !projects.length) {
         const empty: import("@otk/harness").ProjectSeed = {
           directory,
@@ -804,6 +836,9 @@ export class OpencodeV1DigestSink implements DigestSink {
           sessionCount: 0,
           lastActivity: null,
           authority: "current",
+          // No population repo ID remains: exact inventory proves a relationship,
+          // but an unregistered nested scope is unknown, not an authoritative clear.
+          topology: projectTopologyAt(reported, directory) ?? undefined,
         };
         projects.push(empty);
         await publish?.([empty]);

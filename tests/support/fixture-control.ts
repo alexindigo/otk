@@ -56,6 +56,7 @@ export type Profile =
   | "contract-sessions-progress"
   | "contract-sessions-window"
   | "contract-sessions-catalog"
+  | "contract-sessions-worktrees"
   | "contract-sessions-merge"
   | "contract-sessions-tabs"
   | "composer-pickers"
@@ -330,6 +331,7 @@ export function request(value: unknown): ControlRequest {
           "contract-sessions-progress",
           "contract-sessions-window",
           "contract-sessions-catalog",
+          "contract-sessions-worktrees",
           "contract-sessions-merge",
           "contract-sessions-tabs",
           "composer-pickers",

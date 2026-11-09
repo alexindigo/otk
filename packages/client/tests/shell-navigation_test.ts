@@ -119,6 +119,72 @@ Deno.test("removing a direct-route server detaches even while its project metada
   }
 });
 
+Deno.test("nested routes and immediate remembered leaf navigation keep exact persisted location directories", () => {
+  const f = fixture(), saved: unknown[] = [];
+  const pending = Promise.withResolvers<void>();
+  f.resources.rememberLocation = (location) => {
+    saved.push(location);
+    return pending.promise;
+  };
+  f.entries("local", [shellEntry("tstv1-selected", "/tree/src")]);
+  f.resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "g",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      projects: [],
+      tasks: [],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+      summaries: {
+        "/tree": {
+          directory: "/tree",
+          status: "idle",
+          sessionCount: 1,
+          unseenCount: 0,
+          lastActivity: 2,
+          authority: "current",
+          scopes: ["/tree", "/tree/src"],
+          topology: {
+            repoID: "p",
+            canonicalRoot: "/repo",
+            leafDirectory: "/tree",
+            parentDirectory: "/repo",
+          },
+        },
+      },
+    },
+  });
+  try {
+    f.navigation.observeView({
+      selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+      directory: "/tree/src",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    assertEquals(f.navigation.state.project, {
+      sidecarId: "local",
+      directory: "/tree",
+    });
+    assertEquals(saved, [{
+      sidecarId: "local",
+      directory: "/tree/src",
+      sessionID: "tstv1-selected",
+    }]);
+    f.navigation.openProject({ sidecarId: "local", directory: "/other" });
+    f.navigation.openProject({ sidecarId: "local", directory: "/tree" });
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
+    assertEquals(f.navigation.state.project?.directory, "/tree");
+  } finally {
+    pending.resolve();
+    f.stop();
+  }
+});
+
 Deno.test("a late catalog establishes the selected project while its transcript is still loading", () => {
   const f = fixture("#/remote/tstv1-loading");
   try {

@@ -527,6 +527,16 @@ projects. Automatic-permission coverage borrows the existing policy owner.
 Unknown native activity is explicit, and disconnect retains last-good facts as
 stale. No row requires session metadata to render its lamp or counts.
 
+Optional seed topology adds worktree leaves beneath their canonical repo. The
+summary owner preserves direct-checkout counts and deduplicates repo rollups;
+hydrating a session does not add to seeded population counts. Inbox keeps local
+Inactive policy independent per directory. Mandatory activity restores its own
+leaf and repo context, never quiet siblings. Tasks, marks, ordering and exact
+execution directories are not rewritten when topology arrives or changes.
+Checkout summaries retain their exact source-directory `scopes`. View leases
+borrow those scopes for task and mandatory metadata without changing native list
+or stored task identities.
+
 ## Worker-backed digest services
 
 Socket view lifetimes retain viewer presence even for an empty welcomed view.

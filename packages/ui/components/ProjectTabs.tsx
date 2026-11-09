@@ -82,8 +82,7 @@ export default function ProjectTabs(props: {
   const { commands } = useCommandPorts();
   const [error, setError] = createSignal("");
   const crumbFeedbackID = createUniqueId();
-  const tasks = () =>
-    props.inbox.tasks.filter((t) => t.directory === props.project.directory);
+  const tasks = () => props.model.tasks();
   const active = () =>
     tasks().find((t) =>
       props.model.state.selected?.kind === "task" &&
@@ -118,8 +117,9 @@ export default function ProjectTabs(props: {
   const pin = ownedAction("task.pin", controls.pin);
   const taskAvailable = (target: TaskContextTarget) =>
     target.sidecarId === props.project.sidecarId &&
-    target.directory === props.project.directory &&
-    tasks().some((task) => task.id === target.taskID);
+    tasks().some((task) =>
+      task.id === target.taskID && task.directory === target.directory
+    );
   const renameTask = (target?: TaskContextTarget) =>
     controls.rename(
       target ? tasks().find((task) => task.id === target.taskID)! : undefined,
@@ -144,7 +144,10 @@ export default function ProjectTabs(props: {
     context: {
       kind: "session",
       items: (target: SessionContextTarget & { taskID?: string }) =>
-        tasks().filter((task) => !task.sessions.includes(target.sessionID)).map(
+        tasks().filter((task) =>
+          task.directory === target.directory &&
+          !task.sessions.includes(target.sessionID)
+        ).map(
           (task) => ({
             key: task.id,
             title: `Add to task: ${task.name}`,
@@ -157,9 +160,9 @@ export default function ProjectTabs(props: {
       props.ready &&
       !!target && (props.eligible?.(target) ?? true) &&
       target?.sidecarId === props.project.sidecarId &&
-      target.directory === props.project.directory &&
       tasks().some((task) =>
-        task.id === target.taskID && !task.sessions.includes(target.sessionID)
+        task.id === target.taskID && task.directory === target.directory &&
+        !task.sessions.includes(target.sessionID)
       ),
     run: (_ctx, target: SessionContextTarget & { taskID?: string }) =>
       controls.add({
@@ -171,6 +174,7 @@ export default function ProjectTabs(props: {
     kind: "session",
     data: {
       ...props.project,
+      directory: entry(id)?.directory ?? props.project.directory,
       sessionID: id,
       origin,
       title: props.session?.id === id
@@ -343,7 +347,13 @@ export default function ProjectTabs(props: {
                       tab().kind === "task"
                         ? {
                           kind: "task",
-                          data: { ...props.project, taskID: tab().id },
+                          data: {
+                            ...props.project,
+                            directory:
+                              tasks().find((task) => task.id === tab().id)
+                                ?.directory ?? props.project.directory,
+                            taskID: tab().id,
+                          },
                         }
                         : sessionTarget(tab().id, "tab"),
                   )}

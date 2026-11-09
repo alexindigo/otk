@@ -16,10 +16,12 @@ import {
   type InboxProject,
   type InboxStatus,
   inboxStatus,
+  projectDirectory,
   unread,
   visitTime,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { projectName } from "./project-navigation.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -46,9 +48,11 @@ export function createProjectProjection(o: {
   });
   const sessions = new Map<string, {
     entry: MergedMetadata;
+    directory: string;
     status: InboxStatus;
     unread: boolean;
   }>();
+  const repoSessions = new Map<string, Set<string>>();
   const projects = new Map<string, {
     members: Map<string, MergedMetadata>;
     counts: Record<InboxStatus, number>;
@@ -77,6 +81,23 @@ export function createProjectProjection(o: {
     pathTemplates: [],
   };
   let catalog: readonly MergedMetadata[] | undefined;
+  let summaries: Readonly<Record<string, ProjectSummary>> = {};
+  const resolve = (directory: string, repoID?: string): string => {
+    void clock.state.revision;
+    return projectDirectory(directory, summaries, repoID);
+  };
+  const scopes = (directory: string): readonly string[] => {
+    void clock.state.keys[directory];
+    const p = projects.get(directory);
+    return [
+      ...new Set([
+        directory,
+        ...p?.summary?.scopes ?? [],
+        ...[...p?.members.values() ?? []].map((e) => e.directory),
+        ...p?.tasks.map((t) => t.directory) ?? [],
+      ]),
+    ].sort();
+  };
   let operationStates: ReadonlyMap<string, InboxStatus> = new Map();
   const visible = new Set<string>();
   const ensure = (directory: string) => {
@@ -106,9 +127,11 @@ export function createProjectProjection(o: {
       p.row = undefined;
       p.metadata = undefined;
       p.input = undefined;
-      const present = !!(p.members.size || p.record?.inactive || p.discovered ||
-        p.summary?.hasSessions || (p.summary?.sessionCount ?? 0) > 0 ||
-        p.summary && p.summary.hasSessions === undefined);
+      const present =
+        !!(p.members.size || p.tasks.length || p.record?.inactive ||
+          p.discovered ||
+          p.summary?.hasSessions || (p.summary?.sessionCount ?? 0) > 0 ||
+          p.summary && p.summary.hasSessions === undefined);
       if (!present && !p.tasks.length) {
         projects.delete(directory);
       }
@@ -129,17 +152,20 @@ export function createProjectProjection(o: {
     const changed = new Set<string>();
     for (const id of ids) {
       const before = sessions.get(id), entry = o.entry(id);
+      const directory = entry && resolve(entry.directory, entry.projectID);
       const status = entry && inboxStatus(entry, inbox);
       const unseen = !!entry && !entry.parentID && unread(id, inbox);
       if (
         before?.entry === entry && before?.status === status &&
-        before?.unread === unseen
+        before?.unread === unseen && before?.directory === directory
       ) continue;
       changed.add(id);
       if (before) {
-        const p = ensure(before.entry.directory);
+        repoSessions.get(before.entry.projectID)?.delete(id);
+        const p = ensure(before.directory);
         if (
-          !entry || entry.directory !== before.entry.directory ||
+          !entry || directory !== before.directory ||
+          entry.directory !== before.entry.directory ||
           entry.parentID !== before.entry.parentID ||
           entry.title !== before.entry.title
         ) p.structure = undefined;
@@ -149,15 +175,21 @@ export function createProjectProjection(o: {
           before.entry.activityAuthority === "unknown" ||
             before.entry.activityAuthority === "stale",
         );
-        if (!entry || entry.directory !== before.entry.directory) {
+        if (!entry || directory !== before.directory) {
           p.members.delete(id);
           p.ids = undefined;
         }
-        dirty.add(before.entry.directory);
+        dirty.add(before.directory);
       }
       if (entry) {
-        const p = ensure(entry.directory);
-        if (!before || entry.directory !== before.entry.directory) {
+        const repo = repoSessions.get(entry.projectID) ?? new Set<string>();
+        repo.add(id);
+        repoSessions.set(entry.projectID, repo);
+        const p = ensure(directory!);
+        if (
+          !before || directory !== before.directory ||
+          entry.directory !== before.entry.directory
+        ) {
           p.structure = undefined;
         }
         if (!p.members.has(id)) p.ids = undefined;
@@ -168,8 +200,13 @@ export function createProjectProjection(o: {
           entry.activityAuthority === "unknown" ||
             entry.activityAuthority === "stale",
         );
-        sessions.set(id, { entry, status: status!, unread: unseen });
-        dirty.add(entry.directory);
+        sessions.set(id, {
+          entry,
+          directory: directory!,
+          status: status!,
+          unread: unseen,
+        });
+        dirty.add(directory!);
       } else sessions.delete(id);
       catalog = undefined;
     }
@@ -201,11 +238,14 @@ export function createProjectProjection(o: {
   };
   return {
     update,
+    resolve,
+    scopes,
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
     },
     input(directory: string): TabInput {
+      directory = resolve(directory);
       void clock.state.keys[directory];
       const p = ensure(directory);
       activity(directory);
@@ -213,6 +253,7 @@ export function createProjectProjection(o: {
         p.input = {
           version: clock.state.keys[directory] ?? 0,
           directory,
+          directories: scopes(directory),
           get entries() {
             void clock.state.keys[directory];
             const current = ensure(directory);
@@ -237,6 +278,7 @@ export function createProjectProjection(o: {
         p.tasks,
         directory,
         query,
+        scopes(directory),
       );
     },
     get revision() {
@@ -248,23 +290,35 @@ export function createProjectProjection(o: {
     },
     inbox(next: InboxSnapshot, changes?: InboxChanges) {
       const dirty = new Set<string>();
+      const repos = new Set<string>();
+      summaries = next.summaries ?? {};
       for (
         const directory of !changes || changes.baseline
           ? new Set([...projects.keys(), ...Object.keys(next.summaries ?? {})])
           : changes.projects
       ) {
         const p = ensure(directory), summary = next.summaries?.[directory];
+        if (
+          JSON.stringify([p.summary?.topology, p.summary?.scopes]) !==
+            JSON.stringify([summary?.topology, summary?.scopes])
+        ) {
+          for (const topology of [p.summary?.topology, summary?.topology]) {
+            if (topology) repos.add(topology.repoID);
+          }
+        }
         if (JSON.stringify(p.summary) !== JSON.stringify(summary)) {
           p.summary = summary;
           dirty.add(directory);
         }
       }
-      if (!changes || changes.baseline || changes.tasks) {
+      const reroute = repos.size > 0;
+      if (!changes || changes.baseline || changes.tasks || reroute) {
         const tasks = new Map<string, TaskRecord[]>();
         for (const task of next.tasks) {
-          const list = tasks.get(task.directory) ?? [];
+          const directory = resolve(task.directory);
+          const list = tasks.get(directory) ?? [];
           list.push(task);
-          tasks.set(task.directory, list);
+          tasks.set(directory, list);
         }
         for (
           const directory of new Set([...projects.keys(), ...tasks.keys()])
@@ -278,18 +332,27 @@ export function createProjectProjection(o: {
       }
       if (
         !changes || changes.baseline || changes.discovery ||
-        changes.projects.length
+        changes.projects.length || reroute
       ) {
-        const records = new Map(next.projects.map((p) => [p.directory, p]));
-        const discovered = new Set(next.discovered ?? []);
+        const records = new Map<string, ProjectRecord>();
+        for (const record of next.projects) {
+          const directory = resolve(record.directory);
+          if (!records.has(directory) || directory === record.directory) {
+            records.set(directory, { ...record, directory });
+          }
+        }
+        const discovered = new Set(
+          (next.discovered ?? []).map((d) => resolve(d)),
+        );
         for (
-          const directory of changes && !changes.baseline && !changes.discovery
-            ? changes.projects
-            : new Set([
-              ...projects.keys(),
-              ...records.keys(),
-              ...discovered,
-            ])
+          const directory
+            of changes && !changes.baseline && !changes.discovery && !reroute
+              ? changes.projects.map((d) => resolve(d))
+              : new Set([
+                ...projects.keys(),
+                ...records.keys(),
+                ...discovered,
+              ])
         ) {
           const p = ensure(directory), record = records.get(directory);
           if (
@@ -301,6 +364,9 @@ export function createProjectProjection(o: {
         }
       }
       const ids = new Set<string>(changes?.sessions);
+      for (const repo of repos) {
+        for (const id of repoSessions.get(repo) ?? []) ids.add(id);
+      }
       if (!changes || changes.baseline) {
         for (const field of ["seen", "finishes"] as const) {
           for (
@@ -331,6 +397,12 @@ export function createProjectProjection(o: {
       update(ids, dirty);
     },
     operations(states: ReadonlyMap<string, InboxStatus>) {
+      const resolved = new Map<string, InboxStatus>();
+      for (const [directory, status] of states) {
+        const leaf = resolve(directory);
+        resolved.set(leaf, attentionStatus(resolved.get(leaf), status));
+      }
+      states = resolved;
       const dirty = new Set<string>();
       for (
         const directory of new Set([
@@ -423,6 +495,13 @@ export function createProjectProjection(o: {
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,
+          topology: p.summary?.topology,
+          ...(p.summary?.topology?.parentDirectory
+            ? {
+              depth: 1,
+              parentLabel: projectName(p.summary.topology.parentDirectory),
+            }
+            : {}),
         };
       }
       return p.row;

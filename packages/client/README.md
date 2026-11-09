@@ -868,6 +868,19 @@ not raise unseen attention. Task tabs sort by this priority, then newest family
 available for future pinning; it does not drive the strip. Discovery retains its
 recency/name order.
 
+`projectHierarchy` orders explicit worktree rows beneath their repo within each
+server, without merging equal repo IDs across connections. The keyed project
+projection borrows topology and scalar repo/leaf status from inbox summaries;
+views never scan sessions for rollups. Inactive children retain their repo
+label, and working/blocked/unseen leaves remain Active under stale authority
+too. That same keyed owner resolves nested metadata/tasks into their
+authoritative checkout leaf and supplies exact source scopes to tabs and
+Sessions. Navigation uses the leaf while promotion, execution and persisted task
+directories retain their original paths. Sessions borrows bounded native pages
+for those exact scopes through its existing list resources; no flat nested
+project or second project projection is created. Topology changes re-route only
+affected repo membership.
+
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
 single-preview tabs. Only top-level no-task sessions can be phantom tasks;

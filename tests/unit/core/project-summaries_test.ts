@@ -74,3 +74,170 @@ Deno.test("@load project population seeds own counts independently of keyed hydr
   assertEquals(owner.values.get("/other")?.sessionCount, 500);
   assertEquals(owner.values.get("/other")?.authority, "stale");
 });
+
+Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups across nested routing and stale authority", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  owner.seed([
+    {
+      directory: "/repo",
+      hasSessions: true,
+      sessionCount: 2,
+      lastActivity: 4,
+      authority: "current",
+      topology: { repoID: "p", canonicalRoot: "/repo", leafDirectory: "/repo" },
+    },
+    {
+      directory: "/trees/one",
+      hasSessions: true,
+      sessionCount: 3,
+      lastActivity: 6,
+      authority: "current",
+      topology: {
+        repoID: "p",
+        canonicalRoot: "/repo",
+        leafDirectory: "/trees/one",
+        parentDirectory: "/repo",
+      },
+    },
+    {
+      directory: "/trees/one/src",
+      hasSessions: true,
+      sessionCount: 1,
+      lastActivity: 7,
+      authority: "current",
+      topology: {
+        repoID: "p",
+        canonicalRoot: "/repo",
+        leafDirectory: "/trees/one",
+        parentDirectory: "/repo",
+      },
+    },
+  ]);
+  owner.authority("current");
+  owner.entry({ ...entry(), directory: "/trees/one/src", status: "busy" });
+  assertEquals(owner.values.get("/trees/one")?.status, "working");
+  assertEquals(owner.values.get("/trees/one")?.sessionCount, 4);
+  assertEquals(owner.values.get("/trees/one")?.scopes, [
+    "/trees/one",
+    "/trees/one/src",
+  ]);
+  assertEquals(owner.values.get("/repo")?.scopes, ["/repo"]);
+  assertEquals(owner.values.get("/repo")?.sessionCount, 6);
+  assertEquals(owner.values.get("/repo")?.direct?.sessionCount, 2);
+  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.leaf("/trees/one/lib", "p"), "/trees/one");
+  assertEquals(owner.leaf("/trees/one/lib", "other"), "/trees/one/lib");
+  assertEquals(owner.values.has("/trees/one/src"), false);
+  owner.authority("stale");
+  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.authority, "stale");
+  owner.seed([{
+    directory: "/trees/one",
+    hasSessions: true,
+    sessionCount: 4,
+    lastActivity: 7,
+    authority: "current",
+    topology: {
+      repoID: "p",
+      canonicalRoot: "/new-repo",
+      leafDirectory: "/trees/one",
+      parentDirectory: "/new-repo",
+    },
+  }, {
+    directory: "/trees/one/src",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+    topology: {
+      repoID: "p",
+      canonicalRoot: "/new-repo",
+      leafDirectory: "/trees/one",
+      parentDirectory: "/new-repo",
+    },
+  }]);
+  assertEquals(owner.values.get("/repo")?.status, "idle");
+  assertEquals(owner.values.get("/repo")?.sessionCount, 2);
+  assertEquals(owner.values.get("/new-repo")?.status, "working");
+});
+
+Deno.test("topology outlives population-only seeds; explicit clear retires only the relationship and empty inventory stays unmaterialized", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  const topology = {
+    repoID: "p",
+    canonicalRoot: "/repo",
+    leafDirectory: "/tree",
+    parentDirectory: "/repo",
+  };
+  owner.ensure("/tree");
+  owner.seed([{
+    directory: "/tree",
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    topology,
+  }]);
+  owner.seed([{
+    directory: "/tree",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+  }]);
+  assertEquals(owner.values.get("/tree")?.topology, topology);
+  assertEquals(owner.values.get("/tree")?.sessionCount, 0);
+  owner.seed([{
+    directory: "/tree",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+    topology: null,
+  }]);
+  assertEquals(owner.values.get("/tree")?.topology, undefined);
+  owner.seed([{
+    directory: "/empty",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+    topology: {
+      repoID: "empty",
+      canonicalRoot: "/empty",
+      leafDirectory: "/empty",
+    },
+  }]);
+  assertEquals(owner.values.has("/empty"), false);
+  owner.ensure("/empty");
+  assertEquals(owner.values.get("/empty")?.topology?.repoID, "empty");
+});
+
+Deno.test("known nested scopes retain their checkout row and exact source scope after the last native session disappears", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  const topology = {
+    repoID: "p",
+    canonicalRoot: "/repo",
+    leafDirectory: "/tree",
+    parentDirectory: "/repo",
+  };
+  owner.seed([{
+    directory: "/tree/src",
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    topology,
+  }]);
+  owner.ensure("/tree/src");
+  owner.seed([{
+    directory: "/tree/src",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+  }]);
+  assertEquals(owner.values.has("/tree/src"), false);
+  assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/src"]);
+  assertEquals(owner.values.get("/tree")?.sessionCount, 0);
+});

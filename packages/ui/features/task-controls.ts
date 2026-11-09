@@ -7,7 +7,7 @@ export function createTaskControls(ports: {
   commands: Pick<CommandHub, "run">;
   actions(): TaskActions;
   model(): ClientTabs;
-  tasks(): TaskRecord[];
+  tasks(): readonly TaskRecord[];
   onEmpty(): boolean;
 }) {
   return {
@@ -31,7 +31,9 @@ export function createTaskControls(ports: {
       });
     },
     async move(input: { task: TaskRecord; delta: number }) {
-      const ids = ports.tasks().map((t) => t.id),
+      const ids = ports.tasks().filter((t) =>
+          t.directory === input.task.directory
+        ).map((t) => t.id),
         from = ids.indexOf(input.task.id),
         to = from + input.delta;
       if (to < 0 || to >= ids.length) return;
