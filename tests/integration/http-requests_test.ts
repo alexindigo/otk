@@ -77,7 +77,14 @@ test("independent HTTP composition holds cookie headers until result and consume
       username: "consumer",
       password: "fixture-secret",
     });
-    while (!effects) await new Promise((resolve) => setTimeout(resolve, 1));
+    // Server execution can precede receipt of the admission response by the client.
+    const admissionDeadline = performance.now() + 2000;
+    while (
+      operation.state.phase !== "queued" &&
+      performance.now() < admissionDeadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
     assertEquals(operation.state.phase, "queued");
     assertEquals(observed.length, 1);
     assertEquals(observed[0].status, 202);
