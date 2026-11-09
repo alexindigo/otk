@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
 import { shellContained, sidebarWheelContained } from "./containment.ts";
+import { auditUiRules } from "../pages/ui-rules.ts";
 
 /** Return emulation ownership to Playwright. Its Chromium delegate memoizes the
  * metrics tuple, so an unchanged size cannot reinstall an override cleared by
@@ -38,6 +39,7 @@ export async function capture(
   );
   const before = await cdp.send("Page.getLayoutMetrics");
   await shellContained(page);
+  await auditUiRules(page, info, name);
   if (
     name.startsWith("chrome-left-") &&
     await page.locator(".otk-project-inbox .otk-rail-body").count()
