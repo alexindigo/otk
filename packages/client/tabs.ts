@@ -27,6 +27,8 @@ export interface TabInput {
   /** Invalidation identity for source-free handles from the project projection. */
   version?: number;
   directory: string;
+  /** Resolved checkout membership supplied by the shared project owner. */
+  directories?: readonly string[];
   entries: readonly (IndexMetadata & OperationAttention)[];
   taskActivity?: Readonly<Record<string, InboxStatus>>;
   inbox: InboxSnapshot;
@@ -50,6 +52,7 @@ export interface ClientTabs {
   state: TabState;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
+  tasks(): readonly TaskRecord[];
   crumbs(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
@@ -96,6 +99,8 @@ export function createTabs(
       pathTemplates: [],
     },
   };
+  const belongs = (directory: string) =>
+    (input.directories ?? [input.directory]).includes(directory);
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
@@ -117,8 +122,8 @@ export function createTabs(
   const prepare = () => {
     if (derived === input) return;
     derived = input;
-    entries = input.entries.filter((e) => e.directory === input.directory);
-    tasks = input.inbox.tasks.filter((t) => t.directory === input.directory);
+    entries = input.entries.filter((e) => belongs(e.directory));
+    tasks = input.inbox.tasks.filter((t) => belongs(t.directory));
     byID = new Map(entries.map((e) => [e.id, e]));
     taskByID = new Map(tasks.map((t) => [t.id, t]));
     explicit = new Map();
@@ -251,13 +256,11 @@ export function createTabs(
     named?: TabSession,
     ready?: Promise<unknown>,
   ): Promise<TaskRecord> {
-    const directory = named?.directory ?? input.directory;
+    const directories = input.directories ?? [input.directory];
     const entry = named ??
-      input.entries.find((e) =>
-        e.id === sessionID && e.directory === directory
-      );
+      input.entries.find((e) => e.id === sessionID && belongs(e.directory));
     const existing = input.inbox.tasks.find((t) =>
-      t.directory === directory && t.sessions.includes(sessionID)
+      belongs(t.directory) && t.sessions.includes(sessionID)
     );
     if (existing) return Promise.resolve(existing);
     if (!promotions.has(sessionID)) {
@@ -267,7 +270,9 @@ export function createTabs(
         if (ready) await ready;
         const session = entry ?? await sources?.session(sessionID);
         if (stopped) throw new Error("Project tabs are stopped");
-        if (session?.id !== sessionID || session.directory !== directory) {
+        if (
+          session?.id !== sessionID || !directories.includes(session.directory)
+        ) {
           throw new Error("Unknown project session");
         }
         return await promote(session, options);
@@ -283,6 +288,11 @@ export function createTabs(
     state: store.state,
     subscribe: store.subscribe,
     tabs,
+    tasks() {
+      void store.state.revision;
+      prepare();
+      return tasks;
+    },
     entry(id) {
       void store.state.revision;
       return lookup(id);
@@ -325,7 +335,7 @@ export function createTabs(
         if (
           draft.selected?.kind === "task" &&
           !input.inbox.tasks.some((t) =>
-            t.id === draft.selected!.id && t.directory === input.directory
+            t.id === draft.selected!.id && belongs(t.directory)
           )
         ) delete draft.selected;
         // Metadata arrival and user preview use the same current family owner.
@@ -333,9 +343,7 @@ export function createTabs(
         const id = draft.sessionID;
         if (
           id &&
-          input.entries.some((e) =>
-            e.id === id && e.directory === input.directory
-          )
+          input.entries.some((e) => e.id === id && belongs(e.directory))
         ) {
           const task = taskFor(id);
           draft.selected = {
@@ -350,13 +358,13 @@ export function createTabs(
         if (
           draft.selected?.kind === "session" &&
           !input.entries.some((e) =>
-            e.id === draft.selected!.id && e.directory === input.directory
+            e.id === draft.selected!.id && belongs(e.directory)
           )
         ) delete draft.selected;
         if (
           draft.preview &&
           !input.entries.some((e) =>
-            e.id === draft.preview && e.directory === input.directory
+            e.id === draft.preview && belongs(e.directory)
           )
         ) delete draft.preview;
       });
@@ -396,9 +404,7 @@ export function createTabs(
     preview(sessionID: string): void {
       refresh();
       if (
-        !input.entries.some((e) =>
-          e.id === sessionID && e.directory === input.directory
-        )
+        !input.entries.some((e) => e.id === sessionID && belongs(e.directory))
       ) throw new Error("Unknown project session");
       const task = taskFor(sessionID);
       selectionRevision++;
@@ -443,7 +449,11 @@ export function createTabs(
         tab.kind === "phantom" && tab.id === sessionID
       );
       if (!phantom) return await action();
-      const named = { id: sessionID, directory: input.directory, title };
+      const named = {
+        id: sessionID,
+        directory: lookup(sessionID)!.directory,
+        title,
+      };
       const renamed = Promise.resolve().then(action);
       const promoting = persist(sessionID, options, named, renamed);
       const result = await renamed;

@@ -22,7 +22,12 @@ import type {
   MergedEntry,
   MergedMetadata,
 } from "./index.ts";
-import { createInbox, type InboxModel, inboxStatus } from "./inbox.ts";
+import {
+  createInbox,
+  type InboxModel,
+  inboxStatus,
+  projectHierarchy,
+} from "./inbox.ts";
 import {
   createProjectProjection,
   type ProjectProjectionRow,
@@ -74,6 +79,12 @@ export interface ServerResources {
     project: ProjectSelection,
     preferred?: string,
   ): Promise<string | undefined>;
+  /** Presentation routing only; native/persisted directories remain unchanged. */
+  projectDirectory?(
+    sidecar: string,
+    directory: string,
+    repoID?: string,
+  ): string;
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
   directoryCatalog(id: string, directory: string): DirectoryCatalogLease;
@@ -261,11 +272,14 @@ export function createServerResources(o: {
     }
     return owner;
   };
-  const listFor = (project: ProjectSelection, query?: string) =>
-    listOwner(project.sidecarId).get({
-      directory: project.directory,
-      query: query ?? "",
-    });
+  const listInputs = (project: ProjectSelection, query = "") =>
+    projectOwner(project.sidecarId).scopes(
+      projectOwner(project.sidecarId).resolve(project.directory),
+    ).map((directory) => ({ directory, query }));
+  const listsFor = (project: ProjectSelection, query = "") =>
+    listInputs(project, query).map((input) =>
+      listOwner(project.sidecarId).get(input)
+    );
   const trees = new Map<string, ReturnType<typeof createSessionTree>>();
   const listContexts = new WeakMap<TabInput, {
     scope: string;
@@ -288,7 +302,9 @@ export function createServerResources(o: {
     if (previous?.scope === scope) return previous.values;
     const values = new Map(input.entries.map((entry) => [entry.id, entry]));
     const required = new Set(
-      input.inbox.tasks.filter((task) => task.directory === p.directory)
+      input.inbox.tasks.filter((task) =>
+        (input.directories ?? [p.directory]).includes(task.directory)
+      )
         .flatMap((task) => task.sessions),
     );
     if (selected?.sidecarId === p.sidecarId) required.add(selected.sessionID);
@@ -546,6 +562,7 @@ export function createServerResources(o: {
     projectOwner(p.sidecarId).input(p.directory);
   const tabs = (p: ProjectSelection): ClientTabs => {
     live();
+    p = { ...p, directory: projectOwner(p.sidecarId).resolve(p.directory) };
     const key = `${p.sidecarId}/${p.directory}`;
     let model = tabModels.get(key);
     if (!model) {
@@ -599,7 +616,13 @@ export function createServerResources(o: {
     catalogs.get(id)?.receive(frame);
     frecencies.get(id)?.receive(frame);
     if (frame.t === "welcome") bindVisibleCatalog();
-    listOwners.get(id)?.receive(frame);
+    if (frame.t === "sessions.changed") {
+      for (
+        const directory of projectOwner(id).scopes(
+          projectOwner(id).resolve(frame.directory),
+        )
+      ) listOwners.get(id)?.receive({ ...frame, directory });
+    } else listOwners.get(id)?.receive(frame);
     if (frame.t === "welcome") listOwners.get(id)?.refresh();
     if (frame.t === "welcome" && visible?.project.sidecarId === id) {
       sendScope(id, {
@@ -651,7 +674,7 @@ export function createServerResources(o: {
       sendView();
       bindVisibleCatalog();
       if (project) {
-        listOwner(project.sidecarId).activate({ directory: project.directory });
+        listOwner(project.sidecarId).activate(listInputs(project));
       }
       if (visible) {
         sendScope(visible.project.sidecarId, {
@@ -669,12 +692,10 @@ export function createServerResources(o: {
       if (JSON.stringify(next) === JSON.stringify(rowDemand)) return;
       rowDemand = next;
       sendView();
-      listOwner(project.sidecarId).activate({
-        directory: project.directory,
-        query,
-      });
-      const list = listFor(project, query);
-      listOwner(project.sidecarId).viewport(list, rows);
+      listOwner(project.sidecarId).activate(listInputs(project, query));
+      for (const list of listsFor(project, query)) {
+        listOwner(project.sidecarId).viewport(list, rows);
+      }
     },
     async projectSession(project, preferred) {
       const connection = sidecars.connection(project.sidecarId);
@@ -684,17 +705,24 @@ export function createServerResources(o: {
         });
         if (
           identities.some((row) =>
-            row.id === preferred && row.directory === project.directory
+            row.id === preferred &&
+            projectOwner(project.sidecarId).resolve(row.directory) ===
+              projectOwner(project.sidecarId).resolve(project.directory)
           )
         ) return preferred;
       }
-      const page = await connection.rpc.call("sessions.list", {
-        directory: project.directory,
-        parentID: null,
-        limit: 1,
-      });
-      return page.items[0]?.id;
+      for (const { directory } of listInputs(project)) {
+        const page = await connection.rpc.call("sessions.list", {
+          directory,
+          parentID: null,
+          limit: 1,
+        });
+        if (page.items[0]) return page.items[0].id;
+      }
+      return undefined;
     },
+    projectDirectory: (sidecar, directory, repoID) =>
+      projectOwner(sidecar).resolve(directory, repoID),
     inbox,
     directoryCatalog: (id, directory) => {
       live();
@@ -716,8 +744,8 @@ export function createServerResources(o: {
     projected: (id, sessionID) => projection(id).get(sessionID),
     projectedProject: (id, directory) => {
       const owner = projection(id);
-      return o.index.ids(id, directory).map((sessionID) =>
-        owner.get(sessionID)!
+      return projectOwner(id).input(directory).entries.map((entry) =>
+        owner.get(entry.id)!
       ).filter(Boolean);
     },
     observeEntries: (id, listener) => projection(id).subscribe(listener),
@@ -727,61 +755,93 @@ export function createServerResources(o: {
     indexEntries: (id) => o.index.partition(id),
     indexChanges: (id) => o.index.changes(id),
     receive,
-    taskActions: (p) =>
-      createTaskActions(sidecars.connection(p.sidecarId).rpc, p.directory),
+    taskActions: (p) => {
+      const rpc = sidecars.connection(p.sidecarId).rpc;
+      return {
+        ...createTaskActions(rpc, p.directory),
+        async reorder(ids) {
+          const tasks = new Map(
+            inbox(p.sidecarId).state.inbox.tasks.map((task) => [task.id, task]),
+          );
+          const scopes = new Map<string, string[]>();
+          for (const id of ids) {
+            const directory = tasks.get(id)?.directory ?? p.directory;
+            const values = scopes.get(directory) ?? [];
+            values.push(id);
+            scopes.set(directory, values);
+          }
+          for (const [directory, values] of scopes) {
+            await createTaskActions(rpc, directory).reorder(values);
+          }
+        },
+      };
+    },
     anyAdvertised: (capability) =>
       sidecars.state.list.some((s) => advertised(s.id, capability)),
     connectionKey: (id) => server(id)?.connectionVersion,
     projectEntries: (p) =>
       operationAttention(p.sidecarId).entries(
         attention(p.sidecarId).entries(
-          o.index.partition(p.sidecarId, p.directory),
+          projectOwner(p.sidecarId).input(p.directory).entries.map((entry) =>
+            o.index.get(p.sidecarId, entry.id)!
+          ).filter(Boolean),
         ),
       ),
     projectRow: (p, now, ageing) =>
-      projectOwner(p.sidecarId).row(p.directory, now, ageing),
+      projectOwner(p.sidecarId).row(
+        projectOwner(p.sidecarId).resolve(p.directory),
+        now,
+        ageing,
+      ),
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
     sessionRowsReady: (p) => {
-      const page = listFor(
+      const pages = listsFor(
         p,
         rowDemand?.project.directory === p.directory &&
           rowDemand.project.sidecarId === p.sidecarId
           ? rowDemand.query
           : "",
       );
-      return (page.ready || listContext(p).length > 0) &&
+      return (pages.every((page) => page.ready) || listContext(p).length > 0) &&
         inbox(p.sidecarId).state.ready &&
         inboxDirectories.get(p.sidecarId) === p.directory;
     },
     sessionRowsLoading: (p) =>
-      listFor(
+      listsFor(
         p,
         rowDemand?.project.directory === p.directory &&
           rowDemand.project.sidecarId === p.sidecarId
           ? rowDemand.query
           : "",
-      ).loading,
+      ).some((page) => page.loading),
     sessionRowsStatus: (p) =>
       listOwner(p.sidecarId).progress(
-        listFor(
+        listsFor(
           p,
           rowDemand?.project.directory === p.directory &&
             rowDemand.project.sidecarId === p.sidecarId
             ? rowDemand.query
             : "",
-        ),
+        ).find((page) => page.loading) ?? listsFor(p)[0],
       ),
     sessionRows: (p, query) => {
-      const list = listFor(p, query),
+      const lists = listsFor(p, query),
         key = JSON.stringify([p.sidecarId, p.directory]);
       let tree = trees.get(key);
       if (!tree) trees.set(key, tree = createSessionTree());
       return tree.rows(
-        listOwner(p.sidecarId).structures(list, listContext(p)),
+        [...new Map(
+          lists.flatMap((list) =>
+            listOwner(p.sidecarId).structures(list, listContext(p))
+          ).map((entry) => [entry.id, entry]),
+        ).values()],
         inbox(p.sidecarId).state.inbox.tasks,
         p.directory,
         query,
+        projectOwner(p.sidecarId).scopes(
+          projectOwner(p.sidecarId).resolve(p.directory),
+        ),
       );
     },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
@@ -811,7 +871,7 @@ export function createServerResources(o: {
           a.directory.localeCompare(b.directory) ||
           a.label.localeCompare(b.label);
       });
-      return rows;
+      return projectHierarchy(rows);
     },
     tabSnapshot(p) {
       const input = tabInput(p);
@@ -827,7 +887,7 @@ export function createServerResources(o: {
       const id = selected?.sessionID;
       if (
         id &&
-        input.entries.some((e) => e.id === id && e.directory === p.directory) &&
+        input.entries.some((e) => e.id === id) &&
         (model.state.sessionID !== id || !model.state.selected)
       ) model.preview(id);
     },

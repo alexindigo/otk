@@ -169,6 +169,96 @@ function fixture(factory?: StateFactory) {
   };
 }
 
+Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects nested idle rows and tasks without a flat project", async () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/tree" };
+  const inbox: InboxSnapshot = {
+    projects: [],
+    tasks: [{
+      id: "nested-task",
+      directory: "/tree/src",
+      name: "Nested",
+      order: 0,
+      sessions: ["tstv1-idle"],
+    }],
+    seen: {},
+    finishes: {},
+    pathTemplates: [],
+    summaries: {
+      "/tree": {
+        directory: "/tree",
+        status: "idle",
+        hasSessions: true,
+        sessionCount: 1,
+        unseenCount: 0,
+        lastActivity: 1,
+        authority: "current",
+        scopes: ["/tree", "/tree/src"],
+        topology: {
+          repoID: "repo",
+          canonicalRoot: "/repo",
+          leafDirectory: "/tree",
+          parentDirectory: "/repo",
+        },
+      },
+    },
+  };
+  f.resources.scope(project);
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "g",
+    revision: 0,
+    summaryRevision: 0,
+    epoch: f.connections.get("local")!.viewEpoch,
+    inbox,
+  });
+  f.resources.sessionRows(project);
+  assertEquals(f.listReads.map((r) => r.input.directory), [
+    "/tree",
+    "/tree/src",
+  ]);
+  for (const read of f.listReads) {
+    read.resolve({
+      items: read.input.directory === "/tree/src"
+        ? [{ id: "tstv1-idle", directory: "/tree/src", title: "Idle nested" }]
+        : [],
+      older: null,
+      load: {
+        id: read.intent!.key,
+        scope: {
+          kind: "project-sessions",
+          directory: read.input.directory,
+          query: "",
+        },
+        boundary: { kind: "page", limit: 20 },
+        generation: "native",
+        revision: 1,
+        state: "complete",
+      },
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assertEquals(
+    f.resources.sessionRows(project).filter((r) => r.kind === "session").map((
+      r,
+    ) => [r.id, r.group]),
+    [["tstv1-idle", "nested-task"]],
+  );
+  assertEquals(f.resources.projects(0).map((r) => r.directory), ["/tree"]);
+  assertEquals(inbox.tasks[0].directory, "/tree/src");
+  assertEquals(f.resources.tabs(project).tasks()[0].directory, "/tree/src");
+  await f.resources.taskActions(project).reorder(["nested-task"]);
+  assert(
+    f.calls.some((call) =>
+      JSON.stringify(call) ===
+        JSON.stringify(["local", "tasks.reorder", {
+          directory: "/tree/src",
+          ids: ["nested-task"],
+        }])
+    ),
+  );
+  f.resources.stop();
+});
+
 Deno.test("project acquisition point-validates remembered sessions outside the acquired page and uses a bounded newest-root fallback", async () => {
   const f = fixture(), p = { sidecarId: "local", directory: "/unleased" };
   f.resources.scope(p);

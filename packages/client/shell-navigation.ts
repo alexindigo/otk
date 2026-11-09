@@ -94,13 +94,22 @@ export function createShellNavigation(o: {
       draft.error = "";
     });
   let locations: readonly ProjectLocation[] = [];
+  const presentation = (
+    p: ProjectSelection,
+    repoID?: string,
+  ): ProjectSelection => ({
+    ...p,
+    directory: resources.projectDirectory?.(p.sidecarId, p.directory, repoID) ??
+      p.directory,
+  });
   const pendingLocations = new Map<string, ProjectLocation>();
   const locationKey = (p: ProjectSelection) =>
-    JSON.stringify([p.sidecarId, p.directory]);
+    JSON.stringify([p.sidecarId, presentation(p).directory]);
   const lastLocation = (p: ProjectSelection) =>
     pendingLocations.get(locationKey(p)) ??
-      locations.find((location) =>
-        location.sidecarId === p.sidecarId && location.directory === p.directory
+      locations.toReversed().find((location) =>
+        location.sidecarId === p.sidecarId &&
+        presentation(location).directory === presentation(p).directory
       );
   const remember = (p: ProjectSelection, sessionID?: string) => {
     if (lastLocation(p)?.sessionID === sessionID) return;
@@ -118,6 +127,7 @@ export function createShellNavigation(o: {
     },
   });
   const project = (value?: ProjectSelection): void => {
+    value = value && presentation(value);
     // Observing a view is not a new navigation intent. TranscriptScopes owns
     // membership/demand; navigation publishes only a changed project identity.
     const current = store.state.project;
@@ -218,6 +228,7 @@ export function createShellNavigation(o: {
     directory: string,
     task?: TaskRecord,
   ): Promise<void> => {
+    directory = task?.directory ?? directory;
     const rpc = resources.sidecars.connection(sidecarId).rpc;
     return await rpc.intents.run(
       JSON.stringify(["create-session", directory, task?.id]),
@@ -258,7 +269,7 @@ export function createShellNavigation(o: {
     const target = { ...selected }, intent = revision;
     const directory = await actions.directory(target);
     if (intent !== revision) return false;
-    const p = { sidecarId: target.sidecarId, directory };
+    const p = presentation({ sidecarId: target.sidecarId, directory });
     const entries = resources.projectEntries(p);
     const entry = entries.find((entry) => entry.id === target.sessionID);
     if (!entry) return false;
@@ -313,6 +324,7 @@ export function createShellNavigation(o: {
     clearError,
     closeSettings,
     openProject(target) {
+      target = presentation(target);
       if (
         store.state.project?.sidecarId === target.sidecarId &&
         store.state.project?.directory === target.directory
@@ -326,7 +338,11 @@ export function createShellNavigation(o: {
       const saved = remembered && resources.entry(target.sidecarId, remembered);
       // A scoped index is not a project catalog. An incidental attention row
       // cannot replace the remembered selection or the catalog's first root.
-      const existing = saved && saved.directory === target.directory
+      const existing = saved &&
+          presentation({
+              sidecarId: target.sidecarId,
+              directory: saved.directory,
+            }, saved.projectID).directory === target.directory
         ? saved
         : undefined;
       if (existing) {
@@ -436,7 +452,12 @@ export function createShellNavigation(o: {
       const directory = indexed?.directory ??
         (!value.loading ? value.directory : undefined);
       if (directory && !value.settings && value.connected) {
-        project({ sidecarId: value.selected.sidecarId, directory });
+        project(
+          presentation(
+            { sidecarId: value.selected.sidecarId, directory },
+            indexed?.projectID,
+          ),
+        );
       }
       if (
         !value.directory || value.loading ||

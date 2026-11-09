@@ -6,6 +6,8 @@ import type {
   InboxSnapshot,
   IndexMetadata,
   ProjectRecord,
+  ProjectSummary,
+  ProjectTopology,
   RpcMethod,
   RpcParams,
   RpcResult,
@@ -73,6 +75,11 @@ export function ageing(
   return thresholds.filter((threshold) => now - lastVisit >= threshold).length;
 }
 export interface InboxProject extends ProjectRecord {
+  topology?: ProjectTopology;
+  depth?: number;
+  parentLabel?: string;
+  /** A repo can be shown as context while its own independent policy is Inactive. */
+  inactivePolicy?: boolean;
   group?: "active" | "discovered" | "inactive";
   /** Older injected projections without a source are tracked projects. */
   source?: "tracked" | "index" | "template";
@@ -80,6 +87,81 @@ export interface InboxProject extends ProjectRecord {
   unread: boolean;
   visitText: string;
   ageing: number;
+}
+/** Resolve only authoritative exact scopes, or repo-qualified registered roots. */
+export function projectDirectory(
+  directory: string,
+  summaries: Readonly<Record<string, ProjectSummary>>,
+  repoID?: string,
+): string {
+  let result = directory, length = -1;
+  for (const summary of Object.values(summaries)) {
+    const topology = summary.topology;
+    if (!topology || repoID !== undefined && topology.repoID !== repoID) {
+      continue;
+    }
+    if (summary.scopes?.includes(directory)) return topology.leafDirectory;
+    if (
+      repoID !== undefined &&
+      (directory === topology.leafDirectory ||
+        directory.startsWith(topology.leafDirectory + "/")) &&
+      topology.leafDirectory.length > length
+    ) {
+      result = topology.leafDirectory;
+      length = result.length;
+    }
+  }
+  return result;
+}
+/** Hierarchy is presentation only: directory/task identities are never rewritten. */
+export function projectHierarchy<
+  T extends InboxProject & { sidecarId?: string },
+>(rows: readonly T[]): T[] {
+  const result: T[] = [];
+  const emitted = new Set<T>();
+  const key = (row: T) =>
+    JSON.stringify([
+      row.sidecarId,
+      row.topology?.repoID,
+      row.topology?.canonicalRoot,
+    ]);
+  const children = new Map<string, T[]>();
+  const parents = new Map<string, T>();
+  for (const row of rows) {
+    if (!row.topology?.parentDirectory) {
+      if (row.topology) parents.set(key(row), row);
+      continue;
+    }
+    const values = children.get(key(row)) ?? [];
+    values.push(row);
+    children.set(key(row), values);
+  }
+  for (const row of rows) {
+    if (emitted.has(row)) continue;
+    if (row.topology?.parentDirectory) {
+      const parent = parents.get(key(row));
+      if (parent && !emitted.has(parent)) continue;
+    }
+    const leaves = children.get(key(row)) ?? [];
+    result.push(
+      row.topology && !row.topology.parentDirectory && row.inactive &&
+        leaves.some((leaf) => projectGroup(leaf) === "active")
+        ? { ...row, group: "active", inactive: false, inactivePolicy: true }
+        : row,
+    );
+    emitted.add(row);
+    if (row.topology && !row.topology.parentDirectory) {
+      for (const child of leaves) {
+        result.push(
+          child.depth === 1
+            ? child
+            : { ...child, depth: 1, parentLabel: projectName(row.directory) },
+        );
+        emitted.add(child);
+      }
+    }
+  }
+  return result;
 }
 /** Source provenance never decides presentation groups. */
 export function projectGroup(
@@ -99,6 +181,19 @@ export function inboxProjects(
   now: number,
   thresholds?: readonly number[],
 ): InboxProject[] {
+  const resolve = (directory: string, repoID?: string) =>
+    projectDirectory(directory, inbox.summaries ?? {}, repoID);
+  entries = entries.map((entry) => ({
+    ...entry,
+    directory: resolve(entry.directory, entry.projectID),
+  }));
+  const records = new Map<string, ProjectRecord>();
+  for (const record of inbox.projects) {
+    const directory = resolve(record.directory);
+    if (!records.has(directory) || directory === record.directory) {
+      records.set(directory, { ...record, directory });
+    }
+  }
   const hasSessions = (directory: string, sessions: readonly IndexMetadata[]) =>
     inbox.summaries?.[directory]?.hasSessions ??
       ((inbox.summaries?.[directory]?.sessionCount ?? 0) > 0 ||
@@ -113,9 +208,14 @@ export function inboxProjects(
         summary.status,
         ...sessions.map((entry) => entry.operationStatus),
       )
-      : rollup(sessions, inbox);
+      : attentionStatus(
+        summary?.status && summary.status !== "idle"
+          ? summary.status
+          : undefined,
+        rollup(sessions, inbox),
+      );
   };
-  const tracked = [...inbox.projects].filter((project) =>
+  const tracked = [...records.values()].filter((project) =>
     project.inactive || inbox.discovered?.includes(project.directory) ||
     hasSessions(
       project.directory,
@@ -139,7 +239,8 @@ export function inboxProjects(
           : "discovered" as const,
         inactive,
         status,
-        unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
+        unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
+          sessions.some((s) => !s.parentID && unread(s.id, inbox)),
         visitText: visitTime(project.lastVisit, clock),
         ageing: ageing(project.lastVisit, clock, thresholds),
       };
@@ -160,7 +261,8 @@ export function inboxProjects(
   for (const summary of Object.values(inbox.summaries ?? {})) {
     if (
       !known.has(summary.directory) && summary.hasSessions &&
-      !indexed.has(summary.directory)
+      !indexed.has(summary.directory) &&
+      resolve(summary.directory) === summary.directory
     ) {
       indexed.set(summary.directory, []);
     }
@@ -180,14 +282,15 @@ export function inboxProjects(
       inactive: false,
       lastVisit: 0,
       status: statusFor(directory, sessions),
-      unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
+      unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
+        sessions.some((s) => !s.parentID && unread(s.id, inbox)),
       visitText: "",
       ageing: 0,
     };
   });
-  const templates = [...new Set(inbox.discovered ?? [])].filter((p) =>
-    !known.has(p)
-  )
+  const templates = [
+    ...new Set((inbox.discovered ?? []).map((d) => resolve(d))),
+  ].filter((p) => !known.has(p))
     .sort(byName).map((directory): InboxProject => ({
       directory,
       source: "template",
@@ -201,7 +304,12 @@ export function inboxProjects(
       visitText: "",
       ageing: 0,
     }));
-  return [...tracked, ...discovered, ...templates];
+  return projectHierarchy(
+    [...tracked, ...discovered, ...templates].map((row) => ({
+      ...row,
+      topology: inbox.summaries?.[row.directory]?.topology,
+    })),
+  );
 }
 export interface InboxRpc {
   call<M extends RpcMethod>(
