@@ -16,6 +16,16 @@ Session references use the protocol's qualified-ID grammar. An adapter owns its
 native codec and validates its own provider at the boundary; the shared harness
 contracts never infer a provider from a bare native identity.
 
+`ProjectSeed.topology` optionally supplies connection-local repo identity,
+canonical checkout root, exact leaf root and an explicit parent directory.
+Adapters resolve nested working directories only within the same native repo,
+using the longest known checkout root. Omitted topology retains flat projects;
+folder names alone never establish relationships. Seeds remain scalar population
+facts, not session catalogs. Omitted topology retains known facts; explicit null
+retires an authoritatively absent relationship. Population-only updates cannot
+detach a checkout. The canonical row's summary can roll up the repo while its
+`direct` facts retain only the canonical checkout.
+
 `HarnessCore.identities(ids, signal?)` is required for authoritative identity
 validation. It returns one `{id, directory, parentID?}` row per extant requested
 identity, with duplicates removed. A successful missing row means not found; an

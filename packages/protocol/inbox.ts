@@ -51,7 +51,15 @@ export const PROJECT_STATUS_PRIORITY = [
   "idle",
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
-export interface ProjectSummary {
+/** Connection-local repository identity; checkout roots are explicit native facts. */
+export interface ProjectTopology {
+  repoID: string;
+  canonicalRoot: string;
+  leafDirectory: string;
+  /** Absent for the canonical checkout's direct leaf. */
+  parentDirectory?: string;
+}
+export interface ProjectSummaryFacts {
   directory: string;
   /** Population authority, independent of acquired session membership. */
   hasSessions?: boolean;
@@ -60,6 +68,13 @@ export interface ProjectSummary {
   unseenCount: number | null;
   lastActivity: number | null;
   authority: "current" | "stale" | "unknown";
+}
+export interface ProjectSummary extends ProjectSummaryFacts {
+  topology?: ProjectTopology;
+  /** Exact native list/task scopes owned by this checkout, never rewritten paths. */
+  scopes?: readonly string[];
+  /** Canonical rows roll up the repo; direct retains only that checkout. */
+  direct?: ProjectSummaryFacts;
 }
 export interface InboxSnapshot {
   projects: ProjectRecord[];
