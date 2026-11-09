@@ -60,12 +60,12 @@ import {
 import type { SectionObserver } from "./core/diagnostics.ts";
 
 /** Shipped application features, independent of the selected native backend. */
-export function startApplication(
+export async function startApplication(
   cfg: ServiceConfig,
   backend: Harness,
   staticRoot: string,
   options: {
-    upgrade?: (store: OtkDb) => void;
+    upgrade?: (store: OtkDb) => void | Promise<void>;
     index?: IndexStore;
     interactive?: (owner: string, active: boolean) => void;
     requested?: () => void;
@@ -91,7 +91,9 @@ export function startApplication(
   ], cfg.storage);
   const sources: FrameSource[] = [...options.sources ?? []];
   try {
-    options.upgrade?.(store);
+    options.signal?.throwIfAborted();
+    await options.upgrade?.(store);
+    options.signal?.throwIfAborted();
     const prefs = new Prefs(store, prefsOptions);
     const index = options.index ?? new IndexStore();
     const rpc = new RpcRegistry(

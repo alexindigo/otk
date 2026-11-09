@@ -49,7 +49,8 @@ export interface HarnessSink {
 }
 export interface ProjectSeed {
   directory: string;
-  hasSessions: boolean;
+  /** Omitted when native population authority is unavailable. */
+  hasSessions?: boolean;
   sessionCount: number | null;
   lastActivity: number | null;
   authority: "current" | "stale" | "unknown";

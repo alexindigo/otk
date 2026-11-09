@@ -20,6 +20,7 @@ export class V2Client {
     readonly requestms: number,
     readonly signal: AbortSignal,
     readonly fetcher: typeof fetch = fetch,
+    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
   ) {
     this.#api = OpenCode.make({
       baseUrl: service.endpoint.url,
@@ -54,7 +55,13 @@ export class V2Client {
   ): Promise<T> {
     this.signal.throwIfAborted();
     signal?.throwIfAborted();
+    let release: (() => void) | undefined;
     try {
+      release = await this.admission?.(
+        AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
+      );
+      this.signal.throwIfAborted();
+      signal?.throwIfAborted();
       const value = await this.#reads.run(
         signal ?? this.signal,
         () => run(this.#api),
@@ -87,6 +94,8 @@ export class V2Client {
       // Transport, timeout, incompatible bodies and unknown errors cannot prove
       // absence or input rejection. In particular, never return an empty read.
       throw new OperationFailure("unavailable", "native.unavailable", cause);
+    } finally {
+      release?.();
     }
   }
 }

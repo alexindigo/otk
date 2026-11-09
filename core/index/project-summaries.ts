@@ -35,7 +35,11 @@ export class ProjectSummaries {
   seed(values: readonly import("@otk/harness").ProjectSeed[]): void {
     this.#seeded = true;
     for (const value of values) {
-      this.#seeds.set(value.directory, value);
+      this.#seeds.set(value.directory, {
+        ...value,
+        hasSessions: value.hasSessions ??
+          this.#seeds.get(value.directory)?.hasSessions,
+      });
       this.ensure(value.directory);
       this.#update(value.directory);
     }
@@ -195,7 +199,7 @@ export class ProjectSummaries {
     const seed = this.#seeds.get(directory);
     const summary: ProjectSummary = {
       directory,
-      hasSessions: seed?.hasSessions || count > 0,
+      hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
       status: authority === "unknown" && status === "idle" ? null : status,
       sessionCount: seed
         ? seed.sessionCount
@@ -204,7 +208,9 @@ export class ProjectSummaries {
         : null,
       unseenCount: seed || knownCount ? unseen : null,
       lastActivity: seed
-        ? Math.max(seed.lastActivity ?? 0, last)
+        ? seed.lastActivity === null && !last
+          ? null
+          : Math.max(seed.lastActivity ?? 0, last)
         : knownCount && !this.#seeded
         ? last
         : null,

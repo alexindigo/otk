@@ -24,23 +24,39 @@ resyncs before readiness. Snapshot acquisition returns a fenced commit; abort
 joins acquisition and event work before closing. Execution facts survive
 decodable frames whose unrelated fields drift. The SDK event queue is unused.
 
-V0 selects only the foundation connection/index facts, not unqualified action,
+The adapter selects scalar connection/index facts, not unqualified action,
 transcript or catalog capabilities. Their staged implementations compose into
 the same owner. The worker's `core/digest/providers.ts` selects native codecs,
 private migrations and sink construction without changing scheduling or SQLite
-ownership. V2 SQL selection and source proof belong to V1.
+ownership. Its V2 sink proves all API project IDs/canonicals (including archived
+projects) against the read-only file before scalar SQL. Schema/source failures
+fall back to point/list APIs; project counts and recency remain explicitly
+unknown. Startup publishes grouped population facts, never an idle session/body
+catalog. Keyed hydration follows helper ancestry, independently of transcript
+subscriptions. Active executions and loaded-location pending inventories keep
+lamps live.
+
+Session lists retain the neutral 20/default, 200/maximum page contract. SQL
+keysets use `(time_updated,id)`; native API cursors are opaque. Continuations
+bind scope, generation and source mode. Consumed pages join worker demand; only
+one successor may be speculated through existing idle-gated admission. Children
+use paginated `parentID` filtering, not fork provenance or a `/children` route.
 
 ## Existing-state upgrade boundary
 
-V1 will prove imported native identities using the worker's read-only source
+Imported native identities are proven using the worker's read-only source
 identity check before invoking an OTK-only transaction. The existing reference
 upgrade now accepts a distinct marker, strict collision handling and injected
 feature-owned metadata-reference contributions in that transaction. No blind
-`opcv1-` replacement is performed at V0 startup. Unproven/deleted/foreign IDs
-must survive unchanged. Scope and allowlisted metadata receipts join the
-reference transaction; request fingerprints, certainty, dispatch clocks,
-journals and terminal retention must survive unchanged. No native body or
-credential may enter a receipt. The marker commits only with every contributor.
+`opcv1-` replacement is performed. Matching retained legacy/V2 rows must share
+identity, directory and creation clock in the proven file.
+Unproven/deleted/foreign IDs must survive unchanged. Scope and allowlisted
+metadata receipts join the reference transaction; request fingerprints,
+certainty, dispatch clocks, journals and terminal retention must survive
+unchanged. No native body or credential may enter a receipt. The marker commits
+only with every contributor. The upgrade is awaited before feature hydration.
+The shipped client's reserved `local` location is eligible; arbitrary
+browser-owned remote sidecar IDs are not.
 
 Tests: package contracts plus `tests/integration/harness-probe_test.ts` and
 `tests/integration/v2-foundation_test.ts` inside the assigned droplet. The

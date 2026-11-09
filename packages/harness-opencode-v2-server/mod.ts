@@ -12,3 +12,9 @@ export type { OpenCodeClient } from "./client.ts";
 export { opencodeV2SessionID } from "./ids.ts";
 export { decodeEvent, V2_SILENCE_MS, V2Stream } from "./stream.ts";
 export type { StreamPorts, V2Event } from "./stream.ts";
+export {
+  opencodeV2DigestMigrations,
+  OpencodeV2DigestSink,
+  opencodeV2ReadCodecs,
+} from "./digest.ts";
+export type { V2NativeConfig } from "./digest.ts";

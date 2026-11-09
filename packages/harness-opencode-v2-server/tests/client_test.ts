@@ -9,6 +9,58 @@ const service = {
   pid: 42,
 };
 
+Deno.test("V2 finite reads retain the shared native permission through SDK body settlement and release late grants", async () => {
+  const owner = new AbortController(),
+    grant = Promise.withResolvers<() => void>(),
+    result = Promise.withResolvers<number>();
+  let releases = 0, entered = false;
+  const client = new V2Client(
+    service,
+    1000,
+    owner.signal,
+    fetch,
+    () => grant.promise,
+  );
+  const reading = client.read(() => {
+    entered = true;
+    return result.promise;
+  });
+  await Promise.resolve();
+  assertEquals(entered, false);
+  grant.resolve(() => {
+    releases++;
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  assertEquals(entered, true);
+  assertEquals(releases, 0);
+  result.resolve(42);
+  assertEquals(await reading, 42);
+  assertEquals(releases, 1);
+  const late = Promise.withResolvers<() => void>(),
+    cancel = new AbortController();
+  const waiting = new V2Client(
+    service,
+    1000,
+    cancel.signal,
+    fetch,
+    () => late.promise,
+  );
+  let dispatched = false;
+  const pending = waiting.read(() => {
+    dispatched = true;
+    return Promise.resolve(0);
+  });
+  const rejected = assertRejects(() => pending, DOMException, "retired");
+  cancel.abort(new DOMException("retired", "AbortError"));
+  late.resolve(() => {
+    releases++;
+  });
+  await rejected;
+  assertEquals(dispatched, false);
+  assertEquals(releases, 2);
+});
+
 Deno.test("V2 finite-read owner classifies missing, authentication and unavailable SDK errors", async () => {
   const read = (fetcher: typeof fetch) => {
     const client = new V2Client(
