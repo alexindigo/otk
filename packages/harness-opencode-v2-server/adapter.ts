@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type DigestPolicy,
   type Harness,
   type HarnessCore,
   HarnessError,
   type HarnessSink,
+  type ProviderReadPort,
   SessionIndex,
 } from "@otk/harness";
 import type {
@@ -14,6 +16,7 @@ import type {
 import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type V2Event, V2Stream } from "./stream.ts";
+import { V2Catalogs } from "./catalogs.ts";
 import {
   type OpenCodeClient,
   type V2Client,
@@ -28,6 +31,8 @@ export interface OpencodeV2ServerConfig {
     heartbeattimeout: number;
   };
   messages: { replayops: number; replaybytes: number };
+  digest?: DigestPolicy;
+  catalogs?: { pending: number; concurrency: number };
 }
 type NativeSession = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>;
 type Pending = {
@@ -60,7 +65,8 @@ function session(raw: NativeSession): ContentSession {
 /** V0 supplies the connection owner. Capabilities are added only with their proofs. */
 export class OpencodeV2ServerAdapter implements Harness {
   readonly core: HarnessCore;
-  readonly capabilities: Readonly<Capabilities> = Object.freeze({});
+  readonly capabilities: Readonly<Capabilities>;
+  readonly catalogs?: V2Catalogs;
   readonly stream: V2Stream;
   #sink?: HarnessSink;
   #index = new SessionIndex();
@@ -73,6 +79,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     initial?: DiscoveredService,
     readonly diagnostic: (error: unknown) => void = () => {},
     fetcher: typeof fetch = fetch,
+    reads?: ProviderReadPort,
   ) {
     this.#version = initial?.version ?? "";
     this.stream = new V2Stream(
@@ -95,6 +102,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         connected: (client, generation) => {
           this.#version = client.service.version;
           this.#generation = generation;
+          this.catalogs?.reset();
           this.#sink?.connection("connected");
           this.#sink?.bootstrapComplete();
         },
@@ -113,6 +121,37 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       { ...config.harness, ...config.messages, heartbeattimeout: 45 },
       fetcher,
+    );
+    if (config.digest && config.catalogs) {
+      this.catalogs = new V2Catalogs(
+        () => this.stream.client,
+        async (id, signal) =>
+          (await this.stream.client.read(
+            (api) => api.session.get({ sessionID: ids.decode(id) }, { signal }),
+            signal,
+          )).location.directory,
+        config.digest,
+        config.catalogs,
+        diagnostic,
+        reads,
+      );
+    }
+    this.capabilities = Object.freeze(
+      this.catalogs
+        ? {
+          agents: this.catalogs.agents,
+          models: this.catalogs.models,
+          files: this.catalogs.files,
+          catalogs: {
+            watch: (directory, listener, signal) =>
+              this.catalogs!.watch(directory, listener, signal),
+            refresh: (directory, signal) =>
+              this.catalogs!.refresh(directory, signal),
+          },
+          ...(this.catalogs.history ? { history: this.catalogs.history } : {}),
+          // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.
+        }
+        : {},
     );
     const version = () => this.#version;
     const unavailable = () =>
@@ -145,6 +184,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       stop: async () => {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
+        await this.catalogs?.stop();
         await this.stream.stop();
         this.#pending.clear();
         this.#running.clear();
@@ -329,6 +369,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     signal: AbortSignal,
     generation: number,
   ): Promise<void> {
+    this.catalogs?.event(event);
     const form = event.data.form;
     const sid = event.data.sessionID ??
       (form && typeof form === "object"

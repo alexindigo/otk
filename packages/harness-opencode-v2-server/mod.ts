@@ -12,3 +12,15 @@ export type { OpenCodeClient } from "./client.ts";
 export { opencodeV2SessionID } from "./ids.ts";
 export { decodeEvent, V2_SILENCE_MS, V2Stream } from "./stream.ts";
 export type { StreamPorts, V2Event } from "./stream.ts";
+export { CatalogExecutor, V2Catalogs } from "./catalogs.ts";
+export {
+  catalogReadCodecs,
+  catalogReaders,
+  mapAgents,
+  mapCommands,
+  mapConfig,
+  mapModels,
+  mapSkills,
+  mergeCommands,
+} from "./catalog-readers.ts";
+export { HistoryReader } from "./history.ts";

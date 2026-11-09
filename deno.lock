@@ -1196,6 +1196,8 @@
       },
       "packages/harness-opencode-v2-server": {
         "dependencies": [
+          "jsr:@std/encoding@1.0.10",
+          "jsr:@std/path@1.1.5",
           "npm:@opencode/client@2.2.6"
         ]
       },

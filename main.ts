@@ -48,6 +48,8 @@ export async function start(
         serviceFile: selected.file,
         harness: cfg.harness,
         messages: cfg.messages,
+        digest: cfg.digest,
+        catalogs: cfg.catalogs,
       },
       selected.service,
       (error) => diagnostic("warn", "opencode V2", error),
