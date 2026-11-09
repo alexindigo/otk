@@ -554,7 +554,8 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     });
     await waitFor(snapshot, (value) => value.discovered?.length === 130);
     const first = await snapshot();
-    assertEquals(first.summaries?.["/idle"], {
+    // Topology is now additive; scalar authority and no-population reads stay exact.
+    const direct: import("@otk/protocol").ProjectSummary = {
       directory: "/idle",
       hasSessions: true,
       status: "idle",
@@ -565,7 +566,14 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
           .time_updated,
       ),
       authority: "current",
-    });
+      topology: {
+        repoID: "idle",
+        canonicalRoot: "/idle",
+        leafDirectory: "/idle",
+      },
+      scopes: ["/idle"],
+    };
+    assertEquals(first.summaries?.["/idle"], { ...direct, direct });
     assertEquals(first.projects, []);
     assertEquals(
       [...app.index.values()].length,
