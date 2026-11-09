@@ -4,139 +4,145 @@ export const FIXTURE_PROTOCOL = 1;
 export type Json = null | boolean | number | string | Json[] | {
   [key: string]: Json;
 };
-export type Profile =
-  | "ordinary"
-  | "contract-load-priority"
-  | "contract-load-small"
-  | "contract-load-large"
-  | "contract-scale-request"
-  | "contract-scale-overflow"
-  | "contract-scale-remaining"
-  | "contract-scale-heap"
-  | "contract-scale-runtime"
-  | "contract-scale-scroll"
-  | "contract-scale-core"
-  | "contract-scale-paint"
-  | "contract-scale-sessions"
-  | "contract-scale-files"
-  | "contract-visual-inbox"
-  | "contract-themes"
-  | "contract-visual-styles"
-  | "contract-visual-provider-ports"
-  | "contract-visual-native-events"
-  | "contract-menus-inbox"
-  | "contract-menus-content"
-  | "contract-menus-context"
-  | "contract-menus-dialog"
-  | "contract-menus-hints"
-  | "contract-menus-permission"
-  | "contract-menus-question"
-  | "menus-default"
-  | "contract-attention-demand"
-  | "contract-attention-digest"
-  | "contract-attention-lights"
-  | "contract-attention-native"
-  | "contract-attention-auto"
-  | "contract-attention-remote"
-  | "revert-native"
-  | "sessions-tasks"
-  | "sessions-discovery"
-  | "contract-sessions-inbox"
-  | "contract-sessions-panel"
-  | "contract-sessions-memory"
-  | "contract-sessions-membership"
-  | "contract-sessions-hierarchy"
-  | "contract-sessions-axiom"
-  | "contract-sessions-phantom"
-  | "contract-sessions-close"
-  | "contract-sessions-direct"
-  | "contract-sessions-resurrection"
-  | "contract-sessions-unknown"
-  | "contract-sessions-summary"
-  | "contract-sessions-progress"
-  | "contract-sessions-window"
-  | "contract-sessions-catalog"
-  | "contract-sessions-merge"
-  | "contract-sessions-tabs"
-  | "composer-pickers"
-  | "composer-applied"
-  | "composer-selection"
-  | "composer-plan"
-  | "composer-commands"
-  | "composer-mentions"
-  | "composer-submission"
-  | "composer-required"
-  | "composer-catalog"
-  | "composer-native-default"
-  | "composer-long-command"
-  | "composer-history"
-  | "composer-shell-failure"
-  | "contract-composer-missing"
-  | "contract-composer-none"
-  | "contract-composer-pending-choice"
-  | "contract-composer-failed-variant"
-  | "contract-composer-native-null"
-  | "messages-native"
-  | "messages-tools"
-  | "messages-cooling"
-  | "messages-files"
-  | "messages-context"
-  | "messages-temperature"
-  | "messages-helper-pages"
-  | "messages-recovery"
-  | "messages-recovery-retry"
-  | "messages-forms"
-  | "messages-tool-states"
-  | "messages-priced"
-  | "isolated"
-  | "provider-hold"
-  | "transport-page"
-  | "transport-deleted-seen"
-  | "transport-shell"
-  | "transport-freeze"
-  | "transport-reconnect"
-  | "transport-bootstrap"
-  | "transport-errors-http"
-  | "transport-errors-late"
-  | "transport-enrichment"
-  | "transport-cooling"
-  | "transport-restart"
-  | "contract-core"
-  | "contract-messages-highlight"
-  | "contract-messages-facts"
-  | "contract-messages-metadata"
-  | "contract-messages-usage3"
-  | "contract-messages-usage120"
-  | "contract-messages-usage500"
-  | "contract-messages-context"
-  | "contract-messages-collapse"
-  | "contract-messages-labels"
-  | "contract-messages-labels-picker"
-  | "contract-messages-money"
-  | "contract-messages-window"
-  | "contract-messages-anchor"
-  | "contract-messages-diff"
-  | "contract-messages-disclosures"
-  | "contract-messages-usage-paging"
-  | "contract-messages-usage-unknown"
-  | "contract-messages-usage-queued"
-  | "contract-messages-usage-priced"
-  | "contract-messages-usage-unreported"
-  | "contract-messages-session-cost"
-  | "contract-messages-reading"
-  | "contract-messages-public-ui"
-  | "contract-messages-recorded-files"
-  | "contract-messages-recorded-tools"
-  | "contract-messages-clock"
-  | "contract-reconnect"
-  | "contract-initial-question"
-  | "contract-permission-feedback"
-  | "contract-question-feedback"
-  | "contract-task-pending"
-  | "contract-task-background"
-  | "contract-rpc"
-  | "fail-start"
-  | "fail-teardown";
+/** Profile admission follows the scene's backend, not its contract-* name.
+ * New profiles must declare their dependency here; exact native readiness and
+ * project/version matching remain owned by the controller and preparation.
+ */
+export const profiles = {
+  ordinary: "v1",
+  "contract-load-priority": "neutral",
+  "contract-load-small": "v1",
+  "contract-load-large": "v1",
+  "contract-scale-request": "v1",
+  "contract-scale-overflow": "neutral",
+  "contract-scale-remaining": "neutral",
+  "contract-scale-heap": "v1",
+  "contract-scale-runtime": "v1",
+  "contract-scale-scroll": "v1",
+  "contract-scale-core": "neutral",
+  "contract-scale-paint": "v1",
+  "contract-scale-sessions": "v1",
+  "contract-scale-files": "v1",
+  "contract-visual-inbox": "neutral",
+  "contract-themes": "v1",
+  "contract-visual-styles": "neutral",
+  "contract-visual-provider-ports": "neutral",
+  "contract-visual-native-events": "neutral",
+  "contract-menus-inbox": "neutral",
+  "contract-menus-content": "neutral",
+  "contract-menus-context": "neutral",
+  "contract-menus-dialog": "neutral",
+  "contract-menus-hints": "neutral",
+  "contract-menus-permission": "neutral",
+  "contract-menus-question": "neutral",
+  "menus-default": "v1",
+  "contract-attention-demand": "neutral",
+  "contract-attention-digest": "neutral",
+  "contract-attention-lights": "neutral",
+  "contract-attention-native": "v1",
+  "contract-attention-auto": "v1",
+  "contract-attention-remote": "v1",
+  "revert-native": "v1",
+  "sessions-tasks": "v1",
+  "sessions-discovery": "v1",
+  "contract-sessions-inbox": "neutral",
+  "contract-sessions-panel": "neutral",
+  "contract-sessions-memory": "neutral",
+  "contract-sessions-membership": "neutral",
+  "contract-sessions-hierarchy": "neutral",
+  "contract-sessions-axiom": "neutral",
+  "contract-sessions-phantom": "neutral",
+  "contract-sessions-close": "neutral",
+  "contract-sessions-direct": "neutral",
+  "contract-sessions-resurrection": "neutral",
+  "contract-sessions-unknown": "neutral",
+  "contract-sessions-summary": "neutral",
+  "contract-sessions-progress": "neutral",
+  "contract-sessions-window": "neutral",
+  "contract-sessions-catalog": "neutral",
+  "contract-sessions-merge": "neutral",
+  "contract-sessions-tabs": "neutral",
+  "composer-pickers": "v1",
+  "composer-applied": "v1",
+  "composer-selection": "v1",
+  "composer-plan": "v1",
+  "composer-commands": "v1",
+  "composer-mentions": "v1",
+  "composer-submission": "v1",
+  "composer-required": "v1",
+  "composer-catalog": "v1",
+  "composer-native-default": "v1",
+  "composer-long-command": "v1",
+  "composer-history": "v1",
+  "composer-shell-failure": "v1",
+  "contract-composer-missing": "neutral",
+  "contract-composer-none": "neutral",
+  "contract-composer-pending-choice": "neutral",
+  "contract-composer-failed-variant": "neutral",
+  "contract-composer-native-null": "v1",
+  "messages-native": "v1",
+  "messages-tools": "v1",
+  "messages-cooling": "v1",
+  "messages-files": "v1",
+  "messages-context": "v1",
+  "messages-temperature": "v1",
+  "messages-helper-pages": "v1",
+  "messages-recovery": "v1",
+  "messages-recovery-retry": "v1",
+  "messages-forms": "v1",
+  "messages-tool-states": "v1",
+  "messages-priced": "v1",
+  isolated: "v1",
+  "provider-hold": "v1",
+  "transport-page": "v1",
+  "transport-deleted-seen": "v1",
+  "transport-shell": "v1",
+  "transport-freeze": "v1",
+  "transport-reconnect": "v1",
+  "transport-bootstrap": "v1",
+  "transport-errors-http": "v1",
+  "transport-errors-late": "v1",
+  "transport-enrichment": "v1",
+  "transport-cooling": "v1",
+  "transport-restart": "v1",
+  "contract-core": "neutral",
+  "contract-messages-highlight": "neutral",
+  "contract-messages-facts": "neutral",
+  "contract-messages-metadata": "v1",
+  "contract-messages-usage3": "neutral",
+  "contract-messages-usage120": "neutral",
+  "contract-messages-usage500": "neutral",
+  "contract-messages-context": "neutral",
+  "contract-messages-collapse": "neutral",
+  "contract-messages-labels": "neutral",
+  "contract-messages-labels-picker": "neutral",
+  "contract-messages-money": "neutral",
+  "contract-messages-window": "neutral",
+  "contract-messages-anchor": "neutral",
+  "contract-messages-diff": "neutral",
+  "contract-messages-disclosures": "neutral",
+  "contract-messages-usage-paging": "neutral",
+  "contract-messages-usage-unknown": "neutral",
+  "contract-messages-usage-queued": "neutral",
+  "contract-messages-usage-priced": "neutral",
+  "contract-messages-usage-unreported": "neutral",
+  "contract-messages-session-cost": "neutral",
+  "contract-messages-reading": "neutral",
+  "contract-messages-public-ui": "neutral",
+  "contract-messages-recorded-files": "v1",
+  "contract-messages-recorded-tools": "v1",
+  "contract-messages-clock": "neutral",
+  "contract-reconnect": "neutral",
+  "contract-initial-question": "neutral",
+  "contract-permission-feedback": "neutral",
+  "contract-question-feedback": "neutral",
+  "contract-task-pending": "neutral",
+  "contract-task-background": "neutral",
+  "contract-rpc": "neutral",
+  "fail-start": "v1",
+  "fail-teardown": "v1",
+} as const;
+export type Profile = keyof typeof profiles;
 export interface Commands {
   start: { profile: Profile; version: string };
   beginTest: { identity: string };
@@ -278,147 +284,19 @@ export function request(value: unknown): ControlRequest {
   switch (command) {
     case "start":
       if (
-        ![
-          "ordinary",
-          "contract-load-priority",
-          "contract-load-small",
-          "contract-load-large",
-          "contract-scale-request",
-          "contract-scale-overflow",
-          "contract-scale-remaining",
-          "contract-scale-heap",
-          "contract-scale-runtime",
-          "contract-scale-scroll",
-          "contract-scale-core",
-          "contract-scale-paint",
-          "contract-scale-sessions",
-          "contract-scale-files",
-          "contract-visual-inbox",
-          "contract-themes",
-          "contract-visual-styles",
-          "contract-visual-provider-ports",
-          "contract-visual-native-events",
-          "contract-menus-inbox",
-          "contract-menus-content",
-          "contract-menus-context",
-          "contract-menus-dialog",
-          "contract-menus-hints",
-          "contract-menus-permission",
-          "contract-menus-question",
-          "menus-default",
-          "contract-attention-demand",
-          "contract-attention-digest",
-          "contract-attention-lights",
-          "contract-attention-native",
-          "contract-attention-auto",
-          "contract-attention-remote",
-          "revert-native",
-          "sessions-tasks",
-          "sessions-discovery",
-          "contract-sessions-inbox",
-          "contract-sessions-panel",
-          "contract-sessions-memory",
-          "contract-sessions-membership",
-          "contract-sessions-hierarchy",
-          "contract-sessions-axiom",
-          "contract-sessions-phantom",
-          "contract-sessions-close",
-          "contract-sessions-direct",
-          "contract-sessions-resurrection",
-          "contract-sessions-unknown",
-          "contract-sessions-summary",
-          "contract-sessions-progress",
-          "contract-sessions-window",
-          "contract-sessions-catalog",
-          "contract-sessions-merge",
-          "contract-sessions-tabs",
-          "composer-pickers",
-          "composer-applied",
-          "composer-selection",
-          "composer-plan",
-          "composer-commands",
-          "composer-mentions",
-          "composer-submission",
-          "composer-required",
-          "composer-catalog",
-          "composer-native-default",
-          "composer-long-command",
-          "composer-history",
-          "composer-shell-failure",
-          "contract-composer-missing",
-          "contract-composer-none",
-          "contract-composer-pending-choice",
-          "contract-composer-failed-variant",
-          "contract-composer-native-null",
-          "messages-native",
-          "messages-tools",
-          "messages-cooling",
-          "messages-files",
-          "messages-context",
-          "messages-temperature",
-          "messages-helper-pages",
-          "messages-recovery",
-          "messages-recovery-retry",
-          "messages-forms",
-          "messages-tool-states",
-          "messages-priced",
-          "isolated",
-          "provider-hold",
-          "transport-page",
-          "transport-deleted-seen",
-          "transport-shell",
-          "transport-freeze",
-          "transport-reconnect",
-          "transport-bootstrap",
-          "transport-errors-http",
-          "transport-errors-late",
-          "transport-enrichment",
-          "transport-cooling",
-          "transport-restart",
-          "contract-core",
-          "contract-messages-highlight",
-          "contract-messages-facts",
-          "contract-messages-metadata",
-          "contract-messages-usage3",
-          "contract-messages-usage120",
-          "contract-messages-usage500",
-          "contract-messages-context",
-          "contract-messages-collapse",
-          "contract-messages-labels",
-          "contract-messages-labels-picker",
-          "contract-messages-money",
-          "contract-messages-window",
-          "contract-messages-anchor",
-          "contract-messages-diff",
-          "contract-messages-disclosures",
-          "contract-messages-usage-paging",
-          "contract-messages-usage-unknown",
-          "contract-messages-usage-queued",
-          "contract-messages-usage-priced",
-          "contract-messages-usage-unreported",
-          "contract-messages-session-cost",
-          "contract-messages-reading",
-          "contract-messages-public-ui",
-          "contract-messages-recorded-files",
-          "contract-messages-recorded-tools",
-          "contract-messages-clock",
-          "contract-reconnect",
-          "contract-initial-question",
-          "contract-permission-feedback",
-          "contract-question-feedback",
-          "contract-task-pending",
-          "contract-task-background",
-          "contract-rpc",
-          "fail-start",
-          "fail-teardown",
-        ].includes(
-          String(p.profile),
-        )
+        typeof p.profile !== "string" || !Object.hasOwn(profiles, p.profile)
       ) {
         throw new Error("Unknown scenario profile");
       }
-      if (!/^1\.\d+\.\d+$/.test(String(p.version))) {
+      if (
+        typeof p.version !== "string" || !/^[12]\.\d+\.\d+$/.test(p.version)
+      ) {
         throw new Error("Invalid version");
+      }
+      if (
+        p.version.startsWith("2.") && profiles[p.profile as Profile] === "v1"
+      ) {
+        throw new Error("Scenario requires opencode V1");
       }
       break;
     case "beginTest":
