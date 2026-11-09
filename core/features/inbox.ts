@@ -4,7 +4,7 @@ import {
   type InboxBaseline,
   type InboxOp,
   type InboxSnapshot,
-  type IndexEntry,
+  type IndexMetadata,
   isSessionID,
   type ProjectRecord,
   type ProjectSummary,
@@ -79,11 +79,22 @@ export class InboxFeature implements FrameSource {
     let value = this.#taskProjects.get(directory);
     if (!value) {
       value = [...this.#tasks.values()].filter((task) =>
-        task.directory === directory
+        (this.summaries.values.get(directory)?.scopes ?? [directory]).includes(
+          task.directory,
+        )
       );
       this.#taskProjects.set(directory, value);
     }
     return value;
+  }
+  #invalidateTasks(scope: string): void {
+    for (const directory of this.#taskProjects.keys()) {
+      if (
+        (this.summaries.values.get(directory)?.scopes ?? [directory]).includes(
+          scope,
+        )
+      ) this.#taskProjects.delete(directory);
+    }
   }
   #views = new Map<string, () => InboxBaseline>();
   retained(): readonly string[] {
@@ -104,7 +115,11 @@ export class InboxFeature implements FrameSource {
     for (const task of this.#projectTasks(directory)) {
       for (const id of task.sessions) ids.add(id);
     }
-    for (const entry of this.index.catalog(directory)) {
+    for (
+      const entry
+        of (this.summaries.values.get(directory)?.scopes ?? [directory])
+          .flatMap((scope) => this.index.catalog(scope))
+    ) {
       if (entry.deleted) continue;
       const a = entry.attention;
       if (
@@ -147,7 +162,9 @@ export class InboxFeature implements FrameSource {
         leased = entries();
       const ops = changes.filter((change) =>
         change.directory !== undefined
-          ? change.directory === directory
+          ? directory !== undefined &&
+            (this.summaries.values.get(directory)?.scopes ?? [directory])
+              .includes(change.directory)
           : change.sessionID !== undefined
           ? leased.has(change.sessionID)
           : true
@@ -182,8 +199,10 @@ export class InboxFeature implements FrameSource {
     const stopRows = this.index.observe((entry, previous, delta) => {
       if (
         delta ||
-        entry.directory !== this.#directory(view()) &&
-          previous?.directory !== this.#directory(view())
+        !(this.summaries.values.get(this.#directory(view()) ?? "")?.scopes ??
+          [this.#directory(view())]).some((scope) =>
+            entry.directory === scope || previous?.directory === scope
+          )
       ) return;
       if (
         !previous || entry.title !== previous.title ||
@@ -281,6 +300,7 @@ export class InboxFeature implements FrameSource {
         finish: this.#finishes.get(id) ?? 0,
       }),
       (summary) => {
+        this.#taskProjects.delete(summary.directory);
         this.#discoveryProject(summary.directory, summary);
         this.#capture("summaries", summary.directory);
         this.#summaryPending.set(summary.directory, summary);
@@ -314,7 +334,9 @@ export class InboxFeature implements FrameSource {
       }),
       index.observeRemoval((id) => this.summaries.remove(id)),
       index.observeAuthority((value) => this.summaries.authority(value)),
-      index.observeSeeds((values) => this.summaries.seed(values)),
+      index.observeSeeds((values) => {
+        for (const entry of this.summaries.seed(values)) this.#observe(entry);
+      }),
       stores.projects.listen((change) => {
         this.#identity();
         for (const project of change.upsert) {
@@ -382,7 +404,7 @@ export class InboxFeature implements FrameSource {
       }),
       stores.tasks.listen((change) => {
         for (const task of change.upsert) {
-          this.#taskProjects.delete(task.directory);
+          this.#invalidateTasks(task.directory);
           this.#tasks.set(task.id, task);
           this.#capture("tasks", task.id);
           this.#queue(`task:${task.id}`, { op: "task.upsert", task }, {
@@ -391,7 +413,7 @@ export class InboxFeature implements FrameSource {
         }
         for (const id of change.remove) {
           const task = this.#tasks.get(id);
-          if (task) this.#taskProjects.delete(task.directory);
+          if (task) this.#invalidateTasks(task.directory);
           this.#tasks.delete(id);
           this.#capture("tasks", id);
           this.#queue(`task:${id}`, { op: "task.remove", id }, {
@@ -405,6 +427,7 @@ export class InboxFeature implements FrameSource {
         void this.#scan();
       }),
     );
+    for (const entry of index.snapshotEntries()) this.#observe(entry);
     void this.#scan();
   }
   #discoveryProject(
@@ -654,7 +677,11 @@ export class InboxFeature implements FrameSource {
     for (const listener of this.#listeners) listener(structuredClone(frame));
     for (const listener of this.#publications) listener(changes);
   }
-  #observe(entry: IndexEntry, previous?: IndexEntry, tx?: StoreWrite): void {
+  #observe(
+    entry: IndexMetadata,
+    previous?: IndexMetadata,
+    tx?: StoreWrite,
+  ): void {
     const s = this.stores;
     if (
       previous?.status !== undefined && previous.status !== "idle" &&
@@ -680,14 +707,19 @@ export class InboxFeature implements FrameSource {
     }
     // Joined writes have not published their policy changes yet. Revalidate
     // against that transaction's current rows, using the same activity owner.
+    const leaf = this.summaries.leaf(entry.directory, entry.projectID);
+    const context = this.summaries.context(leaf);
     for (const project of tx ? s.projects.policies() : this.#policies) {
       if (
-        project.directory === entry.directory && project.inactive &&
+        !entry.deleted &&
+        (project.directory === leaf || project.directory === context ||
+          project.directory === entry.directory) &&
+        project.inactive &&
         (active ||
           (this.#finishes.get(entry.id) ?? 0) >
             (this.#seen.get(project.user)?.get(entry.id) ?? 0))
       ) {
-        s.projects.reactivate(project.user, entry.directory, tx);
+        s.projects.reactivate(project.user, project.directory, tx);
       }
     }
   }
@@ -839,7 +871,11 @@ export class InboxFeature implements FrameSource {
           }
           s.projects.inactive(user(), p.directory, p.inactive, tx);
           for (const entry of this.index.values()) {
-            if (entry.directory === p.directory) {
+            const leaf = this.summaries.leaf(entry.directory, entry.projectID);
+            if (
+              entry.directory === p.directory || leaf === p.directory ||
+              this.summaries.context(leaf) === p.directory
+            ) {
               this.#observe(entry, undefined, tx);
             }
           }

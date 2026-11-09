@@ -4,12 +4,14 @@ import {
   PROJECT_STATUS_PRIORITY,
   type ProjectStatus,
   type ProjectSummary,
+  type ProjectTopology,
 } from "@otk/protocol";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
   readonly values = new Map<string, ProjectSummary>();
   #sessions = new Map<string, IndexMetadata>();
+  #repoSessions = new Map<string, Set<string>>();
   #projects = new Map<string, Map<string, IndexMetadata>>();
   #facts = new Map<
     string,
@@ -31,14 +33,121 @@ export class ProjectSummaries {
   #catalog = false;
   #known = new Set<string>();
   #seeds = new Map<string, import("@otk/harness").ProjectSeed>();
+  #leafSeeds = new Map<
+    string,
+    Map<string, import("@otk/harness").ProjectSeed>
+  >();
   #seeded = false;
-  seed(values: readonly import("@otk/harness").ProjectSeed[]): void {
+  #topology = new Map<string, ProjectTopology>();
+  #leaves = new Map<string, Set<string>>();
+  #direct = new Map<string, ProjectSummary>();
+  /** Never merge by path alone: a nested working directory must share repo identity. */
+  leaf(directory: string, repoID?: string): string {
+    const exact = this.#seeds.get(directory)?.topology;
+    if (exact && (!repoID || exact.repoID === repoID)) {
+      return exact.leafDirectory;
+    }
+    let root = directory;
+    let length = -1;
+    for (const topology of this.#topology.values()) {
+      if (topology.repoID !== repoID) continue;
+      const candidate = topology.leafDirectory;
+      if (
+        (directory === candidate || directory.startsWith(candidate + "/")) &&
+        candidate.length > length
+      ) {
+        root = candidate;
+        length = candidate.length;
+      }
+    }
+    return root;
+  }
+  context(directory: string): string | undefined {
+    return this.#topology.get(directory)?.parentDirectory;
+  }
+  seed(
+    values: readonly import("@otk/harness").ProjectSeed[],
+  ): readonly IndexMetadata[] {
     this.#seeded = true;
+    values = values.map((value) =>
+      value.topology === undefined
+        ? { ...value, topology: this.#seeds.get(value.directory)?.topology }
+        : value
+    );
+    const repos = new Set<string>(), dirty = new Set<string>();
+    for (const value of values) {
+      const before = this.#seeds.get(value.directory);
+      dirty.add(this.leaf(value.directory));
+      if (JSON.stringify(before?.topology) !== JSON.stringify(value.topology)) {
+        for (const topology of [before?.topology, value.topology]) {
+          if (!topology) continue;
+          repos.add(topology.repoID);
+          dirty.add(topology.canonicalRoot);
+          dirty.add(topology.leafDirectory);
+        }
+      }
+    }
+    const affected = [...repos].flatMap((
+      repo,
+    ) => [...this.#repoSessions.get(repo) ?? []]);
+    for (const id of affected) {
+      const entry = this.#sessions.get(id)!;
+      const directory = this.leaf(entry.directory, entry.projectID);
+      this.#contribute(entry, -1);
+      this.#projects.get(directory)?.delete(id);
+      dirty.add(directory);
+    }
     for (const value of values) {
       this.#seeds.set(value.directory, value);
-      this.ensure(value.directory);
-      this.#update(value.directory);
     }
+    this.#topology.clear();
+    for (const value of this.#seeds.values()) {
+      if (value.topology) {
+        this.#topology.set(value.topology.leafDirectory, value.topology);
+      }
+    }
+    this.#leafSeeds.clear();
+    for (const seed of this.#seeds.values()) {
+      const directory = this.leaf(seed.directory);
+      const seeds = this.#leafSeeds.get(directory) ?? new Map();
+      seeds.set(seed.directory, seed);
+      this.#leafSeeds.set(directory, seeds);
+    }
+    this.#leaves.clear();
+    for (const topology of this.#topology.values()) {
+      const leaves = this.#leaves.get(topology.canonicalRoot) ?? new Set();
+      leaves.add(topology.leafDirectory);
+      this.#leaves.set(topology.canonicalRoot, leaves);
+      if (!this.#topology.has(topology.canonicalRoot)) {
+        this.#topology.set(topology.canonicalRoot, {
+          ...topology,
+          leafDirectory: topology.canonicalRoot,
+          parentDirectory: undefined,
+        });
+      }
+    }
+    // Reparent only affected repos; count-only seeds never traverse sessions.
+    // Session/task identities and persisted marks retain their exact scope.
+    for (const id of affected) {
+      const entry = this.#sessions.get(id)!;
+      const directory = this.leaf(entry.directory, entry.projectID);
+      const project = this.#projects.get(directory) ?? new Map();
+      project.set(entry.id, entry);
+      this.#projects.set(directory, project);
+      this.#contribute(entry, 1);
+      dirty.add(directory);
+    }
+    for (const seed of values) {
+      dirty.add(this.leaf(seed.directory));
+    }
+    for (const directory of dirty) {
+      if (!this.#projects.has(directory)) {
+        this.#projects.set(directory, new Map());
+      }
+      this.#update(directory);
+    }
+    this.retain(this.#known);
+    return affected.map((id) => this.#sessions.get(id)!);
   }
   constructor(
     readonly marks: (id: string) => { seen: number; finish: number },
@@ -46,20 +155,27 @@ export class ProjectSummaries {
     readonly retire: (directory: string) => void = () => {},
   ) {}
   ensure(directory: string): void {
+    this.#known.add(directory);
+    directory = this.leaf(directory);
     if (!this.#projects.has(directory)) {
       this.#projects.set(directory, new Map());
-      this.#update(directory);
     }
+    if (!this.values.has(directory)) this.#update(directory);
   }
   retain(directories: Iterable<string>): void {
     this.#known = new Set(directories);
     for (const directory of this.#known) this.ensure(directory);
     for (const [directory, entries] of this.#projects) {
       if (
-        entries.size || this.#known.has(directory) || this.#seeds.has(directory)
-      ) continue;
+        entries.size || this.#known.has(directory) ||
+        this.#leafSeeds.has(directory) || this.#leaves.has(directory)
+      ) {
+        this.#publish(directory);
+        continue;
+      }
       this.#projects.delete(directory);
       this.#totals.delete(directory);
+      this.#direct.delete(directory);
       this.values.delete(directory);
       this.retire(directory);
     }
@@ -73,26 +189,35 @@ export class ProjectSummaries {
     const before = this.#sessions.get(entry.id);
     if (JSON.stringify(before) === JSON.stringify(entry)) return;
     if (before) {
+      this.#repoSessions.get(before.projectID)?.delete(entry.id);
       this.#contribute(before, -1);
-      this.#projects.get(before.directory)?.delete(entry.id);
+      this.#projects.get(this.leaf(before.directory, before.projectID))?.delete(
+        entry.id,
+      );
     }
     this.#sessions.set(entry.id, entry);
-    const project = this.#projects.get(entry.directory) ?? new Map();
+    const repo = this.#repoSessions.get(entry.projectID) ?? new Set();
+    repo.add(entry.id);
+    this.#repoSessions.set(entry.projectID, repo);
+    const directory = this.leaf(entry.directory, entry.projectID);
+    const project = this.#projects.get(directory) ?? new Map();
     project.set(entry.id, entry);
-    this.#projects.set(entry.directory, project);
+    this.#projects.set(directory, project);
     this.#contribute(entry, 1);
-    if (before && before.directory !== entry.directory) {
-      this.#update(before.directory);
+    if (before && this.leaf(before.directory, before.projectID) !== directory) {
+      this.#update(this.leaf(before.directory, before.projectID));
     }
-    this.#update(entry.directory);
+    this.#update(directory);
   }
   remove(id: string): void {
     const before = this.#sessions.get(id);
     if (!before) return;
     this.#contribute(before, -1);
     this.#sessions.delete(id);
-    this.#projects.get(before.directory)?.delete(id);
-    this.#update(before.directory);
+    this.#repoSessions.get(before.projectID)?.delete(id);
+    const directory = this.leaf(before.directory, before.projectID);
+    this.#projects.get(directory)?.delete(id);
+    this.#update(directory);
     this.retain(this.#known);
   }
   mark(id: string): void {
@@ -100,7 +225,7 @@ export class ProjectSummaries {
     if (entry) {
       this.#contribute(entry, -1);
       this.#contribute(entry, 1);
-      this.#update(entry.directory);
+      this.#update(this.leaf(entry.directory, entry.projectID));
     }
   }
   permissions(lookup: (id: string) => number): void {
@@ -116,7 +241,8 @@ export class ProjectSummaries {
   }
   #contribute(entry: IndexMetadata, sign: 1 | -1): void {
     if (entry.deleted) return;
-    let totals = this.#totals.get(entry.directory);
+    const directory = this.leaf(entry.directory, entry.projectID);
+    let totals = this.#totals.get(directory);
     if (!totals) {
       totals = {
         count: 0,
@@ -126,7 +252,7 @@ export class ProjectSummaries {
         times: new Map(),
         last: 0,
       };
-      this.#totals.set(entry.directory, totals);
+      this.#totals.set(directory, totals);
     }
     const a = entry.attention, marks = this.marks(entry.id);
     const unseen = Number(!entry.parentID && marks.finish > marks.seen);
@@ -192,7 +318,19 @@ export class ProjectSummaries {
       PROJECT_STATUS_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
         "idle";
     const knownCount = this.#catalog;
-    const seed = this.#seeds.get(directory);
+    const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
+    const seed = seeds.length
+      ? {
+        hasSessions: seeds.some((s) => s.hasSessions),
+        sessionCount: seeds.every((s) => s.sessionCount !== null)
+          ? seeds.reduce((n, s) => n + s.sessionCount!, 0)
+          : null,
+        lastActivity:
+          seeds.every((s) => s.lastActivity !== null || !s.hasSessions)
+            ? Math.max(0, ...seeds.map((s) => s.lastActivity ?? 0))
+            : null,
+      }
+      : undefined;
     const summary: ProjectSummary = {
       directory,
       hasSessions: seed?.hasSessions || count > 0,
@@ -209,8 +347,69 @@ export class ProjectSummaries {
         ? last
         : null,
       authority,
+      ...(this.#topology.has(directory)
+        ? {
+          topology: this.#topology.get(directory),
+          scopes: [
+            ...new Set([
+              directory,
+              ...seeds.map((s) => s.directory),
+              ...[...entries.values()].map((e) => e.directory),
+            ]),
+          ].sort(),
+        }
+        : {}),
     };
-    if (JSON.stringify(summary) === JSON.stringify(previous)) return;
+    this.#direct.set(directory, summary);
+    this.#publish(directory);
+    const parent = summary.topology?.parentDirectory;
+    if (parent) this.#publish(parent);
+  }
+  #publish(directory: string): void {
+    const direct = this.#direct.get(directory);
+    if (!direct) return;
+    const leaves = this.#leaves.get(directory);
+    const summaries = leaves &&
+      [...leaves].map((leaf) => this.#direct.get(leaf)).filter((
+        s,
+      ): s is ProjectSummary => !!s);
+    const summary: ProjectSummary = summaries?.length
+      ? {
+        ...direct,
+        direct,
+        hasSessions: summaries.some((s) => s.hasSessions),
+        sessionCount: summaries.every((s) => s.sessionCount !== null)
+          ? summaries.reduce((n, s) => n + s.sessionCount!, 0)
+          : null,
+        unseenCount: summaries.every((s) => s.unseenCount !== null)
+          ? summaries.reduce((n, s) => n + s.unseenCount!, 0)
+          : null,
+        lastActivity: summaries.every((s) => s.lastActivity !== null)
+          ? Math.max(...summaries.map((s) => s.lastActivity!))
+          : null,
+        status: PROJECT_STATUS_PRIORITY.find((status) =>
+          summaries.some((s) => s.status === status)
+        ) ?? null,
+        authority: summaries.some((s) => s.authority === "unknown")
+          ? "unknown"
+          : summaries.some((s) => s.authority === "stale")
+          ? "stale"
+          : "current",
+      }
+      : direct;
+    // Inventory topology is retained independently of row materialization.
+    // Empty untracked checkouts are not fabricated projects on the wire.
+    if (
+      this.#seeded && !summary.hasSessions && !this.#known.has(directory) &&
+      !summary.scopes?.some((scope) => this.#known.has(scope)) &&
+      !this.#projects.get(directory)?.size
+    ) {
+      if (this.values.delete(directory)) this.retire(directory);
+      return;
+    }
+    if (
+      JSON.stringify(summary) === JSON.stringify(this.values.get(directory))
+    ) return;
     this.values.set(directory, summary);
     this.publish(summary);
   }
