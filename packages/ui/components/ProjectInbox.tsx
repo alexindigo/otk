@@ -131,7 +131,7 @@ export default function ProjectInbox(props: {
         sidecarId: project().sidecarId,
         directory: project().directory,
         discovered: projectGroup(project()) === "discovered",
-        value: !project().inactive,
+        value: !(project().inactivePolicy ?? project().inactive),
       },
     });
     const name = () => projectName(project().directory);
@@ -140,7 +140,7 @@ export default function ProjectInbox(props: {
       <div
         ref={contextTarget(target)}
         {...selection({
-          class: "otk-project-row",
+          class: `otk-project-row${project().depth ? " is-subproject" : ""}`,
           kind: "current",
           selected: props.selected?.sidecarId === project().sidecarId &&
             props.selected?.directory === project().directory,
@@ -156,14 +156,16 @@ export default function ProjectInbox(props: {
           ? "unknown"
           : project().status}
         data-summary-authority={project().summary?.authority}
+        data-project-parent={project().topology?.parentDirectory}
+        data-project-repo={project().topology?.repoID}
       >
         <SelectionContent class="otk-project-content">
           <button
             type="button"
             class="otk-project-open"
             aria-label={`Open project ${name()}${
-              duplicate() ? ` on ${project().label}` : ""
-            }`}
+              project().parentLabel ? ` in ${project().parentLabel}` : ""
+            }${duplicate() ? ` on ${project().label}` : ""}`}
             title={`${project().directory} · ${project().label}${
               projectGroup(project()) === "discovered"
                 ? ""
@@ -175,6 +177,9 @@ export default function ProjectInbox(props: {
             }`}
             onClick={() => void open(project())}
           >
+            <Show when={project().depth && !collapsed()}>
+              <span class="otk-project-branch" aria-hidden="true" />
+            </Show>
             <span class="otk-project-marker">
               <Show
                 when={projectGroup(project()) !== "discovered" &&
@@ -196,6 +201,14 @@ export default function ProjectInbox(props: {
                 >
                   {name()}
                 </span>
+                <Show when={project().inactive && project().parentLabel}>
+                  <span
+                    class="otk-project-parent otk-control-label"
+                    title={project().topology?.canonicalRoot}
+                  >
+                    {project().parentLabel}
+                  </span>
+                </Show>
                 <Show when={duplicate()}>
                   <span class="otk-project-machine">{project().label}</span>
                 </Show>

@@ -251,3 +251,22 @@
 .otk-project-inbox[data-collapsed=true] .otk-server-status {
   padding: 0;
 }
+.otk-project-branch {
+  flex: none;
+  width: var(--control-size);
+  align-self: stretch;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+}
+.otk-project-branch::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-inline-start: 1px solid var(--otk-border);
+  border-block-end: 1px solid var(--otk-border);
+}
+.otk-project-parent {
+  min-width: 0;
+  font-size: var(--text-meta);
+}

@@ -282,6 +282,7 @@ export default function ProjectSessions(props: {
                           kind: "session",
                           data: {
                             ...props.project!,
+                            directory: row().session.directory,
                             sessionID: row().session.id,
                             title: row().session.title,
                             origin: "row" as const,
