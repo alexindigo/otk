@@ -3,6 +3,7 @@ import { join } from "@std/path";
 import { sourceTree } from "./source.ts";
 import { stripVTControlCharacters } from "node:util";
 import { migrationLedger } from "./migration-audit.ts";
+import { nativeLane } from "./lanes.ts";
 
 const flags = new Set<string>();
 for (let i = 0; i < Deno.args.length; i++) {
@@ -74,7 +75,9 @@ if (
     ],
   ]);
 }
-if (version === "1.18.34") tiers.push(["themes", ["task", "test:themes"]]);
+if (nativeLane(version, Deno.env.get("OTK_TEST_LANE")) === "A") {
+  tiers.push(["themes", ["task", "test:themes"]]);
+}
 const shard = value("--shard") ??
   Deno.args.find((arg) => arg.startsWith("--shard="))?.slice(8);
 if (shard) {

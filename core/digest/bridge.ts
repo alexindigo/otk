@@ -10,7 +10,7 @@ import type {
 } from "@otk/harness";
 import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
 import { OperationFailure, StoppedError } from "@otk/protocol";
-import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
+import type { DigestNativeConfig } from "./providers.ts";
 import type {
   DigestPressure,
   FromWorker,
@@ -22,7 +22,7 @@ import type { SectionObserver } from "../diagnostics.ts";
 export interface DigestBridgeOptions {
   statePath: string;
   provider: string;
-  native: OpencodeV1Config;
+  native: DigestNativeConfig;
   policy: DigestPolicy;
   publish(value: DigestPublication): void;
   diagnostic?(error: Error): void;

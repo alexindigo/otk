@@ -78,6 +78,9 @@ export async function waitFor<T>(
   throw new Error(`Timed out waiting: ${JSON.stringify(last)}`);
 }
 export class OpencodeTest {
+  readonly kind = "opencode-v1" as const;
+  readonly version = nativeVersion;
+  readonly discoveryEnv: Record<string, string> = {};
   root!: string;
   directory!: string;
   port!: number;
@@ -234,6 +237,74 @@ export class OpencodeTest {
     });
   }
   /** OTK-facing session fixture, with the native identity retained explicitly. */
+  createSession(
+    title = "Fixture session",
+  ): Promise<{ id: string; nativeID: string }> {
+    return this.session("/session", { method: "POST", body: { title } });
+  }
+  listSessions(limit = 20): Promise<{ id: string; nativeID: string }[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+      throw new Error("Invalid fixture page limit");
+    }
+    return this.sessionList(`/session?limit=${limit}`);
+  }
+  readSession(id: string): Promise<unknown> {
+    return this.request(`/session/${id}`);
+  }
+  readMessages(id: string, limit = 10): Promise<unknown> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+      throw new Error("Invalid fixture page limit");
+    }
+    return this.request(`/session/${id}/message?limit=${limit}`);
+  }
+  async listPermissions(
+    id: string,
+  ): Promise<{ id: string; sessionID: string }[]> {
+    const rows = await this.request<{ id: string; sessionID: string }[]>(
+      "/permission",
+    );
+    const native = opencodeV1SessionID.decode(id);
+    return rows.filter((row) => row.sessionID === native).map((row) => ({
+      id: row.id,
+      sessionID: id,
+    }));
+  }
+  replyPermission(
+    id: string,
+    requestID: string,
+    decision: "once" | "always" | "reject",
+    _message?: string,
+  ): Promise<unknown> {
+    opencodeV1SessionID.decode(id);
+    return this.request(`/permission/${requestID}/reply`, {
+      method: "POST",
+      body: { reply: decision },
+    });
+  }
+  stageRevert(id: string, messageID: string, files: boolean): Promise<unknown> {
+    if (!files) {
+      throw new Error("Stock V1 does not support messages-only revert");
+    }
+    return this.request(`/session/${id}/revert`, {
+      method: "POST",
+      body: { messageID },
+    });
+  }
+  restore(id: string): Promise<unknown> {
+    return this.request(`/session/${id}/unrevert`, { method: "POST" });
+  }
+  prompt(id: string, text: string): Promise<unknown> {
+    return this.request(`/session/${id}/prompt_async`, {
+      method: "POST",
+      body: {
+        parts: [{ type: "text", text }],
+        model: { providerID: "fake", modelID: "scripted" },
+      },
+    });
+  }
+  interrupt(id: string): Promise<unknown> {
+    return this.request(`/session/${id}/abort`, { method: "POST" });
+  }
   async session<T extends { id: string }>(
     path: "/session",
     options: { method: string; body?: unknown; directory?: string },
@@ -461,3 +532,4 @@ export class OpencodeTest {
     await this.#stop();
   }
 }
+export { OpencodeTest as OpencodeV1Test };

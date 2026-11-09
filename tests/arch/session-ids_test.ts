@@ -10,6 +10,12 @@ function identityErrors(path: string, source: string): string[] {
     errors.push("native session codec belongs to its single native owner");
   }
   if (
+    path !== "packages/harness-opencode-v2-server/ids.ts" &&
+    source.includes("opcv2-")
+  ) {
+    errors.push("native V2 session codec belongs to its single native owner");
+  }
+  if (
     path.startsWith("core/features/") &&
     /\btext\([^,]+,\s*["'](?:sessionID|parentID)["']/.test(source)
   ) {

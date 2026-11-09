@@ -18,6 +18,15 @@ export async function validateProviderCache(
     const manifest = JSON.parse(
       await Deno.readTextFile(join(path, "ready.json")),
     );
+    if (nativeVersion.startsWith("2.")) {
+      if (
+        manifest.opencode !== nativeVersion ||
+        manifest.provider !== "bundled-openai-compatible"
+      ) {
+        throw new Error("V2 bundled provider preparation mismatch");
+      }
+      return path;
+    }
     const plugin = JSON.parse(
       await Deno.readTextFile(
         join(
@@ -47,6 +56,9 @@ export async function validateProviderCache(
 
 /** Config and DB stay private. Only the prepared immutable dependency tree is shared. */
 export async function seedProviderPackages(directory: string): Promise<void> {
+  if (nativeVersion.startsWith("2.")) {
+    throw new Error("V2 uses bundled providers, not V1 plugin packages");
+  }
   const cache = await validateProviderCache();
   await Deno.mkdir(directory, { recursive: true });
   for (const name of ["package.json", "package-lock.json"]) {

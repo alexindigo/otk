@@ -48,6 +48,55 @@ const dump = (db: OtkDb) =>
     db.connection.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()
   );
 
+Deno.test("independent proven upgrades preserve references and join metadata contributors atomically", () => {
+  const root = Deno.makeTempDirSync();
+  const db = new OtkDb(root, migrations, { busyms: 5000 });
+  try {
+    seed(db);
+    createSessionReferenceUpgrade(opencodeV1SessionID.legacy)(db);
+    const before = dump(db);
+    const proven = (value: string) =>
+      value === "opcv1-ses_one" ? "opcv2-ses_one" : value;
+    const failure = createSessionReferenceUpgrade(proven, {
+      name: "opencode-v2-proven-session-ids",
+      collisions: "reject",
+      references: () => {
+        throw new Error("metadata contributor failed");
+      },
+    });
+    assertThrows(() => failure(db), Error, "metadata contributor");
+    assertEquals(dump(db), before);
+    let contributions = 0;
+    const upgrade = createSessionReferenceUpgrade(proven, {
+      name: "opencode-v2-proven-session-ids",
+      collisions: "reject",
+      references: (_store, convert) => {
+        assertEquals(
+          convert("opcv1-ses_one", "metadata-receipt"),
+          "opcv2-ses_one",
+        );
+        assertEquals(
+          convert("opcv1-ses_other", "unproven-receipt"),
+          "opcv1-ses_other",
+        );
+        contributions++;
+      },
+    });
+    upgrade(db);
+    upgrade(db);
+    assertEquals(contributions, 1);
+    assertEquals(
+      db.connection.prepare(
+        "SELECT session FROM task_sessions ORDER BY position",
+      ).all(),
+      [{ session: "opcv2-ses_one" }, { session: "opcv1-ses_other" }],
+    );
+  } finally {
+    db.close();
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
 Deno.test("beta.1 references migrate atomically, merge only permitted collisions and preserve JSON", () => {
   const root = Deno.makeTempDirSync();
   const diagnostics: string[] = [];

@@ -37,6 +37,7 @@ const guest = Deno.env.get("OTK_TEST_GUEST") ?? ({
   "1.18.34": "otk-tests-a",
   "1.18.35": "otk-tests-b",
   "1.19.3": "otk-tests-c",
+  "2.2.6": "otk-tests-a",
 } as Record<string, string>)[build.native.version];
 const run =
   `integration-${guest}-${build.native.version}-${group}-${Date.now()}-${crypto.randomUUID()}`;

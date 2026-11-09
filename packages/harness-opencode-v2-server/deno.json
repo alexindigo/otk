@@ -1,0 +1,10 @@
+{
+  "name": "@otk/harness-opencode-v2-server",
+  "version": "0.1.0",
+  "license": "LGPL-3.0-only",
+  "exports": "./mod.ts",
+  "imports": {
+    "@opencode/client": "npm:@opencode/client@2.2.6",
+    "@opencode/client/service": "npm:@opencode/client@2.2.6/service"
+  }
+}

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeLane } from "./lanes.ts";
 import entries from "../../tests/browser/quarantine.json" with { type: "json" };
 const version = Deno.args[0];
 const projects = [
   `oc-${version}`,
   `scale-${version}`,
-  ...(version === "1.18.34" ? ["themes"] : []),
+  ...(nativeLane(version, Deno.env.get("OTK_TEST_LANE")) === "A"
+    ? ["themes"]
+    : []),
 ];
 let exit = 0;
 for (const project of projects) {

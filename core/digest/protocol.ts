@@ -5,7 +5,7 @@ import type {
   SessionMetadata,
   TurnUsageSnapshot,
 } from "@otk/protocol";
-import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
+import type { DigestNativeConfig } from "./providers.ts";
 import type { TranscriptMetadata } from "@otk/harness";
 import type { ProviderReadKinds, ProviderReadOptions } from "@otk/harness";
 import type { PublicFailure } from "@otk/protocol";
@@ -53,7 +53,7 @@ export type ToWorker =
       t: "start";
       provider: string;
       statePath: string;
-      native: OpencodeV1Config;
+      native: DigestNativeConfig;
       policy: DigestPolicy;
       since: number;
       connection?: number;

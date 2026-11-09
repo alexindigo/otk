@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeLane } from "./lanes.ts";
 import { join } from "@std/path";
 import { migrationLedger } from "./migration-audit.ts";
 import { sourceTree } from "./source.ts";
@@ -160,7 +161,10 @@ if (legacy.length) {
   ) throw new Error("Missing old/new retirement receipt");
 }
 for (const lane of ["behavior", "scale", "themes"]) {
-  if (lane === "themes" && version !== "1.18.34") continue;
+  if (
+    lane === "themes" &&
+    nativeLane(version, Deno.env.get("OTK_TEST_LANE")) !== "A"
+  ) continue;
   const belongs = (file: string) =>
     (file.includes("/themes/")
       ? "themes"

@@ -21,6 +21,8 @@ import { DigestBridge } from "./core/digest/bridge.ts";
 import { digestProgressSource } from "./core/features/digest-progress.ts";
 import type { ServingDiagnostics } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
+import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
+import { selectHarness } from "./harness-selection.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
   return memo ??= loadConfig({
@@ -35,9 +37,29 @@ export async function start(
   signal?: AbortSignal,
   diagnostic: DiagnosticSink = diagnosticsLog(cfg.log.level),
 ): Promise<CoreServer> {
-  if (cfg.harness.type !== "opencode-v1") {
-    throw new Error(
-      `harness.type (OTK_HARNESS_TYPE): unsupported backend ${cfg.harness.type}`,
+  const selected = await selectHarness(
+    cfg.harness,
+    Deno.env.toObject(),
+    signal,
+  );
+  if (selected.kind === "opencode-v2-server") {
+    const backend = new OpencodeV2ServerAdapter(
+      {
+        serviceFile: selected.file,
+        harness: cfg.harness,
+        messages: cfg.messages,
+      },
+      selected.service,
+      (error) => diagnostic("warn", "opencode V2", error),
+    );
+    return await startApplication(
+      cfg,
+      backend,
+      fromFileUrl(new URL("./web/dist/", import.meta.url)),
+      {
+        diagnostic,
+        signal,
+      },
     );
   }
   const index = new IndexStore(diagnostics?.section);

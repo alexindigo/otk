@@ -162,6 +162,17 @@ the executable and unit preserves your user config and state.
 
 ### Session identity and storage in beta.2
 
+`harness.type = "auto"` now discovers the local opencode V2 service through
+`$XDG_STATE_HOME/opencode/service.json` (or
+`~/.local/state/opencode/service.json`). OTK never starts or owns that service.
+A missing registration permits fallback to the configured V1 URL; a broken
+registration or bad credentials does not. Explicit `opencode-v1` keeps the
+existing V1 adapter and URL/auth settings. Explicit `opencode-v2-server`
+requires local service discovery, with no remote URL/password settings. The V2
+client is pinned to 2.2.6; other 2.x versions warn. This branch's V2 foundation
+is qualified separately from parity areas as they are added; see
+`packages/harness-opencode-v2-server/README.md`.
+
 The adapter/package is now `opencode-v1` / `@otk/harness-opencode-v1`.
 `harness.type = "opencode1"` remains a deprecated config alias and logs a
 message asking you to use `opencode-v1`; OTK does not rewrite your operator

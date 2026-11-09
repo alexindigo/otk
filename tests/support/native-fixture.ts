@@ -1,9 +1,49 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { join } from "@std/path";
 import { FakeLlm } from "./fake-llm.ts";
-import { OpencodeTest } from "./opencode.ts";
+import { join } from "@std/path";
 import { SidecarTest } from "./sidecar.ts";
 import { acquire, resources } from "./resources.ts";
+import { nativeKind } from "./native.ts";
+import { OpencodeTest } from "./opencode.ts";
+import { OpencodeV2Test } from "./opencode-v2.ts";
+
+/** Semantic native fixture seam. Native shapes stay in version-specific tests. */
+export interface NativeFixture {
+  readonly kind: "opencode-v1" | "opencode-v2-server";
+  readonly version: string;
+  readonly root: string;
+  readonly directory: string;
+  readonly url: string;
+  readonly db: string;
+  readonly discoveryEnv: Record<string, string>;
+  createSession(title?: string): Promise<{ id: string; nativeID: string }>;
+  listSessions(limit?: number): Promise<{ id: string; nativeID: string }[]>;
+  readSession(id: string): Promise<unknown>;
+  readMessages(id: string, limit?: number): Promise<unknown>;
+  prompt(id: string, text: string): Promise<unknown>;
+  interrupt(id: string): Promise<unknown>;
+  listPermissions(id: string): Promise<{ id: string; sessionID: string }[]>;
+  replyPermission(
+    id: string,
+    requestID: string,
+    decision: "once" | "always" | "reject",
+    message?: string,
+  ): Promise<unknown>;
+  stageRevert(id: string, messageID: string, files: boolean): Promise<unknown>;
+  restore(id: string): Promise<unknown>;
+  listForms?(id: string): Promise<{ id: string; sessionID: string }[]>;
+  answerForm?(
+    id: string,
+    formID: string,
+    answer: Record<string, string | number | boolean | string[]>,
+  ): Promise<unknown>;
+  stop(): Promise<void>;
+}
+export function startNative(provider: FakeLlm): Promise<NativeFixture> {
+  return nativeKind === "opencode-v2-server"
+    ? OpencodeV2Test.start(provider)
+    : OpencodeTest.start(provider);
+}
 
 /** Native services have one owner, independently of the browser transport. */
 export async function nativeFixture(

@@ -7,7 +7,7 @@ export default defineConfig({
   testMatch: ["scale/**/*.spec.ts"],
   testIgnore: [],
   workers: 1,
-  projects: ["1.18.34", "1.18.35", "1.19.3"].map((version) => ({
+  projects: ["1.18.34", "1.18.35", "1.19.3", "2.2.6"].map((version) => ({
     name: `scale-${version}`,
     ...projectPolicy(`scale-${version}`),
   })),

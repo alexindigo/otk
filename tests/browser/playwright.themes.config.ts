@@ -10,7 +10,10 @@ export default defineConfig({
   workers: 1,
   projects: [{
     name: "themes",
-    metadata: { nativeVersion: "1.18.34" },
+    metadata: {
+      nativeVersion: process.env.OTK_TEST_VERSION ?? "2.2.6",
+      lane: "A",
+    },
     ...projectPolicy("themes"),
   }],
   timeout: 240_000,

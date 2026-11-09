@@ -12,12 +12,13 @@ dependencyBypasses((source) =>
   )
 );
 
-// Final seven-library dependency table; the application remains at root.
+// Public library dependencies; each native adapter owns its protocol boundary.
 const allowed: Record<string, readonly string[]> = {
   protocol: [],
   content: ["protocol"],
   harness: ["protocol"],
   "harness-opencode-v1": ["protocol", "content", "harness"],
+  "harness-opencode-v2-server": ["protocol", "content", "harness"],
   store: [],
   client: ["protocol"],
   ui: ["protocol", "client"],
@@ -107,9 +108,11 @@ export function dependencyError(
   }
   if (production && from === "client") return "client depends only on protocol";
   if (
-    production && from !== "harness-opencode-v1" && /opencode/i.test(specifier)
+    production &&
+    !["harness-opencode-v1", "harness-opencode-v2-server"].includes(from!) &&
+    /opencode/i.test(specifier)
   ) {
-    return "native opencode dependencies belong to harness-opencode-v1";
+    return "native opencode dependencies belong to a native harness adapter";
   }
 }
 
@@ -337,18 +340,18 @@ export function sourceErrors(path: string, source: string): string[] {
     }
   }
   if (
-    from !== "harness-opencode-v1" &&
+    !["harness-opencode-v1", "harness-opencode-v2-server"].includes(from!) &&
     /["'`]\/(?:global\/(?:event|health)|experimental\/(?:session|resource)|session(?:\/|["'`])|permission(?:\/|["'`])|question(?:\/|["'`])|find\/file|agent["'`]|command["'`]|skill["'`]|mcp["'`])/
       .test(source)
   ) {
-    errors.push("native opencode endpoints belong to harness-opencode-v1");
+    errors.push("native opencode endpoints belong to a native harness adapter");
   }
   if (
-    from !== "harness-opencode-v1" &&
-    /(?:FROM|JOIN|CREATE TABLE|PRAGMA table_info\()\s*(?:message|part|session)\b/i
+    !["harness-opencode-v1", "harness-opencode-v2-server"].includes(from!) &&
+    /(?:FROM|JOIN|CREATE TABLE|PRAGMA table_info\()\s*(?:message|part|session|session_v2|session_message|session_part)\b/i
       .test(source)
   ) {
-    errors.push("native database schema belongs to harness-opencode-v1");
+    errors.push("native database schema belongs to a native harness adapter");
   }
   if (
     /(?:^|\/)(?:registries\/|registry(?:\.ts|\/)|[^/]+-registry\.ts)/.test(
@@ -970,7 +973,12 @@ Deno.test("final application entries compose public kit modules and keep reflect
   );
   assertEquals(
     imports(await read("main.ts")).filter((name) => name?.startsWith("@otk/")),
-    ["@otk/harness-opencode-v1", "@otk/content"],
+    // V0 adds a second selected native adapter; application remains the root.
+    [
+      "@otk/harness-opencode-v1",
+      "@otk/content",
+      "@otk/harness-opencode-v2-server",
+    ],
   );
   assertEquals(imports(await read("web/src/features.ts")), ["@otk/ui"]);
   assertEquals(

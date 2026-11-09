@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeLane } from "./lanes.ts";
 import { join } from "@std/path";
 import { pathsFromNul, select } from "./selection.ts";
 import { sourceTree } from "./source.ts";
@@ -62,7 +63,9 @@ tiers.push(["browser", [
   "--retries=0",
   ...Deno.args.filter((a) => a.startsWith("--shard=")),
 ]]);
-if (selection.themes && version === "1.18.34") {
+if (
+  selection.themes && nativeLane(version, Deno.env.get("OTK_TEST_LANE")) === "A"
+) {
   tiers.push(["themes", ["task", "test:themes"]]);
 }
 if (selection.scale) {

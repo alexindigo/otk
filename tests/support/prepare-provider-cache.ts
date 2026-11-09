@@ -2,6 +2,7 @@
 import { dirname, join } from "@std/path";
 import { FakeLlm } from "./fake-llm.ts";
 import { OpencodeTest } from "./opencode.ts";
+import { OpencodeV2Test } from "./opencode-v2.ts";
 import {
   nativeVersion,
   providerCachePath,
@@ -44,6 +45,20 @@ export async function prepareProviderCache(): Promise<void> {
     });
     console.info("Preparing provider cache:", target);
     const fake = new FakeLlm();
+    if (nativeVersion.startsWith("2.")) {
+      const oc = await OpencodeV2Test.start(fake);
+      await oc.stop();
+      await Deno.writeTextFile(
+        join(stage, "ready.json"),
+        JSON.stringify({
+          opencode: nativeVersion,
+          provider: "bundled-openai-compatible",
+        }),
+      );
+      await validateProviderCache(stage);
+      await Deno.rename(stage, target);
+      return;
+    }
     const oc = await OpencodeTest.start(fake, {}, {
       packageCache: false,
       async prepare(oc) {

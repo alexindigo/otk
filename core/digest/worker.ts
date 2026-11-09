@@ -12,12 +12,8 @@ import {
   DigestStore,
   digestTurnCursor,
 } from "@otk/store";
-import {
-  DigestNativeDb,
-  opencodeV1DigestMigrations,
-  OpencodeV1DigestSink,
-  opencodeV1ReadCodecs,
-} from "@otk/harness-opencode-v1";
+import { selectDigestProvider, type WorkerDigestSink } from "./providers.ts";
+import type { ProviderReadCodecs } from "@otk/harness";
 import {
   type DigestDelta,
   errorMessage,
@@ -49,9 +45,9 @@ let run: string | undefined,
   store: DigestStore | undefined;
 let scheduler: DigestScheduler | undefined,
   requests: DigestRequests | undefined,
-  sink: OpencodeV1DigestSink | undefined;
+  sink: WorkerDigestSink | undefined;
 let policy: Extract<ToWorker, { t: "start" }>["policy"];
-const readCodecs = opencodeV1ReadCodecs;
+let readCodecs: ProviderReadCodecs = {};
 const lifetime = new AbortController();
 let credits = 1,
   wake: (() => void) | undefined,
@@ -513,111 +509,102 @@ async function start(
     });
   }, 1000);
   try {
-    const contributions = new Map([["opencode-v1", {
-      migrations: opencodeV1DigestMigrations,
-      create: () =>
-        new OpencodeV1DigestSink(
-          message.native,
-          policy,
-          {
-            sql: db!.connection,
-            transaction: (callback) => db!.transaction(callback),
-            read: (id) => {
-              const row = store!.summary([id])[0];
-              const progress = store!.helpers([id])[0];
-              return row &&
-                {
-                  ...snapshot(row),
-                  ...(progress ? { helper: helper(progress) } : {}),
-                };
-            },
-            turn: (id, turn) => {
-              const row = store!.turn(id, turn);
-              return row && usage(row);
-            },
-            *known() {
-              let after = "";
-              while (true) {
-                const rows = store!.catalog(
-                  message.provider,
-                  after,
-                  policy.batch,
-                );
-                if (!rows.length) return;
-                for (const row of rows) yield snapshot(row);
-                after = rows.at(-1)!.id;
-              }
-            },
-            write: (metadata, delta, checkpoint) =>
-              write(store!, message.provider, metadata, delta, checkpoint),
-            publish,
-            diagnostic: (sessionID, error) =>
-              post({
-                t: "error",
-                run: run!,
-                id: 0,
-                scope: sessionID ? "session" : "worker",
-                sessionID,
-                message: errorMessage(error),
-              }),
+    const selected = selectDigestProvider(message.provider, message.native);
+    readCodecs = selected.reads;
+    const create = () =>
+      selected.create(
+        policy,
+        {
+          sql: db!.connection,
+          transaction: (callback) => db!.transaction(callback),
+          read: (id) => {
+            const row = store!.summary([id])[0];
+            const progress = store!.helpers([id])[0];
+            return row &&
+              {
+                ...snapshot(row),
+                ...(progress ? { helper: helper(progress) } : {}),
+              };
           },
-          fetch,
-          (file) =>
-            new DigestNativeDb(
-              file,
-              message.diagnostics
-                ? (operation, sample) => {
-                  nativeReads[operation] = (nativeReads[operation] ?? 0) + 1;
-                  const context = execution.getStore();
-                  if (context?.nativeReads) {
-                    context.nativeReads[operation] =
-                      (context.nativeReads[operation] ?? 0) + 1;
-                  }
-                  if (sample) context?.headerRows?.push(sample);
-                }
-                : undefined,
+          turn: (id, turn) => {
+            const row = store!.turn(id, turn);
+            return row && usage(row);
+          },
+          *known() {
+            let after = "";
+            while (true) {
+              const rows = store!.catalog(
+                message.provider,
+                after,
+                policy.batch,
+              );
+              if (!rows.length) return;
+              for (const row of rows) yield snapshot(row);
+              after = rows.at(-1)!.id;
+            }
+          },
+          write: (metadata, delta, checkpoint) =>
+            write(store!, message.provider, metadata, delta, checkpoint),
+          publish,
+          diagnostic: (sessionID, error) =>
+            post({
+              t: "error",
+              run: run!,
+              id: 0,
+              scope: sessionID ? "session" : "worker",
+              sessionID,
+              message: errorMessage(error),
+            }),
+        },
+        {
+          wait,
+          listed: (entries, signal) =>
+            admitCatalog(entries, signal, {
+              invalidate: false,
+              helpers: false,
+            }),
+          prefetchList: (input, read) =>
+            scheduler!.prefetchList(input, (signal, turn) =>
+              execution.run({ signal, turn }, () =>
+                read(signal))),
+          demanded: (entry) => {
+            const row = store!.summary([entry.id])[0];
+            if (row && sink!.pending(entry.id) && !row.deleted_at) {
+              const identity = {
+                provider: message.provider,
+                sessionID: entry.id,
+                directory: entry.directory,
+                updated: entry.timeUpdated,
+                backfill: "high" as const,
+              };
+              if (!scheduler!.promote(identity, "attention")) {
+                scheduler!.enqueue(identity, "attention");
+              }
+            }
+          },
+          ioWait: nativeWait,
+          retryable: sqliteBusy,
+          admission: (signal) =>
+            nativeReadsGate.acquire(
+              signal,
+              execution.getStore()?.turn.priority === "interactive",
+              () =>
+                scheduler!.interruptIO(signal),
             ),
-          {
-            wait,
-            listed: (entries, signal) =>
-              admitCatalog(entries, signal, {
-                invalidate: false,
-                helpers: false,
-              }),
-            prefetchList: (input, read) =>
-              scheduler!.prefetchList(input, (signal, turn) =>
-                execution.run({ signal, turn }, () =>
-                  read(signal))),
-            demanded: (entry) => {
-              const row = store!.summary([entry.id])[0];
-              if (row && sink!.pending(entry.id) && !row.deleted_at) {
-                const identity = {
-                  provider: "opencode-v1",
-                  sessionID: entry.id,
-                  directory: entry.directory,
-                  updated: entry.timeUpdated,
-                  backfill: "high" as const,
-                };
-                if (!scheduler!.promote(identity, "attention")) {
-                  scheduler!.enqueue(identity, "attention");
-                }
-              }
-            },
-            ioWait: nativeWait,
-            retryable: sqliteBusy,
-            admission: (signal) =>
-              nativeReadsGate.acquire(
-                signal,
-                execution.getStore()?.turn.priority === "interactive",
-                () =>
-                  scheduler!.interruptIO(signal),
-              ),
-            work: (ms) => execution.getStore()?.turn.charge(ms),
-          },
-        ),
-    }]]);
-    const selected = contributions.get(message.provider);
-    if (!selected) throw new Error("Unknown digest provider");
+          work: (ms) => execution.getStore()?.turn.charge(ms),
+        },
+        message.diagnostics
+          ? (operation, sample) => {
+            nativeReads[operation] = (nativeReads[operation] ?? 0) + 1;
+            const context = execution.getStore();
+            if (context?.nativeReads) {
+              context.nativeReads[operation] =
+                (context.nativeReads[operation] ?? 0) + 1;
+            }
+            if (sample) context?.headerRows?.push(sample);
+          }
+          : undefined,
+      );
     db = await sqliteRetry(
       () =>
         new DigestDb(message.statePath, [
@@ -629,7 +616,7 @@ async function start(
       wait,
     );
     store = new DigestStore(db);
-    sink = selected.create();
+    sink = create();
     connection = message.connection ?? 0;
     sink.connection(connection);
     const selectedSink = sink;
@@ -698,7 +685,7 @@ async function start(
                   }
                   const start = performance.now();
                   const work = turn.workms;
-                  const cursor = await sink!.step(job, budget, signal);
+                  const cursor = await sink!.step(job, budget, signal, turn);
                   nativeUnavailable = (job.projection === "helper"
                     ? store!.helpers([job.sessionID])[0]?.state
                     : store!.summary([job.sessionID])[0]?.state) ===
@@ -1135,7 +1122,7 @@ function handle(message: ToWorker): void {
                 >();
                 try {
                   let result: Awaited<
-                    ReturnType<OpencodeV1DigestSink["catalog"]>
+                    ReturnType<WorkerDigestSink["catalog"]>
                   >;
                   try {
                     result = await sink!.catalog(signal);

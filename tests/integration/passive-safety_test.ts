@@ -97,6 +97,8 @@ test("passive sidecar reports the native version, leaves approvals manual and re
       before,
     );
     const allowed = new Set([
+      // V0 adds a read-only protocol probe; the GET-only safety contract stays.
+      "/api/info",
       "/global/health",
       "/global/event",
       // Q1 proves the project seed source with one read-only project-list read.

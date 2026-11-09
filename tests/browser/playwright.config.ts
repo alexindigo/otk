@@ -45,7 +45,7 @@ export default defineConfig({
     browser: "managed Chromium 156.0.8078.4 / revision 1248",
     run: process.env.OTK_TEST_RUN,
   },
-  projects: ["1.18.34", "1.18.35", "1.19.3"].map((version) => ({
+  projects: ["1.18.34", "1.18.35", "1.19.3", "2.2.6"].map((version) => ({
     name: `oc-${version}`,
     ...projectPolicy(`oc-${version}`),
   })),

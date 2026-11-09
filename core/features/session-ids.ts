@@ -3,6 +3,15 @@ import type { OtkDb } from "@otk/store";
 import { isSessionID } from "@otk/protocol";
 
 interface UpgradeOptions {
+  /** Independent native upgrades do not reuse the beta.1 marker. */
+  name?: string;
+  /** A proven provider transition must reject aliases, not merge identities. */
+  collisions?: "merge" | "reject";
+  /** Feature-owned metadata references join the same atomic transaction. */
+  references?(
+    store: OtkDb,
+    convert: (value: string, field: string) => string,
+  ): void;
   now?: () => number;
   diagnose?: (field: string) => void;
   /** Fault-injection boundary; runs inside the upgrade transaction. */
@@ -20,17 +29,26 @@ export function createSessionReferenceUpgrade(
   return (store) =>
     store.transaction(() => {
       const db = store.connection;
-      const name = "opencode-v1-session-ids";
+      const name = options.name ?? "opencode-v1-session-ids";
       if (
         db.prepare(
           "SELECT version FROM session_reference_upgrades WHERE name=?",
         ).get(name)
       ) return;
       const conversions = new Map<string, string>();
+      const sources = new Map<string, string>();
       const convert = (value: string, field: string): string => {
         let next = conversions.get(value);
         if (next === undefined) {
           next = legacy(value);
+          const previous = sources.get(next);
+          if (
+            options.collisions === "reject" && previous !== undefined &&
+            previous !== value
+          ) {
+            throw new Error(`Session reference upgrade collision at ${field}`);
+          }
+          sources.set(next, value);
           conversions.set(value, next);
         }
         if (!isSessionID(next)) diagnose(field);
@@ -218,6 +236,7 @@ export function createSessionReferenceUpgrade(
         }
       }
       options.checkpoint?.("prefs");
+      options.references?.(store, convert);
       options.checkpoint?.("marker");
       db.prepare("INSERT INTO session_reference_upgrades VALUES(?,1,?)").run(
         name,

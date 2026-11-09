@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
 import { readBuild, sourceTree } from "./prepare.ts";
+import { nativeLane } from "./lanes.ts";
 
 const tree = await sourceTree();
 const scale = Deno.args.includes("--scale");
@@ -25,7 +26,8 @@ if (
     (themes
       ? "themes"
       : `${scale ? "scale" : "oc"}-${receipt.native.version}`) ||
-  (themes && receipt.native.version !== "1.18.34")
+  (themes &&
+    nativeLane(receipt.native.version, Deno.env.get("OTK_TEST_LANE")) !== "A")
 ) {
   throw new Error(
     "Explicit project must match this guest's prepared native version",
@@ -36,6 +38,10 @@ const guest = Deno.env.get("OTK_TEST_GUEST") ??
     "1.18.34": "otk-tests-a",
     "1.18.35": "otk-tests-b",
     "1.19.3": "otk-tests-c",
+    "2.2.6": `otk-tests-${
+      nativeLane(receipt.native.version, Deno.env.get("OTK_TEST_LANE"))
+        .toLowerCase()
+    }`,
   } as Record<string, string>)[receipt.native.version];
 const shard =
   (Deno.args.find((arg) => arg.startsWith("--shard="))?.slice(8) ?? "all")

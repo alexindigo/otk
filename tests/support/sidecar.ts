@@ -8,7 +8,8 @@ import {
   type ServiceConfig,
   type Tree,
 } from "../../core/mod.ts";
-import { freePort, type OpencodeTest, waitFor } from "./opencode.ts";
+import { freePort, waitFor } from "./opencode.ts";
+import type { NativeFixture } from "./native-fixture.ts";
 import { acquire } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
 type DeepPartial<T> = {
@@ -41,7 +42,9 @@ export class SidecarTest {
     return Number(match[1]);
   }
   static async start(
-    oc: OpencodeTest,
+    oc:
+      & Pick<NativeFixture, "root" | "directory" | "db" | "url">
+      & Partial<Pick<NativeFixture, "kind" | "discoveryEnv">>,
     overrides: DeepPartial<ServiceConfig> = {},
   ): Promise<SidecarTest> {
     return await acquire("sidecar fixture", async () => {
@@ -53,7 +56,9 @@ export class SidecarTest {
         server: { port: instance.port },
         auth: { type: "none" },
         state: { path: join(oc.root, `otk-${instance.port}`) },
-        harness: { url: oc.url, db: oc.db },
+        harness: oc.kind === "opencode-v2-server"
+          ? { type: "opencode-v2-server", db: oc.db }
+          : { type: "opencode-v1", url: oc.url, db: oc.db },
       };
       // Overrides merge leaf-wise at every nesting level (the loader's own tree
       // merge), so naming one leaf keeps the fixture's other leaves.
@@ -80,6 +85,7 @@ export class SidecarTest {
         if (!key.startsWith("OTK_")) env[key] = value;
       }
       env.OTK_CONFIG = file;
+      Object.assign(env, oc.discoveryEnv ?? {});
       env.TMPDIR = join(oc.root, "tmp");
       const binary = Deno.env.get("OTK_TEST_BINARY");
       const args = [
