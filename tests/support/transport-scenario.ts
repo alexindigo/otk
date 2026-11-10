@@ -2,11 +2,11 @@
 import { serve } from "./http.ts";
 import { resources } from "./resources.ts";
 import { FreezeProxy } from "./freeze-proxy.ts";
-import type { OpencodeTest } from "./opencode.ts";
+import { type BrowserNative, browserScenarioPath } from "./browser-native.ts";
 import type { Profile } from "./fixture-control.ts";
 
 /** Native-side faults belong to the Deno fixture, never browser routing. */
-export function transportScenario(oc: OpencodeTest, profile: Profile) {
+export function transportScenario(oc: BrowserNative, profile: Profile) {
   const freeze = ["transport-freeze", "transport-reconnect"].includes(profile)
     ? new FreezeProxy(oc.port)
     : undefined;
@@ -32,15 +32,16 @@ export function transportScenario(oc: OpencodeTest, profile: Profile) {
     ? serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
       async (request) => {
-        const url = new URL(request.url);
+        const actual = new URL(request.url), url = new URL(request.url);
+        url.pathname = browserScenarioPath(oc, url.pathname, request.method);
         if (
-          profile === "transport-deleted-seen" && holding &&
+          profile === "transport-deleted-seen" && holding && !entered &&
           request.method === "GET" &&
           url.pathname === `/session/${sessionID}` &&
           !url.searchParams.has("directory")
         ) {
-          // Identity validation has no cached-directory query. Hold before the
-          // real native read so DELETE wins and the released lookup returns 404.
+          // Hold one owned identity exchange, not every GET of this route:
+          // V2 also uses it when preparing DELETE. The released read sees 404.
           reads++;
           entered = true;
           await held.promise;
@@ -68,7 +69,7 @@ export function transportScenario(oc: OpencodeTest, profile: Profile) {
           await held.promise;
         }
         const response = await fetch(
-          new Request(oc.url + url.pathname + url.search, request),
+          new Request(oc.url + actual.pathname + actual.search, request),
         );
         if (
           (profile === "transport-shell" ||

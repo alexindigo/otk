@@ -12,6 +12,8 @@ interface Message {
   info: {
     id: string;
     role: string;
+    type?: string;
+    status?: string;
     parentID?: string;
     time: { completed?: number };
   };
@@ -67,7 +69,7 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
   await page.keyboard.press("Escape");
   await state.controller.call("queueScript", {
     lease: state.lease.lease,
-    chunks: ["Long compaction summary."],
+    chunks: ["## Objective\n\nLong compaction summary."],
     delay: 20_000,
   });
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
@@ -98,7 +100,10 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
   );
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
   const first = await state.queue(["Busy reply finished."], "held"),
-    summary = await state.queue(["Queued compaction summary."], "held");
+    summary = await state.queue(
+      ["## Objective\n\nQueued compaction summary."],
+      "held",
+    );
   await prompt(page, "Keep working until released");
   await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
     "data-status",
@@ -116,20 +121,35 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     }),
   ).toBeVisible();
   const history = await state.native<Message[]>(`/session/${s.id}/message`);
+  const v2 = state.controller.info!.version.startsWith("2.");
+  const queued = v2
+    ? await state.native<{ type: string }[]>(`/session/${s.id}/inbox`)
+    : [];
   expect(
-    history.filter((m) => m.parts.some((p) => p.type === "compaction")).map(
-      (m) =>
-        history.some((r) =>
-            r.info.role === "assistant" && r.info.parentID === m.info.id &&
-            r.info.time.completed !== undefined
-          )
-          ? "Session compacted"
-          : "Compacting…",
-    ),
+    v2
+      ? [
+        ...history.filter((m) => m.info.type === "compaction").map((m) =>
+          m.info.status === "completed"
+            ? "Session compacted"
+            : "Compacting\u2026"
+        ),
+        ...queued.filter((item) => item.type === "compaction").map(() =>
+          "Compacting\u2026"
+        ),
+      ]
+      : history.filter((m) => m.parts.some((p) => p.type === "compaction")).map(
+        (m) =>
+          history.some((r) =>
+              r.info.role === "assistant" && r.info.parentID === m.info.id &&
+              r.info.time.completed !== undefined
+            )
+            ? "Session compacted"
+            : "Compacting…",
+      ),
   ).toEqual(["Session compacted", "Compacting…"]);
   await expect(page.locator(".otk-message-flow")).toHaveAttribute(
     "data-message-count",
-    String(history.length),
+    String(history.length + queued.length),
   );
   expect((await state.observe<{ requests: unknown[] }>()).requests.length).toBe(
     requests,
@@ -370,7 +390,7 @@ test(
 test(
   "sessions.working-family-delete-aborts-before-removal-and-retains-details",
   { tag: ["@sessions", "@isolated"] },
-  async ({ isolatedState: state, page }) => {
+  async ({ isolatedState: state, page }, info) => {
     const root = await state.native<{ id: string; nativeID: string }>(
       "/session",
       "POST",
@@ -427,6 +447,17 @@ test(
     await expect(state.native(`/session/${child.id}`)).rejects.toThrow("404");
     await deletedDetails(page, root.id, "Working family");
     await deletedDetails(page, child.id, "Family helper");
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`deletion-family-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
   },
 );
 

@@ -16,6 +16,7 @@ import {
 } from "./messages.ts";
 import { mapSession, millis } from "./map.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
+import { readSessionActivity } from "./recency.ts";
 
 /** Selection checkpoints contain metadata only, never command or prompt bodies. */
 export async function selectAction(
@@ -154,13 +155,7 @@ export function sessionActions(ports: {
     run: () => Promise<T>,
   ) => ports.client().sequence(ids.decode(id), run, operation);
   const get = (id: string, operation?: OperationContext) =>
-    ports.client().read(
-      (api) =>
-        api.session.get({ sessionID: ids.decode(id) }, {
-          signal: operation?.signal,
-        }),
-      operation?.signal,
-    );
+    readSessionActivity(ports.client(), ids.decode(id), operation?.signal);
   const result = async (id: string, operation?: OperationContext) => {
     const raw = await get(id, operation);
     ports.observed(raw);

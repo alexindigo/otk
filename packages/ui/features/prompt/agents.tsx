@@ -2,7 +2,11 @@
 import "./pickers.css" with { type: "text" };
 import { agentColor } from "../../theme/agent-color.ts";
 import { onSettled, Show } from "solid-js";
-import type { ComposerCatalog, SelectionField } from "@otk/client";
+import {
+  agentIdentity,
+  type ComposerCatalog,
+  type SelectionField,
+} from "@otk/client";
 import type { ModelRef } from "@otk/protocol";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
@@ -141,14 +145,20 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
               when={owner.state.agents.available}
               fallback={
                 <PromptSetting applied={!!applied(selection().agent)}>
-                  {selectionLabel(selection().agent.value, "Default agent")}
+                  {selectionLabel(
+                    selection().agent.name ?? selection().agent.value,
+                    "Default agent",
+                  )}
                 </PromptSetting>
               }
             >
               <ListPicker
                 label="Choose agent"
                 triggerLabel={`Agent: ${
-                  selectionLabel(selection().agent.value, "Default agent")
+                  selectionLabel(
+                    selection().agent.name ?? selection().agent.value,
+                    "Default agent",
+                  )
                 }`}
                 class="otk-composer-picker otk-agent-picker"
                 triggerClass="otk-picker-trigger"
@@ -158,7 +168,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   <>
                     <span class="otk-composer-agent otk-picker-label">
                       {selectionLabel(
-                        selection().agent.value,
+                        selection().agent.name ?? selection().agent.value,
                         "Default agent",
                       )}
                     </span>
@@ -167,8 +177,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 groups={[{
                   key: "agents",
                   items: (owner.state.agents.value ?? []).map((agent) => ({
-                    key: agent.name,
-                    value: agent.name,
+                    key: agentIdentity(agent),
+                    value: agentIdentity(agent),
                     label: selectionLabel(agent.name),
                     description: agent.description,
                     color: agentColor(agent.color),

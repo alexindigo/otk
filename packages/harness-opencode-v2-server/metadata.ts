@@ -2,12 +2,22 @@
 import type { ContentSession, SessionMetadata } from "@otk/protocol";
 import type { OpenCodeClient } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
-export type NativeSession = Awaited<
-  ReturnType<OpenCodeClient["session"]["get"]>
->;
+import { sessionRecency } from "./recency.ts";
+export type NativeSession =
+  & Awaited<
+    ReturnType<OpenCodeClient["session"]["get"]>
+  >
+  & { activity?: number };
 export type SessionFacts = Pick<
   NativeSession,
-  "id" | "location" | "projectID" | "title" | "parentID" | "time" | "outcome"
+  | "id"
+  | "location"
+  | "projectID"
+  | "title"
+  | "parentID"
+  | "time"
+  | "outcome"
+  | "activity"
 >;
 export function millis(value: unknown): number {
   return typeof value === "number"
@@ -25,7 +35,7 @@ export function session(raw: SessionFacts): ContentSession {
     ...(raw.parentID ? { parentID: ids.encode(raw.parentID) } : {}),
     time: {
       created: millis(raw.time.created),
-      updated: millis(raw.time.updated),
+      updated: sessionRecency(raw.time, raw.activity),
     },
     archived: !!raw.time.archived,
   };

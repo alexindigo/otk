@@ -2,12 +2,12 @@
 import { serve } from "./http.ts";
 import { resources } from "./resources.ts";
 import { helperParent } from "./helper-parent.ts";
-import type { OpencodeTest } from "./opencode.ts";
+import { type BrowserNative, browserScenarioPath } from "./browser-native.ts";
 import type { Profile } from "./fixture-control.ts";
 
 /** Observe/hold actual stock HTTP/SSE; never synthesize a successful outcome. */
 export async function nativeMessageScenario(
-  oc: OpencodeTest,
+  oc: BrowserNative,
   profile: Profile,
 ) {
   const helper = profile === "messages-helper-pages"
@@ -40,15 +40,20 @@ export async function nativeMessageScenario(
   const proxy = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (req) => {
-      const url = new URL(req.url);
+      const actual = new URL(req.url), url = new URL(req.url);
+      url.pathname = browserScenarioPath(oc, url.pathname, req.method);
       reads.push(url.pathname);
       if (profile === "revert-native") {
         const operation = url.pathname.split("/").at(-1)!;
         if (
           req.method === "DELETE" ||
-          (req.method === "POST" &&
+          (req.method !== "GET" &&
             ["abort", "revert", "unrevert", "summarize"].includes(operation))
-        ) mutationDetails.push(`${req.method} ${url.pathname}`);
+        ) {
+          mutationDetails.push(
+            `${operation === "unrevert" ? "POST" : req.method} ${url.pathname}`,
+          );
+        }
         if (operation === "summarize" && rejectRevert) {
           return Response.json({
             name: "CompactFailure",
@@ -56,7 +61,7 @@ export async function nativeMessageScenario(
           }, { status: 500 });
         }
         if (
-          req.method === "POST" &&
+          req.method !== "GET" &&
           ["abort", "revert", "unrevert"].includes(operation)
         ) {
           mutations.push(operation);
@@ -69,7 +74,7 @@ export async function nativeMessageScenario(
           }
         }
         return await fetch(
-          new Request(new URL(url.pathname + url.search, oc.url), req),
+          new Request(new URL(actual.pathname + actual.search, oc.url), req),
         );
       }
       if (
@@ -92,12 +97,15 @@ export async function nativeMessageScenario(
         }
       }
       const response = await fetch(
-        new Request(new URL(url.pathname + url.search, oc.url), req),
+        new Request(new URL(actual.pathname + actual.search, oc.url), req),
       );
       if (point) {
         const snapshot = await response.clone().json();
+        const parts = oc.kind === "opencode-v2-server"
+          ? snapshot.data.content
+          : snapshot.parts;
         snapshots.push(
-          snapshot.parts.filter((p: { type: string }) => p.type === "text").map(
+          parts.filter((p: { type: string }) => p.type === "text").map(
             (p: { text: string }) => p.text,
           ).join("").trim(),
         );
@@ -131,6 +139,25 @@ export async function nativeMessageScenario(
                     event = envelope.payload ?? envelope,
                     part = event.properties?.part,
                     info = event.properties?.info;
+                  if (oc.kind === "opencode-v2-server") {
+                    const detail = event.data;
+                    if (event.type === "session.step.started") {
+                      assistants.add(detail.messageID);
+                    }
+                    if (
+                      /^session\.(text|reasoning)\.(started|ended)$/.test(
+                        event.type,
+                      ) && detail.sessionID === sessionID &&
+                      assistants.has(detail.messageID)
+                    ) {
+                      lost++;
+                      drop = true;
+                    }
+                    if (
+                      /^session\.(text|reasoning)\.delta$/.test(event.type) &&
+                      detail.sessionID === sessionID
+                    ) deltas++;
+                  }
                   if (
                     event.type === "message.updated" &&
                     info?.role === "assistant"

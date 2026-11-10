@@ -2,6 +2,29 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { CommandHub, effectiveSelection, emptyDraft } from "@otk/client";
 import type { PromptContext } from "../registries/prompt.ts";
+import { compactionLabel } from "../components/parts/compaction.ts";
+
+Deno.test("compaction renders its provider lifecycle independently of prompt pending", () => {
+  const part = { kind: "compaction" as const, id: "compact" };
+  assertEquals(
+    compactionLabel({ ...part, status: "queued" }, false),
+    "Compacting\u2026",
+  );
+  assertEquals(
+    compactionLabel({ ...part, status: "running" }, false),
+    "Compacting\u2026",
+  );
+  assertEquals(
+    compactionLabel({ ...part, status: "completed" }, true),
+    "Session compacted",
+  );
+  assertEquals(
+    compactionLabel({ ...part, status: "failed" }, true),
+    "Compaction failed",
+  );
+  assertEquals(compactionLabel(part, true), "Compacting\u2026");
+  assertEquals(compactionLabel(part, false), "Session compacted");
+});
 
 Deno.test("compact is prompt-scoped, current-target-only and captures the shared next model after readiness", async () => {
   const { registerCompactCommand } = await import(

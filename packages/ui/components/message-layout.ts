@@ -89,7 +89,7 @@ export function createMessageLayout() {
           rows.map((row) => row.part),
           (part) => parts.get(part.id)!.value,
         );
-        if (!frames.length && role !== "user") {
+        if (!frames.length && role === "assistant") {
           frames.push({ id, parts: [], transcript: false });
         }
         const usedGroups = new Set<string>(), usedFrames = new Set<string>();

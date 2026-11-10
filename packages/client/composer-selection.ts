@@ -16,6 +16,7 @@ import {
   type ModelCatalogOwner,
 } from "./model-catalog.ts";
 import {
+  agentIdentity,
   chooseAgent,
   chooseModel,
   chooseVariant,
@@ -279,12 +280,12 @@ export function createComposerSelection(
           const index = Math.max(
             0,
             items.findIndex((agent) =>
-              agent.name === selection(draft).agent.value
+              agentIdentity(agent) === selection(draft).agent.value
             ),
           );
           return chooseAgent(
             draft,
-            items[(index + delta + items.length) % items.length].name,
+            agentIdentity(items[(index + delta + items.length) % items.length]),
             input,
           );
         });

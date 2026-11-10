@@ -67,34 +67,24 @@ test(
     );
     const a = await state.native<{ id: string }>("/session", "POST", {
       title: "Temperature project A",
+      messages: Array.from(
+        { length: 25 },
+        (_, i) => ({ parts: [{ type: "text", text: `Alpha prompt ${i}` }] }),
+      ),
     });
     const b = await state.controller.call<{ id: string }>("nativeRequest", {
       lease: state.lease.lease,
       path: "/session",
       method: "POST",
       project: "secondary",
-      body: { title: "Temperature project B" },
+      body: {
+        title: "Temperature project B",
+        messages: Array.from(
+          { length: 25 },
+          (_, i) => ({ parts: [{ type: "text", text: `Beta prompt ${i}` }] }),
+        ),
+      },
     });
-    for (
-      const [session, project, label] of [[a, undefined, "Alpha"], [
-        b,
-        "secondary",
-        "Beta",
-      ]] as const
-    ) {
-      for (let i = 0; i < 25; i++) {
-        await state.controller.call("nativeRequest", {
-          lease: state.lease.lease,
-          path: `/session/${session.id}/message`,
-          method: "POST",
-          project,
-          body: {
-            noReply: true,
-            parts: [{ type: "text", text: `${label} prompt ${i}` }],
-          },
-        });
-      }
-    }
     const capture = await wire(page);
     // With the browser clock paused, readiness joins must advance its render
     // frames too. Each observation advances one bounded frame pair; real I/O

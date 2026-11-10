@@ -11,6 +11,7 @@ import type {
 } from "@otk/protocol";
 import type { NativeMessage, NativeSession } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
+import { session } from "./metadata.ts";
 export const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -58,16 +59,7 @@ export function mapSession(
   raw: NativeSession,
 ): import("@otk/protocol").ContentSession {
   return {
-    id: ids.encode(raw.id),
-    directory: raw.location.directory,
-    projectID: raw.projectID,
-    title: raw.title ?? "Untitled session",
-    ...(raw.parentID ? { parentID: ids.encode(raw.parentID) } : {}),
-    time: {
-      created: millis(raw.time.created),
-      updated: millis(raw.time.updated),
-    },
-    archived: !!raw.time.archived,
+    ...session(raw),
     selection: {
       agent: raw.agent ?? undefined,
       model: raw.model
@@ -108,6 +100,18 @@ export function errorText(error: unknown): string {
 type Tool = Extract<NativeMessage, { type: "assistant" }>["content"][number] & {
   type: "tool";
 };
+/** Native names remain source facts; shared kinds own all consumer-facing names. */
+export function sharedToolName(name: string): string {
+  return name === "shell" ? "bash" : name === "subagent" ? "task" : name;
+}
+function userDeclined(error: unknown): boolean {
+  const value = record(error);
+  // Native runner/step.ts preserves user declines as aborted tool errors.
+  // Location shutdown and other interruptions are not user decisions.
+  return value.type === "permission.rejected" || value.type === "aborted" &&
+      (value.message === "The user dismissed this question" ||
+        value.message === "The user declined this tool call");
+}
 export function mapTool(tool: Tool): ToolCall {
   const state = tool.state,
     input = record(state.input),
@@ -122,8 +126,7 @@ export function mapTool(tool: Tool): ToolCall {
     sourceName: tool.name,
     status: state.status === "streaming"
       ? "pending"
-      : state.status === "error" &&
-          record(state.error).type === "permission.rejected"
+      : state.status === "error" && userDeclined(state.error)
       ? "denied"
       : state.status,
     time: {
@@ -138,9 +141,9 @@ export function mapTool(tool: Tool): ToolCall {
       ? { childSessionID: ids.encode(meta.sessionID) }
       : {}),
   };
-  const path = text(input.path) ?? "";
-  switch (tool.name) {
-    case "shell":
+  const path = text(input.path) ?? "", name = sharedToolName(tool.name);
+  switch (name) {
+    case "bash":
       return {
         ...base,
         tool: "bash",
@@ -150,7 +153,7 @@ export function mapTool(tool: Tool): ToolCall {
         output: stripVTControlCharacters(text(meta.output) ?? output ?? ""),
         exitCode: typeof meta.exit === "number" ? meta.exit : undefined,
       };
-    case "subagent":
+    case "task":
       return {
         ...base,
         tool: "task",
@@ -210,7 +213,7 @@ export function mapTool(tool: Tool): ToolCall {
       return {
         ...base,
         tool: "search",
-        mode: tool.name,
+        mode: name,
         path: text(input.path),
         pattern: text(input.pattern),
         matches: typeof meta.matches === "number"
@@ -255,11 +258,18 @@ export function mapTool(tool: Tool): ToolCall {
         ...base,
         tool: "question",
         questions: Array.isArray(input.questions)
-          ? input.questions.flatMap((value) => {
+          ? input.questions.flatMap((value, index) => {
             const q = record(value);
+            const answer = Array.isArray(meta.answers)
+              ? meta.answers[index]
+              : undefined;
             return typeof q.question === "string"
               ? [{
                 text: q.question,
+                ...(Array.isArray(answer) &&
+                    answer.every((value) => typeof value === "string")
+                  ? { answer: [...answer] }
+                  : {}),
                 options: Array.isArray(q.options)
                   ? q.options.flatMap((value) => {
                     const o = record(value);
@@ -292,7 +302,9 @@ export function mapTool(tool: Tool): ToolCall {
       };
   }
 }
-function mapFileDiffs(value: unknown): import("@otk/protocol").FileDiff[] {
+export function mapFileDiffs(
+  value: unknown,
+): import("@otk/protocol").FileDiff[] {
   return Array.isArray(value)
     ? value.flatMap((raw) => {
       const file = record(raw);
@@ -485,13 +497,16 @@ export function mapMessage(
     };
   }
   if (raw.type === "compaction") {
+    const summary = raw.status === "failed"
+      ? errorText(raw.error)
+      : raw.summary;
     return {
       ...common,
       role: "user",
       origin: "compaction",
       parts: [
-        { kind: "compaction", id: `${raw.id}:compaction` },
-        prose("summary" in raw ? raw.summary : errorText(raw.error), true),
+        { kind: "compaction", id: `${raw.id}:compaction`, status: raw.status },
+        ...(summary ? [prose(summary)] : []),
       ],
     };
   }

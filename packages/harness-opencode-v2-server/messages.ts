@@ -5,9 +5,7 @@ import { opencodeV2SessionID as ids } from "./ids.ts";
 export type NativeMessage = Awaited<
   ReturnType<OpenCodeClient["message"]["list"]>
 >["data"][number];
-export type NativeSession = Awaited<
-  ReturnType<OpenCodeClient["session"]["get"]>
->;
+export type { NativeSession } from "./metadata.ts";
 export interface NativePage {
   items: NativeMessage[];
   next?: string;

@@ -198,6 +198,27 @@ function fixture(
   };
 }
 
+Deno.test("composer cycles agent identities independently of display labels", async () => {
+  const f = fixture({
+    agents: () =>
+      Promise.resolve([
+        { id: "build", name: "Build" },
+        { id: "review", name: "Friendly reviewer" },
+      ]),
+  });
+  try {
+    await f.owner.ready();
+    assertEquals(f.owner.selection().input.agent, "build");
+    await f.owner.cycleAgent(1);
+    assertEquals(f.owner.selection().input.agent, "review");
+    assertEquals(f.owner.selection().agent.name, "Friendly reviewer");
+    await f.owner.cycleAgent(1);
+    assertEquals(f.owner.selection().input.agent, "build");
+  } finally {
+    f.owner.dispose();
+  }
+});
+
 Deno.test("composer owns initial readiness, refresh coalescing, errors and last good catalog", async () => {
   let pending = deferred<ModelCatalog>(), calls = 0;
   const f = fixture({

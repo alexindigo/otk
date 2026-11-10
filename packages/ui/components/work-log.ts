@@ -15,6 +15,19 @@ export interface PartFrame {
   parts: Part[];
   transcript: boolean;
 }
+type FramedMessage = Pick<Message, "id" | "role" | "parts"> & {
+  origin?: Extract<Message, { role: "user" }>["origin"];
+};
+/** Provider context is visible content, never a user prompt or prompt action. */
+export function messageLayoutRole(
+  message: Pick<FramedMessage, "role" | "origin">,
+): "user" | "assistant" | "context" {
+  return message.role === "assistant"
+    ? "assistant"
+    : message.origin === undefined
+    ? "user"
+    : "context";
+}
 /** Feature-owned framing is separate from work grouping; mixed messages keep
  * ordinary adjacent content together without enclosing transcript markers. */
 export function partFrames(
@@ -34,7 +47,7 @@ export function partFrames(
 }
 /** One presentation contract for transcript frames and prompt navigation. */
 export function messageFrames(
-  message: Pick<Message, "id" | "role" | "parts">,
+  message: FramedMessage,
   presentation: (part: Part) => PartPresentation,
 ): { frames: PartFrame[]; prompt: boolean; copyable: boolean } {
   let copyable = false;
@@ -50,7 +63,7 @@ export function messageFrames(
       parts: [],
       transcript: false,
     }],
-    prompt: message.role === "user" &&
+    prompt: messageLayoutRole(message) === "user" &&
       frames.some((frame) => !frame.transcript),
   };
 }

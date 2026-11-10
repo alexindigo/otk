@@ -1,7 +1,46 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
-import type { Part } from "@otk/protocol";
-import { createMessageLayout } from "../components/work-log.ts";
+import type { Part, UserMessage } from "@otk/protocol";
+import {
+  createMessageLayout,
+  messageFrames,
+  messageLayoutRole,
+} from "../components/work-log.ts";
+
+Deno.test("provider context never receives user-prompt framing", () => {
+  const message: UserMessage = {
+    id: "context",
+    sessionID: "session",
+    role: "user",
+    time: { created: 1 },
+    parts: [{ kind: "meta", id: "summary" }],
+  };
+  const present = () => ({ text: "summary", copyable: true });
+  assertEquals(messageFrames(message, present).prompt, true);
+  for (
+    const origin of [
+      "compaction",
+      "shell",
+      "synthetic",
+      "system",
+      "skill",
+      "external",
+    ] as const
+  ) {
+    const contextual: UserMessage = { ...message, origin };
+    assertEquals(messageFrames(contextual, present).prompt, false);
+    assertEquals(
+      createMessageLayout().update(
+        contextual.id,
+        messageLayoutRole(contextual),
+        [{ messageID: contextual.id, parts: contextual.parts }],
+        "prefs",
+        present,
+      ).prompt,
+      false,
+    );
+  }
+});
 
 Deno.test("render layout reprojects only changed source parts and keeps historical groups stable", () => {
   const part = (id: string): Part => ({ id, kind: "meta" });

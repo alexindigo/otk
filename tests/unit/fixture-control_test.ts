@@ -11,25 +11,13 @@ function start(profile: unknown, version: unknown) {
   });
 }
 
-Deno.test("fixture admission preserves every V1 profile and admits only neutral V2 scenes", () => {
-  for (const [profile, backend] of Object.entries(profiles)) {
-    for (const version of ["1.18.34", "1.19.3"]) {
+Deno.test("fixture admission preserves every behavior profile on both native lanes", () => {
+  for (const profile of Object.keys(profiles)) {
+    for (const version of ["1.18.34", "1.19.3", "2.2.6"]) {
       assertEquals<unknown>(start(profile, version).params, {
         profile,
         version,
       });
-    }
-    if (backend === "neutral") {
-      assertEquals<unknown>(start(profile, "2.2.6").params, {
-        profile,
-        version: "2.2.6",
-      });
-    } else {
-      assertThrows(
-        () => start(profile, "2.2.6"),
-        Error,
-        "Scenario requires opencode V1",
-      );
     }
   }
 });
@@ -57,11 +45,11 @@ Deno.test("fixture admission retains native dependencies even within contract fa
       "contract-scale-files",
     ]
   ) {
-    assertThrows(
-      () => start(profile, "2.2.6"),
-      Error,
-      "Scenario requires opencode V1",
-    );
+    assertEquals(profiles[profile as keyof typeof profiles], "v1");
+    assertEquals<unknown>(start(profile, "2.2.6").params, {
+      profile,
+      version: "2.2.6",
+    });
   }
 });
 

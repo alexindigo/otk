@@ -37,13 +37,21 @@ import { discoverV2 } from "./discovery.ts";
 import { V2NativeDb } from "./native-db.ts";
 import { V2SessionLists } from "./session-lists.ts";
 import { metadata } from "./metadata.ts";
+import { readSessionActivity, withSessionActivity } from "./recency.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { upgradeReadCodec } from "./upgrade-read.ts";
 import { scalarSessionReadCodec } from "./index-reads.ts";
 import { catalogReadCodecs, catalogReaders } from "./catalog-readers.ts";
 import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
-import { millis, record, reported, text, tokens } from "./map.ts";
+import {
+  millis,
+  record,
+  reported,
+  sharedToolName,
+  text,
+  tokens,
+} from "./map.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -200,13 +208,8 @@ export class OpencodeV2DigestSink implements DigestSink {
                   parentID,
                   time,
                   outcome,
-                } = await client.read(
-                  (api) =>
-                    api.session.get({ sessionID: ids.decode(key) }, {
-                      signal,
-                    }),
-                  signal,
-                );
+                  activity,
+                } = await readSessionActivity(client, ids.decode(key), signal);
                 result.push({
                   id,
                   location,
@@ -215,6 +218,7 @@ export class OpencodeV2DigestSink implements DigestSink {
                   parentID,
                   time,
                   outcome,
+                  activity,
                 });
               } catch (error) {
                 if (!(error instanceof V2MissingSession)) throw error;
@@ -460,11 +464,7 @@ export class OpencodeV2DigestSink implements DigestSink {
         for (const key of keys) {
           try {
             rows.push(metadata(
-              await client.read(
-                (api) =>
-                  api.session.get({ sessionID: ids.decode(key) }, { signal }),
-                signal,
-              ),
+              await readSessionActivity(client, ids.decode(key), signal),
             ));
           } catch (error) {
             if (!(error instanceof V2MissingSession)) {
@@ -840,7 +840,9 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     this.#client = client;
     this.#source = `api:${client.service.pid}:${this.#connection}`;
     this.#provenNative = undefined;
-    if (!native || native !== this.source.native()) return raw;
+    if (!native || native !== this.source.native()) {
+      return await withSessionActivity(client, raw, signal);
+    }
     try {
       const db = native.db;
       for (
@@ -894,7 +896,9 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         this.storage.diagnostic(id, error);
       }
     }
-    return raw;
+    return this.#provenNative
+      ? { ...raw, activity: native.facts([id])[0]?.activity }
+      : await withSessionActivity(client, raw, signal);
   }
   connection(value: number): void {
     if (value < this.#connection) return;
@@ -1378,7 +1382,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ...(tool
           ? {
             current: {
-              name: text(tool.name) ?? "",
+              name: sharedToolName(text(tool.name) ?? ""),
               title: text(tool.title),
               startedAt: typeof tool.startedAt === "number"
                 ? tool.startedAt

@@ -3,6 +3,7 @@ import "./fixture-diagnostics.ts";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
 import { nativeFixture } from "./native-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
+import { browserSessionID, seedBrowserSession } from "./browser-native.ts";
 import { resources, withResources } from "./resources.ts";
 import { WsClient } from "./ws-client.ts";
 import { waitFor } from "./opencode.ts";
@@ -465,16 +466,11 @@ try {
               method: "POST",
               body: { title: "Large session A" },
             });
-            const b = await fixture.oc.session<{ id: string }>("/session", {
-              method: "POST",
-              body: { title: "Small session B" },
-            });
-            await fixture.oc.request(`/session/${b.id}/message`, {
-              method: "POST",
-              body: {
-                noReply: true,
+            const b = await seedBrowserSession(fixture.oc, {
+              title: "Small session B",
+              messages: [{
                 parts: [{ type: "text", text: "Small session text" }],
-              },
+              }],
             });
             fixture.fake.queue({
               chunks: ["OTK_LARGE_SESSION_A_" + "x".repeat(2 * 1024 * 1024)],
@@ -711,7 +707,9 @@ try {
             join(directory, "README.md"),
             `# ${frame.params.identity}\n`,
           );
-          await seedProviderPackages(join(directory, ".opencode"));
+          if (nativeVersion.startsWith("1.")) {
+            await seedProviderPackages(join(directory, ".opencode"));
+          }
           await composer?.prepare(directory);
           if (profile === "messages-forms") {
             const files = {
@@ -856,7 +854,9 @@ try {
             if (!git.success) {
               throw new Error(new TextDecoder().decode(git.stderr));
             }
-            await seedProviderPackages(join(secondaryDirectory, ".opencode"));
+            if (nativeVersion.startsWith("1.")) {
+              await seedProviderPackages(join(secondaryDirectory, ".opencode"));
+            }
             await fixture!.oc.request("/experimental/tool/ids", {
               directory: secondaryDirectory,
             });
@@ -870,6 +870,18 @@ try {
               : lease!.directory,
           };
           if (params.path === "/session" && params.method === "POST") {
+            if (
+              params.body && typeof params.body === "object" &&
+              "messages" in params.body
+            ) {
+              const session = await seedBrowserSession(
+                fixture!.oc,
+                params.body as Record<string, unknown>,
+                options.directory,
+              );
+              createdIDs.push(session.id);
+              return session;
+            }
             const session = await fixture!.oc.session<{ id: string }>(
               "/session",
               {
@@ -1016,7 +1028,7 @@ try {
               settled: boolean;
               error?: string;
             };
-            const sessionID = `opcv1-${frame.params.sessionID}`;
+            const sessionID = browserSessionID(frame.params.sessionID);
             const pending = profile === "composer-commands"
               ? client!.rpc("session.command", {
                 sessionID,
@@ -1052,7 +1064,7 @@ try {
           if (
             profile === "transport-cooling" && frame.params.action === "hold"
           ) {
-            const id = `opcv1-${frame.params.sessionID}`;
+            const id = browserSessionID(frame.params.sessionID!);
             if (![cooling!.a.id, cooling!.b.id].includes(id)) {
               throw new Error("Foreign cooling session");
             }
@@ -1083,7 +1095,7 @@ try {
               error?: string;
             };
             void client!.rpc("session.shell", {
-              sessionID: `opcv1-${frame.params.sessionID}`,
+              sessionID: browserSessionID(frame.params.sessionID),
               command: "echo never-forwarded",
               ...(profile === "transport-errors-late"
                 ? { agent: "missing-late-http-agent" }

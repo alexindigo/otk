@@ -24,6 +24,7 @@ export class OpencodeV2Test implements NativeFixture {
   root!: string;
   directory!: string;
   url!: string;
+  nativePort!: number;
   db!: string;
   serviceFile!: string;
   registration!: string;
@@ -33,9 +34,12 @@ export class OpencodeV2Test implements NativeFixture {
   process!: ChildProcess;
   proxy!: FreezeProxy;
   log = "";
+  #env: Record<string, string> = {};
+  #logPath = "";
   #stop: () => Promise<void> = () => Promise.resolve();
   static async start(provider: FakeLlm, options: {
     config?: Record<string, unknown>;
+    env?: Record<string, string>;
     prepare?(fixture: OpencodeV2Test): Promise<void>;
   } = {}): Promise<OpencodeV2Test> {
     if (nativeVersion !== "2.2.6") {
@@ -51,6 +55,7 @@ export class OpencodeV2Test implements NativeFixture {
         OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
         OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
         OPENCODE_DISABLE_MODELS_FETCH: "1",
+        ...options.env,
       };
       for (
         const [key, name] of Object.entries({
@@ -100,118 +105,130 @@ export class OpencodeV2Test implements NativeFixture {
         Deno.env.get("OTK_TEST_LOG_ROOT") ?? test.root,
         "native-v2.log",
       );
-      const owner = ownedProcess(nativeBinary, [
-        "serve",
-        "--service",
-        "--hostname",
-        "127.0.0.1",
-        "--port",
-        "0",
-      ], {
-        cwd: test.directory,
-        env,
-        detached: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      test.process = owner.child;
-      test.#stop = resources().defer("V2 native generation", async () => {
-        try {
-          await test.proxy?.stop();
-        } finally {
-          await owner.stop();
-        }
-      });
-      const record = (bytes: Uint8Array) => {
-        const text = new TextDecoder().decode(bytes);
-        test.log += text;
-        Deno.writeTextFileSync(logPath, text, { append: true });
-      };
-      test.process.stdout!.on("data", record);
-      test.process.stderr!.on("data", record);
+      test.#env = env;
+      test.#logPath = logPath;
+      await test.#start();
+      return test;
+    });
+  }
+  async restart(): Promise<void> {
+    await this.stop();
+    await this.#start();
+  }
+  async #start(): Promise<void> {
+    const env = this.#env, logPath = this.#logPath;
+    const offset = this.log.length;
+    const owner = ownedProcess(nativeBinary, [
+      "serve",
+      "--service",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      "0",
+    ], {
+      cwd: this.directory,
+      env,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    this.process = owner.child;
+    this.#stop = resources().defer("V2 native generation", async () => {
       try {
-        // Admit only this process's own announcement and exact managed identity.
-        const announced = await waitFor(
-          () => {
-            if (test.process.exitCode !== null) {
-              throw new Error(`V2 native exited: ${test.log}`);
-            }
-            return nativeListeningURL(test.log, test.kind);
-          },
-          Boolean,
-          120_000,
-        );
-        const service = await waitFor(
-          () => discoverV2(test.registration),
-          (s) =>
-            s.pid === test.process.pid && s.version === nativeVersion &&
-            s.endpoint.url === announced,
-          60_000,
-        );
-        const endpoint = await Service.discover({
-          file: test.registration,
-          version: nativeVersion,
-        });
-        if (!endpoint) throw new Error("V2 managed fixture discovery failed");
-        test.api = OpenCode.make({
-          baseUrl: endpoint.url,
-          headers: serviceHeaders(endpoint),
-        });
-        test.nativeApi = test.api;
-        const signal = AbortSignal.timeout(30_000);
-        const stream = await fetch(endpoint.url + "/api/event", {
-          headers: serviceHeaders(endpoint),
-          signal,
-        });
-        if (!stream.ok || !stream.body) {
-          throw new Error("V2 fixture SSE not accepted");
-        }
-        const reader = stream.body.getReader();
-        try {
-          let text = "";
-          while (!text.includes('"server.connected"')) {
-            const bytes = await reader.read();
-            if (bytes.done) {
-              throw new Error("V2 fixture SSE ended before connected");
-            }
-            text += new TextDecoder().decode(bytes.value);
-          }
-        } finally {
-          await reader.cancel();
-          reader.releaseLock();
-        }
-        const location = { directory: test.directory };
-        await test.api.agent.list({ location }, { signal });
-        await test.api.model.list({ location }, { signal });
-        const nativePort = Number(new URL(endpoint.url).port);
-        test.proxy = new FreezeProxy(nativePort);
-        test.url = `http://127.0.0.1:${test.proxy.port}`;
-        const state = join(test.root, "discovery");
-        await Deno.mkdir(join(state, "opencode"), { recursive: true });
-        test.serviceFile = join(state, "opencode/service.json");
-        // The live managed record is never replaced: its owner monitors custody.
-        const registration = JSON.parse(
-          await Deno.readTextFile(test.registration),
-        );
-        await Deno.writeTextFile(
-          test.serviceFile,
-          JSON.stringify({ ...registration, url: test.url }),
-          { mode: 0o600 },
-        );
-        test.discoveryEnv = {
-          HOME: env.HOME,
-          XDG_STATE_HOME: state,
-          XDG_DATA_HOME: env.XDG_DATA_HOME,
-        };
-        test.api = OpenCode.make({
-          baseUrl: test.url,
-          headers: serviceHeaders(service.endpoint),
-        });
-        return test;
-      } catch (error) {
-        await test.stop();
-        throw new Error(`${error}\n${test.log}`, { cause: error });
+        await this.proxy?.stop();
+      } finally {
+        await owner.stop();
       }
     });
+    const record = (bytes: Uint8Array) => {
+      const text = new TextDecoder().decode(bytes);
+      this.log += text;
+      Deno.writeTextFileSync(logPath, text, { append: true });
+    };
+    this.process.stdout!.on("data", record);
+    this.process.stderr!.on("data", record);
+    try {
+      // Admit only this process's own announcement and exact managed identity.
+      const announced = await waitFor(
+        () => {
+          if (this.process.exitCode !== null) {
+            throw new Error(`V2 native exited: ${this.log}`);
+          }
+          return nativeListeningURL(this.log.slice(offset), this.kind);
+        },
+        Boolean,
+        120_000,
+      );
+      const service = await waitFor(
+        () => discoverV2(this.registration),
+        (s) =>
+          s.pid === this.process.pid && s.version === nativeVersion &&
+          s.endpoint.url === announced,
+        60_000,
+      );
+      const endpoint = await Service.discover({
+        file: this.registration,
+        version: nativeVersion,
+      });
+      if (!endpoint) throw new Error("V2 managed fixture discovery failed");
+      this.api = OpenCode.make({
+        baseUrl: endpoint.url,
+        headers: serviceHeaders(endpoint),
+      });
+      this.nativeApi = this.api;
+      const signal = AbortSignal.timeout(30_000);
+      const stream = await fetch(endpoint.url + "/api/event", {
+        headers: serviceHeaders(endpoint),
+        signal,
+      });
+      if (!stream.ok || !stream.body) {
+        throw new Error("V2 fixture SSE not accepted");
+      }
+      const reader = stream.body.getReader();
+      try {
+        let text = "";
+        while (!text.includes('"server.connected"')) {
+          const bytes = await reader.read();
+          if (bytes.done) {
+            throw new Error("V2 fixture SSE ended before connected");
+          }
+          text += new TextDecoder().decode(bytes.value);
+        }
+      } finally {
+        await reader.cancel();
+        reader.releaseLock();
+      }
+      const location = { directory: this.directory };
+      await this.api.agent.list({ location }, { signal });
+      await this.api.model.list({ location }, { signal });
+      const nativePort = Number(new URL(endpoint.url).port);
+      this.nativePort = nativePort;
+      this.proxy = new FreezeProxy(nativePort, { port: this.proxy?.port });
+      this.url = `http://127.0.0.1:${this.proxy.port}`;
+      const state = join(this.root, "discovery");
+      await Deno.mkdir(join(state, "opencode"), { recursive: true });
+      this.serviceFile = join(state, "opencode/service.json");
+      // The live managed record is never replaced: its owner monitors custody.
+      const registration = JSON.parse(
+        await Deno.readTextFile(this.registration),
+      );
+      await Deno.writeTextFile(
+        this.serviceFile,
+        JSON.stringify({ ...registration, url: this.url }),
+        { mode: 0o600 },
+      );
+      this.discoveryEnv = {
+        HOME: env.HOME,
+        XDG_STATE_HOME: state,
+        XDG_DATA_HOME: env.XDG_DATA_HOME,
+      };
+      this.api = OpenCode.make({
+        baseUrl: this.url,
+        headers: serviceHeaders(service.endpoint),
+      });
+    } catch (error) {
+      await this.stop();
+      throw new Error(`${error}\n${this.log}`, { cause: error });
+    }
   }
   async createSession(
     title = "V2 fixture session",
@@ -274,11 +291,7 @@ export class OpencodeV2Test implements NativeFixture {
       sessionID: ids.decode(id),
       requestID,
       decision,
-      ...(decision === "reject"
-        ? { message: message ?? "Declined by the fixture" }
-        : message
-        ? { message }
-        : {}),
+      ...(message ? { message } : {}),
     });
   }
   stageRevert(id: string, messageID: string, files: boolean): Promise<unknown> {

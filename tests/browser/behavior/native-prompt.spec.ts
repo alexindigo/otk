@@ -20,7 +20,7 @@ test(
       { name: "Session", exact: true },
     )
       .click();
-    await expect(page).toHaveURL(/#\/local\/opcv1-/);
+    await expect(page).toHaveURL(new RegExp(`#/local/${state.sessionID("")}`));
     await expect(page).not.toHaveURL(new RegExp(`${seed.id}$`));
     const id = new URL(page.url()).hash.split("/").at(-1)!;
     const prompt = `Trusted native smoke ${state.lease.lease}`;

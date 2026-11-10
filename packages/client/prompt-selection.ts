@@ -31,7 +31,10 @@ export interface PromptSelectionContext {
 export interface PromptSelection {
   applies: { agent: true; model: true; variant: boolean };
   input: PromptChoices;
-  agent: SelectionField<string> & { color?: AgentOption["color"] };
+  agent: SelectionField<string> & {
+    name?: string;
+    color?: AgentOption["color"];
+  };
   model: SelectionField<ModelRef> & {
     name?: string;
     providerName?: string;
@@ -46,6 +49,11 @@ export type PromptChoices = Pick<PromptInput, "agent" | "model" | "variant">;
 type Choices =
   & Pick<Draft, "agent" | "model" | "variant">
   & Partial<Pick<Draft, "mode">>;
+
+/** Legacy providers use their name as identity; display labels are never IDs. */
+export function agentIdentity(agent: Pick<AgentOption, "id" | "name">): string {
+  return agent.id ?? agent.name;
+}
 
 function resolve<T>(
   explicit: T | undefined,
@@ -83,8 +91,12 @@ export function effectiveSelection(
   draft: Readonly<Choices>,
   { context, agents, catalog }: PromptSelectionContext,
 ): PromptSelection {
-  const agent = resolve(draft.agent, context?.agent, agents[0]?.name);
-  const option = agents.find((item) => item.name === agent.value);
+  const agent = resolve(
+    draft.agent,
+    context?.agent,
+    agents[0] && agentIdentity(agents[0]),
+  );
+  const option = agents.find((item) => agentIdentity(item) === agent.value);
   const model = resolve(
     draft.model,
     context?.model,
@@ -129,7 +141,7 @@ export function effectiveSelection(
       model: model.value,
       ...(applies.variant ? { variant: requestedVariant.value } : {}),
     },
-    agent: { ...agent, color: option?.color },
+    agent: { ...agent, name: option?.name, color: option?.color },
     model: {
       ...model,
       name: info?.name || model.value?.model ||
@@ -162,12 +174,12 @@ export function chooseModel(
 /** An agent's configured choices apply on this intent, not on every projection. */
 export function chooseAgent(
   draft: Draft,
-  name: string,
+  id: string,
   context: PromptSelectionContext,
 ): Draft {
-  const agent = context.agents.find((item) => item.name === name);
+  const agent = context.agents.find((item) => agentIdentity(item) === id);
   if (!agent) return draft;
-  let next: Draft = { ...draft, agent: name };
+  let next: Draft = { ...draft, agent: id };
   if (agent.model) next = chooseModel(next, agent.model, context);
   if (agent.variant !== undefined) {
     next = { ...next, variant: agent.variant };

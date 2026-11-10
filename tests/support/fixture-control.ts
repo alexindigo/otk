@@ -298,11 +298,6 @@ export function request(value: unknown): ControlRequest {
       ) {
         throw new Error("Invalid version");
       }
-      if (
-        p.version.startsWith("2.") && profiles[p.profile as Profile] === "v1"
-      ) {
-        throw new Error("Scenario requires opencode V1");
-      }
       break;
     case "beginTest":
       text(p.identity);

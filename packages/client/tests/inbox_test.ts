@@ -61,6 +61,35 @@ Deno.test("inbox distinguishes its initial unknown snapshot from accepted empty 
   assertEquals(inbox.state.inbox.tasks, []);
   assertEquals(inbox.state.inbox.projects, []);
 });
+Deno.test("deleted metadata cannot retain live family attention or phantom tabs", () => {
+  const inbox = snapshot();
+  const root = {
+    ...entry("root", "busy"),
+    deleted: { at: 2, how: "otk" as const },
+  };
+  const child = {
+    ...entry("child", "retry"),
+    parentID: root.id,
+    deleted: { at: 2, how: "provider" as const },
+  };
+  root.attention.childPermissions = 1;
+  child.attention.permissions = 1;
+  child.attention.error = "Old native failure";
+  inbox.finishes.root = 10;
+  assertEquals(inboxStatus(root, inbox), "idle");
+  assertEquals(inboxStatus(child, inbox), "idle");
+  assertEquals(rollup([root, child], inbox), "idle");
+  const tabs = createTabs(() => {
+    throw new Error("No promotion expected");
+  });
+  try {
+    tabs.update({ directory: "/p", entries: [root, child], inbox });
+    assertEquals(tabs.tabs(), []);
+    assertEquals(inboxProjects([root, child], inbox, 0)[0].status, "idle");
+  } finally {
+    tabs.stop();
+  }
+});
 Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle priority without treating idle startup as a finish", () => {
   const inbox = snapshot(),
     idle = entry("idle"),

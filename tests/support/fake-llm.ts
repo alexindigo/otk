@@ -58,13 +58,19 @@ export class FakeLlm {
             JSON.stringify(this.requests, null, 2),
           );
         }
-        // opencode's ensureTitle also streams, but owns a separate request.
-        // Its explicit instruction identifies it without consuming a main reply.
+        // Native title generation owns a separate reply on both protocols.
+        // Match its instructions, never the user's ordinary prompt content.
         const titleRequest = body.messages?.some((
           message: { role: string; content: unknown },
         ) =>
-          message.role === "user" && typeof message.content === "string" &&
-          message.content.startsWith("Generate a title for this conversation:")
+          typeof message.content === "string" &&
+          ((message.role === "user" &&
+            message.content.startsWith(
+              "Generate a title for this conversation:",
+            )) ||
+            (message.role === "system" && message.content.startsWith(
+              "You name conversations so the user can find them later in a list of past sessions.",
+            )))
         );
         if (
           this.#strict && body.stream && !titleRequest && !this.#queue.length

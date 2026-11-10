@@ -262,7 +262,12 @@ export interface PartKinds {
     tokens?: Tokens;
     cost?: number;
   };
-  compaction: { kind: "compaction"; id: string };
+  compaction: {
+    kind: "compaction";
+    id: string;
+    /** Provider lifecycle, independent of whether this context is a prompt. */
+    status?: "queued" | "running" | "completed" | "failed";
+  };
   unknown: { kind: "unknown"; id: string; label: string };
 }
 /** Unrecognized harness parts retain their name and bounded data preview. */

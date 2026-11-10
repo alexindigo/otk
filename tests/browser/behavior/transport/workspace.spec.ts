@@ -284,13 +284,11 @@ test(
     test.setTimeout(120_000);
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Long history",
+      messages: Array.from(
+        { length: 103 },
+        (_, i) => ({ parts: [{ type: "text", text: `History row ${i}` }] }),
+      ),
     });
-    for (let i = 0; i < 103; i++) {
-      await state.native(`/session/${session.id}/message`, "POST", {
-        noReply: true,
-        parts: [{ type: "text", text: `History row ${i}` }],
-      });
-    }
     await openSession(state, page, session.id);
     const flow = page.locator(".otk-message-flow"),
       viewport = page.locator(".otk-messages");

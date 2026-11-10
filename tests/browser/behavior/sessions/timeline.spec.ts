@@ -26,7 +26,7 @@ test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
       "idle",
     );
   }
-  await state.queue(["Timeline compaction summary."]);
+  await state.queue(["## Objective\n\nTimeline compaction summary."]);
   await page.keyboard.press("Control+k");
   await page.locator('[data-command="session.compact"]').click();
   await expect(page.locator(".otk-messages")).toContainText(
@@ -80,7 +80,10 @@ test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
   await row.locator('[data-message-command="prompt.revert"]').click();
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(0);
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "4 prompts rolled back",
+    // V1 stores compaction as a user prompt; V2 stores provider context.
+    state.controller.info!.version.startsWith("2.")
+      ? "3 prompts rolled back"
+      : "4 prompts rolled back",
   );
   await page.locator(".otk-rollback-disclosure").click();
   await page.locator(".otk-rollback-footer button").click();
@@ -96,13 +99,13 @@ test(
   async ({ state, page }) => {
     const s = await state.native<{ id: string }>("/session", "POST", {
       title: "Paged prompts",
+      messages: Array.from(
+        { length: 105 },
+        (_, i) => ({
+          parts: [{ type: "text", text: `Historical prompt ${i}` }],
+        }),
+      ),
     });
-    for (let i = 0; i < 105; i++) {
-      await state.native(`/session/${s.id}/message`, "POST", {
-        noReply: true,
-        parts: [{ type: "text", text: `Historical prompt ${i}` }],
-      });
-    }
     const frames = await wire(page);
     await openSession(state, page, s.id);
     await page.locator("[data-panel-view=timeline]").click();
