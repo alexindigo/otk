@@ -42,6 +42,10 @@ Deno.test("V2 request events make canonical requests available before attention 
     ["frm_event"],
   );
   assertEquals((await f.pending.forms.list()).map((r) => r.id), ["frm_event"]);
+  assertEquals(
+    Reflect.get((await f.pending.forms.list())[0], "presentation"),
+    "question",
+  );
   f.pending.replacePermissions(location, [{
     id: "per_two",
     sessionID: "ses_helper",

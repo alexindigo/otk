@@ -64,6 +64,8 @@ export interface FormRequest {
   directory: string;
   title: string;
   fields: FormField[];
+  /** Stable compatibility presentation, independent of another stream's timing. */
+  presentation?: "question";
 }
 export interface FormsRpcMethods {
   "form.list": {
