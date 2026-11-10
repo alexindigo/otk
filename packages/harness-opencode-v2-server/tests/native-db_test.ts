@@ -3,6 +3,34 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { V2NativeDb } from "../native-db.ts";
 
+Deno.test("V2 saved worktree inventory is bounded, project-scoped and schema-tolerant", () => {
+  const root = Deno.makeTempDirSync({ prefix: "v2-worktrees-" }),
+    file = root + "/native.db";
+  const writer = new DatabaseSync(file);
+  try {
+    writer.exec(
+      "CREATE TABLE project(id TEXT,worktree TEXT); CREATE TABLE session_v2(id TEXT,project_id TEXT,directory TEXT,parent_id TEXT,time_created INTEGER,time_updated INTEGER); CREATE TABLE worktree(project_id TEXT,directory TEXT,strategy TEXT); INSERT INTO worktree VALUES('p','/a','git'),('p','/b',NULL),('p','/c','git'),('foreign','/d','git')",
+    );
+    const db = new V2NativeDb(file);
+    try {
+      assertEquals(db.worktrees("p", "", 2), [{
+        directory: "/a",
+        strategy: "git",
+      }, { directory: "/b" }]);
+      assertEquals(db.worktrees("p", "/b", 2), [{
+        directory: "/c",
+        strategy: "git",
+      }]);
+      assertEquals(db.worktrees("absent", "", 2), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    writer.close();
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
 Deno.test("V2 scalar DB proves projects, groups population and reads keyed ancestry without body tables", () => {
   const root = Deno.makeTempDirSync({ prefix: "v2-scalar-" }),
     file = root + "/native.db";
@@ -32,6 +60,7 @@ Deno.test("V2 scalar DB proves projects, groups population and reads keyed ances
       db = new V2NativeDb(file, (op) => reads.push(op));
     try {
       assertEquals(db.prove([{ id: "p", canonical: "/repo" }]), true);
+      assertEquals(db.worktrees("p", "", 2), undefined);
       assertEquals(db.prove([{ id: "p", canonical: "/wrong" }]), false);
       assertEquals(
         db.projects("", 20).map((p) => [p.directory, p.sessionCount]),
