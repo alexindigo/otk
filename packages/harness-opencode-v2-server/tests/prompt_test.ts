@@ -7,6 +7,8 @@ import {
 } from "@otk/protocol";
 import { V2Client } from "../client.ts";
 import { preparePrompt, V2Prompt } from "../prompt.ts";
+import { selectAction } from "../session-actions.ts";
+import type { NativeSession } from "../messages.ts";
 function fixture() {
   const calls: {
       path: string;
@@ -43,6 +45,14 @@ function fixture() {
         return Promise.reject(new TypeError("transport lost"));
       }
       if (init?.method === "GET") {
+        if (path === "/api/agent") {
+          return Promise.resolve(Response.json({
+            data: [{
+              id: "reviewer",
+              model: { providerID: "fake", id: "scripted", variant: "high" },
+            }],
+          }));
+        }
         return Promise.resolve(
           Response.json({
             data: {
@@ -65,6 +75,7 @@ function fixture() {
   );
   return {
     prompt: new V2Prompt(() => client),
+    client,
     calls,
     receipts,
     operation,
@@ -111,6 +122,38 @@ Deno.test("V2 prepares then separately fences changed agent/model/variant and se
     "prompt",
   ]);
 });
+Deno.test("V2 prompt and action selections resolve the agent's model default before switching", async () => {
+  for (const action of [false, true]) {
+    const f = fixture();
+    const input = {
+      agent: "reviewer",
+      model: { provider: "fake", model: "scripted" },
+    };
+    if (action) {
+      await selectAction(
+        f.client,
+        {
+          id: "ses_root",
+          agent: "build",
+          location: { directory: "/repo" },
+          model: { providerID: "fake", id: "scripted", variant: "default" },
+        } as NativeSession,
+        input,
+        f.operation,
+      );
+    } else {
+      await f.prompt.prompt({
+        ...input,
+        sessionID: "opcv2-ses_root",
+        mode: "normal",
+        parts: [{ kind: "text", text: "applied high" }],
+      }, f.operation);
+    }
+    assertEquals(f.calls.find((c) => c.path.endsWith("/model"))?.body, {
+      model: { providerID: "fake", id: "scripted", variant: "high" },
+    });
+  }
+});
 Deno.test("V2 failed preparation leaves every selection untouched; uncertain later switch is never resent", async () => {
   const f = fixture();
   await assertRejects(
@@ -140,6 +183,7 @@ Deno.test("V2 failed preparation leaves every selection untouched; uncertain lat
   assertEquals(failure.outcome, "unknown");
   assertEquals(f.calls.slice(1).map((c) => c.path.split("/").at(-1)), [
     "ses_root",
+    "agent",
     "agent",
     "model",
   ]);

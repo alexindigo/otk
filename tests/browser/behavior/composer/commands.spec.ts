@@ -5,6 +5,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
 import {
   composerError,
+  rejectedComposerInput,
   reloadComposerError,
 } from "../../pages/composer-error.ts";
 
@@ -40,15 +41,18 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await prompt(page).fill("/canary ");
   await prompt(page).press("Enter");
   await expect(
-    page.locator("[data-role=user] .otk-text").filter({
+    page.locator(".otk-user-message .otk-user-bubble .otk-text").filter({
       hasText: "SKILL-FIXTURE content",
     }),
   ).toBeVisible();
   await reply(state, page, session.id, "Skill command received.");
-  const catalog = await state.native<{ name: string; source: string }[]>(
-    "/command",
-  );
-  const command = catalog.find((command) => command.source === "mcp")!;
+  const catalog = await state.product("commands.list", {
+    sessionID: session.id,
+  });
+  // V2's command catalog intentionally reports no source provenance.
+  const command = catalog.find((command) =>
+    command.name.includes("fixture-prompt")
+  )!;
   await state.queue(["MCP command received."]);
   await prompt(page).fill(`/${command.name} topic-value`);
   await prompt(page).press("Enter");
@@ -157,6 +161,15 @@ test("composer.deferred-slash-failure-keeps-new-draft-and-reloads-authority", {
     action: "fail",
     sessionID: session.nativeID,
   });
+  if (state.controller.info!.version.startsWith("2.")) {
+    await rejectedComposerInput(
+      state,
+      page,
+      session.id,
+      "command",
+    );
+    return;
+  }
   await expect(page.locator(".otk-session-error")).toBeVisible();
   const snapshot = await composerError(state, page, frames, session.id);
   expect(snapshot.error).toMatch(/^Command not found: "missing-otk-command"\./);

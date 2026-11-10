@@ -5,6 +5,7 @@ import { browserProvider } from "./browser-native.ts";
 import { McpFixture } from "./mcp.ts";
 import type { nativeFixture } from "./native-fixture.ts";
 import type { Profile } from "./fixture-control.ts";
+import { nativeKind } from "./native.ts";
 
 /** Native configuration/data owned by the migrated composer scenarios. */
 export function composerProfile(profile: Profile) {
@@ -82,6 +83,21 @@ export function composerProfile(profile: Profile) {
       };
       files[".opencode/tools/plan_enter.ts"] =
         "export default {description:'Enter plan mode fixture',args:{},async execute(){return 'Switching to plan agent'}};";
+      if (nativeKind === "opencode-v2-server") {
+        files[".opencode/plugins/plan-fixture.ts"] = `export default {
+          id: "otk-plan-name-fixture",
+          async setup(ctx) {
+            return await ctx.tool.transform((editor) => {
+              for (const name of ["plan_enter", "plan_exit"]) editor.add({
+                name, description: "A plugin name is not an agent selection",
+                input: { type: "object", properties: {}, additionalProperties: false },
+                options: { codemode: false },
+                async execute() { return { content: "Switching to plan agent" }; },
+              });
+            });
+          },
+        };`;
+      }
     }
   }
   if (["composer-commands", "composer-mentions"].includes(profile)) {

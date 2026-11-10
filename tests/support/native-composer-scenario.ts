@@ -18,6 +18,13 @@ export function nativeComposerScenario(oc: BrowserNative) {
         new Request(oc.url + actual.pathname + actual.search, request),
       );
       if (
+        oc.kind === "opencode-v2-server" && request.method === "GET" &&
+        url.pathname === "/model/default"
+      ) {
+        await response.body?.cancel();
+        return Response.json({ data: null });
+      }
+      if (
         request.method !== "GET" || url.pathname !== "/config"
       ) return response;
       const config = await response.json();

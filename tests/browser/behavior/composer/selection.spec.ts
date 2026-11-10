@@ -221,8 +221,9 @@ test.describe("native picker choices", () => {
       model: selected.model,
     });
     expect(Object.hasOwn(shell, "variant")).toBe(false);
+    // Native V2 shell is its own persisted input kind, not a synthetic user.
     const users = (await messages(state, session.id)).filter((row) =>
-      row.info.role === "user"
+      ["user", "shell"].includes(row.info.role)
     );
     expect(users.length).toBeGreaterThanOrEqual(3);
     for (const row of users) {
@@ -379,23 +380,21 @@ test.describe("history choices", () => {
       }-editor-send`,
       { tag: ["@composer", "@isolated"] },
       async ({ isolatedState: state, page }) => {
-        const source = await state.native<{ id: string }>("/session", "POST", {
-          title: "History source",
-        });
         const target = await state.native<{ id: string }>("/session", "POST", {
           title: "Recall with choices",
+          messages: [{
+            model: variant === undefined
+              ? { providerID: "selected", modelID: "chosen" }
+              : { providerID: "fake", modelID: "scripted" },
+            variant: "high",
+            parts: [{ type: "text", text: "context before recall" }],
+          }],
         });
-        await state.native(`/session/${target.id}/message`, "POST", {
-          noReply: true,
-          model: variant === undefined
-            ? { providerID: "selected", modelID: "chosen" }
-            : { providerID: "fake", modelID: "scripted" },
-          variant: "high",
-          parts: [{ type: "text", text: "context before recall" }],
-        });
-        await state.native(`/session/${source.id}/message`, "POST", {
-          noReply: true,
-          parts: [{ type: "text", text: "recalled history content" }],
+        await state.native<{ id: string }>("/session", "POST", {
+          title: "History source",
+          messages: [{
+            parts: [{ type: "text", text: "recalled history content" }],
+          }],
         });
         const frames = await wire(page);
         await openSession(state, page, target.id);

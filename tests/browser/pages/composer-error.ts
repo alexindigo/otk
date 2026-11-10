@@ -3,6 +3,39 @@ import { expect, type Page } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { wire } from "../fixtures/wire.ts";
 import type { ContentSession } from "@otk/protocol";
+import { messages, prompt } from "./composer.ts";
+
+/** V2 validates these inputs before admitting a native execution. It must not
+ * fabricate a durable session error or corrupt another client's current draft. */
+export async function rejectedComposerInput(
+  state: TestState,
+  page: Page,
+  id: string,
+  error: string,
+) {
+  await expect.poll(async () =>
+    (await state.observe<{ operation: { settled: boolean; error?: string } }>())
+      .operation
+  )
+    .toMatchObject({
+      settled: true,
+      error: "Error: Could not finish this action",
+      failure: { code: error },
+    });
+  await expect(prompt(page)).toHaveValue("keep this draft");
+  await expect(page.locator(".otk-session-error")).toHaveCount(0);
+  expect((await state.product("session.get", { sessionID: id })).error)
+    .toBeUndefined();
+  expect(await messages(state, id)).toHaveLength(0);
+  await page.reload();
+  await expect(prompt(page)).toBeVisible();
+  await expect(page.locator(".otk-session-error")).toHaveCount(0);
+  expect((await state.product("session.get", { sessionID: id })).error)
+    .toBeUndefined();
+  expect(await messages(state, id)).toHaveLength(0);
+  expect((await state.observe<{ requests: unknown[] }>()).requests)
+    .toHaveLength(0);
+}
 
 /** Query, content stream, index and visible sink must identify one error state. */
 export async function composerError(

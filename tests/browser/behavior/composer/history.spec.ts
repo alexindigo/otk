@@ -27,13 +27,10 @@ test(
   async ({ isolatedState: state, page }) => {
     const first = await state.native<{ id: string }>("/session", "POST", {
       title: "History local",
+      messages: [{ parts: [{ type: "text", text: "local older prompt" }] }],
     });
     const blank = await state.native<{ id: string }>("/session", "POST", {
       title: "Blank",
-    });
-    await state.native(`/session/${first.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text: "local older prompt" }],
     });
     await state.product("session.shell", {
       sessionID: first.id,
@@ -54,9 +51,9 @@ test(
       agent: "build",
       command: "echo remote-history-shell",
     });
-    await native(`/session/${remote.session.id}/message`, {
-      noReply: true,
-      parts: [{ type: "text", text: "remote newest prompt" }],
+    await native("/session", {
+      title: "Remote newest history",
+      messages: [{ parts: [{ type: "text", text: "remote newest prompt" }] }],
     });
     await page.goto(state.url);
     await connect(page, remote.url);
@@ -95,15 +92,17 @@ test("composer.remote-image-recall-resolves-origin-bytes-only-on-send", {
   await state.controller.call("nativeRequest", {
     lease: state.lease.lease,
     target: "remote",
-    path: `/session/${remote.session.id}/message`,
+    path: "/session",
     method: "POST",
     body: {
-      noReply: true,
-      parts: [{ type: "text", text: "inspect [Image 1]" }, {
-        type: "file",
-        filename: "pixel.png",
-        mime: "image/png",
-        url: `data:image/png;base64,${bytes}`,
+      title: "Remote image source",
+      messages: [{
+        parts: [{ type: "text", text: "inspect [Image 1]" }, {
+          type: "file",
+          filename: "pixel.png",
+          mime: "image/png",
+          url: `data:image/png;base64,${bytes}`,
+        }],
       }],
     },
   });
@@ -170,15 +169,12 @@ test(
   "composer.local-recall-never-reads-an-unleased-connected-sibling",
   { tag: ["@composer", "@isolated"] },
   async ({ isolatedState: state, page }) => {
-    const source = await state.native<{ id: string }>("/session", "POST", {
+    await state.native<{ id: string }>("/session", "POST", {
       title: "History source",
+      messages: [{ parts: [{ type: "text", text: "valid local history" }] }],
     });
     const blank = await state.native<{ id: string }>("/session", "POST", {
       title: "Recall here",
-    });
-    await state.native(`/session/${source.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text: "valid local history" }],
     });
     const remote = await state.controller.call<{ url: string }>("auxiliary", {
       lease: state.lease.lease,

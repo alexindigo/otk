@@ -159,6 +159,14 @@ export function browserV2Config(value: ObjectValue = {}): ObjectValue {
           models: Object.fromEntries(
             Object.entries(object(p.models ?? {})).map(([key, raw]) => {
               const m = { ...object(raw) };
+              // V1 custom models without variants are non-reasoning choices.
+              // Stock V2 otherwise synthesizes low/medium/high for them.
+              if (!m.variants) {
+                m.capabilities = {
+                  ...object(m.capabilities ?? {}),
+                  reasoning: { supported: false },
+                };
+              }
               if (m.release_date) {
                 m.releaseDate = m.release_date;
                 delete m.release_date;
@@ -337,30 +345,53 @@ export class BrowserV2Native implements BrowserNative {
       },
       time: { created: now, updated: now },
     };
-    const data = messages.map((message, n) =>
+    const data = messages.flatMap((message, n) =>
       typeof message.type === "string"
-        ? {
+        ? [{
           ...message,
           id: message.id ?? "msg_" + crypto.randomUUID().replaceAll("-", ""),
           time: message.time ?? { created: now + n },
-        }
-        : ({
-          id: "msg_" + crypto.randomUUID().replaceAll("-", ""),
-          type: "user",
-          text: (message.parts as ObjectValue[]).filter((p) =>
-            p.type === "text"
-          )
-            .map((p) => p.text).join(""),
-          time: { created: now + n },
-          files: (message.parts as ObjectValue[]).filter((p) =>
-            p.type === "file"
-          )
-            .map((p) => ({
-              uri: String(p.url),
-              name: String(p.filename ?? "attachment"),
-              mime: String(p.mime ?? "text/plain"),
-            })),
-        })
+        }]
+        : [
+          ...(message.agent
+            ? [{
+              id: "msg_" + crypto.randomUUID().replaceAll("-", ""),
+              type: "agent-switched",
+              agent: message.agent,
+              time: { created: now + n },
+            }]
+            : []),
+          ...(message.model
+            ? [{
+              id: "msg_" + crypto.randomUUID().replaceAll("-", ""),
+              type: "model-switched",
+              model: {
+                providerID: object(message.model).providerID,
+                id: object(message.model).modelID,
+                ...(message.variant ? { variant: message.variant } : {}),
+              },
+              time: { created: now + n },
+            }]
+            : []),
+          {
+            id: "msg_" + crypto.randomUUID().replaceAll("-", ""),
+            type: "user",
+            text: (message.parts as ObjectValue[]).filter((p) =>
+              p.type === "text"
+            )
+              .map((p) => p.text).join(""),
+            time: { created: now + n },
+            files: (message.parts as ObjectValue[]).filter((p) =>
+              p.type === "file"
+            )
+              .map((p) => ({
+                data: String(p.url).split(",", 2)[1],
+                source: { type: "inline" },
+                name: String(p.filename ?? "attachment"),
+                mime: String(p.mime ?? "text/plain"),
+              })),
+          },
+        ]
     );
     const raw = await this.native.api.experimental.session.import({
       info,
@@ -520,11 +551,44 @@ export class BrowserV2Native implements BrowserNative {
           limit: Number(uri.searchParams.get("limit") ?? 200),
           order: "asc",
         })).data;
+      let agent: unknown, selectedModel: unknown;
       return (Array.isArray(result)
-        ? result.filter((raw) =>
-          !["agent-switched", "model-switched", "location-switched", "idle"]
-            .includes(String(object(raw).type))
-        ).map(messageFixture)
+        ? result.flatMap((raw, index, rows) => {
+          const row = object(raw);
+          if (row.type === "agent-switched") agent = row.agent;
+          if (row.type === "model-switched") selectedModel = row.model;
+          if (
+            !["agent-switched", "model-switched", "location-switched", "idle"]
+              .includes(String(object(raw).type))
+          ) {
+            // V2 stores chosen selection in control rows and effective selection
+            // on the assistant, not on user input. Observe the actual next reply
+            // (bounded by the next input), including native agent defaults.
+            let applied: ObjectValue | undefined;
+            if (row.type === "user") {
+              for (let next = index + 1; next < rows.length; next++) {
+                const candidate = object(rows[next]);
+                if (["user", "shell"].includes(String(candidate.type))) break;
+                if (candidate.type === "assistant") {
+                  applied = candidate;
+                  break;
+                }
+              }
+            }
+            return [
+              messageFixture({
+                ...row,
+                ...((applied?.agent ?? agent)
+                  ? { agent: applied?.agent ?? agent }
+                  : {}),
+                ...((applied?.model ?? selectedModel)
+                  ? { model: applied?.model ?? selectedModel }
+                  : {}),
+              }),
+            ];
+          }
+          return [];
+        })
         : messageFixture(result)) as T;
     } else if (
       parts[0] === "session" && parts[2] === "revert" && method === "POST"
@@ -670,9 +734,37 @@ function messageFixture(raw: unknown): unknown {
   if (!raw) return raw;
   const row = object(raw), time = object(row.time ?? {});
   return {
-    info: { ...row, role: row.type, time },
+    info: {
+      ...row,
+      role: row.type,
+      time,
+      ...(row.model
+        ? {
+          model: {
+            providerID: object(row.model).providerID,
+            modelID: object(row.model).id,
+            ...(object(row.model).variant &&
+                object(row.model).variant !== "default"
+              ? { variant: object(row.model).variant }
+              : {}),
+          },
+        }
+        : {}),
+    },
     parts: row.type === "user"
-      ? [{ type: "text", text: row.text }]
+      ? [
+        { type: "text", text: row.text },
+        ...((row.files ?? []) as ObjectValue[]).map((f) => ({
+          type: "file",
+          filename: f.name,
+          mime: f.mime,
+          url: `data:${f.mime};base64,${f.data}`,
+        })),
+        ...((row.agents ?? []) as ObjectValue[]).map((a) => ({
+          type: "agent",
+          name: a.name,
+        })),
+      ]
       : Array.isArray(row.content)
       ? row.content.map((value) => {
         const part = object(value);

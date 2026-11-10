@@ -7,7 +7,7 @@ import {
   messageLayoutRole,
 } from "../components/work-log.ts";
 
-Deno.test("provider context never receives user-prompt framing", () => {
+Deno.test("provider context shares user bubbles without becoming an actionable prompt", () => {
   const message: UserMessage = {
     id: "context",
     sessionID: "session",
@@ -17,6 +17,10 @@ Deno.test("provider context never receives user-prompt framing", () => {
   };
   const present = () => ({ text: "summary", copyable: true });
   assertEquals(messageFrames(message, present).prompt, true);
+  assertEquals(
+    Reflect.get(messageFrames(message, present), "userBubble"),
+    true,
+  );
   for (
     const origin of [
       "compaction",
@@ -28,15 +32,34 @@ Deno.test("provider context never receives user-prompt framing", () => {
     ] as const
   ) {
     const contextual: UserMessage = { ...message, origin };
-    assertEquals(messageFrames(contextual, present).prompt, false);
+    const frames = messageFrames(contextual, present);
+    const layout = createMessageLayout().update(
+      contextual.id,
+      messageLayoutRole(contextual),
+      [{ messageID: contextual.id, parts: contextual.parts }],
+      "prefs",
+      present,
+    );
+    assertEquals(frames.prompt, false);
+    assertEquals(layout.prompt, false);
+    assertEquals(Reflect.get(frames, "userBubble"), true);
+    assertEquals(Reflect.get(layout, "userBubble"), true);
+    const markers = () => ({ frame: "transcript" as const });
     assertEquals(
-      createMessageLayout().update(
-        contextual.id,
-        messageLayoutRole(contextual),
-        [{ messageID: contextual.id, parts: contextual.parts }],
-        "prefs",
-        present,
-      ).prompt,
+      Reflect.get(messageFrames(contextual, markers), "userBubble"),
+      false,
+    );
+    assertEquals(
+      Reflect.get(
+        createMessageLayout().update(
+          contextual.id,
+          messageLayoutRole(contextual),
+          [{ messageID: contextual.id, parts: contextual.parts }],
+          "prefs",
+          markers,
+        ),
+        "userBubble",
+      ),
       false,
     );
   }

@@ -79,6 +79,109 @@ test(
       await expect(page.locator(".otk-question-dock dl")).toBeVisible();
       await page.locator(".otk-question-actions .otk-primary").click();
     };
+    if (state.controller.info!.version.startsWith("2.")) {
+      // Stock V2 keeps Plan until an explicit user switch; plan_exit is not a
+      // builtin. A real question still owns approval, never a tool-name guess.
+      const approval = () =>
+        state.controller.call("queueScript", {
+          lease: state.lease.lease,
+          target: "selected",
+          chunks: [],
+          tool: {
+            name: "question",
+            input: {
+              questions: [{
+                header: "Plan",
+                question: "Proceed with implementation?",
+                custom: false,
+                options: [
+                  { label: "Approve", description: "Ready to switch" },
+                  {
+                    label: "Refine",
+                    description: "Stay in plan",
+                  },
+                ],
+              }],
+            },
+          },
+        });
+      await openSession(state, page, session.id);
+      await pick("plan");
+      await footer("plan", "low");
+      await approval();
+      await queue(["Plan approved."]);
+      await send("P5 finish planning");
+      await expect(page.locator(".otk-question-dock .otk-question-options"))
+        .toBeVisible();
+      await footer("plan", "low");
+      await answer(0);
+      await reply(state, page, session.id, "Plan approved.");
+      await footer("plan", "low");
+      await nativeUser("P5 finish planning", "plan", "low");
+      await pick("build");
+      await footer("build", "high");
+      await queue(["Implementation selected."]);
+      await send("P5 implement the approved plan");
+      await reply(state, page, session.id, "Implementation selected.");
+      await nativeUser("P5 implement the approved plan", "build", "high");
+      for (const tool of ["plan_enter", "plan_exit"]) {
+        await queue([`Plugin ${tool} completed.`], tool);
+        await send(`P5 plugin ${tool} must not select an agent`);
+        await reply(state, page, session.id, `Plugin ${tool} completed.`);
+        await expect.poll(async () =>
+          (await messages(state, session.id)).some((row) =>
+            row.parts.some((p) =>
+              p.tool === tool && p.state?.status === "completed"
+            )
+          )
+        ).toBe(true);
+        await footer("build", "high");
+      }
+      await pick("plan");
+      await queue(["Explicit plan selected."]);
+      await send("P5 continue in plan");
+      await reply(state, page, session.id, "Explicit plan selected.");
+      await nativeUser("P5 continue in plan", "plan", "low");
+      await approval();
+      await queue(["Plan retained for refinement."]);
+      await send("P5 keep refining the plan");
+      await expect(page.locator(".otk-question-dock .otk-question-options"))
+        .toBeVisible();
+      await answer(1);
+      await reply(state, page, session.id, "Plan retained for refinement.");
+      await footer("plan", "low");
+      await nativeUser("P5 keep refining the plan", "plan", "low");
+      const observed = await state.observe<
+        {
+          requests: unknown[];
+          selectedRequests: { messages: unknown; reasoning_effort?: string }[];
+        }
+      >();
+      expect(observed.requests).toHaveLength(0);
+      for (const selected of ["Approve", "Refine"]) {
+        expect(
+          observed.selectedRequests.some((request) =>
+            JSON.stringify(request.messages).includes(selected)
+          ),
+        ).toBe(true);
+      }
+      for (const effort of ["low", "high"]) {
+        expect(
+          observed.selectedRequests.some((request) =>
+            request.reasoning_effort === effort
+          ),
+        ).toBe(true);
+      }
+      await pick("build");
+      await footer("build", "high");
+      await openSession(state, page, other.id);
+      await openSession(state, page, session.id);
+      await footer("build", "high");
+      await page.reload();
+      await openSession(state, page, session.id);
+      await footer("plan", "low");
+      return;
+    }
     await openSession(state, page, session.id);
     await pick("plan");
     await footer("plan", "low");

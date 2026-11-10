@@ -5,6 +5,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
 import {
   composerError,
+  rejectedComposerInput,
   reloadComposerError,
 } from "../../pages/composer-error.ts";
 
@@ -96,6 +97,15 @@ test.describe("direct native deferred failure", () => {
         action: "fail",
         sessionID: session.nativeID,
       });
+      if (state.controller.info!.version.startsWith("2.")) {
+        await rejectedComposerInput(
+          state,
+          page,
+          session.id,
+          "request.params",
+        );
+        return;
+      }
       await expect(page.locator(".otk-session-error")).toBeVisible();
       const snapshot = await composerError(state, page, frames, session.id);
       expect(snapshot.error).toMatch(/^Agent not found: "missing-otk-agent"\./);
