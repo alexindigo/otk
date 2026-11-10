@@ -22,7 +22,8 @@ import { metadata, millis, session, type SessionFacts } from "./metadata.ts";
 import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
 import { Transcript } from "./transcript.ts";
-import { mapSession } from "./map.ts";
+import { revertSession, sessionActions } from "./session-actions.ts";
+import { commands } from "./commands.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -34,6 +35,7 @@ export interface OpencodeV2ServerConfig {
   messages: import("@otk/protocol").MessagePolicy;
   digest?: DigestPolicy;
   catalogs?: { pending: number; concurrency: number };
+  attachments?: import("@otk/protocol").AttachmentPolicy;
 }
 type Pending = {
   id: string;
@@ -210,6 +212,50 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.capabilities = Object.freeze({
       ...digestCapabilities,
       ...catalogCapabilities,
+      commands: commands(
+        () => this.stream.client,
+        config.attachments,
+        this.catalogs
+          ? (id, signal) => this.catalogs!.listCommands(id, signal)
+          : undefined,
+      ),
+      ...sessionActions({
+        client: () => this.stream.client,
+        observed: (raw) => {
+          this.transcript.observe(raw);
+          // Native terminal clocks, not an old event, certify the action's
+          // current lamp. In particular Restore owns its clear-triggered run.
+          const busy = millis(raw.time.busy) > millis(raw.time.idle);
+          if (busy) this.#running.set(raw.id, millis(raw.time.busy));
+          else this.#running.delete(raw.id);
+          this.#upsert(this.#metadata(raw, busy));
+        },
+        removed: async (id, operation) => {
+          const client = this.stream.client;
+          const native = ids.decode(id);
+          const raw = await client.read(
+            (api) =>
+              api.session.get({ sessionID: native }, {
+                signal: operation?.signal,
+              }),
+            operation?.signal,
+          );
+          const metadata = this.#metadata(raw, this.#running.has(native));
+          const intent = crypto.randomUUID(), generation = this.#generation;
+          await digest?.deleteIntent(id, intent, "begin", generation);
+          try {
+            await client.effect(
+              (api) => api.session.remove({ sessionID: native }),
+              operation,
+            );
+            await digest?.deleteIntent(id, intent, "confirmed", generation);
+            await this.#deleted(id, metadata, generation);
+          } catch (error) {
+            await digest?.deleteIntent(id, intent, "failed", generation);
+            throw error;
+          }
+        },
+      }),
     });
     const version = () => this.#version;
     const unavailable = () =>
@@ -304,7 +350,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             sessionID: native,
           }, { signal }), signal);
         this.transcript.observe(raw);
-        return mapSession(raw);
+        return await revertSession(this.stream.client, raw, signal);
       },
       listSessions: async (input, signal = new AbortController().signal) => {
         if (input.parentID) ids.decode(input.parentID);
@@ -455,6 +501,34 @@ export class OpencodeV2ServerAdapter implements Harness {
       } catch (error) {
         if (!(error instanceof V2MissingSession)) throw error;
       }
+    }
+  }
+  async #deleted(
+    id: string,
+    metadata: SessionMetadata | undefined,
+    generation: number,
+  ): Promise<void> {
+    if (generation !== this.#generation) return;
+    const previous = this.#index.getMetadata(id);
+    this.transcript.release(id);
+    this.#running.delete(ids.decode(id));
+    this.#finished.delete(id);
+    this.#lists.invalidate();
+    for (const [key, pending] of this.#pending) {
+      if (pending.sessionID === ids.decode(id)) this.#setPending(key);
+    }
+    if (this.digest) {
+      await this.digest.deleted(generation, id, Date.now(), metadata);
+    } else {
+      if (!this.#sink?.index) this.#index.remove(id);
+      this.#sink?.indexRemove(id);
+    }
+    if (previous) {
+      await this.#refreshProjects(
+        [previous.directory],
+        this.stream.client.signal,
+        generation,
+      );
     }
   }
   #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
@@ -756,6 +830,14 @@ export class OpencodeV2ServerAdapter implements Harness {
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    if (changedID && event.type === "session.deleted") {
+      await this.#deleted(
+        changedID,
+        this.#index.getMetadata(changedID),
+        generation,
+      );
+      return;
+    }
     if (
       changedID &&
       /^session\.tool\.(called|progress|success|failed)$/.test(event.type)

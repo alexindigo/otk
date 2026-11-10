@@ -8,10 +8,12 @@ import { MAX_SESSION_TITLE } from "@otk/protocol";
 import type { RpcContext } from "../ws/registry.ts";
 import { nativeEffect, nativeExecution } from "../requests/policies.ts";
 import {
+  archivedReceipt,
   completionReceipt,
   createdReceipt,
   renamedReceipt,
   renameIntent,
+  selectionReceipt,
 } from "./session-receipts.ts";
 
 export function register(
@@ -19,6 +21,30 @@ export function register(
   harness: Harness,
   created?: (directory: string, tx?: StoreWrite) => void,
 ): void {
+  const archive = harness.capabilities.sessionArchive;
+  if (archive) {
+    rpc.register("session.archive", {
+      execution: nativeExecution(
+        (p: { sessionID: string }) => ({
+          sessionID: p.sessionID,
+          resource: "archive",
+        }),
+        archivedReceipt,
+      ),
+      params(p) {
+        if (typeof p.archived !== "boolean") {
+          throw new HarnessError("params", "archived must be a boolean");
+        }
+        return { sessionID: sessionID(p)!, archived: p.archived };
+      },
+      handler: (ctx, p) =>
+        nativeEffect(
+          ctx,
+          (operation) => archive.archive(p.sessionID, p.archived, operation),
+          archivedReceipt,
+        ),
+    });
+  }
   const actions = harness.capabilities.sessionActions;
   if (!actions) return;
   const compacted = completionReceipt("session-compacted"),
@@ -31,10 +57,16 @@ export function register(
       }, createdReceipt.encode)
       : (created?.(value.directory), value);
   rpc.register("session.compact", {
-    execution: nativeExecution(
-      (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
-      compacted,
-    ),
+    execution: {
+      ...nativeExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        compacted,
+      ),
+      checkpoint: (receipt) =>
+        receipt.kind === selectionReceipt.kind
+          ? selectionReceipt.validate(receipt)
+          : compacted.validate(receipt),
+    },
     params(p) {
       const model = object(p.model);
       return {

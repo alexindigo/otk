@@ -108,6 +108,7 @@ export async function start(
         messages: cfg.messages,
         digest: cfg.digest,
         catalogs: cfg.catalogs,
+        attachments: cfg.attachments,
       },
       selected.service,
       (error) => diagnostic("warn", "opencode V2", error),

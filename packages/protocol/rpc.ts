@@ -34,6 +34,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.command": { kind: "mutation", pending: "Running command" },
   "session.abort": { kind: "mutation", pending: "Stopping session" },
   "session.revert": { kind: "mutation", pending: "Rolling back" },
+  "session.revertCode": { kind: "mutation", pending: "Reverting code changes" },
   "commands.list": { kind: "read", pending: "Loading commands" },
   "history.list": { kind: "read", pending: "Loading prompt history" },
   "history.attachments": { kind: "read", pending: "Preparing attachments" },
@@ -223,6 +224,10 @@ export interface RpcMethods
     params: { sessionID: string; messageID: string };
     result: ContentSession;
   };
+  "session.revertCode": {
+    params: { sessionID: string; messageID: string };
+    result: ContentSession;
+  };
   "permission.list": {
     params: { sessionID: string };
     result: PermissionRequest[];
@@ -258,8 +263,18 @@ export interface CreatedSessionReceipt {
 export interface CoreRequestReceipts {
   "session-created": CreatedSessionReceipt;
   "session-rename-intent": { sessionID: string; title: string };
-  "session-boundary-intent": { sessionID: string; messageID: string | null };
-  "session-boundary": { sessionID: string; messageID: string | null };
+  "session-boundary-intent": {
+    sessionID: string;
+    messageID: string | null;
+    mode?: "messages" | "code" | "restore";
+    after?: number;
+  };
+  "session-boundary": {
+    sessionID: string;
+    messageID: string | null;
+    mode?: "messages" | "code" | "restore";
+    after?: number;
+  };
   "prompt-sent": { completed: true };
   "shell-settled": { completed: true };
   "command-settled": { completed: true };

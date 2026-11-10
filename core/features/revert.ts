@@ -5,10 +5,13 @@ import { sessionID, text } from "../ws/params.ts";
 import { Requests } from "@otk/store";
 import { nativeEffect } from "../requests/policies.ts";
 import { boundaryIntent, boundaryReceipt } from "./session-receipts.ts";
-import type { ContentSession } from "@otk/protocol";
+import type { ContentSession, RequestReceipts } from "@otk/protocol";
 import type { RpcExecutionPolicy } from "../requests/types.ts";
 
-function execution<P extends { sessionID: string }>(): RpcExecutionPolicy<
+type Mode = RequestReceipts["session-boundary"]["mode"];
+function execution<P extends { sessionID: string }>(
+  mode?: Mode,
+): RpcExecutionPolicy<
   P,
   ContentSession
 > {
@@ -19,6 +22,7 @@ function execution<P extends { sessionID: string }>(): RpcExecutionPolicy<
       boundaryReceipt.encode({
         sessionID: session.id,
         messageID: session.revert?.messageID ?? null,
+        ...(mode ? { mode } : {}),
       }),
     checkpoint: (receipt) =>
       receipt.kind === boundaryIntent.kind
@@ -39,7 +43,23 @@ function execution<P extends { sessionID: string }>(): RpcExecutionPolicy<
           operation.signal,
         );
         if (
-          complete || (current.revert?.messageID ?? null) === expected.messageID
+          !complete && expected.mode === "restore" &&
+          expected.after !== undefined &&
+          !current.revert && ctx.harness.capabilities.restore?.settle
+        ) {
+          return {
+            state: "complete",
+            result: await ctx.harness.capabilities.restore.settle(
+              expected.sessionID,
+              expected.after,
+              operation,
+            ),
+          };
+        }
+        if (
+          complete ||
+          !mode && !expected.mode &&
+            (current.revert?.messageID ?? null) === expected.messageID
         ) return { state: "complete", result: current };
       }
       return {
@@ -49,24 +69,34 @@ function execution<P extends { sessionID: string }>(): RpcExecutionPolicy<
     },
   };
 }
-const receipt = {
+const receipt = (mode?: Mode) => ({
   kind: boundaryReceipt.kind,
   validate: boundaryReceipt.validate,
   encode: (session: ContentSession) =>
     boundaryReceipt.encode({
       sessionID: session.id,
       messageID: session.revert?.messageID ?? null,
+      ...(mode ? { mode } : {}),
     }),
   restore: () => {
     throw new Error("Boundary results use their authoritative reader");
   },
-};
+});
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
-  const capability = harness.capabilities.revert;
-  if (capability) {
-    rpc.register("session.revert", {
-      execution: execution(),
+  for (
+    const [method, capability, mode] of [
+      [
+        "session.revert",
+        harness.capabilities.revert,
+        harness.capabilities.revertCode ? "messages" : undefined,
+      ],
+      ["session.revertCode", harness.capabilities.revertCode, "code"],
+    ] as const
+  ) {
+    if (!capability) continue;
+    rpc.register(method, {
+      execution: execution(mode),
       params: (p) => ({
         sessionID: sessionID(p)!,
         messageID: text(p, "messageID")!,
@@ -74,30 +104,35 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       handler: async (ctx, p) => {
         await ctx.execution?.checkpoint(
           boundaryIntent.kind,
-          boundaryIntent.encode(p),
+          boundaryIntent.encode({ ...p, ...(mode ? { mode } : {}) }),
         );
         return await nativeEffect(
           ctx,
           (operation) => capability.revert(p.sessionID, p.messageID, operation),
-          receipt,
+          receipt(mode),
         );
       },
     });
   }
   const restore = harness.capabilities.restore;
   if (restore) {
+    const mode = harness.capabilities.revertCode ? "restore" : undefined;
     rpc.register("session.restore", {
-      execution: execution(),
+      execution: execution(mode),
       params: (p) => ({ sessionID: sessionID(p)! }),
       handler: async (ctx, p) => {
         await ctx.execution?.checkpoint(
           boundaryIntent.kind,
-          boundaryIntent.encode({ sessionID: p.sessionID, messageID: null }),
+          boundaryIntent.encode({
+            sessionID: p.sessionID,
+            messageID: null,
+            ...(mode ? { mode } : {}),
+          }),
         );
         return await nativeEffect(
           ctx,
           (operation) => restore.restore(p.sessionID, operation),
-          receipt,
+          receipt(mode),
         );
       },
     });

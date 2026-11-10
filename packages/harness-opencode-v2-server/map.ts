@@ -77,7 +77,15 @@ export function mapSession(
     },
     ...(raw.revert
       ? {
-        revert: { messageID: raw.revert.messageID, messageCount: 0, files: [] },
+        revert: {
+          messageID: raw.revert.messageID,
+          messageCount: 0,
+          files: (raw.revert.files ?? []).map((f) => ({
+            path: f.file,
+            additions: f.additions,
+            deletions: f.deletions,
+          })),
+        },
       }
       : {}),
   };

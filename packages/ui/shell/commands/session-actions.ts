@@ -12,6 +12,9 @@ import type { ContentTarget } from "../../features/transcript-context.tsx";
 /** Feature command contributions; target state and operations are injected. */
 export function registerSessionActionCommands(commands: CommandHub, ports: {
   available(target: Selection): boolean;
+  archiveAvailable?(target: Selection): boolean;
+  archived?(target: Selection): boolean | undefined;
+  archive?(target: Selection, archived: boolean): Promise<unknown>;
   rename: SessionRename;
   working(target: Selection): boolean;
   helpers(target: Selection): number;
@@ -21,7 +24,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   revert?: SessionRevert;
   revertAvailable?(
     target: Selection,
-    capability: "revert" | "restore",
+    capability: "revert" | "revertCode" | "restore",
     interrupt?: boolean,
   ): boolean;
   rolledBack?(): boolean;
@@ -51,6 +54,44 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     return !!target && !!ports.revert?.matches(target) &&
       !!ports.rolledBack?.() && !!ports.revertAvailable?.(target, "restore");
   };
+  const code = commands.register({
+    id: "prompt.revertCode",
+    title: "Revert code changes",
+    category: "Transcript",
+    hidden: true,
+    context: { kind: "prompt", order: 6 },
+    enabled: (_ctx, target?: ContentTarget) =>
+      !!target?.sidecarId && !!target.sessionID && !!target.messageID &&
+      !target.queued &&
+      !!ports.revert?.matches({
+        sidecarId: target.sidecarId,
+        sessionID: target.sessionID,
+      }) &&
+      !!ports.revertAvailable?.({
+        sidecarId: target.sidecarId,
+        sessionID: target.sessionID,
+      }, "revertCode"),
+    run: (_ctx, target: ContentTarget) =>
+      ports.revert!.revertTo(target.messageID!, true),
+  });
+  const archive = [true, false].map((archived) =>
+    commands.register({
+      id: archived ? "session.archive" : "session.unarchive",
+      title: archived ? "Archive" : "Unarchive",
+      category: "Session",
+      hidden: true,
+      context: { kind: "session", order: 35 },
+      enabled: (_ctx, target?: SessionContextTarget) => {
+        if (
+          !target || !ports.archive || !ports.archiveAvailable?.(target)
+        ) return false;
+        const current = ports.archived?.(target);
+        return current !== undefined && current !== archived;
+      },
+      run: (_ctx, target: SessionContextTarget) =>
+        ports.archive!(target, archived),
+    })
+  );
   const undo = commands.register({
     id: "session.undo",
     title: "Undo previous prompt",
@@ -147,6 +188,8 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     fork();
     reply();
     rollback();
+    code();
+    archive.forEach((release) => release());
     restore();
     undo();
     redo();

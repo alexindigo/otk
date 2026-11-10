@@ -30,6 +30,7 @@ export const profiles = {
   "contract-visual-native-events": "neutral",
   "contract-menus-inbox": "neutral",
   "contract-menus-content": "neutral",
+  "contract-menus-session-actions": "neutral",
   "contract-menus-context": "neutral",
   "contract-menus-dialog": "neutral",
   "contract-menus-hints": "neutral",

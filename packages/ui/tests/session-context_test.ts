@@ -3,6 +3,81 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { CommandHub, createSessionRename, type Selection } from "@otk/client";
 import { registerSessionTargetCommands } from "../shell/commands/sessions.ts";
 import { registerSessionActionCommands } from "../shell/commands/session-actions.ts";
+import type { SessionRevert } from "@otk/client";
+
+Deno.test("code revert and archive contributions require independent capabilities and capture the menu target", async () => {
+  const commands = new CommandHub(), calls: unknown[] = [];
+  const target = {
+    sidecarId: "one",
+    sessionID: "source",
+    directory: "/p",
+    title: "Source",
+  };
+  let available = false, archived: boolean | undefined = false;
+  const revert: SessionRevert = {
+    state: {},
+    matches: () => true,
+    revertTo: (id, code) => {
+      calls.push([id, code]);
+      return Promise.resolve();
+    },
+    restore: () => Promise.resolve(),
+    undo: () => Promise.resolve(),
+    redo: () => Promise.resolve(),
+    hasPrompt: () => true,
+    strip: () => undefined,
+    dispose() {},
+  };
+  const release = registerSessionActionCommands(commands, {
+    available: () => true,
+    current: () => target,
+    rename: createSessionRename({ rename: () => Promise.resolve() }),
+    remove: () => Promise.resolve(true),
+    working: () => false,
+    helpers: () => 0,
+    fork: () => Promise.resolve(),
+    revert,
+    revertAvailable: (_target, capability) =>
+      capability === "revert" || available,
+    archiveAvailable: () => available,
+    archived: () => archived,
+    archive: (captured, value) => {
+      calls.push([captured, value]);
+      archived = value;
+      return Promise.resolve();
+    },
+  });
+  const prompt = () =>
+    commands.contextActions({
+      kind: "prompt",
+      data: { ...target, messageID: "boundary" },
+    });
+  const session = () =>
+    commands.contextActions({ kind: "session", data: target });
+  assertEquals(prompt().map((c) => c.title), ["Revert to here"]);
+  assertEquals(session().some((c) => c.id === "session.archive"), false);
+  available = true;
+  assertEquals(prompt().map((c) => c.title), [
+    "Revert to here",
+    "Revert code changes",
+  ]);
+  await commands.runContext(
+    prompt().find((c) => c.id === "prompt.revertCode")!,
+  );
+  assertEquals(calls.at(-1), ["boundary", true]);
+  await commands.runContext(session().find((c) => c.id === "session.archive")!);
+  assertEquals(calls.at(-1), [target, true]);
+  assertEquals(session().some((c) => c.id === "session.archive"), false);
+  assertEquals(session().some((c) => c.id === "session.unarchive"), true);
+  archived = undefined;
+  assertEquals(
+    session().some((c) =>
+      c.id === "session.archive" || c.id === "session.unarchive"
+    ),
+    false,
+  );
+  release();
+});
 
 for (
   const [working, helpers, expected] of [

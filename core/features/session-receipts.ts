@@ -61,6 +61,41 @@ export const renamedReceipt = mappedReceipt(
   project,
   restore,
 );
+export const archivedReceipt = mappedReceipt(
+  "session-archived",
+  session,
+  project,
+  restore,
+);
+export const skillReceipt = metadataReceipt(
+  "command-skill-activated",
+  (value) => {
+    const row = object(value), id = sessionID(row)!;
+    if (!isSessionID(id)) throw new TypeError("Invalid skill receipt");
+    return { sessionID: id, skillID: text(row, "skillID")! };
+  },
+);
+export const selectionReceipt = metadataReceipt(
+  "session-selection",
+  (value) => {
+    const row = object(value), id = sessionID(row)!;
+    if (!isSessionID(id)) throw new TypeError("Invalid selection receipt");
+    const model = row.model === undefined ? undefined : object(row.model);
+    return {
+      sessionID: id,
+      ...(row.agent === undefined ? {} : { agent: text(row, "agent")! }),
+      ...(row.variant === undefined ? {} : { variant: text(row, "variant")! }),
+      ...(model
+        ? {
+          model: {
+            provider: text(model, "provider")!,
+            model: text(model, "model")!,
+          },
+        }
+        : {}),
+    };
+  },
+);
 export const renameIntent = metadataReceipt(
   "session-rename-intent",
   (value) => {
@@ -71,13 +106,24 @@ export const renameIntent = metadataReceipt(
 );
 function boundary(
   value: unknown,
-): { sessionID: string; messageID: string | null } {
+): RequestReceipts["session-boundary"] {
   const row = object(value), id = sessionID(row)!;
   if (
     !isSessionID(id) ||
-    row.messageID !== null && typeof row.messageID !== "string"
+    row.messageID !== null && typeof row.messageID !== "string" ||
+    row.mode !== undefined &&
+      !["messages", "code", "restore"].includes(String(row.mode)) ||
+    row.after !== undefined &&
+      (!Number.isSafeInteger(row.after) || Number(row.after) < 0)
   ) throw new TypeError("Invalid boundary receipt");
-  return { sessionID: id, messageID: row.messageID as string | null };
+  return {
+    sessionID: id,
+    messageID: row.messageID as string | null,
+    ...(row.mode === undefined
+      ? {}
+      : { mode: row.mode as "messages" | "code" | "restore" }),
+    ...(row.after === undefined ? {} : { after: Number(row.after) }),
+  };
 }
 export const boundaryReceipt = metadataReceipt("session-boundary", boundary);
 export const boundaryIntent = metadataReceipt(

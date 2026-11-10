@@ -40,6 +40,45 @@ const user = (key: string): NativeMessage => ({
   text: key,
   time: { created: 1 },
 });
+Deno.test("re-staging the same message retires body authority for file-mode changes", async () => {
+  const notices: unknown[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No body acquisition permitted");
+    },
+    policy,
+    content() {},
+    diagnostic() {},
+    invalidated: (value) => notices.push(value),
+  });
+  const stage = {
+    type: "session.revert.staged",
+    data: {
+      sessionID: "ses_fixture",
+      revert: { messageID: "msg_boundary", files: [] },
+    },
+  };
+  await transcript.event(stage);
+  const first = transcript.replay.version(id),
+    epoch = transcript.replay.clock(id).epoch;
+  await transcript.event({
+    ...stage,
+    data: {
+      ...stage.data,
+      revert: {
+        messageID: "msg_boundary",
+        files: [{ file: "a.ts", additions: 1, deletions: 2 }],
+      },
+    },
+  });
+  assertEquals(transcript.replay.version(id), {
+    generation: first.generation,
+    revision: first.revision + 1,
+  });
+  assert(transcript.replay.clock(id).epoch !== epoch);
+  assertEquals(notices.length, 2);
+  await transcript.stop();
+});
 Deno.test("V2 model selection replaces its variant in content and latest-prompt metadata", () => {
   const model = { provider: "fake", model: "first" },
     next = { provider: "fake", model: "second" };

@@ -177,6 +177,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     capabilities: Object.fromEntries([
       "prompt",
       "sessionActions",
+      "sessionArchive",
       "shell",
       "commands",
       "history",
@@ -188,6 +189,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "permissions",
       "questions",
       "revert",
+      "revertCode",
       "restore",
       "digests",
       "catalogs",
@@ -240,10 +242,12 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "tasks.list",
     "session.create",
     "session.rename",
+    "session.archive",
     "session.delete",
     "session.fork",
     "session.compact",
     "session.revert",
+    "session.revertCode",
     "session.restore",
     "session.prompt",
     "session.shell",
@@ -312,7 +316,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     }
     assertEquals(counts, {
       read: 24,
-      native: 15,
+      native: 17,
       local: 10,
       "prepared-local": 6,
       lease: 2,

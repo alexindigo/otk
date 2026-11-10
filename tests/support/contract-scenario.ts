@@ -5,6 +5,7 @@ import { composerContractScenario } from "./composer-contract-scenario.ts";
 import { sessionsScenario } from "./sessions-scenario.ts";
 import { attentionScenario } from "./attention-scenario.ts";
 import { menusScenario } from "./menus-scenario.ts";
+import { sessionActionsScenario } from "./session-actions-scenario.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
 import { visualScenario } from "./visual-scenario.ts";
 import { themeScenario } from "./theme-scenario.ts";
@@ -31,6 +32,9 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
+  if (profile === "contract-menus-session-actions") {
+    return await sessionActionsScenario();
+  }
   if (profile === "contract-load-priority") return await loadPriorityScenario();
   if (profile === "contract-load-small" || profile === "contract-load-large") {
     return await loadPopulationScenario(profile === "contract-load-large");
