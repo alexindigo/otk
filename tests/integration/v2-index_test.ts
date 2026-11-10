@@ -518,6 +518,7 @@ Deno.test({
   fn: () =>
     withResources("V2 scalar fallback", async () => {
       const native = await OpencodeV2Test.start(new FakeLlm()),
+        older = await native.createSession(),
         target = await native.createSession(),
         settings = cfg();
       const bridge = new DigestBridge({
@@ -555,14 +556,18 @@ Deno.test({
       );
       const list = await bridge.read("sessions.list", {
         directory: native.directory,
+        limit: 1,
       }, { owner: "fallback-list", priority: "user", signal });
       assertEquals(list.items.map((row) => row.id), [target.id]);
       assert(list.older);
       const terminal = await bridge.read("sessions.list", {
         directory: native.directory,
+        limit: 1,
         before: list.older,
       }, { owner: "fallback-terminal", priority: "user", signal });
-      assertEquals(terminal.items, []);
+      // Activity-sorted API fallback proves terminal pages with lookahead;
+      // use two rows to retain a real continuation rather than an empty probe.
+      assertEquals(terminal.items.map((row) => row.id), [older.id]);
       assertEquals(terminal.older, null);
       await native.stop();
       const failure = await assertRejects(() =>
