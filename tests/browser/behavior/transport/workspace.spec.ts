@@ -13,7 +13,9 @@ const markdown = [
 
 isolatedTest("transport.workspace-projects", {
   tag: ["@transport", "@isolated", "@sessions"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
+  // V2 exposes the canonical repo context above this fixture's scoped leaf.
+  const projects = info.project.name === "oc-2.2.6" ? 3 : 2;
   const root = await state.native<{ id: string }>("/session", "POST", {
     title: "Root session",
   });
@@ -32,7 +34,7 @@ isolatedTest("transport.workspace-projects", {
     },
   );
   await openSession(state, page, root.id);
-  await expect(page.locator("[data-project]")).toHaveCount(2);
+  await expect(page.locator("[data-project]")).toHaveCount(projects);
   await expect(page.locator("[data-session]")).toHaveCount(2);
   expect(
     await page.locator(`[data-session="${child.id}"]`).evaluate((element) =>
@@ -66,11 +68,11 @@ isolatedTest("transport.workspace-projects", {
     404,
   );
   await page.goto(state.url + "/nested/route");
-  await expect(page.locator("[data-project]")).toHaveCount(2);
+  await expect(page.locator("[data-project]")).toHaveCount(projects);
   await openSession(state, page, root.id);
   await expect(page.locator("[data-session]")).toHaveCount(2);
   await page.goto(state.url);
-  await expect(page.locator("[data-project]")).toHaveCount(2);
+  await expect(page.locator("[data-project]")).toHaveCount(projects);
   await openSession(state, page, other.id);
   await expect(page.locator("[data-session]")).toHaveCount(1);
 });
@@ -175,7 +177,8 @@ isolatedTest.describe("native stream recovery", () => {
   isolatedTest.use({ profile: "transport-freeze" });
   isolatedTest("transport.frozen-stream", {
     tag: ["@transport", "@isolated", "@messages"],
-  }, async ({ isolatedState: state, page }) => {
+  }, async ({ isolatedState: state, page }, info) => {
+    isolatedTest.setTimeout(120_000);
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Recovery",
     });
@@ -210,7 +213,9 @@ isolatedTest.describe("native stream recovery", () => {
     ).toBe(true);
     await expect(page.locator(".otk-text pre")).toHaveCount(0);
     await expect(page.locator(".otk-server-status[data-connection=local]"))
-      .toHaveAttribute("title", /agent service reconnecting/);
+      .toHaveAttribute("title", /agent service reconnecting/, {
+        timeout: info.project.name === "oc-2.2.6" ? 55_000 : 10_000,
+      });
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "thaw",

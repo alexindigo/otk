@@ -38,6 +38,13 @@ receipts never infer a lost code-revert outcome from its message ID alone.
 Shell remains non-LLM. Commands prepare all selected files before selection
 changes; successful switches checkpoint metadata before final dispatch. Commands
 and compaction join native settlement when called with an operation context.
+Shell completion instead joins the shell exchange itself, never execution.wait.
+
+Native command HTTP diagnostics and execution failure/interruption events share
+the neutral SessionErrors owner with V1. Query, page and live publications carry
+the same revision and provenance; independent HTTP and event observations remain
+distinct. HTTP status/ref survive SDK decoding without changing effect
+certainty.
 
 Location-scoped shells are independent of native session executions. Their
 scalar inventory and start/end events contribute busy state without transcript
@@ -89,13 +96,16 @@ in Active projects through bounded newest-first SQL keysets or native API
 cursors. Project-policy and connection changes fence those cursors. This is not
 a startup population catalog, another scheduler or a message-body scan.
 
-Project seeds join the saved `/api/project` and `/api/worktree` inventories in
-that worker. Native project identity bounds longest-checkout-root matching;
-exact session directories stay list/task scopes. Empty inventory roots are not
-invented populated projects. Failed inventory omits topology (retaining known
-facts); complete retirement sends null. With unavailable SQL, topology remains
-usable while population/count/recency stay unknown. This producer uses V6a's
-neutral `ProjectTopology` shape; hierarchy/policy consumers belong to that item.
+Project seeds join the saved project and worktree inventories in that worker.
+Saved worktrees use bounded scalar pages from the same source-proven native
+connection where compatible, avoiding one HTTP read per unseen project. Missing
+worktree schema retains the native API fallback. Native project identity bounds
+longest-checkout-root matching; exact session directories stay list/task scopes.
+Empty inventory roots are not invented populated projects. Failed inventory
+omits topology (retaining known facts); complete retirement sends null. With
+unavailable SQL, topology remains usable while population/count/recency stay
+unknown. This producer uses V6a's neutral `ProjectTopology` shape;
+hierarchy/policy consumers belong to that item.
 
 Session lists retain the neutral 20/default, 200/maximum page contract. SQL
 keysets use `(time_updated,id)`; native API cursors are opaque. Continuations
@@ -161,6 +171,9 @@ identity. Reconnect stages demanded running-turn backfill and checkpoints
 retained streams before new deltas. Missing seeds use bounded replacement-only
 recovery; HTTP snapshots never become append seeds. Unsubscribe, cutoff,
 reconnect and stop fence late pages, recoveries, shell output and speculation.
+Already acquired in-flight append source survives viewer replacement until its
+native terminal edge, as in V1. Retention acquires no unviewed body or recovery
+read and does not retain completed transcripts.
 
 `OpencodeV2TranscriptDigestSink` is the transcript contribution composed by the
 selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read

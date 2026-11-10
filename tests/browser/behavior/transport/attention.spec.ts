@@ -144,15 +144,26 @@ test.describe("independent enrichment", () => {
       action: "hold",
       sessionID: a.nativeID,
     });
+    const v2 = info.project.name === "oc-2.2.6";
     await state.queue(["A terminal source stays complete."]);
     await page.locator("textarea[name=prompt]").fill(
       "Complete A before its optional clock",
     );
     await page.locator("textarea[name=prompt]").press("Enter");
-    await expect.poll(async () =>
-      (await state.observe<{ transport: { entered: boolean } }>()).transport
-        .entered
-    ).toBe(true);
+    if (v2) {
+      // V2 carries the persisted output clock on step.streamed: no optional
+      // point-message enrichment should be acquired at all.
+      await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
+        "A terminal source stays complete.",
+      );
+      await expect(page.locator(`[data-session="${a.id}"]`)).toHaveAttribute(
+        "data-status",
+        "idle",
+      );
+    } else {await expect.poll(async () =>
+        (await state.observe<{ transport: { entered: boolean } }>()).transport
+          .entered
+      ).toBe(true);}
     const heldAt = performance.now();
     await state.controller.call("queueScript", {
       lease: state.lease.lease,
@@ -217,10 +228,28 @@ test.describe("independent enrichment", () => {
         };
       }
     >();
-    expect(transport.entered).toBe(true);
-    expect(transport.stripped).toBeGreaterThan(0);
-    expect(transport.clockAborts).toBeGreaterThan(0);
-    expect(transport.reads - transport.clockAborts).toBe(1);
+    if (v2) {
+      expect(transport.entered).toBe(false);
+      expect(transport.stripped).toBe(0);
+      expect(transport.clockAborts).toBe(0);
+      expect(transport.reads).toBe(0);
+      const native = await state.native<
+        { info: { role: string; time: { streamed?: number } } }[]
+      >(`/session/${a.id}/message`);
+      const clock = native.find((row) =>
+        row.info.role === "assistant"
+      )!.info.time.streamed;
+      expect(clock).toBeGreaterThan(0);
+      expect(frames.received.some((frame) =>
+        frame.t === "content" && frame.sessionID === a.id &&
+        JSON.stringify(frame.event).includes(`"lastOutput":${clock}`)
+      )).toBe(true);
+    } else {
+      expect(transport.entered).toBe(true);
+      expect(transport.stripped).toBeGreaterThan(0);
+      expect(transport.clockAborts).toBeGreaterThan(0);
+      expect(transport.reads - transport.clockAborts).toBe(1);
+    }
     expect(transport.permissionAcceptedAt).toBeDefined();
     await state.controller.call("scenario", {
       lease: state.lease.lease,

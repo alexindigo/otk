@@ -52,9 +52,13 @@ test(
   "transport.password-login",
   { tag: ["@transport", "@isolated"] },
   async ({ isolatedState: state, page }) => {
-    const session = await state.native<{ id: string }>("/session", "POST", {
-      title: "Password session",
-    });
+    const session = await state.native<{ id: string; directory: string }>(
+      "/session",
+      "POST",
+      {
+        title: "Password session",
+      },
+    );
     const { url } = await state.controller.call<{ url: string }>("auxiliary", {
       lease: state.lease.lease,
       kind: "password",
@@ -76,7 +80,9 @@ test(
     await expect(page.locator(".otk-auth-view")).toHaveCount(0);
     await expect(page.locator(".otk-server-status[data-connection=local]"))
       .toHaveAttribute("title", /: connected;/);
-    await page.locator(".otk-project-open").click();
+    await page.locator(
+      `[data-project="${session.directory}"] .otk-project-open`,
+    ).click();
     await page.getByRole("button", { name: "Open right panel", exact: true })
       .click();
     await page.getByRole("complementary", { name: "Right panel", exact: true })
@@ -89,7 +95,7 @@ test(
 test(
   "transport.authenticated-remote",
   { tag: ["@transport", "@isolated"] },
-  async ({ isolatedState: state, page }) => {
+  async ({ isolatedState: state, page }, info) => {
     await state.native("/session", "POST", { title: "First host" });
     const remote = await state.controller.call<
       { url: string; session: { id: string } }
@@ -136,7 +142,7 @@ test(
     ]);
     await page.reload();
     await expect(page.locator(".otk-project-inbox [data-project]")).toHaveCount(
-      2,
+      info.project.name === "oc-2.2.6" ? 3 : 2,
     );
     await expect(page.locator("[data-session]")).toHaveCount(1);
     await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(

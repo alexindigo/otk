@@ -107,7 +107,7 @@ for (const kind of ["http", "event", "late-http"] as const) {
     test(
       `transport.error-${kind}`,
       { tag: ["@transport", "@isolated"] },
-      async ({ isolatedState: state, page }) => {
+      async ({ isolatedState: state, page }, info) => {
         const session = await state.native<{ id: string; nativeID: string }>(
           "/session",
           "POST",
@@ -118,12 +118,18 @@ for (const kind of ["http", "event", "late-http"] as const) {
         const draft = `${kind} failure keeps this draft`;
         await page.locator("textarea[name=prompt]").fill(draft);
         if (kind === "event") {
-          await expect(
-            state.native(`/session/${session.id}/shell`, "POST", {
-              command: "echo should-not-run",
+          if (info.project.name === "oc-2.2.6") {
+            // V2 admits the prompt, then reports execution failure on the feed.
+            await state.native(`/session/${session.id}/prompt_async`, "POST", {
+              parts: [{ type: "text", text: "Fail at native selection" }],
               agent: "missing-event-only-agent",
-            }),
-          ).rejects.toThrow("500");
+            });
+          } else {await expect(
+              state.native(`/session/${session.id}/shell`, "POST", {
+                command: "echo should-not-run",
+                agent: "missing-event-only-agent",
+              }),
+            ).rejects.toThrow("500");}
         } else {
           if (kind === "late-http") {
             await state.controller.call("scenario", {
