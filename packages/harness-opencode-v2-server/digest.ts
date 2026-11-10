@@ -255,6 +255,7 @@ export class OpencodeV2DigestSink implements DigestSink {
     };
   }
   connection(value: number): void {
+    if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
     this.#transcripts.connection(value);
@@ -677,6 +678,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   #connection = 0;
   #source = "api";
   #helperDirty = new Set<string>();
+  #deletions = new Map<string, number>();
   #helperValidated = new Set<string>();
   #sourceError?: string;
   #helpers = new Map<
@@ -817,10 +819,15 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     return raw;
   }
   connection(value: number): void {
+    if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
     this.#client = undefined;
     this.#provenNative = undefined;
+    this.#deletions.clear();
+    this.storage.sql.prepare(
+      "DELETE FROM opcv2_delete_intents WHERE connection_generation<>?",
+    ).run(value);
     this.#helpers.clear();
     this.#helperValidated.clear();
     this.#sourceError = undefined;
@@ -1334,28 +1341,100 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   async deleted(
     connection: number,
     id: string,
-    _revision: number,
+    revision: number,
     entry?: SessionMetadata,
   ): Promise<void> {
+    ids.decode(id);
     if (connection !== this.#connection) return;
+    if (entry && entry.id !== id) {
+      throw new Error("Deletion metadata identity mismatch");
+    }
+    if (revision <= (this.#deletions.get(id) ?? -1)) return;
     const saved = this.storage.read(id);
     if (!entry && !saved) return;
-    await this.#commit(entry ?? saved!.metadata, {
+    const intent = this.storage.sql.prepare(
+      "SELECT 1 FROM opcv2_delete_intents WHERE session_id=? AND connection_generation=?",
+    ).get(id, connection);
+    if (saved?.deleted && (!intent || saved.deleted.how === "otk")) {
+      this.#deletions.set(id, revision);
+      return;
+    }
+    const metadata = entry ?? saved!.metadata;
+    const delta: DigestDelta = {
       summary: {
         ...(saved?.summary ?? { state: "ready" }),
         revision: (saved?.summary.revision ?? 0) + 1,
       },
       turns: { upsert: {}, remove: [] },
-      deleted: { at: Date.now(), how: "provider" },
+      deleted: {
+        at: saved?.deleted?.at ?? Date.now(),
+        how: intent ? "otk" : "provider",
+      },
+    };
+    this.storage.transaction(() => {
+      this.invalidate(id, revision);
+      if (intent) {
+        this.storage.sql.prepare(
+          "UPDATE opcv2_delete_intents SET confirmed=1 WHERE session_id=? AND connection_generation=?",
+        ).run(id, connection);
+      }
+      this.storage.write(metadata, delta);
+    });
+    this.#deletions.set(id, revision);
+    await this.storage.publish({
+      sessionID: id,
+      revision: delta.summary.revision,
+      delta,
+      ...(!saved ? { metadata } : {}),
     });
   }
-  deleteIntent(
-    _id: string,
-    _intent: string,
-    _phase: "begin" | "confirmed" | "failed",
-    _connection: number,
+  async deleteIntent(
+    id: string,
+    intent: string,
+    phase: "begin" | "confirmed" | "failed",
+    connection: number,
   ): Promise<void> {
-    return Promise.resolve();
+    ids.decode(id);
+    if (connection !== this.#connection) return;
+    if (phase === "begin") {
+      this.storage.sql.prepare(
+        "INSERT INTO opcv2_delete_intents VALUES(?,?,?,?,0) ON CONFLICT(session_id) DO UPDATE SET intent_id=excluded.intent_id,connection_generation=excluded.connection_generation,time=excluded.time,confirmed=0",
+      ).run(id, intent, connection, Date.now());
+    } else if (phase === "confirmed") {
+      const owned = this.storage.sql.prepare(
+        "SELECT 1 FROM opcv2_delete_intents WHERE session_id=? AND intent_id=? AND connection_generation=?",
+      ).get(id, intent, connection);
+      if (!owned) return;
+      const previous = this.storage.read(id);
+      let delta: DigestDelta | undefined;
+      this.storage.transaction(() => {
+        this.storage.sql.prepare(
+          "UPDATE opcv2_delete_intents SET confirmed=1 WHERE session_id=? AND intent_id=? AND connection_generation=?",
+        ).run(id, intent, connection);
+        if (previous?.deleted?.how === "provider") {
+          delta = {
+            summary: {
+              ...previous.summary,
+              revision: previous.summary.revision + 1,
+            },
+            turns: { upsert: {}, remove: [] },
+            deleted: { ...previous.deleted, how: "otk" },
+          };
+          this.storage.write(previous.metadata, delta);
+        }
+      });
+      if (delta) {
+        await this.storage.publish({
+          sessionID: id,
+          revision: delta.summary.revision,
+          delta,
+        });
+      }
+    } else {
+      this.storage.sql.prepare(
+        "DELETE FROM opcv2_delete_intents WHERE session_id=? AND intent_id=? AND connection_generation=?",
+      ).run(id, intent, connection);
+    }
   }
   close(): void {
     this.#closed = true;
