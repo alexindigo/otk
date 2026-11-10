@@ -529,6 +529,8 @@ export function mapMessage(
     ...common,
     role: "user",
     origin: raw.type,
-    parts: [prose(raw.text, true)],
+    // These are standalone native context messages, not hidden expansions
+    // inside a real user prompt. Origin keeps them out of prompt anchors.
+    parts: [prose(raw.text)],
   };
 }

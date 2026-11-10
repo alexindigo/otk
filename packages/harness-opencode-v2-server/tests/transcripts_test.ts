@@ -40,6 +40,22 @@ const user = (key: string): NativeMessage => ({
   text: key,
   time: { created: 1 },
 });
+Deno.test("V2 standalone context kinds stay visible without becoming real prompts", () => {
+  for (const type of ["synthetic", "system", "skill"] as const) {
+    const raw = {
+      id: "context",
+      type,
+      text: "Native context text",
+      time: { created: 1 },
+      ...(type === "skill" ? { skill: "canary", name: "Canary" } : {}),
+    } as NativeMessage;
+    const mapped = mapMessage(raw, id, { order: 1 })!;
+    assertEquals(mapped.role === "user" && mapped.origin, type);
+    const part = mapped.parts[0];
+    assertEquals(part.kind === "text" && part.synthetic, false);
+    assertEquals(mapped.role === "user" && mapped.origin === undefined, false);
+  }
+});
 Deno.test("V2 compaction carries its own lifecycle without becoming a prompt", () => {
   for (const status of ["running", "completed", "failed"] as const) {
     const raw = {
