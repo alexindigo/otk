@@ -70,7 +70,7 @@ export async function observeReply(
     clearTimeout(timer);
     const created = await connection.rpc.call(
       "session.create",
-      { directory },
+      { directory, title: "Standalone client fixture" },
     );
     connection.view({ directory, selected: created.id, crumbs: [], rows: [] });
     session.open({ sidecarId: "core", sessionID: created.id });

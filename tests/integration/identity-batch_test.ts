@@ -9,7 +9,15 @@ import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { cfg } from "../support/config.ts";
-import { tempDir, test } from "../support/resources.ts";
+import { tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 DigestNativeDb keyed identity SQL and native absence shapes",
+  [
+    "tests/integration/v2-index_test.ts#OC2I1",
+    "tests/integration/v2-index_test.ts#OC2I4",
+  ],
+);
 
 test("stock native batch identity consumer, task grouping, tombstone seen and unavailable authority", async () => {
   const oc = await OpencodeTest.start(new FakeLlm());

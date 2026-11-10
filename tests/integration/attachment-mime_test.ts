@@ -4,7 +4,14 @@ import { join, toFileUrl } from "@std/path";
 import { mapPromptParts } from "@otk/harness-opencode-v1";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { cfg } from "../support/config.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 mapPromptParts MIME/file-URI pointers; V2 admits file bytes through native preparation",
+  [
+    "tests/integration/v2-actions_test.ts#OC2P3",
+    "tests/integration/v2-catalogs_test.ts#OC2C2",
+  ],
+);
 
 test("stock stores truthful path MIME and exact local URI identity without copying file bodies into the prompt", async () => {
   const f = await nativeFixture();

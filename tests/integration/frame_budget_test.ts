@@ -2,12 +2,12 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { selectedNative } from "../support/native-testing.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 test("oversized total receives an immediate correlated pre-admission rejection and leaves the connection usable", async () => {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
   const server = await SidecarTest.start(oc), client = new WsClient(server.url);
   try {
     await client.connect();

@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { readRpcMessages } from "../support/message-pages.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 command configuration and expanded user parts wire shape",
+  [
+    "tests/integration/v2-session-actions_test.ts#OC2A4",
+    "tests/integration/v2-session-actions_test.ts#OC2A5",
+  ],
+);
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { nativeFixture } from "../support/native-fixture.ts";

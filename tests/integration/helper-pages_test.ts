@@ -8,7 +8,10 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { helperParent } from "../support/helper-parent.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 task tool parts and helper SQL projection", [
+  "tests/integration/v2-transcripts_test.ts#OC2T5",
+]);
 import { WsClient } from "../support/ws-client.ts";
 test("real native helper summaries decorate pages, removals patch only progress and v2 metadata reopens", async () => {
   const fake = new FakeLlm(),

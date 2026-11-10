@@ -6,7 +6,15 @@ import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 explicit URL supports offline application startup; V2 requires managed discovery and retains worker tombstones independently",
+  [
+    "tests/unit/core/digest-new-deletion_test.ts#accepted deletion before catalog",
+    "tests/integration/v2-transcripts_test.ts#OC2T3",
+    "tests/integration/v2-foundation_test.ts#OC2F2",
+  ],
+);
 import { WsClient } from "../support/ws-client.ts";
 
 test("shipped source rebuilds only derived digests and serves cached deleted metadata and seen marks without provider health", async () => {

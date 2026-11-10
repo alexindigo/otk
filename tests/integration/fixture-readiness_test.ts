@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 custom-tool npm dependency readiness", [
+  "tests/integration/v2-fixture-readiness_test.ts#OC2R1",
+]);
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { FakeLlm } from "../support/fake-llm.ts";

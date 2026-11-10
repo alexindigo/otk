@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { resources, test } from "../support/resources.ts";
+import { resources } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 numeric port collision recovery and custom-tool readiness; V2 binds port zero atomically",
+  ["tests/integration/v2-fixture-readiness_test.ts#OC2R1"],
+);
 import { nativeFixture } from "../support/native-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 

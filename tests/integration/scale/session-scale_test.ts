@@ -6,7 +6,13 @@ import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
 import { freePort, waitFor } from "../../support/opencode.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
-import { SCALE, SessionScale } from "../../support/session-scale.ts";
+import { SCALE } from "../../support/session-scale.ts";
+import {
+  createScale,
+  promptScale,
+  scaleDiscovery,
+} from "../../support/scale-native.ts";
+import { V2SessionScale } from "../../support/v2-session-scale.ts";
 import { servingProbe } from "../../support/serving-probe.ts";
 import { WsClient } from "../../support/ws-client.ts";
 import { digestRowFloor } from "@otk/harness";
@@ -14,18 +20,25 @@ import type { DigestPressure } from "../../../core/digest/protocol.ts";
 
 test("real-version scale summaries match independent totals with bounded serving-isolate work", async () => {
   const root = await tempDir("sc-"), fake = new FakeLlm();
-  const fixture = await SessionScale.create(join(root, "fixture"), root, fake);
+  const fixture = await createScale(join(root, "fixture"), root, fake);
+  await scaleDiscovery(fixture);
   await Deno.writeTextFile(
     join(root, "scale-manifest.json"),
     JSON.stringify(fixture.manifest),
   );
   assertEquals(fixture.manifest.counts, SCALE);
   const config = cfg();
+  // Full-duty pressure is stronger serving-isolate stress; readiness duration
+  // remains a measurement, not a slower default-duty scheduling test.
+  config.digest.cpu = 1;
   config.server.port = freePort();
   config.auth.type = "none";
   config.state.path = join(root, "otk");
   config.harness.url = fixture.url;
   config.harness.db = fixture.db;
+  if (fixture instanceof V2SessionScale) {
+    config.harness.type = "opencode-v2-server";
+  }
   const probe = servingProbe(false);
   resources().evidence(
     "serving raw samples",
@@ -151,14 +164,7 @@ test("real-version scale summaries match independent totals with bounded serving
   );
   const session = fixture.manifest.sessions[251];
   fake.queue({ chunks: ["Scale native outcome"] });
-  await fixture.request(`/session/${session.nativeID}/message`, {
-    method: "POST",
-    directory: session.directory,
-    body: {
-      model: { providerID: "fake", modelID: "scripted" },
-      parts: [{ type: "text", text: "Scale prompt" }],
-    },
-  });
+  await promptScale(fixture, session, "Scale prompt");
   await waitFor(
     () => app.index.get(session.id)?.digest,
     (n) =>

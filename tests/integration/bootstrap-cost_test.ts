@@ -11,7 +11,14 @@ import {
   nativeVersion,
   seedProviderPackages,
 } from "../support/provider-cache.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 native instance inventory and grouped session SQL",
+  [
+    "tests/integration/v2-index_test.ts#OC2I1",
+    "tests/integration/v2-index_test.ts#OC2I7",
+  ],
+);
 
 test("idle project bootstrap leaves native instances and project visit clocks untouched", async () => {
   const fake = new FakeLlm();

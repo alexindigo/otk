@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import type { ApprovalSnapshot, RequestEvent } from "@otk/protocol";
-import { nativeFixture } from "../support/native-fixture.ts";
+import { nativeBehavior as nativeFixture } from "../support/native-testing.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { test } from "../support/resources.ts";
 
 test("local policy disable settles behind sessions.seen while stock native readiness is held offline", async () => {
   const f = await nativeFixture();
-  const proxy = new FreezeProxy(f.oc.port);
+  const proxy = f.oc.kind === "opencode-v2-server"
+    ? f.oc.proxy
+    : new FreezeProxy(f.oc.port);
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Offline local effects" },
-    });
-    const server = await f.sidecar({
-      harness: { url: `http://127.0.0.1:${proxy.port}` },
-    });
+    const session = await f.oc.createSession("Offline local effects");
+    const server = await f.sidecar(
+      f.oc.kind === "opencode-v1"
+        ? {
+          harness: { url: `http://127.0.0.1:${proxy.port}` },
+        }
+        : {},
+    );
     client = new WsClient(server.url);
     await client.connect();
     await client.rpc("permission.auto", {

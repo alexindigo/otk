@@ -6,7 +6,12 @@ import { DigestBridge } from "../../core/digest/bridge.ts";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
-import { resources, test } from "../support/resources.ts";
+import { resources } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 completion-clock reader and native message response",
+  ["tests/integration/v2-transcripts_test.ts#OC2T3"],
+);
 
 test("worker-native completion clocks cross only the transient scalar read channel", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);

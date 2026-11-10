@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 question tool request/reply and rejection vocabulary",
+  ["tests/integration/v2-actions_test.ts#OC2P1"],
+);
 import { assert, assertEquals } from "@std/assert";
 import type { QuestionRequest } from "@otk/protocol";
 import { nativeFixture } from "../support/native-fixture.ts";

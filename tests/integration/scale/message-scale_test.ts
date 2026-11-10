@@ -3,22 +3,68 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex, createTranscripts, SidecarConnection } from "@otk/client";
 import type { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
+import type { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import { start } from "../../../main.ts";
 import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
 import { freePort, waitFor } from "../../support/opencode.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
-import { SCALE, SessionScale } from "../../support/session-scale.ts";
+import { SCALE } from "../../support/session-scale.ts";
+import { createScale, scaleDiscovery } from "../../support/scale-native.ts";
+import { V2SessionScale } from "../../support/v2-session-scale.ts";
 import { MESSAGE_CASES } from "../../support/message-scale-cases.ts";
 import { originFetch } from "../../support/request-wire.ts";
 
 test("message scale fixture preserves population while supplying a 102-step reply and helper/code/diff cases", async () => {
   const root = await tempDir("mf-"), fake = new FakeLlm();
-  const native = await SessionScale.create(join(root, "fixture"), root, fake, {
+  const native = await createScale(join(root, "fixture"), root, fake, {
     messages: true,
   });
   assertEquals(native.manifest.counts, SCALE);
   const giant = native.manifest.sessions[MESSAGE_CASES.giant];
+  if (native instanceof V2SessionScale) {
+    const rows = (await native.native.api.message.list({
+      sessionID: giant.nativeID,
+      limit: 200,
+      order: "desc",
+    })).data;
+    assertEquals(rows.filter((row) => row.type === "assistant").length, 102);
+    assertEquals(
+      rows.filter((row) => row.type === "user").length,
+      1,
+      "All 102 native assistant steps retain one source prompt",
+    );
+    for (
+      const [key, tool] of [["helper", "subagent"], ["diff", "edit"]] as const
+    ) {
+      const session = native.manifest.sessions[MESSAGE_CASES[key]];
+      const page = (await native.native.api.message.list({
+        sessionID: session.nativeID,
+        limit: 10,
+        order: "desc",
+      })).data;
+      assert(
+        page.some((row) =>
+          row.type === "assistant" &&
+          row.content.some((part) => part.type === "tool" && part.name === tool)
+        ),
+      );
+    }
+    const code = (await native.native.api.message.list({
+      sessionID: native.manifest.sessions[MESSAGE_CASES.code].nativeID,
+      limit: 10,
+      order: "desc",
+    })).data;
+    assert(
+      code.some((row) =>
+        row.type === "assistant" &&
+        row.content.some((part) =>
+          part.type === "text" && part.text.includes("line_101_2047")
+        )
+      ),
+    );
+    return;
+  }
   const rows = await native.request<
     {
       info: { role: string; parentID?: string };
@@ -54,7 +100,7 @@ test("message scale fixture preserves population while supplying a 102-step repl
 
 test("real scale reports cursor reserve at 75ms collection latency across 1525 messages and reverse demand", async () => {
   const root = await tempDir("mr-"), fake = new FakeLlm();
-  const native = await SessionScale.create(join(root, "fixture"), root, fake);
+  const native = await createScale(join(root, "fixture"), root, fake);
   const selected = native.manifest.sessions[0];
   let active = 0, maximum = 0;
   const requests: {
@@ -89,12 +135,15 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (req) => {
       const url = new URL(req.url);
-      const collection = /^\/session\/[^/]+\/message$/.test(url.pathname) &&
+      const collection =
+        /^(?:\/api)?\/session\/[^/]+\/message$/.test(url.pathname) &&
         req.method === "GET";
       const row = {
         path: url.pathname,
         query: url.search,
-        cursor: url.searchParams.get("before"),
+        cursor: url.searchParams.get(
+          native instanceof V2SessionScale ? "cursor" : "before",
+        ),
         start: performance.now(),
         end: undefined as number | undefined,
       };
@@ -130,6 +179,10 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   config.auth.type = "none";
   config.harness.url = `http://127.0.0.1:${(proxy.addr as Deno.NetAddr).port}`;
   config.harness.db = native.db;
+  if (native instanceof V2SessionScale) {
+    config.harness.type = "opencode-v2-server";
+  }
+  await scaleDiscovery(native, config.harness.url);
   config.state.path = join(root, "state");
   const app = await start(config);
   resources().defer("reserve app", () => app.stop());
@@ -147,7 +200,8 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       row.end = performance.now();
     });
   };
-  const digest = (app.backend as OpencodeV1Adapter).digest!;
+  const digest = (app.backend as OpencodeV1Adapter | OpencodeV2ServerAdapter)
+    .digest!;
   const metadata = digest.transcriptMetadata.bind(digest);
   digest.transcriptMetadata = (...args) => {
     const row = {
@@ -254,7 +308,9 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   );
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 20);
   const messageID = (rank: number) =>
-    `msg_scale${String(rank).padStart(9, "0")}`;
+    `msg_scale${
+      String(rank).padStart(native instanceof V2SessionScale ? 12 : 9, "0")
+    }`;
   resource.viewport({ first: messageID(1520), last: messageID(1524) });
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 30);
   const begun = performance.now();
@@ -312,6 +368,24 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
     const message = resource.state.messagesByID[messageID(rank)];
     assertEquals(message.role, rank % 2 ? "assistant" : "user");
     const count = 3 + (rank < 1097 ? 1 : 0);
+    if (native instanceof V2SessionScale) {
+      const texts = message.parts.filter((part) => part.kind === "text");
+      assertEquals(texts.length, rank % 2 ? count : 1);
+      assertEquals(
+        message.parts.filter((part) => part.kind === "step").map((part) =>
+          part.phase
+        ),
+        rank % 2 ? ["start", "finish"] : [],
+      );
+      for (let part = 0; part < count; part++) {
+        assert(
+          JSON.stringify(texts[rank % 2 ? part : 0]).includes(
+            `Scale fixture 0/${rank}/${part}`,
+          ),
+        );
+      }
+      continue;
+    }
     assertEquals(message.parts.length, count);
     for (let part = 0; part < count; part++) {
       assert(
@@ -323,7 +397,12 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   }
   assert(maximum <= 4, `aggregate page ceiling ${maximum}`);
   assertEquals(
-    requests.filter((r) => r.path === `/session/${selected.nativeID}/message`)
+    requests.filter((r) =>
+      r.path ===
+        `${
+          native instanceof V2SessionScale ? "/api" : ""
+        }/session/${selected.nativeID}/message`
+    )
       .length,
     153,
   );

@@ -6,7 +6,11 @@ import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { nativeVersion } from "../support/native.ts";
 import { OpencodeTest } from "../support/opencode.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 /file ignored flags and V1 catalog consumer wire calls",
+  ["tests/integration/v2-catalogs_test.ts#OC2C1"],
+);
 
 test("file catalog excludes native ignores and never requests Git metadata subtrees", async () => {
   const fake = new FakeLlm();

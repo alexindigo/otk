@@ -677,7 +677,7 @@ Deno.test("standalone sessions consumer imports only the harness public entries"
   const consumer = await Deno.readTextFile(
     new URL("tests/reuse/harness-consumer.ts", root),
   );
-  assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode-v1"]);
+  assertEquals(imports(consumer), ["@otk/harness"]);
 });
 
 Deno.test("database upgrades stay feature-owned and the global sequence is frozen compatibility only", async () => {

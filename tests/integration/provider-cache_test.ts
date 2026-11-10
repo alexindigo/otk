@@ -6,6 +6,7 @@ import { ownedProcess } from "../support/process.ts";
 import { bounded, resources, tempDir, test } from "../support/resources.ts";
 import { validateProviderCache } from "../support/provider-cache.ts";
 import { packageRegistry } from "../support/package-registry.ts";
+import { nativeKind } from "../support/native.ts";
 
 test("test tasks prepare one shared native package cache on concurrent cold starts and reuse it offline", async () => {
   const root = await tempDir("provider-cache-task-");
@@ -16,7 +17,9 @@ test("test tasks prepare one shared native package cache on concurrent cold star
       "task",
       "test",
       "--filter",
-      "pre-populated packages serve independent native tools",
+      nativeKind === "opencode-v1"
+        ? "pre-populated packages serve independent native tools"
+        : "OC2R2 bundled providers serve independent native fixtures",
       "tests/integration/fixture-lifetime_test.ts",
     ], {
       env: {
@@ -59,16 +62,28 @@ test("test tasks prepare one shared native package cache on concurrent cold star
   );
   await validateProviderCache(cache);
   assertEquals(source.unexpected, []);
-  assert(source.requests.includes("/@opencode-ai/plugin"));
-  assert(source.requests.some((path) => path.endsWith(".tgz")));
-  const installed = JSON.parse(
-    await Deno.readTextFile(join(cache, "dependencies/package-lock.json")),
-  );
-  assert(
-    installed.packages["node_modules/@opencode-ai/plugin"].resolved
-      .startsWith(source.url + "/"),
-    "Cold preparation must install from this test's local source",
-  );
+  if (nativeKind === "opencode-v1") {
+    assert(source.requests.includes("/@opencode-ai/plugin"));
+    assert(source.requests.some((path) => path.endsWith(".tgz")));
+    const installed = JSON.parse(
+      await Deno.readTextFile(join(cache, "dependencies/package-lock.json")),
+    );
+    assert(
+      installed.packages["node_modules/@opencode-ai/plugin"].resolved
+        .startsWith(source.url + "/"),
+      "Cold preparation must install from this test's local source",
+    );
+  } else {
+    assertEquals(
+      source.requests,
+      [],
+      "Bundled V2 provider preparation must not request V1 packages",
+    );
+    assertEquals(
+      JSON.parse(await Deno.readTextFile(join(cache, "ready.json"))).provider,
+      "bundled-openai-compatible",
+    );
+  }
   await source.shutdown();
   const ready = await Deno.stat(join(cache, "ready.json"));
   let requests = 0;

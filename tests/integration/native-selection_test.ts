@@ -3,7 +3,14 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 plan transition through question and agent-bearing messages",
+  [
+    "tests/integration/v2-transcripts_test.ts#OC2T4",
+    "tests/integration/v2-actions_test.ts#OC2P3",
+  ],
+);
 
 test("native plan transition characterization retains result provenance and agent-bearing messages", async () => {
   const f = await nativeFixture({ "*": "allow" }, {

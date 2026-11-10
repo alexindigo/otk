@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 bash/task permission events and native reply vocabulary",
+  [
+    "tests/integration/v2-actions_test.ts#OC2P2",
+    "tests/integration/v2-index_test.ts#OC2I2",
+  ],
+);
 import { assert, assertEquals } from "@std/assert";
 import type { ContentSession, PermissionRequest } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";

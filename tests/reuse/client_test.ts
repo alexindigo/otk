@@ -2,13 +2,13 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { selectedNative } from "../support/native-testing.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { observeReply } from "./client-consumer.ts";
 
 test("standalone client consumes real core RPC and reduces live ops in plain Deno", async () => {
   const fake = new FakeLlm();
-  const oc = await OpencodeTest.start(fake);
+  const oc = await selectedNative(fake);
   let core: SidecarTest | undefined;
   try {
     core = await SidecarTest.start(oc);

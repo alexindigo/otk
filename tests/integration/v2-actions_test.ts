@@ -186,13 +186,17 @@ Deno.test({
     withResources("V2 unattended permissions", async () => {
       const native = await OpencodeV2Test.start(new FakeLlm()),
         root = await native.createSession();
-      const app = await SidecarTest.start(native), ws = new WsClient(app.url);
+      const state = { path: native.root + "/auto-restart-state" };
+      let app = await SidecarTest.start(native, { state });
+      const ws = new WsClient(app.url);
       const nativeRules =
         (await native.nativeApi.session.get({ sessionID: root.nativeID }))
           .permissions;
       await ws.connect();
       await ws.rpc("permission.auto", { sessionID: root.id, enabled: true });
       await ws.close();
+      await app.stop();
+      app = await SidecarTest.start(native, { state });
       const middle = await native.nativeApi.session.create({
         parentID: root.nativeID,
         title: "Unseen intermediate helper",

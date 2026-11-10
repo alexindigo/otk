@@ -5,7 +5,10 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 project.sandboxes and session table topology", [
+  "tests/integration/v2-index_test.ts#OC2I7",
+]);
 import type { InboxBaseline } from "@otk/protocol";
 
 test("V1 native worktrees share repo identity and publish separate leaf populations through the worker and inbox", async () => {

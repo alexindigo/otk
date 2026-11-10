@@ -2,11 +2,15 @@
 import { assertEquals } from "@std/assert";
 import { DigestScheduler } from "@otk/harness";
 import {
-  DigestNativeDb,
   type DigestSnapshot,
   opencodeV1DigestMigrations,
   OpencodeV1DigestSink,
+  type OpencodeV1DigestStorage,
 } from "@otk/harness-opencode-v1";
+import {
+  opencodeV2DigestMigrations,
+  OpencodeV2DigestSink,
+} from "@otk/harness-opencode-v2-server";
 import {
   DigestDb,
   digestMigrations,
@@ -16,7 +20,13 @@ import {
 } from "@otk/store";
 import type { UsageSummary } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { waitFor } from "../support/opencode.ts";
+import {
+  nativeHarness,
+  selectedNative,
+  startHarness,
+} from "../support/native-testing.ts";
+import { cfg } from "../support/config.ts";
 import { tempDir, test } from "../support/resources.ts";
 
 function summary(row: DigestUsageRecord): UsageSummary {
@@ -57,40 +67,43 @@ function scalars(
   };
 }
 test("independent public-entry consumer composes native sink, scheduler and derived store without application modules", async () => {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
-  const session = await oc.session<{ id: string }>("/session", {
-    method: "POST",
-    body: { title: "Independent digest" },
-  });
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  const session = await oc.createSession("Independent digest");
   fake.queue({ chunks: ["Independent reply"] });
-  await oc.request(`/session/${session.id}/message`, {
-    method: "POST",
-    body: {
-      model: { providerID: "fake", modelID: "scripted" },
-      parts: [{ type: "text", text: "Independent prompt" }],
+  await oc.prompt(session.id, "Independent prompt");
+  const harness = nativeHarness(oc);
+  await startHarness(harness);
+  const page = await waitFor(
+    () => harness.core.listMessages(session.id, {}),
+    (page) =>
+      page.items.some((m) =>
+        m.role === "assistant" && m.time.completed !== undefined
+      ),
+  );
+  const expectedCalls = page.items.filter((m) => m.role === "assistant").length;
+  const raw = await harness.core.getSession(session.id);
+  const base = {
+    id: raw.id,
+    title: raw.title,
+    directory: raw.directory,
+    projectID: raw.projectID,
+    timeCreated: raw.time.created,
+    timeUpdated: raw.time.updated,
+    archived: raw.archived,
+    status: "idle" as const,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
     },
-  });
-  const reader = new DigestNativeDb(oc.db);
-  const base = reader.catalog("", 2)[0];
-  let expectedCalls = 0, after = "";
-  let position: { created: number; messageID: string } | undefined;
-  while (true) {
-    const rows = reader.headers(
-      [session.id],
-      session.nativeID,
-      after,
-      2,
-      position,
-    );
-    if (!rows.length) break;
-    expectedCalls += rows.filter((row) => row.role === "assistant").length;
-    after = rows.at(-1)!.message_id;
-    position = { created: rows.at(-1)!.time_created, messageID: after };
-  }
-  reader.close();
+  };
+  await harness.core.stop();
   const db = new DigestDb(await tempDir("public-digest-"), [
     digestMigrations,
-    opencodeV1DigestMigrations,
+    oc.kind === "opencode-v1"
+      ? opencodeV1DigestMigrations
+      : opencodeV2DigestMigrations,
   ], { busyms: 100 });
   const store = new DigestStore(db);
   const read = (id: string): DigestSnapshot | undefined => {
@@ -125,96 +138,97 @@ test("independent public-entry consumer composes native sink, scheduler and deri
     retryms: 10,
     busyms: 100,
   };
-  const sink = new OpencodeV1DigestSink(
-    {
-      harness: {
-        url: oc.url,
+  const storage: OpencodeV1DigestStorage = {
+    sql: db.connection,
+    transaction: (run) => db.transaction(run),
+    read,
+    turn: (id, key) => {
+      const row = store.turn(id, key);
+      return row && summary(row);
+    },
+    known: function* () {
+      const value = read(base.id);
+      if (value) yield value;
+    },
+    diagnostic: (_id, error) => {
+      throw error;
+    },
+    publish: () => {},
+    write(metadata, delta, checkpoint) {
+      const value = delta.summary, last = value.last;
+      const row: DigestSessionRecord = {
+        ...scalars(value.total, value.revision),
+        id: metadata.id,
+        provider: oc.kind,
+        parent_id: metadata.parentID ?? null,
+        directory: metadata.directory,
+        project_id: metadata.projectID,
+        title: metadata.title,
+        time_created: metadata.timeCreated,
+        time_updated: metadata.timeUpdated,
+        archived: metadata.archived ? 1 : 0,
+        message_count: value.messageCount ?? null,
+        last_agent: last?.agent ?? null,
+        last_provider: last?.model?.provider ?? null,
+        last_model: last?.model?.model ?? null,
+        context_input: last?.context?.input ?? null,
+        context_output: last?.context?.output ?? null,
+        context_reasoning: last?.context?.reasoning ?? null,
+        context_cache_read: last?.context?.cache.read ?? null,
+        context_cache_write: last?.context?.cache.write ?? null,
+        state: value.state,
+        digested_at: value.digestedAt ?? null,
+        native_updated_at: value.nativeUpdatedAt ?? null,
+        deleted_at: delta.deleted?.at ?? null,
+        deleted_how: delta.deleted?.how ?? null,
+      };
+      store.commit({
+        sessions: [row],
+        turns: {
+          upsert: Object.entries(delta.turns.upsert).map((
+            [turn_id, total],
+          ) => ({
+            ...scalars(total, value.revision),
+            session_id: metadata.id,
+            turn_id,
+            call_count: total.calls,
+          })),
+          remove: delta.turns.remove.map((turn_id) => ({
+            session_id: metadata.id,
+            turn_id,
+          })),
+        },
+        bookkeeping: checkpoint
+          ? [{
+            session_id: metadata.id,
+            last_message_id: checkpoint.lastMessage,
+            last_message_hash: checkpoint.lastHash,
+            generation: checkpoint.generation,
+            dirty: checkpoint.dirty ? 1 : 0,
+            digested_at: value.digestedAt ?? null,
+            native_updated_at: metadata.timeUpdated,
+          }]
+          : [],
+      });
+    },
+  };
+  const settings = cfg();
+  const sink = oc.kind === "opencode-v1"
+    ? new OpencodeV1DigestSink(
+      { ...settings, harness: { ...settings.harness, url: oc.url, db: oc.db } },
+      policy,
+      storage,
+    )
+    : new OpencodeV2DigestSink(
+      {
+        serviceFile: oc.serviceFile,
         db: oc.db,
-        username: "",
-        password: "",
-        heartbeattimeout: 25,
-        reconnectmax: 30,
-        requestms: 60000,
+        requestms: settings.harness.requestms,
+        attachments: settings.attachments,
       },
-      index: { days: 30 },
-      attachments: { concurrency: 1, maxrefs: 10, maxbytes: 1024 },
-    },
-    policy,
-    {
-      sql: db.connection,
-      transaction: (run) => db.transaction(run),
-      read,
-      turn: (id, key) => {
-        const row = store.turn(id, key);
-        return row && summary(row);
-      },
-      known: function* () {
-        const value = read(base.id);
-        if (value) yield value;
-      },
-      diagnostic: (_id, error) => {
-        throw error;
-      },
-      publish: () => {},
-      write(metadata, delta, checkpoint) {
-        const value = delta.summary, last = value.last;
-        const row: DigestSessionRecord = {
-          ...scalars(value.total, value.revision),
-          id: metadata.id,
-          provider: "opencode-v1",
-          parent_id: metadata.parentID ?? null,
-          directory: metadata.directory,
-          project_id: metadata.projectID,
-          title: metadata.title,
-          time_created: metadata.timeCreated,
-          time_updated: metadata.timeUpdated,
-          archived: metadata.archived ? 1 : 0,
-          message_count: value.messageCount ?? null,
-          last_agent: last?.agent ?? null,
-          last_provider: last?.model?.provider ?? null,
-          last_model: last?.model?.model ?? null,
-          context_input: last?.context?.input ?? null,
-          context_output: last?.context?.output ?? null,
-          context_reasoning: last?.context?.reasoning ?? null,
-          context_cache_read: last?.context?.cache.read ?? null,
-          context_cache_write: last?.context?.cache.write ?? null,
-          state: value.state,
-          digested_at: value.digestedAt ?? null,
-          native_updated_at: value.nativeUpdatedAt ?? null,
-          deleted_at: delta.deleted?.at ?? null,
-          deleted_how: delta.deleted?.how ?? null,
-        };
-        store.commit({
-          sessions: [row],
-          turns: {
-            upsert: Object.entries(delta.turns.upsert).map((
-              [turn_id, total],
-            ) => ({
-              ...scalars(total, value.revision),
-              session_id: metadata.id,
-              turn_id,
-              call_count: total.calls,
-            })),
-            remove: delta.turns.remove.map((turn_id) => ({
-              session_id: metadata.id,
-              turn_id,
-            })),
-          },
-          bookkeeping: checkpoint
-            ? [{
-              session_id: metadata.id,
-              last_message_id: checkpoint.lastMessage,
-              last_message_hash: checkpoint.lastHash,
-              generation: checkpoint.generation,
-              dirty: checkpoint.dirty ? 1 : 0,
-              digested_at: value.digestedAt ?? null,
-              native_updated_at: metadata.timeUpdated,
-            }]
-            : [],
-        });
-      },
-    },
-  );
+      policy,
+      storage,
+    );
   const scheduler = new DigestScheduler(policy, {
     freeMemory: () => 1000,
     sleep: () => Promise.resolve(),

@@ -3,22 +3,27 @@ import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { preparedBinary } from "../support/prepared-binaries.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest, waitFor } from "../support/opencode.ts";
+import { waitFor } from "../support/opencode.ts";
+import { nativePrompt, selectedNative } from "../support/native-testing.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
 test("compiled independent worker consumer digests off-source with empty runtime caches", async () => {
   const root = await tempDir("compiled-digest-");
   const binary = await preparedBinary("digest-consumer");
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
-  const session = await oc.session<{ id: string }>("/session", {
-    method: "POST",
-    body: { title: "Compiled digest" },
-  });
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  const session = await oc.createSession("Compiled digest");
   const state = join(root, "state");
   const run = () => {
     const process = new Deno.Command(binary, {
       cwd: root,
-      args: [state, oc.url, oc.db, session.id],
+      args: [
+        state,
+        oc.url,
+        oc.db,
+        session.id,
+        oc.kind,
+        oc.kind === "opencode-v2-server" ? oc.serviceFile : "",
+      ],
       env: {
         DENO_DIR: join(root, `empty-cache-${crypto.randomUUID()}`),
         DENO_NO_REMOTE: "1",
@@ -77,13 +82,7 @@ test("compiled independent worker consumer digests off-source with empty runtime
   );
   assertEquals(first.rows.at(-1)?.delta.summary.messageCount, 0);
   fake.queue({ chunks: ["Compiled worker reply"] });
-  await oc.request(`/session/${session.id}/message`, {
-    method: "POST",
-    body: {
-      model: { providerID: "fake", modelID: "scripted" },
-      parts: [{ type: "text", text: "Compiled worker prompt" }],
-    },
-  });
+  await nativePrompt(oc, session.id, "Compiled worker prompt");
   await first.writer.write(new TextEncoder().encode("changed\n"));
   await waitFor(
     () => first.rows.at(-1),
