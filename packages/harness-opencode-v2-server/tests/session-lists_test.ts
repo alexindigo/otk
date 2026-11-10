@@ -9,7 +9,7 @@ const raw = (id: string): NativeSession => ({
   projectID: "p",
   location: { directory: "/repo" },
   title: id,
-  time: { created: 1, updated: 2 },
+  time: { created: 1, updated: 2, idle: id === "ses_first" ? 20 : 10 },
   cost: 0,
   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
 });
@@ -21,6 +21,9 @@ Deno.test("V2 list cursor binds scope, size, generation and mode; cursor API pag
     owner.signal,
     (input) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.endsWith("/message")) {
+        return Promise.resolve(Response.json({ data: [], cursor: {} }));
+      }
       requests.push(Object.fromEntries(url.searchParams));
       return Promise.resolve(Response.json(
         url.searchParams.has("cursor")
@@ -41,12 +44,22 @@ Deno.test("V2 list cursor binds scope, size, generation and mode; cursor API pag
   );
   assertEquals(second.items[0].id, "opcv2-ses_second");
   assertEquals(second.older, null);
-  assertEquals(requests, [{
-    directory: "/repo",
-    parentID: "null",
-    limit: "1",
-    order: "desc",
-  }, { cursor: "opaque-native", limit: "1" }]);
+  assertEquals(requests, [
+    {
+      directory: "/repo",
+      parentID: "null",
+      limit: "200",
+      order: "desc",
+    },
+    { cursor: "opaque-native", limit: "200" },
+    {
+      directory: "/repo",
+      parentID: "null",
+      limit: "200",
+      order: "desc",
+    },
+    { cursor: "opaque-native", limit: "200" },
+  ]);
   assertEquals(
     (await assertRejects(() =>
       lists.read(
@@ -75,7 +88,7 @@ Deno.test("V2 list cursor binds scope, size, generation and mode; cursor API pag
     () => lists.read({ ...input, limit: 201 }, client, undefined, signal),
     OperationFailure,
   );
-  assertEquals(requests.length, 2);
+  assertEquals(requests.length, 4);
 });
 Deno.test("V2 list pages retire on cancellation and detect nonadvancing native cursors", async () => {
   const owner = new AbortController();
@@ -83,17 +96,21 @@ Deno.test("V2 list pages retire on cancellation and detect nonadvancing native c
     { endpoint: { url: "http://127.0.0.1:42" }, version: "2.2.6", pid: 42 },
     1000,
     owner.signal,
-    () =>
-      Promise.resolve(
+    (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.endsWith("/message")) {
+        return Promise.resolve(Response.json({ data: [], cursor: {} }));
+      }
+      return Promise.resolve(
         Response.json({ data: [raw("ses_first")], cursor: { next: "same" } }),
-      ),
+      );
+    },
   );
   const lists = new V2SessionLists(), input = { directory: "/repo", limit: 1 };
-  const first = await lists.read(input, client, undefined, owner.signal);
   await assertRejects(
     () =>
       lists.read(
-        { ...input, before: first.older! },
+        input,
         client,
         undefined,
         owner.signal,

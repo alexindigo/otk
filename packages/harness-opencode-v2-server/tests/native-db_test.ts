@@ -63,6 +63,7 @@ Deno.test("V2 scalar DB proves projects, groups population and reads keyed ances
       assertEquals(db.lookup(["opcv2-ses_child"])[0].title, "Untitled session");
       assertEquals(db.facts(["opcv2-ses_child"]), [{
         id: "ses_child",
+        activity: 1,
         projectID: "p",
         location: { directory: "/repo/tree" },
         parentID: "ses_000",

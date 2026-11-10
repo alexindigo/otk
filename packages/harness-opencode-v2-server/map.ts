@@ -11,6 +11,7 @@ import type {
 } from "@otk/protocol";
 import type { NativeMessage, NativeSession } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
+import { session } from "./metadata.ts";
 export const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -58,16 +59,7 @@ export function mapSession(
   raw: NativeSession,
 ): import("@otk/protocol").ContentSession {
   return {
-    id: ids.encode(raw.id),
-    directory: raw.location.directory,
-    projectID: raw.projectID,
-    title: raw.title ?? "Untitled session",
-    ...(raw.parentID ? { parentID: ids.encode(raw.parentID) } : {}),
-    time: {
-      created: millis(raw.time.created),
-      updated: millis(raw.time.updated),
-    },
-    archived: !!raw.time.archived,
+    ...session(raw),
     selection: {
       agent: raw.agent ?? undefined,
       model: raw.model

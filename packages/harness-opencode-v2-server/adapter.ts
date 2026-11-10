@@ -23,6 +23,7 @@ import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
 import { Transcript } from "./transcript.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
+import { readSessionActivity } from "./recency.ts";
 import { commands } from "./commands.ts";
 import { V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
@@ -388,10 +389,11 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       getSession: async (id, signal) => {
         const native = ids.decode(id);
-        const raw = await this.stream.client.read((api) =>
-          api.session.get({
-            sessionID: native,
-          }, { signal }), signal);
+        const raw = await readSessionActivity(
+          this.stream.client,
+          native,
+          signal,
+        );
         this.transcript.observe(raw);
         return await revertSession(this.stream.client, raw, signal);
       },
@@ -568,8 +570,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       if (seen.has(key)) continue;
       seen.add(key);
       try {
-        const raw = await this.stream.client.read(
-          (api) => api.session.get({ sessionID: ids.decode(key) }, { signal }),
+        const raw = await readSessionActivity(
+          this.stream.client,
+          ids.decode(key),
           signal,
         );
         this.#merge(metadata(raw));
@@ -822,10 +825,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       if (hydrated.has(id)) continue;
       hydrated.add(id);
       try {
-        const raw = await client.read(
-          (api) => api.session.get({ sessionID: id }, { signal }),
-          signal,
-        );
+        const raw = await readSessionActivity(client, id, signal);
         sessions.push(raw);
         if (raw.parentID && !hydrated.has(raw.parentID)) {
           owners.add(raw.parentID);
@@ -971,10 +971,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     await this.transcript.event(event);
     const shell = this.#shells.event(event);
     if (shell) {
-      const raw = await client.read(
-        (api) => api.session.get({ sessionID: shell.sessionID }, { signal }),
-        signal,
-      );
+      const raw = await readSessionActivity(client, shell.sessionID, signal);
       signal.throwIfAborted();
       if (generation !== this.#generation) return;
       const entry = this.#metadata(raw, this.#running.has(raw.id));
@@ -1046,10 +1043,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#running.set(sid, event.created ?? Date.now());
     }
     const previous = this.#index.getMetadata(ids.encode(sid));
-    const raw = await client.read(
-      (api) => api.session.get({ sessionID: sid }, { signal }),
-      signal,
-    );
+    const raw = await readSessionActivity(client, sid, signal);
     signal.throwIfAborted();
     if (generation !== this.#generation) return;
     // Retain the prior run as a mandatory resync key until metadata I/O settles.

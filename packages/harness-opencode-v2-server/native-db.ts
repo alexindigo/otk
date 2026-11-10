@@ -4,6 +4,7 @@ import type { ProjectSeed, SessionIdentity } from "@otk/harness";
 import type { SessionListInput, SessionMetadata } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { SessionFacts } from "./metadata.ts";
+import { sessionRecencySql } from "./recency.ts";
 
 const required = {
   project: ["id", "worktree"],
@@ -21,6 +22,7 @@ export class V2NativeDb {
   readonly db: DatabaseSync;
   readonly identity: string;
   readonly columns: Set<string>;
+  readonly messageClocks: boolean;
   constructor(
     readonly file: string,
     readonly observe?: (
@@ -46,6 +48,13 @@ export class V2NativeDb {
           String(row.name)
         ),
       );
+      const messages = new Set(
+        db.prepare("PRAGMA table_info(session_message)").all().map((row) =>
+          String(row.name)
+        ),
+      );
+      this.messageClocks = ["session_id", "seq", "type", "time_created", "data"]
+        .every((name) => messages.has(name));
     } catch (error) {
       db.close();
       throw error;
@@ -69,6 +78,8 @@ export class V2NativeDb {
   }
   #projection(): string {
     return "s.id,s.parent_id,s.directory,s.project_id,s.time_created,s.time_updated," +
+      sessionRecencySql(this.columns, this.messageClocks) +
+      " AS activity_time," +
       (this.columns.has("title") ? "s.title" : "NULL AS title") + "," +
       (this.columns.has("time_archived")
         ? "s.time_archived"
@@ -84,7 +95,7 @@ export class V2NativeDb {
         : { parentID: ids.encode(String(row.parent_id)) }),
       title: row.title == null ? "Untitled session" : String(row.title),
       timeCreated: Number(row.time_created),
-      timeUpdated: Number(row.time_updated),
+      timeUpdated: Number(row.activity_time),
       archived: row.time_archived != null,
       status: "idle",
       activityAuthority: "unknown",
@@ -116,6 +127,7 @@ export class V2NativeDb {
       .all(JSON.stringify([...new Set(keys.map(ids.decode))])).map((row) => ({
         id: String(row.id),
         projectID: String(row.project_id),
+        activity: Number(row.activity_time),
         location: { directory: String(row.directory) },
         ...(row.title == null ? {} : { title: String(row.title) }),
         ...(row.parent_id == null ? {} : { parentID: String(row.parent_id) }),
@@ -155,7 +167,9 @@ export class V2NativeDb {
   ): (ProjectSeed & { projectID?: string })[] {
     this.observe?.("project-seeds");
     return this.db.prepare(
-      `SELECT directory,CASE WHEN COUNT(*)=1 THEN MIN(project_id) END AS project_id,SUM(count) AS count,MAX(latest) AS latest FROM (SELECT project_id,directory,COUNT(*) AS count,MAX(time_updated) AS latest FROM session_v2 WHERE directory>? ${
+      `SELECT directory,CASE WHEN COUNT(*)=1 THEN MIN(project_id) END AS project_id,SUM(count) AS count,MAX(latest) AS latest FROM (SELECT project_id,directory,COUNT(*) AS count,MAX(${
+        sessionRecencySql(this.columns, this.messageClocks)
+      }) AS latest FROM session_v2 s WHERE directory>? ${
         directory === undefined ? "" : "AND directory=?"
       } GROUP BY project_id,directory) GROUP BY directory ORDER BY directory LIMIT ?`,
     )
@@ -194,13 +208,17 @@ export class V2NativeDb {
       values.push(input.query);
     }
     if (before) {
-      filters.push("(s.time_updated,s.id)<(?,?)");
+      filters.push(
+        `(${sessionRecencySql(this.columns, this.messageClocks)},s.id)<(?,?)`,
+      );
       values.push(before.updated, before.id);
     }
     const rows = this.db.prepare(
       `SELECT ${this.#projection()} FROM session_v2 s WHERE ${
         filters.join(" AND ")
-      } ORDER BY s.time_updated DESC,s.id DESC LIMIT ?`,
+      } ORDER BY ${
+        sessionRecencySql(this.columns, this.messageClocks)
+      } DESC,s.id DESC LIMIT ?`,
     ).all(...values, limit).map((row) => this.#metadata(row));
     this.observe?.("session-list", { limit, rows: rows.length });
     return rows;
