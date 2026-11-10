@@ -265,9 +265,11 @@ export class OpencodeTest {
   }
   async listPermissions(
     id: string,
+    directory = this.directory,
   ): Promise<{ id: string; sessionID: string }[]> {
     const rows = await this.request<{ id: string; sessionID: string }[]>(
       "/permission",
+      { directory },
     );
     const native = opencodeV1SessionID.decode(id);
     return rows.filter((row) => row.sessionID === native).map((row) => ({
