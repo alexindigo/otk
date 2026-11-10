@@ -11,29 +11,28 @@ test(
   "composer.cold-recall-image-pdf-exact-ordered-bytes",
   { tag: "@composer" },
   async ({ state, page }) => {
-    const source = await state.native<{ id: string }>("/session", "POST", {
+    await state.native<{ id: string }>("/session", "POST", {
       title: "Provider recall source",
+      messages: [{
+        parts: [
+          { type: "text", text: "Review the image and [PDF 1]" },
+          {
+            type: "file",
+            filename: "pixel.png",
+            mime: "image/png",
+            url: `data:image/png;base64,${image}`,
+          },
+          {
+            type: "file",
+            filename: "report.pdf",
+            mime: "application/pdf",
+            url: `data:application/pdf;base64,${pdf}`,
+          },
+        ],
+      }],
     });
     const target = await state.native<{ id: string }>("/session", "POST", {
       title: "Recalled attachments",
-    });
-    await state.native(`/session/${source.id}/message`, "POST", {
-      noReply: true,
-      parts: [
-        { type: "text", text: "Review the image and [PDF 1]" },
-        {
-          type: "file",
-          filename: "pixel.png",
-          mime: "image/png",
-          url: `data:image/png;base64,${image}`,
-        },
-        {
-          type: "file",
-          filename: "report.pdf",
-          mime: "application/pdf",
-          url: `data:application/pdf;base64,${pdf}`,
-        },
-      ],
     });
     const frames = await wire(page);
     await openSession(state, page, target.id);
@@ -87,21 +86,20 @@ test("composer.deleted-recall-rejects-with-complete-draft-and-no-send", {
 }, async ({ state, page }) => {
   const source = await state.native<{ id: string }>("/session", "POST", {
     title: "Deleted recall source",
+    messages: [{
+      parts: [
+        { type: "text", text: "Keep this recalled draft" },
+        {
+          type: "file",
+          filename: "pixel.png",
+          mime: "image/png",
+          url: `data:image/png;base64,${image}`,
+        },
+      ],
+    }],
   });
   const target = await state.native<{ id: string }>("/session", "POST", {
     title: "Keep recalled draft",
-  });
-  await state.native(`/session/${source.id}/message`, "POST", {
-    noReply: true,
-    parts: [
-      { type: "text", text: "Keep this recalled draft" },
-      {
-        type: "file",
-        filename: "pixel.png",
-        mime: "image/png",
-        url: `data:image/png;base64,${image}`,
-      },
-    ],
   });
   const frames = await wire(page);
   await openSession(state, page, target.id);
@@ -175,18 +173,15 @@ test("composer.definitive-recall-rejection-is-one-visible-failure", {
 test("composer.recalled-caret-accepts-next-native-key-before-paint", {
   tag: "@composer",
 }, async ({ state, page }) => {
-  const source = await state.native<{ id: string }>("/session", "POST", {
+  await state.native<{ id: string }>("/session", "POST", {
     title: "Caret source",
+    messages: ["older caret prompt", "newer caret prompt"].map((text) => ({
+      parts: [{ type: "text", text }],
+    })),
   });
   const target = await state.native<{ id: string }>("/session", "POST", {
     title: "Caret recall",
   });
-  for (const text of ["older caret prompt", "newer caret prompt"]) {
-    await state.native(`/session/${source.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text }],
-    });
-  }
   await openSession(state, page, target.id);
   await prompt(page).focus();
   await expect(prompt(page)).toBeFocused();

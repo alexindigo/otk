@@ -110,9 +110,12 @@ test("composer.native-file-range-agent-mcp-directory-frecency", {
   await expect(page.locator(".otk-autocomplete")).toContainText("guide.md");
   await prompt(page).press("Escape");
   await prompt(page).fill("@explore");
-  await expect(page.locator(".otk-autocomplete")).toContainText("explore");
+  const v2 = state.controller.info!.version.startsWith("2.");
+  await expect(page.locator(".otk-autocomplete")).toContainText(
+    v2 ? "Explore" : "explore",
+  );
   await prompt(page).press("Enter");
-  await expect(chips(page)).toContainText("@explore");
+  await expect(chips(page)).toContainText(v2 ? "@Explore" : "@explore");
   await state.queue(["Agent mention received."]);
   await sendPrompt(page);
   await expect(
@@ -122,35 +125,45 @@ test("composer.native-file-range-agent-mcp-directory-frecency", {
   ).toBeVisible();
   await reply(state, page, other.id, "Agent mention received.");
   await prompt(page).fill("@specification");
-  await expect(page.locator(".otk-autocomplete")).toContainText(
-    "specification",
-  );
-  await prompt(page).press("Enter");
-  await expect(chips(page)).toContainText("@specification");
-  await state.queue(["MCP resource received."]);
-  await sendPrompt(page);
-  await expect(
-    page.locator("[data-role=user] .otk-text").filter({
-      hasText: "@specification",
-    }),
-  ).toBeVisible();
-  await expect(prompt(page)).toHaveValue("");
-  await reply(state, page, other.id, "MCP resource received.");
-  const observation = await state.observe<
-    { requests: { messages: unknown }[]; mcpRequests: { method: string }[] }
-  >();
-  expect(
-    observation.requests.some((request) =>
-      JSON.stringify(request.messages).includes(
-        "MCP fixture specification bytes",
-      )
-    ),
-  ).toBe(true);
-  expect(
-    observation.mcpRequests.some((request) =>
-      request.method === "resources/read"
-    ),
-  ).toBe(true);
+  if (v2) {
+    // Addendum-1 #4: stock V2 has no MCP-resource attachment route.
+    await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
+    await expect(chips(page)).toHaveCount(0);
+    expect(
+      (await state.observe<{ mcpRequests: { method: string }[] }>()).mcpRequests
+        .filter((request) => request.method === "resources/read"),
+    ).toHaveLength(0);
+  } else {
+    await expect(page.locator(".otk-autocomplete")).toContainText(
+      "specification",
+    );
+    await prompt(page).press("Enter");
+    await expect(chips(page)).toContainText("@specification");
+    await state.queue(["MCP resource received."]);
+    await sendPrompt(page);
+    await expect(
+      page.locator("[data-role=user] .otk-text").filter({
+        hasText: "@specification",
+      }),
+    ).toBeVisible();
+    await expect(prompt(page)).toHaveValue("");
+    await reply(state, page, other.id, "MCP resource received.");
+    const observation = await state.observe<
+      { requests: { messages: unknown }[]; mcpRequests: { method: string }[] }
+    >();
+    expect(
+      observation.requests.some((request) =>
+        JSON.stringify(request.messages).includes(
+          "MCP fixture specification bytes",
+        )
+      ),
+    ).toBe(true);
+    expect(
+      observation.mcpRequests.some((request) =>
+        request.method === "resources/read"
+      ),
+    ).toBe(true);
+  }
   await page.reload();
   await prompt(page).fill("@");
   await expect(page.locator(".otk-autocomplete button").first()).toContainText(

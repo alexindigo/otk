@@ -116,7 +116,9 @@ try {
       blocked: { id: string };
       directory: string;
     } | undefined;
-    let operation: { settled: boolean; error?: string } | undefined;
+    let operation:
+      | { settled: boolean; error?: string; failure?: unknown }
+      | undefined;
     let cooling:
       | { a: { id: string }; b: { id: string }; directory: string }
       | undefined;
@@ -833,6 +835,17 @@ try {
                 "Remote native target outside history composition",
               );
             }
+            if (
+              params.path === "/session" && params.method === "POST" &&
+              params.body && typeof params.body === "object" &&
+              "messages" in params.body
+            ) {
+              return await seedBrowserSession(
+                remote.oc,
+                params.body as Record<string, unknown>,
+                remote.oc.directory,
+              );
+            }
             return await remote.oc.request(params.path, {
               method: params.method,
               body: params.body,
@@ -1027,6 +1040,7 @@ try {
             const result = operation = { settled: false } as {
               settled: boolean;
               error?: string;
+              failure?: unknown;
             };
             const sessionID = browserSessionID(frame.params.sessionID);
             const pending = profile === "composer-commands"
@@ -1037,7 +1051,11 @@ try {
               })
               : client!.rpc("session.shell", {
                 sessionID,
-                command: "echo should-not-run",
+                // V2 shell has no agent selection field. Reject invalid input
+                // before dispatch rather than fabricate a deferred native error.
+                command: nativeVersion.startsWith("2.")
+                  ? ""
+                  : "echo should-not-run",
                 agent: "missing-otk-agent",
               });
             // Match the original independent-client fault injection. Keeping the
@@ -1048,6 +1066,9 @@ try {
             }, (error) => {
               result.settled = true;
               result.error = String(error);
+              if (error && typeof error === "object" && "failure" in error) {
+                result.failure = error.failure;
+              }
             });
             return null;
           }
