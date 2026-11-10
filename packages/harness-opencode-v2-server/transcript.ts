@@ -182,6 +182,11 @@ export class Transcript {
     }
   >();
   #helperHints = new Set<string>();
+  #helperReads = new Map<
+    string,
+    { controller: AbortController; dirty: boolean }
+  >();
+  #helperProgress = new Map<string, import("@otk/protocol").HelperSummary>();
   #own<T>(task: Promise<T>): Promise<T> {
     this.#tasks.add(task);
     void task.then(
@@ -465,6 +470,7 @@ export class Transcript {
   }
   disconnect(): void {
     this.#cancelBackfills();
+    this.#releaseHelpers();
     this.buffers.suspend();
     this.changed();
     this.recovery.release();
@@ -867,15 +873,9 @@ export class Transcript {
       for (const m of items) {
         for (const p of m.parts) {
           if (p.kind === "tool" && p.call.childSessionID) {
-            result.helpers[p.call.childSessionID] =
-              this.options.helper?.(p.call.childSessionID) ??
-                {
-                  state: this.options.requestHelper
-                    ? "digesting"
-                    : "unavailable",
-                  revision: 0,
-                  toolCount: null,
-                };
+            result.helpers[p.call.childSessionID] = this.#helperSummary(
+              p.call.childSessionID,
+            );
           }
         }
       }
@@ -1030,6 +1030,9 @@ export class Transcript {
     const d = event.data, sid = text(d.sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    if (/^session\.(tool\.|execution\.)/.test(event.type)) {
+      this.#requestHelper(id, true);
+    }
     if (
       event.type.startsWith("session.") &&
       !event.type.startsWith("session.execution.")
@@ -1692,6 +1695,7 @@ export class Transcript {
       id: partID(live.raw.id, "tool", callID),
       call: mapTool(tool),
     });
+    this.#pruneHelpers();
     if (part) {
       this.#publish(live.session, {
         op: "part.upsert",
@@ -1722,9 +1726,23 @@ export class Transcript {
         this.#helperLinks.delete(key);
       }
     }
+    this.#pruneHelpers();
+  }
+  #pruneHelpers(): void {
     for (const child of this.#helperHints) {
       if (![...this.#helperLinks.values()].some((l) => l.child === child)) {
         this.#helperHints.delete(child);
+      }
+    }
+    for (const [child, work] of this.#helperReads) {
+      if (![...this.#helperLinks.values()].some((l) => l.child === child)) {
+        this.#helperReads.delete(child);
+        work.controller.abort();
+      }
+    }
+    for (const child of this.#helperProgress.keys()) {
+      if (![...this.#helperLinks.values()].some((l) => l.child === child)) {
+        this.#helperProgress.delete(child);
       }
     }
   }
@@ -1734,12 +1752,11 @@ export class Transcript {
         this.#helperLinks.delete(key);
       }
     }
-    return {
-      ...message,
-      parts: message.parts.map((part) =>
-        this.#helperPart(message.sessionID, message.id, part)
-      ),
-    };
+    const parts = message.parts.map((part) =>
+      this.#helperPart(message.sessionID, message.id, part)
+    );
+    this.#pruneHelpers();
+    return { ...message, parts };
   }
   #helperPart(
     parent: string,
@@ -1753,12 +1770,7 @@ export class Transcript {
       !part.call.childSessionID
     ) return part;
     const child = part.call.childSessionID,
-      progress = this.options.helper?.(child) ??
-        {
-          state: this.options.requestHelper ? "digesting" : "unavailable",
-          revision: 0,
-          toolCount: null,
-        } as import("@otk/protocol").HelperSummary;
+      progress = this.#helperSummary(child);
     if (this.#subscriptions.has(parent)) {
       this.#helperLinks.set(key, {
         parent,
@@ -1767,6 +1779,7 @@ export class Transcript {
         child,
         revision: progress.revision,
       });
+      this.#requestHelper(child);
     }
     if (!this.#helperHints.has(child) && this.options.requestHelper) {
       this.#helperHints.add(child);
@@ -1774,7 +1787,74 @@ export class Transcript {
     }
     return { ...part, call: { ...part.call, progress } };
   }
+  #helperSummary(child: string): import("@otk/protocol").HelperSummary {
+    return this.#helperProgress.get(child) ?? this.options.helper?.(child) ?? {
+      state: "digesting",
+      revision: 0,
+      toolCount: null,
+    };
+  }
   helper(child: string, summary: import("@otk/protocol").HelperSummary): void {
+    // Scalar index changes invalidate only an existing viewer-owned read.
+    // They never acquire helper bodies for idle/background aggregation.
+    if (summary) this.#requestHelper(child, true);
+  }
+  #requestHelper(child: string, refresh = false): void {
+    if (
+      ![...this.#helperLinks.values()].some((link) =>
+        link.child === child && this.#subscriptions.has(link.parent)
+      )
+    ) return;
+    const active = this.#helperReads.get(child);
+    if (active) {
+      if (refresh) active.dirty = true;
+      return;
+    }
+    if (!refresh && this.#helperProgress.has(child)) return;
+    const work = { controller: new AbortController(), dirty: false };
+    this.#helperReads.set(child, work);
+    const signal = AbortSignal.any([
+      work.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    this.#own(
+      (async () => {
+        do {
+          work.dirty = false;
+          const summary = this.options.digest
+            ? await this.options.digest.read("opcv2.helper.progress", {
+              sessionID: child,
+            }, {
+              owner: `v2-helper:${child}`,
+              priority: "user",
+              signal,
+            })
+            : await new TranscriptReads(this.reader, () => undefined)
+              .helperProgress(child, signal);
+          signal.throwIfAborted();
+          if (this.#helperReads.get(child) !== work) return;
+          const revision = Math.max(
+            this.#helperProgress.get(child)?.revision ?? 0,
+            ...[...this.#helperLinks.values()].filter((l) => l.child === child)
+              .map((l) => l.revision),
+          ) + 1;
+          const value = { ...summary, revision };
+          this.#helperProgress.set(child, value);
+          this.#publishHelper(child, value);
+        } while (work.dirty);
+      })().catch((error) => {
+        if (!signal.aborted) this.options.diagnostic(error);
+      }).finally(() => {
+        if (this.#helperReads.get(child) === work) {
+          this.#helperReads.delete(child);
+        }
+      }),
+    );
+  }
+  #publishHelper(
+    child: string,
+    summary: import("@otk/protocol").HelperSummary,
+  ): void {
     for (const link of this.#helperLinks.values()) {
       if (
         link.child !== child || summary.revision <= link.revision ||

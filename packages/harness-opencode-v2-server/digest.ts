@@ -788,6 +788,22 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       (operation) => this.source.native()?.observe?.(operation),
     );
     this.readers = {
+      "opcv2.helper.progress": async (input, signal) => {
+        const raw = await this.#ensure(input.sessionID, signal);
+        const result = await this.transcript.helperProgress(
+          input.sessionID,
+          signal,
+        );
+        return {
+          ...result,
+          time: {
+            start: millis(raw.time.created),
+            ...(raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy)
+              ? { end: millis(raw.time.idle) }
+              : {}),
+          },
+        };
+      },
       "opcv2.transcript": async (input, signal) => {
         await this.#ensure(input.sessionID, signal);
         return await this.transcript.facts(input, signal);
@@ -825,7 +841,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       new Promise<void>((r) => setTimeout(r, 0)));
     this.source.check(signal);
   }
-  async #ensure(id: string, signal: AbortSignal): Promise<NativeSession> {
+  async #ensure(
+    id: string,
+    signal: AbortSignal,
+    activity = true,
+  ): Promise<NativeSession> {
     if (this.#closed) throw new Error("V2 transcript digest is stopped");
     const connection = this.#connection;
     const { client, native } = await this.source.prepare(signal),
@@ -841,7 +861,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     this.#source = `api:${client.service.pid}:${this.#connection}`;
     this.#provenNative = undefined;
     if (!native || native !== this.source.native()) {
-      return await withSessionActivity(client, raw, signal);
+      return activity ? await withSessionActivity(client, raw, signal) : raw;
     }
     try {
       const db = native.db;
@@ -898,7 +918,9 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     }
     return this.#provenNative
       ? { ...raw, activity: native.facts([id])[0]?.activity }
-      : await withSessionActivity(client, raw, signal);
+      : activity
+      ? await withSessionActivity(client, raw, signal)
+      : raw;
   }
   connection(value: number): void {
     if (value < this.#connection) return;
@@ -1277,7 +1299,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     budget: DigestBudget,
     signal: AbortSignal,
   ): Promise<string | undefined> {
-    const raw = await this.#ensure(job.sessionID, signal),
+    const raw = await this.#ensure(job.sessionID, signal, false),
       source = this.#source;
     let scan = this.#helpers.get(job.sessionID);
     if (!scan || scan.source !== source) {

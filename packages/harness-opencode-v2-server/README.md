@@ -168,12 +168,16 @@ channel, derived SQLite owner and the index owner's source-proven read-only
 native connection. Background headers exclude text, tool inputs and output.
 Helper summaries use SQL count/current aggregates, at most one scalar row per
 admitted message, never the on-intent tool-detail reader or body API pages.
-Split parts and legacy inline content contribute the same scalar aggregate;
-without a proven SQL source helper summaries are explicitly unavailable. Usage
-API fallback extracts and releases bounded pages. Reported usage remains
-nullable; native session totals include internal charges and need not equal
-reply ledgers. This contribution does not enumerate projects or session lists;
-V1 owns those.
+Viewer-acquired parent/helper links separately borrow the transient
+`opcv2.helper.progress` read channel. Its cancellable, bounded pages may use the
+API when SQL is unavailable; only scalar progress survives each page. Tool
+events refresh existing demand, never acquire an unviewed helper. The last
+parent viewer releases that read and fences late publication. Split parts and
+legacy inline content contribute the same scalar aggregate; without a proven SQL
+source helper summaries are explicitly unavailable. Usage API fallback extracts
+and releases bounded pages. Reported usage remains nullable; native session
+totals include internal charges and need not equal reply ledgers. This
+contribution does not enumerate projects or session lists; V1 owns those.
 
 Q6 prefetch reads only the next older page under the existing optional/idle
 admission. Its adapter-wide memory-only FIFO charges complete encoded keys and

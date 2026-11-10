@@ -6,13 +6,19 @@ import type {
   TranscriptMetadata,
 } from "@otk/harness";
 import "./read-kinds.ts";
-import type { LatestPrompt, UsageMessage, UsageTool } from "@otk/protocol";
+import type {
+  HelperSummary,
+  LatestPrompt,
+  UsageMessage,
+  UsageTool,
+} from "@otk/protocol";
 import {
   type MessageContext,
   millis,
   partID,
   record,
   reported,
+  sharedToolName,
   text,
   tokens,
 } from "./map.ts";
@@ -55,7 +61,10 @@ export interface HelperAggregate {
 }
 /** Transient JSON fragments use the existing credited worker channel. */
 function jsonCodec<
-  K extends "opcv2.transcript" | "opcv2.message.prefetch",
+  K extends
+    | "opcv2.transcript"
+    | "opcv2.message.prefetch"
+    | "opcv2.helper.progress",
 >(): ProviderReadCodec<K> {
   return {
     *chunks(value) {
@@ -86,6 +95,7 @@ function jsonCodec<
   };
 }
 export const transcriptReadCodecs: ProviderReadCodecs = {
+  "opcv2.helper.progress": jsonCodec<"opcv2.helper.progress">(),
   "opcv2.transcript": jsonCodec<"opcv2.transcript">(),
   "opcv2.message.prefetch": jsonCodec<"opcv2.message.prefetch">(),
 };
@@ -246,6 +256,84 @@ export class TranscriptReads {
     readonly source?: () => string,
     readonly observe?: (operation: string) => void,
   ) {}
+  /** On-view demand only. Bodies are discarded after each bounded API page;
+   * background helper jobs continue to use helperAggregates exclusively. */
+  async helperProgress(
+    sessionID: string,
+    signal: AbortSignal,
+  ): Promise<HelperSummary> {
+    let before: number | undefined, cursor: string | undefined, toolCount = 0;
+    let current: HelperSummary["current"];
+    const accept = (count: number, value: HelperSummary["current"]) => {
+      toolCount += count;
+      if (
+        value && (!current || (value.startedAt ?? 0) > (current.startedAt ?? 0))
+      ) current = value;
+    };
+    do {
+      signal.throwIfAborted();
+      const headers = this.sqlHeaders(sessionID, before, SCAN_ROWS);
+      if (headers) {
+        for (
+          const row of this.helperAggregates(
+            sessionID,
+            headers.map((h) => h.id),
+          ) ?? []
+        ) {
+          accept(
+            row.toolCount,
+            row.current
+              ? { ...row.current, name: sharedToolName(row.current.name) }
+              : undefined,
+          );
+        }
+        before = headers.at(-1)?.seq;
+        if (headers.length < SCAN_ROWS) break;
+      } else {
+        const page = await this.messages.page(
+          sessionID,
+          SCAN_ROWS,
+          cursor,
+          signal,
+        );
+        for (const message of page.items) {
+          if (message.type !== "assistant") continue;
+          for (const part of message.content) {
+            if (part.type !== "tool") continue;
+            const active = part.state.status === "running" ||
+              part.state.status === "streaming";
+            const metadata = record(
+              "metadata" in part.state ? part.state.metadata : undefined,
+            );
+            accept(
+              1,
+              active
+                ? {
+                  name: sharedToolName(part.name),
+                  title: text(metadata.title) ?? text(metadata.description),
+                  startedAt: millis(part.time.created),
+                }
+                : undefined,
+            );
+          }
+        }
+        const next = page.next;
+        if (!next) break;
+        if (next === cursor || !page.items.length) {
+          throw new Error("Native helper cursor did not advance");
+        }
+        cursor = next;
+      }
+      await this.yieldRead(signal);
+    } while (true);
+    signal.throwIfAborted();
+    return {
+      state: "ready",
+      revision: 0,
+      toolCount,
+      ...(current ? { current } : {}),
+    };
+  }
   sqlHeaders(
     sessionID: string,
     before: number | undefined,

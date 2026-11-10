@@ -11,7 +11,7 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { nativeKind } from "../support/native.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
 import { waitFor } from "../support/opencode.ts";
-import { withResources } from "../support/resources.ts";
+import { resources, withResources } from "../support/resources.ts";
 
 Deno.test({
   name:
@@ -40,6 +40,20 @@ Deno.test({
       await waitFor(
         () => native.api.session.active(),
         (active) => !active[target.nativeID],
+      );
+      const fetcher = globalThis.fetch;
+      let bodyReads = 0;
+      globalThis.fetch = (input, init) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (/\/api\/session\/[^/]+\/message(?:\?|$)/.test(url)) bodyReads++;
+        return fetcher(input, init);
+      };
+      // Each test module owns an isolated process and restores its transport.
+      resources().defer(
+        "restore helper fetch",
+        () => {
+          globalThis.fetch = fetcher;
+        },
       );
       for (const sql of [true, false]) {
         const db = new DatabaseSync(":memory:"), settings = cfg();
@@ -103,6 +117,7 @@ Deno.test({
           }
           for (let generation = 0; generation < 2; generation++) {
             if (generation) sink.invalidateHelper(target.id);
+            const beforeBodies = bodyReads;
             for (let i = 0; i < 10; i++) {
               const next = await sink.step(
                 {
@@ -124,6 +139,11 @@ Deno.test({
               );
               if (!next) break;
             }
+            assertEquals(
+              bodyReads,
+              beforeBodies,
+              "Background helper acquisition must not read API bodies",
+            );
             assertEquals(
               saved.get(target.id)?.helper?.state,
               sql ? "ready" : "unavailable",

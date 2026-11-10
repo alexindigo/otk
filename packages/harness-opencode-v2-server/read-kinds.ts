@@ -7,6 +7,11 @@ import type {
 } from "./transcript-reads.ts";
 declare module "@otk/harness" {
   interface ProviderReadKinds {
+    "opcv2.helper.progress": {
+      input: { sessionID: string };
+      result: import("@otk/protocol").HelperSummary;
+      chunk: string;
+    };
     "opcv2.transcript": {
       input: TranscriptInput;
       result: TranscriptFacts;
