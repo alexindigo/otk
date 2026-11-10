@@ -6,7 +6,11 @@ export class McpFixture {
   server: Deno.HttpServer;
   url: string;
   #stop: () => Promise<void>;
-  constructor() {
+  constructor(
+    options: {
+      templates?: { name: string; uriTemplate: string; mimeType?: string }[];
+    } = {},
+  ) {
     const scope = resources();
     this.server = Deno.serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
@@ -42,7 +46,7 @@ export class McpFixture {
             };
             break;
           case "resources/templates/list":
-            result = { resourceTemplates: [] };
+            result = { resourceTemplates: options.templates ?? [] };
             break;
           case "resources/read":
             result = {

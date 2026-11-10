@@ -12,8 +12,16 @@ export type CatalogModelItem =
     kind: "catalog";
     defaultState: ModelCatalog["defaultState"];
     default?: ModelCatalog["default"];
+    defaultVariant?: string;
+    provenance?: ModelCatalog["provenance"];
   }
-  | { kind: "provider"; id: string; name: string }
+  | {
+    kind: "provider";
+    id: string;
+    name: string;
+    provenance?: ModelCatalog["provenance"];
+    availability?: ModelCatalog["providers"][number]["availability"];
+  }
   | {
     kind: "model";
     providerID: string;
@@ -26,9 +34,17 @@ export const modelCatalogCodec: CatalogCodec<"models"> = {
         kind: "catalog",
         defaultState: value.defaultState,
         default: value.default,
+        defaultVariant: value.defaultVariant,
+        provenance: value.provenance,
       };
       for (const provider of value.providers) {
-        yield { kind: "provider", id: provider.id, name: provider.name };
+        yield {
+          kind: "provider",
+          id: provider.id,
+          name: provider.name,
+          provenance: provider.provenance,
+          availability: provider.availability,
+        };
         for (const model of provider.models) {
           yield { kind: "model", providerID: provider.id, model };
         }
@@ -56,11 +72,19 @@ export const modelCatalogCodec: CatalogCodec<"models"> = {
             header = true;
             value.defaultState = item.defaultState;
             if (item.default) value.default = item.default;
+            if (item.defaultVariant) value.defaultVariant = item.defaultVariant;
+            if (item.provenance) value.provenance = item.provenance;
           } else if (item.kind === "provider") {
             if (providers.has(item.id)) {
               throw new Error("Duplicate catalog provider");
             }
-            const provider = { id: item.id, name: item.name, models: [] };
+            const provider = {
+              id: item.id,
+              name: item.name,
+              ...(item.provenance ? { provenance: item.provenance } : {}),
+              ...(item.availability ? { availability: item.availability } : {}),
+              models: [],
+            };
             providers.set(item.id, provider);
             value.providers.push(provider);
           } else {
@@ -75,7 +99,7 @@ export const modelCatalogCodec: CatalogCodec<"models"> = {
       },
       finish() {
         if (
-          !header || (value.defaultState === "configured") !== !!value.default
+          !header || (value.defaultState !== "unknown") !== !!value.default
         ) throw new Error("Invalid catalog default metadata");
         return value;
       },

@@ -103,6 +103,7 @@ export interface FileMatch {
   directory: boolean;
 }
 export interface AgentOption {
+  id?: string;
   name: string;
   description?: string;
   color?: AgentColor;
@@ -134,10 +135,12 @@ export interface ShellInput {
   model?: ModelRef;
 }
 export interface CommandOption {
+  /** Native skill identity is distinct from its displayed slash name. */
+  skillID?: string;
   name: string;
   description?: string;
   aliases: string[];
-  source: "server" | "mcp" | "skill" | "builtin";
+  source: "server" | "mcp" | "skill" | "builtin" | "unknown";
 }
 export interface CommandInput {
   sessionID: string;

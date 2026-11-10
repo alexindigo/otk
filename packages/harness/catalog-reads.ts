@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   CatalogAgent,
+  CatalogConfig,
   CatalogFile,
   CatalogModelItem,
   CommandOption,
@@ -8,6 +9,7 @@ import type {
   PermissionRequest,
   QuestionRequest,
   ResourceOption,
+  ResourceTemplateOption,
   SessionMetadata,
   SkillOption,
 } from "@otk/protocol";
@@ -44,6 +46,18 @@ export interface ResourceReadKinds {
     input: { directory: string };
     result: ResourceOption[];
     chunk: ResourceOption[];
+  };
+  "catalog.resourceTemplates": {
+    input: { directory: string };
+    result: ResourceTemplateOption[];
+    chunk: ResourceTemplateOption[];
+  };
+}
+export interface ConfigReadKinds {
+  "catalog.config": {
+    input: { directory: string };
+    result: CatalogConfig[];
+    chunk: CatalogConfig[];
   };
 }
 export interface QuestionReadKinds {

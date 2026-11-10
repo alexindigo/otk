@@ -18,3 +18,15 @@ export {
   opencodeV2ReadCodecs,
 } from "./digest.ts";
 export type { V2NativeConfig } from "./digest.ts";
+export { CatalogExecutor, V2Catalogs } from "./catalogs.ts";
+export {
+  catalogReadCodecs,
+  catalogReaders,
+  mapAgents,
+  mapCommands,
+  mapConfig,
+  mapModels,
+  mapSkills,
+  mergeCommands,
+} from "./catalog-readers.ts";
+export { HistoryReader } from "./history.ts";

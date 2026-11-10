@@ -12,6 +12,7 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
       source: {
         trigger: mention,
         revision: () => [
+          ctx.supports("resources"),
           ctx.directoryCatalog?.state.catalog?.revision,
           ctx.frecencyCatalog?.revision,
         ],
@@ -22,7 +23,9 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
             agents: catalog?.values.agents?.value?.filter((agent) =>
               agent.mention
             ) ?? [],
-            resources: catalog?.values.resources?.value ?? [],
+            resources: ctx.supports("resources")
+              ? catalog?.values.resources?.value ?? []
+              : [],
             frecency: ctx.frecencyCatalog?.entries ?? [],
             scores: ctx.frecencyCatalog?.scores,
             directory: catalog?.directory ?? "",

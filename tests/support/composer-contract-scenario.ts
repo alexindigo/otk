@@ -7,7 +7,11 @@ import { resources } from "./resources.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import { mapMessage, OpencodeV1Adapter } from "@otk/harness-opencode-v1";
 import type { Capabilities } from "@otk/harness";
-import type { ModelCatalog, PromptInput } from "@otk/protocol";
+import type {
+  DirectoryCatalog,
+  ModelCatalog,
+  PromptInput,
+} from "@otk/protocol";
 import type {
   ControlRequest,
   Json,
@@ -34,6 +38,53 @@ export async function composerContractScenario(profile: Profile) {
     }],
   };
   const capabilities: Capabilities = {};
+  if (
+    profile === "contract-composer-resource-attachments" ||
+    profile === "contract-composer-no-resource-attachments"
+  ) {
+    const resource = {
+      name: "specification",
+      description: "MCP resource attachment",
+      mime: "text/plain",
+      uri: "otk-fixture://specification",
+      server: "fixture",
+    };
+    const directoryCatalog: DirectoryCatalog = {
+      directory: root,
+      generation: "fixture",
+      revision: 1,
+      paths: { style: "posix" as const, separator: "/" },
+      values: {
+        files: {
+          state: "ready" as const,
+          revision: 1,
+          value: [{
+            path: "specification.md",
+            canonicalPath: join(root, "specification.md"),
+            directory: false,
+          }],
+        },
+        resources: { state: "ready" as const, revision: 1, value: [resource] },
+      },
+    };
+    capabilities.catalogs = {
+      watch: (_directory, listener) => {
+        listener(directoryCatalog);
+        return Promise.resolve(directoryCatalog);
+      },
+      refresh: () => Promise.resolve(),
+    };
+    capabilities.files = {
+      findFiles: () =>
+        Promise.resolve([{ path: "specification.md", directory: false }]),
+    };
+    if (profile === "contract-composer-resource-attachments") {
+      capabilities.resources = {
+        listResources: () => Promise.resolve([resource]),
+      };
+    }
+    pending.resolve(catalog);
+  }
   let native: OpencodeV1Adapter | undefined;
   if (profile !== "contract-composer-none") {
     capabilities.prompt = {

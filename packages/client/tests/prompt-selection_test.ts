@@ -13,6 +13,37 @@ import {
 } from "../mod.ts";
 
 const first: ModelRef = { provider: "one", model: "shared" };
+Deno.test("applied model defaults and reported default variants remain display/submission authority", () => {
+  const reported: ModelCatalog = {
+    defaultState: "applied",
+    default: first,
+    defaultVariant: "high",
+    providers: [{
+      id: "one",
+      name: "One",
+      models: [{
+        id: "shared",
+        name: "Shared",
+        variants: ["high"],
+        status: "active",
+        free: null,
+      }],
+    }],
+  };
+  const selected = effectiveSelection(emptyDraft(), {
+    agents: [],
+    catalog: reported,
+  });
+  assertEquals(selected.model.value, first);
+  assertEquals(selected.input.model, first);
+  assertEquals(selected.variant.value, "high");
+  assertEquals(selected.input.variant, "high");
+  const invalid = effectiveSelection(emptyDraft(), {
+    agents: [],
+    catalog: { ...reported, defaultVariant: "unavailable" },
+  });
+  assertEquals(invalid.input.variant, undefined);
+});
 const second: ModelRef = { provider: "two", model: "shared" };
 const plain: ModelRef = { provider: "two", model: "plain" };
 const catalog: ModelCatalog = {

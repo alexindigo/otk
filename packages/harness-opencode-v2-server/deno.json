@@ -4,6 +4,8 @@
   "license": "LGPL-3.0-only",
   "exports": "./mod.ts",
   "imports": {
+    "@std/path": "jsr:@std/path@1.1.5",
+    "@std/encoding/base64": "jsr:@std/encoding@1.0.10/base64",
     "@opencode/client": "npm:@opencode/client@2.2.6",
     "@opencode/client/service": "npm:@opencode/client@2.2.6/service"
   }
