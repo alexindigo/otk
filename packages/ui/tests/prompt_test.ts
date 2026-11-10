@@ -86,7 +86,11 @@ Deno.test("editor whole-token round trip keeps attachments and paste saves expan
     editor: { text: "before " + upload.input + " after" },
   });
   assertEquals(saved.chips[0].start, 7);
-  assertEquals(serialize(saved)[1], upload.chips[0].part);
+  // Editor relocation preserves the attachment and adds its rebased mention range.
+  assertEquals(serialize(saved)[1], {
+    ...upload.chips[0].part,
+    mention: { start: 7, end: 16, text: "[Image 1]" },
+  });
   const pasted = insertChip(emptyDraft(), 0, 0, "[Pasted ~3 lines]", {
     kind: "text",
     text: "a\nb\nc",

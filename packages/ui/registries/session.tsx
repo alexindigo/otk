@@ -43,6 +43,7 @@ export interface SessionPorts {
   location?(id: string): string;
   permissions(): PermissionRequest[];
   questions(): QuestionRequest[];
+  forms?(): readonly import("@otk/protocol").FormRequest[];
   prefs(): Preferences;
   dirty(owner: string, value: boolean, input?: string): void;
   act<T>(action: () => Promise<T>): Promise<T>;

@@ -22,7 +22,19 @@ test("prompt history consumer preserves captured attachments and refuses recall 
   const reader = new History(captured, cfg().attachments);
   try {
     const entries = await reader.listHistory();
-    assertEquals(serialize(historyDraft(entries[2])), entries[2].parts);
+    // Serialization now preserves displayed mention offsets alongside attachment bytes.
+    assertEquals(
+      serialize(historyDraft(entries[2])),
+      entries[2].parts.map((part) => ({
+        ...part,
+        ...(part.kind === "agent"
+          ? { mention: { start: 8, end: 16, text: "@explore" } }
+          : {}),
+        ...(part.kind === "file"
+          ? { mention: { start: 17, end: 26, text: "[Image 1]" } }
+          : {}),
+      })),
+    );
     const cursor = new PromptHistory();
     cursor.replace(entries);
     const newest = cursor.move(-1, emptyDraft())!;

@@ -49,6 +49,11 @@ export interface TakeoverDefinition {
   component(props?: { notice?: () => Element; focusNotice?(): void }): Element;
   active?(session: SessionPorts): boolean;
 }
+export interface GlobalSurfaceDefinition {
+  id: string;
+  capability?: CapabilityName;
+  component(): Element;
+}
 /** Open collections; consumers select features, machinery knows no implementations. */
 export class SurfaceRegistry<
   T extends { id: string; capability?: CapabilityName },

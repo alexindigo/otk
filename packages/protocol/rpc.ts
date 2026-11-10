@@ -18,6 +18,7 @@ import type { RestoreRpcMethods } from "./capabilities/restore.ts";
 import type { DigestsRpcMethods } from "./capabilities/digests.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { CatalogRpcMethods } from "./catalogs.ts";
+import type { FormsRpcMethods } from "./forms.ts";
 import type {
   HistoryAttachment,
   HistoryAttachmentRef,
@@ -51,45 +52,51 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "question.list": { kind: "read", pending: "Loading requests" },
   "question.reply": { kind: "mutation", pending: "Sending answer" },
   "question.reject": { kind: "mutation", pending: "Skipping question" },
+  "form.list": { kind: "read", pending: "Loading forms" },
+  "form.reply": { kind: "mutation", pending: "Sending answers" },
+  "form.cancel": { kind: "mutation", pending: "Cancelling form" },
   "prefs.get": { kind: "read", pending: "Loading settings" },
   "prefs.set": { kind: "mutation", pending: "Saving" },
 };
 export type PromptPart =
-  | { kind: "text"; text: string }
-  | {
-    kind: "file";
-    source: "upload";
-    name: string;
-    mime: string;
-    dataBase64: string;
-  }
-  | {
-    kind: "file";
-    source: "path";
-    path: string;
-    label?: string;
-    range?: { start: number; end?: number };
-  }
-  | { kind: "agent"; name: string }
-  | {
-    kind: "file";
-    source: "resource";
-    name: string;
-    mime: string;
-    uri: string;
-    server: string;
-    label?: string;
-  }
-  | {
-    kind: "file";
-    source: "history";
-    name: string;
-    mime: string;
-    size: number;
-    messageID: string;
-    partID: string;
-    sidecarID?: string;
-  };
+  & (
+    | { kind: "text"; text: string }
+    | {
+      kind: "file";
+      source: "upload";
+      name: string;
+      mime: string;
+      dataBase64: string;
+    }
+    | {
+      kind: "file";
+      source: "path";
+      path: string;
+      label?: string;
+      range?: { start: number; end?: number };
+    }
+    | { kind: "agent"; name: string }
+    | {
+      kind: "file";
+      source: "resource";
+      name: string;
+      mime: string;
+      uri: string;
+      server: string;
+      label?: string;
+    }
+    | {
+      kind: "file";
+      source: "history";
+      name: string;
+      mime: string;
+      size: number;
+      messageID: string;
+      partID: string;
+      sidecarID?: string;
+    }
+  )
+  & { mention?: { start: number; end: number; text: string } };
 export interface PromptInput {
   sessionID: string;
   parts: PromptPart[];
@@ -162,7 +169,8 @@ export interface RpcMethods
     RestoreRpcMethods,
     DigestsRpcMethods,
     ApprovalRpcMethods,
-    CatalogRpcMethods {
+    CatalogRpcMethods,
+    FormsRpcMethods {
   "session.get": {
     params: { sessionID: string };
     result: ContentSession & { load: import("./session-list.ts").LoadCoverage };
@@ -256,11 +264,19 @@ export interface CreatedSessionReceipt {
   parentID?: string;
 }
 export interface CoreRequestReceipts {
+  "form-replied": { completed: true };
+  "form-cancelled": { completed: true };
   "session-created": CreatedSessionReceipt;
   "session-rename-intent": { sessionID: string; title: string };
   "session-boundary-intent": { sessionID: string; messageID: string | null };
   "session-boundary": { sessionID: string; messageID: string | null };
   "prompt-sent": { completed: true };
+  "prompt-selection": {
+    sessionID: string;
+    agent?: string;
+    model?: ModelRef;
+    variant?: string;
+  };
   "shell-settled": { completed: true };
   "command-settled": { completed: true };
   "interrupt-sent": { completed: true };

@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-form-choice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+.otk-form-choice-row > .otk-question-row {
+  text-align: left;
+  padding-block: 8px;
+  min-width: 0;
+}
+.otk-form-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.otk-form-toggle input {
+  flex: none;
+  width: auto;
+}

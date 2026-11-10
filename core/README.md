@@ -37,6 +37,17 @@ reads deliver the pending request through their request-owned lifetime.
 Settlement evicts this metadata unless another view still owns it; automatic
 permissions do not acquire the user-attention lease.
 
+`FormsFeature` registers typed `form.list/reply/cancel` operations and publishes
+volatile `forms.pending` attention state. Answer values remain typed; completion
+receipts contain no answer or attachment bodies. Location-owned forms contribute
+scalar `ProjectSummary.locationForms` attention without inventing sessions or
+changing session counts. The shared `SurfaceRegistry` also supplies global
+surfaces for requests that have no selected session. Session forms use the
+existing takeover owner; both render the same retained form state, validation
+and exact review payload. Hidden/conditional drafts remain private when
+inactive, and opening an external link never substitutes for explicit
+acknowledgement.
+
 ## Beta.2 startup and upgrade
 
 The release advertises `0.1.0-beta.2` with protocol 17. Before backend startup,

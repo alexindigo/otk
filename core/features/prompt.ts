@@ -5,7 +5,10 @@ import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
 import { nativeEffect, nativeExecution } from "../requests/policies.ts";
-import { completionReceipt } from "./session-receipts.ts";
+import {
+  completionReceipt,
+  promptSelectionReceipt,
+} from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.prompt;
@@ -13,10 +16,16 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
   const sent = completionReceipt("prompt-sent"),
     interrupted = completionReceipt("interrupt-sent");
   rpc.register("session.prompt", {
-    execution: nativeExecution(
-      (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
-      sent,
-    ),
+    execution: {
+      ...nativeExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        sent,
+      ),
+      checkpoint: (receipt) =>
+        receipt.kind === promptSelectionReceipt.kind
+          ? promptSelectionReceipt.validate(receipt)
+          : sent.validate(receipt),
+    },
     params(p): PromptInput {
       const parts = promptParts(p.parts);
       if (p.mode !== "normal") {

@@ -3,12 +3,10 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
 import "./QuestionDock.css" with { type: "text" };
-import ContentTextarea from "./ContentTextarea.tsx";
 import Takeover from "./surface/Takeover.tsx";
 import Tabs from "./Tabs.tsx";
 import QuestionAnswers from "./QuestionAnswers.tsx";
-import { selection } from "./selection.ts";
-import SelectionContent from "./SelectionContent.tsx";
+import { FormChoices } from "./FormField.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerQuestionDock(docks: DockRegistry): void {
   docks.register({
@@ -232,47 +230,6 @@ function Request(
       event.stopPropagation();
     }
   };
-  const ownRow = (index: number) => (
-    <div
-      data-question-row
-      ref={(element) => {
-        rowRefs[index][form.questions[index].options.length] = element;
-      }}
-      data-otk-selection="vertical"
-      {...selection({
-        class: "otk-question-row",
-        kind: "pressed",
-        selected: form.isOwnChosen(index),
-      })}
-      role="button"
-      tabindex="-1"
-      onClick={(event) => {
-        const field = ownFields[index];
-        if (event.target !== field) {
-          form.chooseOwn(index);
-          field?.focus();
-        }
-      }}
-    >
-      <SelectionContent class="otk-question-content">
-        <span>Type your own answer</span>
-        <ContentTextarea
-          ref={(element) => {
-            ownFields[index] = element;
-          }}
-          class="otk-question-own"
-          name="question-answer"
-          rows={1}
-          placeholder="Your answer…"
-          value={form.state.drafts[index].own}
-          onInput={(event) => {
-            const field = event.currentTarget;
-            form.typeOwn(index, field.value);
-          }}
-        />
-      </SelectionContent>
-    </div>
-  );
   const questionPanel = (index: number) => {
     const q = form.questions[index];
     return (
@@ -281,39 +238,26 @@ function Request(
           {q.text}
           {q.multiple ? " (select all that apply)" : ""}
         </p>
-        <div class="otk-question-options">
-          <For each={q.options} keyed={false}>
-            {(option, i) => (
-              <button
-                type="button"
-                data-question-row
-                ref={(element) => {
-                  rowRefs[index][i] = element;
-                }}
-                data-otk-selection="vertical"
-                {...selection({
-                  class: "otk-question-row",
-                  kind: "pressed",
-                  selected: form.isPicked(index, i),
-                })}
-                onClick={() => form.pick(index, i)}
-              >
-                <SelectionContent class="otk-question-content">
-                  <span class="otk-control-label" title={option().label}>
-                    {option().label}
-                  </span>
-                  <span
-                    class="otk-muted otk-control-label"
-                    title={option().description}
-                  >
-                    {option().description}
-                  </span>
-                </SelectionContent>
-              </button>
-            )}
-          </For>
-          <Show when={q.custom}>{ownRow(index)}</Show>
-        </div>
+        <FormChoices
+          options={q.options.map((option) => ({
+            ...option,
+            value: option.label,
+          }))}
+          selected={(value) => form.state.drafts[index].picked.includes(value)}
+          onPick={(option) => form.pick(index, option)}
+          custom={q.custom}
+          multiple={q.multiple}
+          own={form.state.drafts[index].own}
+          ownChosen={form.isOwnChosen(index)}
+          onOwn={() => form.chooseOwn(index)}
+          onText={(text) => form.typeOwn(index, text)}
+          row={(element, option) => {
+            rowRefs[index][option] = element;
+          }}
+          input={(element) => {
+            ownFields[index] = element;
+          }}
+        />
       </>
     );
   };

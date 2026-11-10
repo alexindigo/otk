@@ -5,7 +5,8 @@
   padding: 0 var(--lane-gutter) 20px;
   display: flex;
   flex-direction: column;
-  max-height: 75%;
+  max-height: 100%;
+  box-sizing: border-box;
 }
 .otk-composer {
   --prompt-input-outline: none;

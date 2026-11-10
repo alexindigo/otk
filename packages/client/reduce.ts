@@ -18,6 +18,7 @@ export interface ContentState {
   messages: Message[];
   permissions: PermissionRequest[];
   questions: QuestionRequest[];
+  forms?: import("@otk/protocol").FormRequest[];
   todos: Todo[];
   diffs: FileDiff[];
   revert: RevertInfo | null;
@@ -244,6 +245,21 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
       };
     }
     return state.errorState ? state : { ...state, error: op.error };
+  }
+  if (op.op === "form.upsert") {
+    return {
+      ...state,
+      forms: [
+        ...(state.forms ?? []).filter((f) => f.id !== op.request.id),
+        op.request,
+      ],
+    };
+  }
+  if (op.op === "form.remove") {
+    return {
+      ...state,
+      forms: (state.forms ?? []).filter((f) => f.id !== op.requestID),
+    };
   }
   if (op.op === "question.upsert") {
     return {

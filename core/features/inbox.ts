@@ -411,7 +411,7 @@ export class InboxFeature implements FrameSource {
     directory: string,
     summary = this.summaries?.values.get(directory),
   ): void {
-    const active = !!summary?.hasSessions &&
+    const active = !!(summary?.hasSessions || summary?.locationForms) &&
       (!this.#projects.get(directory)?.inactive ||
         summary.status === "working" || summary.status === "blocked" ||
         (summary.unseenCount ?? 0) > 0);
@@ -426,6 +426,13 @@ export class InboxFeature implements FrameSource {
   ): void {
     this.summaries.permissions(permissions);
     this.#stops.push(listen(() => this.summaries.refresh()));
+  }
+  locationAttention(
+    values: () => Readonly<Record<string, number>>,
+    listen: (changed: () => void) => () => void,
+  ): void {
+    this.summaries.locationForms(values());
+    this.#stops.push(listen(() => this.summaries.locationForms(values())));
   }
   #summaryDirectories(): void {
     this.summaries.retain([...this.#projects.keys(), ...this.#discovered]);

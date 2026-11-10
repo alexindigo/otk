@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import PaneState from "../components/PaneState.tsx";
+import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
 import "./Shell.css" with { type: "text" };
 import { scrollRegion } from "../components/ScrollRegion.tsx";
@@ -433,6 +434,7 @@ export default function Shell(
             older: () => session.older(),
           },
           servers: () => sidecars.state.list,
+          forms: resources.forms,
           connection: (id) => sidecars.connection(id),
           inbox,
           approvals,
@@ -802,6 +804,7 @@ export default function Shell(
                 onClose={() => void commands.run("settings.close")}
               />
             </Show>
+            <GlobalSurfaces />
           </main>
           <RightPanel
             layout={layout()}

@@ -24,6 +24,7 @@ import {
 import {
   type CoreServer,
   type DiagnosticSink,
+  FormsFeature,
   type FrameSource,
   frecencyOptions,
   IndexStore,
@@ -31,6 +32,7 @@ import {
   registerAgents,
   registerCommands,
   registerFiles,
+  registerForms,
   registerFrecency,
   registerHistory,
   registerLayout,
@@ -190,6 +192,18 @@ export function startApplication(
       approvals && ((input, operation) => approvals.reply(input, operation)),
     );
     registerQuestions(rpc, backend);
+    registerForms(rpc, backend);
+    if (backend.capabilities.forms) {
+      const forms = new FormsFeature(
+        backend.capabilities.forms,
+        options.diagnostic ?? console.error,
+      );
+      sources.push(forms);
+      inbox.locationAttention(
+        () => forms.locations(),
+        (changed) => forms.listen(() => changed()),
+      );
+    }
     registerRevert(rpc, backend);
     return startCore({
       cfg,

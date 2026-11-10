@@ -57,6 +57,7 @@ export interface FrameObserver {
   removed?(id: string): void;
 }
 export interface ServerResources {
+  forms(id: string): readonly import("@otk/protocol").FormRequest[];
   progress(server: string, directory?: string): ProgressDisplay;
   ownsFailure?(cause: unknown): boolean;
   scope(
@@ -152,6 +153,9 @@ export function createServerResources(o: {
   error?: (error: unknown) => void;
 }): ServerResources {
   const factory = o.factory ?? createState;
+  const pendingForms = factory<
+    { servers: Record<string, import("@otk/protocol").FormRequest[]> }
+  >({ servers: {} });
   const progressOwners = new Map<string, ReturnType<typeof createProgress>>();
   const progressOwner = (id: string) => {
     let owner = progressOwners.get(id);
@@ -564,6 +568,11 @@ export function createServerResources(o: {
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
     approvals(id).receive(frame);
+    if (frame.t === "forms.pending") {
+      pendingForms.update((s) => {
+        s.servers[id] = frame.requests;
+      });
+    }
     let accepted = true;
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
       accepted = o.index.receive(id, frame);
@@ -705,6 +714,7 @@ export function createServerResources(o: {
       return frecencyOwner(id).acquire(directory);
     },
     approvals,
+    forms: (id) => pendingForms.state.servers[id] ?? [],
     tabs,
     entry,
     server,

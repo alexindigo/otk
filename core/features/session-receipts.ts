@@ -80,6 +80,23 @@ function boundary(
   return { sessionID: id, messageID: row.messageID as string | null };
 }
 export const boundaryReceipt = metadataReceipt("session-boundary", boundary);
+export const promptSelectionReceipt = metadataReceipt(
+  "prompt-selection",
+  (value) => {
+    const row = object(value), id = sessionID(row)!;
+    const result: RequestReceipts["prompt-selection"] = { sessionID: id };
+    if (row.agent !== undefined) result.agent = text(row, "agent")!;
+    if (row.variant !== undefined) result.variant = text(row, "variant")!;
+    if (row.model !== undefined) {
+      const model = object(row.model);
+      result.model = {
+        provider: text(model, "provider")!,
+        model: text(model, "model")!,
+      };
+    }
+    return result;
+  },
+);
 export const boundaryIntent = metadataReceipt(
   "session-boundary-intent",
   boundary,

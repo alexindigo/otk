@@ -43,6 +43,7 @@ export { register as registerUsage } from "./features/usage.ts";
 export { register as registerResources } from "./features/resources.ts";
 export { register as registerPermissions } from "./features/permissions.ts";
 export { register as registerQuestions } from "./features/questions.ts";
+export { FormsFeature, register as registerForms } from "./features/forms.ts";
 export { register as registerRevert } from "./features/revert.ts";
 export { prefsOptions, register as registerPrefs } from "./features/prefs.ts";
 export { register as registerLayout } from "./features/layout.ts";

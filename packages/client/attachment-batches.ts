@@ -83,7 +83,10 @@ export async function prepareAttachments(
   );
   const result = parts.map((part) =>
     part.kind === "file" && part.source === "history"
-      ? results.get(part.sidecarID || origin)!.get(key(part))!
+      ? {
+        ...results.get(part.sidecarID || origin)!.get(key(part))!,
+        ...(part.mention ? { mention: part.mention } : {}),
+      }
       : part
   );
   const actual = result.flatMap((part) =>

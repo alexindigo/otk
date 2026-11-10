@@ -5,6 +5,7 @@ import { DockRegistry, PartRegistry, ToolRegistry } from "./renderers.ts";
 import { PromptRegistry } from "./prompt.ts";
 import {
   DialogRegistry,
+  type GlobalSurfaceDefinition,
   type PanelDefinition,
   SurfaceRegistry,
   type TakeoverDefinition,
@@ -19,6 +20,7 @@ export interface UiRegistries {
   dialogs: DialogRegistry;
   panels: SurfaceRegistry<PanelDefinition>;
   takeovers: SurfaceRegistry<TakeoverDefinition>;
+  global: SurfaceRegistry<GlobalSurfaceDefinition>;
 }
 export function createUiRegistries(): UiRegistries {
   return {
@@ -29,6 +31,7 @@ export function createUiRegistries(): UiRegistries {
     dialogs: new DialogRegistry(),
     panels: new SurfaceRegistry(),
     takeovers: new SurfaceRegistry(),
+    global: new SurfaceRegistry(),
   };
 }
 const Context = createContext<UiRegistries>();

@@ -52,6 +52,8 @@ export const PROJECT_STATUS_PRIORITY = [
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
 export interface ProjectSummary {
+  /** Pending location-owned forms; not fabricated sessions or session counts. */
+  locationForms?: number;
   directory: string;
   /** Population authority, independent of acquired session membership. */
   hasSessions?: boolean;

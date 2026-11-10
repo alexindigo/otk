@@ -29,6 +29,7 @@ import type { UsageCapabilities } from "./capabilities/usage.ts";
 import type { RestoreCapabilities } from "./capabilities/restore.ts";
 import type { DigestsCapabilities } from "./capabilities/digests.ts";
 import type { CatalogsCapabilities } from "./catalogs.ts";
+import type { FormsCapabilities } from "./capabilities/forms.ts";
 import {
   legacyResourcesCapabilities,
   type ResourcesCapabilities,
@@ -61,6 +62,7 @@ export interface CapabilityContracts
     ResourcesCapabilities,
     PermissionsCapabilities,
     QuestionsCapabilities,
+    FormsCapabilities,
     RevertCapabilities,
     RestoreCapabilities,
     DigestsCapabilities,
@@ -108,6 +110,7 @@ export type { UsageCapability } from "./capabilities/usage.ts";
 export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";
 export type { QuestionsCapability } from "./capabilities/questions.ts";
+export type { FormsCapability } from "./capabilities/forms.ts";
 export type { RevertCapability } from "./capabilities/revert.ts";
 export type { RestoreCapability } from "./capabilities/restore.ts";
 export type { SessionActionsCapability } from "./capabilities/session-actions.ts";

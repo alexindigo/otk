@@ -27,6 +27,18 @@ export class ProjectSummaries {
     }
   >();
   #permissions?: (id: string) => number;
+  #locationForms: Readonly<Record<string, number>> = {};
+  locationForms(values: Readonly<Record<string, number>>): void {
+    const affected = new Set([
+      ...Object.keys(this.#locationForms),
+      ...Object.keys(values),
+    ]);
+    this.#locationForms = { ...values };
+    for (const directory of affected) {
+      this.ensure(directory);
+      this.#update(directory);
+    }
+  }
   #authority: ProjectSummary["authority"] = "unknown";
   #catalog = false;
   #known = new Set<string>();
@@ -56,7 +68,8 @@ export class ProjectSummaries {
     for (const directory of this.#known) this.ensure(directory);
     for (const [directory, entries] of this.#projects) {
       if (
-        entries.size || this.#known.has(directory) || this.#seeds.has(directory)
+        entries.size || this.#known.has(directory) ||
+        this.#seeds.has(directory) || this.#locationForms[directory]
       ) continue;
       this.#projects.delete(directory);
       this.#totals.delete(directory);
@@ -181,20 +194,27 @@ export class ProjectSummaries {
       last = totals?.last ?? 0,
       unknown = (totals?.unknown ?? 0) > 0;
     const previous = this.values.get(directory);
+    const locationForms = this.#locationForms[directory] ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
+      : locationForms
+      ? "current"
       : unknown
       ? "unknown"
       : entries.size
       ? "current"
       : this.#authority;
-    const status =
-      PROJECT_STATUS_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
+    const status = locationForms
+      ? "blocked"
+      : PROJECT_STATUS_PRIORITY.find((s) =>
+        (totals?.statuses.get(s) ?? 0) > 0
+      ) ??
         "idle";
     const knownCount = this.#catalog;
     const seed = this.#seeds.get(directory);
     const summary: ProjectSummary = {
       directory,
+      ...(locationForms ? { locationForms } : {}),
       hasSessions: seed?.hasSessions || count > 0,
       status: authority === "unknown" && status === "idle" ? null : status,
       sessionCount: seed

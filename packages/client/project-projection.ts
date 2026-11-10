@@ -107,7 +107,8 @@ export function createProjectProjection(o: {
       p.metadata = undefined;
       p.input = undefined;
       const present = !!(p.members.size || p.record?.inactive || p.discovered ||
-        p.summary?.hasSessions || (p.summary?.sessionCount ?? 0) > 0 ||
+        p.summary?.hasSessions || p.summary?.locationForms ||
+        (p.summary?.sessionCount ?? 0) > 0 ||
         p.summary && p.summary.hasSessions === undefined);
       if (!present && !p.tasks.length) {
         projects.delete(directory);

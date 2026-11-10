@@ -10,6 +10,7 @@ export type Json = null | boolean | number | string | Json[] | {
  */
 export const profiles = {
   ordinary: "v1",
+  "contract-typed-forms": "neutral",
   "contract-load-priority": "neutral",
   "contract-load-small": "v1",
   "contract-load-large": "v1",

@@ -17,7 +17,7 @@
   align-items: stretch;
   gap: 4px;
 }
-.otk-question-options > * {
+.otk-question-options > .otk-question-row {
   text-align: left;
   padding-block: 8px;
   cursor: pointer;
@@ -25,18 +25,10 @@
 .otk-question-own {
   flex: 1 1 100%;
   min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
   font: inherit;
   color: var(--otk-fg);
-}
-.otk-question-own:focus-visible {
-  outline: 0;
-}
-.otk-question-row:has(.otk-question-own:focus-visible) {
-  outline: 2px solid var(--control-focus);
-  outline-offset: var(--focus-ring-offset);
 }
 .otk-question-peek {
   overflow: hidden;
