@@ -62,7 +62,9 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
         if (
           profile === "transport-page" && holding &&
           request.method === "GET" &&
-          url.pathname === `/session/${sessionID}/message`
+          url.pathname === `/session/${sessionID}/message` &&
+          (oc.kind === "opencode-v1" ||
+            new URL(request.url).searchParams.get("limit") === "10")
         ) {
           reads++;
           entered = true;
@@ -75,7 +77,10 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
           (profile === "transport-shell" ||
             profile === "transport-errors-late") &&
           holding &&
-          request.method === "POST" && url.pathname.endsWith("/shell")
+          request.method === "POST" &&
+          (url.pathname.endsWith("/shell") ||
+            profile === "transport-errors-late" &&
+              url.pathname.endsWith("/prompt_async"))
         ) {
           effects++;
           const bytes = await response.arrayBuffer();
@@ -84,6 +89,19 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
             body: new TextDecoder().decode(bytes).slice(0, 8192),
             headers: [...response.headers],
           };
+          if (
+            profile === "transport-errors-late" &&
+            oc.kind === "opencode-v2-server"
+          ) {
+            const sid = url.pathname.split("/")[2];
+            await oc.request(`/session/${sid}/prompt_async`, {
+              method: "POST",
+              body: {
+                agent: "missing-late-http-agent",
+                parts: [{ type: "text", text: "Fail at native selection" }],
+              },
+            });
+          }
           entered = true;
           await held.promise;
           // Fetch exposed decoded bytes. A new Response must describe those bytes,
@@ -91,7 +109,16 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
           const headers = new Headers(response.headers);
           headers.delete("content-encoding");
           headers.delete("content-length");
-          return new Response(bytes, { status: response.status, headers });
+          return profile === "transport-errors-late" &&
+              oc.kind === "opencode-v2-server"
+            ? Response.json({
+              message: "The native execution failed",
+              ref: "proxy-late-http",
+            }, { status: 500 })
+            : new Response(response.status === 204 ? null : bytes, {
+              status: response.status,
+              headers,
+            });
         }
         if (profile === "transport-enrichment") {
           if (

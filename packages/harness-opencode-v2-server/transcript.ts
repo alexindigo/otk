@@ -385,10 +385,10 @@ export class Transcript {
       this.buffers.epoch(id, this.replay.clock(id).epoch);
     } else {
       this.#subscriptions.delete(id);
-      this.release(id);
+      this.release(id, true);
     }
   }
-  release(id?: string): void {
+  release(id?: string, retainLive = false): void {
     this.#cancelBackfills(id);
     this.changed(id);
     this.recovery.release(id);
@@ -418,10 +418,12 @@ export class Transcript {
       }
     }
     for (const [key, value] of this.#live) {
-      if (id === undefined || value.session === id) this.#live.delete(key);
+      if (!retainLive && (id === undefined || value.session === id)) {
+        this.#live.delete(key);
+      }
     }
     if (id === undefined) this.buffers.reset();
-    else this.buffers.removeSession(id);
+    else if (!retainLive) this.buffers.removeSession(id);
     this.replay.reset(id);
     if (id) this.options.digest?.release(`v2-prefetch:${id}`);
   }
@@ -476,6 +478,14 @@ export class Transcript {
     this.recovery.release();
     for (const shell of this.#shells.values()) shell.controller.abort();
     this.#shells.clear();
+    // With no viewer, a broken native stream ends the retained append lease.
+    // Reconnect must not acquire bodies merely to settle an unviewed cache.
+    for (const [key, live] of this.#live) {
+      if (!this.#subscriptions.has(live.session)) {
+        this.#live.delete(key);
+        this.buffers.removeMessage(key, live.session);
+      }
+    }
   }
   observe(raw: NativeSession): void {
     const id = ids.encode(raw.id), baseline = this.#baselines.get(id);
@@ -497,7 +507,7 @@ export class Transcript {
     const key = boundaryKey(revert);
     const changed = this.#boundaries.has(id)
       ? this.#boundaries.get(id) !== key
-      : true;
+      : key !== boundaryKey(undefined);
     this.#boundaries.set(id, key);
     if (changed || force) this.invalidate(id);
     return changed || force;
@@ -1052,7 +1062,14 @@ export class Transcript {
       this.release(id);
       return;
     }
-    if (!this.#subscriptions.has(id)) return;
+    const retained = typeof d.assistantMessageID === "string" &&
+      this.#live.get(d.assistantMessageID)?.session === id;
+    if (
+      !this.#subscriptions.has(id) && !(retained &&
+        /^session\.(text\.|reasoning\.|step\.(streamed|ended|failed)$)/.test(
+          event.type,
+        ))
+    ) return;
     const sourceID = event.id?.replace(/^evt_/, "msg_");
     const contextFor = (messageID: string): MessageContext => {
       const baseline = this.#baselines.get(id);

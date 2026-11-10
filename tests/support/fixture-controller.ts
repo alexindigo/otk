@@ -586,6 +586,7 @@ try {
                     url: transport.url,
                     ...([
                         "transport-enrichment",
+                        "transport-page",
                         "transport-deleted-seen",
                         "messages-helper-pages",
                       ]
@@ -1094,13 +1095,14 @@ try {
               settled: boolean;
               error?: string;
             };
-            void client!.rpc("session.shell", {
+            const pending = client!.rpc("session.shell", {
               sessionID: browserSessionID(frame.params.sessionID),
               command: "echo never-forwarded",
               ...(profile === "transport-errors-late"
                 ? { agent: "missing-late-http-agent" }
                 : {}),
-            }).then(() => {
+            });
+            void pending.then(() => {
               result.settled = true;
             }, (error) => {
               result.settled = true;

@@ -188,7 +188,11 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         for (const request of end.requests) {
           const session = request.path.match(/^\/session\/(ses_[^/]+)/)?.[1];
           if (session) {
-            expect(`opcv1-${decodeURIComponent(session)}`).toBe(
+            expect(
+              `${initial.selected.split("-")[0]}-${
+                decodeURIComponent(session)
+              }`,
+            ).toBe(
               initial.selected,
             );
           }

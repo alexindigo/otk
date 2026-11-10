@@ -12,12 +12,13 @@ test.describe("native page", () => {
     const session = await state.native<{ id: string; nativeID: string }>(
       "/session",
       "POST",
-      { title: "Forty-second page" },
+      {
+        title: "Forty-second page",
+        messages: [{
+          parts: [{ type: "text", text: "Seed before the held native page" }],
+        }],
+      },
     );
-    await state.native(`/session/${session.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text: "Seed before the held native page" }],
-    });
     const frames = await wire(page);
     await state.controller.call("scenario", {
       lease: state.lease.lease,
@@ -47,8 +48,8 @@ test.describe("native page", () => {
       observations.push({ elapsed: performance.now() - start, loading: true });
     };
     await throughDuration(16_000, inspect);
-    await state.native(`/session/${session.id}/message`, "POST", {
-      noReply: true,
+    await state.queue(["Held page event reply"]);
+    await state.native(`/session/${session.id}/prompt_async`, "POST", {
       parts: [{ type: "text", text: "Event arrived during the held page" }],
     });
     await expect.poll(() =>

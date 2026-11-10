@@ -238,7 +238,8 @@ export function sessionActions(ports: {
             (api) => api.session.shell({ sessionID, command: input.command }),
             operation,
           );
-          if (operation) await client.settled(sessionID, operation);
+          // Native shell joins its own shell lifetime before replying. It is not
+          // a session execution, so execution.wait cannot certify this effect.
         });
       },
     },

@@ -11,6 +11,16 @@ export class V2MissingSession extends HarnessError {
     super("session", "That session is no longer available.");
   }
 }
+export class V2HttpFailure extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: { message: string; kind?: string; ref?: string },
+    readonly _tag?: string,
+    cause?: unknown,
+  ) {
+    super(detail.message, { cause });
+  }
+}
 /** One endpoint generation. Re-discovery replaces this owner, never the service. */
 export class V2Client {
   readonly readiness: NativeReadiness;
@@ -53,6 +63,7 @@ export class V2Client {
     operation?: OperationContext;
     dispatched: boolean;
     observation?: boolean;
+    failure?: V2HttpFailure;
   }>();
   /** The stream aborts this generation first, then joins its actual SDK I/O. */
   async idle(): Promise<void> {
@@ -98,6 +109,25 @@ export class V2Client {
             "Opencode authentication failed (401).",
           );
         }
+        if (effect && !effect.observation && !response.ok) {
+          let body: Record<string, unknown> = {};
+          try {
+            const value = await response.clone().json();
+            if (value && typeof value === "object" && !Array.isArray(value)) {
+              body = value;
+            }
+          } catch { /* Non-JSON rejection still retains its HTTP status. */ }
+          const data = body.data && typeof body.data === "object"
+            ? body.data as Record<string, unknown>
+            : body;
+          effect.failure = new V2HttpFailure(response.status, {
+            message: typeof data.message === "string"
+              ? data.message
+              : `Opencode request failed (${response.status}).`,
+            ...(typeof body.name === "string" ? { kind: body.name } : {}),
+            ...(typeof data.ref === "string" ? { ref: data.ref } : {}),
+          }, typeof body._tag === "string" ? body._tag : undefined);
+        }
         return response;
       },
     });
@@ -119,7 +149,11 @@ export class V2Client {
   ): Promise<T | undefined> {
     this.signal.throwIfAborted();
     operation?.signal.throwIfAborted();
-    const context = { operation, dispatched: false };
+    const context: {
+      operation?: OperationContext;
+      dispatched: boolean;
+      failure?: V2HttpFailure;
+    } = { operation, dispatched: false };
     try {
       const exchange = this.#own(
         this.#effects.run(context, () => run(this.#api)),
@@ -136,14 +170,24 @@ export class V2Client {
       if (known instanceof OperationFailure) throw known;
       if (
         known instanceof HarnessError ||
+        context.failure && context.failure.status >= 400 &&
+          context.failure.status < 500 ||
         tag &&
           /(?:Invalid|NotFound|Busy|Unauthorized|Validation|Denied|Conflict|AttachmentError)/
             .test(tag)
       ) {
-        throw new OperationFailure("rejected", "native.rejected", cause);
+        throw new OperationFailure(
+          "rejected",
+          "native.rejected",
+          context.failure ?? cause,
+        );
       }
       if (!context.dispatched) throw cause;
-      throw new OperationFailure("unknown", "native.unknown", cause);
+      throw new OperationFailure(
+        "unknown",
+        "native.unknown",
+        context.failure ?? cause,
+      );
     }
   }
   /** Native wait is a read-only POST; it must outlive finite-read deadlines. */

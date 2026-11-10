@@ -2,12 +2,61 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { type OperationContext, OperationFailure } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
-import { V2Client, V2MissingSession } from "../client.ts";
+import { V2Client, V2HttpFailure, V2MissingSession } from "../client.ts";
 const service = {
   endpoint: { url: "http://127.0.0.1:42" },
   version: "2.2.6",
   pid: 42,
 };
+
+Deno.test("V2 effect diagnostics retain HTTP status/ref and native settled tags independently of certainty", async () => {
+  const client = new V2Client(
+    service,
+    1000,
+    new AbortController().signal,
+    () =>
+      Promise.resolve(
+        Response.json({
+          name: "ProxyFailure",
+          data: { message: "Unavailable", ref: "proxy-ref" },
+        }, { status: 503 }),
+      ),
+  );
+  const error = await assertRejects(
+    () =>
+      client.effect((api) =>
+        api.session.shell({ sessionID: "ses_one", command: "true" })
+      ),
+    OperationFailure,
+  );
+  assertEquals(error.outcome, "unknown");
+  let cause: unknown = error;
+  while (
+    cause && typeof cause === "object" && !(cause instanceof V2HttpFailure)
+  ) cause = Reflect.get(cause, "cause");
+  assertEquals(cause instanceof V2HttpFailure && cause.status, 503);
+  assertEquals(cause instanceof V2HttpFailure && cause.detail.ref, "proxy-ref");
+  const settled = new V2Client(
+    service,
+    1000,
+    new AbortController().signal,
+    () =>
+      Promise.resolve(
+        Response.json({ _tag: "FormNotFoundError", message: "Settled" }, {
+          status: 404,
+        }),
+      ),
+  );
+  assertEquals(
+    await settled.effect(
+      (api) =>
+        api.session.form.cancel({ sessionID: "ses_one", formID: "form_one" }),
+      undefined,
+      ["FormNotFoundError"],
+    ),
+    undefined,
+  );
+});
 
 Deno.test("V2 finite reads retain the shared native permission through SDK body settlement and release late grants", async () => {
   const owner = new AbortController(),
@@ -59,6 +108,28 @@ Deno.test("V2 finite reads retain the shared native permission through SDK body 
   await rejected;
   assertEquals(dispatched, false);
   assertEquals(releases, 2);
+});
+
+Deno.test("V2 effect HTTP provenance tolerates non-record error bodies", async () => {
+  for (const body of [null, [], "unknown"]) {
+    const client = new V2Client(
+      service,
+      1000,
+      new AbortController().signal,
+      () => Promise.resolve(Response.json(body, { status: 503 })),
+    );
+    const failure = await assertRejects(
+      () =>
+        client.effect((api) =>
+          api.session.shell({ sessionID: "ses_one", command: "true" })
+        ),
+      OperationFailure,
+    );
+    assertEquals(
+      failure.cause instanceof V2HttpFailure && failure.cause.status,
+      503,
+    );
+  }
 });
 
 Deno.test("V2 effects fence every exchange, do not expire at finite-read deadlines, and classify lost outcomes without replay", async () => {

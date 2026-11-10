@@ -23,6 +23,7 @@ export class V2NativeDb {
   readonly identity: string;
   readonly columns: Set<string>;
   readonly messageClocks: boolean;
+  readonly worktreeColumns: Set<string>;
   constructor(
     readonly file: string,
     readonly observe?: (
@@ -55,6 +56,11 @@ export class V2NativeDb {
       );
       this.messageClocks = ["session_id", "seq", "type", "time_created", "data"]
         .every((name) => messages.has(name));
+      this.worktreeColumns = new Set(
+        db.prepare("PRAGMA table_info(worktree)").all().map((row) =>
+          String(row.name)
+        ),
+      );
     } catch (error) {
       db.close();
       throw error;
@@ -84,6 +90,28 @@ export class V2NativeDb {
       (this.columns.has("time_archived")
         ? "s.time_archived"
         : "NULL AS time_archived");
+  }
+  /** Optional saved topology, paged in this worker's already source-proven DB. */
+  worktrees(
+    projectID: string,
+    after: string,
+    limit: number,
+  ): { directory: string; strategy?: string }[] | undefined {
+    if (
+      !["project_id", "directory"].every((name) =>
+        this.worktreeColumns.has(name)
+      )
+    ) return;
+    this.observe?.("worktree-inventory");
+    const strategy = this.worktreeColumns.has("strategy")
+      ? "strategy"
+      : "NULL AS strategy";
+    return this.db.prepare(
+      `SELECT directory,${strategy} FROM worktree WHERE project_id=? AND directory>? ORDER BY directory LIMIT ?`,
+    ).all(projectID, after, limit).map((row) => ({
+      directory: String(row.directory),
+      ...(typeof row.strategy === "string" ? { strategy: row.strategy } : {}),
+    }));
   }
   #metadata(row: Record<string, unknown>): SessionMetadata {
     return {

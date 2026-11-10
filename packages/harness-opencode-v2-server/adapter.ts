@@ -7,6 +7,7 @@ import {
   HarnessError,
   type HarnessSink,
   type ProviderReadPort,
+  SessionErrors,
   SessionIndex,
 } from "@otk/harness";
 import type {
@@ -14,10 +15,15 @@ import type {
   ContentSession,
   SessionMetadata,
 } from "@otk/protocol";
+import {
+  type ErrorObservation,
+  OperationFailure,
+  sessionErrorMessage,
+} from "@otk/protocol";
 import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type V2Event, V2Stream } from "./stream.ts";
-import { type V2Client, V2MissingSession } from "./client.ts";
+import { type V2Client, V2HttpFailure, V2MissingSession } from "./client.ts";
 import { metadata, millis, session, type SessionFacts } from "./metadata.ts";
 import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
@@ -72,6 +78,26 @@ export class OpencodeV2ServerAdapter implements Harness {
   #activityCurrent = false;
   #observation = 0;
   #helperListener?: () => void;
+  #errors = new SessionErrors(
+    (id, state) => {
+      const entry = this.#index.getMetadata(id);
+      if (entry) this.#upsert(entry, state);
+      if (this.transcript.buffers.subscribed(id)) {
+        this.#sink?.content(id, {
+          op: "session.error",
+          error: sessionErrorMessage(state),
+          errorState: state,
+        });
+      }
+    },
+    (id) =>
+      !!this.#sink &&
+      (!!this.#index.getMetadata(id) || this.transcript.buffers.subscribed(id)),
+    (id) =>
+      this.#sink
+        ? this.#index.getMetadata(id)?.attention.errorState
+        : undefined,
+  );
   constructor(
     readonly config: OpencodeV2ServerConfig,
     initial?: DiscoveredService,
@@ -234,7 +260,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.
       }
       : {};
-    this.capabilities = Object.freeze({
+    const capabilities: Capabilities = {
       ...digestCapabilities,
       ...catalogCapabilities,
       prompt: this.prompts,
@@ -293,7 +319,48 @@ export class OpencodeV2ServerAdapter implements Harness {
           }
         },
       }),
-    });
+    };
+    // Session command diagnostics share one owner with native execution events.
+    // Wrapping the capability lifetime keeps independent HTTP and event provenance.
+    if (capabilities.shell) {
+      const shell = capabilities.shell;
+      capabilities.shell = {
+        shell: (input, operation) =>
+          this.#action(
+            input.sessionID,
+            "shell",
+            operation,
+            () => shell.shell(input, operation),
+          ),
+      };
+    }
+    if (capabilities.commands) {
+      const commands = capabilities.commands;
+      capabilities.commands = {
+        ...commands,
+        command: (input, operation) =>
+          this.#action(
+            input.sessionID,
+            "command",
+            operation,
+            () => commands.command(input, operation),
+          ),
+      };
+    }
+    if (capabilities.sessionActions) {
+      const actions = capabilities.sessionActions;
+      capabilities.sessionActions = {
+        ...actions,
+        compact: (id, model, operation) =>
+          this.#action(
+            id,
+            "compact",
+            operation,
+            () => actions.compact(id, model, operation),
+          ),
+      };
+    }
+    this.capabilities = Object.freeze(capabilities);
     const version = () => this.#version;
     this.core = {
       kind: "opencode-v2-server",
@@ -325,6 +392,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       stop: async () => {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
+        this.#errors.reset();
         await this.catalogs?.stop();
         this.#helperListener?.();
         this.#helperListener = undefined;
@@ -339,7 +407,10 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#shells.clear();
         this.#finished.clear();
       },
-      subscriptions: (id, count) => this.transcript.subscriptions(id, count),
+      subscriptions: (id, count) => {
+        this.transcript.subscriptions(id, count);
+        if (!count) this.#errors.release(id);
+      },
       hydrate: (keys, signal = new AbortController().signal) =>
         this.#hydrate(keys, signal),
       identities: async (keys, signal) => {
@@ -383,7 +454,9 @@ export class OpencodeV2ServerAdapter implements Harness {
           signal,
         );
         this.transcript.observe(raw);
-        return await revertSession(this.stream.client, raw, signal);
+        return this.#sessionErrors(
+          await revertSession(this.stream.client, raw, signal),
+        );
       },
       listSessions: async (input, signal = new AbortController().signal) => {
         if (input.parentID) ids.decode(input.parentID);
@@ -424,7 +497,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             signal,
           );
           for (const raw of page.data) {
-            result.push(session(raw));
+            result.push(this.#sessionErrors(session(raw)));
             this.#merge(metadata(raw));
           }
           const next = page.cursor.next;
@@ -436,8 +509,24 @@ export class OpencodeV2ServerAdapter implements Harness {
         } while (cursor);
         return result;
       },
-      listMessages: (id, input, signal) =>
-        this.transcript.page(id, input?.before, signal, input?.publish),
+      listMessages: async (id, input, signal) => {
+        const decorate = (page: import("@otk/protocol").MessagePage) => ({
+          ...page,
+          ...(page.session
+            ? { session: this.#sessionErrors(page.session) }
+            : {}),
+        });
+        return decorate(
+          await this.transcript.page(
+            id,
+            input?.before,
+            signal,
+            input?.publish
+              ? (page) => input.publish!(decorate(page))
+              : undefined,
+          ),
+        );
+      },
       createSession: async (input, operation) => {
         const client = this.stream.client;
         const parentID = input.parentID === undefined
@@ -474,7 +563,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
     };
   }
-  #upsert(entry: SessionMetadata): void {
+  #upsert(
+    entry: SessionMetadata,
+    errors = this.#errors.snapshot(entry.id),
+  ): void {
     if (!this.#sink) return;
     const pending = pendingAttention(
       entry.id,
@@ -484,7 +576,12 @@ export class OpencodeV2ServerAdapter implements Harness {
     );
     entry = {
       ...entry,
-      attention: { ...entry.attention, ...pending.attention },
+      attention: {
+        ...entry.attention,
+        ...pending.attention,
+        errorState: errors,
+        error: sessionErrorMessage(errors),
+      },
       ...(pending.stale ? { activityAuthority: "unknown" } : {}),
     };
     if (!this.#sink.index) this.#index.upsertMetadata(entry);
@@ -494,6 +591,56 @@ export class OpencodeV2ServerAdapter implements Harness {
     for (const key of [id, ...this.#index.ancestors(id)]) {
       const entry = this.#index.getMetadata(key);
       if (entry) this.#upsert(entry);
+    }
+  }
+  #sessionErrors(value: ContentSession): ContentSession {
+    const errorState = this.#errors.snapshot(value.id);
+    return { ...value, errorState, error: sessionErrorMessage(errorState) };
+  }
+  async #action<T>(
+    id: string,
+    kind: NonNullable<ErrorObservation["operation"]>,
+    operation: import("@otk/protocol").OperationContext | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const token = this.#errors.begin(id, kind, operation?.key.key);
+    try {
+      return await run();
+    } catch (error) {
+      if (!operation?.signal.aborted && this.#sink) {
+        let cause: unknown = error;
+        const seen = new Set<unknown>();
+        while (
+          cause && typeof cause === "object" && !seen.has(cause) &&
+          !(cause instanceof V2HttpFailure)
+        ) {
+          seen.add(cause);
+          cause = Reflect.get(cause, "cause");
+        }
+        this.#errors.http(token, {
+          ...(cause instanceof V2HttpFailure
+            ? { ...cause.detail, status: cause.status }
+            : {
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          ...(error instanceof OperationFailure
+            ? {
+              failure: {
+                code: error.code,
+                retry: error.outcome === "unknown"
+                  ? "none" as const
+                  : error.outcome === "unavailable"
+                  ? "same-intent" as const
+                  : "new-intent" as const,
+                diagnosticID: crypto.randomUUID(),
+              },
+            }
+            : {}),
+        });
+      }
+      throw error;
+    } finally {
+      this.#errors.settled(token);
     }
   }
   #merge(row: SessionMetadata): void {
@@ -588,6 +735,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     if (generation !== this.#generation) return;
+    this.#errors.remove(id);
     this.transcript.release(id);
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
@@ -994,6 +1142,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       reason: "metadata",
     }]);
     if (event.type === "session.deleted") {
+      this.#errors.remove(ids.encode(sid));
       const previous = this.#index.getMetadata(ids.encode(sid));
       this.#running.delete(sid);
       this.#finished.delete(ids.encode(sid));
@@ -1007,8 +1156,14 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     const previousRun = this.#running.get(sid);
+    this.#errors.register(ids.encode(sid));
     if (event.type === "session.execution.started") {
       this.#running.set(sid, event.created ?? Date.now());
+      // A busy edge only clears an existing diagnostic. Publishing an empty
+      // error transition for every healthy run needlessly invalidates content.
+      if (this.#errors.snapshot(ids.encode(sid)).observations.length) {
+        this.#errors.clear(ids.encode(sid));
+      }
     }
     const previous = this.#index.getMetadata(ids.encode(sid));
     const raw = await readSessionActivity(client, sid, signal);
@@ -1059,7 +1214,21 @@ export class OpencodeV2ServerAdapter implements Harness {
       };
     }
     if (event.type === "session.execution.failed" && !this.#running.has(sid)) {
-      entry.attention.error = "Execution failed.";
+      const error = event.data.error;
+      this.#errors.native(ids.encode(sid), {
+        message: error && typeof error === "object" &&
+            typeof Reflect.get(error, "message") === "string"
+          ? String(Reflect.get(error, "message"))
+          : "Execution failed.",
+      }, event.id);
+    }
+    if (
+      event.type === "session.execution.interrupted" && !this.#running.has(sid)
+    ) {
+      this.#errors.native(ids.encode(sid), {
+        message: "Execution interrupted.",
+        kind: "MessageAbortedError",
+      }, event.id);
     }
     this.#execution(
       entry,

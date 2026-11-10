@@ -152,6 +152,85 @@ export class V2SessionScale {
     const recipe = await this.validate(path);
     return await this.build(recipe.variant, fake);
   }
+  /** Paired load populations use the same stock import seam as scale recipes. */
+  static async loadPopulation(
+    fake: FakeLlm,
+    population: number,
+    projects: number,
+  ) {
+    const native = await OpencodeV2Test.start(fake);
+    const control = await native.createSession("Load import schema");
+    const sample = await native.api.session.get({
+      sessionID: control.nativeID,
+    });
+    await native.api.session.remove({ sessionID: control.nativeID });
+    const directories = Array.from(
+      { length: projects },
+      (_, i) => join(native.root, "discovered", `project-${i}`),
+    );
+    for (const directory of directories) {
+      await Deno.mkdir(directory, { recursive: true });
+    }
+    for (let offset = 0; offset <= population; offset += 8) {
+      await Promise.all(
+        Array.from(
+          { length: Math.min(8, population + 1 - offset) },
+          async (_, n) => {
+            const i = offset + n, id = `ses_scale${String(i).padStart(6, "0")}`;
+            const directory = i === 0
+              ? native.directory
+              : directories[(i - 1) % projects];
+            await native.api.experimental.session.import({
+              info: {
+                ...sample,
+                id,
+                title: `Load session ${i}`,
+                location: { directory },
+                time: { created: 1700000000000, updated: 1700000000010 },
+              },
+              messages: [
+                {
+                  id: `msg_load${i}_0`,
+                  type: "user",
+                  text: `Unseen complete session ${i}, message 0`,
+                  time: { created: 1700000000000 },
+                },
+                {
+                  id: `msg_load${i}_1`,
+                  type: "assistant",
+                  agent: "build",
+                  model: { providerID: "fake", id: "scripted" },
+                  content: [{
+                    type: "text",
+                    text: `Unseen complete session ${i}, message 1`,
+                  }],
+                  time: {
+                    created: 1700000000001,
+                    streamed: 1700000000009,
+                    completed: 1700000000010,
+                  },
+                },
+              ],
+              location: { directory },
+            });
+          },
+        ),
+      );
+    }
+    const db = new DatabaseSync(native.db, { readOnly: true });
+    try {
+      const sessions = db.prepare("SELECT count(*) n FROM session_v2").get();
+      const messages = db.prepare(
+        "SELECT count(*) n FROM session_message WHERE session_id<>?",
+      ).get("ses_scale000000");
+      if (sessions?.n !== population + 1 || messages?.n !== population * 2) {
+        throw new Error("Wrong imported load population");
+      }
+    } finally {
+      db.close();
+    }
+    return native;
+  }
   static async build(
     variant: ScaleVariant,
     fake: FakeLlm,

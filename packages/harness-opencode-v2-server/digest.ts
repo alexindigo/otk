@@ -116,6 +116,12 @@ export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
   "sessions.list": sessionListReadCodec,
 };
 
+type PreparedV2 = {
+  client: V2Client;
+  projects: Awaited<
+    ReturnType<import("./client.ts").OpenCodeClient["project"]["list"]>
+  >;
+};
 /** The same worker/scheduler/native permission as V1; no second SQL owner. */
 export class OpencodeV2DigestSink implements DigestSink {
   readonly identity = "opencode-v2-server";
@@ -124,6 +130,7 @@ export class OpencodeV2DigestSink implements DigestSink {
   readonly #lists = new V2SessionLists();
   #native?: V2NativeDb;
   #client?: V2Client;
+  #prepared?: PreparedV2;
   #connection = 0;
   #closed = false;
   #lifetime = new AbortController();
@@ -267,6 +274,7 @@ export class OpencodeV2DigestSink implements DigestSink {
     if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
+    this.#prepared = undefined;
     this.#transcripts.connection(value);
     this.#resetDiscovery();
     this.#lists.reset();
@@ -319,13 +327,22 @@ export class OpencodeV2DigestSink implements DigestSink {
       this.#lists.reset();
       this.#resetDiscovery();
       this.#source = undefined;
+      this.#prepared = undefined;
       throw new Error("V2 native database was replaced");
     }
   }
   async #io<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
     return await this.#readiness.run(signal, run);
   }
-  async #prepare(
+  async #prepare(signal: AbortSignal, refresh = false): Promise<PreparedV2> {
+    this.#check(signal);
+    if (refresh) this.#prepared = undefined;
+    if (this.#prepared && this.#native) return this.#prepared;
+    const value = await this.#prepareFresh(signal);
+    this.#prepared = value;
+    return value;
+  }
+  async #prepareFresh(
     signal: AbortSignal,
   ): Promise<
     {
@@ -341,6 +358,7 @@ export class OpencodeV2DigestSink implements DigestSink {
       signal,
       () => discoverV2(this.config.serviceFile, signal),
     );
+    this.#check(signal, connection);
     const source = `${service.endpoint.url}:${service.pid}:${service.version}`;
     if (source !== this.#source) {
       this.#native?.close();
@@ -489,15 +507,32 @@ export class OpencodeV2DigestSink implements DigestSink {
     directory?: string,
   ): Promise<{ projects: ProjectSeed[]; hints?: string[] }> {
     const connection = this.#connection,
-      { client, projects: reported } = await this.#prepare(signal);
+      { client, projects: reported } = await this.#prepare(signal, true);
     const inventory: NativeProjectTopology[] = [];
     for (const project of reported) {
       this.#check(signal, connection);
       try {
-        const worktrees = await client.read(
-          (api) => api.worktree.list({ projectID: project.id }, { signal }),
-          signal,
+        let worktrees = this.#native?.worktrees(
+          project.id,
+          "",
+          this.policy.batch,
         );
+        if (worktrees) {
+          let page = worktrees;
+          while (page.length === this.policy.batch) {
+            await this.#yield(signal);
+            this.#check(signal, connection);
+            page = this.#native!.worktrees(
+              project.id,
+              page.at(-1)!.directory,
+              this.policy.batch,
+            )!;
+            worktrees.push(...page);
+          }
+        } else {worktrees = await client.read(
+            (api) => api.worktree.list({ projectID: project.id }, { signal }),
+            signal,
+          );}
         inventory.push({ ...project, worktrees });
       } catch (error) {
         this.#check(signal, connection);

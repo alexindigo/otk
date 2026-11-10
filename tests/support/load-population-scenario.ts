@@ -6,7 +6,14 @@ import { start } from "../../main.ts";
 import { cfg } from "./config.ts";
 import { FakeLlm } from "./fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "./opencode.ts";
-import { nativeBinary, nativeVersion } from "./native.ts";
+import { nativeBinary, nativeKind, nativeVersion } from "./native.ts";
+import { V2SessionScale } from "./v2-session-scale.ts";
+import {
+  browserScenarioPath,
+  browserSessionID,
+  BrowserV2Native,
+} from "./browser-native.ts";
+import { useNativeDiscovery } from "./native-testing.ts";
 import { resources } from "./resources.ts";
 import { SessionScale } from "./session-scale.ts";
 import type { ControlRequest, TestLease } from "./fixture-control.ts";
@@ -30,99 +37,104 @@ export async function loadPopulationScenario(large: boolean) {
   };
   const population = large ? 4000 : 200, projects = large ? 130 : 10;
   const selectedNative = "ses_scale000000",
-    selected = `opcv1-${selectedNative}`;
+    selected = browserSessionID(selectedNative);
   const fake = new FakeLlm();
-  await SessionScale.generate("sessions", fake);
-  const { key } = await SessionScale.identity("sessions");
-  const native = await OpencodeTest.start(fake, { bash: "ask" }, {
-    snapshot: key,
-    prepare(oc) {
-      // Edit only this stopped writable clone, never a running native or template.
-      for (let i = 0; i < projects; i++) {
-        Deno.mkdirSync(join(oc.root, "discovered", `project-${i}`), {
-          recursive: true,
-        });
-      }
-      const db = new DatabaseSync(join(oc.root, "data/opencode/opencode.db"));
-      try {
-        db.exec("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE");
-        db.prepare(
-          "DELETE FROM session WHERE id NOT IN (SELECT id FROM session ORDER BY id LIMIT ?)",
-        ).run(population + 1);
-        db.prepare("DELETE FROM message WHERE session_id<>?").run(
-          selectedNative,
-        );
-        const rows = db.prepare(
-          "SELECT id FROM session WHERE id<>? ORDER BY id",
-        ).all(selectedNative);
-        const update = db.prepare(
-          "UPDATE session SET directory=?,parent_id=NULL,time_archived=NULL,revert=NULL WHERE id=?",
-        );
-        const samples = db.prepare(
-          "SELECT data FROM message WHERE session_id=? ORDER BY id LIMIT 2",
-        ).all(selectedNative);
-        if (samples.length !== 2) {
-          throw new Error("Missing characterized native headers");
+  const v2 = nativeKind === "opencode-v2-server";
+  if (!v2) await SessionScale.generate("sessions", fake);
+  const key = v2 ? undefined : (await SessionScale.identity("sessions")).key;
+  const native = v2
+    ? new BrowserV2Native(
+      await V2SessionScale.loadPopulation(fake, population, projects),
+    )
+    : await OpencodeTest.start(fake, { bash: "ask" }, {
+      snapshot: key,
+      prepare(oc) {
+        // Edit only this stopped writable clone, never a running native or template.
+        for (let i = 0; i < projects; i++) {
+          Deno.mkdirSync(join(oc.root, "discovered", `project-${i}`), {
+            recursive: true,
+          });
         }
-        const message = db.prepare(
-          "INSERT INTO message(id,session_id,time_created,time_updated,data) VALUES(?,?,?,?,?)",
-        );
-        const part = db.prepare(
-          "INSERT INTO part(id,message_id,session_id,time_created,time_updated,data) VALUES(?,?,?,?,?,?)",
-        );
-        rows.forEach((row, i) => {
-          const directory = join(
-            oc.root,
-            "discovered",
-            `project-${i % projects}`,
+        const db = new DatabaseSync(join(oc.root, "data/opencode/opencode.db"));
+        try {
+          db.exec("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE");
+          db.prepare(
+            "DELETE FROM session WHERE id NOT IN (SELECT id FROM session ORDER BY id LIMIT ?)",
+          ).run(population + 1);
+          db.prepare("DELETE FROM message WHERE session_id<>?").run(
+            selectedNative,
           );
-          update.run(directory, row.id);
-          const userID = `msg_load${String(i * 2).padStart(9, "0")}`;
-          for (let rank = 0; rank < 2; rank++) {
-            const id = `msg_load${String(i * 2 + rank).padStart(9, "0")}`;
-            const data = JSON.parse(String(samples[rank].data));
-            if (rank) {
-              data.parentID = userID;
-              data.path = { cwd: directory, root: directory };
-            }
-            message.run(
-              id,
-              row.id,
-              1700000000000 + rank * 10,
-              1700000000000 + rank * 10,
-              JSON.stringify(data),
+          const rows = db.prepare(
+            "SELECT id FROM session WHERE id<>? ORDER BY id",
+          ).all(selectedNative);
+          const update = db.prepare(
+            "UPDATE session SET directory=?,parent_id=NULL,time_archived=NULL,revert=NULL WHERE id=?",
+          );
+          const samples = db.prepare(
+            "SELECT data FROM message WHERE session_id=? ORDER BY id LIMIT 2",
+          ).all(selectedNative);
+          if (samples.length !== 2) {
+            throw new Error("Missing characterized native headers");
+          }
+          const message = db.prepare(
+            "INSERT INTO message(id,session_id,time_created,time_updated,data) VALUES(?,?,?,?,?)",
+          );
+          const part = db.prepare(
+            "INSERT INTO part(id,message_id,session_id,time_created,time_updated,data) VALUES(?,?,?,?,?,?)",
+          );
+          rows.forEach((row, i) => {
+            const directory = join(
+              oc.root,
+              "discovered",
+              `project-${i % projects}`,
             );
-            part.run(
-              `prt_load${i}_${rank}`,
-              id,
-              row.id,
-              1700000000000 + rank * 10,
-              1700000000000 + rank * 10,
-              JSON.stringify({
-                type: "text",
-                text: `Unseen complete session ${i}, message ${rank}`,
-              }),
+            update.run(directory, row.id);
+            const userID = `msg_load${String(i * 2).padStart(9, "0")}`;
+            for (let rank = 0; rank < 2; rank++) {
+              const id = `msg_load${String(i * 2 + rank).padStart(9, "0")}`;
+              const data = JSON.parse(String(samples[rank].data));
+              if (rank) {
+                data.parentID = userID;
+                data.path = { cwd: directory, root: directory };
+              }
+              message.run(
+                id,
+                row.id,
+                1700000000000 + rank * 10,
+                1700000000000 + rank * 10,
+                JSON.stringify(data),
+              );
+              part.run(
+                `prt_load${i}_${rank}`,
+                id,
+                row.id,
+                1700000000000 + rank * 10,
+                1700000000000 + rank * 10,
+                JSON.stringify({
+                  type: "text",
+                  text: `Unseen complete session ${i}, message ${rank}`,
+                }),
+              );
+            }
+          });
+          if (rows.length !== population) {
+            throw new Error("Wrong load population");
+          }
+          const totals = db.prepare(
+            "SELECT count(*) n FROM message WHERE session_id<>?",
+          ).get(selectedNative);
+          if (totals?.n !== population * 2) {
+            throw new Error(
+              "Unseen population must contain complete message pairs",
             );
           }
-        });
-        if (rows.length !== population) {
-          throw new Error("Wrong load population");
+          db.exec("COMMIT");
+        } finally {
+          db.close();
         }
-        const totals = db.prepare(
-          "SELECT count(*) n FROM message WHERE session_id<>?",
-        ).get(selectedNative);
-        if (totals?.n !== population * 2) {
-          throw new Error(
-            "Unseen population must contain complete message pairs",
-          );
-        }
-        db.exec("COMMIT");
-      } finally {
-        db.close();
-      }
-      return Promise.resolve();
-    },
-  });
+        return Promise.resolve();
+      },
+    });
   fake.strict();
   const requests: {
     at: number;
@@ -137,8 +149,9 @@ export async function loadPopulationScenario(large: boolean) {
       requests.push({
         at: Date.now(),
         method: request.method,
-        path: url.pathname,
-        directory: url.searchParams.get("directory"),
+        path: browserScenarioPath(native, url.pathname, request.method),
+        directory: url.searchParams.get("directory") ??
+          request.headers.get("x-opencode-directory"),
       });
       return fetch(
         new Request(new URL(url.pathname + url.search, native.url), request),
@@ -152,6 +165,10 @@ export async function loadPopulationScenario(large: boolean) {
   config.state.path = join(native.root, "load-state");
   config.harness.url = `http://127.0.0.1:${proxy.addr.port}`;
   config.harness.db = native.db;
+  if (native instanceof BrowserV2Native) {
+    config.harness.type = "opencode-v2-server";
+    await useNativeDiscovery(native.native, config.harness.url);
+  }
   const app = await start(config);
   resources().defer("load application", () => app.stop());
   await waitFor(
@@ -168,7 +185,7 @@ export async function loadPopulationScenario(large: boolean) {
         {},
       ) as import("@otk/protocol").InboxBaseline;
       return Object.values(baseline.inbox.summaries ?? {}).reduce(
-        (sum, row) => sum + (row.sessionCount ?? 0),
+        (sum, row) => sum + ((row.direct ?? row).sessionCount ?? 0),
         0,
       );
     },
@@ -218,7 +235,7 @@ export async function loadPopulationScenario(large: boolean) {
             directory: native.directory,
             // Q1 supersedes startup catalog membership; scalar seeds prove the complete native population.
             count: Object.values(baseline.inbox.summaries ?? {}).reduce(
-              (sum, row) => sum + (row.sessionCount ?? 0),
+              (sum, row) => sum + ((row.direct ?? row).sessionCount ?? 0),
               0,
             ),
           };
