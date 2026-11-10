@@ -118,10 +118,11 @@ export class V2Stream {
       const generation = ++this.#generation;
       const owner = new AbortController();
       const current = AbortSignal.any([signal, owner.signal]);
+      let client: V2Client | undefined;
       try {
         const service = await this.ports.discover(current);
         current.throwIfAborted();
-        const client = new V2Client(
+        client = new V2Client(
           service,
           this.policy.requestms,
           current,
@@ -130,7 +131,7 @@ export class V2Stream {
         );
         await this.#consume(client, owner, current, generation, () => {
           this.#client = client;
-          this.ports.connected(client, generation);
+          this.ports.connected(client!, generation);
           admitted = true;
           delay = 1;
           ready.resolve();
@@ -147,6 +148,7 @@ export class V2Stream {
         owner.abort();
         this.#client = undefined;
         this.ports.disconnected(generation);
+        await client?.join();
       }
       if (!signal.aborted) {
         await new Promise<void>((resolve) => {

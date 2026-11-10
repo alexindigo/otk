@@ -258,6 +258,12 @@ not completion. Native summary requests remain in the harness adapter.
 from the respective `revert` and `restore` capabilities. Both validate session
 identity; revert additionally validates the boundary message. Neither operation
 adds confirmation or overlap detection around the backend's native semantics.
+The independently advertised `revertCode` port contributes `session.revertCode`;
+its boundary receipt includes the requested mode. A boundary ID alone cannot
+reconcile an uncertain mode change. Restore can reconcile a lost clear through
+the capability's read-only `settle` port and persisted execution watermark.
+`sessionArchive` independently contributes validated `session.archive` with a
+metadata-only completion receipt, without expanding V1's capability contract.
 
 `usage.get` requires a session and turn identity and delegates cancellation to
 the optional usage capability. The result includes only that turn's complete

@@ -10,11 +10,20 @@ export const sessionActionsRequestMetadata: Readonly<
   "session.delete": { kind: "mutation", pending: "Deleting session" },
   "session.fork": { kind: "mutation", pending: "Forking session" },
   "session.compact": { kind: "mutation", pending: "Compacting session" },
+  "session.archive": { kind: "mutation", pending: "Archiving session" },
 };
 export interface SessionActionsRequestReceipts {
+  "command-skill-activated": { sessionID: string; skillID: string };
   "session-renamed": CreatedSessionReceipt;
   "session-deleted": { completed: true };
   "session-compacted": { completed: true };
+  "session-archived": CreatedSessionReceipt;
+  "session-selection": {
+    sessionID: string;
+    agent?: string;
+    model?: { provider: string; model: string };
+    variant?: string;
+  };
 }
 
 export interface SessionActionsCapability {
@@ -39,8 +48,19 @@ export interface SessionActionsCapability {
 }
 export interface SessionActionsCapabilities {
   sessionActions: SessionActionsCapability;
+  sessionArchive: {
+    archive(
+      sessionID: string,
+      archived: boolean,
+      operation?: OperationContext,
+    ): Promise<ContentSession>;
+  };
 }
 export interface SessionActionsRpcMethods {
+  "session.archive": {
+    params: { sessionID: string; archived: boolean };
+    result: ContentSession;
+  };
   "session.rename": {
     params: { sessionID: string; title: string };
     result: ContentSession;

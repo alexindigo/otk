@@ -42,6 +42,7 @@ export interface SessionActions {
   prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
   abort(target?: Selection, options?: RequestOptions): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
+  archive(target: Selection, archived: boolean): Promise<ContentSession>;
   remove(target: Selection): Promise<void>;
   fork(target: Selection, through?: string): Promise<ContentSession>;
   compact(target: Selection, model: ModelRef): Promise<void>;
@@ -49,6 +50,7 @@ export interface SessionActions {
     target: Selection,
     messageID: string,
     options?: RequestOptions,
+    code?: boolean,
   ): Promise<ContentSession>;
   restore(target: Selection, options?: RequestOptions): Promise<ContentSession>;
   working(target: Selection): boolean;
@@ -276,12 +278,23 @@ export function createSessionActions(o: {
           ),
       );
     },
-    revert(target, messageID, options) {
+    archive(target, archived) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(
         target,
         () =>
-          rpc.call("session.revert", {
+          rpc.call("session.archive", {
+            sessionID: target.sessionID,
+            archived,
+          }),
+      );
+    },
+    revert(target, messageID, options, code = false) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      return act(
+        target,
+        () =>
+          rpc.call(code ? "session.revertCode" : "session.revert", {
             sessionID: target.sessionID,
             messageID,
           }, options),

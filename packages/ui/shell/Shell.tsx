@@ -245,6 +245,17 @@ export default function Shell(
   );
   const info = createMemo(actions.info);
   onCleanup(registerSessionActionCommands(commands, {
+    archiveAvailable: (target) =>
+      actions.eligibility(target).live &&
+      resources.connected(target.sidecarId) &&
+      resources.advertised(target.sidecarId, "sessionArchive"),
+    archived: (target) =>
+      resources.entry(target.sidecarId, target.sessionID)?.archived ??
+        (session.state.selection?.sidecarId === target.sidecarId &&
+            info()?.id === target.sessionID
+          ? info()?.archived
+          : undefined),
+    archive: actions.archive,
     available: (target) =>
       actions.eligibility(target).live &&
       resources.connected(target.sidecarId) &&

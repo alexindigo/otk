@@ -10,6 +10,8 @@ export interface RevertCapability {
 }
 export interface RevertCapabilities {
   revert: RevertCapability;
+  /** Independent advertisement for explicit file rollback. */
+  revertCode: RevertCapability;
 }
 export const legacyRevertCapabilities: readonly (keyof RevertCapabilities)[] = [
   "revert",

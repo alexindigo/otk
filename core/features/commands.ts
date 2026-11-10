@@ -9,7 +9,11 @@ import {
   nativeExecution,
   readExecution,
 } from "../requests/policies.ts";
-import { completionReceipt } from "./session-receipts.ts";
+import {
+  completionReceipt,
+  selectionReceipt,
+  skillReceipt,
+} from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.commands;
@@ -21,10 +25,18 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
     handler: (ctx, id) => capability.listCommands(id, ctx.execution?.signal),
   });
   rpc.register("session.command", {
-    execution: nativeExecution(
-      (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
-      receipt,
-    ),
+    execution: {
+      ...nativeExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        receipt,
+      ),
+      checkpoint: (value) =>
+        value.kind === skillReceipt.kind
+          ? skillReceipt.validate(value)
+          : value.kind === selectionReceipt.kind
+          ? selectionReceipt.validate(value)
+          : receipt.validate(value),
+    },
     params(p) {
       const model = p.model === undefined ? undefined : object(p.model),
         parts = p.parts === undefined ||

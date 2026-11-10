@@ -14,7 +14,30 @@ enter neutral protocol frames or browser config.
 SDK stays private. Native not-found tags establish absence; transport, timeout
 and malformed responses remain unavailable. Per-read async context carries
 caller cancellation through concurrent SDK calls, and aborted continuations
-cannot return late data. Native mutations need their separate effect owner.
+cannot return late data. `effect` fences each native exchange immediately before
+I/O, has no finite mutation deadline, and retains ambiguous outcomes as unknown.
+`sequence` serializes a whole same-session operation, including preparation,
+selection checkpoints and final settlement. Disconnect aborts and joins effects.
+
+Session actions use authoritative GETs after 204 metadata updates. Archive and
+code revert are independently advertised; V1 does not acquire either capability.
+Fork translates inclusive `through` to native exclusive `before` by source
+order, caps it at a staged revert, and maps proven empty prefixes to new empty
+roots. Its bounded fallback releases every body page and retains only scalar
+boundaries.
+
+Revert stages with `files:false`; Revert code changes stages with `files:true`.
+Neither commits or clears. Re-staging changes mode without waking execution.
+Restore clears only an existing stage, persists a pre-clear execution watermark,
+and joins native wait plus fresh terminal clocks. Lost clears reconcile through
+a read-only settlement port, never another clear. Only a successful next native
+prompt makes the history removal permanent. Preview reads retain at most 50
+oldest prompt previews and metadata-only recalled attachments. Mode-aware
+receipts never infer a lost code-revert outcome from its message ID alone.
+
+Shell remains non-LLM. Commands prepare all selected files before selection
+changes; successful switches checkpoint metadata before final dispatch. Commands
+and compaction join native settlement when called with an operation context.
 
 `V2Stream` owns one subscribed SSE generation. It waits for `server.connected`
 before snapshot reads, stages events under the injected operation/byte budgets,

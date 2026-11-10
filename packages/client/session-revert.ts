@@ -22,7 +22,7 @@ export interface RevertStrip {
   more: number;
   files: RevertInfo["files"];
 }
-type RevertIntent = "revert" | "restore" | "undo" | "redo";
+type RevertIntent = "revert" | "code" | "restore" | "undo" | "redo";
 export interface SessionRevertState {
   pending?: RevertIntent;
   error?: string;
@@ -32,7 +32,7 @@ export interface SessionRevertState {
 export interface SessionRevert {
   readonly state: SessionRevertState;
   matches(target: Selection): boolean;
-  revertTo(messageID: string): Promise<void>;
+  revertTo(messageID: string, code?: boolean): Promise<void>;
   restore(): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
@@ -115,7 +115,9 @@ export function createSessionRevert(options: {
     if (kind === "undo") {
       messageID = options.session.state.latestPrompt?.id;
     }
-    if ((kind === "undo" || kind === "revert") && !messageID) return;
+    if (
+      (kind === "undo" || kind === "revert" || kind === "code") && !messageID
+    ) return;
     const captured = { ...target }, current = generation;
     const group = options.actions.group?.(captured);
     const interrupt = group?.options("interrupt", captured.sessionID);
@@ -152,8 +154,13 @@ export function createSessionRevert(options: {
       store.update((state) => {
         state.key = change?.intent?.key;
       });
-      const result = kind === "revert" || kind === "undo"
-        ? await options.actions.revert(captured, messageID!, change)
+      const result = kind === "revert" || kind === "undo" || kind === "code"
+        ? await options.actions.revert(
+          captured,
+          messageID!,
+          change,
+          kind === "code",
+        )
         : await options.actions.restore(captured, change);
       if (!active()) return;
       // RPC completion admits the mutation. The selected transcript remains
@@ -166,7 +173,11 @@ export function createSessionRevert(options: {
             state.loading || state.continuity !== "ready" ||
             state.content.revert?.messageID !== boundary
           ) return false;
-          if (boundary === previousBoundary) return true;
+          if (
+            boundary === previousBoundary && kind !== "code" &&
+            JSON.stringify(state.content.revert?.files) ===
+              JSON.stringify(result.revert?.files)
+          ) return true;
           if (!state.clock || state.clock.epoch === previousEpoch) return false;
           return true;
         },
@@ -215,7 +226,7 @@ export function createSessionRevert(options: {
       return !!selected && selected.sidecarId === target.sidecarId &&
         selected.sessionID === target.sessionID;
     },
-    revertTo: (id) => run("revert", id),
+    revertTo: (id, code) => run(code ? "code" : "revert", id),
     restore: () => run("restore"),
     undo: () => run("undo"),
     redo: () => run("redo"),

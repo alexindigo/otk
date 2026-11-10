@@ -132,6 +132,17 @@ test("every native feature fences its backend effect, checkpoints only metadata 
         remove: (_id, operation) =>
           effect("session.delete", operation, undefined),
       },
+      sessionArchive: {
+        archive: (_id, archived, operation) =>
+          effect("session.archive", operation, { ...base, archived }),
+      },
+      revertCode: {
+        revert: (_id, messageID, operation) =>
+          effect("session.revertCode", operation, {
+            ...base,
+            revert: { messageID, messageCount: 1, files: [] },
+          }),
+      },
       revert: {
         revert: (_id, messageID, operation) =>
           effect("session.revert", operation, {
@@ -198,6 +209,7 @@ test("every native feature fences its backend effect, checkpoints only metadata 
     ["session.create", { directory: root }],
     ["session.fork", { sessionID: base.id }],
     ["session.rename", { sessionID: base.id, title: "Renamed" }],
+    ["session.archive", { sessionID: base.id, archived: true }],
     ["session.prompt", {
       sessionID: base.id,
       parts: [{ kind: "text", text: "private prompt" }],
@@ -219,6 +231,7 @@ test("every native feature fences its backend effect, checkpoints only metadata 
     }],
     ["session.abort", { sessionID: base.id }],
     ["session.revert", { sessionID: base.id, messageID: "boundary" }],
+    ["session.revertCode", { sessionID: base.id, messageID: "boundary" }],
     ["session.restore", { sessionID: base.id }],
     ["permission.reply", {
       sessionID: base.id,
@@ -289,6 +302,19 @@ test("every native feature fences its backend effect, checkpoints only metadata 
       })!;
       assertEquals(record.state, "succeeded");
       assert(!JSON.stringify(record).includes("private"), method);
+      if (
+        method === "session.revert" || method === "session.revertCode" ||
+        method === "session.restore"
+      ) {
+        assertEquals(
+          JSON.parse(record.receipt_json!).mode,
+          method === "session.revertCode"
+            ? "code"
+            : method === "session.restore"
+            ? "restore"
+            : "messages",
+        );
+      }
       await coordinator.stop();
       coordinator = new RequestCoordinator({
         registry,

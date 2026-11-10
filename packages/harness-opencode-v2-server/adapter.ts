@@ -18,6 +18,8 @@ import {
 import { Transcript } from "./transcript.ts";
 import type { DigestPort } from "@otk/harness";
 import { mapSession as session, millis } from "./map.ts";
+import { revertSession, sessionActions } from "./session-actions.ts";
+import { commands } from "./commands.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -27,6 +29,7 @@ export interface OpencodeV2ServerConfig {
     heartbeattimeout: number;
   };
   messages: import("@otk/protocol").MessagePolicy;
+  attachments?: import("@otk/protocol").AttachmentPolicy;
 }
 type NativeSession = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>;
 type Pending = {
@@ -123,34 +126,74 @@ export class OpencodeV2ServerAdapter implements Harness {
         : undefined,
     });
     this.capabilities = Object.freeze(
-      digest
-        ? {
-          usage: {
-            getUsage: async (
-              id: string,
-              turnID: string,
-              signal?: AbortSignal,
-            ) => {
-              ids.decode(id);
-              const clock = this.transcript.replay.clock(id),
-                version = this.transcript.replay.version(id);
-              const value = await digest.detail(
-                id,
-                turnID,
-                signal ?? new AbortController().signal,
+      {
+        commands: commands(() => this.stream.client, config.attachments),
+        ...sessionActions({
+          client: () => this.stream.client,
+          observed: (raw) => {
+            this.transcript.observe(raw);
+            // Native terminal clocks, not an old event, certify the action's
+            // current lamp. In particular Restore owns its clear-triggered run.
+            const busy = millis(raw.time.busy) > millis(raw.time.idle);
+            if (busy) this.#running.set(raw.id, millis(raw.time.busy));
+            else this.#running.delete(raw.id);
+            this.#upsert(this.#metadata(raw, busy));
+          },
+          removed: async (id, operation) => {
+            const client = this.stream.client;
+            const native = ids.decode(id);
+            const raw = await client.read(
+              (api) =>
+                api.session.get({ sessionID: native }, {
+                  signal: operation?.signal,
+                }),
+              operation?.signal,
+            );
+            const metadata = this.#metadata(raw, this.#running.has(native));
+            const intent = crypto.randomUUID(), generation = this.#generation;
+            await digest?.deleteIntent(id, intent, "begin", generation);
+            try {
+              await client.effect(
+                (api) => api.session.remove({ sessionID: native }),
+                operation,
               );
-              return { ...value, clock, version };
+              await digest?.deleteIntent(id, intent, "confirmed", generation);
+              await this.#deleted(id, metadata, generation);
+            } catch (error) {
+              await digest?.deleteIntent(id, intent, "failed", generation);
+              throw error;
+            }
+          },
+        }),
+        ...(digest
+          ? {
+            usage: {
+              getUsage: async (
+                id: string,
+                turnID: string,
+                signal?: AbortSignal,
+              ) => {
+                ids.decode(id);
+                const clock = this.transcript.replay.clock(id),
+                  version = this.transcript.replay.version(id);
+                const value = await digest.detail(
+                  id,
+                  turnID,
+                  signal ?? new AbortController().signal,
+                );
+                return { ...value, clock, version };
+              },
             },
-          },
-          digests: {
-            scope: (
-              owner: string,
-              value: { directory?: string; sessions: string[] },
-            ) => digest.scope(owner, value),
-            release: (owner: string) => digest.release(owner),
-          },
-        }
-        : {},
+            digests: {
+              scope: (
+                owner: string,
+                value: { directory?: string; sessions: string[] },
+              ) => digest.scope(owner, value),
+              release: (owner: string) => digest.release(owner),
+            },
+          }
+          : {}),
+      },
     );
     const version = () => this.#version;
     const unavailable = () =>
@@ -233,7 +276,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             sessionID: native,
           }, { signal }), signal);
         this.transcript.observe(raw);
-        return session(raw);
+        return await revertSession(this.stream.client, raw, signal);
       },
       listSessions: unavailable,
       listChildren: unavailable,
@@ -246,6 +289,24 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (!this.#sink) return;
     if (!this.#sink.index) this.#index.upsertMetadata(entry);
     this.#sink.indexUpsert(entry);
+  }
+  async #deleted(
+    id: string,
+    metadata: SessionMetadata | undefined,
+    generation: number,
+  ): Promise<void> {
+    if (generation !== this.#generation) return;
+    this.transcript.release(id);
+    this.#running.delete(ids.decode(id));
+    for (const [key, pending] of this.#pending) {
+      if (pending.sessionID === ids.decode(id)) this.#pending.delete(key);
+    }
+    if (this.digest) {
+      await this.digest.deleted(generation, id, Date.now(), metadata);
+    } else {
+      if (!this.#sink?.index) this.#index.remove(id);
+      this.#sink?.indexRemove(id);
+    }
   }
   #metadata(raw: NativeSession, busy: boolean): SessionMetadata {
     const mapped = session(raw);
@@ -388,6 +449,14 @@ export class OpencodeV2ServerAdapter implements Harness {
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    if (changedID && event.type === "session.deleted") {
+      await this.#deleted(
+        changedID,
+        this.#index.getMetadata(changedID),
+        generation,
+      );
+      return;
+    }
     if (
       changedID &&
       /^session\.tool\.(called|progress|success|failed)$/.test(event.type)
@@ -424,7 +493,9 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (typeof sid !== "string" || sid === "global") return;
     if (
       !/^session\.execution\./.test(event.type) &&
-      !/^(permission\.|form\.)/.test(event.type)
+      !/^(permission\.|form\.)/.test(event.type) &&
+      !/^session\.(created|forked|renamed|archived|unarchived|metadata.updated)$/
+        .test(event.type)
     ) return;
     if (event.type === "session.execution.started") {
       this.#running.set(sid, event.created ?? Date.now());

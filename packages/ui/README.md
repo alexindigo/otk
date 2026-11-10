@@ -982,7 +982,12 @@ local disclosure shows bounded prompt previews, times, Copy and file counts, the
 permanence note and an available neutral Restore action. Pending and errors
 remain in that composer area; rollback takes precedence over the fork note.
 Restore requires the separately advertised `restore` capability. No confirmation
-is added to the native file/conversation rollback.
+is added to the native file/conversation rollback. An independently advertised
+`revertCode` capability adds Revert code changes to the same prompt context
+menu. It uses the existing selected-session revert owner and remains hidden on
+backends without that capability. Session targets similarly offer Archive or
+Unarchive only with `sessionArchive`, using authoritative state and the shared
+CommandMenu. No overlay, style or local archive store is added.
 
 Primary notice content shares `ComposerNoticeRow`: disclosure, error and fork
 facts use one control-height row with the same leading icon slot and

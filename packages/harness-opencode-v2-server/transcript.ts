@@ -28,7 +28,6 @@ import {
 import {
   completeTokens,
   mapMessage,
-  mapSession,
   mapTool,
   type MessageContext,
   millis,
@@ -47,6 +46,7 @@ import { MessagePrefetchCache } from "./prefetch.ts";
 import { MessageRecovery } from "./recovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
+import { revertSession } from "./session-actions.ts";
 interface Baseline {
   raw: NativeSession;
   epoch: string;
@@ -54,6 +54,7 @@ interface Baseline {
   prompt?: LatestPrompt;
   contexts: Map<string, MessageContext>;
   source?: string;
+  presentation?: import("@otk/protocol").ContentSession;
 }
 interface Cursor {
   v: 2;
@@ -459,7 +460,10 @@ export class Transcript {
         controller: new AbortController(),
         contexts: new Map(),
       });
-    } else if (baseline) baseline.raw = raw;
+    } else if (baseline) {
+      baseline.raw = raw;
+      baseline.presentation = undefined;
+    }
   }
   #boundary(id: string, cutoff: string | null, force = false): boolean {
     const changed = this.#cutoffs.has(id)
@@ -740,6 +744,12 @@ export class Transcript {
         owner !== this.#baselines.get(id) ||
         owner.epoch !== this.replay.clock(id).epoch
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
+      owner.presentation ??= await revertSession(
+        this.reader.client(),
+        owner.raw,
+        signal,
+      );
+      signal.throwIfAborted();
       const sealed = capture.seal(), recovering = this.recovery.snapshot(id);
       const replacements = new Map<string, number>();
       sealed.events.forEach(({ event }, index) => {
@@ -805,7 +815,7 @@ export class Transcript {
         version: this.replay.version(id),
         from: capture.from,
         clock: sealed.clock,
-        session: mapSession(owner.raw),
+        session: owner.presentation,
         items,
         older: page.next
           ? encode({
@@ -1008,7 +1018,8 @@ export class Transcript {
       this.#boundary(
         id,
         cutoff,
-        event.type === "session.revert.committed" && !this.#cutoffs.has(id),
+        event.type === "session.revert.staged" ||
+          event.type === "session.revert.committed" && !this.#cutoffs.has(id),
       );
       return;
     }
