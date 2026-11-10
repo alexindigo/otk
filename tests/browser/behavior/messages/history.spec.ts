@@ -12,41 +12,66 @@ test(
   "messages.history-chips-compaction",
   { tag: ["@messages"] },
   async ({ state, page }) => {
+    const v2 = state.controller.info!.version.startsWith("2.");
     const session = await state.native<{ id: string; nativeID: string }>(
       "/session",
       "POST",
-      { title: "History details" },
-    );
-    const message = await state.native<{ info: { id: string } }>(
-      `/session/${session.id}/message`,
-      "POST",
       {
-        noReply: true,
-        parts: [{ type: "text", text: "Historical parts" }],
+        title: "History details",
+        ...(v2
+          ? {
+            messages: [{
+              type: "user",
+              text: "Historical parts",
+              files: [{
+                name: "fixture.txt",
+                mime: "text/plain",
+                data: "Zml4dHVyZQ==",
+                source: { type: "uri", uri: "file:///fixture.txt" },
+              }],
+              agents: [{ name: "general" }],
+            }, {
+              type: "compaction",
+              status: "completed",
+              reason: "manual",
+              summary: "",
+            }],
+          }
+          : {}),
       },
     );
-    const parts: Record<string, Json>[] = [
-      {
-        type: "file",
-        mime: "text/plain",
-        filename: "fixture.txt",
-        url: "file:///fixture.txt",
-      },
-      { type: "agent", name: "general" },
-      { type: "compaction", auto: false },
-    ];
-    for (const value of parts) {
-      const id = "prt_" + randomUUID().replaceAll("-", "");
-      await state.native(
-        `/session/${session.id}/message/${message.info.id}/part/${id}`,
-        "PATCH",
+    if (!v2) {
+      const message = await state.native<{ info: { id: string } }>(
+        `/session/${session.id}/message`,
+        "POST",
         {
-          id,
-          sessionID: session.nativeID,
-          messageID: message.info.id,
-          ...value,
+          noReply: true,
+          parts: [{ type: "text", text: "Historical parts" }],
         },
       );
+      const parts: Record<string, Json>[] = [
+        {
+          type: "file",
+          mime: "text/plain",
+          filename: "fixture.txt",
+          url: "file:///fixture.txt",
+        },
+        { type: "agent", name: "general" },
+        { type: "compaction", auto: false },
+      ];
+      for (const value of parts) {
+        const id = "prt_" + randomUUID().replaceAll("-", "");
+        await state.native(
+          `/session/${session.id}/message/${message.info.id}/part/${id}`,
+          "PATCH",
+          {
+            id,
+            sessionID: session.nativeID,
+            messageID: message.info.id,
+            ...value,
+          },
+        );
+      }
     }
     await openSession(state, page, session.id);
     const transcript = page.getByRole("region", {
@@ -99,17 +124,27 @@ test("messages.revert-files-counted-strip-reload", {
     `/session/${session.id}/message`,
   );
   const user = raw.find((message) => message.info.role === "user")!.info.id;
-  await state.product("session.revert", {
-    sessionID: session.id,
-    messageID: user,
-  });
+  await state.product(
+    state.controller.info!.version.startsWith("2.")
+      ? "session.revertCode"
+      : "session.revert",
+    {
+      sessionID: session.id,
+      messageID: user,
+    },
+  );
   await expect.poll(() =>
     frames.received.some((frame) => {
       const event = frame.event as
         | { op?: string; messageCount?: number }
         | undefined;
+      const page = frame.outcome as {
+        ok?: boolean;
+        result?: { session?: { revert?: { messageCount: number } } };
+      } | undefined;
       return frame.t === "content" && event?.op === "session.revert" &&
-        event.messageCount === 1;
+          event.messageCount === 1 ||
+        page?.ok === true && page.result?.session?.revert?.messageCount === 1;
     })
   ).toBe(true);
   await expect(page.locator(".otk-rolled-back-strip")).toContainText(

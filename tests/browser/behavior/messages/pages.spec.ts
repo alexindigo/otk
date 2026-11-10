@@ -40,7 +40,10 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
   const newest = await state.product("session.messages", {
     sessionID: session.id,
   }) as MessagePage;
-  expect(newest.items).toHaveLength(10);
+  // V2's terminal idle is a native control row: it owns one of the ten native slots.
+  expect(newest.items).toHaveLength(
+    state.controller.info!.version.startsWith("2.") ? 9 : 10,
+  );
   expect(newest.items.every((m) => m.role === "assistant")).toBe(true);
   expect(newest.prompt).toBeTruthy();
   expect(newest.items.some((m) => m.id === newest.prompt!.id)).toBe(false);

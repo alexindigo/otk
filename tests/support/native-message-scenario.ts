@@ -21,6 +21,7 @@ export async function nativeMessageScenario(
     childReads = 0,
     fail = profile.endsWith("-retry");
   const reads: string[] = [],
+    events: { type: string; sessionID?: string; messageID?: string }[] = [],
     points: string[] = [],
     snapshots: string[] = [],
     assistants = new Set<string>(),
@@ -87,20 +88,24 @@ export async function nativeMessageScenario(
       const point = sessionID &&
         url.pathname.startsWith(`/session/${sessionID}/message/`) &&
         req.method === "GET";
-      if (point) {
-        points.push(url.pathname);
-        if (fail) {
-          fail = false;
-          return Response.json({ message: "Checkpoint unavailable" }, {
-            status: 503,
-          });
-        }
-      }
       const response = await fetch(
         new Request(new URL(actual.pathname + actual.search, oc.url), req),
       );
       if (point) {
         const snapshot = await response.clone().json();
+        // V2 also point-reads delivered user messages. Only assistant replacement
+        // reads belong to this recovery fault/observation contract.
+        if (
+          oc.kind === "opencode-v2-server" && snapshot.data.type !== "assistant"
+        ) return response;
+        points.push(url.pathname);
+        if (fail) {
+          fail = false;
+          await response.body?.cancel();
+          return Response.json({ message: "Checkpoint unavailable" }, {
+            status: 503,
+          });
+        }
         const parts = oc.kind === "opencode-v2-server"
           ? snapshot.data.content
           : snapshot.parts;
@@ -141,14 +146,21 @@ export async function nativeMessageScenario(
                     info = event.properties?.info;
                   if (oc.kind === "opencode-v2-server") {
                     const detail = event.data;
+                    if (events.length < 256) {
+                      events.push({
+                        type: event.type,
+                        sessionID: detail?.sessionID,
+                        messageID: detail?.assistantMessageID,
+                      });
+                    }
                     if (event.type === "session.step.started") {
-                      assistants.add(detail.messageID);
+                      assistants.add(detail.assistantMessageID);
                     }
                     if (
                       /^session\.(text|reasoning)\.(started|ended)$/.test(
                         event.type,
                       ) && detail.sessionID === sessionID &&
-                      assistants.has(detail.messageID)
+                      assistants.has(detail.assistantMessageID)
                     ) {
                       lost++;
                       drop = true;
@@ -197,6 +209,7 @@ export async function nativeMessageScenario(
     observe: () => ({
       helper,
       reads,
+      events,
       holding,
       streamCount,
       lost,

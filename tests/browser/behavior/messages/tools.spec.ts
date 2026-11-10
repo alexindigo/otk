@@ -53,7 +53,17 @@ test.describe("actual tool forms", () => {
       limit: 1,
     });
     await expandTool(page, "[data-tool=read]");
-    await expect(page.locator("[data-tool=read]")).toContainText("↳ Loaded");
+    if (state.controller.info!.version.startsWith("2.")) {
+      // V2 publishes discovered instructions as their own durable synthetic message.
+      await expect(page.locator(".otk-message-flow")).toContainText(
+        "Instructions from: " + state.directory + "/src/AGENTS.md",
+      );
+      await expect(page.locator(".otk-message-flow")).toContainText(
+        "Read the fixture only.",
+      );
+    } else {await expect(page.locator("[data-tool=read]")).toContainText(
+        "↳ Loaded",
+      );}
     await runNativeTool(state, page, s.id, "read", {
       filePath: state.directory + "/src",
     });

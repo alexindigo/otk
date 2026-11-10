@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { serve } from "./http.ts";
 import { resources } from "./resources.ts";
+import { nativeKind } from "./native.ts";
 /** Same native priced streaming provider as the legacy U4 journey. */
 export function pricedMessageProvider() {
   let step = 0;
@@ -20,7 +21,7 @@ export function pricedMessageProvider() {
             id: `call_usage_${n}`,
             type: "function",
             function: {
-              name: "bash",
+              name: nativeKind === "opencode-v2-server" ? "shell" : "bash",
               arguments: JSON.stringify({
                 command: n === 1 ? "pwd" : "ls -la",
                 description: n === 1

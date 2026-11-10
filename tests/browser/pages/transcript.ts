@@ -253,12 +253,15 @@ export async function runNativeTool(
   input: Record<string, Json>,
   model?: { providerID: string; modelID: string },
 ) {
-  const before = await state.native<{ parts: NativeToolPart[] }[]>(
+  const before = await state.native<
+    { info: { id: string }; parts: NativeToolPart[] }[]
+  >(
     `/session/${sessionID}/message`,
   );
   const old = new Set(
     before.flatMap((message) => message.parts).map((part) => part.id),
   );
+  const oldMessages = new Set(before.map((message) => message.info.id));
   await toolScript(state, name, input, `Finished ${name}.`);
   if (model) {
     await state.native(`/session/${sessionID}/prompt_async`, "POST", {
@@ -269,7 +272,12 @@ export async function runNativeTool(
   let result: NativeToolPart | undefined;
   await expect.poll(async () => {
     const messages = await state.native<{
-      info: { role: string; finish?: string; time: { completed?: number } };
+      info: {
+        id: string;
+        role: string;
+        finish?: string;
+        time: { completed?: number };
+      };
       parts: (NativeToolPart & { text?: string })[];
     }[]>(
       `/session/${sessionID}/message`,
@@ -283,9 +291,10 @@ export async function runNativeTool(
     // trusted prompt, exactly as the real empty-read integration witness does.
     return !!result &&
       messages.some((message) =>
+        !oldMessages.has(message.info.id) &&
         message.info.role === "assistant" && message.info.finish === "stop" &&
         !!message.info.time.completed && message.parts.some((part) =>
-          !old.has(part.id) && part.type === "text" &&
+          part.type === "text" &&
           part.text === `Finished ${name}.`
         )
       );
