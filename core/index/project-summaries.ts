@@ -29,6 +29,18 @@ export class ProjectSummaries {
     }
   >();
   #permissions?: (id: string) => number;
+  #locationForms: Readonly<Record<string, number>> = {};
+  locationForms(values: Readonly<Record<string, number>>): void {
+    const affected = new Set([
+      ...Object.keys(this.#locationForms),
+      ...Object.keys(values),
+    ]);
+    this.#locationForms = { ...values };
+    for (const directory of affected) {
+      this.ensure(directory);
+      this.#update(directory);
+    }
+  }
   #authority: ProjectSummary["authority"] = "unknown";
   #catalog = false;
   #known = new Set<string>();
@@ -172,7 +184,8 @@ export class ProjectSummaries {
     for (const [directory, entries] of this.#projects) {
       if (
         entries.size || this.#known.has(directory) ||
-        this.#leafSeeds.has(directory) || this.#leaves.has(directory)
+        this.#leafSeeds.has(directory) || this.#leaves.has(directory) ||
+        this.#locationForms[directory]
       ) {
         this.#publish(directory);
         continue;
@@ -311,15 +324,21 @@ export class ProjectSummaries {
       last = totals?.last ?? 0,
       unknown = (totals?.unknown ?? 0) > 0;
     const previous = this.values.get(directory);
+    const locationForms = this.#locationForms[directory] ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
+      : locationForms
+      ? "current"
       : unknown
       ? "unknown"
       : entries.size
       ? "current"
       : this.#authority;
-    const status =
-      PROJECT_STATUS_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
+    const status = locationForms
+      ? "blocked"
+      : PROJECT_STATUS_PRIORITY.find((s) =>
+        (totals?.statuses.get(s) ?? 0) > 0
+      ) ??
         "idle";
     const knownCount = this.#catalog;
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
@@ -341,6 +360,7 @@ export class ProjectSummaries {
       : undefined;
     const summary: ProjectSummary = {
       directory,
+      ...(locationForms ? { locationForms } : {}),
       hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
       status: authority === "unknown" && status === "idle" ? null : status,
       sessionCount: seed
@@ -387,6 +407,14 @@ export class ProjectSummaries {
       ? {
         ...direct,
         direct,
+        ...(summaries.some((s) => s.locationForms)
+          ? {
+            locationForms: summaries.reduce(
+              (n, s) => n + (s.locationForms ?? 0),
+              0,
+            ),
+          }
+          : {}),
         hasSessions: summaries.some((s) => s.hasSessions === true)
           ? true
           : summaries.every((s) => s.hasSessions === false)
@@ -415,6 +443,7 @@ export class ProjectSummaries {
     // Empty untracked checkouts are not fabricated projects on the wire.
     if (
       this.#seeded && summary.hasSessions === false &&
+      !summary.locationForms &&
       !this.#known.has(directory) &&
       !summary.scopes?.some((scope) => this.#known.has(scope)) &&
       !this.#projects.get(directory)?.size

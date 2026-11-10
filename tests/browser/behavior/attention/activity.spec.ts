@@ -20,6 +20,8 @@ test(
       rightView: "activity",
     });
     const activity = page.locator(".otk-permission-activity");
+    // The initial empty model can paint before settled activation sends its read.
+    await expect.poll(reads).toBe(1);
     await expect(activity).toContainText(
       "Permission replies will appear here.",
     );

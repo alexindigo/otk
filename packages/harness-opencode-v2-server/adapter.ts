@@ -24,6 +24,8 @@ import { V2Catalogs } from "./catalogs.ts";
 import { Transcript } from "./transcript.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
 import { commands } from "./commands.ts";
+import { V2Pending } from "./pending.ts";
+import { V2Prompt } from "./prompt.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -52,6 +54,8 @@ export class OpencodeV2ServerAdapter implements Harness {
   readonly catalogs?: V2Catalogs;
   readonly stream: V2Stream;
   readonly transcript: Transcript;
+  readonly pending: V2Pending;
+  readonly prompts: V2Prompt;
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
@@ -194,6 +198,33 @@ export class OpencodeV2ServerAdapter implements Harness {
         reads,
       );
     }
+    this.pending = new V2Pending(
+      () => this.stream.client,
+      (id) => this.#index.getMetadata(id),
+      (id, op) => {
+        this.#sink?.content(id, op);
+        if (op.op === "permission.remove" || op.op === "form.remove") {
+          this.#setPending(
+            `${
+              op.op === "permission.remove" ? "permission" : "form"
+            }:${op.requestID}`,
+          );
+          const entry = this.#index.getMetadata(id);
+          if (entry) {
+            const counts = this.#pendingCounts.get(ids.decode(id));
+            this.#upsert({
+              ...entry,
+              attention: {
+                ...entry.attention,
+                permissions: counts?.permissions ?? 0,
+                questions: counts?.questions ?? 0,
+              },
+            });
+          }
+        }
+      },
+    );
+    this.prompts = new V2Prompt(() => this.stream.client, config.attachments);
     const catalogCapabilities: Capabilities = this.catalogs
       ? {
         agents: this.catalogs.agents,
@@ -212,6 +243,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.capabilities = Object.freeze({
       ...digestCapabilities,
       ...catalogCapabilities,
+      prompt: this.prompts,
+      permissions: this.pending.permissions,
+      forms: this.pending.forms,
+      questions: this.pending.questions,
       commands: commands(
         () => this.stream.client,
         config.attachments,
@@ -306,9 +341,11 @@ export class OpencodeV2ServerAdapter implements Harness {
         await this.stream.stop();
         await this.transcript.stop();
         await digest?.stop();
+        await this.prompts.stop();
         this.#pending.clear();
         this.#pendingCounts.clear();
         this.#settledPending.clear();
+        this.pending.clear();
         this.#running.clear();
         this.#finished.clear();
       },
@@ -654,6 +691,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ),
     );
     const projects = await this.digest?.projects?.(generation, signal);
+    const inventories: (() => void)[] = [];
     const owners = new Set([
       ...Object.keys(active),
       ...this.#running.keys(),
@@ -665,7 +703,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ) => ids.decode(id)),
     ]);
     for (const location of locations) {
-      const inventories = [
+      const readers = [
         [
           "permission",
           () =>
@@ -683,10 +721,21 @@ export class OpencodeV2ServerAdapter implements Harness {
             ),
         ],
       ] as const;
-      for (const [kind, read] of inventories) {
+      for (const [kind, read] of readers) {
         try {
           const { data: rows } = await read();
           signal.throwIfAborted();
+          if (kind === "permission") {
+            const permissions = rows as Parameters<
+              V2Pending["replacePermissions"]
+            >[1];
+            inventories.push(() =>
+              this.pending.replacePermissions(location, permissions)
+            );
+          } else {
+            const forms = rows as Parameters<V2Pending["replaceForms"]>[1];
+            inventories.push(() => this.pending.replaceForms(location, forms));
+          }
           // Each complete kind/location inventory owns only its own absence facts.
           for (const [key, value] of pending) {
             if (value.kind === kind && value.directory === location.directory) {
@@ -760,6 +809,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         if (this.#settledPending.has(key)) this.#pending.delete(key);
         else this.#countPending(row, 1);
       }
+      for (const apply of inventories) apply();
       if (reconnect) {
         await transcriptCommit?.();
       }
@@ -837,6 +887,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ? ids.encode(event.data.sessionID)
       : undefined;
     if (changedID && event.type === "session.deleted") {
+      this.pending.retireSession(event.data.sessionID as string);
       await this.#deleted(
         changedID,
         this.#index.getMetadata(changedID),
@@ -889,6 +940,19 @@ export class OpencodeV2ServerAdapter implements Harness {
         : undefined);
     if (/^(permission\.|form\.)/.test(event.type)) {
       this.#pendingEvent(event, sid, form);
+      if (typeof sid === "string") {
+        if (
+          event.type === "permission.replied" &&
+          typeof event.data.requestID === "string"
+        ) {
+          this.pending.settle("permission", event.data.requestID, sid);
+        } else if (
+          (event.type === "form.replied" || event.type === "form.cancelled") &&
+          typeof event.data.id === "string"
+        ) {
+          this.pending.settle("form", event.data.id, sid);
+        }
+      }
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
       await commit();

@@ -26,6 +26,13 @@ test("attention.public-own-answer-resizes-after-collapse-remount-and-shrinks", {
     answer.evaluate((e) => e.clientHeight >= e.scrollHeight - 1)
   ).toBe(true);
   await answer.fill("Short answer");
-  await expect.poll(() => answer.evaluate((e) => e.clientHeight))
+  // Native themed field padding is intentional; the answer still shrinks to one content line.
+  await expect.poll(() =>
+    answer.evaluate((e) => {
+      const style = getComputedStyle(e);
+      return e.clientHeight - parseFloat(style.paddingTop) -
+        parseFloat(style.paddingBottom);
+    })
+  )
     .toBeLessThanOrEqual(24);
 });

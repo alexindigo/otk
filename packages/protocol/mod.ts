@@ -33,3 +33,4 @@ export * from "./request-metadata.ts";
 export * from "./request-features.ts";
 export * from "./failures.ts";
 export * from "./progress.ts";
+export * from "./forms.ts";

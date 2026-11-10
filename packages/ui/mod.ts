@@ -209,3 +209,8 @@ export {
   type NotificationPreference,
 } from "./components/NotificationSettings.tsx";
 export { registerCompactPrompt } from "./features/prompt/compact.ts";
+export {
+  default as FormDock,
+  registerFormTakeover,
+  registerGlobalForms,
+} from "./components/FormDock.tsx";

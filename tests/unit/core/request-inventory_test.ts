@@ -188,6 +188,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "usage",
       "permissions",
       "questions",
+      "forms",
       "revert",
       "revertCode",
       "restore",
@@ -227,6 +228,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       Core.registerResources,
       Core.registerPermissions,
       Core.registerQuestions,
+      Core.registerForms,
       Core.registerRevert,
       registerDigests,
     ]
@@ -265,6 +267,9 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "question.reply",
     "question.reject",
     "question.list",
+    "form.list",
+    "form.reply",
+    "form.cancel",
     "models.list",
     "agents.list",
     "commands.list",
@@ -315,8 +320,8 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 24,
-      native: 17,
+      read: 25, // Typed forms add one read and two native effects to the inventory.
+      native: 19,
       local: 10,
       "prepared-local": 6,
       lease: 2,

@@ -90,9 +90,22 @@ export function serialize(draft: Draft): PromptPart[] {
   }
   return [
     { kind: "text", text: input },
-    ...draft.chips.filter((chip) => chip.part.kind !== "text").map((chip) =>
-      chip.part
-    ),
+    ...draft.chips.filter((chip) => chip.part.kind !== "text").map((chip) => {
+      if (!inlineChip(chip)) return chip.part;
+      const delta = draft.chips.reduce(
+        (sum, prior) =>
+          prior.part.kind === "text" && inlineChip(prior) &&
+            prior.end <= chip.start
+            ? sum + prior.part.text.length - (prior.end - prior.start)
+            : sum,
+        0,
+      );
+      const start = chip.start + delta, end = chip.end + delta;
+      return {
+        ...chip.part,
+        mention: { start, end, text: input.slice(start, end) },
+      };
+    }),
   ];
 }
 export function editorSave(draft: Draft): Draft {

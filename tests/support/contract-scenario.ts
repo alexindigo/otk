@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { coreBackendFixture } from "./core-backend.ts";
+import { typedFormScenario } from "./typed-form-scenario.ts";
 import { messagesScenario } from "./messages-scenario.ts";
 import { composerContractScenario } from "./composer-contract-scenario.ts";
 import { sessionsScenario } from "./sessions-scenario.ts";
@@ -35,6 +36,7 @@ export async function contractScenario(profile: Profile) {
   if (profile === "contract-menus-session-actions") {
     return await sessionActionsScenario();
   }
+  if (profile === "contract-typed-forms") return await typedFormScenario();
   if (profile === "contract-load-priority") return await loadPriorityScenario();
   if (profile === "contract-load-small" || profile === "contract-load-large") {
     return await loadPopulationScenario(profile === "contract-load-large");

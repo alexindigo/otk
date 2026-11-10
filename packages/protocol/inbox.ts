@@ -60,6 +60,8 @@ export interface ProjectTopology {
   parentDirectory?: string;
 }
 export interface ProjectSummaryFacts {
+  /** Pending location-owned forms; not fabricated sessions or session counts. */
+  locationForms?: number;
   directory: string;
   /** Population authority, independent of acquired session membership. */
   hasSessions?: boolean;

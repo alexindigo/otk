@@ -7,7 +7,7 @@ export function promptParts(value: unknown): PromptPart[] {
   if (!Array.isArray(value) || !value.length) {
     throw new HarnessError("params", "parts required");
   }
-  return value.map((value) => {
+  const parts: PromptPart[] = value.map((value) => {
     const p = object(value);
     if (p.kind === "text") {
       return { kind: "text", text: text(p, "text", true) ?? "" };
@@ -71,5 +71,24 @@ export function promptParts(value: unknown): PromptPart[] {
       };
     }
     throw new HarnessError("params", "Invalid prompt part");
+  });
+  return parts.map((part, index) => {
+    const source = object(value[index]);
+    if (source.mention === undefined) return part;
+    const mention = object(source.mention);
+    if (
+      !Number.isSafeInteger(mention.start) ||
+      !Number.isSafeInteger(mention.end) || Number(mention.start) < 0 ||
+      Number(mention.end) < Number(mention.start) ||
+      typeof mention.text !== "string"
+    ) throw new HarnessError("params", "Invalid prompt mention");
+    return {
+      ...part,
+      mention: {
+        start: Number(mention.start),
+        end: Number(mention.end),
+        text: mention.text,
+      },
+    };
   });
 }

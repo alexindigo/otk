@@ -29,6 +29,7 @@ export interface ShellPorts {
     older(): Promise<void>;
   };
   servers(): SidecarState[];
+  forms?: import("@otk/client").ServerResources["forms"];
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;
   approvals(id: string): ApprovalModel;

@@ -16,7 +16,9 @@ import {
   registerEditTool,
   registerFetchTool,
   registerFilePart,
+  registerFormTakeover,
   registerGenericTool,
+  registerGlobalForms,
   registerHistoryPrompt,
   registerImageDialog,
   registerMentionsPrompt,
@@ -87,6 +89,8 @@ export function applicationUi(): UiRegistries {
   registerCompactPrompt(ui.prompt);
   registerPermissionTakeover(ui.takeovers);
   registerQuestionTakeover(ui.takeovers);
+  registerFormTakeover(ui.takeovers);
+  registerGlobalForms(ui.global);
   registerCommandDialogs(ui.dialogs);
   registerProjectDialogs(ui.dialogs);
   registerTaskDialogs(ui.dialogs);

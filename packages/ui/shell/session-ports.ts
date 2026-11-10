@@ -6,7 +6,7 @@ import {
   type ServerResources,
   type SessionActions,
 } from "@otk/client";
-import type { Preferences } from "@otk/protocol";
+import { belongsToSession, type Preferences } from "@otk/protocol";
 import type { SessionPorts } from "../registries/session.tsx";
 
 /** Plain binding: capture identity once, delegate every live read and intent. */
@@ -40,6 +40,15 @@ export function sessionPorts(o: {
     location: (id) => actions.location(target, id),
     permissions: () => session.state.content.permissions,
     questions: () => session.state.content.questions,
+    forms: () =>
+      resources.forms(target.sidecarId).filter((f) =>
+        f.owner.kind === "session" &&
+        belongsToSession(
+          f.owner.sessionID,
+          target.sessionID,
+          (id) => resources.entry(target.sidecarId, id),
+        )
+      ),
     prefs: o.prefs,
     dirty: (owner, dirty, input) => o.guard.mark(owner, dirty, input),
     act: (action) => actions.act(target, action),

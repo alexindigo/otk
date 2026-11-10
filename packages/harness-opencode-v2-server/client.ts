@@ -54,6 +54,10 @@ export class V2Client {
     dispatched: boolean;
     observation?: boolean;
   }>();
+  /** The stream aborts this generation first, then joins its actual SDK I/O. */
+  async idle(): Promise<void> {
+    await this.join();
+  }
   constructor(
     readonly service: DiscoveredService,
     readonly requestms: number,
@@ -99,10 +103,20 @@ export class V2Client {
     });
   }
   /** Classified dispatch has lifecycle cancellation, never a mutation deadline. */
+  effect<T>(
+    run: (api: OpenCodeClient) => Promise<T>,
+    operation?: OperationContext,
+  ): Promise<T>;
+  effect<T>(
+    run: (api: OpenCodeClient) => Promise<T>,
+    operation: OperationContext | undefined,
+    settled: readonly string[],
+  ): Promise<T | undefined>;
   async effect<T>(
     run: (api: OpenCodeClient) => Promise<T>,
     operation?: OperationContext,
-  ): Promise<T> {
+    settled: readonly string[] = [],
+  ): Promise<T | undefined> {
     this.signal.throwIfAborted();
     operation?.signal.throwIfAborted();
     const context = { operation, dispatched: false };
@@ -116,12 +130,15 @@ export class V2Client {
       operation?.signal.throwIfAborted();
       return result;
     } catch (cause) {
-      if (cause instanceof OperationFailure) throw cause;
       const tag = errorTag(cause);
+      if (tag && settled.includes(tag)) return undefined;
+      const known = nativeFailure(cause);
+      if (known instanceof OperationFailure) throw known;
       if (
-        cause instanceof HarnessError ||
+        known instanceof HarnessError ||
         tag &&
-          /(?:Invalid|NotFound|Busy|Unauthorized|Validation|Denied)/.test(tag)
+          /(?:Invalid|NotFound|Busy|Unauthorized|Validation|Denied|Conflict|AttachmentError)/
+            .test(tag)
       ) {
         throw new OperationFailure("rejected", "native.rejected", cause);
       }
@@ -153,25 +170,19 @@ export class V2Client {
     this.signal.throwIfAborted();
     signal?.throwIfAborted();
     try {
-      const value = await this.readiness.run(
+      const value = await this.#own(this.readiness.run(
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
         () => this.#reads.run(signal ?? this.signal, () => run(this.#api)),
-      );
+      ));
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
       return value;
     } catch (cause) {
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
-      if (cause instanceof OperationFailure || cause instanceof HarnessError) {
-        throw cause;
-      }
-      if (cause instanceof Error && cause.cause instanceof HarnessError) {
-        throw cause.cause;
-      }
-      const tag = cause && typeof cause === "object"
-        ? Reflect.get(cause, "_tag")
-        : undefined;
+      const known = nativeFailure(cause);
+      if (known) throw known;
+      const tag = errorTag(cause);
       if (tag === "SessionNotFoundError") throw new V2MissingSession();
       if (tag === "UnauthorizedError") {
         throw new HarnessError(
@@ -189,8 +200,26 @@ export class V2Client {
   }
 }
 export function errorTag(cause: unknown): string | undefined {
-  if (!cause || typeof cause !== "object") return;
-  const tag = Reflect.get(cause, "_tag");
-  return typeof tag === "string" ? tag : errorTag(Reflect.get(cause, "cause"));
+  for (const value of causes(cause)) {
+    const tag = Reflect.get(value, "_tag");
+    if (typeof tag === "string") return tag;
+  }
+}
+function nativeFailure(
+  cause: unknown,
+): OperationFailure | HarnessError | undefined {
+  for (const value of causes(cause)) {
+    if (value instanceof OperationFailure || value instanceof HarnessError) {
+      return value;
+    }
+  }
+}
+function* causes(cause: unknown): Generator<object> {
+  const seen = new Set<object>();
+  while (cause && typeof cause === "object" && !seen.has(cause)) {
+    seen.add(cause);
+    yield cause;
+    cause = Reflect.get(cause, "cause");
+  }
 }
 export type { OpenCodeClient } from "@opencode/client";

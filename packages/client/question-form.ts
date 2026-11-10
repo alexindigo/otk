@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { QuestionRequest } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { createForm, forgetForm, questionFields } from "./forms.ts";
 
 type Question = QuestionRequest["questions"][number];
 
@@ -49,10 +50,6 @@ export function answerOf(draft: QuestionDraft): string[] {
   return own ? [...draft.picked, own] : [...draft.picked];
 }
 
-const kept = new Map<string, QuestionFormState>();
-const copy = (state: QuestionFormState): QuestionFormState =>
-  JSON.parse(JSON.stringify(state));
-
 /**
  * The form for a request. Its state outlives the view (switching sessions and
  * back keeps what was entered) until `forgetQuestionForm` after the reply.
@@ -63,27 +60,41 @@ export function createQuestionForm(
 ): QuestionForm {
   const questions = request.questions;
   const review = questions.length;
-  const initial = kept.get(request.id) ??
-    { step: 0, drafts: questions.map(empty) };
-  const store = factory<QuestionFormState>(copy(initial));
-  const remember = () => kept.set(request.id, copy(store.state));
+  const form = createForm({
+    id: request.id,
+    owner: { kind: "session", sessionID: request.sessionID },
+    directory: "",
+    title: "Questions",
+    fields: questionFields(request),
+  }, factory);
+  const draft = (index: number): QuestionDraft =>
+    form.state.drafts[`q${index}`]?.choice ?? empty();
+  const state: Readonly<QuestionFormState> = {
+    get step() {
+      return form.state.step;
+    },
+    get drafts() {
+      return questions.map((_, index) => draft(index));
+    },
+  };
   const edit = (question: number, change: (draft: QuestionDraft) => void) => {
     if (!questions[question]) return;
-    store.update((state) => change(state.drafts[question]));
-    remember();
+    form.edit(`q${question}`, (field) => {
+      const choice = field.choice ?? (field.choice = empty());
+      change(choice);
+      const answer = answerOf(choice);
+      field.value = questions[question].multiple ? answer : answer[0];
+    });
   };
   const goTo = (step: number) => {
-    store.update((state) => {
-      state.step = Math.max(0, Math.min(review, step));
-    });
-    remember();
+    form.goTo(step, review);
   };
   return {
     questions,
-    state: store.state,
+    state,
     review,
     goTo,
-    next: () => goTo(store.state.step + 1),
+    next: () => goTo(form.state.step + 1),
     pick(question, option) {
       const q = questions[question], label = q?.options[option]?.label;
       if (label === undefined) return;
@@ -118,14 +129,22 @@ export function createQuestionForm(
       });
     },
     isPicked: (question, option) =>
-      store.state.drafts[question]?.picked.includes(
+      draft(question).picked.includes(
         questions[question]?.options[option]?.label ?? "\u0000",
       ) ?? false,
-    isOwnChosen: (question) => store.state.drafts[question]?.ownChosen ?? false,
-    answers: () => store.state.drafts.map(answerOf),
-    subscribe: (listener) => store.subscribe(() => listener()),
+    isOwnChosen: (question) => draft(question).ownChosen,
+    answers: () =>
+      questions.map((_, index) => {
+        const value = form.derive().answer[`q${index}`];
+        return Array.isArray(value)
+          ? value
+          : typeof value === "string"
+          ? [value]
+          : [];
+      }),
+    subscribe: (listener) => form.subscribe(listener),
   };
 }
 export function forgetQuestionForm(requestID: string): void {
-  kept.delete(requestID);
+  forgetForm(requestID);
 }

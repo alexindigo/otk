@@ -387,6 +387,8 @@ export type ContentOp =
   | { op: "session.error"; error?: string; errorState?: SessionErrorState }
   | { op: "question.upsert"; request: QuestionRequest }
   | { op: "question.remove"; requestID: string; sessionID: string }
+  | { op: "form.upsert"; request: import("./forms.ts").FormRequest }
+  | { op: "form.remove"; requestID: string }
   | {
     op: "session.revert";
     messageID?: string;

@@ -94,6 +94,7 @@ type ServerMessage =
     remove: string[];
   }
   | { t: "approvals"; approvals: ApprovalSnapshot }
+  | { t: "forms.pending"; requests: import("./forms.ts").FormRequest[] }
   | { t: "approval.activity"; sessions: string[] }
   | { t: "index.snapshot"; rev: number; entries: IndexEntry[]; epoch?: number }
   | {
