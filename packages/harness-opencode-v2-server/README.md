@@ -165,11 +165,15 @@ reconnect and stop fence late pages, recoveries, shell output and speculation.
 `OpencodeV2TranscriptDigestSink` is the transcript contribution composed by the
 selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read
 channel, derived SQLite owner and the index owner's source-proven read-only
-native connection. Background headers and helper rows exclude text, tool inputs
-and output. API fallback extracts and releases bounded pages. Reported usage
-remains nullable; native session totals include internal charges and need not
-equal reply ledgers. This contribution does not enumerate projects or session
-lists; V1 owns those.
+native connection. Background headers exclude text, tool inputs and output.
+Helper summaries use SQL count/current aggregates, at most one scalar row per
+admitted message, never the on-intent tool-detail reader or body API pages.
+Split parts and legacy inline content contribute the same scalar aggregate;
+without a proven SQL source helper summaries are explicitly unavailable. Usage
+API fallback extracts and releases bounded pages. Reported usage remains
+nullable; native session totals include internal charges and need not equal
+reply ledgers. This contribution does not enumerate projects or session lists;
+V1 owns those.
 
 Q6 prefetch reads only the next older page under the existing optional/idle
 admission. Its adapter-wide memory-only FIFO charges complete encoded keys and

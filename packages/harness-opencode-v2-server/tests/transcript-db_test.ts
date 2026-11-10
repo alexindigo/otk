@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { TranscriptReads } from "../transcript-reads.ts";
-import { Messages } from "../messages.ts";
+import { Messages, SCAN_ROWS } from "../messages.ts";
 import { opencodeV2SessionID as ids } from "../ids.ts";
 const sid = ids.encode("ses_fixture");
 function fixture(): DatabaseSync {
@@ -97,7 +97,7 @@ Deno.test("V2 native transcript facts use seq and scalar selections across page 
     db.close();
   }
 });
-Deno.test("V2 scalar helper tools combine split and legacy inline rows without input/output bodies", () => {
+Deno.test("V2 on-demand tool labels combine split and legacy inline rows without input/output bodies", () => {
   const db = fixture();
   const observed: string[] = [];
   try {
@@ -139,6 +139,91 @@ Deno.test("V2 scalar helper tools combine split and legacy inline rows without i
     assertEquals(observed, ["tools"]);
     assert(!JSON.stringify(tools).includes("secret"));
     assert(!JSON.stringify(tools).includes("private output"));
+  } finally {
+    db.close();
+  }
+});
+
+Deno.test("V2 helper summaries aggregate split and inline calls without acquiring tool details", () => {
+  const db = fixture(), observed: string[] = [];
+  try {
+    const put = db.prepare(
+      "INSERT INTO session_part VALUES (?,'ses_fixture',?,'tool',?,?)",
+    );
+    for (let i = 0; i < 300; i++) {
+      put.run(
+        "msg_owner",
+        i,
+        `call_${i}`,
+        JSON.stringify({
+          name: "read",
+          state: {
+            status: "completed",
+            input: { secret: "private input" },
+            content: [{ text: "private output" }],
+          },
+          time: { created: i, completed: i + 1 },
+        }),
+      );
+    }
+    const inline = [{
+      type: "tool",
+      id: "inline",
+      name: "subagent",
+      state: {
+        status: "running",
+        metadata: { title: "Inspect", sessionID: "ses_child" },
+        input: { secret: "private input" },
+      },
+      time: { created: 500 },
+    }];
+    db.prepare(
+      "INSERT INTO session_message VALUES ('msg_owner','ses_fixture','assistant',1,1,?)",
+    ).run(JSON.stringify({ content: inline }));
+    db.prepare(
+      "INSERT INTO session_message VALUES ('msg_empty','ses_fixture','user',2,2,'{}')",
+    ).run();
+    const reads = new TranscriptReads(
+      new Messages(() => {
+        throw new Error("No body API acquisition");
+      }),
+      () => db,
+      undefined,
+      undefined,
+      (operation) => observed.push(operation),
+    );
+    reads.tools = () => {
+      throw new Error("No tool-detail acquisition");
+    };
+    const rows = reads.helperAggregates(sid, ["msg_owner", "msg_empty"])!;
+    assertEquals(rows, [{
+      messageID: "msg_owner",
+      toolCount: 301,
+      current: { name: "subagent", title: "Inspect", startedAt: 500 },
+    }]);
+    assertEquals(observed, ["helpers"]);
+    assert(!JSON.stringify(rows).includes("private"));
+    assert(!JSON.stringify(rows).includes("ses_child"));
+    assertEquals(reads.helperAggregates(sid, []), []);
+    db.prepare("UPDATE session_message SET data='{}' WHERE id='msg_owner'")
+      .run();
+    assertEquals(reads.helperAggregates(sid, ["msg_owner"]), [{
+      messageID: "msg_owner",
+      toolCount: 300,
+    }]);
+    assertThrows(
+      () => reads.helperAggregates(sid, Array(SCAN_ROWS + 1).fill("msg_owner")),
+      RangeError,
+    );
+    db.exec("DELETE FROM session_part");
+    assertEquals(reads.helperAggregates(sid, ["msg_owner"]), []);
+    const unavailable = new TranscriptReads(
+      new Messages(() => {
+        throw new Error("No body fallback");
+      }),
+      () => undefined,
+    );
+    assertEquals(unavailable.helperAggregates(sid, ["msg_owner"]), undefined);
   } finally {
     db.close();
   }

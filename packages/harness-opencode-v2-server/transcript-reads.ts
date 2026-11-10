@@ -48,6 +48,11 @@ export interface PrefetchPage {
   page: import("./messages.ts").NativePage;
   facts: TranscriptFacts;
 }
+export interface HelperAggregate {
+  messageID: string;
+  toolCount: number;
+  current?: { name: string; title?: string; startedAt: number };
+}
 /** Transient JSON fragments use the existing credited worker channel. */
 function jsonCodec<
   K extends "opcv2.transcript" | "opcv2.message.prefetch",
@@ -505,7 +510,65 @@ export class TranscriptReads {
     }, signal);
     return { page, facts };
   }
-  /** Bounded tool scalar read: split rows plus legacy inline content after them. */
+  /** Background helper acquisition returns at most one scalar aggregate per
+   * admitted message, never tool-detail rows or native input/output bodies. */
+  helperAggregates(
+    sessionID: string,
+    messageIDs: readonly string[],
+  ): HelperAggregate[] | undefined {
+    const sql = this.native();
+    if (!sql) return;
+    if (messageIDs.length > SCAN_ROWS) {
+      throw new RangeError(
+        "Helper aggregate message batch exceeds native row limit",
+      );
+    }
+    if (!messageIDs.length) return [];
+    this.observe?.("helpers");
+    // Match stock V2's scalar stats projection for split and legacy inline
+    // storage. Aggregation stays in SQLite; even a message with many tool calls
+    // contributes one count/current row to the worker.
+    const rows = sql.prepare(`WITH calls AS MATERIALIZED (
+      SELECT message_id,ordinal,0 AS source,
+        json_extract(data,'$.name') AS name,
+        json_extract(data,'$.state.status') AS status,
+        coalesce(json_extract(data,'$.state.metadata.title'),json_extract(data,'$.state.metadata.description')) AS title,
+        json_extract(data,'$.time.created') AS created
+      FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data)
+      UNION ALL
+      SELECT m.id,p.key,1,
+        json_extract(p.value,'$.name'),json_extract(p.value,'$.state.status'),
+        coalesce(json_extract(p.value,'$.state.metadata.title'),json_extract(p.value,'$.state.metadata.description')),
+        json_extract(p.value,'$.time.created')
+      FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p
+      WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND m.type='assistant' AND json_extract(p.value,'$.type')='tool'
+    ), ranked AS (
+      SELECT *,row_number() OVER (PARTITION BY message_id ORDER BY CASE WHEN status IN ('running','streaming') THEN 0 ELSE 1 END,created DESC,source DESC,ordinal DESC) AS rank FROM calls
+    ) SELECT message_id,count(*) AS tool_count,
+      max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN name END) AS current_name,
+      max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN title END) AS current_title,
+      max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN created END) AS current_created
+      FROM ranked GROUP BY message_id ORDER BY message_id`).all(
+      ids.decode(sessionID),
+      JSON.stringify(messageIDs),
+      ids.decode(sessionID),
+      JSON.stringify(messageIDs),
+    );
+    return rows.map((row) => ({
+      messageID: String(row.message_id),
+      toolCount: Number(row.tool_count),
+      ...(typeof row.current_name === "string"
+        ? {
+          current: {
+            name: row.current_name,
+            title: text(row.current_title),
+            startedAt: millis(row.current_created),
+          },
+        }
+        : {}),
+    }));
+  }
+  /** On-intent tool labels: split rows plus legacy inline content after them. */
   tools(
     sessionID: string,
     messageIDs: string[],

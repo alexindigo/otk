@@ -43,7 +43,7 @@ import { scalarSessionReadCodec } from "./index-reads.ts";
 import { catalogReadCodecs, catalogReaders } from "./catalog-readers.ts";
 import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
-import { millis, partID, record, reported, text, tokens } from "./map.ts";
+import { millis, record, reported, text, tokens } from "./map.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -764,7 +764,6 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     {
       generation: number;
       before?: number;
-      cursor?: string;
       source: string;
       exhausted?: boolean;
       keys?: string[];
@@ -1298,47 +1297,35 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       scan.offset ?? 0,
       (scan.offset ?? 0) + Math.min(budget.rows, SCAN_ROWS),
     );
-    let headers = scan.exhausted ? [] : this.transcript.sqlHeaders(
+    const headers = scan.exhausted ? [] : this.transcript.sqlHeaders(
       job.sessionID,
       scan.before,
       Math.min(budget.rows, SCAN_ROWS),
       selected,
     );
-    let next: string | undefined;
-    let tools: ReturnType<TranscriptReads["tools"]>;
-    if (headers) {
-      tools = this.transcript.tools(
-        job.sessionID,
-        selected ?? headers.map((h) => h.id),
-      );
-    } else {
-      const page = await this.messages.page(
-        job.sessionID,
-        Math.min(budget.rows, SCAN_ROWS),
-        scan.cursor,
-        signal,
-      );
-      next = page.next;
-      headers = page.items.map((r, i) => scalarMessage(r, i));
-      tools = page.items.flatMap((r) =>
-        r.type !== "assistant"
-          ? []
-          : r.content.flatMap((p) =>
-            p.type !== "tool" ? [] : [{
-              messageID: r.id,
-              tool: { id: partID(r.id, "tool", p.id), name: p.name },
-              status: p.state.status,
-              created: millis(p.time.created),
-              completed: p.time.completed
-                ? millis(p.time.completed)
-                : undefined,
-              child: text(
-                record("metadata" in p.state ? p.state.metadata : undefined)
-                  .sessionID,
-              ),
-            }]
-          )
-      );
+    const aggregates = headers && this.transcript.helperAggregates(
+      job.sessionID,
+      selected ?? headers.map((h) => h.id),
+    );
+    // Stock V2 has no per-session scalar helper API. Do not inflate body pages
+    // when the source-proven scalar reader is unavailable.
+    if (!headers || !aggregates) {
+      const saved = this.storage.read(job.sessionID);
+      this.#helpers.delete(job.sessionID);
+      await this.#commit(metadata(raw), {
+        summary: {
+          ...(saved?.summary ?? { state: "digesting" }),
+          revision: (saved?.summary.revision ?? 0) + 1,
+        },
+        helper: {
+          state: "unavailable",
+          revision: (saved?.helper?.revision ?? 0) + 1,
+          toolCount: null,
+        },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      });
+      return;
     }
     signal.throwIfAborted();
     if (this.#helpers.get(job.sessionID) !== admitted) return "reconcile";
@@ -1348,13 +1335,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           "DELETE FROM opcv2_transcript_helper WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
         ).run(job.sessionID, JSON.stringify(selected));
       }
-      for (const row of tools ?? []) {
+      for (const row of aggregates) {
         this.storage.sql.prepare(
           "INSERT INTO opcv2_transcript_helper(session_id,message_id,part_id,scalar,generation) VALUES (?,?,?,?,?) ON CONFLICT(session_id,message_id,part_id) DO UPDATE SET scalar=excluded.scalar,generation=excluded.generation",
         ).run(
           job.sessionID,
           row.messageID,
-          row.tool.id,
+          "summary",
           JSON.stringify(row),
           admitted.generation,
         );
@@ -1363,11 +1350,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     if (selected) admitted.offset = (admitted.offset ?? 0) + selected.length;
     const complete = selected
       ? admitted.offset! >= admitted.keys!.length
-      : this.#native
-      ? headers.length < Math.min(budget.rows, SCAN_ROWS)
-      : !next;
+      : headers.length < Math.min(budget.rows, SCAN_ROWS);
     admitted.before = headers.at(-1)?.seq;
-    admitted.cursor = next;
     if (!complete) return "continue";
     admitted.exhausted = true;
     const stale = selected ? [] : this.storage.sql.prepare(
@@ -1379,13 +1363,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     if (stale.length === budget.rows) return "continue";
     const count = Number(
         this.storage.sql.prepare(
-          "SELECT COUNT(*) AS n FROM opcv2_transcript_helper WHERE session_id=?",
+          "SELECT coalesce(sum(json_extract(scalar,'$.toolCount')),0) AS n FROM opcv2_transcript_helper WHERE session_id=?",
         ).get(job.sessionID)!.n,
       ),
       last = this.storage.sql.prepare(
-        "SELECT scalar FROM opcv2_transcript_helper WHERE session_id=? AND json_extract(scalar,'$.status') IN ('running','streaming') ORDER BY json_extract(scalar,'$.created') DESC LIMIT 1",
+        "SELECT json_extract(scalar,'$.current') AS current FROM opcv2_transcript_helper WHERE session_id=? AND json_type(scalar,'$.current')='object' ORDER BY json_extract(scalar,'$.current.startedAt') DESC,message_id DESC LIMIT 1",
       ).get(job.sessionID),
-      tool = last ? record(JSON.parse(String(last.scalar))) : undefined;
+      tool = last ? record(JSON.parse(String(last.current))) : undefined;
     const saved = this.storage.read(job.sessionID),
       helper: HelperSummary = {
         state: "ready",
@@ -1394,10 +1378,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ...(tool
           ? {
             current: {
-              name: text(record(tool.tool).name) ?? "",
-              title: text(record(tool.tool).summary),
-              startedAt: typeof tool.created === "number"
-                ? tool.created
+              name: text(tool.name) ?? "",
+              title: text(tool.title),
+              startedAt: typeof tool.startedAt === "number"
+                ? tool.startedAt
                 : undefined,
             },
           }
