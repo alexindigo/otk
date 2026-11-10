@@ -7,8 +7,8 @@
     "jsxImportSource": "@solidjs/web"
   },
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys=systemMemoryInfo main.ts",
-    "dev": "deno run --watch --allow-net --allow-read --allow-write --allow-env --allow-sys=systemMemoryInfo main.ts",
+    "start": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run=git --allow-sys=systemMemoryInfo main.ts",
+    "dev": "deno run --watch --allow-net --allow-read --allow-write --allow-env --allow-run=git --allow-sys=systemMemoryInfo main.ts",
     "prepare:test": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run tests/support/prepare-provider-cache.ts",
     "test": {
       "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run --allow-sys=systemMemoryInfo",

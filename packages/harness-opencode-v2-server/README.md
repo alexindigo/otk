@@ -120,7 +120,12 @@ advertisement, not the mere presence of resource metadata.
 
 Complete files traverse typed `fs.list` children, not capped ranked `fs.find`
 results. `.git` is pruned and physical directory identities prevent cycles.
-Stock V2 listings have no ignored flag; no ignore status is invented. Only
+Stock V2 listings have no ignored flag. The existing file reader filters bounded
+groups through read-only `git check-ignore --stdin -z --no-index`, honoring
+nested rules, exceptions and repository/global excludes without a pattern parser
+or a second catalog. Runtime permission is restricted to `--allow-run=git`;
+missing Git or a failed query makes that catalog unavailable. Cancellation joins
+the owned query. Outside a Git repository, the listing remains usable. Only
 demanded file catalogs open project filesystem watches. Native catalog events
 refresh demanded kinds without reloading configuration or booting idle
 locations.

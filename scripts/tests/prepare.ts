@@ -161,6 +161,7 @@ if (import.meta.main) {
       args: [
         "compile",
         "--allow-read",
+        "--allow-run=git",
         "--allow-write",
         "--allow-env",
         "--allow-net=127.0.0.1",

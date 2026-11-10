@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { basename, isAbsolute, relative, resolve } from "@std/path";
+import { ignoredFiles } from "./ignored-files.ts";
 import {
   arrayReadCodec,
   catalogFileCodec,
@@ -354,24 +355,34 @@ export function catalogReaders(
         (api) => api.file.list({ location: { directory }, path }, { signal }),
         signal,
       );
+      const items = entries.data.filter((entry) =>
+        basename(entry.path.replace(/\/$/, "")) !== ".git"
+      ).map((entry) => {
+        const absolute = resolve(directory, entry.path),
+          normalized = relative(directory, absolute);
+        if (
+          normalized === ".." || normalized.startsWith("../") ||
+          isAbsolute(normalized) || absolute === target ||
+          resolve(absolute, "..") !== target
+        ) throw new Error("Malformed native file listing");
+        return {
+          path: normalized,
+          canonicalPath: absolute,
+          directory: entry.type === "directory",
+        };
+      });
+      const ignored = await wait(
+        ignoredFiles(
+          directory,
+          items.map((entry) => entry.path + (entry.directory ? "/" : "")),
+          signal,
+        ),
+      );
       return {
         physical,
-        items: entries.data.filter((entry) =>
-          basename(entry.path.replace(/\/$/, "")) !== ".git"
-        ).map((entry) => {
-          const absolute = resolve(directory, entry.path),
-            normalized = relative(directory, absolute);
-          if (
-            normalized === ".." || normalized.startsWith("../") ||
-            isAbsolute(normalized) || absolute === target ||
-            resolve(absolute, "..") !== target
-          ) throw new Error("Malformed native file listing");
-          return {
-            path: normalized,
-            canonicalPath: absolute,
-            directory: entry.type === "directory",
-          };
-        }),
+        items: items.filter((entry) =>
+          !ignored.has(entry.path + (entry.directory ? "/" : ""))
+        ),
       };
     },
   };
