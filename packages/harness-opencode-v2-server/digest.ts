@@ -44,7 +44,15 @@ import { scalarSessionReadCodec } from "./index-reads.ts";
 import { catalogReadCodecs, catalogReaders } from "./catalog-readers.ts";
 import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
-import { millis, partID, record, reported, text, tokens } from "./map.ts";
+import {
+  millis,
+  partID,
+  record,
+  reported,
+  sharedToolName,
+  text,
+  tokens,
+} from "./map.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -1306,7 +1314,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ...(tool
           ? {
             current: {
-              name: text(record(tool.tool).name) ?? "",
+              name: sharedToolName(text(record(tool.tool).name) ?? ""),
               title: text(record(tool.tool).summary),
               startedAt: typeof tool.created === "number"
                 ? tool.created

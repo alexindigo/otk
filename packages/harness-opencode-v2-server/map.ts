@@ -100,6 +100,10 @@ export function errorText(error: unknown): string {
 type Tool = Extract<NativeMessage, { type: "assistant" }>["content"][number] & {
   type: "tool";
 };
+/** Native names remain source facts; shared kinds own all consumer-facing names. */
+export function sharedToolName(name: string): string {
+  return name === "shell" ? "bash" : name === "subagent" ? "task" : name;
+}
 export function mapTool(tool: Tool): ToolCall {
   const state = tool.state,
     input = record(state.input),
@@ -130,9 +134,9 @@ export function mapTool(tool: Tool): ToolCall {
       ? { childSessionID: ids.encode(meta.sessionID) }
       : {}),
   };
-  const path = text(input.path) ?? "";
-  switch (tool.name) {
-    case "shell":
+  const path = text(input.path) ?? "", name = sharedToolName(tool.name);
+  switch (name) {
+    case "bash":
       return {
         ...base,
         tool: "bash",
@@ -142,7 +146,7 @@ export function mapTool(tool: Tool): ToolCall {
         output: stripVTControlCharacters(text(meta.output) ?? output ?? ""),
         exitCode: typeof meta.exit === "number" ? meta.exit : undefined,
       };
-    case "subagent":
+    case "task":
       return {
         ...base,
         tool: "task",
@@ -202,7 +206,7 @@ export function mapTool(tool: Tool): ToolCall {
       return {
         ...base,
         tool: "search",
-        mode: tool.name,
+        mode: name,
         path: text(input.path),
         pattern: text(input.pattern),
         matches: typeof meta.matches === "number"
