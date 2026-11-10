@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { mapFileDiffs, mapTool } from "../map.ts";
+import { Messages } from "../messages.ts";
 import type { NativeMessage } from "../messages.ts";
+import type { V2Client } from "../client.ts";
 
 type Tool = Extract<NativeMessage, { type: "assistant" }>["content"][number] & {
   type: "tool";
@@ -59,4 +61,35 @@ Deno.test("V2 typed source tools carry language and native working directory", (
   );
   const shell = mapTool(tool("shell", { command: "pwd", cwd: "/repo/sub" }));
   assertEquals(shell.tool === "bash" && shell.cwd, "/repo/sub");
+});
+Deno.test("V2 requested recovery reads one keyed message, never the transcript population", async () => {
+  const requests: unknown[] = [],
+    expected: NativeMessage = {
+      id: "msg_selected",
+      type: "user",
+      text: "selected",
+      time: { created: 1 },
+    };
+  const client = {
+    read: <T>(run: (api: unknown) => Promise<T>) =>
+      run({
+        session: {
+          message: {
+            get: (input: unknown) => {
+              requests.push(input);
+              return Promise.resolve(expected);
+            },
+          },
+        },
+        message: { list: () => Promise.resolve({ data: [], cursor: {} }) },
+      }),
+  } as unknown as V2Client;
+  assertEquals(
+    await new Messages(() => client).get("opcv2-ses_fixture", expected.id),
+    expected,
+  );
+  assertEquals(requests, [{
+    sessionID: "ses_fixture",
+    messageID: "msg_selected",
+  }]);
 });
