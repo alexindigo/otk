@@ -40,6 +40,118 @@ const user = (key: string): NativeMessage => ({
   text: key,
   time: { created: 1 },
 });
+Deno.test("V2 compaction carries its own lifecycle without becoming a prompt", () => {
+  for (const status of ["running", "completed", "failed"] as const) {
+    const raw = {
+      id: "msg_compaction",
+      type: "compaction",
+      status,
+      reason: "manual",
+      summary: "summary",
+      error: { type: "unknown", message: "Summary failed" },
+      time: { created: 1 },
+    } as NativeMessage;
+    const message = mapMessage(raw, id, { order: 1 })!;
+    assertEquals(message.role === "user" && message.origin, "compaction");
+    const part = message.parts.find((part) => part.kind === "compaction")!;
+    assertEquals(Reflect.get(part, "status"), status);
+    assertEquals(JSON.parse(JSON.stringify(part)).status, status);
+    const summary = message.parts.find((part) => part.kind === "text");
+    assertEquals(summary?.kind === "text" && summary.synthetic === true, false);
+    if (status === "failed") {
+      assertEquals(JSON.stringify(summary).includes("Summary failed"), true);
+    }
+  }
+});
+
+Deno.test("V2 queued compaction is provider context and keeps its inbox owner", async () => {
+  const updates: ContentOp[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No native read expected");
+    },
+    policy,
+    content: (_id, op) => {
+      updates.push(op);
+    },
+    diagnostic() {},
+    invalidated() {},
+  });
+  transcript.subscriptions(id, 1);
+  try {
+    await transcript.event({
+      type: "session.inbox.enqueued",
+      id: "evt_queue",
+      created: 1,
+      data: {
+        sessionID: "ses_fixture",
+        inboxID: "msg_queued",
+        item: { type: "compaction", delivery: "queue", payload: {} },
+      },
+    });
+    const event = updates.find((op) => op.op === "message.upsert");
+    assertEquals(
+      event?.op === "message.upsert" && event.message.id,
+      "msg_queued",
+    );
+    assertEquals(
+      event?.op === "message.upsert" && event.message.role === "user" &&
+        event.message.origin,
+      "compaction",
+    );
+    assertEquals(
+      event?.op === "message.upsert" &&
+        Reflect.get(event.message.parts[0], "status"),
+      "queued",
+    );
+  } finally {
+    await transcript.stop();
+  }
+});
+
+Deno.test("V2 successive compactions keep distinct native lifecycle owners", async () => {
+  const updates: ContentOp[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No native read expected");
+    },
+    policy,
+    content: (_id, op) => {
+      updates.push(op);
+    },
+    diagnostic() {},
+    invalidated() {},
+  });
+  transcript.subscriptions(id, 1);
+  try {
+    for (const key of ["first", "second"]) {
+      await transcript.event({
+        type: "session.compaction.started",
+        id: `evt_${key}`,
+        created: 1,
+        data: {
+          sessionID: "ses_fixture",
+          inputID: `msg_${key}`,
+          reason: "manual",
+        },
+      });
+      await transcript.event({
+        type: "session.compaction.ended",
+        id: `evt_${key}_end`,
+        created: 2,
+        data: { sessionID: "ses_fixture", reason: "manual", text: key },
+      });
+    }
+    assertEquals(
+      updates.flatMap((op) =>
+        op.op === "message.upsert" ? [op.message.id] : []
+      ),
+      ["msg_first", "msg_first", "msg_second", "msg_second"],
+    );
+  } finally {
+    await transcript.stop();
+  }
+});
 Deno.test("re-staging the same message retires body authority for file-mode changes", async () => {
   const notices: unknown[] = [];
   const transcript = new Transcript({

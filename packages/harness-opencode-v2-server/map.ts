@@ -477,13 +477,16 @@ export function mapMessage(
     };
   }
   if (raw.type === "compaction") {
+    const summary = raw.status === "failed"
+      ? errorText(raw.error)
+      : raw.summary;
     return {
       ...common,
       role: "user",
       origin: "compaction",
       parts: [
-        { kind: "compaction", id: `${raw.id}:compaction` },
-        prose("summary" in raw ? raw.summary : errorText(raw.error), true),
+        { kind: "compaction", id: `${raw.id}:compaction`, status: raw.status },
+        ...(summary ? [prose(summary)] : []),
       ],
     };
   }

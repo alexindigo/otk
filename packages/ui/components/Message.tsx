@@ -8,7 +8,7 @@ import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
 import type { UsageSummary } from "@otk/protocol";
-import { createMessageLayout, elapsed } from "./work-log.ts";
+import { createMessageLayout, elapsed, messageLayoutRole } from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
@@ -129,7 +129,7 @@ export default function Message(
   const framing = createMemo(() =>
     layout.update(
       props.ownerID ?? props.message.id,
-      props.message.role,
+      messageLayoutRole(props.message),
       props.segments ??
         [{ messageID: props.message.id, parts: props.message.parts }],
       JSON.stringify(props.prefs),
@@ -215,7 +215,7 @@ export default function Message(
             article = element;
           },
           contextTarget(() => ({
-            kind: props.message.role === "user" ? "prompt" : "reply",
+            kind: prompt() ? "prompt" : "reply",
             data: target(),
           })),
         ]}
@@ -231,19 +231,16 @@ export default function Message(
             <div
               class={frame().transcript
                 ? "otk-transcript-frame"
-                : props.message.role === "user"
+                : prompt()
                 ? "otk-user-bubble otk-created-trigger"
                 : "otk-message-content"}
               ref={(element) => {
-                if (!frame().transcript && props.message.role === "user") {
+                if (!frame().transcript && prompt()) {
                   bubble = element;
                 }
               }}
-              tabindex={!frame().transcript && props.message.role === "user"
-                ? "0"
-                : undefined}
-              data-otk-focus={!frame().transcript &&
-                  props.message.role === "user"
+              tabindex={!frame().transcript && prompt() ? "0" : undefined}
+              data-otk-focus={!frame().transcript && prompt()
                 ? "content"
                 : undefined}
             >
