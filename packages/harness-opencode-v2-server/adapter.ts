@@ -249,7 +249,12 @@ export class OpencodeV2ServerAdapter implements Harness {
               operation,
             );
             await digest?.deleteIntent(id, intent, "confirmed", generation);
-            await this.#deleted(id, metadata, generation);
+            await this.#deleted(
+              id,
+              metadata,
+              generation,
+              operation?.signal ?? client.signal,
+            );
           } catch (error) {
             await digest?.deleteIntent(id, intent, "failed", generation);
             throw error;
@@ -507,6 +512,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     id: string,
     metadata: SessionMetadata | undefined,
     generation: number,
+    signal: AbortSignal,
   ): Promise<void> {
     if (generation !== this.#generation) return;
     const previous = this.#index.getMetadata(id);
@@ -526,7 +532,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (previous) {
       await this.#refreshProjects(
         [previous.directory],
-        this.stream.client.signal,
+        signal,
         generation,
       );
     }
@@ -835,6 +841,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         changedID,
         this.#index.getMetadata(changedID),
         generation,
+        signal,
       );
       return;
     }
