@@ -79,6 +79,38 @@ Deno.test("re-staging the same message retires body authority for file-mode chan
   assertEquals(notices.length, 2);
   await transcript.stop();
 });
+Deno.test("an already-observed API revert is not invalidated again by its delayed stage event", async () => {
+  const notices: unknown[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No body acquisition permitted");
+    },
+    policy,
+    content() {},
+    diagnostic() {},
+    invalidated: (value) => notices.push(value),
+  });
+  const revert = { messageID: "msg_boundary", files: [] };
+  transcript.observe({
+    id: "ses_fixture",
+    projectID: "project",
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 1, updated: 2 },
+    location: { directory: "/project" },
+    revert,
+  });
+  const version = transcript.replay.version(id),
+    epoch = transcript.replay.clock(id).epoch;
+  await transcript.event({
+    type: "session.revert.staged",
+    data: { sessionID: "ses_fixture", revert },
+  });
+  assertEquals(transcript.replay.version(id), version);
+  assertEquals(transcript.replay.clock(id).epoch, epoch);
+  assertEquals(notices.length, 1);
+  await transcript.stop();
+});
 Deno.test("V2 model selection replaces its variant in content and latest-prompt metadata", () => {
   const model = { provider: "fake", model: "first" },
     next = { provider: "fake", model: "second" };

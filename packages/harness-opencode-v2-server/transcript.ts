@@ -72,6 +72,28 @@ interface LiveShell {
   controller: AbortController;
   task: Promise<void>;
 }
+/** API snapshots and staged events describe the same boundary, including file mode. */
+function boundaryKey(revert: unknown): string {
+  const value = record(revert);
+  return JSON.stringify([
+    text(value.messageID) ?? null,
+    text(value.partID) ?? null,
+    text(value.snapshot) ?? null,
+    Array.isArray(value.files)
+      ? value.files.map((raw) => {
+        const file = record(raw);
+        return [
+          file.file,
+          file.patch,
+          file.additions,
+          file.deletions,
+          file.status,
+          file.more,
+        ];
+      })
+      : null,
+  ]);
+}
 const encode = (value: Cursor) =>
   btoa(JSON.stringify(value)).replaceAll("+", "-").replaceAll("/", "_").replace(
     /=+$/,
@@ -139,7 +161,7 @@ export class Transcript {
     { shells: Map<string, string>; compaction?: string }
   >();
   #finished = new Map<string, Map<string, number>>();
-  #cutoffs = new Map<string, string | null>();
+  #boundaries = new Map<string, string>();
   #tasks = new Set<Promise<unknown>>();
   #backfills = new Map<string, AbortController>();
   #cancelBackfills(id?: string): void {
@@ -367,8 +389,8 @@ export class Transcript {
     this.recovery.release(id);
     if (id === undefined) this.#finished.clear();
     else this.#finished.delete(id);
-    if (id === undefined) this.#cutoffs.clear();
-    else this.#cutoffs.delete(id);
+    if (id === undefined) this.#boundaries.clear();
+    else this.#boundaries.delete(id);
     this.#releaseHelpers(id);
     for (const [key, shell] of this.#shells) {
       if (id === undefined || shell.session === id) {
@@ -452,7 +474,7 @@ export class Transcript {
   observe(raw: NativeSession): void {
     const id = ids.encode(raw.id), baseline = this.#baselines.get(id);
     this.changed(id);
-    const changed = this.#boundary(id, raw.revert?.messageID ?? null);
+    const changed = this.#boundary(id, raw.revert);
     if (changed && baseline) {
       this.#baselines.set(id, {
         raw,
@@ -465,11 +487,12 @@ export class Transcript {
       baseline.presentation = undefined;
     }
   }
-  #boundary(id: string, cutoff: string | null, force = false): boolean {
-    const changed = this.#cutoffs.has(id)
-      ? this.#cutoffs.get(id) !== cutoff
+  #boundary(id: string, revert: unknown, force = false): boolean {
+    const key = boundaryKey(revert);
+    const changed = this.#boundaries.has(id)
+      ? this.#boundaries.get(id) !== key
       : true;
-    this.#cutoffs.set(id, cutoff);
+    this.#boundaries.set(id, key);
     if (changed || force) this.invalidate(id);
     return changed || force;
   }
@@ -511,7 +534,7 @@ export class Transcript {
             contexts: new Map<string, MessageContext>(),
           };
           this.#baselines.set(id, value);
-          this.#cutoffs.set(id, raw.revert?.messageID ?? null);
+          this.#boundaries.set(id, boundaryKey(raw.revert));
           return value;
         }).finally(() => {
           opening.settled = true;
@@ -931,7 +954,7 @@ export class Transcript {
               signal,
             ),
             cutoff = rawSession.revert?.messageID;
-          this.#cutoffs.set(id, cutoff ?? null);
+          this.#boundaries.set(id, boundaryKey(rawSession.revert));
           const publishRows = async (rows: NativeMessage[]) => {
             const facts = await this.#facts(
               {
@@ -1012,14 +1035,13 @@ export class Transcript {
       !event.type.startsWith("session.execution.")
     ) this.changed(id);
     if (/^session\.revert\./.test(event.type)) {
-      const cutoff = event.type === "session.revert.staged"
-        ? text(record(d.revert).messageID) ?? null
-        : null;
+      const revert = event.type === "session.revert.staged"
+        ? d.revert
+        : undefined;
       this.#boundary(
         id,
-        cutoff,
-        event.type === "session.revert.staged" ||
-          event.type === "session.revert.committed" && !this.#cutoffs.has(id),
+        revert,
+        event.type === "session.revert.committed" && !this.#boundaries.has(id),
       );
       return;
     }
