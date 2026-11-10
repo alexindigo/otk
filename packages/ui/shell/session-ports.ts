@@ -43,6 +43,9 @@ export function sessionPorts(o: {
     forms: () =>
       resources.forms(target.sidecarId).filter((f) =>
         f.owner.kind === "session" &&
+        !session.state.content.questions.some((question) =>
+          question.id === f.id
+        ) &&
         belongsToSession(
           f.owner.sessionID,
           target.sessionID,

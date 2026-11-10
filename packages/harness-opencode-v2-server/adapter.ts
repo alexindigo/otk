@@ -24,6 +24,7 @@ import { V2Catalogs } from "./catalogs.ts";
 import { Transcript } from "./transcript.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
 import { readSessionActivity } from "./recency.ts";
+import { pendingAttention } from "./attention.ts";
 import { commands } from "./commands.ts";
 import { V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
@@ -62,10 +63,6 @@ export class OpencodeV2ServerAdapter implements Harness {
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
-  #pendingCounts = new Map<
-    string,
-    { permissions: number; questions: number; stale: number }
-  >();
   #settledPending = new Set<string>();
   #running = new Map<string, number>();
   #finished = new Map<string, number>();
@@ -212,18 +209,7 @@ export class OpencodeV2ServerAdapter implements Harness {
               op.op === "permission.remove" ? "permission" : "form"
             }:${op.requestID}`,
           );
-          const entry = this.#index.getMetadata(id);
-          if (entry) {
-            const counts = this.#pendingCounts.get(ids.decode(id));
-            this.#upsert({
-              ...entry,
-              attention: {
-                ...entry.attention,
-                permissions: counts?.permissions ?? 0,
-                questions: counts?.questions ?? 0,
-              },
-            });
-          }
+          this.#refreshAttention(id);
         }
       },
     );
@@ -347,7 +333,6 @@ export class OpencodeV2ServerAdapter implements Harness {
         await digest?.stop();
         await this.prompts.stop();
         this.#pending.clear();
-        this.#pendingCounts.clear();
         this.#settledPending.clear();
         this.pending.clear();
         this.#running.clear();
@@ -491,14 +476,30 @@ export class OpencodeV2ServerAdapter implements Harness {
   }
   #upsert(entry: SessionMetadata): void {
     if (!this.#sink) return;
+    const pending = pendingAttention(
+      entry.id,
+      [...this.#pending.values()].filter((row) => row.sessionID !== "global")
+        .map((row) => ({ ...row, sessionID: ids.encode(row.sessionID) })),
+      (id) => id === entry.id ? entry : this.#index.getMetadata(id),
+    );
+    entry = {
+      ...entry,
+      attention: { ...entry.attention, ...pending.attention },
+      ...(pending.stale ? { activityAuthority: "unknown" } : {}),
+    };
     if (!this.#sink.index) this.#index.upsertMetadata(entry);
     this.#sink.indexUpsert(entry);
+  }
+  #refreshAttention(id: string): void {
+    for (const key of [id, ...this.#index.ancestors(id)]) {
+      const entry = this.#index.getMetadata(key);
+      if (entry) this.#upsert(entry);
+    }
   }
   #merge(row: SessionMetadata): void {
     const current = this.#index.getMetadata(row.id);
     if (current && current.timeUpdated > row.timeUpdated) row = { ...current };
-    const native = ids.decode(row.id),
-      pending = this.#pendingCounts.get(native);
+    const native = ids.decode(row.id);
     this.#upsert({
       ...row,
       status: this.#running.has(native) || this.#shells.busy(native)
@@ -509,12 +510,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       retry: current?.retry,
       attention: {
         ...(current?.attention ?? row.attention),
-        permissions: pending?.permissions ?? 0,
-        questions: pending?.questions ?? 0,
       },
-      activityAuthority: pending?.stale
-        ? "unknown"
-        : this.#activityCurrent
+      activityAuthority: this.#activityCurrent
         ? "current"
         : current?.activityAuthority ?? "unknown",
     });
@@ -609,7 +606,6 @@ export class OpencodeV2ServerAdapter implements Harness {
   #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
     busy ||= this.#shells.busy(raw.id);
     const mapped = session(raw);
-    const pending = this.#pendingCounts.get(raw.id);
     return {
       id: mapped.id,
       parentID: mapped.parentID,
@@ -620,13 +616,13 @@ export class OpencodeV2ServerAdapter implements Harness {
       timeUpdated: mapped.time.updated,
       archived: mapped.archived,
       status: busy ? "busy" : "idle",
-      activityAuthority: pending?.stale ? "unknown" : "current",
+      activityAuthority: "current",
       ...(busy && this.#index.getMetadata(mapped.id)?.retry
         ? { retry: this.#index.getMetadata(mapped.id)!.retry }
         : {}),
       attention: {
-        permissions: pending?.permissions ?? 0,
-        questions: pending?.questions ?? 0,
+        permissions: 0,
+        questions: 0,
         childPermissions: 0,
         childQuestions: 0,
         ...(!busy && raw.outcome === "failed"
@@ -635,22 +631,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
     };
   }
-  #countPending(row: Pending, delta: 1 | -1): void {
-    const count = this.#pendingCounts.get(row.sessionID) ??
-      { permissions: 0, questions: 0, stale: 0 };
-    count[row.kind === "permission" ? "permissions" : "questions"] += delta;
-    if (row.stale) count.stale += delta;
-    if (count.permissions || count.questions) {
-      this.#pendingCounts.set(row.sessionID, count);
-    } else this.#pendingCounts.delete(row.sessionID);
-  }
   #setPending(key: string, row?: Pending): void {
-    const previous = this.#pending.get(key);
-    if (previous) this.#countPending(previous, -1);
-    if (row) {
-      this.#pending.set(key, row);
-      this.#countPending(row, 1);
-    } else this.#pending.delete(key);
+    if (row) this.#pending.set(key, row);
+    else this.#pending.delete(key);
   }
   #pendingEvent(event: V2Event, sid: unknown, form: unknown): void {
     const kind = event.type.startsWith("permission.") ? "permission" : "form";
@@ -681,27 +664,15 @@ export class OpencodeV2ServerAdapter implements Harness {
           ? this.#index.getMetadata(ids.encode(owner))?.directory
           : undefined);
       if (directory) {
+        const accepted = kind === "permission"
+          ? this.pending.acceptPermission({ directory }, event.data)
+          : this.pending.acceptForm({ directory }, form);
+        if (!accepted) return;
         this.#setPending(key, { id, kind, sessionID: owner, directory });
       }
     }
     if (!owner || owner === "global") return;
-    const current = this.#index.getMetadata(ids.encode(owner));
-    if (current) {
-      const counts = this.#pendingCounts.get(owner);
-      this.#upsert({
-        ...current,
-        activityAuthority: counts?.stale
-          ? "unknown"
-          : this.#activityCurrent
-          ? "current"
-          : current.activityAuthority,
-        attention: {
-          ...current.attention,
-          permissions: counts?.permissions ?? 0,
-          questions: counts?.questions ?? 0,
-        },
-      });
-    }
+    this.#refreshAttention(ids.encode(owner));
   }
   async #resync(
     client: V2Client,
@@ -839,10 +810,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#activityCurrent = true;
       this.#shells.replace(shells);
       this.#pending = pending;
-      this.#pendingCounts.clear();
-      for (const [key, row] of this.#pending) {
+      for (const [key] of this.#pending) {
         if (this.#settledPending.has(key)) this.#pending.delete(key);
-        else this.#countPending(row, 1);
       }
       for (const apply of inventories) apply();
       if (reconnect) {

@@ -130,5 +130,30 @@ Deno.test("session ports capture target once while capability and resource gette
   ports.dirty("permissions", true);
   assertEquals(dirty, [["permissions", true]]);
   assertStrictEquals(ports.prefs(), DEFAULT_PREFS);
+  resources.forms = () => [
+    {
+      id: "question-form",
+      owner: { kind: "session", sessionID: "original" },
+      directory: "/original",
+      title: "Question projection",
+      fields: [],
+    },
+    {
+      id: "typed-form",
+      owner: { kind: "session", sessionID: "original" },
+      directory: "/original",
+      title: "Typed form",
+      fields: [],
+    },
+  ];
+  session.state.content.questions = [{
+    id: "question-form",
+    sessionID: "original",
+    questions: [],
+  }];
+  assertEquals(ports.questions().map((request) => request.id), [
+    "question-form",
+  ]);
+  assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
   resources.stop();
 });

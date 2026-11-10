@@ -5,6 +5,56 @@ import { V2Client } from "../client.ts";
 import { V2Pending } from "../pending.ts";
 import { interrupt } from "../interrupt.ts";
 const root = "opcv2-ses_root", helper = "opcv2-ses_helper";
+Deno.test("V2 request events make canonical requests available before attention and preserve unrelated requests", async () => {
+  const f = fixture(), location = { directory: "/repo" };
+  for (const id of ["per_one", "per_two"]) {
+    assertEquals(
+      f.pending.acceptPermission(location, {
+        id,
+        sessionID: "ses_helper",
+        action: "shell",
+        resources: ["echo safe"],
+        metadata: { command: "echo safe" },
+      }),
+      true,
+    );
+  }
+  assertEquals(
+    (await f.pending.permissions.listPermissions(root)).map((r) => r.id),
+    ["per_one", "per_two"],
+  );
+  assertEquals(
+    f.pending.acceptPermission(location, { id: "per_invalid" }),
+    false,
+  );
+  assertEquals(
+    f.pending.acceptForm(location, {
+      id: "frm_event",
+      sessionID: "ses_helper",
+      title: "Event question",
+      metadata: { kind: "question" },
+      fields: [{ key: "q0", type: "string", options: [] }],
+    }),
+    true,
+  );
+  assertEquals(
+    (await f.pending.questions.listQuestions(root)).map((r) => r.id),
+    ["frm_event"],
+  );
+  assertEquals((await f.pending.forms.list()).map((r) => r.id), ["frm_event"]);
+  f.pending.replacePermissions(location, [{
+    id: "per_two",
+    sessionID: "ses_helper",
+    action: "shell",
+    resources: ["echo safe"],
+    metadata: { command: "echo safe" },
+  }]);
+  assertEquals(
+    (await f.pending.permissions.listPermissions(root)).map((r) => r.id),
+    ["per_two"],
+  );
+  assertEquals((await f.pending.forms.list()).length, 1);
+});
 function fixture() {
   const calls: { path: string; body: unknown; headers: Headers }[] = [];
   let response = () => Promise.resolve(new Response(null, { status: 204 }));
@@ -51,7 +101,7 @@ function fixture() {
     },
   };
 }
-Deno.test("V2 permissions reply decision once to asking helper, decline carries feedback, settlement converges", async () => {
+Deno.test("V2 permissions preserve asking owner and distinguish decline from explicit feedback", async () => {
   const f = fixture();
   f.pending.replace({ directory: "/repo" }, [{
     id: "per_1",
@@ -59,6 +109,7 @@ Deno.test("V2 permissions reply decision once to asking helper, decline carries 
     action: "shell",
     resources: ["echo safe"],
     save: ["echo *"],
+    metadata: { command: "echo safe" },
     source: { type: "tool", messageID: "msg_1", id: "call_1" },
   }], []);
   const requests = await f.pending.permissions.listPermissions(root);
@@ -88,9 +139,18 @@ Deno.test("V2 permissions reply decision once to asking helper, decline carries 
   }, f.operation);
   assertEquals(f.calls[1].body, {
     decision: "reject",
-    message: "The user declined this request.",
   });
   assertEquals(f.fences(), 2);
+  await f.pending.permissions.replyPermission({
+    sessionID: helper,
+    requestID: "per_feedback",
+    reply: "reject",
+    message: "Use the read tool instead",
+  }, f.operation);
+  assertEquals(f.calls[2].body, {
+    decision: "reject",
+    message: "Use the read tool instead",
+  });
 });
 Deno.test("V2 global-owner forms retain location and typed answers, failures retain pending drafts", async () => {
   const f = fixture();

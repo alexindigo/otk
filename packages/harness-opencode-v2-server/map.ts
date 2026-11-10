@@ -104,6 +104,14 @@ type Tool = Extract<NativeMessage, { type: "assistant" }>["content"][number] & {
 export function sharedToolName(name: string): string {
   return name === "shell" ? "bash" : name === "subagent" ? "task" : name;
 }
+function userDeclined(error: unknown): boolean {
+  const value = record(error);
+  // Native runner/step.ts preserves user declines as aborted tool errors.
+  // Location shutdown and other interruptions are not user decisions.
+  return value.type === "permission.rejected" || value.type === "aborted" &&
+      (value.message === "The user dismissed this question" ||
+        value.message === "The user declined this tool call");
+}
 export function mapTool(tool: Tool): ToolCall {
   const state = tool.state,
     input = record(state.input),
@@ -118,8 +126,7 @@ export function mapTool(tool: Tool): ToolCall {
     sourceName: tool.name,
     status: state.status === "streaming"
       ? "pending"
-      : state.status === "error" &&
-          record(state.error).type === "permission.rejected"
+      : state.status === "error" && userDeclined(state.error)
       ? "denied"
       : state.status,
     time: {
@@ -251,11 +258,18 @@ export function mapTool(tool: Tool): ToolCall {
         ...base,
         tool: "question",
         questions: Array.isArray(input.questions)
-          ? input.questions.flatMap((value) => {
+          ? input.questions.flatMap((value, index) => {
             const q = record(value);
+            const answer = Array.isArray(meta.answers)
+              ? meta.answers[index]
+              : undefined;
             return typeof q.question === "string"
               ? [{
                 text: q.question,
+                ...(Array.isArray(answer) &&
+                    answer.every((value) => typeof value === "string")
+                  ? { answer: [...answer] }
+                  : {}),
                 options: Array.isArray(q.options)
                   ? q.options.flatMap((value) => {
                     const o = record(value);
@@ -288,7 +302,9 @@ export function mapTool(tool: Tool): ToolCall {
       };
   }
 }
-function mapFileDiffs(value: unknown): import("@otk/protocol").FileDiff[] {
+export function mapFileDiffs(
+  value: unknown,
+): import("@otk/protocol").FileDiff[] {
   return Array.isArray(value)
     ? value.flatMap((raw) => {
       const file = record(raw);
