@@ -10,5 +10,8 @@ export const opencodeV2DigestMigrations: {
   migrations: [{
     version: 1,
     sql: new URL("./digest-migrations/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./digest-migrations/002.sql", import.meta.url),
   }],
 };
