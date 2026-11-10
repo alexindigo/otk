@@ -285,6 +285,10 @@ export class V2Stream {
     };
     touch();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let cancelReader: (() => Promise<void>) | undefined;
+    const cancelBody = () => {
+      void cancelReader?.();
+    };
     try {
       const response = await this.fetcher(
         new URL("/api/event", client.service.endpoint.url),
@@ -309,6 +313,14 @@ export class V2Stream {
         );
       }
       reader = response.body.getReader();
+      const ownedReader = reader;
+      let cancellation: Promise<void> | undefined;
+      cancelReader = () =>
+        cancellation ??= ownedReader.cancel().catch(() => {});
+      // Transport abort does not necessarily retire an acquired body read.
+      // Cancel the body at its owner and join that same cleanup in finally.
+      signal.addEventListener("abort", cancelBody, { once: true });
+      if (signal.aborted) cancelBody();
       // Closure aborts snapshot reads even while the parser is backpressured.
       void reader.closed.then(
         () => owner.abort(new Error("Opencode V2 stream closed")),
@@ -351,7 +363,8 @@ export class V2Stream {
     } finally {
       owner.abort();
       pause();
-      await reader?.cancel().catch(() => {});
+      signal.removeEventListener("abort", cancelBody);
+      await cancelReader?.();
       reader?.releaseLock();
       await bootstrap?.catch(() => {});
     }
