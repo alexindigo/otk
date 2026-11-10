@@ -15,6 +15,7 @@ import { waitFor } from "./opencode.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import { FreezeProxy } from "./freeze-proxy.ts";
 import type { NativeFixture } from "./native-fixture.ts";
+import { nativeListeningURL } from "./native-announcement.ts";
 
 /** Stock managed V2 service, private HOME/XDG and test-owned discovery proxy. */
 export class OpencodeV2Test implements NativeFixture {
@@ -134,9 +135,7 @@ export class OpencodeV2Test implements NativeFixture {
             if (test.process.exitCode !== null) {
               throw new Error(`V2 native exited: ${test.log}`);
             }
-            return /server listening on (http:\/\/127\.0\.0\.1:\d+)/.exec(
-              test.log,
-            )?.[1];
+            return nativeListeningURL(test.log, test.kind);
           },
           Boolean,
           120_000,

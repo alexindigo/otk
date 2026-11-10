@@ -9,6 +9,7 @@ import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 import { nativeBinary } from "./native.ts";
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
 import { isSessionID } from "@otk/protocol";
+import { nativeListeningURL } from "./native-announcement.ts";
 class NativePortCollision extends Error {}
 function sessionFixture<T extends { id: string }>(
   raw: T,
@@ -119,6 +120,11 @@ export class OpencodeTest {
       }>;
     } = {},
   ): Promise<OpencodeTest> {
+    if (!nativeVersion.startsWith("1.")) {
+      throw new Error(
+        "V1 protocol fixture requires a V1 lane; use the semantic native fixture for shared behavior",
+      );
+    }
     return await acquire("native fixture", async () => {
       const providers = Object.entries(options.providers ?? {});
       const instances = new Set([provider]);
@@ -409,9 +415,7 @@ export class OpencodeTest {
       this.#record(chunk);
       output = (output + new TextDecoder().decode(chunk)).slice(-4096);
       if (
-        output.split(/\r?\n/).includes(
-          `opencode server listening on ${this.nativeURL}`,
-        )
+        nativeListeningURL(output, this.kind) === this.nativeURL
       ) {
         nativeAnnounced = true;
         announced.resolve();
