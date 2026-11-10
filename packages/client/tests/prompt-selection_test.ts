@@ -488,6 +488,13 @@ Deno.test("model intent keeps advertised explicit variants and clears unsupporte
   const unset = chooseModel(emptyDraft(), second, context);
   assertEquals(Object.hasOwn(unset, "variant"), false);
 });
+Deno.test("model intent cannot resurrect a restored variant after selecting a variantless model", () => {
+  const input = { ...context, context: { model: first, variant: "high" } };
+  const noVariants = chooseModel(emptyDraft(), plain, input);
+  assertEquals(Object.hasOwn(noVariants, "variant"), true);
+  const back = chooseModel(noVariants, first, input);
+  assertEquals(effectiveSelection(back, input).variantChoice, undefined);
+});
 
 Deno.test("variant intent accepts advertised values and Default suppresses restore while projecting native configuration", () => {
   const draft = emptyDraft();

@@ -161,12 +161,17 @@ export function effectiveSelection(
 export function chooseModel(
   draft: Draft,
   model: ModelRef,
-  { catalog }: PromptSelectionContext,
+  { catalog, context }: PromptSelectionContext,
 ): Draft {
   const { info } = modelInfo(model, catalog);
   const next = { ...draft, model: { ...model } };
-  return catalog !== undefined && draft.variant !== undefined &&
-      !info?.variants.includes(draft.variant)
+  // A restored choice that becomes invalid is explicitly cleared too. Otherwise
+  // it can reappear when the user returns to its previous model.
+  const variant = Object.hasOwn(draft, "variant")
+    ? draft.variant
+    : context?.variant;
+  return catalog !== undefined && variant !== undefined &&
+      !info?.variants.includes(variant)
     ? { ...next, variant: undefined }
     : next;
 }
