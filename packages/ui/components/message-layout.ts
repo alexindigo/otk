@@ -5,6 +5,7 @@ import { partFrames, type PartGroup, partGroups } from "./work-log.ts";
 
 export interface MessageLayout {
   frames: { id: string; transcript: boolean; groups: PartGroup[] }[];
+  userBubble: boolean;
   prompt: boolean;
   copyable: boolean;
 }
@@ -17,7 +18,12 @@ interface Descriptor {
 /** Presentation indexes borrow source segments; ordinary replacements never
  * flatten a grouped reply or re-run historical feature presenters. */
 export function createMessageLayout() {
-  let state: MessageLayout = { frames: [], prompt: false, copyable: false };
+  let state: MessageLayout = {
+    frames: [],
+    userBubble: false,
+    prompt: false,
+    copyable: false,
+  };
   let preference: string | undefined, previousRole = "", copyable = 0;
   let order: string[] = [];
   const segments = new Map<string, { parts: Part[]; rows: Descriptor[] }>();
@@ -132,9 +138,12 @@ export function createMessageLayout() {
           )
         );
         order = input.map((segment) => segment.messageID);
+        const userBubble = (role === "user" || role === "context") &&
+          next.some((frame) => !frame.transcript);
         state = {
           frames: next,
-          prompt: role === "user" && next.some((frame) => !frame.transcript),
+          userBubble,
+          prompt: role === "user" && userBubble,
           copyable: copyable > 0,
         };
         return state;

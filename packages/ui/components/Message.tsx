@@ -137,6 +137,7 @@ export default function Message(
     )
   );
   const frames = () => framing().frames;
+  const userBubble = () => framing().userBubble;
   const prompt = () => framing().prompt;
   const identity = () => ({
     ownerID: props.ownerID,
@@ -220,7 +221,7 @@ export default function Message(
           })),
         ]}
         class={["otk-message", {
-          "otk-user-message": prompt(),
+          "otk-user-message": userBubble(),
           "is-revealed": revealed(),
         }]}
         data-message={props.message.id}
@@ -231,7 +232,7 @@ export default function Message(
             <div
               class={frame().transcript
                 ? "otk-transcript-frame"
-                : prompt()
+                : userBubble()
                 ? "otk-user-bubble otk-created-trigger"
                 : "otk-message-content"}
               ref={(element) => {

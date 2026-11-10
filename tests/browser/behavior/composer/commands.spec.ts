@@ -41,7 +41,7 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await prompt(page).fill("/canary ");
   await prompt(page).press("Enter");
   await expect(
-    page.locator(".otk-message .otk-text").filter({
+    page.locator(".otk-user-message .otk-user-bubble .otk-text").filter({
       hasText: "SKILL-FIXTURE content",
     }),
   ).toBeVisible();

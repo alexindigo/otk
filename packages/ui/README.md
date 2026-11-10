@@ -192,6 +192,12 @@ the same label/rule pattern as WorkLog: “Compacting…” for a pending reques
 part kinds. Part renderers receive the client projection's optional `pending`
 input; the summary reply retains its normal rendering.
 
+Shared message framing separates `userBubble` presentation from `prompt` action
+eligibility. Visible provider-context content uses the same user bubble as
+ordinary user text, without becoming editable, recallable or a Timeline prompt.
+Transcript markers remain outside bubbles; assistant content retains its reply
+presentation.
+
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its
 lifetime, so continued backend steps share one indicator and terminal replies
@@ -518,15 +524,15 @@ remain independent of these presentation lifetimes.
 the application composition. Its adapter projects `ShellPorts.transcript`
 through the client `timelinePrompts` helper and the part registry's source
 presentation. The shared `messageFrames` projection owns both transcript framing
-and prompt-bubble visibility: Timeline lists a message iff that projection gives
-it a prompt bubble. Transcript-only markers and hidden-only messages are
-omitted; mixed ordinary content remains a prompt. Rows share prompt context
-targets and `MessageActions`; the most recently revealed row uses the shared
-vertical selection. Load earlier prompts pages the same client session. The
-hidden `transcript.reveal` command belongs to the mounted SessionView; Message
-exposes a reveal control that scrolls and focuses its own bubble, while the
-viewport suspends tail following for that explicit navigation. No panel reads
-another component's DOM or maintains a second transcript store.
+and prompt eligibility: Timeline lists a message iff that projection marks it as
+a prompt, independently of its bubble presentation. Transcript-only markers and
+hidden-only messages are omitted; mixed ordinary content remains a prompt. Rows
+share prompt context targets and `MessageActions`; the most recently revealed
+row uses the shared vertical selection. Load earlier prompts pages the same
+client session. The hidden `transcript.reveal` command belongs to the mounted
+SessionView; Message exposes a reveal control that scrolls and focuses its own
+bubble, while the viewport suspends tail following for that explicit navigation.
+No panel reads another component's DOM or maintains a second transcript store.
 
 Sessions and Timeline use the same `ListRow` frame: shared 30px height,
 selection pointer, highlight bounds, padding and leading/label/trailing slots.

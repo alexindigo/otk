@@ -49,22 +49,29 @@ export function partFrames(
 export function messageFrames(
   message: FramedMessage,
   presentation: (part: Part) => PartPresentation,
-): { frames: PartFrame[]; prompt: boolean; copyable: boolean } {
+): {
+  frames: PartFrame[];
+  userBubble: boolean;
+  prompt: boolean;
+  copyable: boolean;
+} {
   let copyable = false;
   const frames = partFrames(message.parts, (part) => {
     const value = presentation(part);
     copyable ||= value.copyable ?? !!value.text;
     return value;
   });
+  const userBubble = message.role === "user" &&
+    frames.some((frame) => !frame.transcript);
   return {
     copyable,
+    userBubble,
     frames: frames.length || message.role === "user" ? frames : [{
       id: message.id,
       parts: [],
       transcript: false,
     }],
-    prompt: messageLayoutRole(message) === "user" &&
-      frames.some((frame) => !frame.transcript),
+    prompt: messageLayoutRole(message) === "user" && userBubble,
   };
 }
 /** Layout groups follow feature contributions, never a central part-kind list. */
