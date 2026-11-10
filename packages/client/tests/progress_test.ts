@@ -14,6 +14,15 @@ const facts = (completed = 0, activeMs = 0): ProgressFacts => ({
   started: 0,
   advanced: 1000,
 });
+Deno.test("ready progress clears pending copy for every resource label", () => {
+  const estimate = new ProgressEstimate();
+  estimate.update({ ...facts(), phase: "ready" });
+  for (
+    const label of ["Loading messages", "Loading sessions", "Indexing sessions"]
+  ) {
+    assertEquals(estimate.display(label, 1000), { busy: false, text: "" });
+  }
+});
 Deno.test("progress estimates steady work from active time, never from waiting", () => {
   const owner = new ProgressEstimate();
   owner.update(facts());
