@@ -242,6 +242,10 @@ export class V2Prompt implements PromptCapability {
   constructor(
     readonly client: () => V2Client,
     readonly policy?: AttachmentPolicy,
+    readonly interruptSession?: (
+      id: string,
+      operation?: OperationContext,
+    ) => Promise<void>,
   ) {}
   async prompt(
     input: PromptInput,
@@ -324,6 +328,7 @@ export class V2Prompt implements PromptCapability {
     }
   }
   abort(id: string, operation?: OperationContext): Promise<void> {
+    if (this.interruptSession) return this.interruptSession(id, operation);
     return interrupt(this.client(), id, operation);
   }
   async stop(): Promise<void> {

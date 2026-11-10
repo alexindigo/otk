@@ -38,6 +38,13 @@ receipts never infer a lost code-revert outcome from its message ID alone.
 Shell remains non-LLM. Commands prepare all selected files before selection
 changes; successful switches checkpoint metadata before final dispatch. Commands
 and compaction join native settlement when called with an operation context.
+
+Location-scoped shells are independent of native session executions. Their
+scalar inventory and start/end events contribute busy state without transcript
+subscribers, including after reconnect. Interrupt bypasses the effect sequence
+and stops both the execution and that session's shells, retaining original
+locations for moved sessions and leaving unrelated shells alone.
+
 `V2Prompt` prepares all attachments before selection changes, serializes each
 session's sequence, and calls separate agent/model switches only when their
 explicit native selections differ. Variant changes use the model switch.

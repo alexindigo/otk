@@ -26,6 +26,7 @@ import { revertSession, sessionActions } from "./session-actions.ts";
 import { commands } from "./commands.ts";
 import { V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
+import { V2Shells } from "./shells.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -56,6 +57,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   readonly transcript: Transcript;
   readonly pending: V2Pending;
   readonly prompts: V2Prompt;
+  readonly #shells = new V2Shells();
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
@@ -224,7 +226,12 @@ export class OpencodeV2ServerAdapter implements Harness {
         }
       },
     );
-    this.prompts = new V2Prompt(() => this.stream.client, config.attachments);
+    this.prompts = new V2Prompt(
+      () => this.stream.client,
+      config.attachments,
+      (id, operation) =>
+        this.#shells.interrupt(this.stream.client, id, operation),
+    );
     const catalogCapabilities: Capabilities = this.catalogs
       ? {
         agents: this.catalogs.agents,
@@ -347,6 +354,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#settledPending.clear();
         this.pending.clear();
         this.#running.clear();
+        this.#shells.clear();
         this.#finished.clear();
       },
       subscriptions: (id, count) => this.transcript.subscriptions(id, count),
@@ -462,7 +470,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       pending = this.#pendingCounts.get(native);
     this.#upsert({
       ...row,
-      status: this.#running.has(native)
+      status: this.#running.has(native) || this.#shells.busy(native)
         ? "busy"
         : this.#activityCurrent
         ? "idle"
@@ -554,6 +562,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (generation !== this.#generation) return;
     const previous = this.#index.getMetadata(id);
     this.transcript.release(id);
+    this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
     this.#lists.invalidate();
@@ -575,6 +584,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
   }
   #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
+    busy ||= this.#shells.busy(raw.id);
     const mapped = session(raw);
     const pending = this.#pendingCounts.get(raw.id);
     return {
@@ -685,6 +695,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       (api) => api.debug.location.list({ signal }),
       signal,
     );
+    const previousShells = new Set(this.#shells.sessions());
+    const shells = await this.#shells.snapshot(client, locations, signal);
     const pending = new Map<string, Pending>(
       [...this.#pending].map(([key, row]) =>
         [key, { ...row, stale: true }] as const
@@ -695,6 +707,8 @@ export class OpencodeV2ServerAdapter implements Harness {
     const owners = new Set([
       ...Object.keys(active),
       ...this.#running.keys(),
+      ...previousShells,
+      ...shells.map((shell) => shell.sessionID),
       ...[...pending.values()].filter((p) => p.sessionID !== "global").map((
         p,
       ) => p.sessionID),
@@ -803,6 +817,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       signal.throwIfAborted();
       this.#generation = generation;
       this.#activityCurrent = true;
+      this.#shells.replace(shells);
       this.#pending = pending;
       this.#pendingCounts.clear();
       for (const [key, row] of this.#pending) {
@@ -824,10 +839,14 @@ export class OpencodeV2ServerAdapter implements Harness {
           );
         } else this.#running.delete(raw.id);
         const entry = this.#metadata(raw, !!active[raw.id]);
-        const ended = previous !== undefined && !active[raw.id] &&
-            millis(raw.time.idle) > previous
-          ? millis(raw.time.idle)
-          : undefined;
+        const ended =
+          previousShells.has(raw.id) && !this.#shells.busy(raw.id) &&
+            !active[raw.id]
+            ? Date.now()
+            : previous !== undefined && !active[raw.id] &&
+                millis(raw.time.idle) > previous
+            ? millis(raw.time.idle)
+            : undefined;
         // An old outcome cannot certify a lost newer execution's success.
         if (
           previous !== undefined && !active[raw.id] &&
@@ -924,6 +943,19 @@ export class OpencodeV2ServerAdapter implements Harness {
       }]);
     }
     await this.transcript.event(event);
+    const shell = this.#shells.event(event);
+    if (shell) {
+      const raw = await client.read(
+        (api) => api.session.get({ sessionID: shell.sessionID }, { signal }),
+        signal,
+      );
+      signal.throwIfAborted();
+      if (generation !== this.#generation) return;
+      const entry = this.#metadata(raw, this.#running.has(raw.id));
+      this.#execution(entry, entry.status === "idle" ? shell.ended : undefined);
+      if (raw.parentID) await this.#hydrate([ids.encode(raw.parentID)], signal);
+      return;
+    }
     if (
       /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
         .test(event.type)
