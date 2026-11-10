@@ -191,6 +191,42 @@ Deno.test("V2 finite-read owner classifies missing, authentication and unavailab
   ]);
 });
 
+Deno.test("V2 native busy rejections retain their neutral reason across session effects", async () => {
+  const client = new V2Client(
+    service,
+    1000,
+    new AbortController().signal,
+    () =>
+      Promise.resolve(Response.json({
+        _tag: "SessionBusyError",
+        sessionID: "ses_private",
+        message: "Session is busy: ses_private",
+      }, { status: 409 })),
+  );
+  const actions = [
+    () =>
+      client.effect((api) =>
+        api.session.revert.stage({
+          sessionID: "ses_private",
+          messageID: "msg_one",
+          files: false,
+        })
+      ),
+    () =>
+      client.effect((api) =>
+        api.session.revert.clear({ sessionID: "ses_private" })
+      ),
+    () =>
+      client.effect((api) =>
+        api.session.revert.commit({ sessionID: "ses_private" })
+      ),
+  ];
+  for (const action of actions) {
+    const error = await assertRejects(action, OperationFailure);
+    assertEquals([error.outcome, error.code], ["rejected", "session.busy"]);
+  }
+});
+
 Deno.test("V2 worker cancellation joins the real exchange before releasing native permission", async () => {
   const owner = new AbortController(),
     entered = Promise.withResolvers<void>(),

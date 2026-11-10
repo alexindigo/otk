@@ -140,7 +140,11 @@ export class V2Client {
           /(?:Invalid|NotFound|Busy|Unauthorized|Validation|Denied|Conflict|AttachmentError)/
             .test(tag)
       ) {
-        throw new OperationFailure("rejected", "native.rejected", cause);
+        throw new OperationFailure(
+          "rejected",
+          tag === "SessionBusyError" ? "session.busy" : "native.rejected",
+          cause,
+        );
       }
       if (!context.dispatched) throw cause;
       throw new OperationFailure("unknown", "native.unknown", cause);
