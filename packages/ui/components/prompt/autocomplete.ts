@@ -9,7 +9,11 @@ import type {
   FrecencyEntry,
   ResourceOption,
 } from "@otk/protocol";
-import { canonicalPath, type CompletionOption } from "@otk/client";
+import {
+  agentIdentity,
+  canonicalPath,
+  type CompletionOption,
+} from "@otk/client";
 import type { PathSemantics } from "@otk/protocol";
 export type { CompletionOption } from "@otk/client";
 export interface MentionSources {
@@ -156,10 +160,10 @@ export function mentionOptions(
         },
       })),
       ...source.agents.map((agent) => ({
-        id: `agent:${agent.name}`,
+        id: `agent:${agentIdentity(agent)}`,
         label: agent.name,
         description: agent.description,
-        part: { kind: "agent" as const, name: agent.name },
+        part: { kind: "agent" as const, name: agentIdentity(agent) },
       })),
       ...source.resources.map((resource) => ({
         id: `resource:${resource.server}:${resource.uri}`,

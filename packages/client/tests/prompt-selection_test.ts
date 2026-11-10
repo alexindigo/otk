@@ -13,6 +13,20 @@ import {
 } from "../mod.ts";
 
 const first: ModelRef = { provider: "one", model: "shared" };
+Deno.test("agent display names never replace native selection identities", () => {
+  const context: PromptSelectionContext = {
+    agents: [{ id: "build", name: "Build" }, {
+      id: "review",
+      name: "Friendly reviewer",
+      model: first,
+    }],
+  };
+  const selected = effectiveSelection(emptyDraft(), context);
+  assertEquals(selected.agent.value, "build");
+  assertEquals(selected.input.agent, "build");
+  assertEquals(chooseAgent(emptyDraft(), "review", context).agent, "review");
+  assertEquals(chooseAgent(emptyDraft(), "review", context).model, first);
+});
 Deno.test("applied model defaults and reported default variants remain display/submission authority", () => {
   const reported: ModelCatalog = {
     defaultState: "applied",
@@ -166,6 +180,7 @@ Deno.test("selection resolves explicit, restored, agent-configured, catalog-defa
   const explicit = effectiveSelection(draft, restored);
   assertEquals(explicit.agent, {
     value: "build",
+    name: "build",
     source: "explicit",
     userChosen: true,
     color: "#aabbcc",
@@ -215,6 +230,7 @@ Deno.test("selection resolves explicit, restored, agent-configured, catalog-defa
   assertEquals(absent.agent, {
     source: "absent",
     userChosen: false,
+    name: undefined,
     color: undefined,
   });
   assertEquals(absent.model, {
