@@ -42,6 +42,8 @@ export function inboxStatus(
   entry: IndexMetadata & OperationAttention,
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
+  // Tombstones retain historical metadata, never authority for live attention.
+  if (entry.deleted) return "idle";
   const a = entry.attention;
   if (
     a.error ||
