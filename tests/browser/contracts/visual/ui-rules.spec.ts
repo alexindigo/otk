@@ -248,13 +248,21 @@ test.describe("native selected values", () => {
       const messages = await state.native<
         { info: { role: string; model?: unknown } }[]
       >(`/session/${session.id}/message`);
-      expect(messages.find((row) => row.info.role === "user")!.info.model)
-        .toEqual({ providerID: "fake2", modelID: "scripted", variant: "high" });
+      const v2 = state.controller.info!.version.startsWith("2.");
+      const nativeModel = v2
+        ? (await state.native<{ model: unknown }>(`/session/${session.id}`))
+          .model
+        : messages.find((row) => row.info.role === "user")!.info.model;
+      expect(nativeModel).toEqual({
+        providerID: "fake2",
+        [v2 ? "id" : "modelID"]: "scripted",
+        variant: "high",
+      });
       await record(info, "values-" + theme, {
         applied,
         explicit,
         sent,
-        native: messages.find((row) => row.info.role === "user")!.info.model,
+        native: nativeModel,
       });
       const toggle = page.locator(".otk-auto-approve-toggle");
       await toggle.click();

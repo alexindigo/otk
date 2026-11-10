@@ -449,13 +449,24 @@ try {
           if (profile === "provider-hold") {
             const path = join(fixture.oc.root, "config/opencode/opencode.json");
             const input = JSON.parse(await Deno.readTextFile(path));
-            input.provider.fake.options.chunkTimeout = 2000;
+            const v2 = fixture.oc.kind === "opencode-v2-server";
+            const providers = v2 ? input.providers : input.provider;
+            providers.fake[v2 ? "settings" : "options"].chunkTimeout = 2000;
             await Deno.writeTextFile(path, JSON.stringify(input));
             await fixture.oc.restart();
-            const config = await fixture.oc.request<
-              { provider: { fake: { options: { chunkTimeout: number } } } }
-            >("/config");
-            chunkTimeout = config.provider.fake.options.chunkTimeout;
+            type ProviderConfig = Record<
+              string,
+              Record<string, Record<string, { chunkTimeout: number }>>
+            >;
+            const config = v2
+              ? (await fixture.oc.request<
+                { type: string; path?: string; info: ProviderConfig }[]
+              >("/config")).find((entry) =>
+                entry.type === "document" && entry.path === path
+              )!.info
+              : await fixture.oc.request<ProviderConfig>("/config");
+            chunkTimeout = config[v2 ? "providers" : "provider"]
+              .fake[v2 ? "settings" : "options"].chunkTimeout;
             if (chunkTimeout !== 2000) {
               throw new Error("Native inactivity profile not applied");
             }

@@ -18,6 +18,9 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
   const created = await state.native<{ id: string }>("/session", "POST", {
     title: "Area commands",
   });
+  const archive = state.controller.info!.version.startsWith("2.")
+    ? ["Archive"]
+    : [];
   await openSession(state, page, created.id);
   await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
   for (
@@ -29,6 +32,7 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
         "Rename",
         "Fork session",
         "Turn auto-approve on",
+        ...archive,
         "Compact",
         "Copy session title",
         "Close session",
@@ -99,6 +103,9 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
   const other = await state.native<{ id: string }>("/session", "POST", {
     title: "Context session",
   });
+  const archive = state.controller.info!.version.startsWith("2.")
+    ? ["Archive"]
+    : [];
   await openSession(state, page, first.id);
   await rightClick(page, `[data-session="${other.id}"]`);
   expect(await menuLabels(page)).toEqual([
@@ -107,6 +114,7 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
     "Rename",
     "Fork session",
     "Turn auto-approve on",
+    ...archive,
     "Copy session title",
     "Delete",
     ...panelActions,
@@ -137,6 +145,7 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
     "Rename",
     "Fork session",
     "Turn auto-approve on",
+    ...archive,
     "Compact",
     "Copy session title",
     "Close session",

@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { pick, rightClick } from "../../pages/menus.ts";
 import {
   prompt,
   revealAcquired,
@@ -50,6 +51,19 @@ async function action(
   });
 }
 
+async function revertFiles(state: TestState, page: Page, bubble: string) {
+  await page.locator(bubble).focus();
+  if (state.controller.info!.version.startsWith("2.")) {
+    // V2's default is messages-only; file rollback is its explicit native action.
+    await rightClick(page, bubble);
+    await pick(page, "Revert code changes");
+  } else {
+    await page.locator(bubble).locator("..").locator(
+      '[data-message-command="prompt.revert"]',
+    ).click();
+  }
+}
+
 test("revert.shared-directory-native-rollback-restore-other-edit", {
   tag: ["@revert", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
@@ -79,8 +93,7 @@ test("revert.shared-directory-native-rollback-restore-other-edit", {
   const transcript = await state.native(`/session/${b.id}/message`);
   expect(await readFile(path, "utf8")).toBe("B\n");
   await openSession(state, page, a.id);
-  await page.locator(".otk-user-bubble").focus();
-  await page.locator('[data-message-command="prompt.revert"]').click();
+  await revertFiles(state, page, ".otk-user-bubble");
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
     "1 prompt rolled back",
   );
@@ -123,11 +136,8 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
   );
   const id = messages.find((m) => m.info.role === "user")!.info.id;
   const bubble = `[data-message="${id}"] .otk-user-bubble`;
-  const revert =
-    `[data-message="${id}"] [data-message-command="prompt.revert"]`;
   await revealAcquired(page, bubble);
-  await page.locator(bubble).focus();
-  await page.locator(revert).click();
+  await revertFiles(state, page, bubble);
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
     "2 prompts rolled back",
   );
@@ -165,8 +175,7 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
     "after\n",
   );
   await revealAcquired(page, bubble);
-  await page.locator(bubble).focus();
-  await page.locator(revert).click();
+  await revertFiles(state, page, bubble);
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
     "2 prompts rolled back",
   );
@@ -185,10 +194,7 @@ test("revert.pending-error-owned-feedback-retry", {
 }, async ({ isolatedState: state, page }) => {
   const s = await state.native<{ id: string }>("/session", "POST", {
     title: "Rollback feedback",
-  });
-  await state.native(`/session/${s.id}/message`, "POST", {
-    noReply: true,
-    parts: [{ type: "text", text: "A prompt to roll back" }],
+    messages: [{ parts: [{ type: "text", text: "A prompt to roll back" }] }],
   });
   await openSession(state, page, s.id);
   await action(state, "hold", "revert");
@@ -313,10 +319,7 @@ test("revert.controls-absent-while-working-and-in-readonly-helper", {
   const child = await state.native<{ id: string }>("/session", "POST", {
     title: "Helper",
     parentID: root.nativeID,
-  });
-  await state.native(`/session/${child.id}/message`, "POST", {
-    noReply: true,
-    parts: [{ type: "text", text: "Helper prompt" }],
+    messages: [{ parts: [{ type: "text", text: "Helper prompt" }] }],
   });
   await openSession(state, page, root.id);
   const held = await state.queue(["Work in progress."], "held");

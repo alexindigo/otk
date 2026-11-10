@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { mkdir } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -177,6 +179,8 @@ test("sessions.project-scan-retires-disconnected-work-current-connection-add", {
 }, async ({ isolatedState: state, page }) => {
   const directory = state.directory + "/scan-target";
   await mkdir(directory);
+  // Use an independent project, not a nested scope coalesced into its checkout.
+  await promisify(execFile)("git", ["init", "-b", "master", directory]);
   await state.product("projects.templates", { templates: [directory] });
   const frames = await wire(page);
   let holdWelcome = false;
