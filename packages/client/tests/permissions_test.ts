@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { PermissionRequest } from "@otk/protocol";
-import { emptyContent, oldestPermission, reduce } from "@otk/client";
+import {
+  emptyContent,
+  oldestPermission,
+  permissionTool,
+  reduce,
+} from "@otk/client";
 const nodes: Record<string, { parentID?: string }> = {
   root: {},
   child: { parentID: "root" },
@@ -11,6 +16,53 @@ const nodes: Record<string, { parentID?: string }> = {
   cycleB: { parentID: "cycleA" },
 };
 const lookup = (id: string) => nodes[id];
+Deno.test("pending file tools borrow the canonical permission preview, then return to settled native files", () => {
+  const pending = {
+    id: "edit",
+    sessionID: "root",
+    kind: "edit",
+    title: "Edit",
+    patterns: [],
+    alwaysPatterns: [],
+    time: 1,
+    toolCall: "call_edit",
+    detail: {
+      kind: "edit" as const,
+      files: [{
+        path: "README.md",
+        status: "modified" as const,
+        additions: 1,
+        deletions: 1,
+        hunks: [],
+      }],
+    },
+  };
+  for (const tool of ["edit", "patch"] as const) {
+    const call = {
+      callID: "call_edit",
+      tool,
+      status: "running" as const,
+      time: {},
+      path: "README.md",
+      files: [],
+      diagnostics: [],
+    };
+    const projected = permissionTool(call, [pending]);
+    assertEquals(
+      "files" in projected && projected.files === pending.detail.files,
+      true,
+    );
+    assertEquals(
+      permissionTool(call, [{ ...pending, toolCall: "other" }]),
+      call,
+    );
+    assertEquals(permissionTool({ ...call, status: "completed" }, [pending]), {
+      ...call,
+      status: "completed",
+    });
+    assertEquals(permissionTool(call, []), call);
+  }
+});
 const request = (
   id: string,
   sessionID: string,

@@ -96,8 +96,12 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   );
   expect(values.map((r) => r[0])).toEqual(["1", "2", "3"]);
   expect(values.map((r) => r[1])).toEqual([
-    "bash: pwd",
-    "bash: ls -la",
+    state.controller.info!.version.startsWith("2.")
+      ? "shell: pwd"
+      : "bash: pwd",
+    state.controller.info!.version.startsWith("2.")
+      ? "shell: ls -la"
+      : "bash: ls -la",
     "answered",
   ]);
   for (const [i, m] of steps.entries()) {

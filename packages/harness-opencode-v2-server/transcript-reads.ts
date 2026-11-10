@@ -21,6 +21,7 @@ import {
   sharedToolName,
   text,
   tokens,
+  toolTitle,
 } from "./map.ts";
 import { type Messages, type NativeMessage, SCAN_ROWS } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
@@ -685,7 +686,7 @@ export class TranscriptReads {
         tool: {
           id: partID(messageID, "tool", p.id),
           name: p.name,
-          summary: text(meta.title) ?? text(meta.description),
+          summary: toolTitle(p.name, record(state.input), meta),
         },
         child: text(meta.sessionID),
         status: text(state.status) ?? "running",
@@ -695,13 +696,13 @@ export class TranscriptReads {
       }];
     };
     const rows = sql.prepare(
-      `SELECT message_id,ordinal,json_object('type',type,'id',call_id,'name',json_extract(data,'$.name'),'state',json_object('status',json_extract(data,'$.state.status'),'metadata',json_object('title',json_extract(data,'$.state.metadata.title'),'description',json_extract(data,'$.state.metadata.description'),'sessionID',json_extract(data,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(data,'$.time.created'),'completed',json_extract(data,'$.time.completed'))) AS scalar FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data) ORDER BY message_id,ordinal`,
+      `SELECT message_id,ordinal,json_object('type',type,'id',call_id,'name',json_extract(data,'$.name'),'state',json_object('status',json_extract(data,'$.state.status'),'input',json_object('command',substr(json_extract(data,'$.state.input.command'),1,200)),'metadata',json_object('title',json_extract(data,'$.state.metadata.title'),'description',json_extract(data,'$.state.metadata.description'),'sessionID',json_extract(data,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(data,'$.time.created'),'completed',json_extract(data,'$.time.completed'))) AS scalar FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data) ORDER BY message_id,ordinal`,
     ).all(ids.decode(sessionID), JSON.stringify(messageIDs));
     const result = rows.flatMap((r) =>
       extract(String(r.scalar), Number(r.ordinal), String(r.message_id))
     );
     const inline = sql.prepare(
-      `SELECT m.id,p.key,json_object('type',json_extract(p.value,'$.type'),'id',json_extract(p.value,'$.id'),'name',json_extract(p.value,'$.name'),'state',json_object('status',json_extract(p.value,'$.state.status'),'metadata',json_object('title',json_extract(p.value,'$.state.metadata.title'),'description',json_extract(p.value,'$.state.metadata.description'),'sessionID',json_extract(p.value,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(p.value,'$.time.created'),'completed',json_extract(p.value,'$.time.completed'))) AS scalar FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND json_extract(p.value,'$.type')='tool' ORDER BY m.seq,p.key`,
+      `SELECT m.id,p.key,json_object('type',json_extract(p.value,'$.type'),'id',json_extract(p.value,'$.id'),'name',json_extract(p.value,'$.name'),'state',json_object('status',json_extract(p.value,'$.state.status'),'input',json_object('command',substr(json_extract(p.value,'$.state.input.command'),1,200)),'metadata',json_object('title',json_extract(p.value,'$.state.metadata.title'),'description',json_extract(p.value,'$.state.metadata.description'),'sessionID',json_extract(p.value,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(p.value,'$.time.created'),'completed',json_extract(p.value,'$.time.completed'))) AS scalar FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND json_extract(p.value,'$.type')='tool' ORDER BY m.seq,p.key`,
     ).all(ids.decode(sessionID), JSON.stringify(messageIDs));
     result.push(
       ...inline.flatMap((r) =>

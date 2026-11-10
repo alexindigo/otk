@@ -329,8 +329,9 @@ export default function SessionView(props: {
                 >
                   <Show when={!props.error}>
                     <ProgressStatus
-                      text={props.transcript?.progress?.().text ||
-                        "Loading messages..."}
+                      text={props.transcript?.progress
+                        ? props.transcript.progress().text
+                        : "Loading messages..."}
                     />
                   </Show>
                 </PaneState>
@@ -348,8 +349,9 @@ export default function SessionView(props: {
                   (props.loading || props.continuity === "missing")}
               >
                 <ProgressStatus
-                  text={props.transcript?.progress?.().text ||
-                    "Loading messages..."}
+                  text={props.transcript?.progress
+                    ? props.transcript.progress().text
+                    : "Loading messages..."}
                 />
               </Show>
               <div
@@ -362,8 +364,9 @@ export default function SessionView(props: {
                 <Show when={props.paging}>
                   <PaneState>
                     <ProgressStatus
-                      text={props.transcript?.progress?.().text ||
-                        "Loading earlier messages..."}
+                      text={props.transcript?.progress
+                        ? props.transcript.progress().text
+                        : "Loading earlier messages..."}
                     />
                   </PaneState>
                 </Show>

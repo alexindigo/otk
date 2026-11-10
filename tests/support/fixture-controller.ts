@@ -732,6 +732,12 @@ try {
                 "---\nname: otk-fixture\ndescription: OTK rendering fixture\n---\nRead only this fixture.\n",
               ".opencode/tools/echo_fixture.ts":
                 "export default {description:'Local generic output fixture',args:{},async execute(){return Array.from({length:15},(_,i)=>'Generic line '+(i+1)).join('\\n')}};",
+              ...(nativeVersion.startsWith("2.")
+                ? {
+                  ".opencode/plugins/echo_fixture.js":
+                    "export default {id:'otk.echo-fixture',async setup(ctx){await ctx.tool.transform(editor=>editor.add({name:'echo_fixture',options:{codemode:false},description:'Local generic output fixture',input:{type:'object',properties:{},additionalProperties:false},async execute(){return {content:Array.from({length:15},(_,i)=>'Generic line '+(i+1)).join('\\n')}}}))}};",
+                }
+                : {}),
             };
             for (const [path, source] of Object.entries(files)) {
               const target = join(directory, path);

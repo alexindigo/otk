@@ -60,6 +60,8 @@ export type FormField =
   };
 export interface FormRequest {
   id: string;
+  /** Stable renderer ownership for a form also projected through the question port. */
+  presentation?: "question";
   owner: FormOwner;
   directory: string;
   title: string;

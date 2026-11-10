@@ -109,8 +109,17 @@ test("messages.edit-write-patch-native-files-geometry", {
     .toBeAttached();
   await expect(page.locator("[data-tool=write] .otk-code-numbers"))
     .toBeAttached();
-  await expect(page.locator("[data-tool=write] .otk-diagnostics"))
-    .toContainText("fixture diagnostic");
+  if (state.controller.info!.version.startsWith("1.")) {
+    // V1-only: V2 accepts lsp config but does not run language servers or produce LSP diagnostics.
+    await expect(page.locator("[data-tool=write] .otk-diagnostics"))
+      .toContainText("fixture diagnostic");
+  } else {
+    await expect(page.locator("[data-tool=write] .otk-diagnostics"))
+      .toHaveCount(0);
+    await expect(page.locator("[data-tool=write]")).not.toContainText(
+      /diagnostics.*unavailable/i,
+    );
+  }
   const patch =
     "*** Begin Patch\n*** Add File: created.ts\n+const created: number = 3;\n*** Update File: modify.txt\n@@\n-before\n+after\n*** Delete File: delete.txt\n*** Update File: move.txt\n*** Move to: moved.txt\n@@\n-move me\n+moved\n*** End Patch";
   parts.push(

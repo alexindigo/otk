@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ToolResult } from "@otk/protocol";
+import { fileLanguage } from "./language.ts";
+import { join } from "@std/path";
 /** Characterized stock 2.2.6 model wrappers. Incomplete shapes stay verbatim. */
 export function toolResult(
   name: string,
   output: string | undefined,
   truncated: boolean,
+  input: Record<string, unknown> = {},
 ): ToolResult | undefined {
   if (output === undefined) return;
   const lines = output.split("\n");
@@ -38,6 +41,9 @@ export function toolResult(
       return {
         kind: "file",
         text: body.join("\n"),
+        lang: typeof input.path === "string"
+          ? fileLanguage(input.path)
+          : undefined,
         startLine: start,
         endLine: end,
         truncated: cut,
@@ -65,12 +71,31 @@ export function toolResult(
       }
       return {
         kind: "paths",
-        paths,
-        offset: start,
-        total: cut ? undefined : end,
+        paths: typeof input.path === "string"
+          ? paths.map((path) =>
+            join(input.path as string, path) + (path.endsWith("/") ? "/" : "")
+          )
+          : paths,
+        offset: typeof input.offset === "number" && input.offset > 0
+          ? input.offset
+          : start,
+        total: cut || !paths.length && Number(input.offset) > 1
+          ? undefined
+          : end,
         truncated: cut,
       };
     }
+  }
+  if (name === "glob") {
+    let cut = truncated;
+    const paths = lines.filter((line) => {
+      if (/^\(Results are truncated:/.test(line)) {
+        cut = true;
+        return false;
+      }
+      return !!line && line !== "No files found";
+    });
+    return { kind: "paths", paths, truncated: cut };
   }
   if (name === "grep") {
     if (output === "No matches found") {

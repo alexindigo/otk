@@ -163,6 +163,13 @@ export function browserV2Config(value: ObjectValue = {}): ObjectValue {
                 m.releaseDate = m.release_date;
                 delete m.release_date;
               }
+              if (m.cost) {
+                const cost = { ...object(m.cost) };
+                cost.cache = { read: cost.cache_read, write: cost.cache_write };
+                delete cost.cache_read;
+                delete cost.cache_write;
+                m.cost = cost;
+              }
               if (m.variants && !Array.isArray(m.variants)) {
                 m.variants = Object.entries(object(m.variants)).map((
                   [id, settings],

@@ -95,17 +95,22 @@ export default function ToolOutput(
                 startLine={result().startLine}
               />
             </Show>
-            <small class="otk-muted" data-tool-result-meta>
-              {result().endLine >= result().startLine
-                ? `${result().startLine}–${result().endLine}`
-                : ""}
-              {result().totalLines !== undefined
-                ? `${result().endLine >= result().startLine ? " of " : ""}${
-                  countLabel(result().totalLines!, "line")
-                }${result().endLine >= result().startLine ? "" : " total"}`
-                : ""}
-              {result().truncated ? " · More available" : ""}
-            </small>
+            <Show
+              when={result().endLine >= result().startLine ||
+                result().totalLines !== undefined || result().truncated}
+            >
+              <small class="otk-muted" data-tool-result-meta>
+                {result().endLine >= result().startLine
+                  ? `${result().startLine}–${result().endLine}`
+                  : ""}
+                {result().totalLines !== undefined
+                  ? `${result().endLine >= result().startLine ? " of " : ""}${
+                    countLabel(result().totalLines!, "line")
+                  }${result().endLine >= result().startLine ? "" : " total"}`
+                  : ""}
+                {result().truncated ? " · More available" : ""}
+              </small>
+            </Show>
           </>
         )}
       </Match>

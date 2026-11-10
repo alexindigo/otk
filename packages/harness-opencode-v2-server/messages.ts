@@ -75,14 +75,13 @@ export class Messages {
     messageID: string,
     signal?: AbortSignal,
   ): Promise<NativeMessage> {
-    let cursor: string | undefined;
-    do {
-      const page = await this.page(id, SCAN_ROWS, cursor, signal);
-      const found = page.items.find((m) => m.id === messageID);
-      if (found) return found;
-      cursor = page.next;
-    } while (cursor);
-    throw new HarnessError("message", "That message is no longer available.");
+    return await this.client().read(
+      (api) =>
+        api.session.message.get({ sessionID: ids.decode(id), messageID }, {
+          signal,
+        }),
+      signal,
+    );
   }
   /** Untested servers keep ownership of their opaque continuation format. */
   async before(

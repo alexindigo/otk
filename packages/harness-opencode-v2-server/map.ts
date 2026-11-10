@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { markdown, parseDiff } from "@otk/content";
 import { toolResult } from "./tool-results.ts";
+import { fileLanguage } from "./language.ts";
 import { stripVTControlCharacters } from "node:util";
 import type {
   Message,
@@ -112,6 +113,17 @@ function userDeclined(error: unknown): boolean {
       (value.message === "The user dismissed this question" ||
         value.message === "The user declined this tool call");
 }
+/** Same bounded human label for native snapshots, events and on-intent usage reads. */
+export function toolTitle(
+  name: string,
+  input: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+): string | undefined {
+  return text(metadata.title) ?? text(metadata.description) ??
+    (name === "shell" || name === "bash"
+      ? text(input.command)?.slice(0, 200)
+      : undefined);
+}
 export function mapTool(tool: Tool): ToolCall {
   const state = tool.state,
     input = record(state.input),
@@ -133,10 +145,15 @@ export function mapTool(tool: Tool): ToolCall {
       start: millis(tool.time.ran ?? tool.time.created),
       ...(tool.time.completed ? { end: millis(tool.time.completed) } : {}),
     },
-    title: text(meta.title) ?? text(meta.description),
+    title: toolTitle(tool.name, input, meta),
     error: "error" in state ? errorText(state.error) : undefined,
     output,
-    outputContent: toolResult(tool.name, output, meta.truncated === true),
+    outputContent: toolResult(
+      tool.name,
+      output,
+      meta.truncated === true,
+      input,
+    ),
     ...(typeof meta.sessionID === "string"
       ? { childSessionID: ids.encode(meta.sessionID) }
       : {}),
@@ -149,7 +166,7 @@ export function mapTool(tool: Tool): ToolCall {
         tool: "bash",
         command: text(input.command) ?? "",
         description: text(input.description),
-        cwd: text(input.workdir),
+        cwd: text(input.cwd),
         output: stripVTControlCharacters(text(meta.output) ?? output ?? ""),
         exitCode: typeof meta.exit === "number" ? meta.exit : undefined,
       };
@@ -199,13 +216,14 @@ export function mapTool(tool: Tool): ToolCall {
         tool: "write",
         path,
         content: text(input.content) ?? "",
+        lang: fileLanguage(path),
         diagnostics: [],
       };
     case "patch":
       return {
         ...base,
         tool: "patch",
-        files: mapFileDiffs(meta.files),
+        files: mapFileDiffs(meta.files, text(input.patchText)),
       };
     case "glob":
     case "grep":
@@ -232,7 +250,11 @@ export function mapTool(tool: Tool): ToolCall {
     case "websearch":
       return { ...base, tool: "websearch", query: text(input.query) ?? "" };
     case "skill":
-      return { ...base, tool: "skill", name: text(input.name) ?? "" };
+      return {
+        ...base,
+        tool: "skill",
+        name: text(input.id) ?? text(input.name) ?? "",
+      };
     case "todowrite":
       return {
         ...base,
@@ -304,9 +326,20 @@ export function mapTool(tool: Tool): ToolCall {
 }
 export function mapFileDiffs(
   value: unknown,
+  patchText?: string,
 ): import("@otk/protocol").FileDiff[] {
+  // Native patch metadata keeps the destination but its unified header still
+  // names the source. The accepted patch input owns the move relationship.
+  const moves = new Map<string, string>();
+  let source: string | undefined;
+  for (const line of patchText?.split("\n") ?? []) {
+    if (line.startsWith("*** Update File: ")) source = line.slice(17);
+    else if (line.startsWith("*** Move to: ") && source) {
+      moves.set(line.slice(13), source);
+    } else if (line.startsWith("*** ")) source = undefined;
+  }
   return Array.isArray(value)
-    ? value.flatMap((raw) => {
+    ? value.flatMap((raw): import("@otk/protocol").FileDiff[] => {
       const file = record(raw);
       if (typeof file.file !== "string") return [];
       const status =
@@ -316,13 +349,25 @@ export function mapFileDiffs(
       const parsed = typeof file.patch === "string"
         ? parseDiff(file.patch)
         : [];
+      const moved = [...moves].find(([target]) =>
+        file.file === target || (file.file as string).endsWith("/" + target)
+      );
+      const oldPath = moved
+        ? (file.file as string).slice(0, -moved[0].length) + moved[1]
+        : undefined;
       return parsed.length
-        ? parsed.map((p) => ({ ...p, path: file.file as string, status }))
+        ? parsed.map((p) => ({
+          ...p,
+          path: file.file as string,
+          oldPath: oldPath ?? p.oldPath,
+          status: oldPath || p.status === "moved" ? "moved" : status,
+        }))
         : typeof file.additions === "number" &&
             typeof file.deletions === "number"
         ? [{
           path: file.file,
-          status,
+          status: oldPath ? "moved" : status,
+          ...(oldPath ? { oldPath } : {}),
           additions: file.additions,
           deletions: file.deletions,
           hunks: [],
@@ -529,6 +574,7 @@ export function mapMessage(
     ...common,
     role: "user",
     origin: raw.type,
-    parts: [prose(raw.text, true)],
+    // Native context is visible but its origin keeps it out of real-prompt anchors/recall.
+    parts: [prose(raw.text)],
   };
 }

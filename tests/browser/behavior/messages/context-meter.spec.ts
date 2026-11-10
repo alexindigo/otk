@@ -11,6 +11,7 @@ test("messages.native-catalog-context-window", {
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Beam Free context",
   });
+  const v2 = state.controller.info!.version.startsWith("2.");
   const native = await state.native<
     {
       all: {
@@ -18,10 +19,21 @@ test("messages.native-catalog-context-window", {
         models: Record<string, { limit: { context: number } }>;
       }[];
     }
-  >("/provider");
+  >(v2 ? "/model" : "/provider");
   expect(
-    native.all.find((provider) => provider.id === "opencode")!
-      .models["beam-free"].limit.context,
+    v2
+      ? (native as unknown as {
+        data: {
+          providerID: string;
+          id: string;
+          limit: { context: number };
+        }[];
+      }).data
+        .find((model) =>
+          model.providerID === "opencode" && model.id === "beam-free"
+        )!.limit.context
+      : native.all.find((provider) => provider.id === "opencode")!
+        .models["beam-free"].limit.context,
   ).toBe(10000);
   const catalog = await state.product("models.list", { sessionID: session.id });
   console.info(

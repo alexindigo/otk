@@ -73,7 +73,7 @@ export class ProgressEstimate {
     const facts = this.#last;
     if (!facts) return { busy: false, text: "" };
     const busy = facts.phase !== "ready";
-    if (!busy) return { busy: false, text: `${label}: ready` };
+    if (!busy) return { busy: false, text: "" };
     const elapsedMs = Math.max(0, now - facts.started),
       elapsed = humanDuration(elapsedMs);
     const page = facts.phase === "reading" || facts.phase === "queued";

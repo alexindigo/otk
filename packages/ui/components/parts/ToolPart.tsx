@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
+import { permissionTool } from "@otk/client";
 import type { PartRegistry } from "../../registries/renderers.ts";
 import ToolLine from "../ToolLine.tsx";
 export function registerToolPart(parts: PartRegistry): void {
   parts.registerTyped(
     "tool",
     (props) => {
-      const call = () => props.part.call;
+      const call = () => permissionTool(props.part.call, props.permissions);
       return (
         <Show when={props.prefs.toolDetails || call().status !== "completed"}>
           <ToolLine

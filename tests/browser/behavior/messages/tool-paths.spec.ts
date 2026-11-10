@@ -73,8 +73,12 @@ test("messages.project-and-outside-tool-paths-reload", {
           .toHaveJSProperty("textContent", sourceText);
       }
       if (kind === "read" && !outside) {
-        await expect(page.locator(selector + " .otk-muted .otk-path"))
-          .toHaveText("src/AGENTS.md");
+        if (state.controller.info!.version.startsWith("2.")) {
+          await expect(page.locator(".otk-message-flow")).toContainText(
+            "Instructions from: " + state.directory + "/src/AGENTS.md",
+          );
+        } else {await expect(page.locator(selector + " .otk-muted .otk-path"))
+            .toHaveText("src/AGENTS.md");}
       }
       const result = kind === "glob"
         ? outside ? directory + "/probe.txt" : "src/probe.txt"

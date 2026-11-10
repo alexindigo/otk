@@ -349,7 +349,7 @@ export function request(value: unknown): ControlRequest {
       }
       text(p.path);
       if (
-        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|command|experimental\/tool\/ids)$/
+        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|model|command|experimental\/tool\/ids)$/
           .test(p.path)
       ) {
         throw new Error("Native path outside fixture vocabulary");

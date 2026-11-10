@@ -47,6 +47,7 @@ import { MessageRecovery } from "./recovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
 import { revertSession } from "./session-actions.ts";
+import { AgentColors } from "./agent-colors.ts";
 interface Baseline {
   raw: NativeSession;
   epoch: string;
@@ -124,6 +125,7 @@ function decode(token: string): Cursor {
 }
 /** One demand-owned transcript lifetime for pages, source, recovery and prefetch. */
 export class Transcript {
+  readonly colors?: AgentColors;
   readonly buffers: StreamBuffers = new StreamBuffers();
   readonly replay: ContentReplay;
   readonly reader: Messages;
@@ -224,8 +226,19 @@ export class Transcript {
       ): Record<string, import("@otk/protocol").UsageSummary>;
       helper?(id: string): import("@otk/protocol").HelperSummary | undefined;
       requestHelper?(id: string): void;
+      agents?(
+        directory: string,
+        signal: AbortSignal,
+      ): Promise<readonly import("@otk/protocol").CatalogAgent[]>;
     },
   ) {
+    if (options.agents) {
+      this.colors = new AgentColors(
+        options.agents,
+        (id, colors) => this.#publish(id, { op: "agent.colors", colors }),
+        options.diagnostic,
+      );
+    }
     this.reader = new Messages(() => this.#client ?? options.client());
     this.replay = new ContentReplay({
       ...options.policy,
@@ -278,8 +291,19 @@ export class Transcript {
   }
   #publish(id: string, event: ContentOp): void {
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
+      if (event.op === "message.upsert") {
+        event = { ...event, message: this.#decorateAgent(event.message, id) };
+      }
       this.replay.publish(id, event);
     }
+  }
+  #decorateAgent(message: Message, id: string): Message {
+    const directory = this.#baselines.get(id)?.raw.location.directory;
+    if (!directory || !this.#subscriptions.has(id)) return message;
+    const colors = this.colors?.peek(id, directory);
+    return message.agent
+      ? { ...message, agentColor: colors?.[message.agent] }
+      : message;
   }
   async #facts(
     input: TranscriptInput,
@@ -389,6 +413,7 @@ export class Transcript {
     }
   }
   release(id?: string, retainLive = false): void {
+    this.colors?.release(id);
     this.#cancelBackfills(id);
     this.changed(id);
     this.recovery.release(id);
@@ -471,6 +496,7 @@ export class Transcript {
     }
   }
   disconnect(): void {
+    this.colors?.reset();
     this.#cancelBackfills();
     this.#releaseHelpers();
     this.buffers.suspend();
@@ -648,6 +674,7 @@ export class Transcript {
     }
     let mapped = mapMessage(raw, id, context);
     if (!mapped) return;
+    mapped = this.#decorateAgent(mapped, id);
     mapped = this.#decorateHelpers(mapped);
     if (raw.type === "shell" || raw.type === "compaction") {
       let known = this.#projected.get(id);
@@ -1037,6 +1064,9 @@ export class Transcript {
     };
   }
   async event(event: V2Event): Promise<void> {
+    if (event.type === "agent.updated" || event.type === "config.updated") {
+      this.colors?.reset(event.location?.directory);
+    }
     const d = event.data, sid = text(d.sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
@@ -1724,6 +1754,7 @@ export class Transcript {
     this.changed(live.session);
   }
   async stop(): Promise<void> {
+    await this.colors?.stop();
     this.#lifetime.abort();
     this.#client = undefined;
     const owned = [...this.#tasks];
