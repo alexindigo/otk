@@ -21,6 +21,7 @@ import { type V2Client, V2MissingSession } from "./client.ts";
 import { metadata, millis, session, type SessionFacts } from "./metadata.ts";
 import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
+import { mapAgents } from "./catalog-readers.ts";
 import { Transcript } from "./transcript.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
 import { readSessionActivity } from "./recency.ts";
@@ -155,6 +156,13 @@ export class OpencodeV2ServerAdapter implements Harness {
             reason: "helper-hint",
           }])
         : undefined,
+      agents: (directory, signal) =>
+        this.catalogs
+          ? this.catalogs.catalogs.get(directory, "agents", signal)
+          : this.stream.client.read(
+            (api) => api.agent.list({ location: { directory } }, { signal }),
+            signal,
+          ).then((result) => mapAgents(result.data)),
     });
     const digestCapabilities: Capabilities = digest
       ? {
