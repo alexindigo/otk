@@ -84,6 +84,11 @@ catalog. Keyed hydration follows helper ancestry, independently of transcript
 subscriptions. Active executions and loaded-location pending inventories keep
 lamps live.
 
+After requested work drains, the shared scheduler can discover scalar sessions
+in Active projects through bounded newest-first SQL keysets or native API
+cursors. Project-policy and connection changes fence those cursors. This is not
+a startup population catalog, another scheduler or a message-body scan.
+
 Project seeds join the saved `/api/project` and `/api/worktree` inventories in
 that worker. Native project identity bounds longest-checkout-root matching;
 exact session directories stay list/task scopes. Empty inventory roots are not

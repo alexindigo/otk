@@ -208,6 +208,23 @@ export class V2NativeDb {
   close(): void {
     this.db.close();
   }
+  recent(
+    directories: readonly string[],
+    before: { updated: number; id: string } | undefined,
+    limit: number,
+  ): SessionMetadata[] {
+    const rows = this.db.prepare(
+      `SELECT ${this.#projection()} FROM session_v2 s WHERE s.directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (s.time_updated,s.id)<(?,?)) ORDER BY s.time_updated DESC,s.id DESC LIMIT ?`,
+    ).all(
+      JSON.stringify(directories),
+      before?.updated ?? null,
+      before?.updated ?? null,
+      before?.id ?? null,
+      limit,
+    ).map((row) => this.#metadata(row));
+    this.observe?.("session-discovery", { limit, rows: rows.length });
+    return rows;
+  }
   /** Legacy rows retained by native migration prove origin, not just an ID prefix. */
   upgrade(
     keys: readonly string[],

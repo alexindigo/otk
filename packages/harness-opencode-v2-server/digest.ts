@@ -121,6 +121,11 @@ export class OpencodeV2DigestSink implements DigestSink {
   #lifetime = new AbortController();
   #source?: string;
   #projectDirectories = new Set<string>();
+  #activeDirectories = new Set<string>();
+  #discoveryRevision = 0;
+  #discoveryPosition?: { updated: number; id: string };
+  #discoveryCursor?: string;
+  #discoveryComplete = false;
   #wait: <T>(value: Promise<T>) => Promise<T>;
   readonly #readiness: NativeReadiness;
   constructor(
@@ -259,6 +264,7 @@ export class OpencodeV2DigestSink implements DigestSink {
     if (value === this.#connection) return;
     this.#connection = value;
     this.#transcripts.connection(value);
+    this.#resetDiscovery();
     this.#lists.reset();
     this.#source = undefined;
     this.#native?.close();
@@ -307,6 +313,7 @@ export class OpencodeV2DigestSink implements DigestSink {
       this.#native.close();
       this.#native = undefined;
       this.#lists.reset();
+      this.#resetDiscovery();
       this.#source = undefined;
       throw new Error("V2 native database was replaced");
     }
@@ -572,13 +579,84 @@ export class OpencodeV2DigestSink implements DigestSink {
     this.#check(signal);
     return Promise.resolve({ entries: [], authoritative: false });
   }
-  discover(
+  async discover(
     signal: AbortSignal,
   ): Promise<{ entries: SessionMetadata[]; complete: boolean }> {
     this.#check(signal);
-    return Promise.resolve({ entries: [], complete: true });
+    if (!this.#activeDirectories.size) return { entries: [], complete: true };
+    const connection = this.#connection,
+      { client } = await this.#prepare(signal);
+    const revision = this.#discoveryRevision;
+    if (this.#discoveryComplete) return { entries: [], complete: true };
+    const directories = [...this.#activeDirectories],
+      limit = Math.min(200, this.policy.batch);
+    let rows: SessionMetadata[],
+      complete: boolean,
+      nextCursor: string | undefined;
+    if (this.#native) {
+      if (this.#native.fileIdentity() !== this.#native.identity) {
+        this.#native.close();
+        this.#native = undefined;
+        this.#resetDiscovery();
+        return { entries: [], complete: false };
+      }
+      rows = this.#native.recent(directories, this.#discoveryPosition, limit);
+      complete = rows.length < limit;
+    } else {
+      const page = await client.read(
+        (api) =>
+          api.session.list(
+            this.#discoveryCursor
+              ? { cursor: this.#discoveryCursor }
+              : { limit, order: "desc" },
+            { signal },
+          ),
+        signal,
+      );
+      const next = page.cursor.next ?? undefined;
+      if (next && (!page.data.length || next === this.#discoveryCursor)) {
+        throw new Error("V2 discovery cursor did not advance");
+      }
+      rows = page.data.filter((row) =>
+        this.#activeDirectories.has(row.location.directory)
+      ).map(metadata);
+      complete = !next;
+      nextCursor = next;
+    }
+    this.#check(signal, connection);
+    if (revision !== this.#discoveryRevision) {
+      return { entries: [], complete: false };
+    }
+    for (const row of rows) {
+      await this.#remember(row, signal);
+      await this.#yield(signal);
+    }
+    if (revision !== this.#discoveryRevision) {
+      return { entries: [], complete: false };
+    }
+    const last = rows.at(-1);
+    if (last) {
+      this.#discoveryPosition = {
+        updated: last.timeUpdated,
+        id: ids.decode(last.id),
+      };
+    }
+    this.#discoveryCursor = nextCursor;
+    this.#discoveryComplete = complete;
+    return { entries: rows, complete };
   }
-  discoveryProject(_directory: string, _active: boolean): void {}
+  #resetDiscovery(): void {
+    this.#discoveryRevision++;
+    this.#discoveryPosition = undefined;
+    this.#discoveryCursor = undefined;
+    this.#discoveryComplete = false;
+  }
+  discoveryProject(directory: string, active: boolean): void {
+    if (this.#activeDirectories.has(directory) === active) return;
+    if (active) this.#activeDirectories.add(directory);
+    else this.#activeDirectories.delete(directory);
+    this.#resetDiscovery();
+  }
   pending(id: string): boolean {
     return this.#transcripts.pending(id);
   }
