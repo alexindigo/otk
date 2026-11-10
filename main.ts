@@ -57,6 +57,7 @@ export async function start(
         serviceFile: selected.file,
         db: harnessDb(cfg),
         requestms: cfg.harness.requestms,
+        attachments: cfg.attachments,
       },
       policy: cfg.digest,
       section: diagnostics?.section,

@@ -261,7 +261,10 @@ export function mapModels(
 }
 
 /** Selected worker contributions, with native schemas/endpoints confined to this package. */
-export function catalogReaders(client: () => V2Client): ProviderReaders {
+export function catalogReaders(
+  client: () => V2Client,
+  wait: <T>(value: Promise<T>) => Promise<T> = (value) => value,
+): ProviderReaders {
   return {
     "catalog.agents": async ({ directory }, signal) =>
       mapAgents(
@@ -345,7 +348,7 @@ export function catalogReaders(client: () => V2Client): ProviderReaders {
       if (local === ".." || local.startsWith("../") || isAbsolute(local)) {
         throw new Error("File listing escaped its project");
       }
-      const physical = await Deno.realPath(target);
+      const physical = await wait(Deno.realPath(target));
       signal.throwIfAborted();
       const entries = await client().read(
         (api) => api.file.list({ location: { directory }, path }, { signal }),

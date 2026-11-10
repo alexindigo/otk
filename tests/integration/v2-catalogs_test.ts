@@ -23,6 +23,8 @@ import { OpencodeV2Test } from "../support/opencode-v2.ts";
 import { nativeKind } from "../support/native.ts";
 import { resources, withResources } from "../support/resources.ts";
 import { waitFor } from "../support/opencode.ts";
+import { SidecarTest } from "../support/sidecar.ts";
+import { WsClient } from "../support/ws-client.ts";
 
 Deno.test({
   name:
@@ -284,6 +286,80 @@ Deno.test({
           api.session.get({ sessionID: target.nativeID })
         )).id,
         target.nativeID,
+      );
+    }),
+});
+
+Deno.test({
+  name:
+    "OC2C3 shipped worker composes indexed transcripts, on-intent recall bytes and catalogs",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("V2 shipped worker history", async () => {
+      const fake = new FakeLlm();
+      fake.queue({ chunks: ["Worker recall complete"] });
+      const native = await OpencodeV2Test.start(fake),
+        target = await native.createSession();
+      await native.api.session.switchModel({
+        sessionID: target.nativeID,
+        model: { providerID: "fake", id: "scripted" },
+      });
+      await native.api.session.prompt({
+        sessionID: target.nativeID,
+        text: "Recall through the shipped worker",
+        files: [{
+          uri: "data:text/plain;base64,YWRtaXR0ZWQgYnl0ZXM=",
+          name: "admitted.txt",
+          source: { type: "uri", uri: "file:///original/no-longer-present" },
+        }],
+      });
+      await native.api.experimental.session.wait({
+        sessionID: target.nativeID,
+      });
+      const app = await SidecarTest.start(native), ws = new WsClient(app.url);
+      resources().defer("worker history socket", () => ws.close());
+      await ws.connect(native.directory, target.id);
+      const welcome = await ws.wait((frame) => frame.t === "welcome");
+      assert(welcome.t === "welcome");
+      assert(welcome.sidecar.harness.capabilities?.includes("history"));
+      assert(welcome.sidecar.harness.capabilities?.includes("usage"));
+      const page = await ws.rpc<import("@otk/protocol").MessagePage>(
+        "session.messages",
+        { sessionID: target.id },
+      );
+      assert(page.prompt);
+      const entries = await ws.rpc<import("@otk/protocol").HistoryEntry[]>(
+        "history.list",
+        {},
+      );
+      assertEquals(entries.length, 1);
+      assertEquals(entries[0].input, "Recall through the shipped worker");
+      assertFalse(JSON.stringify(entries).includes("YWRtaXR0ZWQgYnl0ZXM="));
+      const ref = entries[0].parts[0];
+      assert(ref.kind === "file" && ref.source === "history");
+      assertEquals(ref.messageID, page.prompt.id);
+      assertEquals(ref.size, 14);
+      const attachments = await ws.rpc<
+        { items: import("@otk/harness").HistoryAttachment[] }
+      >("history.attachments", { refs: [ref] });
+      assertEquals(
+        attachments.items[0].part.dataBase64,
+        "YWRtaXR0ZWQgYnl0ZXM=",
+      );
+      await assertRejects(() =>
+        ws.rpc("history.attachments", {
+          refs: [ref, { messageID: ref.messageID, partID: "file:999" }],
+        })
+      );
+      const models = await ws.rpc<import("@otk/protocol").ModelCatalog>(
+        "models.list",
+        { sessionID: target.id },
+      );
+      assert(
+        models.providers.some((provider) =>
+          provider.id === "fake" &&
+          provider.models.some((model) => model.id === "scripted")
+        ),
       );
     }),
 });

@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   type DigestDelta,
   type HelperSummary,
+  type HistoryEntry,
   OperationFailure,
   type SessionMetadata,
   type TurnUsageSnapshot,
@@ -10,12 +11,15 @@ import {
   type UsageSummary,
 } from "@otk/protocol";
 import {
+  arrayReadCodec,
   type DigestBudget,
   type DigestExecution,
   type DigestJob,
   type DigestPolicy,
   type DigestPublication,
   type DigestSink,
+  HarnessError,
+  historyAttachmentCodec,
   identityReadCodec,
   NativeReadiness,
   type ProjectSeed,
@@ -36,6 +40,8 @@ import { metadata } from "./metadata.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { upgradeReadCodec } from "./upgrade-read.ts";
 import { scalarSessionReadCodec } from "./index-reads.ts";
+import { catalogReadCodecs, catalogReaders } from "./catalog-readers.ts";
+import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
 import { millis, partID, record, reported, text, tokens } from "./map.ts";
 import {
@@ -53,6 +59,7 @@ export interface V2NativeConfig {
   serviceFile: string;
   db: string;
   requestms: number;
+  attachments: import("@otk/protocol").AttachmentPolicy;
 }
 export interface V2DigestStorage {
   sql: Pick<DatabaseSync, "prepare">;
@@ -91,6 +98,10 @@ export interface V2DigestReadiness {
 }
 export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
   ...transcriptReadCodecs,
+  ...catalogReadCodecs,
+  "history.list": arrayReadCodec<HistoryEntry>(),
+  "history.entries": arrayReadCodec<HistoryEntry>(),
+  "history.attachments": historyAttachmentCodec,
   "opcv2.sessions": scalarSessionReadCodec,
   "opcv2.upgrade": upgradeReadCodec,
   "identity.batch": identityReadCodec,
@@ -141,7 +152,28 @@ export class OpencodeV2DigestSink implements DigestSink {
         check: (signal) => this.#check(signal),
       },
     );
+    const history = new HistoryReader(
+      () => {
+        if (!this.#native) {
+          throw new OperationFailure(
+            "unavailable",
+            "native.unavailable",
+            new Error("V2 history source identity is unavailable"),
+          );
+        }
+        return this.#native.db;
+      },
+      config.attachments,
+      () => this.#wait(new Promise<void>((resolve) => setTimeout(resolve, 0))),
+    );
     this.readers = {
+      ...this.#preparedReaders({
+        ...catalogReaders(() => {
+          if (!this.#client) throw new Error("V2 worker is not connected");
+          return this.#client;
+        }, this.#wait),
+        ...history.readers(),
+      }),
       ...this.#transcripts.readers,
       "opcv2.sessions": async (input, signal) => {
         const connection = this.#connection,
@@ -230,6 +262,35 @@ export class OpencodeV2DigestSink implements DigestSink {
     this.#source = undefined;
     this.#native?.close();
     this.#native = undefined;
+  }
+  #preparedReaders(readers: ProviderReaders): ProviderReaders {
+    return Object.fromEntries(
+      Object.entries(readers).map((
+        [kind, read],
+      ) => [kind, async (input: never, signal: AbortSignal) => {
+        const connection = this.#connection;
+        try {
+          await this.#prepare(signal);
+          const source = this.#source, native = this.#native;
+          const result = await read!(input, signal);
+          this.#check(signal, connection);
+          if (source !== this.#source || native !== this.#native) {
+            throw new Error("V2 transient read source changed");
+          }
+          return result;
+        } catch (error) {
+          signal.throwIfAborted();
+          if (
+            error instanceof OperationFailure || error instanceof HarnessError
+          ) throw error;
+          throw new OperationFailure(
+            "unavailable",
+            "native.unavailable",
+            error,
+          );
+        }
+      }]),
+    ) as ProviderReaders;
   }
   #check(signal: AbortSignal, connection = this.#connection): void {
     signal.throwIfAborted();

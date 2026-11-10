@@ -6,6 +6,7 @@ import {
   type HarnessCore,
   HarnessError,
   type HarnessSink,
+  type ProviderReadPort,
   SessionIndex,
 } from "@otk/harness";
 import type {
@@ -45,6 +46,7 @@ type Pending = {
 export class OpencodeV2ServerAdapter implements Harness {
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
+  readonly digest?: DigestPort;
   readonly catalogs?: V2Catalogs;
   readonly stream: V2Stream;
   readonly transcript: Transcript;
@@ -69,8 +71,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     initial?: DiscoveredService,
     readonly diagnostic: (error: unknown) => void = () => {},
     fetcher: typeof fetch = fetch,
-    readonly digest?: DigestPort,
+    reads?: ProviderReadPort,
   ) {
+    const digest = this.digest = reads && "start" in reads
+      ? reads as DigestPort
+      : undefined;
     this.#version = initial?.version ?? "";
     this.stream = new V2Stream(
       {
@@ -184,7 +189,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         config.digest,
         config.catalogs,
         diagnostic,
-        digest,
+        reads,
       );
     }
     const catalogCapabilities: Capabilities = this.catalogs
