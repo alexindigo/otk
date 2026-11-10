@@ -1133,6 +1133,12 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       nativeTokens = tokens(nativeUsage.tokens),
       nativeCost = reported(nativeUsage.cost);
     const summaries: Record<string, UsageSummary> = {};
+    const latest = this.storage.sql.prepare(
+      "SELECT scalar FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ORDER BY seq DESC LIMIT 1",
+    ).get(job.sessionID);
+    const last = latest
+      ? JSON.parse(String(latest.scalar)) as ScalarMessage
+      : undefined;
     for (const turn of turns) {
       summaries[turn] = this.#summary(job.sessionID, turn);
     }
@@ -1146,6 +1152,22 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           "SELECT COUNT(*) AS n FROM opcv2_transcript_header WHERE session_id=?",
         ).get(job.sessionID)!.n as number,
         total: { ...total, cost: nativeCost, tokens: nativeTokens },
+        ...(last
+          ? {
+            last: {
+              ...(last.agent ? { agent: last.agent } : {}),
+              ...(last.model
+                ? {
+                  model: {
+                    provider: last.model.providerID,
+                    model: last.model.id,
+                  },
+                }
+                : {}),
+              context: last.usage?.tokens ?? tokens(undefined),
+            },
+          }
+          : {}),
       },
       turns: { upsert: summaries, remove: [] },
       deleted: null,
