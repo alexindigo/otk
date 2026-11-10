@@ -321,6 +321,9 @@ for (const background of [false, true]) {
         if (value.delta.deleted) seen.push("deleted:" + value.sessionID);
         if (!closed && seen.length) {
           closed = true;
+          // Begin observing at release, not after its acknowledgement: the
+          // worker may publish its final drained frame before that fence returns.
+          pressure = undefined;
           restarted.release("viewer");
         }
       },
@@ -342,7 +345,6 @@ for (const background of [false, true]) {
       // Fence receipt of the scope release, then observe a fresh drained state;
       // a pressure frame sent before the first publication is not pause evidence.
       await restarted.deleteIntent("opcv1-ses_b", "fence", "begin", 1);
-      pressure = undefined;
       await waitFor(
         () => pressure,
         (value) =>
