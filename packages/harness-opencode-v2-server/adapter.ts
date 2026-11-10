@@ -20,6 +20,8 @@ import { type V2Client, V2MissingSession } from "./client.ts";
 import { metadata, millis, session, type SessionFacts } from "./metadata.ts";
 import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
+import { Transcript } from "./transcript.ts";
+import { mapSession } from "./map.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -28,7 +30,7 @@ export interface OpencodeV2ServerConfig {
     reconnectmax: number;
     heartbeattimeout: number;
   };
-  messages: { replayops: number; replaybytes: number };
+  messages: import("@otk/protocol").MessagePolicy;
   digest?: DigestPolicy;
   catalogs?: { pending: number; concurrency: number };
 }
@@ -45,6 +47,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   readonly capabilities: Readonly<Capabilities>;
   readonly catalogs?: V2Catalogs;
   readonly stream: V2Stream;
+  readonly transcript: Transcript;
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
@@ -60,6 +63,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   #lists = new V2SessionLists();
   #activityCurrent = false;
   #observation = 0;
+  #helperListener?: () => void;
   constructor(
     readonly config: OpencodeV2ServerConfig,
     initial?: DiscoveredService,
@@ -98,6 +102,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         },
         disconnected: (generation) => {
           this.#activityCurrent = false;
+          this.transcript.disconnect();
           this.#generation = generation;
           this.#lists.reset();
           for (const entry of this.#index.snapshotEntries()) {
@@ -113,7 +118,61 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       { ...config.harness, ...config.messages, heartbeattimeout: 45 },
       fetcher,
+      digest?.admission?.bind(digest),
     );
+    this.transcript = new Transcript({
+      client: () => this.stream.client,
+      policy: config.messages,
+      digest,
+      content: (id, event, clock) => this.#sink?.content(id, event, clock),
+      invalidated: (value) => this.#sink?.invalidate(value),
+      diagnostic,
+      summaries: (id, turns) => {
+        const entry = this.#index.snapshotEntry(id);
+        return Object.fromEntries(
+          turns.flatMap((turn) =>
+            entry?.digest.turns[turn] ? [[turn, entry.digest.turns[turn]]] : []
+          ),
+        );
+      },
+      helper: (id) => this.#index.helper(id),
+      requestHelper: digest
+        ? (id) =>
+          digest.observe(this.#generation, [{
+            sessionID: id,
+            revision: 0,
+            reason: "helper-hint",
+          }])
+        : undefined,
+    });
+    const digestCapabilities: Capabilities = digest
+      ? {
+        usage: {
+          getUsage: async (
+            id: string,
+            turnID: string,
+            signal?: AbortSignal,
+          ) => {
+            ids.decode(id);
+            const clock = this.transcript.replay.clock(id),
+              version = this.transcript.replay.version(id);
+            const value = await digest.detail(
+              id,
+              turnID,
+              signal ?? new AbortController().signal,
+            );
+            return { ...value, clock, version };
+          },
+        },
+        digests: {
+          scope: (
+            owner: string,
+            value: { directory?: string; sessions: string[] },
+          ) => digest.scope(owner, value),
+          release: (owner: string) => digest.release(owner),
+        },
+      }
+      : {};
     if (config.digest && config.catalogs) {
       this.catalogs = new V2Catalogs(
         () => this.stream.client,
@@ -128,23 +187,25 @@ export class OpencodeV2ServerAdapter implements Harness {
         digest,
       );
     }
-    this.capabilities = Object.freeze(
-      this.catalogs
-        ? {
-          agents: this.catalogs.agents,
-          models: this.catalogs.models,
-          files: this.catalogs.files,
-          catalogs: {
-            watch: (directory, listener, signal) =>
-              this.catalogs!.watch(directory, listener, signal),
-            refresh: (directory, signal) =>
-              this.catalogs!.refresh(directory, signal),
-          },
-          ...(this.catalogs.history ? { history: this.catalogs.history } : {}),
-          // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.
-        }
-        : {},
-    );
+    const catalogCapabilities: Capabilities = this.catalogs
+      ? {
+        agents: this.catalogs.agents,
+        models: this.catalogs.models,
+        files: this.catalogs.files,
+        catalogs: {
+          watch: (directory, listener, signal) =>
+            this.catalogs!.watch(directory, listener, signal),
+          refresh: (directory, signal) =>
+            this.catalogs!.refresh(directory, signal),
+        },
+        ...(this.catalogs.history ? { history: this.catalogs.history } : {}),
+        // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.
+      }
+      : {};
+    this.capabilities = Object.freeze({
+      ...digestCapabilities,
+      ...catalogCapabilities,
+    });
     const version = () => this.#version;
     const unavailable = () =>
       Promise.reject(
@@ -163,7 +224,12 @@ export class OpencodeV2ServerAdapter implements Harness {
           throw new HarnessError("started", "Harness is already started");
         }
         this.#index = sink.index ?? new SessionIndex();
+        this.#helperListener = this.#index.observeDigest((id) => {
+          const summary = this.#index.helper(id);
+          if (summary) this.transcript.helper(id, summary);
+        });
         this.#sink = sink;
+        this.transcript.start();
         sink.connection("connecting");
         try {
           await digest?.start();
@@ -179,7 +245,10 @@ export class OpencodeV2ServerAdapter implements Harness {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
         await this.catalogs?.stop();
+        this.#helperListener?.();
+        this.#helperListener = undefined;
         await this.stream.stop();
+        await this.transcript.stop();
         await digest?.stop();
         this.#pending.clear();
         this.#pendingCounts.clear();
@@ -187,7 +256,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#running.clear();
         this.#finished.clear();
       },
-      subscriptions: () => {},
+      subscriptions: (id, count) => this.transcript.subscriptions(id, count),
       hydrate: (keys, signal = new AbortController().signal) =>
         this.#hydrate(keys, signal),
       identities: async (keys, signal) => {
@@ -225,12 +294,12 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       getSession: async (id, signal) => {
         const native = ids.decode(id);
-        return session(
-          await this.stream.client.read((api) =>
-            api.session.get({
-              sessionID: native,
-            }, { signal }), signal),
-        );
+        const raw = await this.stream.client.read((api) =>
+          api.session.get({
+            sessionID: native,
+          }, { signal }), signal);
+        this.transcript.observe(raw);
+        return mapSession(raw);
       },
       listSessions: async (input, signal = new AbortController().signal) => {
         if (input.parentID) ids.decode(input.parentID);
@@ -283,7 +352,8 @@ export class OpencodeV2ServerAdapter implements Harness {
         } while (cursor);
         return result;
       },
-      listMessages: unavailable,
+      listMessages: (id, input, signal) =>
+        this.transcript.page(id, input?.before, signal, input?.publish),
       createSession: unavailable,
     };
   }
@@ -483,11 +553,12 @@ export class OpencodeV2ServerAdapter implements Harness {
     signal: AbortSignal,
     generation: number,
     reconnect = true,
-  ): Promise<() => void> {
+  ): Promise<() => Promise<void>> {
     const active = await client.read(
       (api) => api.session.active({ signal }),
       signal,
     );
+    await this.digest?.projects?.(generation, signal);
     const locations = await client.read(
       (api) => api.debug.location.list({ signal }),
       signal,
@@ -591,7 +662,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
     }
     signal.throwIfAborted();
-    return () => {
+    const transcriptCommit = reconnect
+      ? await this.transcript.resync(client, signal)
+      : undefined;
+    return async () => {
       signal.throwIfAborted();
       this.#generation = generation;
       this.#activityCurrent = true;
@@ -602,7 +676,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         else this.#countPending(row, 1);
       }
       if (reconnect) {
-        this.#sink?.invalidate({ version: { generation, revision: 0 } });
+        await transcriptCommit?.();
       }
       this.#sink?.projectSeeds?.(projects?.projects ?? []);
       this.#sink?.projectAuthority?.("current");
@@ -674,13 +748,44 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
+    const changedID = typeof event.data.sessionID === "string"
+      ? ids.encode(event.data.sessionID)
+      : undefined;
+    if (
+      changedID &&
+      /^session\.tool\.(called|progress|success|failed)$/.test(event.type)
+    ) {
+      this.digest?.observe(generation, [{
+        sessionID: changedID,
+        revision: event.durable?.seq ?? event.created ?? Date.now(),
+        reason: "helper",
+        messages: typeof event.data.assistantMessageID === "string"
+          ? [event.data.assistantMessageID]
+          : undefined,
+      }]);
+    }
+    if (
+      changedID && event.data.sessionID !== "global" &&
+      /^session\.(step\.|usage\.updated|compaction\.|inbox\.delivered|revert\.)/
+        .test(event.type)
+    ) {
+      this.digest?.observe(generation, [{
+        sessionID: changedID,
+        revision: event.durable?.seq ?? event.created ?? Date.now(),
+        reason: "messages",
+        messages: typeof event.data.assistantMessageID === "string"
+          ? [event.data.assistantMessageID]
+          : undefined,
+      }]);
+    }
+    await this.transcript.event(event);
     if (
       /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
         .test(event.type)
     ) {
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
-      commit();
+      await commit();
       return;
     }
     const form = event.data.form;
@@ -692,7 +797,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#pendingEvent(event, sid, form);
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
-      commit();
+      await commit();
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;

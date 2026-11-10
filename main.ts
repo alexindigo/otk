@@ -83,7 +83,21 @@ export async function start(
       publish: ({ sessionID, revision, delta }) => {
         index.applyDigest({ id: sessionID, revision, ...delta });
       },
-      unready: () => {},
+      unready: (keys) => {
+        for (const id of keys) {
+          const entry = index.get(id);
+          if (entry) {
+            const { turns: _turns, ...summary } = entry.digest;
+            index.applyDigest({
+              id,
+              revision: summary.revision,
+              summary: { ...summary, state: "digesting" },
+              turns: { upsert: {}, remove: [] },
+              deleted: entry.deleted ?? null,
+            });
+          }
+        }
+      },
       diagnostic: (error) => diagnostic("warn", "session digest", error),
     });
     const backend = new OpencodeV2ServerAdapter(

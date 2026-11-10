@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, Part } from "@otk/protocol";
+import { isRealPrompt } from "@otk/protocol";
 import { queuedMessages } from "./messages.ts";
 
 export interface TimelinePrompt {
@@ -16,7 +17,7 @@ export function timelinePrompts(
   busy = false,
 ): TimelinePrompt[] {
   const queued = queuedMessages(messages, busy);
-  return messages.filter((message) => message.role === "user").map((
+  return messages.filter(isRealPrompt).map((
     message,
   ) => ({
     id: message.id,

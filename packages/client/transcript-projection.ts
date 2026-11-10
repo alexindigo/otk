@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ContentOp, Message, Part, ReplyBoundary } from "@otk/protocol";
+import { compareMessages, isRealPrompt } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
 
@@ -24,8 +25,7 @@ export const replyKey = (message: Message): string =>
   message.role === "assistant"
     ? `reply:${message.replyTo ?? message.id}`
     : message.id;
-const compare = (a: Message, b: Message) =>
-  a.time.created - b.time.created || a.id.localeCompare(b.id);
+const compare = compareMessages;
 const dictionary = <T>(): Record<string, T> => Object.create(null);
 function insert(
   ids: string[],
@@ -148,7 +148,11 @@ export function createTranscriptProjection(): TranscriptProjection {
       next.time.completed === undefined;
     if (
       previous?.role === next?.role &&
-      previous?.time.created === next?.time.created && oldTurn === newTurn &&
+      previous?.time.created === next?.time.created &&
+      previous?.sourceOrder === next?.sourceOrder &&
+      (previous?.role !== "user" || next?.role !== "user" ||
+        previous.origin === next.origin) &&
+      oldTurn === newTurn &&
       oldUnfinished === newUnfinished
     ) return;
     const before = boundary(), current = userOrder.at(-1);
@@ -164,13 +168,13 @@ export function createTranscriptProjection(): TranscriptProjection {
         touched.add(newTurn);
       }
     }
-    if (previous?.role === "user") {
+    if (previous && isRealPrompt(previous)) {
       userClocks.delete(previous.id);
       userOrder = userOrder.filter((id) => id !== previous.id);
       touched.add(previous.id);
     }
-    if (next?.role === "user") {
-      userClocks.set(next.id, next.time.created);
+    if (next && isRealPrompt(next)) {
+      userClocks.set(next.id, next.sourceOrder ?? next.time.created);
       userOrder = ordered(userOrder, next.id, userClocks);
       touched.add(next.id);
     }
@@ -179,7 +183,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       unfinishedOrder = unfinishedOrder.filter((id) => id !== previous!.id);
     }
     if (newUnfinished) {
-      unfinishedClocks.set(next!.id, next!.time.created);
+      unfinishedClocks.set(next!.id, next!.sourceOrder ?? next!.time.created);
       unfinishedOrder = ordered(unfinishedOrder, next!.id, unfinishedClocks);
     }
     const after = boundary(), selected = userOrder.at(-1);
@@ -240,6 +244,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     const message: Message = {
       ...last,
       id: first.id,
+      sourceOrder: first.sourceOrder,
       time: { ...last.time, created: first.time.created },
       get parts() {
         return partsForReply();

@@ -21,6 +21,7 @@ export class V2Client {
     readonly signal: AbortSignal,
     readonly fetcher: typeof fetch = fetch,
     readonly admission?: (signal: AbortSignal) => Promise<() => void>,
+    readonly wait: <T>(value: Promise<T>) => Promise<T> = (value) => value,
   ) {
     this.#api = OpenCode.make({
       baseUrl: service.endpoint.url,
@@ -57,15 +58,16 @@ export class V2Client {
     signal?.throwIfAborted();
     let release: (() => void) | undefined;
     try {
-      release = await this.admission?.(
+      const admission = this.admission?.(
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
       );
+      release = admission ? await this.wait(admission) : undefined;
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
-      const value = await this.#reads.run(
+      const value = await this.wait(this.#reads.run(
         signal ?? this.signal,
         () => run(this.#api),
-      );
+      ));
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
       return value;

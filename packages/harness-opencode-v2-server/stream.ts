@@ -49,7 +49,7 @@ export interface StreamPorts {
     client: V2Client,
     signal: AbortSignal,
     generation: number,
-  ): Promise<() => void>;
+  ): Promise<() => void | Promise<void>>;
   event(
     event: V2Event,
     client: V2Client,
@@ -78,6 +78,7 @@ export class V2Stream {
       replaybytes: number;
     },
     readonly fetcher: typeof fetch = fetch,
+    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
   ) {}
   get client(): V2Client {
     if (!this.#client) {
@@ -126,7 +127,7 @@ export class V2Stream {
           this.policy.requestms,
           current,
           this.fetcher,
-          this.ports.admission,
+          this.ports.admission ?? this.admission,
         );
         await this.#consume(client, owner, current, generation, () => {
           this.#client = client;
@@ -239,7 +240,7 @@ export class V2Stream {
         bootstrap = (async () => {
           const commit = await this.ports.resync(client, signal, generation);
           signal.throwIfAborted();
-          commit();
+          await commit();
           while (queue.length) {
             const pending = queue.shift()!;
             queuedBytes -=

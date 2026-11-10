@@ -88,6 +88,37 @@ count/ownership/byte admission before any selected bytes leave SQLite; point
 retrieval delegates to the batch operation. Malformed individual entries cannot
 erase healthy recall, while incompatible sources remain unavailable, not empty.
 
+The transcript owner maps all native message kinds through one snapshot/tool
+mapper. Native controls update selection, not fabricated prompts. Source
+sequence orders fork copies independently of their copied timestamps and
+non-sortable IDs; synthetic/system/skill/shell/compaction rows never become
+real-prompt anchors. Text and reasoning identities count their own ordinals;
+tools use call IDs.
+
+Pages contain ten native rows, chronological visible items, session metadata,
+real-prompt/reply context and an event-aligned replay clock. Cursor
+continuations omit native `order` and bind to session, epoch, cutoff and source
+identity. Reconnect stages demanded running-turn backfill and checkpoints
+retained streams before new deltas. Missing seeds use bounded replacement-only
+recovery; HTTP snapshots never become append seeds. Unsubscribe, cutoff,
+reconnect and stop fence late pages, recoveries, shell output and speculation.
+
+`OpencodeV2TranscriptDigestSink` is the transcript contribution composed by the
+selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read
+channel, derived SQLite owner and the index owner's source-proven read-only
+native connection. Background headers and helper rows exclude text, tool inputs
+and output. API fallback extracts and releases bounded pages. Reported usage
+remains nullable; native session totals include internal charges and need not
+equal reply ledgers. This contribution does not enumerate projects or session
+lists; V1 owns those.
+
+Q6 prefetch reads only the next older page under the existing optional/idle
+admission. Its adapter-wide memory-only FIFO charges complete encoded keys and
+payloads, expires from insertion and rejects oversized entries. Hits skip native
+body and scalar metadata acquisition and seal a new replay clock. Mutations,
+metadata replacement, source/boundary changes and retirement cancel cached and
+in-flight authority; speculation never recursively fetches another page.
+
 ## Existing-state upgrade boundary
 
 Imported native identities are proven using the worker's read-only source
@@ -104,8 +135,6 @@ only with every contributor. The upgrade is awaited before feature hydration.
 The shipped client's reserved `local` location is eligible; arbitrary
 browser-owned remote sidecar IDs are not.
 
-Tests: package contracts plus `tests/integration/harness-probe_test.ts` and
-`tests/integration/v2-foundation_test.ts` inside the assigned droplet. The
-latter is V2-specific, while native selection runs in both lanes. No V2 parity
-area is claimed by merely selecting a browser project or preparing its native
-binary.
+Tests: package contracts, `test:v2-foundation` and `test:v2-transcripts`, inside
+the assigned droplet. Native selection runs in both lanes. No V2 parity area is
+claimed merely by preparing a native binary or selecting a browser project.

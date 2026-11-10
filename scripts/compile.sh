@@ -18,6 +18,7 @@ deno compile --frozen --node-modules-dir=none --exclude-unused-npm \
   --allow-net --allow-read --allow-write --allow-env --allow-sys=systemMemoryInfo \
   --include core/digest/worker.ts \
   --include packages/harness-opencode-v1/digest-migrations \
+  --include packages/harness-opencode-v2-server/digest-migrations \
   --include core/http/routes \
   --include web/dist \
   --include defaults/otk.toml \

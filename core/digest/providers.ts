@@ -50,16 +50,19 @@ export function selectDigestProvider(
   provider: string,
   native: DigestNativeConfig,
 ) {
-  const contributions = new Map<string, {
-    migrations: typeof opencodeV1DigestMigrations;
-    reads: ProviderReadCodecs;
-    create(
-      policy: DigestPolicy,
-      storage: OpencodeV1DigestStorage,
-      readiness: OpencodeV1DigestReadiness,
-      observe?: ConstructorParameters<typeof DigestNativeDb>[1],
-    ): WorkerDigestSink;
-  }>([["opencode-v1", {
+  const contributions = new Map<
+    string,
+    {
+      migrations: typeof opencodeV1DigestMigrations;
+      reads: ProviderReadCodecs;
+      create: (
+        policy: DigestPolicy,
+        storage: OpencodeV1DigestStorage,
+        readiness: OpencodeV1DigestReadiness,
+        observe?: ConstructorParameters<typeof DigestNativeDb>[1],
+      ) => WorkerDigestSink;
+    }
+  >([["opencode-v1", {
     migrations: opencodeV1DigestMigrations,
     reads: opencodeV1ReadCodecs as ProviderReadCodecs,
     create: (

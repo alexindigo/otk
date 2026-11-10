@@ -24,7 +24,9 @@ function setup(overrides: Partial<StreamPorts> = {}) {
         }),
       resync: () => {
         order.push("snapshot");
-        return Promise.resolve(() => order.push("commit"));
+        return Promise.resolve(() => {
+          order.push("commit");
+        });
       },
       event: (event) => {
         applied.push(event);
@@ -164,6 +166,36 @@ Deno.test("V2 stream stop joins bootstrap and drops its late commit", async () =
   await x.stream.stop();
   await rejected;
   assertEquals(commit, false);
+});
+Deno.test("V2 stream awaits reconnect backfill before buffered events and readiness", async () => {
+  const gate = Promise.withResolvers<void>();
+  let entered = false;
+  const x = setup({
+    resync: () =>
+      Promise.resolve(async () => {
+        entered = true;
+        await gate.promise;
+      }),
+  });
+  const starting = x.stream.start();
+  try {
+    await until(() => entered);
+    x.send({
+      id: "backfill-race",
+      type: "session.execution.succeeded",
+      data: { sessionID: "ses_1" },
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    assertEquals(x.applied.length, 0);
+    assertEquals(x.order.includes("ready"), false);
+    gate.resolve();
+    await starting;
+    await until(() => x.applied.length === 1);
+    assertEquals(x.order.at(-1), "ready");
+  } finally {
+    gate.resolve();
+    await x.stream.stop();
+  }
 });
 Deno.test("V2 execution salvage keeps valid run facts from drifted frames", () => {
   assertEquals(

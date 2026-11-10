@@ -12,12 +12,6 @@ export type { OpenCodeClient } from "./client.ts";
 export { opencodeV2SessionID } from "./ids.ts";
 export { decodeEvent, V2_SILENCE_MS, V2Stream } from "./stream.ts";
 export type { StreamPorts, V2Event } from "./stream.ts";
-export {
-  opencodeV2DigestMigrations,
-  OpencodeV2DigestSink,
-  opencodeV2ReadCodecs,
-} from "./digest.ts";
-export type { V2NativeConfig } from "./digest.ts";
 export { CatalogExecutor, V2Catalogs } from "./catalogs.ts";
 export {
   catalogReadCodecs,
@@ -30,3 +24,10 @@ export {
   mergeCommands,
 } from "./catalog-readers.ts";
 export { HistoryReader } from "./history.ts";
+export * from "./messages.ts";
+export * from "./map.ts";
+export * from "./transcript.ts";
+export * from "./transcript-reads.ts";
+export * from "./digest.ts";
+export * from "./digest-migrations.ts";
+export * from "./prefetch.ts";

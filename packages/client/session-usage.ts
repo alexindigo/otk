@@ -27,7 +27,9 @@ export interface UsageTarget {
 }
 export const usageKey = (target: UsageTarget): string =>
   JSON.stringify([target.sidecarId, target.sessionID, target.turnID]);
-type DetailOp = { message: UsageMessage } | { remove: string } | {
+type DetailOp = { message: UsageMessage; restart?: boolean } | {
+  remove: string;
+} | {
   messageID: string;
   tool: UsageTool;
 } | { messageID: string; removeTool: string };
@@ -35,7 +37,7 @@ function detailOp(event: ContentOp, turnID: string): DetailOp | undefined {
   if (
     event.op === "message.upsert" && event.message.role === "assistant" &&
     (event.message.replyTo ?? event.message.id) === turnID
-  ) return { message: usageHeader(event.message) };
+  ) return { message: usageHeader(event.message), restart: event.restart };
   if (event.op === "message.remove") return { remove: event.messageID };
   if (event.op === "part.upsert") {
     const tool = usageTool(event.part);
@@ -139,7 +141,7 @@ export function createSessionUsage(
     return resource;
   };
   const apply = (ledger: UsageLedger, event: DetailOp) => {
-    if ("message" in event) return ledger.upsert(event.message);
+    if ("message" in event) return ledger.upsert(event.message, event.restart);
     if ("remove" in event) return ledger.remove(event.remove);
     if ("tool" in event) return ledger.tool(event.messageID, event.tool);
     return ledger.removeTool(event.messageID, event.removeTool);
