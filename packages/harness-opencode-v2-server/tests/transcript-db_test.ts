@@ -99,6 +99,7 @@ Deno.test("V2 native transcript facts use seq and scalar selections across page 
 });
 Deno.test("V2 scalar helper tools combine split and legacy inline rows without input/output bodies", () => {
   const db = fixture();
+  const observed: string[] = [];
   try {
     const split = {
       type: "tool",
@@ -125,6 +126,9 @@ Deno.test("V2 scalar helper tools combine split and legacy inline rows without i
           throw new Error("no API");
         }),
         () => db,
+        undefined,
+        undefined,
+        (operation) => observed.push(operation),
       ),
       tools = reads.tools(sid, ["msg_owner"])!;
     assertEquals(tools.map((t) => t.tool.id), [
@@ -132,6 +136,7 @@ Deno.test("V2 scalar helper tools combine split and legacy inline rows without i
       "msg_owner:tool:inline",
     ]);
     assertEquals(tools[0].child, "ses_child");
+    assertEquals(observed, ["tools"]);
     assert(!JSON.stringify(tools).includes("secret"));
     assert(!JSON.stringify(tools).includes("private output"));
   } finally {

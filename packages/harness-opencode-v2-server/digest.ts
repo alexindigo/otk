@@ -706,6 +706,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       () => this.#native,
       (signal) => this.#yield(signal),
       () => this.#source,
+      (operation) => this.source.native()?.observe?.(operation),
     );
     this.readers = {
       "opcv2.transcript": async (input, signal) => {
@@ -934,6 +935,12 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         Math.min(budget.rows, SCAN_ROWS),
       ),
       next: string | undefined;
+    if (rows && !scan.exhausted) {
+      this.source.native()?.observe?.("headers", {
+        limit: Math.min(budget.rows, SCAN_ROWS),
+        rows: rows.length,
+      });
+    }
     if (!rows) {
       const page = await this.messages.page(
         job.sessionID,

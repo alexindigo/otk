@@ -239,6 +239,7 @@ export class TranscriptReads {
       await new Promise((r) => setTimeout(r, 0));
     },
     readonly source?: () => string,
+    readonly observe?: (operation: string) => void,
   ) {}
   sqlHeaders(
     sessionID: string,
@@ -518,6 +519,7 @@ export class TranscriptReads {
   }[] | undefined {
     const sql = this.native();
     if (!sql) return;
+    this.observe?.("tools");
     const extract = (data: string, ordinal: number, messageID: string) => {
       const p = record(JSON.parse(data)),
         state = record(p.state),
