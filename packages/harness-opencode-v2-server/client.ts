@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
-import { HarnessError } from "@otk/harness";
+import { HarnessError, NativeReadiness } from "@otk/harness";
 import { OperationFailure } from "@otk/protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DiscoveredService } from "./discovery.ts";
@@ -13,6 +13,7 @@ export class V2MissingSession extends HarnessError {
 }
 /** One endpoint generation. Re-discovery replaces this owner, never the service. */
 export class V2Client {
+  readonly readiness: NativeReadiness;
   readonly #api: OpenCodeClient;
   readonly #reads = new AsyncLocalStorage<AbortSignal>();
   constructor(
@@ -21,8 +22,11 @@ export class V2Client {
     readonly signal: AbortSignal,
     readonly fetcher: typeof fetch = fetch,
     readonly admission?: (signal: AbortSignal) => Promise<() => void>,
-    readonly wait: <T>(value: Promise<T>) => Promise<T> = (value) => value,
+    readonly wait: <T>(value: Promise<T>, join?: boolean) => Promise<T> = (
+      value,
+    ) => value,
   ) {
+    this.readiness = new NativeReadiness(wait, admission);
     this.#api = OpenCode.make({
       baseUrl: service.endpoint.url,
       headers: serviceHeaders(service.endpoint),
@@ -56,18 +60,11 @@ export class V2Client {
   ): Promise<T> {
     this.signal.throwIfAborted();
     signal?.throwIfAborted();
-    let release: (() => void) | undefined;
     try {
-      const admission = this.admission?.(
+      const value = await this.readiness.run(
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
+        () => this.#reads.run(signal ?? this.signal, () => run(this.#api)),
       );
-      release = admission ? await this.wait(admission) : undefined;
-      this.signal.throwIfAborted();
-      signal?.throwIfAborted();
-      const value = await this.wait(this.#reads.run(
-        signal ?? this.signal,
-        () => run(this.#api),
-      ));
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
       return value;
@@ -96,8 +93,6 @@ export class V2Client {
       // Transport, timeout, incompatible bodies and unknown errors cannot prove
       // absence or input rejection. In particular, never return an empty read.
       throw new OperationFailure("unavailable", "native.unavailable", cause);
-    } finally {
-      release?.();
     }
   }
 }

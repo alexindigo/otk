@@ -17,6 +17,7 @@ import {
   type DigestPublication,
   type DigestSink,
   identityReadCodec,
+  NativeReadiness,
   type ProjectSeed,
   type ProviderReaders,
   type SessionIdentity,
@@ -110,6 +111,7 @@ export class OpencodeV2DigestSink implements DigestSink {
   #source?: string;
   #projectDirectories = new Set<string>();
   #wait: <T>(value: Promise<T>) => Promise<T>;
+  readonly #readiness: NativeReadiness;
   constructor(
     readonly config: V2NativeConfig,
     readonly policy: DigestPolicy,
@@ -121,6 +123,10 @@ export class OpencodeV2DigestSink implements DigestSink {
     ) => void,
   ) {
     this.#wait = readiness.wait ?? ((p) => p);
+    this.#readiness = new NativeReadiness(
+      readiness.ioWait ?? this.#wait,
+      readiness.admission,
+    );
     this.#transcripts = new OpencodeV2TranscriptDigestSink(
       policy,
       storage,
@@ -244,15 +250,7 @@ export class OpencodeV2DigestSink implements DigestSink {
     }
   }
   async #io<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
-    const wait = this.readiness.ioWait ?? this.#wait;
-    const release = await wait(
-      this.readiness.admission?.(signal) ?? Promise.resolve(() => {}),
-    );
-    try {
-      return await wait(run());
-    } finally {
-      release();
-    }
+    return await this.#readiness.run(signal, run);
   }
   async #prepare(
     signal: AbortSignal,

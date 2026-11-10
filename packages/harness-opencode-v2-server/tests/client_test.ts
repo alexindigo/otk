@@ -115,6 +115,53 @@ Deno.test("V2 finite-read owner classifies missing, authentication and unavailab
   ]);
 });
 
+Deno.test("V2 worker cancellation joins the real exchange before releasing native permission", async () => {
+  const owner = new AbortController(),
+    entered = Promise.withResolvers<void>(),
+    body = Promise.withResolvers<number>();
+  let releases = 0, settled = false;
+  const wait = <T>(value: Promise<T>, join = false): Promise<T> => {
+    if (join) return value;
+    return new Promise<T>((resolve, reject) => {
+      const abort = () => reject(owner.signal.reason);
+      owner.signal.addEventListener("abort", abort, { once: true });
+      value.then(resolve, reject).finally(() =>
+        owner.signal.removeEventListener("abort", abort)
+      );
+      if (owner.signal.aborted) abort();
+    });
+  };
+  const client = new V2Client(
+    service,
+    1000,
+    owner.signal,
+    fetch,
+    () => Promise.resolve(() => releases++),
+    wait,
+  );
+  const reading = client.read(() => {
+    entered.resolve();
+    return body.promise;
+  });
+  const rejected = assertRejects(() => reading, DOMException, "retired");
+  void reading.then(() => {
+    settled = true;
+  }, () => {
+    settled = true;
+  });
+  await entered.promise;
+  owner.abort(new DOMException("retired", "AbortError"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    assertEquals(releases, 0);
+    assertEquals(settled, false);
+  } finally {
+    body.resolve(42);
+    await rejected;
+  }
+  assertEquals(releases, 1);
+});
+
 Deno.test("V2 read cancellation reaches the SDK without caller-specific transport wiring", async () => {
   const owner = new AbortController(), caller = new AbortController();
   const entered = Promise.withResolvers<void>();
