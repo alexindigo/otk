@@ -117,6 +117,7 @@ export class V2Stream {
       const generation = ++this.#generation;
       const owner = new AbortController();
       const current = AbortSignal.any([signal, owner.signal]);
+      let retire: (() => Promise<void>) | undefined;
       try {
         const service = await this.ports.discover(current);
         current.throwIfAborted();
@@ -126,6 +127,7 @@ export class V2Stream {
           current,
           this.fetcher,
         );
+        retire = () => client.idle();
         await this.#consume(client, owner, current, generation, () => {
           this.#client = client;
           this.ports.connected(client, generation);
@@ -143,6 +145,7 @@ export class V2Stream {
         if (!signal.aborted) this.ports.diagnostic(error);
       } finally {
         owner.abort();
+        await retire?.();
         this.#client = undefined;
         this.ports.disconnected(generation);
       }

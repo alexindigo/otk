@@ -17,6 +17,8 @@ import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type V2Event, V2Stream } from "./stream.ts";
 import { V2Catalogs } from "./catalogs.ts";
+import { V2Pending } from "./pending.ts";
+import { V2Prompt } from "./prompt.ts";
 import {
   type OpenCodeClient,
   type V2Client,
@@ -33,6 +35,7 @@ export interface OpencodeV2ServerConfig {
   messages: { replayops: number; replaybytes: number };
   digest?: DigestPolicy;
   catalogs?: { pending: number; concurrency: number };
+  attachments?: import("@otk/protocol").AttachmentPolicy;
 }
 type NativeSession = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>;
 type Pending = {
@@ -68,6 +71,8 @@ export class OpencodeV2ServerAdapter implements Harness {
   readonly capabilities: Readonly<Capabilities>;
   readonly catalogs?: V2Catalogs;
   readonly stream: V2Stream;
+  readonly pending: V2Pending;
+  readonly prompts: V2Prompt;
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
@@ -136,8 +141,45 @@ export class OpencodeV2ServerAdapter implements Harness {
         reads,
       );
     }
-    this.capabilities = Object.freeze(
-      this.catalogs
+    this.pending = new V2Pending(
+      () => this.stream.client,
+      (id) => this.#index.getMetadata(id),
+      (id, op) => {
+        this.#sink?.content(id, op);
+        const native = ids.decode(id);
+        if (op.op === "permission.remove") {
+          this.#pending.delete(
+            `permission:${op.requestID}`,
+          );
+        }
+        if (op.op === "form.remove") {
+          this.#pending.delete(`form:${op.requestID}`);
+        }
+        const entry = this.#index.getMetadata(id);
+        if (entry) {
+          const pending = [...this.#pending.values()].filter((x) =>
+            x.sessionID === native
+          );
+          this.#upsert({
+            ...entry,
+            attention: {
+              ...entry.attention,
+              permissions: pending.filter((x) =>
+                x.kind === "permission"
+              ).length,
+              questions: pending.filter((x) => x.kind === "form").length,
+            },
+          });
+        }
+      },
+    );
+    this.prompts = new V2Prompt(() => this.stream.client, config.attachments);
+    this.capabilities = Object.freeze<Capabilities>({
+      prompt: this.prompts,
+      permissions: this.pending.permissions,
+      forms: this.pending.forms,
+      questions: this.pending.questions,
+      ...(this.catalogs
         ? {
           agents: this.catalogs.agents,
           models: this.catalogs.models,
@@ -151,8 +193,8 @@ export class OpencodeV2ServerAdapter implements Harness {
           ...(this.catalogs.history ? { history: this.catalogs.history } : {}),
           // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.
         }
-        : {},
-    );
+        : {}),
+    });
     const version = () => this.#version;
     const unavailable = () =>
       Promise.reject(
@@ -186,7 +228,9 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#sink = undefined;
         await this.catalogs?.stop();
         await this.stream.stop();
+        await this.prompts.stop();
         this.#pending.clear();
+        this.pending.clear();
         this.#running.clear();
       },
       subscriptions: () => {},
@@ -274,6 +318,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       signal,
     );
     const pending = new Map(this.#pending);
+    const inventories: (() => void)[] = [];
     const owners = new Set([
       ...Object.keys(active),
       ...this.#running.keys(),
@@ -299,6 +344,9 @@ export class OpencodeV2ServerAdapter implements Harness {
         );
         signal.throwIfAborted();
         // Replace only after both complete owner/location inventories succeed.
+        inventories.push(() =>
+          this.pending.replace(location, permissions.data, forms.data)
+        );
         for (const [key, value] of pending) {
           if (value.directory === location.directory) pending.delete(key);
         }
@@ -326,12 +374,14 @@ export class OpencodeV2ServerAdapter implements Harness {
     const sessions: NativeSession[] = [];
     for (const id of owners) {
       try {
-        sessions.push(
-          await client.read(
-            (api) => api.session.get({ sessionID: id }, { signal }),
-            signal,
-          ),
+        const raw = await client.read(
+          (api) => api.session.get({ sessionID: id }, { signal }),
+          signal,
         );
+        sessions.push(raw);
+        // Keyed pending-owner ancestry only. Reconcile this V3 hook with V1's
+        // shared hydrate owner at merge; never enumerate session populations.
+        if (raw.parentID) owners.add(raw.parentID);
       } catch (error) {
         signal.throwIfAborted();
         this.diagnostic(error);
@@ -342,6 +392,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       signal.throwIfAborted();
       this.#generation = generation;
       this.#pending = pending;
+      for (const apply of inventories) apply();
       if (reconnect) {
         this.#sink?.invalidate({ version: { generation, revision: 0 } });
       }
@@ -370,6 +421,33 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
+    const native = event.data.sessionID;
+    if (event.type === "session.deleted" && typeof native === "string") {
+      this.pending.retireSession(native);
+    }
+    if (
+      event.type === "permission.replied" && typeof native === "string" &&
+      typeof event.data.requestID === "string"
+    ) {
+      this.pending.settle("permission", event.data.requestID, native);
+      return;
+    }
+    if (
+      (event.type === "form.replied" || event.type === "form.cancelled") &&
+      typeof native === "string" && typeof event.data.id === "string"
+    ) {
+      this.pending.settle("form", event.data.id, native);
+      return;
+    }
+    if (
+      /^(permission\.|form\.)/.test(event.type) ||
+      event.type === "location.shutdown"
+    ) {
+      const commit = await this.#resync(client, signal, generation, false);
+      signal.throwIfAborted();
+      commit();
+      return;
+    }
     const form = event.data.form;
     const sid = event.data.sessionID ??
       (form && typeof form === "object"
@@ -385,13 +463,6 @@ export class OpencodeV2ServerAdapter implements Harness {
     } else if (
       /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
     ) this.#running.delete(sid);
-    if (/^(permission\.|form\.)/.test(event.type)) {
-      // Inventory is the authoritative reconciliation for racing ephemeral requests.
-      const commit = await this.#resync(client, signal, generation, false);
-      signal.throwIfAborted();
-      commit();
-      return;
-    }
     const raw = await client.read(
       (api) => api.session.get({ sessionID: sid }, { signal }),
       signal,

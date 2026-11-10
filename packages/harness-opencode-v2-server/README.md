@@ -14,7 +14,30 @@ enter neutral protocol frames or browser config.
 SDK stays private. Native not-found tags establish absence; transport, timeout
 and malformed responses remain unavailable. Per-read async context carries
 caller cancellation through concurrent SDK calls, and aborted continuations
-cannot return late data. Native mutations need their separate effect owner.
+cannot return late data. `V2Client.effect` fences each actual dispatch, has no
+mutation timeout or replay, and preserves native rejection versus unknown
+transport outcomes through SDK causal wrappers. Retiring a stream generation
+aborts and joins its finite SDK exchanges before closing that owner.
+
+`V2Prompt` prepares all attachments before selection changes, serializes each
+session's sequence, and calls separate agent/model switches only when their
+explicit native selections differ. Variant changes use the model switch.
+Successful intermediate changes checkpoint selection metadata, never prompt or
+attachment bytes. The final prompt retains exact text, mention offsets and
+resolved recall bytes. Interrupt bypasses that queue and omits `resume`;
+`interrupted:false` is idle success.
+
+`V2Pending` is the canonical volatile permission/form owner. Permission replies
+use the asking session and native `decision`; rejection includes feedback. OTK's
+existing server-owned policy supplies automatic `once` replies, without native
+rule rewriting. Typed forms preserve string/number/integer/boolean, multiselect
+and external-step values. Only question-tagged `qN` string/choice forms
+additionally project the legacy question API. Both use one retained client
+form-state owner and choice renderer; attention counts each form once. Global
+forms retain a location owner, use the directory header on native replies, and
+appear through registered global surfaces with project attention. They never
+acquire a fabricated qualified session ID. Explicit settlement events retire
+pending requests even when another inventory is unavailable.
 
 `V2Stream` owns one subscribed SSE generation. It waits for `server.connected`
 before snapshot reads, stages events under the injected operation/byte budgets,

@@ -46,6 +46,7 @@ export async function start(
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
+        attachments: cfg.attachments,
         harness: cfg.harness,
         messages: cfg.messages,
         digest: cfg.digest,
