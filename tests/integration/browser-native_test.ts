@@ -42,7 +42,7 @@ Deno.test("browser native pending authority follows newly loaded nested project 
         body: { parts: [{ type: "text", text: "Ask in a nested location" }] },
       });
       await waitFor(
-        () => f.oc.listPermissions(child.id),
+        () => f.oc.listPermissions(child.id, directory),
         (rows) => rows.length === 1,
       );
       const pending = await waitFor(

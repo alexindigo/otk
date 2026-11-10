@@ -166,7 +166,7 @@ export default function Message(
   onSettled(() =>
     props.control?.({
       reveal() {
-        if (!bubble) return;
+        if (!prompt() || !bubble) return;
         bubble.focus({ preventScroll: true });
       },
     })
@@ -235,7 +235,9 @@ export default function Message(
                 ? "otk-user-bubble otk-created-trigger"
                 : "otk-message-content"}
               ref={(element) => {
-                if (!frame().transcript && prompt()) {
+                // Parts may arrive after this frame mounts. Keep its reference
+                // independently of the current prompt projection.
+                if (!frame().transcript) {
                   bubble = element;
                 }
               }}

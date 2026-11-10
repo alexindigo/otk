@@ -192,7 +192,11 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
   ).toBe("plan");
   expect(
     (await messages(state, seed.id)).some((row) =>
-      row.info.role === "user" && row.info.agent === "plan"
+      row.info.role ===
+        (state.controller.info!.version.startsWith("2.")
+          ? "assistant"
+          : "user") &&
+      row.info.agent === "plan"
     ),
   ).toBe(true);
   await prompt(page).click();
@@ -215,7 +219,10 @@ isolatedTest.describe("configured primary order", () => {
         sessionID: seed.id,
         primary: true,
       });
-      expect(catalog.map((agent) => agent.name)).toEqual(["plan", "build"]);
+      expect(catalog.map((agent) => agent.id ?? agent.name)).toEqual([
+        "plan",
+        "build",
+      ]);
       const frames = await wire(page);
       await openSession(state, page, seed.id);
       await expect(page.locator(".otk-composer-agent")).toHaveText("Plan");
@@ -243,7 +250,10 @@ isolatedTest.describe("configured primary order", () => {
       await reply(state, page, seed.id, "Cycled build replied.");
       expect(
         (await messages(state, seed.id)).filter((row) =>
-          row.info.role === "user"
+          row.info.role ===
+            (state.controller.info!.version.startsWith("2.")
+              ? "assistant"
+              : "user")
         ).map((row) => row.info.agent),
       ).toEqual(["plan", "build"]);
     },

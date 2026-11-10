@@ -178,7 +178,7 @@ export class V2Client {
       ) {
         throw new OperationFailure(
           "rejected",
-          "native.rejected",
+          tag === "SessionBusyError" ? "session.busy" : "native.rejected",
           context.failure ?? cause,
         );
       }
