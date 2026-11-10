@@ -15,6 +15,7 @@ import {
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { interrupt } from "./interrupt.ts";
+import { selectionModel } from "./selection.ts";
 type NativeInput = Parameters<OpenCodeClient["session"]["prompt"]>[0];
 type Prepared = Pick<NativeInput, "text" | "files" | "agents">;
 
@@ -266,22 +267,7 @@ export class V2Prompt implements PromptCapability {
         this.policy,
         operation?.signal,
       );
-      const model = input.model
-        ? {
-          providerID: input.model.provider,
-          id: input.model.model,
-          ...(input.variant === undefined ? {} : { variant: input.variant }),
-        }
-        : input.variant !== undefined && session.model
-        ? { ...session.model, variant: input.variant }
-        : undefined;
-      if (input.variant !== undefined && !model) {
-        throw new OperationFailure(
-          "rejected",
-          "native.rejected",
-          new Error("A model is required to choose a variant"),
-        );
-      }
+      const model = await selectionModel(client, session, input, operation);
       if (input.agent !== undefined && input.agent !== session.agent) {
         await client.effect(
           (api) =>

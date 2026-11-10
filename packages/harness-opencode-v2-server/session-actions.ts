@@ -17,6 +17,7 @@ import {
 import { mapSession, millis } from "./map.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { readSessionActivity } from "./recency.ts";
+import { selectionModel } from "./selection.ts";
 
 /** Selection checkpoints contain metadata only, never command or prompt bodies. */
 export async function selectAction(
@@ -25,6 +26,7 @@ export async function selectAction(
   input: { agent?: string; model?: ModelRef; variant?: string },
   operation?: OperationContext,
 ): Promise<void> {
+  const model = await selectionModel(client, raw, input, operation);
   const checkpoint = async () => {
     await operation?.checkpoint("session-selection", {
       kind: "session-selection",
@@ -50,16 +52,11 @@ export async function selectAction(
     await checkpoint();
   }
   if (
-    input.model &&
-    (input.model.provider !== raw.model?.providerID ||
-      input.model.model !== raw.model?.id ||
-      input.variant !== raw.model?.variant)
+    model &&
+    (model.providerID !== raw.model?.providerID ||
+      model.id !== raw.model?.id ||
+      (model.variant ?? "default") !== (raw.model?.variant ?? "default"))
   ) {
-    const model = {
-      providerID: input.model.provider,
-      id: input.model.model,
-      ...(input.variant ? { variant: input.variant } : {}),
-    };
     await client.effect(
       (api) => api.session.switchModel({ sessionID: raw.id, model }),
       operation,
