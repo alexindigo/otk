@@ -276,14 +276,18 @@ export class OpencodeV2ServerAdapter implements Harness {
         removed: async (id, operation) => {
           const client = this.stream.client;
           const native = ids.decode(id);
-          const raw = await client.read(
-            (api) =>
-              api.session.get({ sessionID: native }, {
-                signal: operation?.signal,
-              }),
-            operation?.signal,
+          // Preserve last-known metadata without blocking a lifetime mutation
+          // behind unrelated finite reads (for example a delayed seen lookup).
+          const metadata = this.#index.getMetadata(id) ?? this.#metadata(
+            await client.read(
+              (api) =>
+                api.session.get({ sessionID: native }, {
+                  signal: operation?.signal,
+                }),
+              operation?.signal,
+            ),
+            this.#running.has(native),
           );
-          const metadata = this.#metadata(raw, this.#running.has(native));
           const intent = crypto.randomUUID(), generation = this.#generation;
           await digest?.deleteIntent(id, intent, "begin", generation);
           try {
@@ -296,7 +300,6 @@ export class OpencodeV2ServerAdapter implements Harness {
               id,
               metadata,
               generation,
-              operation?.signal ?? client.signal,
             );
           } catch (error) {
             await digest?.deleteIntent(id, intent, "failed", generation);
@@ -586,10 +589,8 @@ export class OpencodeV2ServerAdapter implements Harness {
     id: string,
     metadata: SessionMetadata | undefined,
     generation: number,
-    signal: AbortSignal,
   ): Promise<void> {
     if (generation !== this.#generation) return;
-    const previous = this.#index.getMetadata(id);
     this.transcript.release(id);
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
@@ -603,13 +604,6 @@ export class OpencodeV2ServerAdapter implements Harness {
     } else {
       if (!this.#sink?.index) this.#index.remove(id);
       this.#sink?.indexRemove(id);
-    }
-    if (previous) {
-      await this.#refreshProjects(
-        [previous.directory],
-        signal,
-        generation,
-      );
     }
   }
   #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
@@ -933,12 +927,17 @@ export class OpencodeV2ServerAdapter implements Harness {
       : undefined;
     if (changedID && event.type === "session.deleted") {
       this.pending.retireSession(event.data.sessionID as string);
+      const previous = this.#index.getMetadata(changedID);
       await this.#deleted(
         changedID,
-        this.#index.getMetadata(changedID),
+        previous,
         generation,
-        signal,
       );
+      // Population refresh belongs to the event stream, not the confirmed
+      // mutation's receipt. A held read cannot delay deletion confirmation.
+      if (previous) {
+        await this.#refreshProjects([previous.directory], signal, generation);
+      }
       return;
     }
     if (
