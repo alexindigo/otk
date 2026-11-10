@@ -1355,6 +1355,18 @@ export class Transcript {
     }
     if (messageID) {
       const live = this.#live.get(messageID);
+      if (
+        event.type === "session.step.streamed" && live &&
+        event.created !== undefined
+      ) {
+        // This is the native persisted output edge. The later terminal event
+        // includes bookkeeping/tool settlement and must not replace that clock.
+        live.raw.time.streamed = event.created;
+        const header = mapMessage(live.raw, id, live.context)!;
+        header.parts = [];
+        this.#publish(id, { op: "message.upsert", message: header });
+        return;
+      }
       if (/^session\.(text|reasoning)\./.test(event.type)) {
         const kind = event.type.includes(".reasoning.") ? "reasoning" : "text",
           ordinal = d.ordinal;
