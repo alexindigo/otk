@@ -133,6 +133,7 @@ Deno.test("session ports capture target once while capability and resource gette
   resources.forms = () => [
     {
       id: "question-form",
+      presentation: "question",
       owner: { kind: "session", sessionID: "original" },
       directory: "/original",
       title: "Question projection",
@@ -154,6 +155,10 @@ Deno.test("session ports capture target once while capability and resource gette
   assertEquals(ports.questions().map((request) => request.id), [
     "question-form",
   ]);
+  assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
+  // Question removal and the typed pending list settle independently.
+  session.state.content.questions = [];
+  assertEquals(ports.questions(), []);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
   resources.stop();
 });

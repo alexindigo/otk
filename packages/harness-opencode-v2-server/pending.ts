@@ -461,6 +461,7 @@ export class V2Pending {
           }),
         }
         : undefined;
+    if (question) request.presentation = "question";
     this.#forms.set(raw.id, {
       request,
       native: raw.sessionID,
