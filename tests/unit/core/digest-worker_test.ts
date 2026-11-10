@@ -5,7 +5,13 @@ import { DigestBridge } from "../../../core/digest/bridge.ts";
 import { StoppedError } from "@otk/protocol";
 import { bounded, resources, tempDir, test } from "../../support/resources.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { OpencodeTest, waitFor } from "../../support/opencode.ts";
+import { waitFor } from "../../support/opencode.ts";
+import {
+  nativeDigest,
+  nativeHarness,
+  selectedNative,
+  startHarness,
+} from "../../support/native-testing.ts";
 
 test("project-only worker startup has no phantom session enumeration or unrequested progress", async () => {
   const statePath = await tempDir("project-only-progress-");
@@ -38,11 +44,14 @@ test("project-only worker startup has no phantom session enumeration or unreques
 
 test("public worker port publishes real native totals and recovers committed metadata after restart", async () => {
   const fake = new FakeLlm();
-  const oc = await OpencodeTest.start(fake);
-  const session = await oc.session<{ id: string }>("/session", {
-    method: "POST",
-    body: { title: "Worker digest" },
-  });
+  const oc = await selectedNative(fake);
+  const session = await oc.createSession("Worker digest");
+  const nativeReader = nativeHarness(oc);
+  resources().defer(
+    "worker native transcript observer",
+    () => nativeReader.core.stop(),
+  );
+  await startHarness(nativeReader);
   const statePath = await tempDir("digest-worker-");
   const turnKeys = new Set<string>();
   const summaries = new Map<
@@ -60,20 +69,7 @@ test("public worker port publishes real native totals and recovers committed met
   >();
   const options = {
     statePath,
-    provider: "opencode-v1",
-    native: {
-      harness: {
-        url: oc.url,
-        username: "opencode",
-        password: "",
-        db: oc.db,
-        heartbeattimeout: 25,
-        reconnectmax: 30,
-        requestms: 60000,
-      },
-      index: { days: 30 },
-      attachments: cfg().attachments,
-    },
+    ...nativeDigest(oc),
     policy: {
       batch: 2,
       slicems: 8,
@@ -108,11 +104,17 @@ test("public worker port publishes real native totals and recovers committed met
       for (const key of value.delta.turns.remove) turnKeys.delete(key);
     },
   };
+  const open = async (target: DigestBridge, connection: number) => {
+    target.scope("viewer", { sessions: [session.id] });
+    await target.start();
+    // Both lifetimes acquire the selected key explicitly. Catalog replay is
+    // optional background work, not the selected-turn acquisition contract.
+    await target.hydrate([session.id], new AbortController().signal);
+    return await target.catalog(connection, new AbortController().signal);
+  };
   const bridge = new DigestBridge(options);
   try {
-    bridge.scope("viewer", { sessions: [] });
-    await bridge.start();
-    const catalog = await bridge.catalog(1, new AbortController().signal);
+    const catalog = await open(bridge, 1);
     assertEquals(
       catalog.entries.some((entry) => entry.id === session.id),
       true,
@@ -130,13 +132,14 @@ test("public worker port publishes real native totals and recovers committed met
     assertEquals(bridge.progress()[0].completed, catalog.entries.length);
     for (let round = 0; round < 3; round++) {
       fake.queue({ chunks: ["Digest reply"] });
-      await oc.request(`/session/${session.id}/message`, {
-        method: "POST",
-        body: {
-          parts: [{ type: "text", text: "Digest prompt" }],
-          model: { providerID: "fake", modelID: "scripted" },
-        },
-      });
+      await oc.prompt(session.id, "Digest prompt");
+      await waitFor(
+        () => nativeReader.core.listMessages(session.id, {}),
+        (page) =>
+          page.items.filter((row) =>
+            row.role === "assistant" && row.time.completed !== undefined
+          ).length >= round + 1,
+      );
       bridge.observe(1, [{
         sessionID: session.id,
         revision: round + 1,
@@ -173,15 +176,14 @@ test("public worker port publishes real native totals and recovers committed met
     },
   });
   try {
-    restarted.scope("viewer", { sessions: [] });
-    await restarted.start();
-    await restarted.catalog(2, new AbortController().signal);
+    await open(restarted, 2);
     await waitFor(
       () => summaries.get(session.id),
       (value) =>
         value?.delta.summary.state === "ready" &&
         (value.delta.summary.total?.calls ?? 0) >= 3,
     );
+    await waitFor(() => turnKeys.size, (count) => count === 3);
     assertEquals(turnKeys.size, 3);
     const beforeCrash = summaries.get(session.id)!.revision;
     // Deliberately violate the typed scope port to force an actual worker fault.

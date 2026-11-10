@@ -7,7 +7,12 @@ import { DigestBridge } from "../../core/digest/bridge.ts";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
-import { tempDir, test } from "../support/resources.ts";
+import { tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 History SQL/part attachment codecs", [
+  "tests/integration/v2-catalogs_test.ts#OC2C2",
+  "tests/integration/v2-catalogs_test.ts#OC2C3",
+]);
 
 test("real provider history batches cross the existing worker without durable content and cannot recover a deleted provider", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);

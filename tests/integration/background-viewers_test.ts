@@ -6,26 +6,22 @@ import { InboxFeature } from "../../core/features/inbox.ts";
 import type { DigestPressure } from "../../core/digest/protocol.ts";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { freePort, waitFor } from "../support/opencode.ts";
+import {
+  nativePrompt,
+  selectedNative,
+  useNativeDiscovery,
+} from "../support/native-testing.ts";
 import { resources, test } from "../support/resources.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 test("@load @transport background=false view leases park unfinished backfill without holding execution, native permission or credit; SSE lamps and resume survive", async () => {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
-  const session = await oc.session<{ id: string; nativeID: string }>(
-    "/session",
-    {
-      method: "POST",
-      body: { title: "Unfinished backfill" },
-    },
-  );
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  const session = await oc.createSession("Unfinished backfill");
   // Keep older history beyond the requested ten-message boundary for idle work.
   for (let i = 0; i < 8; i++) {
     fake.queue({ chunks: [`Reply ${i}`] });
-    await oc.request(`/session/${session.id}/message`, {
-      method: "POST",
-      body: { parts: [{ type: "text", text: `Prompt ${i}` }] },
-    });
+    await nativePrompt(oc, session.id, `Prompt ${i}`);
   }
   let hold = true, entered = 0, settled = 0, optionalReads = 0;
   let pageAccepted = false;
@@ -52,6 +48,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
       }
       return fetch(new URL(url.pathname + url.search, oc.url), {
         signal: request.signal,
+        headers: request.headers,
       });
     },
   );
@@ -61,6 +58,8 @@ test("@load @transport background=false view leases park unfinished backfill wit
   settings.server.port = freePort();
   settings.state.path = join(oc.root, "viewer-state");
   settings.harness.url = `http://127.0.0.1:${proxy.addr.port}`;
+  settings.harness.type = oc.kind;
+  await useNativeDiscovery(oc, settings.harness.url);
   settings.harness.db = join(oc.root, "absent.db");
   settings.digest = { ...settings.digest, batch: 2, cpu: 1, publishrows: 2 };
   const pressure: DigestPressure[] = [];
@@ -114,10 +113,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
       source instanceof InboxFeature
     );
     assert(inbox instanceof InboxFeature);
-    await oc.request(`/session/${session.id}/prompt_async`, {
-      method: "POST",
-      body: { parts: [{ type: "text", text: "Run with no viewers" }] },
-    });
+    await oc.prompt(session.id, "Run with no viewers");
     await waitFor(
       () => inbox.summaries.values.get(oc.directory)?.status,
       (status) => status === "working",
@@ -132,19 +128,14 @@ test("@load @transport background=false view leases park unfinished backfill wit
     assertEquals(optionalReads, pausedReads);
     fake.queue({
       tool: {
-        name: "bash",
+        name: oc.kind === "opencode-v2-server" ? "shell" : "bash",
         input: {
           command: "printf p6",
           description: "Manual permission while disconnected",
         },
       },
     });
-    await oc.request(`/session/${session.id}/prompt_async`, {
-      method: "POST",
-      body: {
-        parts: [{ type: "text", text: "Ask for permission without a viewer" }],
-      },
-    });
+    await oc.prompt(session.id, "Ask for permission without a viewer");
     await waitFor(
       () => inbox.summaries.values.get(oc.directory)?.status,
       (status) => status === "blocked",

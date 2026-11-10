@@ -1,44 +1,52 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { cfg } from "../../support/config.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { SessionIndex } from "@otk/harness";
-import { mapIndex, type Session } from "@otk/harness-opencode-v1";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { OpencodeTest, waitFor } from "../../support/opencode.ts";
+import { waitFor } from "../../support/opencode.ts";
+import {
+  nativeDigest,
+  nativeHarness,
+  selectedNative,
+  startHarness,
+} from "../../support/native-testing.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
 
 test("accepted deletion before catalog seeds retained metadata and survives restart without provider health", async () => {
   const root = await tempDir("new-deletion-"),
     fake = new FakeLlm(),
-    oc = await OpencodeTest.start(fake);
-  const raw = await oc.request<Session>("/session", {
-    method: "POST",
-    body: { title: "Deleted before catalog" },
-  });
-  const metadata = mapIndex(raw);
-  await oc.request(`/session/${raw.id}`, { method: "DELETE" });
+    oc = await selectedNative(fake);
+  const session = await oc.createSession("Deleted before catalog");
+  const harness = nativeHarness(oc);
+  resources().defer("deletion metadata adapter", () => harness.core.stop());
+  await startHarness(harness);
+  const raw = await harness.core.getSession(session.id);
+  const metadata = {
+    id: raw.id,
+    title: raw.title,
+    directory: raw.directory,
+    projectID: raw.projectID,
+    parentID: raw.parentID,
+    timeCreated: raw.time.created,
+    timeUpdated: raw.time.updated,
+    archived: raw.archived,
+    status: "idle" as const,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  };
+  await harness.capabilities.sessionActions!.remove(session.id);
   await oc.stop();
   let index = new SessionIndex();
   const diagnostics: Error[] = [];
   const open = () =>
     new DigestBridge({
       statePath: join(root, "state"),
-      provider: "opencode-v1",
-      native: {
-        harness: {
-          url: oc.url,
-          db: oc.db,
-          username: "",
-          password: "",
-          heartbeattimeout: 25,
-          reconnectmax: 30,
-          requestms: 60000,
-        },
-        index: { days: 30 },
-        attachments: cfg().attachments,
-      },
+      ...nativeDigest(oc),
       policy: {
         batch: 100,
         slicems: 8,

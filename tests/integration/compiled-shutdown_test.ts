@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { nativeFixture } from "../support/native-fixture.ts";
+import {
+  nativeBehavior as nativeFixture,
+  type TestNative,
+} from "../support/native-testing.ts";
 import { preparedBinary } from "../support/prepared-binaries.ts";
 import { ownedProcess } from "../support/process.ts";
 import { bounded, test } from "../support/resources.ts";
-import { freePort, type OpencodeTest, waitFor } from "../support/opencode.ts";
+import { freePort, waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-async function launch(oc: OpencodeTest, port: number, level = "info") {
+async function launch(oc: TestNative, port: number, level = "info") {
   const binary = await preparedBinary();
   const env = Object.fromEntries(
     Object.entries(Deno.env.toObject()).filter(([key]) =>
@@ -24,6 +27,8 @@ async function launch(oc: OpencodeTest, port: number, level = "info") {
       OTK_SERVER_PORT: String(port),
       OTK_HARNESS_URL: oc.url,
       OTK_HARNESS_DB: oc.db,
+      OTK_HARNESS_TYPE: oc.kind,
+      ...oc.discoveryEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -92,22 +97,37 @@ test("compiled debug logging reports each ignored real native event type once", 
     await client.wait((frame) =>
       frame.t === "harness" && frame.state === "connected"
     );
+    const ids: string[] = [];
     for (let i = 0; i < 4; i++) {
-      await fixture.oc.request("/session", {
-        method: "POST",
-        body: { title: `Debug event ${i}` },
-      });
+      ids.push((await fixture.oc.createSession(`Debug event ${i}`)).id);
     }
-    await waitFor(
-      () => server.log,
-      (log) => log.includes("harness event ignored:"),
-    );
+    if (fixture.oc.kind === "opencode-v1") {
+      await waitFor(
+        () => server.log,
+        (log) => log.includes("harness event ignored:"),
+      );
+    } else {
+      // V2 session.created is recognized; prove consumption rather than require
+      // V1's incidental ignored session.diff event from a different protocol.
+      client.lease({ directory: fixture.oc.directory, crumbs: [], rows: ids });
+      await waitFor(
+        () =>
+          ids.every((id) => client.entry(id)?.title.startsWith("Debug event ")),
+        Boolean,
+      );
+    }
     await client.close();
     await server.stop();
     const ignored = server.log.split("\n").filter((line) =>
       line.startsWith("harness event ignored:")
     );
-    assert(ignored.length > 0, server.log);
+    if (fixture.oc.kind === "opencode-v1") {
+      assert(ignored.length > 0, server.log);
+    } else {assertEquals(
+        ignored.length,
+        0,
+        "V2 recognized session events must not be logged as ignored",
+      );}
     assertEquals(ignored.length, new Set(ignored).size, server.log);
     assertEquals(server.child.exitCode, 0, server.log);
   } finally {

@@ -148,6 +148,16 @@ export class DigestBridge implements DigestPort {
     this.#worker = undefined;
     this.#running = false;
     this.#start = undefined;
+    // The failed worker may have missed native events after its last ready
+    // publication. Reconcile those same known identities, not a catalog scan.
+    this.observe(
+      this.#connection,
+      identities.map((sessionID) => ({
+        sessionID,
+        revision: 0,
+        reason: "messages",
+      })),
+    );
     // Fence callbacks before disposal, including reentrant worker errors.
     worker.terminate();
     this.#fail(error);
@@ -307,6 +317,7 @@ export class DigestBridge implements DigestPort {
               }
             }
             this.#running = true;
+            this.#scheduleDirty();
             for (const [directory, active] of this.#discoveryProjects) {
               this.#post({ t: "discovery.project", directory, active });
             }

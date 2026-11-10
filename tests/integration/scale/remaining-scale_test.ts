@@ -25,7 +25,11 @@ import type {
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { OpencodeTest } from "../../support/opencode.ts";
+import {
+  seedUserSession,
+  selectedNative,
+  type TestNative,
+} from "../../support/native-testing.ts";
 import { SidecarTest } from "../../support/sidecar.ts";
 import { WsClient } from "../../support/ws-client.ts";
 import { tempDir, test } from "../../support/resources.ts";
@@ -149,40 +153,28 @@ test("ten real provider attachments across two isolated origins are batched, ord
   const report = new RemainingMeasurements(root, "attachment-origin-scale");
   const origins: {
     fake: FakeLlm;
-    native: OpencodeTest;
+    native: TestNative;
     server: SidecarTest;
     client: WsClient;
   }[] = [];
   const expected: string[] = [], parts: PromptPart[] = [];
   try {
     for (let origin = 0; origin < 2; origin++) {
-      const fake = new FakeLlm(), native = await OpencodeTest.start(fake);
-      const session = await native.session<{ id: string }>("/session", {
-        method: "POST",
-        body: { title: `Origin ${origin}` },
-      });
+      const fake = new FakeLlm(), native = await selectedNative(fake);
       const files = Array.from({ length: 5 }, (_, n) => {
         const bytes = btoa(
           `%PDF-1.4\norigin-${origin}-attachment-${n}\n%%EOF\n`,
         );
         expected.push(bytes);
         return {
-          type: "file",
-          filename: `origin-${origin}-${n}.pdf`,
+          name: `origin-${origin}-${n}.pdf`,
           mime: "application/pdf",
-          url: `data:application/pdf;base64,${bytes}`,
+          dataBase64: bytes,
         };
       });
-      await native.request(`/session/${session.id}/message`, {
-        method: "POST",
-        body: {
-          noReply: true,
-          parts: [
-            { type: "text", text: `Private origin ${origin} prompt` },
-            ...files,
-          ],
-        },
-      });
+      await seedUserSession(native, `Origin ${origin}`, [
+        `Private origin ${origin} prompt`,
+      ], files);
       const server = await SidecarTest.start(native),
         client = new WsClient(server.url);
       origins.push({ fake, native, server, client });
@@ -242,10 +234,9 @@ test("ten real provider attachments across two isolated origins are batched, ord
       before,
       "A failed preparation cannot mutate the captured draft",
     );
-    const target = await origins[0].native.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Combined original-origin bytes" },
-    });
+    const target = await origins[0].native.createSession(
+      "Combined original-origin bytes",
+    );
     origins[0].fake.queue({ chunks: ["Combined origin attachments received"] });
     await origins[0].client.rpc(
       "session.prompt",
@@ -255,13 +246,28 @@ test("ten real provider attachments across two isolated origins are batched, ord
         parts: result,
       } satisfies RpcParams<"session.prompt">,
     );
-    const submitted = await origins[0].native.request<
-      { parts: { type: string; url?: string }[] }[]
-    >(`/session/${target.id}/message`);
+    const producer = origins[0].native;
+    const submitted = producer.kind === "opencode-v2-server"
+      ? (await producer.api.message.list({
+        sessionID: target.nativeID,
+        limit: 20,
+        order: "desc",
+      })).data
+        .flatMap((row) =>
+          row.type === "user"
+            ? row.files?.map((file) =>
+              `data:${file.mime};base64,${file.data}`
+            ) ?? []
+            : []
+        )
+      : (await producer.request<{ parts: { type: string; url?: string }[] }[]>(
+        `/session/${target.id}/message`,
+      ))
+        .flatMap((row) => row.parts).filter((part) => part.type === "file").map(
+          (part) => part.url,
+        );
     assertEquals(
-      submitted.flatMap((row) => row.parts).filter((part) =>
-        part.type === "file"
-      ).map((part) => part.url),
+      submitted,
       expected.map((bytes) => `data:application/pdf;base64,${bytes}`),
     );
     for (const { native, server } of origins) {

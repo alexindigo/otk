@@ -43,7 +43,7 @@ import { scalarSessionReadCodec } from "./index-reads.ts";
 import { catalogReadCodecs, catalogReaders } from "./catalog-readers.ts";
 import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
-import { millis, partID, record, reported, text, tokens } from "./map.ts";
+import { millis, record, reported, text, tokens } from "./map.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -121,6 +121,11 @@ export class OpencodeV2DigestSink implements DigestSink {
   #lifetime = new AbortController();
   #source?: string;
   #projectDirectories = new Set<string>();
+  #activeDirectories = new Set<string>();
+  #discoveryRevision = 0;
+  #discoveryPosition?: { updated: number; id: string };
+  #discoveryCursor?: string;
+  #discoveryComplete = false;
   #wait: <T>(value: Promise<T>) => Promise<T>;
   readonly #readiness: NativeReadiness;
   constructor(
@@ -255,9 +260,11 @@ export class OpencodeV2DigestSink implements DigestSink {
     };
   }
   connection(value: number): void {
+    if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
     this.#transcripts.connection(value);
+    this.#resetDiscovery();
     this.#lists.reset();
     this.#source = undefined;
     this.#native?.close();
@@ -306,6 +313,7 @@ export class OpencodeV2DigestSink implements DigestSink {
       this.#native.close();
       this.#native = undefined;
       this.#lists.reset();
+      this.#resetDiscovery();
       this.#source = undefined;
       throw new Error("V2 native database was replaced");
     }
@@ -571,13 +579,84 @@ export class OpencodeV2DigestSink implements DigestSink {
     this.#check(signal);
     return Promise.resolve({ entries: [], authoritative: false });
   }
-  discover(
+  async discover(
     signal: AbortSignal,
   ): Promise<{ entries: SessionMetadata[]; complete: boolean }> {
     this.#check(signal);
-    return Promise.resolve({ entries: [], complete: true });
+    if (!this.#activeDirectories.size) return { entries: [], complete: true };
+    const connection = this.#connection,
+      { client } = await this.#prepare(signal);
+    const revision = this.#discoveryRevision;
+    if (this.#discoveryComplete) return { entries: [], complete: true };
+    const directories = [...this.#activeDirectories],
+      limit = Math.min(200, this.policy.batch);
+    let rows: SessionMetadata[],
+      complete: boolean,
+      nextCursor: string | undefined;
+    if (this.#native) {
+      if (this.#native.fileIdentity() !== this.#native.identity) {
+        this.#native.close();
+        this.#native = undefined;
+        this.#resetDiscovery();
+        return { entries: [], complete: false };
+      }
+      rows = this.#native.recent(directories, this.#discoveryPosition, limit);
+      complete = rows.length < limit;
+    } else {
+      const page = await client.read(
+        (api) =>
+          api.session.list(
+            this.#discoveryCursor
+              ? { cursor: this.#discoveryCursor }
+              : { limit, order: "desc" },
+            { signal },
+          ),
+        signal,
+      );
+      const next = page.cursor.next ?? undefined;
+      if (next && (!page.data.length || next === this.#discoveryCursor)) {
+        throw new Error("V2 discovery cursor did not advance");
+      }
+      rows = page.data.filter((row) =>
+        this.#activeDirectories.has(row.location.directory)
+      ).map(metadata);
+      complete = !next;
+      nextCursor = next;
+    }
+    this.#check(signal, connection);
+    if (revision !== this.#discoveryRevision) {
+      return { entries: [], complete: false };
+    }
+    for (const row of rows) {
+      await this.#remember(row, signal);
+      await this.#yield(signal);
+    }
+    if (revision !== this.#discoveryRevision) {
+      return { entries: [], complete: false };
+    }
+    const last = rows.at(-1);
+    if (last) {
+      this.#discoveryPosition = {
+        updated: last.timeUpdated,
+        id: ids.decode(last.id),
+      };
+    }
+    this.#discoveryCursor = nextCursor;
+    this.#discoveryComplete = complete;
+    return { entries: rows, complete };
   }
-  discoveryProject(_directory: string, _active: boolean): void {}
+  #resetDiscovery(): void {
+    this.#discoveryRevision++;
+    this.#discoveryPosition = undefined;
+    this.#discoveryCursor = undefined;
+    this.#discoveryComplete = false;
+  }
+  discoveryProject(directory: string, active: boolean): void {
+    if (this.#activeDirectories.has(directory) === active) return;
+    if (active) this.#activeDirectories.add(directory);
+    else this.#activeDirectories.delete(directory);
+    this.#resetDiscovery();
+  }
   pending(id: string): boolean {
     return this.#transcripts.pending(id);
   }
@@ -677,6 +756,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   #connection = 0;
   #source = "api";
   #helperDirty = new Set<string>();
+  #deletions = new Map<string, number>();
   #helperValidated = new Set<string>();
   #sourceError?: string;
   #helpers = new Map<
@@ -684,7 +764,6 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     {
       generation: number;
       before?: number;
-      cursor?: string;
       source: string;
       exhausted?: boolean;
       keys?: string[];
@@ -706,6 +785,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       () => this.#native,
       (signal) => this.#yield(signal),
       () => this.#source,
+      (operation) => this.source.native()?.observe?.(operation),
     );
     this.readers = {
       "opcv2.transcript": async (input, signal) => {
@@ -817,10 +897,15 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     return raw;
   }
   connection(value: number): void {
+    if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
     this.#client = undefined;
     this.#provenNative = undefined;
+    this.#deletions.clear();
+    this.storage.sql.prepare(
+      "DELETE FROM opcv2_delete_intents WHERE connection_generation<>?",
+    ).run(value);
     this.#helpers.clear();
     this.#helperValidated.clear();
     this.#sourceError = undefined;
@@ -934,6 +1019,12 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         Math.min(budget.rows, SCAN_ROWS),
       ),
       next: string | undefined;
+    if (rows && !scan.exhausted) {
+      this.source.native()?.observe?.("headers", {
+        limit: Math.min(budget.rows, SCAN_ROWS),
+        rows: rows.length,
+      });
+    }
     if (!rows) {
       const page = await this.messages.page(
         job.sessionID,
@@ -1206,47 +1297,35 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       scan.offset ?? 0,
       (scan.offset ?? 0) + Math.min(budget.rows, SCAN_ROWS),
     );
-    let headers = scan.exhausted ? [] : this.transcript.sqlHeaders(
+    const headers = scan.exhausted ? [] : this.transcript.sqlHeaders(
       job.sessionID,
       scan.before,
       Math.min(budget.rows, SCAN_ROWS),
       selected,
     );
-    let next: string | undefined;
-    let tools: ReturnType<TranscriptReads["tools"]>;
-    if (headers) {
-      tools = this.transcript.tools(
-        job.sessionID,
-        selected ?? headers.map((h) => h.id),
-      );
-    } else {
-      const page = await this.messages.page(
-        job.sessionID,
-        Math.min(budget.rows, SCAN_ROWS),
-        scan.cursor,
-        signal,
-      );
-      next = page.next;
-      headers = page.items.map((r, i) => scalarMessage(r, i));
-      tools = page.items.flatMap((r) =>
-        r.type !== "assistant"
-          ? []
-          : r.content.flatMap((p) =>
-            p.type !== "tool" ? [] : [{
-              messageID: r.id,
-              tool: { id: partID(r.id, "tool", p.id), name: p.name },
-              status: p.state.status,
-              created: millis(p.time.created),
-              completed: p.time.completed
-                ? millis(p.time.completed)
-                : undefined,
-              child: text(
-                record("metadata" in p.state ? p.state.metadata : undefined)
-                  .sessionID,
-              ),
-            }]
-          )
-      );
+    const aggregates = headers && this.transcript.helperAggregates(
+      job.sessionID,
+      selected ?? headers.map((h) => h.id),
+    );
+    // Stock V2 has no per-session scalar helper API. Do not inflate body pages
+    // when the source-proven scalar reader is unavailable.
+    if (!headers || !aggregates) {
+      const saved = this.storage.read(job.sessionID);
+      this.#helpers.delete(job.sessionID);
+      await this.#commit(metadata(raw), {
+        summary: {
+          ...(saved?.summary ?? { state: "digesting" }),
+          revision: (saved?.summary.revision ?? 0) + 1,
+        },
+        helper: {
+          state: "unavailable",
+          revision: (saved?.helper?.revision ?? 0) + 1,
+          toolCount: null,
+        },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      });
+      return;
     }
     signal.throwIfAborted();
     if (this.#helpers.get(job.sessionID) !== admitted) return "reconcile";
@@ -1256,13 +1335,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           "DELETE FROM opcv2_transcript_helper WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
         ).run(job.sessionID, JSON.stringify(selected));
       }
-      for (const row of tools ?? []) {
+      for (const row of aggregates) {
         this.storage.sql.prepare(
           "INSERT INTO opcv2_transcript_helper(session_id,message_id,part_id,scalar,generation) VALUES (?,?,?,?,?) ON CONFLICT(session_id,message_id,part_id) DO UPDATE SET scalar=excluded.scalar,generation=excluded.generation",
         ).run(
           job.sessionID,
           row.messageID,
-          row.tool.id,
+          "summary",
           JSON.stringify(row),
           admitted.generation,
         );
@@ -1271,11 +1350,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     if (selected) admitted.offset = (admitted.offset ?? 0) + selected.length;
     const complete = selected
       ? admitted.offset! >= admitted.keys!.length
-      : this.#native
-      ? headers.length < Math.min(budget.rows, SCAN_ROWS)
-      : !next;
+      : headers.length < Math.min(budget.rows, SCAN_ROWS);
     admitted.before = headers.at(-1)?.seq;
-    admitted.cursor = next;
     if (!complete) return "continue";
     admitted.exhausted = true;
     const stale = selected ? [] : this.storage.sql.prepare(
@@ -1287,13 +1363,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     if (stale.length === budget.rows) return "continue";
     const count = Number(
         this.storage.sql.prepare(
-          "SELECT COUNT(*) AS n FROM opcv2_transcript_helper WHERE session_id=?",
+          "SELECT coalesce(sum(json_extract(scalar,'$.toolCount')),0) AS n FROM opcv2_transcript_helper WHERE session_id=?",
         ).get(job.sessionID)!.n,
       ),
       last = this.storage.sql.prepare(
-        "SELECT scalar FROM opcv2_transcript_helper WHERE session_id=? AND json_extract(scalar,'$.status') IN ('running','streaming') ORDER BY json_extract(scalar,'$.created') DESC LIMIT 1",
+        "SELECT json_extract(scalar,'$.current') AS current FROM opcv2_transcript_helper WHERE session_id=? AND json_type(scalar,'$.current')='object' ORDER BY json_extract(scalar,'$.current.startedAt') DESC,message_id DESC LIMIT 1",
       ).get(job.sessionID),
-      tool = last ? record(JSON.parse(String(last.scalar))) : undefined;
+      tool = last ? record(JSON.parse(String(last.current))) : undefined;
     const saved = this.storage.read(job.sessionID),
       helper: HelperSummary = {
         state: "ready",
@@ -1302,10 +1378,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ...(tool
           ? {
             current: {
-              name: text(record(tool.tool).name) ?? "",
-              title: text(record(tool.tool).summary),
-              startedAt: typeof tool.created === "number"
-                ? tool.created
+              name: text(tool.name) ?? "",
+              title: text(tool.title),
+              startedAt: typeof tool.startedAt === "number"
+                ? tool.startedAt
                 : undefined,
             },
           }
@@ -1334,28 +1410,100 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   async deleted(
     connection: number,
     id: string,
-    _revision: number,
+    revision: number,
     entry?: SessionMetadata,
   ): Promise<void> {
+    ids.decode(id);
     if (connection !== this.#connection) return;
+    if (entry && entry.id !== id) {
+      throw new Error("Deletion metadata identity mismatch");
+    }
+    if (revision <= (this.#deletions.get(id) ?? -1)) return;
     const saved = this.storage.read(id);
     if (!entry && !saved) return;
-    await this.#commit(entry ?? saved!.metadata, {
+    const intent = this.storage.sql.prepare(
+      "SELECT 1 FROM opcv2_delete_intents WHERE session_id=? AND connection_generation=?",
+    ).get(id, connection);
+    if (saved?.deleted && (!intent || saved.deleted.how === "otk")) {
+      this.#deletions.set(id, revision);
+      return;
+    }
+    const metadata = entry ?? saved!.metadata;
+    const delta: DigestDelta = {
       summary: {
         ...(saved?.summary ?? { state: "ready" }),
         revision: (saved?.summary.revision ?? 0) + 1,
       },
       turns: { upsert: {}, remove: [] },
-      deleted: { at: Date.now(), how: "provider" },
+      deleted: {
+        at: saved?.deleted?.at ?? Date.now(),
+        how: intent ? "otk" : "provider",
+      },
+    };
+    this.storage.transaction(() => {
+      this.invalidate(id, revision);
+      if (intent) {
+        this.storage.sql.prepare(
+          "UPDATE opcv2_delete_intents SET confirmed=1 WHERE session_id=? AND connection_generation=?",
+        ).run(id, connection);
+      }
+      this.storage.write(metadata, delta);
+    });
+    this.#deletions.set(id, revision);
+    await this.storage.publish({
+      sessionID: id,
+      revision: delta.summary.revision,
+      delta,
+      ...(!saved ? { metadata } : {}),
     });
   }
-  deleteIntent(
-    _id: string,
-    _intent: string,
-    _phase: "begin" | "confirmed" | "failed",
-    _connection: number,
+  async deleteIntent(
+    id: string,
+    intent: string,
+    phase: "begin" | "confirmed" | "failed",
+    connection: number,
   ): Promise<void> {
-    return Promise.resolve();
+    ids.decode(id);
+    if (connection !== this.#connection) return;
+    if (phase === "begin") {
+      this.storage.sql.prepare(
+        "INSERT INTO opcv2_delete_intents VALUES(?,?,?,?,0) ON CONFLICT(session_id) DO UPDATE SET intent_id=excluded.intent_id,connection_generation=excluded.connection_generation,time=excluded.time,confirmed=0",
+      ).run(id, intent, connection, Date.now());
+    } else if (phase === "confirmed") {
+      const owned = this.storage.sql.prepare(
+        "SELECT 1 FROM opcv2_delete_intents WHERE session_id=? AND intent_id=? AND connection_generation=?",
+      ).get(id, intent, connection);
+      if (!owned) return;
+      const previous = this.storage.read(id);
+      let delta: DigestDelta | undefined;
+      this.storage.transaction(() => {
+        this.storage.sql.prepare(
+          "UPDATE opcv2_delete_intents SET confirmed=1 WHERE session_id=? AND intent_id=? AND connection_generation=?",
+        ).run(id, intent, connection);
+        if (previous?.deleted?.how === "provider") {
+          delta = {
+            summary: {
+              ...previous.summary,
+              revision: previous.summary.revision + 1,
+            },
+            turns: { upsert: {}, remove: [] },
+            deleted: { ...previous.deleted, how: "otk" },
+          };
+          this.storage.write(previous.metadata, delta);
+        }
+      });
+      if (delta) {
+        await this.storage.publish({
+          sessionID: id,
+          revision: delta.summary.revision,
+          delta,
+        });
+      }
+    } else {
+      this.storage.sql.prepare(
+        "DELETE FROM opcv2_delete_intents WHERE session_id=? AND intent_id=? AND connection_generation=?",
+      ).run(id, intent, connection);
+    }
   }
   close(): void {
     this.#closed = true;

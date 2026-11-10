@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 default_agent and bash permission config", [
+  "tests/integration/v2-session-actions_test.ts#OC2A4",
+  "tests/integration/v2-shell-activity_test.ts#OC2S1",
+]);
 import { assertEquals } from "@std/assert";
 import { readRpcMessages } from "../support/message-pages.ts";
 import { nativeFixture } from "../support/native-fixture.ts";

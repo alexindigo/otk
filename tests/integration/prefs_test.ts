@@ -4,11 +4,11 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { DEFAULT_PREFS, type Preferences } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { selectedNative } from "../support/native-testing.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 test("prefs RPC persists across sidecar restart and broadcasts to other connections", async () => {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
   const clients: WsClient[] = [], servers: SidecarTest[] = [];
   try {
     const server = await SidecarTest.start(oc);

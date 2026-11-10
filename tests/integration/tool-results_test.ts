@@ -4,7 +4,10 @@ import { join } from "@std/path";
 import { mapTool, type RawPart } from "@otk/harness-opencode-v1";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests("V1 read tool offset/limit and RawPart mapping", [
+  "tests/integration/v2-transcripts_test.ts#OC2T4",
+]);
 
 test("stock read empty pages preserve real offset, zero-limit totals and source bytes", async () => {
   const f = await nativeFixture({ read: "allow" }, {

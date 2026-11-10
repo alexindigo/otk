@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { nativeFixture } from "../support/native-fixture.ts";
+import { nativeBehavior as nativeFixture } from "../support/native-testing.ts";
 import { preparedBinary } from "../support/prepared-binaries.ts";
 import { test } from "../support/resources.ts";
 

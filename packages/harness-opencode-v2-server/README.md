@@ -84,6 +84,11 @@ catalog. Keyed hydration follows helper ancestry, independently of transcript
 subscriptions. Active executions and loaded-location pending inventories keep
 lamps live.
 
+After requested work drains, the shared scheduler can discover scalar sessions
+in Active projects through bounded newest-first SQL keysets or native API
+cursors. Project-policy and connection changes fence those cursors. This is not
+a startup population catalog, another scheduler or a message-body scan.
+
 Project seeds join the saved `/api/project` and `/api/worktree` inventories in
 that worker. Native project identity bounds longest-checkout-root matching;
 exact session directories stay list/task scopes. Empty inventory roots are not
@@ -120,7 +125,12 @@ advertisement, not the mere presence of resource metadata.
 
 Complete files traverse typed `fs.list` children, not capped ranked `fs.find`
 results. `.git` is pruned and physical directory identities prevent cycles.
-Stock V2 listings have no ignored flag; no ignore status is invented. Only
+Stock V2 listings have no ignored flag. The existing file reader filters bounded
+groups through read-only `git check-ignore --stdin -z --no-index`, honoring
+nested rules, exceptions and repository/global excludes without a pattern parser
+or a second catalog. Runtime permission is restricted to `--allow-run=git`;
+missing Git or a failed query makes that catalog unavailable. Cancellation joins
+the owned query. Outside a Git repository, the listing remains usable. Only
 demanded file catalogs open project filesystem watches. Native catalog events
 refresh demanded kinds without reloading configuration or booting idle
 locations.
@@ -155,11 +165,15 @@ reconnect and stop fence late pages, recoveries, shell output and speculation.
 `OpencodeV2TranscriptDigestSink` is the transcript contribution composed by the
 selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read
 channel, derived SQLite owner and the index owner's source-proven read-only
-native connection. Background headers and helper rows exclude text, tool inputs
-and output. API fallback extracts and releases bounded pages. Reported usage
-remains nullable; native session totals include internal charges and need not
-equal reply ledgers. This contribution does not enumerate projects or session
-lists; V1 owns those.
+native connection. Background headers exclude text, tool inputs and output.
+Helper summaries use SQL count/current aggregates, at most one scalar row per
+admitted message, never the on-intent tool-detail reader or body API pages.
+Split parts and legacy inline content contribute the same scalar aggregate;
+without a proven SQL source helper summaries are explicitly unavailable. Usage
+API fallback extracts and releases bounded pages. Reported usage remains
+nullable; native session totals include internal charges and need not equal
+reply ledgers. This contribution does not enumerate projects or session lists;
+V1 owns those.
 
 Q6 prefetch reads only the next older page under the existing optional/idle
 admission. Its adapter-wide memory-only FIFO charges complete encoded keys and

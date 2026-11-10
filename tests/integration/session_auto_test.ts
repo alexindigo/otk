@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 task/bash helper and permission/status wire shapes",
+  ["tests/integration/v2-actions_test.ts#OC2P2"],
+);
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { PermissionActivityPage, PermissionRequest } from "@otk/protocol";

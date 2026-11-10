@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import type { RequestEvent, RequestRef, TaskRecord } from "@otk/protocol";
-import { nativeFixture } from "./native-fixture.ts";
+import { nativeBehavior as nativeFixture } from "./native-testing.ts";
 import { preparedBinary } from "./prepared-binaries.ts";
 import { serve } from "./http.ts";
 import { freePort, waitFor } from "./opencode.ts";
@@ -28,12 +28,17 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
         new Request(f.oc.url + url.pathname + url.search, request),
       );
       if (
-        request.method !== "POST" || url.pathname !== "/session"
+        request.method !== "POST" ||
+        url.pathname !==
+          (f.oc.kind === "opencode-v2-server" ? "/api/session" : "/session")
       ) return response;
       creates++;
       const bytes = await response.arrayBuffer();
       assert(response.ok);
-      lostNativeID = JSON.parse(new TextDecoder().decode(bytes)).id;
+      const body = JSON.parse(new TextDecoder().decode(bytes));
+      lostNativeID = f.oc.kind === "opencode-v2-server"
+        ? body.data.id
+        : body.id;
       remoteCommitted.resolve();
       await deliver.promise;
       return new Response(bytes, {
@@ -47,15 +52,40 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
     url = `http://127.0.0.1:${port}`,
     state = join(root, "state");
   const config = join(root, "otk.toml");
+  const discovery = join(root, "discovery");
+  if (f.oc.kind === "opencode-v2-server") {
+    await Deno.mkdir(join(discovery, "opencode"), { recursive: true });
+    const registration = JSON.parse(await Deno.readTextFile(f.oc.serviceFile));
+    await Deno.writeTextFile(
+      join(discovery, "opencode/service.json"),
+      JSON.stringify({
+        ...registration,
+        url: `http://127.0.0.1:${proxy.addr.port}`,
+      }),
+      { mode: 0o600 },
+    );
+  }
   await Deno.writeTextFile(
     config,
     `[server]\nport=${port}\n[auth]\ntype="none"\n[state]\npath=${
       JSON.stringify(state)
-    }\n[harness]\nurl="http://127.0.0.1:${proxy.addr.port}"\ndb=${
+    }\n[harness]\ntype="${f.oc.kind}"\nurl="http://127.0.0.1:${proxy.addr.port}"\ndb=${
       JSON.stringify(f.oc.db)
     }\n[digest]\nretryms=10\ncpu=1\nmemoryreserve=1\n`,
   );
   let generation = 0;
+  // Native discovery changes HOME, not the source runner's dependency cache.
+  const cache = compiled ? undefined : await new Deno.Command(Deno.execPath(), {
+    args: ["info", "--json"],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  if (cache && !cache.success) {
+    throw new Error(new TextDecoder().decode(cache.stderr));
+  }
+  const sourceCache = cache
+    ? JSON.parse(new TextDecoder().decode(cache.stdout)).denoDir
+    : undefined;
   const run = async () => {
     const index = ++generation;
     const env = Object.fromEntries(
@@ -64,6 +94,10 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
       ),
     );
     Object.assign(env, { OTK_CONFIG: config, TMPDIR: Deno.env.get("TMPDIR")! });
+    if (sourceCache) env.DENO_DIR = sourceCache;
+    if (f.oc.kind === "opencode-v2-server") {
+      Object.assign(env, f.oc.discoveryEnv, { XDG_STATE_HOME: discovery });
+    }
     if (compiled) {
       Object.assign(env, {
         DENO_DIR: join(root, `empty-${index}`),
@@ -157,7 +191,9 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
     await remoteCommitted.promise;
     assertEquals(creates, 1);
     assertEquals(
-      (await f.oc.request<{ id: string }>(`/session/${lostNativeID}`)).id,
+      (f.oc.kind === "opencode-v2-server"
+        ? await f.oc.api.session.get({ sessionID: lostNativeID })
+        : await f.oc.request<{ id: string }>(`/session/${lostNativeID}`)).id,
       lostNativeID,
     );
     assertEquals(
@@ -188,9 +224,9 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
       false,
     );
     assertEquals(await active.client.rpc("tasks.list", {}), [original]);
-    const sessions = await f.oc.request<{ id: string }[]>("/session");
+    const sessions = await f.oc.listSessions();
     assertEquals(
-      sessions.filter((session) => session.id === lostNativeID).length,
+      sessions.filter((session) => session.nativeID === lostNativeID).length,
       1,
     );
     await Deno.writeTextFile(

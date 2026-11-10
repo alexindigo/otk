@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
-import { nativeBinary, nativeVersion } from "../../tests/support/native.ts";
+import {
+  nativeBinary,
+  nativeKind,
+  nativeVersion,
+} from "../../tests/support/native.ts";
+import { V2SessionScale } from "../../tests/support/v2-session-scale.ts";
 import { validateProviderCache } from "../../tests/support/provider-cache.ts";
 import { prepareConsumers } from "../../tests/support/consumer-builds.ts";
 import {
@@ -161,6 +166,7 @@ if (import.meta.main) {
       args: [
         "compile",
         "--allow-read",
+        "--allow-run=git",
         "--allow-write",
         "--allow-env",
         "--allow-net=127.0.0.1",
@@ -171,6 +177,8 @@ if (import.meta.main) {
         "core/digest/worker.ts",
         "--include",
         "packages/harness-opencode-v1/digest-migrations",
+        "--include",
+        "packages/harness-opencode-v2-server/digest-migrations",
         "--output",
         digestConsumer,
         "tests/support/digest-consumer.ts",
@@ -218,10 +226,19 @@ if (import.meta.main) {
       const fake = new FakeLlm();
       const snapshots: Record<string, { path: string; sha256: string }> = {};
       for (const variant of SCALE_VARIANTS) {
-        const path = await SessionScale.generate(variant, fake);
+        const path = nativeKind === "opencode-v2-server"
+          ? await V2SessionScale.generate(variant, fake)
+          : await SessionScale.generate(variant, fake);
         snapshots[variant] = {
           path,
-          sha256: await hash(join(path, "snapshot.json")),
+          sha256: await hash(
+            join(
+              path,
+              nativeKind === "opencode-v2-server"
+                ? "recipe.json"
+                : "snapshot.json",
+            ),
+          ),
         };
       }
       await Deno.writeTextFile(

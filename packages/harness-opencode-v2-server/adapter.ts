@@ -47,7 +47,7 @@ type Pending = {
   directory: string;
   stale?: boolean;
 };
-/** V0 supplies the connection owner. Capabilities are added only with their proofs. */
+/** Managed-service connection, native identity and capability composition. */
 export class OpencodeV2ServerAdapter implements Harness {
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
@@ -305,13 +305,6 @@ export class OpencodeV2ServerAdapter implements Harness {
       }),
     });
     const version = () => this.#version;
-    const unavailable = () =>
-      Promise.reject(
-        new HarnessError(
-          "capability",
-          "This V2 area is not available in this foundation build.",
-        ),
-      );
     this.core = {
       kind: "opencode-v2-server",
       get version() {
@@ -455,7 +448,40 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       listMessages: (id, input, signal) =>
         this.transcript.page(id, input?.before, signal, input?.publish),
-      createSession: unavailable,
+      createSession: async (input, operation) => {
+        const client = this.stream.client;
+        const parentID = input.parentID === undefined
+          ? undefined
+          : ids.decode(input.parentID);
+        if (parentID !== undefined) {
+          const parent = await client.read(
+            (api) =>
+              api.session.get({ sessionID: parentID }, {
+                signal: operation?.signal,
+              }),
+            operation?.signal,
+          );
+          if (parent.location.directory !== input.directory) {
+            throw new HarnessError(
+              "params",
+              "Child session directory must match its parent",
+            );
+          }
+        }
+        const raw = await client.effect(
+          (api) =>
+            api.session.create({
+              ...(parentID === undefined
+                ? { location: { directory: input.directory } }
+                : { parentID }),
+              ...(input.title === undefined ? {} : { title: input.title }),
+            }),
+          operation,
+        );
+        this.transcript.observe(raw);
+        this.#merge(metadata(raw));
+        return session(raw);
+      },
     };
   }
   #upsert(entry: SessionMetadata): void {

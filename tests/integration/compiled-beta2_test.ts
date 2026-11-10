@@ -21,7 +21,18 @@ import { DatabaseSync } from "node:sqlite";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { ownedProcess } from "../support/process.ts";
-import { resources, tempDir, test } from "../support/resources.ts";
+import { resources, tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 beta.1 opcv1 references, legacy SQL, and version-specific capability inventory",
+  [
+    "tests/unit/core/opencode-v2-upgrade_test.ts#V2 proven reference upgrade",
+    "tests/unit/core/opencode-v2-upgrade_test.ts#V2 reference collision",
+    "tests/integration/v2-index_test.ts#OC2I1",
+    "tests/integration/v2-catalogs_test.ts#OC2C3",
+    "tests/integration/v2-actions_test.ts#OC2P3",
+  ],
+);
 import { cfg } from "../support/config.ts";
 import { AuthState } from "../../core/auth/state.ts";
 import { WsClient } from "../support/ws-client.ts";

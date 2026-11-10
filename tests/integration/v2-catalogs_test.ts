@@ -86,6 +86,19 @@ Deno.test({
           );
           config.skills = [`${test.directory}/skills`];
           await Deno.mkdir(`${test.directory}/docs`);
+          await Deno.writeTextFile(
+            `${test.directory}/.gitignore`,
+            "ignored/\nignored.txt\n",
+          );
+          await Deno.mkdir(`${test.directory}/ignored`);
+          await Deno.writeTextFile(
+            `${test.directory}/ignored/private.txt`,
+            "ignored native source",
+          );
+          await Deno.writeTextFile(
+            `${test.directory}/ignored.txt`,
+            "ignored native source",
+          );
           for (let index = 0; index < 125; index++) {
             await Deno.writeTextFile(
               `${test.directory}/docs/file-${
@@ -172,7 +185,10 @@ Deno.test({
       assertEquals(files.length, 125);
       assertFalse(
         (await services.catalogs.get(native.directory, "files")).some((file) =>
-          file.path.startsWith(".git") || file.path.startsWith("cycle/")
+          file.path.split("/").includes(".git") ||
+          file.path.startsWith("cycle/") ||
+          file.path === "ignored.txt" || file.path === "ignored" ||
+          file.path.startsWith("ignored/")
         ),
       );
       const lease = services.catalogs.acquire(native.directory);

@@ -6,7 +6,15 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { serve } from "../support/http.ts";
 import { nativeVersion } from "../support/native.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 WAL table set, instance list, permission and status native authority",
+  [
+    "tests/integration/v2-foundation_test.ts#OC2F2",
+    "tests/integration/v2-actions_test.ts#OC2P2",
+    "tests/integration/v2-index_test.ts#OC2I7",
+  ],
+);
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 

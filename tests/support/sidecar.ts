@@ -94,6 +94,7 @@ export class SidecarTest {
         "--allow-read",
         "--allow-write",
         "--allow-env",
+        "--allow-run=git",
         "--allow-sys=systemMemoryInfo",
         "main.ts",
       ];

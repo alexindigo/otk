@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 /file,/find/file,/agent and instance-dispose characterization",
+  ["tests/integration/v2-catalogs_test.ts#OC2C1"],
+);
 import { OpencodeTest } from "../support/opencode.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { nativeVersion } from "../support/native.ts";

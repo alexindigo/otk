@@ -9,7 +9,15 @@ import {
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { catalogConsumer } from "../reuse/directory-catalogs-consumer.ts";
 import { cfg } from "../support/config.ts";
-import { tempDir, test } from "../support/resources.ts";
+import { tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 catalog readers/config and bounded worker codecs",
+  [
+    "tests/integration/v2-catalogs_test.ts#OC2C1",
+    "tests/integration/v2-catalogs_test.ts#OC2C3",
+  ],
+);
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 

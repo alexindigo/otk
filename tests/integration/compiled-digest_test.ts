@@ -8,7 +8,16 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { helperParent } from "../support/helper-parent.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { ownedProcess } from "../support/process.ts";
-import { tempDir, test } from "../support/resources.ts";
+import { tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 historical message/part SQL and explicit-URL offline binary startup",
+  [
+    "tests/integration/compiled-digest-services_test.ts#compiled independent worker consumer",
+    "tests/integration/v2-transcripts_test.ts#OC2T3",
+    "tests/unit/core/digest-new-deletion_test.ts#accepted deletion before catalog",
+  ],
+);
 import { WsClient } from "../support/ws-client.ts";
 
 test("shipped binary digests off-source with empty caches, follows SSE, retains tombstones and restarts", async () => {

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 noReply message and bash shell transcript encoding",
+  ["tests/integration/v2-catalogs_test.ts#OC2C2"],
+);
 import { assertEquals } from "@std/assert";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";

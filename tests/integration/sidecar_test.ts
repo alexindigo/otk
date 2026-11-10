@@ -18,81 +18,108 @@ import { readRpcMessages } from "../support/message-pages.ts";
 import type { MessagePage } from "@otk/protocol";
 import { HttpRequests, RequestFailure } from "@otk/client";
 import { originFetch } from "../support/request-wire.ts";
+import { selectedNative } from "../support/native-testing.ts";
+import type { NativeFixture } from "../support/native-fixture.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const v1Test = v1NativeTests(
+  "V1 capability inventory, native SSE envelopes, restart and SQL bootstrap contracts",
+  [
+    "tests/integration/v2-transcripts_test.ts#OC2T1",
+    "tests/integration/v2-transcripts_test.ts#OC2T2",
+    "tests/integration/v2-foundation_test.ts#OC2F1",
+    "tests/integration/v2-foundation_test.ts#OC2F2",
+    "tests/integration/v2-index_test.ts#OC2I1",
+    "tests/integration/v2-actions_test.ts#OC2P2",
+  ],
+);
 
-test("I11 message paging retains opaque native continuation and exact-multiple terminal pages", async () => {
-  const f = await fixture();
-  try {
-    const server = await f.sidecar(), client = await f.client(server);
-    const welcome = await client.wait((frame) => frame.t === "welcome");
-    assert(welcome.t === "welcome");
-    assert(welcome.sidecar.harness.capabilities);
-    assertEquals([...welcome.sidecar.harness.capabilities].sort(), [
-      "agents",
-      "catalogs",
-      "commands",
-      "digests",
-      "files",
-      "history",
-      "models",
-      "permissions",
-      "prompt",
-      "questions",
-      "resources",
-      "restore",
-      "revert",
-      "sessionActions",
-      "shell",
-      "usage",
-    ]);
-    const session = await client.rpc<ContentSession>("session.create", {
-      directory: f.oc.directory,
-      title: "Paging",
-    });
-    for (let i = 0; i < 30; i++) {
-      await f.oc.request(`/session/${session.id}/message`, {
-        method: "POST",
-        body: { noReply: true, parts: [{ type: "text", text: `Prompt ${i}` }] },
+v1Test(
+  "I11 message paging retains opaque native continuation and exact-multiple terminal pages",
+  async () => {
+    const f = await fixture();
+    try {
+      const server = await f.sidecar(), client = await f.client(server);
+      const welcome = await client.wait((frame) => frame.t === "welcome");
+      assert(welcome.t === "welcome");
+      assert(welcome.sidecar.harness.capabilities);
+      assertEquals([...welcome.sidecar.harness.capabilities].sort(), [
+        "agents",
+        "catalogs",
+        "commands",
+        "digests",
+        "files",
+        "history",
+        "models",
+        "permissions",
+        "prompt",
+        "questions",
+        "resources",
+        "restore",
+        "revert",
+        "sessionActions",
+        "shell",
+        "usage",
+      ]);
+      const session = await client.rpc<ContentSession>("session.create", {
+        directory: f.oc.directory,
+        title: "Paging",
       });
+      for (let i = 0; i < 30; i++) {
+        await f.oc.request(`/session/${session.id}/message`, {
+          method: "POST",
+          body: {
+            noReply: true,
+            parts: [{ type: "text", text: `Prompt ${i}` }],
+          },
+        });
+      }
+      const newest = await client.rpc<MessagePage>("session.messages", {
+        sessionID: session.id,
+      });
+      assertEquals(newest.items.length, 10);
+      assert(newest.older && newest.older !== newest.items[0].id);
+      const older = await client.rpc<MessagePage>("session.messages", {
+        sessionID: session.id,
+        before: newest.older,
+      });
+      assertEquals(older.items.length, 10);
+      assert(
+        older.items[0].parts.some((part) =>
+          part.kind === "text" &&
+          JSON.stringify(part.blocks).includes("Prompt 10")
+        ),
+      );
+      assert(older.older);
+      const first = await client.rpc<MessagePage>("session.messages", {
+        sessionID: session.id,
+        before: older.older,
+      });
+      assertEquals(first.items.length, 10);
+      assertEquals(first.older, null);
+      assertEquals(
+        new Set(
+          [...first.items, ...older.items, ...newest.items].map((m) => m.id),
+        ).size,
+        30,
+      );
+    } finally {
+      await f.stop();
     }
-    const newest = await client.rpc<MessagePage>("session.messages", {
-      sessionID: session.id,
-    });
-    assertEquals(newest.items.length, 10);
-    assert(newest.older && newest.older !== newest.items[0].id);
-    const older = await client.rpc<MessagePage>("session.messages", {
-      sessionID: session.id,
-      before: newest.older,
-    });
-    assertEquals(older.items.length, 10);
-    assert(
-      older.items[0].parts.some((part) =>
-        part.kind === "text" &&
-        JSON.stringify(part.blocks).includes("Prompt 10")
-      ),
-    );
-    assert(older.older);
-    const first = await client.rpc<MessagePage>("session.messages", {
-      sessionID: session.id,
-      before: older.older,
-    });
-    assertEquals(first.items.length, 10);
-    assertEquals(first.older, null);
-    assertEquals(
-      new Set(
-        [...first.items, ...older.items, ...newest.items].map((m) => m.id),
-      ).size,
-      30,
-    );
-  } finally {
-    await f.stop();
-  }
-});
+  },
+);
 
 function latest(client: WsClient, id: string): IndexEntry | undefined {
   return client.entry(id);
 }
 async function fixture() {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
+  return stack(fake, oc);
+}
+async function neutralFixture() {
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  return stack(fake, oc);
+}
+function stack<T extends NativeFixture>(fake: FakeLlm, oc: T) {
   const clients: WsClient[] = [], sidecars: SidecarTest[] = [];
   return {
     fake,
@@ -159,7 +186,7 @@ async function completed(client: WsClient, id: string): Promise<Message[]> {
   );
 }
 
-test("I1 startup catalogue exposes existing idle sessions", async () => {
+v1Test("I1 startup catalogue exposes existing idle sessions", async () => {
   const f = await fixture();
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
@@ -176,7 +203,7 @@ test("I1 startup catalogue exposes existing idle sessions", async () => {
   }
 });
 test("I2 streaming blocks, busy/idle index, final history and adapter boundary", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
     const session = await client.rpc<ContentSession>("session.create", {
@@ -232,7 +259,7 @@ test("I2 streaming blocks, busy/idle index, final history and adapter boundary",
   }
 });
 test("I3 unsubscribed client receives index but no content", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   try {
     const server = await f.sidecar(),
       client = await f.client(server),
@@ -250,7 +277,7 @@ test("I3 unsubscribed client receives index but no content", async () => {
     await f.stop();
   }
 });
-test("I4 bash permission round trip and completed typed output", async () => {
+v1Test("I4 bash permission round trip and completed typed output", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -299,7 +326,7 @@ test("I4 bash permission round trip and completed typed output", async () => {
     await f.stop();
   }
 });
-test("I5 child permission rolls up to root", async () => {
+v1Test("I5 child permission rolls up to root", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -360,175 +387,184 @@ test("I5 child permission rolls up to root", async () => {
     await f.stop();
   }
 });
-test("I6 silent drop recovers idle snapshot, resync and complete reply", async () => {
-  const f = await fixture(), proxy = new FreezeProxy(f.oc.port);
-  try {
-    const server = await f.sidecar({
-        harness: {
-          url: `http://127.0.0.1:${proxy.port}`,
-          db: f.oc.db,
-          heartbeattimeout: 2,
-        },
-      }),
-      client = await f.client(server);
-    const session = await client.rpc<ContentSession>("session.create", {
-      directory: f.oc.directory,
-      title: "Silent drop",
-    });
-    f.fake.queue(script());
-    await prompt(client, session);
-    await client.wait((frame) =>
-      frame.t === "content" && frame.event.op === "part.blocks"
-    );
-    const baseline = client.frames.length;
-    proxy.freeze();
-    await client.wait((frame) =>
-      frame.t === "harness" && frame.state === "reconnecting"
-    );
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    proxy.thaw();
-    await waitFor(
-      () => ({
-        entry: client.entry(session.id),
-        connected: client.frames.slice(baseline).some((frame) =>
-          frame.t === "harness" && frame.state === "connected"
-        ),
-        resync: client.frames.slice(baseline).some((frame) =>
-          frame.t === "bootstrap.complete"
-        ),
-      }),
-      (value) =>
-        value.entry?.status === "idle" && value.connected && value.resync,
-      30_000,
-    );
-    assert(
-      client.frames.slice(baseline).some((frame) =>
-        frame.t === "bootstrap.complete"
-      ),
-    );
-    const history = await readRpcMessages(client, session.id);
-    assert(
-      history.flatMap((m) => m.parts).some((part) =>
-        part.kind === "text" &&
-        JSON.stringify(part.blocks) === JSON.stringify(markdown(reply))
-      ),
-    );
-  } finally {
-    await proxy.stop();
-    await f.stop();
-  }
-});
-test("I7 opencode restart reconnects and reconciles existing indexed sessions", async () => {
-  const f = await fixture();
-  try {
-    const server = await f.sidecar(), client = await f.client(server);
-    const session = await client.rpc<ContentSession>("session.create", {
-      directory: f.oc.directory,
-      title: "Restarted index",
-    });
-    await waitFor(
-      () => client.entry(session.id),
-      (entry) => entry?.status === "idle",
-    );
-    const baseline = client.frames.length;
-    await f.oc.restart();
-    await client.wait((frame) =>
-      frame.t === "harness" && frame.state === "reconnecting"
-    );
-    await waitFor(
-      () => ({
-        entry: client.entry(session.id),
-        connected: client.frames.slice(baseline).some((frame) =>
-          frame.t === "harness" && frame.state === "connected"
-        ),
-        resync: client.frames.slice(baseline).some((frame) =>
-          frame.t === "bootstrap.complete"
-        ),
-      }),
-      (value) =>
-        value.entry?.id === session.id && value.entry.status === "idle" &&
-        value.connected && value.resync,
-    );
-  } finally {
-    await f.stop();
-  }
-});
-test("I8 compatible idle projects bootstrap without loading native inventories", async () => {
-  const f = await fixture(), controller = new AbortController();
-  const requests: { path: string; directory: string | null }[] = [];
-  const proxy = serve(
-    { hostname: "127.0.0.1", port: 0, onListen() {} },
-    (request) => {
-      const url = new URL(request.url);
-      assertEquals(request.method, "GET");
-      requests.push({
-        path: url.pathname,
-        directory: url.searchParams.get("directory"),
-      });
-      return fetch(new URL(url.pathname + url.search, f.oc.url), {
-        headers: request.headers,
-        signal: controller.signal,
-      });
-    },
-  );
-  try {
-    const second = join(f.oc.root, "second");
-    await Deno.mkdir(second);
-    const directories = [f.oc.directory, second];
-    const sessions: { id: string }[] = [];
-    for (const directory of [...directories, f.oc.directory]) {
-      sessions.push(
-        await f.oc.session<{ id: string }>("/session", {
-          method: "POST",
-          directory,
-          body: { title: "Idle" },
-        }),
-      );
-    }
-    const server = await f.sidecar({
-        harness: { url: `http://127.0.0.1:${proxy.addr.port}`, db: f.oc.db },
-      }),
-      client = await f.client(server);
-    const entries: IndexEntry[] = [];
-    for (const directory of directories) {
-      const ids = sessions.filter((_, i) =>
-        (i === 1 ? second : f.oc.directory) === directory
-      ).map((session) => session.id);
-      client.lease({ directory, selected: ids[0], crumbs: [], rows: ids });
-      entries.push(
-        ...await waitFor(
-          () => ids.map((id) => client.entry(id)),
-          (values) => values.every((entry) => entry !== undefined),
-        ) as IndexEntry[],
-      );
-    }
-    for (const session of sessions) {
-      const entry = entries.find((entry) => entry?.id === session.id)!;
-      assertEquals(entry.status, "idle");
-      assertEquals([
-        entry.attention.permissions,
-        entry.attention.questions,
-        entry.attention.childPermissions,
-        entry.attention.childQuestions,
-      ], [0, 0, 0, 0]);
-    }
-    const inventories = ["/session/status", "/permission", "/question"];
-    assertEquals(
-      requests.filter(({ path }) => inventories.includes(path))
-        .map(({ path, directory }) => [directory, path]),
-      [],
-    );
-  } finally {
+v1Test(
+  "I6 silent drop recovers idle snapshot, resync and complete reply",
+  async () => {
+    const f = await fixture(), proxy = new FreezeProxy(f.oc.port);
     try {
-      await f.stop();
+      const server = await f.sidecar({
+          harness: {
+            url: `http://127.0.0.1:${proxy.port}`,
+            db: f.oc.db,
+            heartbeattimeout: 2,
+          },
+        }),
+        client = await f.client(server);
+      const session = await client.rpc<ContentSession>("session.create", {
+        directory: f.oc.directory,
+        title: "Silent drop",
+      });
+      f.fake.queue(script());
+      await prompt(client, session);
+      await client.wait((frame) =>
+        frame.t === "content" && frame.event.op === "part.blocks"
+      );
+      const baseline = client.frames.length;
+      proxy.freeze();
+      await client.wait((frame) =>
+        frame.t === "harness" && frame.state === "reconnecting"
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      proxy.thaw();
+      await waitFor(
+        () => ({
+          entry: client.entry(session.id),
+          connected: client.frames.slice(baseline).some((frame) =>
+            frame.t === "harness" && frame.state === "connected"
+          ),
+          resync: client.frames.slice(baseline).some((frame) =>
+            frame.t === "bootstrap.complete"
+          ),
+        }),
+        (value) =>
+          value.entry?.status === "idle" && value.connected && value.resync,
+        30_000,
+      );
+      assert(
+        client.frames.slice(baseline).some((frame) =>
+          frame.t === "bootstrap.complete"
+        ),
+      );
+      const history = await readRpcMessages(client, session.id);
+      assert(
+        history.flatMap((m) => m.parts).some((part) =>
+          part.kind === "text" &&
+          JSON.stringify(part.blocks) === JSON.stringify(markdown(reply))
+        ),
+      );
     } finally {
-      controller.abort();
-      await proxy.shutdown();
+      await proxy.stop();
+      await f.stop();
     }
-  }
-});
+  },
+);
+v1Test(
+  "I7 opencode restart reconnects and reconciles existing indexed sessions",
+  async () => {
+    const f = await fixture();
+    try {
+      const server = await f.sidecar(), client = await f.client(server);
+      const session = await client.rpc<ContentSession>("session.create", {
+        directory: f.oc.directory,
+        title: "Restarted index",
+      });
+      await waitFor(
+        () => client.entry(session.id),
+        (entry) => entry?.status === "idle",
+      );
+      const baseline = client.frames.length;
+      await f.oc.restart();
+      await client.wait((frame) =>
+        frame.t === "harness" && frame.state === "reconnecting"
+      );
+      await waitFor(
+        () => ({
+          entry: client.entry(session.id),
+          connected: client.frames.slice(baseline).some((frame) =>
+            frame.t === "harness" && frame.state === "connected"
+          ),
+          resync: client.frames.slice(baseline).some((frame) =>
+            frame.t === "bootstrap.complete"
+          ),
+        }),
+        (value) =>
+          value.entry?.id === session.id && value.entry.status === "idle" &&
+          value.connected && value.resync,
+      );
+    } finally {
+      await f.stop();
+    }
+  },
+);
+v1Test(
+  "I8 compatible idle projects bootstrap without loading native inventories",
+  async () => {
+    const f = await fixture(), controller = new AbortController();
+    const requests: { path: string; directory: string | null }[] = [];
+    const proxy = serve(
+      { hostname: "127.0.0.1", port: 0, onListen() {} },
+      (request) => {
+        const url = new URL(request.url);
+        assertEquals(request.method, "GET");
+        requests.push({
+          path: url.pathname,
+          directory: url.searchParams.get("directory"),
+        });
+        return fetch(new URL(url.pathname + url.search, f.oc.url), {
+          headers: request.headers,
+          signal: controller.signal,
+        });
+      },
+    );
+    try {
+      const second = join(f.oc.root, "second");
+      await Deno.mkdir(second);
+      const directories = [f.oc.directory, second];
+      const sessions: { id: string }[] = [];
+      for (const directory of [...directories, f.oc.directory]) {
+        sessions.push(
+          await f.oc.session<{ id: string }>("/session", {
+            method: "POST",
+            directory,
+            body: { title: "Idle" },
+          }),
+        );
+      }
+      const server = await f.sidecar({
+          harness: { url: `http://127.0.0.1:${proxy.addr.port}`, db: f.oc.db },
+        }),
+        client = await f.client(server);
+      const entries: IndexEntry[] = [];
+      for (const directory of directories) {
+        const ids = sessions.filter((_, i) =>
+          (i === 1 ? second : f.oc.directory) === directory
+        ).map((session) => session.id);
+        client.lease({ directory, selected: ids[0], crumbs: [], rows: ids });
+        entries.push(
+          ...await waitFor(
+            () => ids.map((id) => client.entry(id)),
+            (values) => values.every((entry) => entry !== undefined),
+          ) as IndexEntry[],
+        );
+      }
+      for (const session of sessions) {
+        const entry = entries.find((entry) => entry?.id === session.id)!;
+        assertEquals(entry.status, "idle");
+        assertEquals([
+          entry.attention.permissions,
+          entry.attention.questions,
+          entry.attention.childPermissions,
+          entry.attention.childQuestions,
+        ], [0, 0, 0, 0]);
+      }
+      const inventories = ["/session/status", "/permission", "/question"];
+      assertEquals(
+        requests.filter(({ path }) => inventories.includes(path))
+          .map(({ path, directory }) => [directory, path]),
+        [],
+      );
+    } finally {
+      try {
+        await f.stop();
+      } finally {
+        controller.abort();
+        await proxy.shutdown();
+      }
+    }
+  },
+);
 test("I9 password cookie, WS authentication, Origin, logout and CORS", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   try {
     const extraOrigin = "http://127.0.0.1:31502";
     const server = await f.sidecar({
@@ -659,7 +695,7 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
   }
 });
 test("I14 a server.origins override keeps the fixture's own port and applies the origin", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   try {
     const extraOrigin = "http://127.0.0.1:31503";
     const server = await f.sidecar({ server: { origins: [extraOrigin] } });
@@ -687,7 +723,7 @@ test("I14 a server.origins override keeps the fixture's own port and applies the
   }
 });
 test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
     const session = await client.rpc<ContentSession>("session.create", {
@@ -752,7 +788,7 @@ test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply", asy
 });
 
 test("I12 JSON heartbeat pings every 20 seconds, retains pong clients and closes silence at 60", async () => {
-  const f = await fixture();
+  const f = await neutralFixture();
   let silent: WebSocket | undefined;
   try {
     const server = await f.sidecar(), client = await f.client(server);

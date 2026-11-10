@@ -1,35 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { cfg } from "../support/config.ts";
-import { fixtureMessagePolicy } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import {
-  OpencodeV1Adapter as Opencode1Adapter,
-  type OpencodeV1AdapterConfig as Opencode1Config,
-} from "@otk/harness-opencode-v1";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import {
+  nativeHarness,
+  selectedNative,
+  startHarness,
+} from "../support/native-testing.ts";
 import { listSessions } from "./harness-consumer.ts";
 
 test("standalone harness consumer lists stock-server sessions without a sidecar", async () => {
   const fake = new FakeLlm();
-  const oc = await OpencodeTest.start(fake);
-  const config: Opencode1Config = {
-    ...cfg(),
-    harness: {
-      url: oc.url,
-      username: "opencode",
-      password: "",
-      db: oc.db,
-      heartbeattimeout: 25,
-      reconnectmax: 30,
-      requestms: 60000,
-    },
-    index: { days: 30 },
-    messages: fixtureMessagePolicy,
-  };
-  const seed = new Opencode1Adapter(config);
+  const oc = await selectedNative(fake);
+  const seed = nativeHarness(oc);
   try {
+    await startHarness(seed);
     const parent = await seed.core.createSession({
       directory: oc.directory,
       title: "Standalone parent",
@@ -43,7 +28,7 @@ test("standalone harness consumer lists stock-server sessions without a sidecar"
       (await seed.core.listChildren(parent.id)).map((session) => session.id),
       [child.id],
     );
-    const entries = await listSessions(config);
+    const entries = await listSessions(nativeHarness(oc), oc.directory);
     assertEquals(
       entries.map((entry) => entry.id).sort(),
       [parent.id, child.id].sort(),

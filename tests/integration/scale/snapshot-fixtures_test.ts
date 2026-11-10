@@ -34,7 +34,13 @@ import {
   type StackInfo,
   type TestLease,
 } from "../../support/fixture-control.ts";
-import { nativeVersion } from "../../support/native.ts";
+import { nativeKind, nativeVersion } from "../../support/native.ts";
+import { V2SessionScale } from "../../support/v2-session-scale.ts";
+import { v1NativeTests } from "../../support/native-contract.ts";
+const v1Test = v1NativeTests(
+  "V1 stopped database snapshots, SQL relocation and V1 controller snapshot keys",
+  ["tests/integration/scale/v2-snapshot-fixtures_test.ts#OC2Scale1"],
+);
 import { WsClient } from "../../support/ws-client.ts";
 
 test("snapshot keys separate variants and corrupt existing keys are preserved without regeneration under an inode-stable lock", async () => {
@@ -43,11 +49,17 @@ test("snapshot keys separate variants and corrupt existing keys are preserved wi
   await Deno.mkdir(join(root, "tmp"));
   Deno.env.set("TMPDIR", join(root, "tmp"));
   try {
-    const a = await SessionScale.identity("sessions"),
-      b = await SessionScale.identity("messages");
+    const scale = nativeKind === "opencode-v2-server"
+      ? V2SessionScale
+      : SessionScale;
+    const bucket = nativeKind === "opencode-v2-server"
+      ? "v2-scale"
+      : "snapshots";
+    const a = await scale.identity("sessions"),
+      b = await scale.identity("messages");
     assertNotEquals(a.key, b.key);
     assert(a.key.includes(a.binary) && a.key.includes(a.fixture));
-    const target = join(stateRoot(), "snapshots", a.key);
+    const target = join(stateRoot(), bucket, a.key);
     await Deno.mkdir(target, { recursive: true });
     await Deno.writeTextFile(
       join(target, "diagnostic"),
@@ -55,12 +67,12 @@ test("snapshot keys separate variants and corrupt existing keys are preserved wi
     );
     const fake = new FakeLlm();
     await assertRejects(
-      () => SessionScale.generate("sessions", fake),
+      () => scale.generate("sessions", fake),
       Deno.errors.NotFound,
     );
     const inode = (await Deno.stat(target + ".lock")).ino;
     await assertRejects(
-      () => SessionScale.generate("sessions", fake),
+      () => scale.generate("sessions", fake),
       Deno.errors.NotFound,
     );
     assertEquals((await Deno.stat(target + ".lock")).ino, inode);
@@ -69,7 +81,7 @@ test("snapshot keys separate variants and corrupt existing keys are preserved wi
       "preserve corrupt key",
     );
     assertEquals(
-      [...Deno.readDirSync(join(stateRoot(), "snapshots"))].map((entry) =>
+      [...Deno.readDirSync(join(stateRoot(), bucket))].map((entry) =>
         entry.name
       ).sort(),
       [a.key, a.key + ".lock"].sort(),
@@ -146,261 +158,268 @@ test("stopped WAL-backed snapshot keeps committed sentinel; main-file-only copy 
 });
 
 for (const variant of SCALE_VARIANTS) {
-  test(`versioned ${variant} snapshot relocates concurrent private copies without changing source`, async () => {
-    const root = await tempDir("snapshot-clones-"), fake = new FakeLlm();
-    const [template, joined] = await Promise.all([
-      SessionScale.generate(variant, fake),
-      SessionScale.generate(variant, fake),
-    ]);
-    assertEquals(joined, template);
-    const source = await fileHashes(template),
-      original = await SessionScale.validate(template);
-    const inode = (await Deno.stat(template + ".lock")).ino;
-    assertEquals((await Deno.stat(joined + ".lock")).ino, inode);
-    assertEquals(
-      basename(template),
-      (await SessionScale.identity(variant)).key,
-    );
-    assert(
-      !Object.keys(source).some((p) => /(^|\/)(otk|digest)\.db/.test(p)),
-      "Native snapshots cannot warm OTK digestion",
-    );
-    assertEquals(original.scale.counts, SCALE);
-    const [a, b] = await Promise.all([
-      SessionScale.materialize(template, join(root, "a"), root, fake),
-      SessionScale.materialize(template, join(root, "b"), root, fake),
-    ]);
-    assertNotEquals(a.directory, b.directory);
-    for (const fixture of [a, b]) {
-      const config = JSON.parse(
-        await Deno.readTextFile(
-          join(fixture.root, "config/opencode/opencode.json"),
-        ),
-      );
+  v1Test(
+    `versioned ${variant} snapshot relocates concurrent private copies without changing source`,
+    async () => {
+      const root = await tempDir("snapshot-clones-"), fake = new FakeLlm();
+      const [template, joined] = await Promise.all([
+        SessionScale.generate(variant, fake),
+        SessionScale.generate(variant, fake),
+      ]);
+      assertEquals(joined, template);
+      const source = await fileHashes(template),
+        original = await SessionScale.validate(template);
+      const inode = (await Deno.stat(template + ".lock")).ino;
+      assertEquals((await Deno.stat(joined + ".lock")).ino, inode);
       assertEquals(
-        config.provider.fake.options.baseURL,
-        `http://127.0.0.1:${fake.port}/v1`,
-      );
-      assertEquals(fixture.manifest.counts, SCALE);
-      const rows = await fixture.request<{ id: string; directory: string }[]>(
-        "/experimental/session?limit=200",
+        basename(template),
+        (await SessionScale.identity(variant)).key,
       );
       assert(
-        rows.length > 0 &&
-          rows.every((row) => row.directory === fixture.directory),
+        !Object.keys(source).some((p) => /(^|\/)(otk|digest)\.db/.test(p)),
+        "Native snapshots cannot warm OTK digestion",
       );
-      const page = await fixture.request<
-        { info: { id: string }; parts: unknown[] }[]
-      >(`/session/${fixture.manifest.sessions[0].nativeID}/message?limit=10`);
-      assertEquals(page.length, 10);
-      assert(
-        page.every((row) =>
-          row.info.id.startsWith("msg_scale") && row.parts.length >= 3
-        ),
-      );
-      await fixture.stop();
-    }
-    for (const [fixture, title] of [[a, "copy A"], [b, "copy B"]] as const) {
-      const db = new DatabaseSync(fixture.db);
-      try {
-        db.prepare("UPDATE session SET title=? WHERE id='ses_scale000000'").run(
-          title,
+      assertEquals(original.scale.counts, SCALE);
+      const [a, b] = await Promise.all([
+        SessionScale.materialize(template, join(root, "a"), root, fake),
+        SessionScale.materialize(template, join(root, "b"), root, fake),
+      ]);
+      assertNotEquals(a.directory, b.directory);
+      for (const fixture of [a, b]) {
+        const config = JSON.parse(
+          await Deno.readTextFile(
+            join(fixture.root, "config/opencode/opencode.json"),
+          ),
         );
         assertEquals(
-          db.prepare("SELECT title FROM session WHERE id='ses_scale000000'")
-            .get()!.title,
-          title,
+          config.provider.fake.options.baseURL,
+          `http://127.0.0.1:${fake.port}/v1`,
+        );
+        assertEquals(fixture.manifest.counts, SCALE);
+        const rows = await fixture.request<{ id: string; directory: string }[]>(
+          "/experimental/session?limit=200",
+        );
+        assert(
+          rows.length > 0 &&
+            rows.every((row) => row.directory === fixture.directory),
+        );
+        const page = await fixture.request<
+          { info: { id: string }; parts: unknown[] }[]
+        >(`/session/${fixture.manifest.sessions[0].nativeID}/message?limit=10`);
+        assertEquals(page.length, 10);
+        assert(
+          page.every((row) =>
+            row.info.id.startsWith("msg_scale") && row.parts.length >= 3
+          ),
+        );
+        await fixture.stop();
+      }
+      for (const [fixture, title] of [[a, "copy A"], [b, "copy B"]] as const) {
+        const db = new DatabaseSync(fixture.db);
+        try {
+          db.prepare("UPDATE session SET title=? WHERE id='ses_scale000000'")
+            .run(
+              title,
+            );
+          assertEquals(
+            db.prepare("SELECT title FROM session WHERE id='ses_scale000000'")
+              .get()!.title,
+            title,
+          );
+        } finally {
+          db.close();
+        }
+      }
+      assertEquals(await fileHashes(template), source);
+      await SessionScale.validate(template);
+      // Refuse an uncharacterized path-bearing JSON field transactionally.
+      const bad = join(root, "bad");
+      await Deno.mkdir(bad);
+      await copyTree(join(template, "tree"), bad);
+      const dbPath = join(bad, "data/opencode/opencode.db"),
+        db = new DatabaseSync(dbPath);
+      try {
+        const row = db.prepare("SELECT id,data FROM message LIMIT 1").get()!;
+        const value = JSON.parse(String(row.data));
+        value.unknownPath = original.originalRoot + "/unexpected";
+        db.prepare("UPDATE message SET data=? WHERE id=?").run(
+          JSON.stringify(value),
+          row.id,
         );
       } finally {
         db.close();
       }
-    }
-    assertEquals(await fileHashes(template), source);
-    await SessionScale.validate(template);
-    // Refuse an uncharacterized path-bearing JSON field transactionally.
-    const bad = join(root, "bad");
-    await Deno.mkdir(bad);
-    await copyTree(join(template, "tree"), bad);
-    const dbPath = join(bad, "data/opencode/opencode.db"),
-      db = new DatabaseSync(dbPath);
-    try {
-      const row = db.prepare("SELECT id,data FROM message LIMIT 1").get()!;
-      const value = JSON.parse(String(row.data));
-      value.unknownPath = original.originalRoot + "/unexpected";
-      db.prepare("UPDATE message SET data=? WHERE id=?").run(
-        JSON.stringify(value),
-        row.id,
+      assertThrows(
+        () => relocateScale(dbPath, original, join(root, "new")),
+        Error,
+        "Unknown message path",
       );
-    } finally {
-      db.close();
-    }
-    assertThrows(
-      () => relocateScale(dbPath, original, join(root, "new")),
-      Error,
-      "Unknown message path",
-    );
-    await assertRejects(
-      () => SessionScale.materialize(template, a.root, root, fake),
-      Deno.errors.AlreadyExists,
-    );
-    assertEquals(await fileHashes(template), source);
-  });
+      await assertRejects(
+        () => SessionScale.materialize(template, a.root, root, fake),
+        Deno.errors.AlreadyExists,
+      );
+      assertEquals(await fileHashes(template), source);
+    },
+  );
 }
 
-test("isolated controller materializes the checked native key before a fresh OTK consumer reads wire totals", async () => {
-  const root = await tempDir("snapshot-controller-"), fake = new FakeLlm();
-  const template = await SessionScale.generate("sessions", fake),
-    key = basename(template);
-  const manifest = await SessionScale.validate(template),
-    original = await fileHashes(template);
-  const unit = `otk-t1c3-snapshot-${crypto.randomUUID()}.service`;
-  const env = Object.entries(Deno.env.toObject()).filter(([key]) =>
-    key.startsWith("OTK_TEST_") ||
-    ["PATH", "TMPDIR", "HOME", "DENO_DIR"].includes(key)
-  ).map(([key, value]) => `--setenv=${key}=${value}`);
-  const stopUnit = resources().defer("snapshot controller unit", async () => {
-    const result = await new Deno.Command("systemctl", {
-      args: ["--user", "stop", unit],
-      signal: AbortSignal.timeout(15000),
-    }).output();
-    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr));
-    const state = await new Deno.Command("systemctl", {
-      args: ["--user", "show", unit, "-p", "ActiveState", "--value"],
-      signal: AbortSignal.timeout(5000),
-    }).output();
-    assertEquals(new TextDecoder().decode(state.stdout).trim(), "inactive");
-  }, 20000);
-  const owner = ownedProcess("systemd-run", [
-    "--user",
-    "--pipe",
-    "--wait",
-    "--quiet",
-    `--unit=${unit}`,
-    "--property=KillMode=control-group",
-    "--property=TimeoutStopSec=10s",
-    `--working-directory=${Deno.cwd()}`,
-    ...env,
-    Deno.execPath(),
-    "run",
-    "-A",
-    "tests/support/fixture-controller.ts",
-  ], { detached: true, stdio: ["pipe", "pipe", "pipe"] });
-  owner.child.stderr!.on(
-    "data",
-    (chunk) =>
-      Deno.writeTextFileSync(join(root, "controller.log"), chunk.toString(), {
-        append: true,
-      }),
-  );
-  const lines = createInterface({ input: owner.child.stdout! });
-  const reader = lines[Symbol.asyncIterator]();
-  const call = async <T>(
-    command: Command,
-    params: Commands[Command],
-  ): Promise<T> => {
-    const frame = request({ v: 1, id: crypto.randomUUID(), command, params });
-    owner.child.stdin!.write(JSON.stringify(frame) + "\n");
-    const line = await bounded(
-      `snapshot controller ${command}`,
-      reader.next(),
-      120000,
+v1Test(
+  "isolated controller materializes the checked native key before a fresh OTK consumer reads wire totals",
+  async () => {
+    const root = await tempDir("snapshot-controller-"), fake = new FakeLlm();
+    const template = await SessionScale.generate("sessions", fake),
+      key = basename(template);
+    const manifest = await SessionScale.validate(template),
+      original = await fileHashes(template);
+    const unit = `otk-t1c3-snapshot-${crypto.randomUUID()}.service`;
+    const env = Object.entries(Deno.env.toObject()).filter(([key]) =>
+      key.startsWith("OTK_TEST_") ||
+      ["PATH", "TMPDIR", "HOME", "DENO_DIR"].includes(key)
+    ).map(([key, value]) => `--setenv=${key}=${value}`);
+    const stopUnit = resources().defer("snapshot controller unit", async () => {
+      const result = await new Deno.Command("systemctl", {
+        args: ["--user", "stop", unit],
+        signal: AbortSignal.timeout(15000),
+      }).output();
+      assertEquals(result.code, 0, new TextDecoder().decode(result.stderr));
+      const state = await new Deno.Command("systemctl", {
+        args: ["--user", "show", unit, "-p", "ActiveState", "--value"],
+        signal: AbortSignal.timeout(5000),
+      }).output();
+      assertEquals(new TextDecoder().decode(state.stdout).trim(), "inactive");
+    }, 20000);
+    const owner = ownedProcess("systemd-run", [
+      "--user",
+      "--pipe",
+      "--wait",
+      "--quiet",
+      `--unit=${unit}`,
+      "--property=KillMode=control-group",
+      "--property=TimeoutStopSec=10s",
+      `--working-directory=${Deno.cwd()}`,
+      ...env,
+      Deno.execPath(),
+      "run",
+      "-A",
+      "tests/support/fixture-controller.ts",
+    ], { detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    owner.child.stderr!.on(
+      "data",
+      (chunk) =>
+        Deno.writeTextFileSync(join(root, "controller.log"), chunk.toString(), {
+          append: true,
+        }),
     );
-    assert(!line.done);
-    const result = response(JSON.parse(line.value));
-    assertEquals(result.id, frame.id);
-    assert(result.ok, JSON.stringify(result.error));
-    return result.result as T;
-  };
-  const stacks: StackInfo[] = [];
-  try {
-    stacks.push(
-      await call<StackInfo>("start", {
-        profile: "isolated",
-        version: nativeVersion,
-      }),
-    );
-    const initial = await call<TestLease>("beginTest", {
-      identity: "snapshot-control",
-    });
-    const restored = await call<{ stack: StackInfo; lease: TestLease }>(
-      "materializeSnapshot",
-      { lease: initial.lease, key },
-    );
-    stacks.push(restored.stack);
-    assertNotEquals(restored.lease.lease, initial.lease);
-    assertNotEquals(restored.lease.directory, manifest.scale.directory);
-    const page = await fetch(
-      `${restored.stack.nativeUrl}/session/ses_scale000000/message?limit=10&directory=${
-        encodeURIComponent(restored.lease.directory)
-      }`,
-      { signal: AbortSignal.timeout(30000) },
-    );
-    assertEquals(page.status, 200);
-    assertEquals((await page.json()).length, 10);
-    const client = new WsClient(restored.stack.url);
-    await client.connect();
-    const target = manifest.scale.sessions[0];
-    resources().evidence("snapshot controller consumer", async () => {
-      await Deno.writeTextFile(
-        join(root, "controller-consumer.json"),
-        JSON.stringify({ restored, target, frames: client.frames }, null, 2),
+    const lines = createInterface({ input: owner.child.stdout! });
+    const reader = lines[Symbol.asyncIterator]();
+    const call = async <T>(
+      command: Command,
+      params: Commands[Command],
+    ): Promise<T> => {
+      const frame = request({ v: 1, id: crypto.randomUUID(), command, params });
+      owner.child.stdin!.write(JSON.stringify(frame) + "\n");
+      const line = await bounded(
+        `snapshot controller ${command}`,
+        reader.next(),
+        120000,
       );
-    });
-    // Match a real visible consumer's public demand. Background order alone puts
-    // this deliberately oldest session behind the entire unrelated population.
-    await client.rpc("digests.scope", { sessions: [target.id] });
-    await waitFor(
-      () => client.entry(target.id),
-      (entry) => entry?.digest.state === "ready",
-      120000,
-    );
-    const entry = client.entry(target.id)!;
-    assertEquals(entry.digest.messageCount, target.expected.messages);
-    assertEquals(entry.digest.total!.calls, target.expected.calls);
-    assertEquals(await fileHashes(template), original);
-    await client.close();
-    await call("endTest", { lease: restored.lease.lease });
-    await call("stop", {});
-  } finally {
-    lines.close();
-    await stopUnit();
-    await owner.stop();
-    await resources().observe(
-      "snapshot controller ownership proof",
-      async () => {
-        for (const stack of stacks) {
-          for (const pid of stack.pids) {
-            const result = await new Deno.Command("/usr/bin/kill", {
-              args: ["-0", String(pid)],
-              signal: AbortSignal.timeout(5000),
-            }).output();
-            assert(!result.success, `Snapshot-owned PID survived: ${pid}`);
-          }
-          for (const port of stack.ports) {
-            try {
-              const connection = await Deno.connect({
-                hostname: "127.0.0.1",
-                port,
-              });
-              connection.close();
-              throw new Error(`Snapshot-owned port survived: ${port}`);
-            } catch (error) {
-              if (
-                !(error instanceof Deno.errors.ConnectionRefused)
-              ) throw error;
+      assert(!line.done);
+      const result = response(JSON.parse(line.value));
+      assertEquals(result.id, frame.id);
+      assert(result.ok, JSON.stringify(result.error));
+      return result.result as T;
+    };
+    const stacks: StackInfo[] = [];
+    try {
+      stacks.push(
+        await call<StackInfo>("start", {
+          profile: "isolated",
+          version: nativeVersion,
+        }),
+      );
+      const initial = await call<TestLease>("beginTest", {
+        identity: "snapshot-control",
+      });
+      const restored = await call<{ stack: StackInfo; lease: TestLease }>(
+        "materializeSnapshot",
+        { lease: initial.lease, key },
+      );
+      stacks.push(restored.stack);
+      assertNotEquals(restored.lease.lease, initial.lease);
+      assertNotEquals(restored.lease.directory, manifest.scale.directory);
+      const page = await fetch(
+        `${restored.stack.nativeUrl}/session/ses_scale000000/message?limit=10&directory=${
+          encodeURIComponent(restored.lease.directory)
+        }`,
+        { signal: AbortSignal.timeout(30000) },
+      );
+      assertEquals(page.status, 200);
+      assertEquals((await page.json()).length, 10);
+      const client = new WsClient(restored.stack.url);
+      await client.connect();
+      const target = manifest.scale.sessions[0];
+      resources().evidence("snapshot controller consumer", async () => {
+        await Deno.writeTextFile(
+          join(root, "controller-consumer.json"),
+          JSON.stringify({ restored, target, frames: client.frames }, null, 2),
+        );
+      });
+      // Match a real visible consumer's public demand. Background order alone puts
+      // this deliberately oldest session behind the entire unrelated population.
+      await client.rpc("digests.scope", { sessions: [target.id] });
+      await waitFor(
+        () => client.entry(target.id),
+        (entry) => entry?.digest.state === "ready",
+        120000,
+      );
+      const entry = client.entry(target.id)!;
+      assertEquals(entry.digest.messageCount, target.expected.messages);
+      assertEquals(entry.digest.total!.calls, target.expected.calls);
+      assertEquals(await fileHashes(template), original);
+      await client.close();
+      await call("endTest", { lease: restored.lease.lease });
+      await call("stop", {});
+    } finally {
+      lines.close();
+      await stopUnit();
+      await owner.stop();
+      await resources().observe(
+        "snapshot controller ownership proof",
+        async () => {
+          for (const stack of stacks) {
+            for (const pid of stack.pids) {
+              const result = await new Deno.Command("/usr/bin/kill", {
+                args: ["-0", String(pid)],
+                signal: AbortSignal.timeout(5000),
+              }).output();
+              assert(!result.success, `Snapshot-owned PID survived: ${pid}`);
+            }
+            for (const port of stack.ports) {
+              try {
+                const connection = await Deno.connect({
+                  hostname: "127.0.0.1",
+                  port,
+                });
+                connection.close();
+                throw new Error(`Snapshot-owned port survived: ${port}`);
+              } catch (error) {
+                if (
+                  !(error instanceof Deno.errors.ConnectionRefused)
+                ) throw error;
+              }
             }
           }
-        }
-        await Deno.writeTextFile(
-          join(root, "controller-cleanup.json"),
-          JSON.stringify(
-            { unit, stacks, processesGone: true, portsClosed: true },
-            null,
-            2,
-          ),
-        );
-      },
-      20000,
-    );
-  }
-});
+          await Deno.writeTextFile(
+            join(root, "controller-cleanup.json"),
+            JSON.stringify(
+              { unit, stacks, processesGone: true, portsClosed: true },
+              null,
+              2,
+            ),
+          );
+        },
+        20000,
+      );
+    }
+  },
+);

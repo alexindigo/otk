@@ -6,7 +6,15 @@ import { DigestBridge } from "../../core/digest/bridge.ts";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
-import { resources, tempDir, test } from "../support/resources.ts";
+import { resources, tempDir } from "../support/resources.ts";
+import { v1NativeTests } from "../support/native-contract.ts";
+const test = v1NativeTests(
+  "V1 one-row /experimental/session ownership proof and opcv1_scan dirty rows",
+  [
+    "tests/integration/v2-index_test.ts#OC2I1",
+    "tests/integration/v2-index_test.ts#OC2I4",
+  ],
+);
 
 test("unknown dirty sessions hydrate behind a bounded point proof without catalog admission", async () => {
   const oc = await OpencodeTest.start(new FakeLlm());
