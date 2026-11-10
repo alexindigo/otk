@@ -7,7 +7,7 @@ import { file, prompt, reply, seed, tool } from "../../pages/attention.ts";
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
   tag: ["@attention", "@isolated"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
   const session = await seed(state, "Typed permission details");
   await openSession(state, page, session.id);
   await tool(state, "read", { filePath: `${state.directory}/README.md` });
@@ -23,6 +23,14 @@ test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(dock).toContainText("README.md");
   await expect(dock).toContainText("+1 / \u22121");
+  for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+    await state.product("prefs.set", { key: "theme", value: theme });
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    await info.attach(`permission-native-preview-${theme}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  }
   await dock.getByRole("button", { name: "Reject", exact: true }).click();
   await expect(page.locator("textarea[name=rejection]")).toBeVisible();
   await dock.getByRole("button", { name: "Reject request", exact: true })

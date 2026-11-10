@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
 import { FakeLlm } from "./fake-llm.ts";
+import { browserProvider } from "./browser-native.ts";
 import { McpFixture } from "./mcp.ts";
 import type { nativeFixture } from "./native-fixture.ts";
 import type { Profile } from "./fixture-control.ts";
@@ -19,7 +20,7 @@ export function composerProfile(profile: Profile) {
       "composer-plan",
     ].includes(profile)
   ) {
-    selected = new FakeLlm();
+    selected = browserProvider();
     selected.strict();
     const choosing = profile === "composer-selection";
     options.providers = {

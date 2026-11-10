@@ -10,13 +10,11 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
 }, async ({ isolatedState: state, page }) => {
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Cursor continuity review",
+    messages: Array.from(
+      { length: 12 },
+      (_, i) => ({ parts: [{ type: "text", text: `Earlier prompt ${i}` }] }),
+    ),
   });
-  for (let i = 0; i < 12; i++) {
-    await state.native(`/session/${session.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text: `Earlier prompt ${i}` }],
-    });
-  }
   for (let i = 0; i < 11; i++) {
     await state.controller.call("queueScript", {
       lease: state.lease.lease,

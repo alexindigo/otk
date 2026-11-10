@@ -292,11 +292,7 @@ export class OpencodeV2Test implements NativeFixture {
       sessionID: ids.decode(id),
       requestID,
       decision,
-      ...(decision === "reject"
-        ? { message: message ?? "Declined by the fixture" }
-        : message
-        ? { message }
-        : {}),
+      ...(message ? { message } : {}),
     });
   }
   stageRevert(id: string, messageID: string, files: boolean): Promise<unknown> {

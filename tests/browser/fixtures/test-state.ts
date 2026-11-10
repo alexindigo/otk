@@ -24,6 +24,11 @@ export class TestState {
   get url(): string {
     return this.controller.info!.url;
   }
+  sessionID(nativeID: string): string {
+    return `opcv${
+      this.controller.info!.version.startsWith("2.") ? "2" : "1"
+    }-${nativeID}`;
+  }
   async newContext(browser: Browser): Promise<BrowserContext> {
     const context = await browser.newContext();
     this.#contexts.push(context);

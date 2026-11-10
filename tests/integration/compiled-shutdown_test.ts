@@ -8,7 +8,11 @@ import { bounded, test } from "../support/resources.ts";
 import { freePort, type OpencodeTest, waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-async function launch(oc: OpencodeTest, port: number, level = "info") {
+async function launch(
+  oc: Pick<OpencodeTest, "root" | "url" | "db">,
+  port: number,
+  level = "info",
+) {
   const binary = await preparedBinary();
   const env = Object.fromEntries(
     Object.entries(Deno.env.toObject()).filter(([key]) =>

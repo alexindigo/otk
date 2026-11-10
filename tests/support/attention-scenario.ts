@@ -12,7 +12,7 @@ import { FreezeProxy } from "./freeze-proxy.ts";
 import { serve } from "./http.ts";
 import { waitFor } from "./opencode.ts";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
-import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
+import { browserSessionID } from "./browser-native.ts";
 import type {
   ControlRequest,
   Json,
@@ -379,9 +379,7 @@ async function nativeAttention(profile: Profile) {
           } else if (frame.params.action === "freeze") frozen.freeze();
           else if (frame.params.action === "thaw") frozen.thaw();
           else if (frame.params.action === "fail" && frame.params.sessionID) {
-            const session = frame.params.sessionID.startsWith("opcv1-")
-              ? frame.params.sessionID
-              : opencodeV1SessionID.encode(frame.params.sessionID);
+            const session = browserSessionID(frame.params.sessionID);
             await c.rpc("permission.activity", { sessionID: session });
             const db = new OtkDb(join(f.oc.root, `otk-${server.port}`), [
               permissionMigrations,

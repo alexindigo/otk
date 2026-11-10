@@ -11,12 +11,13 @@ test(
       directory: state.directory,
       title: "Qualified identity smoke",
     });
-    expect(root.id).toMatch(/^opcv1-ses_[A-Za-z0-9_-]+$/);
+    const prefix = state.sessionID("");
+    expect(root.id).toMatch(new RegExp(`^${prefix}ses_[A-Za-z0-9_-]+$`));
     const native =
       (await state.native<{ id: string; title: string }[]>("/session")).find(
         (s) => s.title === root.title,
       )!;
-    expect(root.id).toBe(`opcv1-${native.id}`);
+    expect(root.id).toBe(state.sessionID(native.id));
     const beforeBare =
       (await state.observe<{ frames: unknown[] }>()).frames.length;
     await expect(state.product("session.get", { sessionID: native.id })).rejects
@@ -50,12 +51,14 @@ test(
     const helper = await state.native<{ id: string; nativeID: string }>(
       "/session",
       "POST",
-      { parentID: native.id, title: "Helper created outside OTK" },
+      {
+        parentID: native.id,
+        title: "Helper created outside OTK",
+        messages: [{
+          parts: [{ type: "text", text: "External helper transcript." }],
+        }],
+      },
     );
-    await state.native(`/session/${helper.id}/message`, "POST", {
-      noReply: true,
-      parts: [{ type: "text", text: "External helper transcript." }],
-    });
     await page.locator(`[data-session="${helper.id}"]`).click();
     await expect(page.locator(".otk-messages")).toContainText(
       "External helper transcript.",
@@ -95,7 +98,8 @@ test(
       const id = frame.sessionID ?? frame.params?.sessionID;
       return typeof id === "string" ? [id] : [];
     });
-    expect(ids.every((id) => /^opcv1-[A-Za-z0-9_-]+$/.test(id))).toBe(true);
+    expect(ids.every((id) => new RegExp(`^${prefix}[A-Za-z0-9_-]+$`).test(id)))
+      .toBe(true);
     const messages = await page.evaluate(async (url) => {
       const socket = new WebSocket(url.replace(/^http/, "ws") + "/api/ws");
       const messages: { t: string; code?: string }[] = [];

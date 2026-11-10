@@ -74,6 +74,11 @@ test("sessions.focused-row-identity-survives-native-page-acquisition", {
       };
     });
   const before = await anchor();
+  const beforeViewport = await pane.evaluate((element) => ({
+    top: element.scrollTop,
+    total: element.scrollHeight,
+    height: element.clientHeight,
+  }));
   frames.hold((frame, request) =>
     frame.t === "request.result" && request?.method === "sessions.list"
   );
@@ -112,6 +117,23 @@ test("sessions.focused-row-identity-survives-native-page-acquisition", {
     frames.release();
     await expect(loading).toHaveCount(0);
     const after = await anchor();
+    await info.attach("anchor-reconciliation", {
+      body: JSON.stringify({
+        before,
+        after,
+        beforeViewport,
+        afterViewport: await pane.evaluate((element) => ({
+          top: element.scrollTop,
+          total: element.scrollHeight,
+          height: element.clientHeight,
+        })),
+        sourcePositions: {
+          before: sessions.findIndex((s) => s.id === before.key),
+          after: sessions.findIndex((s) => s.id === after.key),
+        },
+      }),
+      contentType: "application/json",
+    });
     expect(after.key).toBe(before.key);
     expect(Math.abs(after.offset - before.offset)).toBeLessThan(1);
     expect(after.height).toBe(before.height);

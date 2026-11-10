@@ -65,9 +65,13 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   ).toBeVisible({ timeout: 60000 });
   await expect.poll(async () =>
     (await state.native<
-      { parts: { tool?: string; state?: { status: string } }[] }[]
+      {
+        parts: { tool?: string; name?: string; state?: { status: string } }[];
+      }[]
     >(`/session/${root.id}/message`)).flatMap((r) => r.parts).filter((p) =>
-      p.tool === "task" && p.state?.status === "completed"
+      (state.controller.info!.version.startsWith("2.")
+        ? p.name === "subagent"
+        : p.tool === "task") && p.state?.status === "completed"
     ).length
   ).toBe(2);
   await expect(page.locator(".otk-messages")).toContainText(
@@ -81,7 +85,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
     `/session/${root.id}/children`,
   );
   expect(raw).toHaveLength(2);
-  const children = raw.map((c) => ({ ...c, id: `opcv1-${c.id}` }));
+  const children = raw.map((c) => ({ ...c, id: state.sessionID(c.id) }));
   const first = children.find((c) => c.title.includes("First inspection"))!,
     second = children.find((c) => c.title.includes("Second inspection"))!;
   await page.locator("textarea[name=prompt]").fill("Unsent parent work");

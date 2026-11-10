@@ -6,6 +6,12 @@ import { acquire, resources } from "./resources.ts";
 import { nativeKind } from "./native.ts";
 import { OpencodeTest } from "./opencode.ts";
 import { OpencodeV2Test } from "./opencode-v2.ts";
+import {
+  type BrowserNative,
+  type BrowserNativeOptions,
+  browserProvider,
+  BrowserV2Native,
+} from "./browser-native.ts";
 
 /** Semantic native fixture seam. Native shapes stay in version-specific tests. */
 export interface NativeFixture {
@@ -48,12 +54,14 @@ export function startNative(provider: FakeLlm): Promise<NativeFixture> {
 /** Native services have one owner, independently of the browser transport. */
 export async function nativeFixture(
   permission?: Record<string, "ask" | "allow" | "deny">,
-  options?: Parameters<typeof OpencodeTest.start>[2],
+  options?: BrowserNativeOptions,
 ) {
   return await acquire("native stack", async () => {
     const scope = resources();
-    const fake = new FakeLlm();
-    const oc = await OpencodeTest.start(fake, permission, options);
+    const fake = browserProvider();
+    const oc: BrowserNative = nativeKind === "opencode-v2-server"
+      ? await BrowserV2Native.start(fake, permission, options)
+      : await OpencodeTest.start(fake, permission, options);
     const logs = Deno.env.get("OTK_TEST_LOG_ROOT") ?? oc.root;
     fake.recordRequests(join(logs, "provider-requests.json"));
     const servers: SidecarTest[] = [];
@@ -78,7 +86,10 @@ export async function nativeFixture(
       oc,
       servers,
       async sidecar(overrides: Parameters<typeof SidecarTest.start>[1] = {}) {
-        const sidecar = await SidecarTest.start(oc, overrides);
+        const endpoint = oc instanceof BrowserV2Native && overrides.harness?.url
+          ? await oc.endpoint(overrides.harness.url)
+          : oc;
+        const sidecar = await SidecarTest.start(endpoint, overrides);
         servers.push(sidecar);
         return sidecar;
       },

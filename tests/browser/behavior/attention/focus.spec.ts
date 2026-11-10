@@ -16,7 +16,7 @@ test.use({ profile: "contract-attention-native" });
 test(
   "attention.question-transitions-focus-visible-controls-and-preserve-independent-focus",
   { tag: ["@attention", "@isolated"] },
-  async ({ isolatedState: state, page }) => {
+  async ({ isolatedState: state, page }, info) => {
     await page.setViewportSize({ width: 1600, height: 900 });
     const session = await seed(state, "Focus ownership");
     await openSession(state, page, session.id);
@@ -31,6 +31,18 @@ test(
     await active.locator("textarea").fill("My own output");
     await page.keyboard.press("Enter");
     await expect(action).toBeFocused();
+    await expect(page.locator(".otk-question-dock")).toHaveCount(1);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`question-single-owner-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
     expect(
       await page.evaluate(() => {
         const card = document.querySelector(".otk-takeover")!

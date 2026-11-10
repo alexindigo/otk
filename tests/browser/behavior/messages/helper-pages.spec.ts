@@ -10,7 +10,7 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
       helper: {
         parent: { id: string; nativeID: string };
         child: { id: string; nativeID: string };
-        work: { info: { id: string } };
+        work: { info: { id: string; promptID?: string } };
         tool: { id: string };
       };
       reads: string[];
@@ -85,10 +85,26 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
   await expect(
     page.locator(".otk-task-card").filter({ hasText: "1 tool call" }).first(),
   ).toBeAttached({ timeout: 60000 });
-  await state.native(
-    `/session/${child.id}/message/${work.info.id}/part/${tool.id}`,
-    "DELETE",
-  );
+  if (state.controller.info!.version.startsWith("2.")) {
+    // V2 commits removal through its native revert boundary, not V1 part edits.
+    if (!work.info.promptID) {
+      throw new Error("V2 helper fixture omitted its revert boundary");
+    }
+    await state.native(`/session/${child.id}/revert`, "POST", {
+      messageID: work.info.promptID,
+      files: false,
+    });
+    await state.queue(["Helper continued without a tool."]);
+    await state.native(`/session/${child.id}/message`, "POST", {
+      parts: [{
+        type: "text",
+        text: "Continue after removing the old helper turn",
+      }],
+    });
+  } else {await state.native(
+      `/session/${child.id}/message/${work.info.id}/part/${tool.id}`,
+      "DELETE",
+    );}
   await expect(
     page.locator(".otk-task-card").filter({ hasText: "0 tool calls" }).first(),
   ).toBeAttached({ timeout: 60000 });

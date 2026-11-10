@@ -2,6 +2,7 @@
 import { join } from "@std/path";
 import { fixture } from "./config.ts";
 import { nativeFixture } from "./native-fixture.ts";
+import { seedBrowserSession } from "./browser-native.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { consumerAssets } from "./consumer-builds.ts";
 import { serve } from "./http.ts";
@@ -67,16 +68,11 @@ export async function themeScenario() {
         },
       },
     });
-  const session = await native.oc.session<{ id: string }>("/session", {
-    method: "POST",
-    body: { title: "Native theme corpus" },
-  });
-  await native.oc.request(`/session/${session.id}/message`, {
-    method: "POST",
-    body: {
-      noReply: true,
+  const session = await seedBrowserSession(native.oc, {
+    title: "Native theme corpus",
+    messages: [{
       parts: [{ type: "text", text: "Fixed native source for theme evidence" }],
-    },
+    }],
   });
   const automaticGate = Promise.withResolvers<void>();
   let automaticHeld = false, automaticReplying = false;

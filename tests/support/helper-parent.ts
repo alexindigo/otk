@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Info, RawPart } from "@otk/harness-opencode-v1";
-import type { OpencodeTest } from "./opencode.ts";
+import { type BrowserNative, BrowserV2Native } from "./browser-native.ts";
+import { v2HelperParent } from "./helper-v2-parent.ts";
 /** Real stock API only; expected helper facts are independent of OTK's digest. */
-export async function helperParent(oc: OpencodeTest) {
+export async function helperParent(oc: BrowserNative) {
+  if (oc instanceof BrowserV2Native) return await v2HelperParent(oc);
   const parent = await oc.session<{ id: string }>("/session", {
     method: "POST",
     body: { title: "Helper isolation review" },
