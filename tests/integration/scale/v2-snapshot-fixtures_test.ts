@@ -75,14 +75,16 @@ for (const variant of SCALE_VARIANTS) {
             const info = await fixture.native.api.session.get({
               sessionID: target.nativeID,
             });
-            assertEquals(info.cost, target.expected.cost);
+            // Native mandatory totals stay zero when no constituent reports;
+            // target.expected describes OTK authority, not native defaults.
+            assertEquals(info.cost, target.expected.cost ?? 0);
             assertEquals([
               info.tokens.input,
               info.tokens.output,
               info.tokens.reasoning,
               info.tokens.cache.read,
               info.tokens.cache.write,
-            ], target.expected.tokens);
+            ], target.expected.tokens.map((value) => value ?? 0));
           }
           // Native session aggregates are mandatory even when a provider did
           // not report call usage. Unknown reply categories must stay unknown.
@@ -153,6 +155,36 @@ for (const variant of SCALE_VARIANTS) {
           client.entry(selected.id)?.digest.total?.tokens.input,
           selected.expected.tokens[0],
         );
+        // Each recipe seeds omitted usage at 1 and explicit zeros at 2.
+        for (const target of a.sessions.slice(1, 3)) {
+          client.lease({
+            directory: a.directory,
+            selected: target.id,
+            crumbs: [],
+            rows: [],
+          });
+          await client.rpc("session.messages", { sessionID: target.id });
+          await waitFor(
+            () => client.entry(target.id)?.digest,
+            (digest) => digest?.state === "ready",
+            120000,
+          );
+          assertEquals(
+            client.entry(target.id)?.digest.total?.cost,
+            target.expected.cost,
+          );
+          assertEquals(
+            client.entry(target.id)?.digest.total?.tokens.input,
+            target.expected.tokens[0],
+          );
+          const [turnID, expected] = Object.entries(target.expected.turns)[0];
+          const usage = await client.rpc<
+            import("@otk/protocol").TurnUsageDetail
+          >("usage.get", { sessionID: target.id, turnID });
+          assertEquals(usage.aggregation, "reported");
+          assertEquals(usage.summary.cost, expected.cost);
+          assertEquals(usage.summary.tokens.input, expected.tokens[0]);
+        }
         await client.close();
         assertEquals(await fileHashes(template), source);
         await V2SessionScale.validate(template);

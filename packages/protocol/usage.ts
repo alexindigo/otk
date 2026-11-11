@@ -54,12 +54,15 @@ export interface UsageRpcMethods {
   };
 }
 export type UsageCallDetail = UsageMessage;
+/** Omitted preserves complete-contributor accounting for existing producers. */
+export type UsageAggregation = "reported";
 export interface TurnUsageSnapshot {
   sessionID: string;
   turnID: string;
   revision: number;
   summary: UsageSummary;
   calls: UsageCallDetail[];
+  aggregation?: UsageAggregation;
 }
 export interface TurnUsageDetail extends TurnUsageSnapshot {
   clock: ContentClock;
@@ -142,6 +145,7 @@ class Extrema {
   }
 }
 class Aggregate {
+  constructor(readonly aggregation?: UsageAggregation) {}
   count = 0;
   sums = Array<number>(6).fill(0);
   unknown = Array<number>(6).fill(0);
@@ -170,12 +174,21 @@ class Aggregate {
     } else this.contexts.change(input + cache.read + cache.write, direction);
   }
   read(): UsageSummary {
-    const v = this.sums.map((sum, i) => this.unknown[i] ? null : sum);
+    // A missing constituent cannot erase a reported value (including zero).
+    const v = this.sums.map((sum, i) =>
+      (this.aggregation === "reported"
+          ? this.unknown[i] === this.count
+          : this.unknown[i] > 0)
+        ? null
+        : sum
+    );
     return {
       calls: this.count,
       tokens: tokensFrom(v),
       cost: v[5],
-      contextPeak: this.unknownContext
+      contextPeak: this.aggregation === "reported"
+        ? this.contexts.values.at(-1) ?? null
+        : this.unknownContext
         ? null
         : this.contexts.values.at(-1) ?? 0,
       ...(this.count && !this.untimed
@@ -192,7 +205,7 @@ class Aggregate {
 /** Sole aggregation owner, shared by producers and live consumers; never stores parts. */
 export class UsageLedger {
   #messages = new Map<string, UsageMessage>();
-  #total = new Aggregate();
+  #total: Aggregate;
   #turns = new Map<string, Aggregate>();
   #models = new Map<string, { model: ModelRef; aggregate: Aggregate }>();
   #turnModels = new Map<
@@ -202,7 +215,9 @@ export class UsageLedger {
   constructor(
     readonly sessionID: string,
     messages: readonly UsageMessage[] = [],
+    readonly aggregation?: UsageAggregation,
   ) {
+    this.#total = new Aggregate(aggregation);
     for (const message of messages) this.upsert(message);
   }
   upsert(message: UsageMessage, restart: boolean = false): UsageChange {
@@ -273,7 +288,9 @@ export class UsageLedger {
   #account(message: UsageMessage, direction: number) {
     this.#total.change(message, direction);
     let turn = this.#turns.get(message.turnID);
-    if (!turn) this.#turns.set(message.turnID, turn = new Aggregate());
+    if (!turn) {
+      this.#turns.set(message.turnID, turn = new Aggregate(this.aggregation));
+    }
     turn.change(message, direction);
     let models = this.#turnModels.get(message.turnID);
     if (!models) this.#turnModels.set(message.turnID, models = new Map());
@@ -283,7 +300,10 @@ export class UsageLedger {
       if (!model) {
         map.set(
           key,
-          model = { model: message.model, aggregate: new Aggregate() },
+          model = {
+            model: message.model,
+            aggregate: new Aggregate(this.aggregation),
+          },
         );
       }
       model.aggregate.change(message, direction);
@@ -362,11 +382,13 @@ export class UsageLedger {
     );
   }
   detail(turnID: string, revision = 0): TurnUsageSnapshot {
-    const summary = this.summary(turnID) ?? new Aggregate().read();
+    const summary = this.summary(turnID) ??
+      new Aggregate(this.aggregation).read();
     return {
       sessionID: this.sessionID,
       turnID,
       revision,
+      ...(this.aggregation ? { aggregation: this.aggregation } : {}),
       summary,
       calls: [...this.#messages.values()].filter((call) =>
         call.turnID === turnID

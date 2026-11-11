@@ -145,6 +145,7 @@ export type FromWorker =
       turnID: string;
       revision: number;
       summary?: TurnUsageSnapshot["summary"];
+      aggregation?: TurnUsageSnapshot["aggregation"];
       calls: TurnUsageSnapshot["calls"];
     }
     | ({ t: "pressure" } & DigestPressure)
