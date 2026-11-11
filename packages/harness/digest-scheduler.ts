@@ -95,6 +95,9 @@ export class DigestScheduler {
   #idleUntil = -Infinity;
   #idleWait?: AbortController;
   #batches = 0;
+  // Only a returned optional slot can admit a capacity waiter. Generic change
+  // signals (including its own duty timer) would make waiting execute.
+  #capacity = Promise.withResolvers<void>();
   #lists = new Map<string, Promise<void>>();
   #discovering = false;
   #discovered = false;
@@ -422,7 +425,7 @@ export class DigestScheduler {
           async (signal, execution) => {
             if (optional) {
               while (this.#batches >= this.policy.parallel) {
-                await execution.wait(this.#changed.promise);
+                await execution.wait(this.#capacity.promise);
                 signal.throwIfAborted();
               }
               this.#batches++;
@@ -433,10 +436,7 @@ export class DigestScheduler {
               signal.throwIfAborted();
               return value;
             } finally {
-              if (optional) {
-                this.#batches--;
-                this.#wake();
-              }
+              if (optional) this.#returnBatch();
             }
           },
           AbortSignal.any([signal, slice.signal]),
@@ -458,6 +458,13 @@ export class DigestScheduler {
         ) throw error;
       }
     }
+  }
+  #returnBatch(): void {
+    this.#batches--;
+    const capacity = this.#capacity;
+    this.#capacity = Promise.withResolvers<void>();
+    capacity.resolve();
+    this.#wake();
   }
   /** The I/O-permission owner requests preemption only when a read needs it. */
   interruptIO(signal?: AbortSignal): void {
@@ -747,7 +754,7 @@ export class DigestScheduler {
           this.#errors.push(error);
         }
       }).finally(() => {
-        if (optional) this.#batches--;
+        if (optional) this.#returnBatch();
         if (failed && !this.#controller.signal.aborted) {
           // Only this identity waits after failure. Its backoff cannot suspend
           // the dispatcher or consume execution needed by essential callers.
