@@ -1205,7 +1205,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     });
     const previous = this.storage.read(job.sessionID),
       total = this.#summary(job.sessionID);
-    const nativeUsage = record(raw),
+    // Native sessions initialize their totals to zero even when the provider
+    // reports no usage. Only observed constituent usage establishes authority;
+    // once known, native totals still include charges outside the reply ledger.
+    const usageReported = !!this.storage.sql.prepare(
+      "SELECT 1 FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' AND coalesce(json_extract(scalar,'$.usage.cost'),json_extract(scalar,'$.usage.tokens.input'),json_extract(scalar,'$.usage.tokens.output'),json_extract(scalar,'$.usage.tokens.reasoning'),json_extract(scalar,'$.usage.tokens.cache.read'),json_extract(scalar,'$.usage.tokens.cache.write')) IS NOT NULL LIMIT 1",
+    ).get(job.sessionID);
+    const nativeUsage = usageReported ? record(raw) : {},
       nativeTokens = tokens(nativeUsage.tokens),
       nativeCost = reported(nativeUsage.cost);
     const summaries: Record<string, UsageSummary> = {};
