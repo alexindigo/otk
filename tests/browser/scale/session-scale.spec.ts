@@ -135,7 +135,37 @@ test(
       const r = await page.locator(viewport).boundingBox();
       expect(r).toBeTruthy();
       await page.mouse.move(r!.x + r!.width / 2, r!.y + r!.height / 2);
-      await page.mouse.wheel(0, delta);
+      // Native activity order need not put the target at the absolute bottom.
+      // Scan overlapping windows so paging cannot jump past the requested row.
+      const scroll = async () => {
+        const moves = await page.locator(viewport).evaluate((el, direction) => {
+          const end = el.scrollHeight - el.clientHeight;
+          const moves = direction > 0
+            ? el.scrollTop < end - .5
+            : el.scrollTop > .5;
+          if (moves) {
+            el.setAttribute("data-scale-scroll", "pending");
+            el.addEventListener(
+              "scrollend",
+              () => el.setAttribute("data-scale-scroll", "settled"),
+              { once: true },
+            );
+          }
+          return moves;
+        }, delta);
+        await page.mouse.wheel(
+          0,
+          delta > 0 ? Math.min(delta, r!.height / 2) : delta,
+        );
+        // wheel() acknowledges dispatch, not native scrolling or windowing.
+        if (moves) {
+          await expect(page.locator(viewport)).toHaveAttribute(
+            "data-scale-scroll",
+            "settled",
+          );
+        }
+        await page.evaluate(framesAhead);
+      };
       // A paged list extends its end as demand is answered; one wheel is not full-population acquisition.
       await expect.poll(async () => {
         if (delta > 0) {
@@ -149,9 +179,16 @@ test(
         ) {
           return true;
         }
-        await page.mouse.wheel(0, delta);
+        await scroll();
         return false;
-      }).toBe(true);
+      }, { intervals: [0, 16, 32] }).toBe(true);
+      if (delta > 0) {
+        // Mounted overscan is not yet a click target. Account for actionability
+        // scrolling before taking the anchor that a later mutation must retain.
+        await page.locator(`[data-session="${last.id}"]`)
+          .scrollIntoViewIfNeeded({ timeout: 10_000 });
+        await page.evaluate(framesAhead);
+      }
     };
     const anchor = () =>
       page.locator(viewport).evaluate((v) => {
@@ -543,6 +580,9 @@ test(
       const reordered = await anchor();
       expect(reordered.key).toBe(before.key);
       expect(Math.abs(reordered.offset - before.offset)).toBeLessThan(1);
+      const renameBefore = await state.product("session.get", {
+        sessionID: last.id,
+      });
       await page.locator(`[data-session="${last.id}"]`).click({
         button: "right",
       });
@@ -553,8 +593,11 @@ test(
       await expect(page.locator(".otk-title-editor")).toHaveCount(0);
       await expect(page.locator(`[data-session="${last.id}"] .otk-row-title`))
         .toHaveText(last.title + " renamed");
-      expect((await state.product("session.get", { sessionID: last.id })).title)
-        .toBe(last.title + " renamed");
+      const renamed = await state.product("session.get", {
+        sessionID: last.id,
+      });
+      expect(renamed.title).toBe(last.title + " renamed");
+      expect(renamed.time.updated).toBe(renameBefore.time.updated);
       const edited = await anchor();
       expect(edited.key).toBe(before.key);
       expect(Math.abs(edited.offset - before.offset)).toBeLessThan(1);
