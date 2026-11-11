@@ -615,7 +615,13 @@ export class OpencodeV2ServerAdapter implements Harness {
     try {
       return await run();
     } catch (error) {
-      if (!operation?.signal.aborted && this.#sink) {
+      // Definitive input rejection belongs to the requesting operation, not the
+      // session's execution history. Native events and uncertain HTTP outcomes
+      // retain their independent session diagnostics.
+      if (
+        !operation?.signal.aborted && this.#sink &&
+        !(error instanceof OperationFailure && error.outcome === "rejected")
+      ) {
         let cause: unknown = error;
         const seen = new Set<unknown>();
         while (
