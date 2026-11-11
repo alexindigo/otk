@@ -44,6 +44,18 @@ Deno.test("V2 SQL recency keysets and project activity use activity clocks, not 
     }, 2);
     assertEquals(rest.map((row) => row.id), ["opcv2-ses_new", "opcv2-ses_old"]);
     assertEquals(db.projects("", 20)[0].lastActivity, 45);
+    const discovered = db.recent(["/repo"], undefined, 1);
+    assertEquals(discovered.map((row) => [row.id, row.timeUpdated]), [[
+      "opcv2-ses_shell",
+      45,
+    ]]);
+    assertEquals(
+      db.recent(["/repo"], {
+        updated: discovered[0].timeUpdated,
+        id: "ses_shell",
+      }, 2).map((row) => row.id),
+      ["opcv2-ses_new", "opcv2-ses_old"],
+    );
   } finally {
     db.close();
     writer.close();
