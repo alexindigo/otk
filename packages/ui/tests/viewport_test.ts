@@ -136,6 +136,34 @@ for (const movedBeforeLayout of [true, false]) {
   });
 }
 
+Deno.test("a paged list's end is a reader position, not a tail to follow", () => {
+  viewportFixture(({ pane, height, flush }) => {
+    const lease = acquireViewport(pane);
+    const release = lease.owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({ key: "row", offset: pane.scrollTop }),
+      resolve: (anchor) => anchor.offset,
+    });
+    try {
+      for (let i = 0; i < 4; i++) flush();
+      pane.scrollTop = 900;
+      pane.dispatchEvent(new Event("scroll"));
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: 100 });
+      pane.dispatchEvent(wheel);
+      // The demanded older page arrives below the row the reader is on.
+      height(1100);
+      lease.owner.layout();
+      for (let i = 0; i < 5; i++) flush();
+      assertEquals(pane.scrollTop, 900);
+    } finally {
+      release();
+      lease.release();
+    }
+  }, { tail: false });
+});
+
 /** Controlled native event/frame order; assertions observe viewport position. */
 function viewportFixture(
   run: (f: {
@@ -145,6 +173,7 @@ function viewportFixture(
     flush(): void;
     writes(): number;
   }) => void,
+  { tail = true } = {},
 ) {
   const names = [
     "document",
@@ -208,7 +237,7 @@ function viewportFixture(
       value: values[i],
     })
   );
-  const owner = followViewport(pane, pane, () => {});
+  const owner = tail ? followViewport(pane, pane, () => {}) : undefined;
   const flush = () => {
     const pending = [...frames.values()];
     frames.clear();
@@ -216,7 +245,7 @@ function viewportFixture(
   };
   try {
     flush();
-    assertEquals(pane.scrollTop, 900);
+    assertEquals(pane.scrollTop, tail ? 900 : 0);
     run({
       pane,
       height: (value) => {
@@ -227,7 +256,7 @@ function viewportFixture(
       writes: () => (pane as unknown as Pane).writes,
     });
   } finally {
-    owner.dispose();
+    owner?.dispose();
     names.forEach((name, i) => {
       if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!);
       else Reflect.deleteProperty(globalThis, name);

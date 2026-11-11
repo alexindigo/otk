@@ -176,10 +176,11 @@ test.describe("interior focus pin", () => {
     const pane = page.locator(".otk-project-session-tree");
     const row = page.locator("[data-session=tstv1-w-298]");
     await pane.hover();
+    // Each gesture at the end demands one more page; none is acquired unasked.
     await expect.poll(async () => {
       await page.mouse.wheel(0, 100000);
       return row.count();
-    }).toBe(1);
+    }, { intervals: [0, 16, 32] }).toBe(1);
     await row.evaluate((element) => {
       Object.assign(globalThis, { interiorFocusRow: element });
       (element as HTMLElement).focus();
