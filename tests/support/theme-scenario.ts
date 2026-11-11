@@ -545,6 +545,15 @@ export async function themeScenario() {
           if (
             frame.params.path === "/session" && frame.params.method === "POST"
           ) {
+            if (
+              frame.params.body && typeof frame.params.body === "object" &&
+              "messages" in frame.params.body
+            ) {
+              return await seedBrowserSession(
+                native.oc,
+                frame.params.body as Record<string, unknown>,
+              );
+            }
             return await native.oc.session("/session", {
               method: "POST",
               body: frame.params.body,

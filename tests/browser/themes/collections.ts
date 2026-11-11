@@ -130,10 +130,9 @@ export async function composerAccessories(
   await expect(page.locator(".otk-right-panel")).toBeVisible();
 }
 export async function loadedImage(
-  { state, page, sessionID, nativePage, theme, image, shot }: {
+  { state, page, nativePage, theme, image, shot }: {
     state: TestState;
     page: Page;
-    sessionID: string;
     nativePage(id: string): Promise<void>;
     theme: Theme;
     image: string;
@@ -141,16 +140,18 @@ export async function loadedImage(
   },
 ) {
   const filename = `sample-${theme.id}.png`;
-  await state.native(`/session/${sessionID}/message`, "POST", {
-    noReply: true,
-    parts: [{ type: "text", text: "Describe these shapes." }, {
-      type: "file",
-      filename,
-      mime: "image/png",
-      url: image,
+  const seeded = await state.native<{ id: string }>("/session", "POST", {
+    title: `Loaded native image ${theme.id}`,
+    messages: [{
+      parts: [{ type: "text", text: "Describe these shapes." }, {
+        type: "file",
+        filename,
+        mime: "image/png",
+        url: image,
+      }],
     }],
   });
-  await nativePage(sessionID);
+  await nativePage(seeded.id);
   const trigger = page.getByRole("button", {
     name: `Open image: ${filename}`,
     exact: true,
@@ -323,16 +324,12 @@ export async function collections456(input: Inputs) {
   await test.step("4/native-composer", async () => {
     const restored = await state.native<{ id: string }>("/session", "POST", {
       title: "Restored native composer choice",
-    });
-    await state.native(`/session/${restored.id}/message`, "POST", {
-      noReply: true,
-      agent: "reviewer",
-      model: { providerID: "fake2", modelID: "scripted" },
-      variant: "high",
-      parts: [{ type: "text", text: "Restored visual choice" }],
-    });
-    const images = await state.native<{ id: string }>("/session", "POST", {
-      title: "Loaded native image",
+      messages: [{
+        agent: "reviewer",
+        model: { providerID: "fake2", modelID: "scripted" },
+        variant: "high",
+        parts: [{ type: "text", text: "Restored visual choice" }],
+      }],
     });
     await page.setViewportSize({ width: 1280, height: 657 });
     await nativePage(native.emptyID);
@@ -783,7 +780,6 @@ export async function collections456(input: Inputs) {
         await loadedImage({
           state,
           page,
-          sessionID: images.id,
           nativePage,
           theme,
           image,
