@@ -3,6 +3,90 @@ import { assertEquals } from "@std/assert";
 import { Transcript } from "../transcript.ts";
 import { cfg } from "../../../tests/support/config.ts";
 
+Deno.test("V2 unfinished text and reasoning precede their first viewer without body reads", async () => {
+  const id = "opcv2-ses_unviewed", messageID = "msg_unviewed";
+  const transcript = new Transcript({
+    client() {
+      throw new Error("Unviewed native events must perform no body reads");
+    },
+    policy: cfg().messages,
+    content() {
+      throw new Error("Unviewed native source must not publish content");
+    },
+    diagnostic() {},
+    invalidated() {},
+  });
+  try {
+    for (const kind of ["text", "reasoning"] as const) {
+      const data = {
+        sessionID: "ses_unviewed",
+        assistantMessageID: messageID,
+        ordinal: 0,
+      };
+      await transcript.event({ type: `session.${kind}.started`, data });
+      await transcript.event({
+        type: `session.${kind}.delta`,
+        data: { ...data, delta: `Unviewed ${kind}` },
+      });
+      const snapshot = transcript.buffers.snapshot(
+        `${messageID}:${kind}:0`,
+        id,
+        messageID,
+      );
+      assertEquals(
+        snapshot?.part.stream?.sourceLength,
+        `Unviewed ${kind}`.length,
+      );
+      assertEquals(
+        JSON.stringify(snapshot?.part.blocks).includes(`Unviewed ${kind}`),
+        true,
+      );
+    }
+    transcript.subscriptions(id, 1);
+    const projected = transcript.buffers.overlay({
+      id: messageID,
+      sessionID: id,
+      role: "assistant",
+      time: { created: 1 },
+      agent: "build",
+      model: { provider: "fake", model: "scripted" },
+      cost: null,
+      tokens: {
+        input: null,
+        output: null,
+        reasoning: null,
+        cache: { read: null, write: null },
+      },
+      interrupted: false,
+      parts: [],
+    });
+    assertEquals(projected.parts.length, 2);
+    assertEquals(JSON.stringify(projected).includes("Unviewed text"), true);
+    assertEquals(
+      JSON.stringify(projected).includes("Unviewed reasoning"),
+      true,
+    );
+    transcript.subscriptions(id, 0);
+    await transcript.event({
+      type: "session.text.ended",
+      data: {
+        sessionID: "ses_unviewed",
+        assistantMessageID: messageID,
+        ordinal: 0,
+        text: "Unviewed text",
+      },
+    });
+    assertEquals(transcript.buffers.size, 1);
+    await transcript.event({
+      type: "session.step.ended",
+      data: { sessionID: "ses_unviewed", assistantMessageID: messageID },
+    });
+    assertEquals(transcript.buffers.size, 0);
+  } finally {
+    await transcript.stop();
+  }
+});
+
 Deno.test("V2 acquired live source survives viewer replacement without acquiring unviewed bodies", async () => {
   const id = "opcv2-ses_retained",
     message = "msg_retained",

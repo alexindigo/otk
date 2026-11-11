@@ -1104,11 +1104,18 @@ export class Transcript {
     const retained = typeof d.assistantMessageID === "string" &&
       this.#live.get(d.assistantMessageID)?.session === id;
     if (
-      !this.#subscriptions.has(id) && !(retained &&
+      !this.#subscriptions.has(id) &&
+      !/^session\.(text|reasoning)\./.test(event.type) && !(retained &&
         /^session\.(text\.|reasoning\.|step\.(streamed|ended|failed)$)/.test(
           event.type,
         ))
-    ) return;
+    ) {
+      if (
+        typeof d.assistantMessageID === "string" &&
+        /^session\.step\.(ended|failed)$/.test(event.type)
+      ) this.buffers.complete(d.assistantMessageID, () => {});
+      return;
+    }
     const sourceID = event.id?.replace(/^evt_/, "msg_");
     const contextFor = (messageID: string): MessageContext => {
       const baseline = this.#baselines.get(id);
@@ -1427,6 +1434,10 @@ export class Transcript {
         return;
       }
       if (/^session\.(text|reasoning)\./.test(event.type)) {
+        // Native deltas are not persisted until block end. The existing stream
+        // owner retains unfinished source before its first viewer, without reads
+        // or publication; a later native page overlays that same authority.
+        const acquired = this.#subscriptions.has(id) || !!live;
         const kind = event.type.includes(".reasoning.") ? "reasoning" : "text",
           ordinal = d.ordinal;
         if (!Number.isSafeInteger(ordinal) || Number(ordinal) < 0) return;
@@ -1458,7 +1469,9 @@ export class Transcript {
               d.delta,
               (session, op) => this.#publish(session, op),
             )
-          ) this.recovery.touch(id, messageID, pid);
+          ) {
+            if (acquired) this.recovery.touch(id, messageID, pid);
+          }
           return;
         }
         if (event.type.endsWith(".started")) {
@@ -1466,25 +1479,33 @@ export class Transcript {
             live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
           ) return;
           this.buffers.upsert(id, messageID, shell, "");
-          this.#publish(id, {
-            op: "part.upsert",
-            messageID,
-            part: this.buffers.snapshot(pid)!.part,
-          });
-          this.recovery.part(messageID, pid, id);
+          if (acquired) {
+            this.#publish(id, {
+              op: "part.upsert",
+              messageID,
+              part: this.buffers.snapshot(pid)!.part,
+            });
+            this.recovery.part(messageID, pid, id);
+          }
           return;
         }
         if (event.type.endsWith(".ended") && typeof d.text === "string") {
+          if (!acquired) {
+            this.buffers.remove(pid);
+            return;
+          }
           const finished =
             this.buffers.finishPart(id, messageID, shell, d.text) ??
               { ...shell, blocks: importMarkdown(d.text) };
-          this.#publish(id, {
-            op: "part.upsert",
-            messageID,
-            part: finished,
-            lastOutput: event.created,
-          });
-          this.recovery.part(messageID, pid, id);
+          if (acquired) {
+            this.#publish(id, {
+              op: "part.upsert",
+              messageID,
+              part: finished,
+              lastOutput: event.created,
+            });
+            this.recovery.part(messageID, pid, id);
+          }
           return;
         }
       }
