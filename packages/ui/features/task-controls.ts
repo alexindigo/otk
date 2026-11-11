@@ -22,7 +22,10 @@ export function createTaskControls(ports: {
             if (task) await actions.rename(task.id, name);
             else {
               const created = await actions.create(name);
-              if (ports.model() === model && ports.onEmpty()) {
+              if (
+                ports.model() === model && await model.taskReady(created.id) &&
+                ports.model() === model && ports.onEmpty()
+              ) {
                 model.select({ kind: "task", id: created.id });
               }
             }

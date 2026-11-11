@@ -58,6 +58,8 @@ export interface ClientTabs {
   taskFor(id: string): TaskRecord | undefined;
   sessionFor(taskID: string): string | undefined;
   update(input: TabInput): void;
+  /** Join canonical publication; false if this project owner is replaced/stopped. */
+  taskReady(id: string): Promise<boolean>;
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   close(sessionID: string): void;
@@ -87,6 +89,7 @@ export function createTabs(
   const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
   const remembered = new Map<string, string>();
+  const taskWaiters = new Map<string, Set<(ready: boolean) => void>>();
   let selectionRevision = 0, stopped = false;
   let input: TabInput = {
     directory: "",
@@ -368,6 +371,22 @@ export function createTabs(
           )
         ) delete draft.preview;
       });
+      for (const [id, waiters] of taskWaiters) {
+        if (!changedProject && !taskByID.has(id)) continue;
+        taskWaiters.delete(id);
+        for (const resolve of waiters) resolve(!changedProject);
+      }
+    },
+    taskReady(id) {
+      if (stopped) return Promise.resolve(false);
+      refresh();
+      prepare();
+      if (taskByID.has(id)) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        let waiters = taskWaiters.get(id);
+        if (!waiters) taskWaiters.set(id, waiters = new Set());
+        waiters.add(resolve);
+      });
     },
     select(selection: TabSelection, sessionID?: string): void {
       refresh();
@@ -491,6 +510,10 @@ export function createTabs(
       if (stopped) return;
       stopped = true;
       selectionRevision++;
+      for (const waiters of taskWaiters.values()) {
+        for (const resolve of waiters) resolve(false);
+      }
+      taskWaiters.clear();
       promotions.clear();
       remembered.clear();
       input = {

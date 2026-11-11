@@ -168,6 +168,63 @@ Deno.test("task editor saves retain their project and never navigate a replaceme
   assertEquals(f.navigations(), 0);
 });
 
+Deno.test("task creation joins canonical publication before selecting the returned identity", async () => {
+  const f = fixture();
+  const task = {
+    id: "late",
+    directory: "/first",
+    name: "Late task",
+    order: 2,
+    sessions: [],
+  };
+  f.first.actions.create = () => Promise.resolve(task);
+  await f.controls.rename();
+  let complete = false, failure: unknown;
+  const saved = f.editor().input.save(task.name).then(() => {
+    complete = true;
+  }, (error) => {
+    failure = error;
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  assertEquals(failure, undefined);
+  assertEquals(complete, false);
+  f.first.input.inbox.tasks.push(task);
+  f.first.model.update(f.first.input);
+  await saved;
+  assertEquals(failure, undefined);
+  assertEquals(complete, true);
+  assertEquals(f.first.model.state.selected, { kind: "task", id: "late" });
+});
+
+Deno.test("task publication rechecks model ownership and navigation permission after waiting", async () => {
+  for (const changed of ["replacement", "guard", "stop"]) {
+    const f = fixture();
+    const task = {
+      id: "late",
+      directory: "/first",
+      name: "Late task",
+      order: 2,
+      sessions: [],
+    };
+    f.first.actions.create = () => Promise.resolve(task);
+    await f.controls.rename();
+    const saved = f.editor().input.save(task.name);
+    await Promise.resolve();
+    if (changed === "replacement") f.select(f.second);
+    if (changed === "guard") f.block();
+    if (changed === "stop") f.first.model.stop();
+    else {
+      f.first.input.inbox.tasks.push(task);
+      f.first.model.update(f.first.input);
+    }
+    await saved;
+    assertEquals(f.first.model.state.selected, undefined);
+    assertEquals(f.second.model.state.selected, undefined);
+    assertEquals(f.navigations(), changed === "guard" ? 1 : 0);
+  }
+});
+
 Deno.test("new task selection follows successful guarded navigation and rechecks ownership after an async save", async () => {
   const f = fixture();
   await f.controls.rename();

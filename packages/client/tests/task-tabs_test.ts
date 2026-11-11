@@ -40,6 +40,45 @@ const model = () =>
     throw Error("No promotion");
   });
 
+Deno.test("task readiness joins canonical project publication without weakening selection", async () => {
+  const tabs = model(),
+    input = { directory: "/p", entries: [], inbox: inbox() };
+  tabs.update(input);
+  let complete = false;
+  const first = tabs.taskReady("late").then((ready) => {
+    complete = true;
+    return ready;
+  });
+  const second = tabs.taskReady("late");
+  input.inbox.tasks.push({ ...task("late"), directory: "/other" });
+  tabs.update(input);
+  await Promise.resolve();
+  assertEquals(complete, false);
+  input.inbox.tasks.push(task("late", []));
+  tabs.update(input);
+  assertEquals(await first, true);
+  assertEquals(await second, true);
+  assertEquals(await tabs.taskReady("late"), true);
+  tabs.select({ kind: "task", id: "late" });
+  assertEquals(tabs.state.selected, { kind: "task", id: "late" });
+});
+
+Deno.test("task readiness settles on owner replacement and stop, never joins a replacement project", async () => {
+  const tabs = model();
+  tabs.update({ directory: "/p", entries: [], inbox: inbox() });
+  const replaced = tabs.taskReady("late");
+  tabs.update({
+    directory: "/other",
+    entries: [],
+    inbox: inbox([{ ...task("late"), directory: "/other" }]),
+  });
+  assertEquals(await replaced, false);
+  const stopped = tabs.taskReady("absent");
+  tabs.stop();
+  assertEquals(await stopped, false);
+  assertEquals(await tabs.taskReady("late"), false);
+});
+
 Deno.test("authoritative task removal retains the viewed tombstone as a preview", () => {
   const tabs = model(),
     deleted = {
