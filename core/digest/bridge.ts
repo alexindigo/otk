@@ -582,6 +582,7 @@ export class DigestBridge implements DigestPort {
             }
             if (message.summary) {
               detail.summary = message.summary;
+              if (message.aggregation) detail.aggregation = message.aggregation;
               detail.revision = message.revision;
               total = true;
             }

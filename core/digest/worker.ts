@@ -1287,7 +1287,12 @@ function handle(message: ToWorker): void {
                     last: part === count - 1,
                     turnID: detail.turnID,
                     revision: detail.revision,
-                    ...(part === 0 ? { summary: detail.summary } : {}),
+                    ...(part === 0
+                      ? {
+                        summary: detail.summary,
+                        aggregation: detail.aggregation,
+                      }
+                      : {}),
                     calls: detail.calls.slice(
                       part * policy.publishrows,
                       (part + 1) * policy.publishrows,

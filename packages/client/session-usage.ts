@@ -184,7 +184,11 @@ export function createSessionUsage(
       clock: resource.clock ?? resource.value.clock,
       calls,
       summary: resource.ledger.summary(resource.target.turnID) ??
-        new UsageLedger(resource.target.sessionID).detail(
+        new UsageLedger(
+          resource.target.sessionID,
+          [],
+          resource.value.aggregation,
+        ).detail(
           resource.target.turnID,
         ).summary,
     };
@@ -256,7 +260,11 @@ export function createSessionUsage(
           )
         ) throw new Error("Usage detail identity mismatch");
         if (resource.overflow) throw new Error("Refreshing usage breakdown…");
-        const ledger = new UsageLedger(value.sessionID, value.calls);
+        const ledger = new UsageLedger(
+          value.sessionID,
+          value.calls,
+          value.aggregation,
+        );
         const candidate = {
           ...resource,
           clock: value.clock,

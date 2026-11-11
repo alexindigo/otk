@@ -1089,6 +1089,45 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       metadata: entry,
     });
   }
+  async #commitHelper(
+    entry: SessionMetadata,
+    helper: Omit<HelperSummary, "revision">,
+  ): Promise<void> {
+    const saved = this.storage.read(entry.id), previous = saved?.helper;
+    const same = previous !== undefined &&
+      previous.state === helper.state &&
+      previous.toolCount === helper.toolCount &&
+      previous.current?.name === helper.current?.name &&
+      previous.current?.title === helper.current?.title &&
+      previous.current?.startedAt === helper.current?.startedAt &&
+      previous.time?.start === helper.time?.start &&
+      previous.time?.end === helper.time?.end;
+    const metadataSame = saved && ([
+      "id",
+      "parentID",
+      "directory",
+      "projectID",
+      "title",
+      "timeCreated",
+      "timeUpdated",
+      "archived",
+    ] as const).every((key) => saved.metadata[key] === entry[key]);
+    // Revalidation is not a semantic helper change. Keep scan bookkeeping
+    // private, while still publishing genuinely changed scalar metadata.
+    if (same && metadataSame) return;
+    await this.#commit(entry, {
+      summary: {
+        ...(saved?.summary ?? { state: "digesting" }),
+        revision: (saved?.summary.revision ?? 0) + 1,
+      },
+      helper: {
+        ...helper,
+        revision: (previous?.revision ?? 0) + (same ? 0 : 1),
+      },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    });
+  }
   async step(
     job: DigestJob,
     budget: DigestBudget,
@@ -1267,10 +1306,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       "cost",
     ];
     const numeric = paths.map((path, i) =>
-      `CASE WHEN count(json_extract(scalar,'$.usage.${path}'))=count(*) THEN COALESCE(sum(json_extract(scalar,'$.usage.${path}')),0) END AS v${i}`
+      `sum(json_extract(scalar,'$.usage.${path}')) AS v${i}`
     ).join(",");
     const row = this.storage.sql.prepare(
-      `SELECT count(*) AS calls,${numeric},min(json_extract(scalar,'$.usage.time.start')) AS start,CASE WHEN sum(json_extract(scalar,'$.usage.completed')=0)>0 THEN NULL ELSE max(json_extract(scalar,'$.usage.time.end')) END AS end,CASE WHEN count(json_extract(scalar,'$.usage.tokens.input')+json_extract(scalar,'$.usage.tokens.cache.read')+json_extract(scalar,'$.usage.tokens.cache.write'))=count(*) THEN COALESCE(max(json_extract(scalar,'$.usage.tokens.input')+json_extract(scalar,'$.usage.tokens.cache.read')+json_extract(scalar,'$.usage.tokens.cache.write')),0) END AS peak FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ${
+      `SELECT count(*) AS calls,${numeric},min(json_extract(scalar,'$.usage.time.start')) AS start,CASE WHEN sum(json_extract(scalar,'$.usage.completed')=0)>0 THEN NULL ELSE max(json_extract(scalar,'$.usage.time.end')) END AS end,max(json_extract(scalar,'$.usage.tokens.input')+json_extract(scalar,'$.usage.tokens.cache.read')+json_extract(scalar,'$.usage.tokens.cache.write')) AS peak FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ${
         turn === undefined ? "" : "AND turn_id=?"
       }`,
     ).get(...(turn === undefined ? [id] : [id, turn]))!;
@@ -1325,7 +1364,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     signal: AbortSignal,
     turn?: string,
   ): Promise<UsageLedger> {
-    const ledger = new UsageLedger(id);
+    const ledger = new UsageLedger(id, [], "reported");
     for (const row of await this.#stored(id, signal, turn)) {
       if (row.usage) ledger.upsert(row.usage);
     }
@@ -1440,20 +1479,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     // Stock V2 has no per-session scalar helper API. Do not inflate body pages
     // when the source-proven scalar reader is unavailable.
     if (!headers || !aggregates) {
-      const saved = this.storage.read(job.sessionID);
       this.#helpers.delete(job.sessionID);
-      await this.#commit(metadata(raw), {
-        summary: {
-          ...(saved?.summary ?? { state: "digesting" }),
-          revision: (saved?.summary.revision ?? 0) + 1,
-        },
-        helper: {
-          state: "unavailable",
-          revision: (saved?.helper?.revision ?? 0) + 1,
-          toolCount: null,
-        },
-        turns: { upsert: {}, remove: [] },
-        deleted: null,
+      await this.#commitHelper(metadata(raw), {
+        state: "unavailable",
+        toolCount: null,
       });
       return;
     }
@@ -1500,41 +1529,31 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         "SELECT json_extract(scalar,'$.current') AS current FROM opcv2_transcript_helper WHERE session_id=? AND json_type(scalar,'$.current')='object' ORDER BY json_extract(scalar,'$.current.startedAt') DESC,message_id DESC LIMIT 1",
       ).get(job.sessionID),
       tool = last ? record(JSON.parse(String(last.current))) : undefined;
-    const saved = this.storage.read(job.sessionID),
-      helper: HelperSummary = {
-        state: "ready",
-        revision: (saved?.helper?.revision ?? 0) + 1,
-        toolCount: count,
-        ...(tool
-          ? {
-            current: {
-              name: sharedToolName(text(tool.name) ?? ""),
-              title: text(tool.title),
-              startedAt: typeof tool.startedAt === "number"
-                ? tool.startedAt
-                : undefined,
-            },
-          }
+    const helper: Omit<HelperSummary, "revision"> = {
+      state: "ready",
+      toolCount: count,
+      ...(tool
+        ? {
+          current: {
+            name: sharedToolName(text(tool.name) ?? ""),
+            title: text(tool.title),
+            startedAt: typeof tool.startedAt === "number"
+              ? tool.startedAt
+              : undefined,
+          },
+        }
+        : {}),
+      time: {
+        start: millis(raw.time.created),
+        ...(raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy)
+          ? { end: millis(raw.time.idle) }
           : {}),
-        time: {
-          start: millis(raw.time.created),
-          ...(raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy)
-            ? { end: millis(raw.time.idle) }
-            : {}),
-        },
-      };
+      },
+    };
     this.#helpers.delete(job.sessionID);
     this.#helperDirty.delete(job.sessionID);
     this.#helperValidated.add(job.sessionID);
-    await this.#commit(metadata(raw), {
-      summary: {
-        ...(saved?.summary ?? { state: "digesting" }),
-        revision: (saved?.summary.revision ?? 0) + 1,
-      },
-      helper,
-      turns: { upsert: {}, remove: [] },
-      deleted: null,
-    });
+    await this.#commitHelper(metadata(raw), helper);
     return;
   }
   async deleted(

@@ -24,6 +24,12 @@ for (
     { name: "empty session", replies: [], known: false },
     { name: "all unknown replies", replies: [{}, {}], known: false },
     {
+      name: "reported nonzero cost among unknown replies",
+      replies: [{}, { cost: 2, tokens: zero }],
+      known: true,
+      nativeCost: 2,
+    },
+    {
       name: "reported zero cost among unknown replies",
       replies: [{}, { cost: 0 }],
       known: true,
@@ -46,7 +52,10 @@ for (
     for (const migration of opencodeV2DigestMigrations.migrations) {
       db.exec(await Deno.readTextFile(migration.sql));
     }
-    const rows = example.replies.map((usage, index) => ({
+    const rows: Record<string, unknown>[] = example.replies.map((
+      usage,
+      index,
+    ) => ({
       id: `msg_${index}`,
       type: "assistant",
       time: { created: 1, completed: 2 },
@@ -54,6 +63,14 @@ for (
       content: [],
       ...usage,
     }));
+    if (rows.length) {
+      rows.push({
+        id: "user",
+        type: "user",
+        text: "One turn",
+        time: { created: 0 },
+      });
+    }
     const nativeCost = example.nativeCost ?? 0;
     const api = {
       session: {
@@ -111,12 +128,30 @@ for (
       assert(total);
       assertEquals(total.cost, example.known ? nativeCost : null);
       assertEquals(total.tokens, example.known ? zero : unknown);
+      const detail = await sink.detail(
+        "opcv2-ses_usage",
+        "user",
+        new AbortController().signal,
+      );
+      assertEquals(detail.summary.calls, example.replies.length);
+      assertEquals(
+        detail.summary.cost,
+        example.replies.some((reply) => "cost" in reply)
+          ? example.replies.reduce(
+            (sum, reply) => sum + ("cost" in reply ? reply.cost as number : 0),
+            0,
+          )
+          : null,
+      );
+      assertEquals(
+        detail.summary.tokens,
+        example.replies.some((reply) => "tokens" in reply) ? zero : unknown,
+      );
+      assertEquals(
+        deltas.at(-1)?.turns.upsert.user,
+        example.replies.length ? detail.summary : undefined,
+      );
       if (example.name === "all unknown replies") {
-        const detail = await sink.detail(
-          "opcv2-ses_usage",
-          "msg_0",
-          new AbortController().signal,
-        );
         assertEquals(detail.calls[0].cost, null);
         assertEquals(detail.calls[0].tokens, unknown);
       }

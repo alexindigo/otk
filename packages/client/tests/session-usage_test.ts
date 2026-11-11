@@ -218,6 +218,50 @@ Deno.test("index-bound turn detail accepts honest reported zero and keyed remova
     owner.stop();
   }
 });
+Deno.test("reported-constituent detail retains its aggregation through live removal and empty turns", async () => {
+  const missing = {
+    ...header(0, true),
+    id: "unknown",
+    cost: null,
+    tokens: {
+      input: null,
+      output: null,
+      reasoning: null,
+      cache: { read: null, write: null },
+    },
+  };
+  const connection = () =>
+    ({
+      supports: () => true,
+      messages: policy,
+      rpc: {
+        call: () =>
+          Promise.resolve(
+            snapshot(
+              new UsageLedger("s", [missing, header(0, true)], "reported"),
+            ),
+          ),
+      },
+    }) as unknown as SidecarConnection;
+  const owner = createSessionUsage(connection);
+  const release = owner.retain(target);
+  try {
+    await owner.load(target);
+    assertEquals(owner.get(target)?.aggregation, "reported");
+    assertEquals(owner.get(target)?.summary.cost, 0);
+    for (const messageID of ["step", "unknown"]) {
+      owner.receive("local", {
+        t: "content",
+        sessionID: "s",
+        event: { op: "message.remove", messageID },
+      });
+      assertEquals(owner.get(target)?.summary.cost, null);
+    }
+  } finally {
+    release();
+    owner.stop();
+  }
+});
 Deno.test("a known tombstone cannot acquire or load usage even before the old view unmounts", async () => {
   const entry = shellEntry("s");
   entry.deleted = { at: 1, how: "provider" };

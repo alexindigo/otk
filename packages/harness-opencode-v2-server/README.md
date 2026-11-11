@@ -188,9 +188,15 @@ events refresh existing demand, never acquire an unviewed helper. The last
 parent viewer releases that read and fences late publication. Split parts and
 legacy inline content contribute the same scalar aggregate; without a proven SQL
 source helper summaries are explicitly unavailable. Usage API fallback extracts
-and releases bounded pages. Reported usage remains nullable; native session
-totals include internal charges and need not equal reply ledgers. This
-contribution does not enumerate projects or session lists; V1 owns those.
+and releases bounded pages. Session and turn usage is known once any constituent
+reports usage, including zero; unreported constituents do not erase reported
+values. With no reports it stays null, even if native session totals are zero.
+Individual unreported categories remain null. Native session totals include
+internal charges and need not equal reply ledgers. This contribution does not
+enumerate projects or session lists; V1 owns those. V2 detail carries the
+neutral `aggregation:"reported"` marker through worker chunks to the shared live
+ledger. Omitted markers preserve existing V1 complete-contributor accounting and
+empty-ledger behavior.
 
 Q6 prefetch reads only the next older page under the existing optional/idle
 admission. Its adapter-wide memory-only FIFO charges complete encoded keys and
