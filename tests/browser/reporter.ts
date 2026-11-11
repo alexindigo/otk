@@ -11,7 +11,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { outcome } from "../../scripts/tests/report.ts";
-import { validateCollection } from "../../scripts/tests/selection.ts";
+import {
+  validateCollection,
+  validateSmoke,
+} from "../../scripts/tests/selection.ts";
 import quarantine from "./quarantine.json" with { type: "json" };
 
 export default class Outcomes implements Reporter {
@@ -49,20 +52,12 @@ export default class Outcomes implements Reporter {
       }
       if (process.env.OTK_TEST_STANDARD_COLLECTION === "1") {
         validateCollection(this.tests.map((t) => t.tags));
-        for (const project of config.projects) {
+        for (const project of suite.suites.map((suite) => suite.project()!)) {
           const smoke = this.tests.filter((t) =>
             t.parent.project()!.name === project.name &&
             t.tags.includes("@smoke")
           );
-          const ids = smoke.flatMap((t) =>
-            t.tags.filter((tag) => tag.startsWith("@smoke."))
-          );
-          if (
-            smoke.length !== 4 || ids.length !== 4 ||
-            ["native-prompt", "attention", "navigation", "preferences"].some((
-              id,
-            ) => !ids.includes(`@smoke.${id}`))
-          ) throw new Error(`Incomplete smoke contract: ${project.name}`);
+          validateSmoke(smoke.map((test) => test.tags), project.name);
         }
       }
     } catch (error) {

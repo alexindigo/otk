@@ -101,3 +101,15 @@ export function validateCollection(
     }
   }
 }
+/** Required smoke contracts remain exact; additional smoke journeys also run. */
+export function validateSmoke(tags: string[][], project: string) {
+  const ids = tags.filter((row) => row.includes("@smoke")).flatMap((row) =>
+    row.filter((tag) => tag.startsWith("@smoke."))
+  );
+  if (
+    ids.length !== 4 ||
+    ["native-prompt", "attention", "navigation", "preferences"].some((id) =>
+      !ids.includes(`@smoke.${id}`)
+    )
+  ) throw new Error(`Incomplete smoke contract: ${project}`);
+}
