@@ -296,9 +296,9 @@ export class DigestScheduler {
     this.#sleepIdle();
     this.#wake();
   }
-  #sleepIdle(): void {
+  #sleepIdle(now = this.#now()): void {
     if (this.#idleWait || this.#controller.signal.aborted) return;
-    const remaining = this.#idleUntil - this.#now();
+    const remaining = this.#idleUntil - now;
     if (remaining <= 0) return;
     const controller = this.#idleWait = new AbortController();
     void this.resources.sleep(
@@ -622,8 +622,8 @@ export class DigestScheduler {
     });
     return result.promise;
   }
-  #sleepDuty(): void {
-    const remaining = this.#dutyUntil - this.#now();
+  #sleepDuty(now = this.#now()): void {
+    const remaining = this.#dutyUntil - now;
     if (this.#dutyWait || this.#controller.signal.aborted || remaining <= 0) {
       return;
     }
@@ -644,19 +644,22 @@ export class DigestScheduler {
   }
   #eligible(priority: number, signal?: AbortSignal, optional = false): boolean {
     if (signal?.aborted) return true; // Canceled continuations still join their cleanup.
+    // A gate and its wake timer share one observation. Re-reading the clock
+    // while arming can cross the deadline and park work with no future wake.
+    const now = this.#now();
     if (optional) {
       if ((!this.#viewers && !this.policy.background) || this.#pendingPages) {
         return false;
       }
-      if (this.#now() < this.#idleUntil) {
-        this.#sleepIdle();
+      if (now < this.#idleUntil) {
+        this.#sleepIdle(now);
         return false;
       }
     }
     if (priority === rank.interactive) return true;
     if (this.#controller.signal.aborted) return false;
-    if (this.#dutyUntil > this.#now()) {
-      this.#sleepDuty();
+    if (this.#dutyUntil > now) {
+      this.#sleepDuty(now);
       return false;
     }
     return !this.#interactive.size &&
