@@ -84,11 +84,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       const entry = this.#index.getMetadata(id);
       if (entry) this.#upsert(entry, state);
       if (this.transcript.buffers.subscribed(id)) {
-        this.#sink?.content(id, {
-          op: "session.error",
-          error: sessionErrorMessage(state),
-          errorState: state,
-        });
+        this.transcript.error(id, state);
       }
     },
     (id) =>

@@ -7,6 +7,7 @@ import {
   isRealPrompt,
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
+  sessionErrorMessage,
 } from "@otk/protocol";
 import type {
   ContentOp,
@@ -296,6 +297,14 @@ export class Transcript {
       }
       this.replay.publish(id, event);
     }
+  }
+  /** Diagnostics share the transcript clock and page catchup with body events. */
+  error(id: string, state: import("@otk/protocol").SessionErrorState): void {
+    this.#publish(id, {
+      op: "session.error",
+      errorState: state,
+      error: sessionErrorMessage(state),
+    });
   }
   #decorateAgent(message: Message, id: string): Message {
     const directory = this.#baselines.get(id)?.raw.location.directory;
