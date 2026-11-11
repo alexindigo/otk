@@ -3,13 +3,14 @@ import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { staticResponse } from "../../core/mod.ts";
 import { cfg } from "./config.ts";
-import { FakeLlm } from "./fake-llm.ts";
+import { browserProvider, browserScenarioPath } from "./browser-native.ts";
 import { freePort } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
-import { SCALE, SessionScale } from "./session-scale.ts";
+import { SCALE } from "./session-scale.ts";
+import { createScale, scaleDiscovery } from "./scale-native.ts";
 import { consumerAssets } from "./consumer-builds.ts";
 import { MESSAGE_CASES, PAYLOAD_BYTES } from "./message-scale-cases.ts";
-import { nativeBinary, nativeVersion } from "./native.ts";
+import { nativeBinary, nativeKind, nativeVersion } from "./native.ts";
 import { WsClient } from "./ws-client.ts";
 import { scaleReadiness } from "./scale-readiness.ts";
 import { scaleNativeEvidence } from "./scale-evidence.ts";
@@ -19,8 +20,8 @@ import type { ControlRequest, Profile, TestLease } from "./fixture-control.ts";
 
 /** Stock scale population plus the unchanged independent public UI consumer. */
 export async function nativeScaleScenario(profile: Profile) {
-  const root = await tempDir("scale-"), fake = new FakeLlm();
-  const native = await SessionScale.create(join(root, "fixture"), root, fake, {
+  const root = await tempDir("scale-"), fake = browserProvider();
+  const native = await createScale(join(root, "fixture"), root, fake, {
     messages: true,
     ...(profile === "contract-scale-heap" ? { payload: true } : {}),
   });
@@ -39,11 +40,16 @@ export async function nativeScaleScenario(profile: Profile) {
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const uri = new URL(request.url);
-      if (uri.pathname === `/session/${a.nativeID}/message`) {
+      if (
+        browserScenarioPath({ kind: nativeKind }, uri.pathname) ===
+          `/session/${a.nativeID}/message`
+      ) {
         const row = {
           at: performance.now(),
-          before: uri.searchParams.has("before"),
-          cursor: uri.searchParams.get("before"),
+          before: uri.searchParams.has("before") ||
+            uri.searchParams.has("cursor"),
+          cursor: uri.searchParams.get("before") ??
+            uri.searchParams.get("cursor"),
           ended: undefined as number | undefined,
         };
         reads.push(row);
@@ -79,6 +85,7 @@ export async function nativeScaleScenario(profile: Profile) {
     ? native.url
     : `http://127.0.0.1:${proxy.addr.port}`;
   config.harness.db = native.db;
+  await scaleDiscovery(native, config.harness.url);
   config.messages.coolms = 1000;
   const serving = servingProbe(false);
   resources().defer("scale serving measurements", () => serving.stop());

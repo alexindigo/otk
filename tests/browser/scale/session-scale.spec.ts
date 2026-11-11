@@ -225,7 +225,7 @@ test(
       const live = await state.native<{ id: string }>("/session", "POST", {
           title: "Scale interactive outcome",
         }),
-        liveID = `opcv1-${live.id}`;
+        liveID = `${selected.id.split("-")[0]}-${live.id}`;
       await page.locator(search).fill("Scale interactive outcome");
       await page.locator(`[data-session="${liveID}"]`).click();
       await expect(page.locator("textarea[name=prompt]")).toBeVisible();
@@ -283,7 +283,7 @@ test(
           project: "secondary",
           body: { title },
         });
-        return { native: s.id, id: `opcv1-${s.id}` };
+        return { native: s.id, id: `${selected.id.split("-")[0]}-${s.id}` };
       };
       const begin = (s: { native: string }, text: string) =>
         state.controller.call("nativeRequest", {
@@ -473,7 +473,7 @@ test(
       }
       await expect(
         page.locator(
-          "[data-session=opcv1-ses_scale000001] .otk-session-digest-state",
+          `[data-session="${sessions[1].id}"] .otk-session-digest-state`,
         ),
       ).toHaveText("Usage unavailable");
       await page.locator(search).fill(sessions[250].title);
@@ -560,7 +560,7 @@ test(
       expect(Math.abs(edited.offset - before.offset)).toBeLessThan(1);
       await page.locator(search).fill("Scale session 0005");
       await expect(page.locator(".otk-session-row")).toHaveCount(2);
-      await expect(page.locator("[data-session=opcv1-ses_scale000004]"))
+      await expect(page.locator(`[data-session="${sessions[4].id}"]`))
         .toBeAttached();
       for (const width of [280, 480]) {
         await state.product("layout.patch", { rightWidth: width });

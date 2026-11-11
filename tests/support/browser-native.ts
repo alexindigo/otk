@@ -549,7 +549,10 @@ export class BrowserV2Native implements BrowserNative {
         : (await api.message.list({
           sessionID,
           limit: Number(uri.searchParams.get("limit") ?? 200),
-          order: "asc",
+          order: uri.searchParams.get("order") === "desc" ? "desc" : "asc",
+          ...(uri.searchParams.get("type") === "assistant"
+            ? { type: "assistant" as const }
+            : {}),
         })).data;
       let agent: unknown, selectedModel: unknown;
       return (Array.isArray(result)

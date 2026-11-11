@@ -260,7 +260,11 @@ export class V2NativeDb {
     limit: number,
   ): SessionMetadata[] {
     const rows = this.db.prepare(
-      `SELECT ${this.#projection()} FROM session_v2 s WHERE s.directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (s.time_updated,s.id)<(?,?)) ORDER BY s.time_updated DESC,s.id DESC LIMIT ?`,
+      `SELECT ${this.#projection()} FROM session_v2 s WHERE s.directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (${
+        sessionRecencySql(this.columns, this.messageClocks)
+      },s.id)<(?,?)) ORDER BY ${
+        sessionRecencySql(this.columns, this.messageClocks)
+      } DESC,s.id DESC LIMIT ?`,
     ).all(
       JSON.stringify(directories),
       before?.updated ?? null,

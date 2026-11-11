@@ -6,13 +6,15 @@ import { cfg } from "./config.ts";
 import { FakeLlm } from "./fake-llm.ts";
 import { freePort } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
-import { SCALE, SessionScale } from "./session-scale.ts";
+import { SCALE } from "./session-scale.ts";
+import { createScale, scaleDiscovery } from "./scale-native.ts";
 import { servingProbe } from "./serving-probe.ts";
 
 /** Reuse the characterized stock-native population, not a second scale generator. */
 export async function requestScaleFixture() {
   const root = await tempDir("rs-"), fake = new FakeLlm();
-  const native = await SessionScale.create(join(root, "fixture"), root, fake);
+  const native = await createScale(join(root, "fixture"), root, fake);
+  await scaleDiscovery(native);
   assertEquals(native.manifest.counts, SCALE);
   const config = cfg();
   config.server.port = freePort();

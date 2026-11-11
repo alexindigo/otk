@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
+import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import type { Harness } from "@otk/harness";
 interface SocketEvent {
   method: string;
@@ -22,14 +23,21 @@ export interface CatalogWatchObservation {
  * The synchronous watch acquisition is characterized in the adapter; no owner,
  * cache, response or cancellation behavior is substituted by this observer. */
 export function observeCatalogWatches(backend: Harness) {
-  assert(backend instanceof OpencodeV1Adapter);
+  assert(
+    backend instanceof OpencodeV1Adapter ||
+      backend instanceof OpencodeV2ServerAdapter,
+  );
   const port = backend.capabilities.catalogs;
   assert(port);
   const records: CatalogWatchObservation[] = [];
-  const originalWatch = port.watch, originalAcquire = backend.catalogs.acquire;
+  const catalogs = backend instanceof OpencodeV2ServerAdapter
+    ? backend.catalogs?.catalogs
+    : backend.catalogs;
+  assert(catalogs);
+  const originalWatch = port.watch, originalAcquire = catalogs.acquire;
   let entering: CatalogWatchObservation | undefined;
-  backend.catalogs.acquire = (directory) => {
-    const lease = originalAcquire.call(backend.catalogs, directory),
+  catalogs.acquire = (directory) => {
+    const lease = originalAcquire.call(catalogs, directory),
       observation = entering;
     if (!observation) return lease;
     assertEquals(directory, observation.directory);
@@ -80,7 +88,7 @@ export function observeCatalogWatches(backend: Harness) {
     records,
     restore() {
       port.watch = originalWatch;
-      backend.catalogs.acquire = originalAcquire;
+      catalogs.acquire = originalAcquire;
     },
   };
 }

@@ -19,6 +19,7 @@ import {
   variantOptions,
 } from "./session-scale.ts";
 import { scaleParts, scaleRole } from "./message-scale-cases.ts";
+import { BrowserV2Native } from "./browser-native.ts";
 
 interface Recipe {
   schema: 1;
@@ -51,6 +52,18 @@ export class V2SessionScale {
   }
   get url() {
     return this.native.url;
+  }
+  get port() {
+    return this.native.proxy.port;
+  }
+  get log() {
+    return this.native.log;
+  }
+  request<T>(
+    path: string,
+    options: { method?: string; body?: unknown; directory?: string } = {},
+  ): Promise<T> {
+    return new BrowserV2Native(this.native).request<T>(path, options);
   }
   get manifest(): ScaleManifest {
     return {
@@ -245,6 +258,22 @@ export class V2SessionScale {
     const background = join(native.root, "background");
     await Deno.mkdir(background);
     const clock = 1700000000000, options = variantOptions(variant);
+    const counts = Array.from(
+      { length: SCALE.sessions },
+      (_, index) =>
+        index === 0
+          ? 1525
+          : index < 251
+          ? 102 + (index <= 180 ? 1 : 0)
+          : index % 3 === 0
+          ? 2
+          : 0,
+    );
+    const offsets: number[] = [];
+    counts.reduce((offset, count, index) => {
+      offsets[index] = offset;
+      return offset + count;
+    }, 0);
     const importSession = async (index: number) => {
       const nativeID = `ses_scale${String(index).padStart(6, "0")}`;
       const directory = index < SCALE.projectSessions
@@ -276,9 +305,7 @@ export class V2SessionScale {
       const nativeTotal = { cost: 0, tokens: [0, 0, 0, 0, 0] };
       let turn = "";
       const messages = Array.from({ length: count }, (_, rank) => {
-        const id = `msg_scale${String(index).padStart(6, "0")}${
-          String(rank).padStart(6, "0")
-        }`;
+        const id = `msg_scale${String(offsets[index] + rank).padStart(9, "0")}`;
         const time = clock + rank * 10;
         const parts = Array.from({
           length: index === 0 ? 3 + (rank < 1097 ? 1 : 0) : 1,
