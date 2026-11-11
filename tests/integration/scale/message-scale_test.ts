@@ -308,9 +308,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   );
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 20);
   const messageID = (rank: number) =>
-    `msg_scale${
-      String(rank).padStart(native instanceof V2SessionScale ? 12 : 9, "0")
-    }`;
+    `msg_scale${String(rank).padStart(9, "0")}`;
   resource.viewport({ first: messageID(1520), last: messageID(1524) });
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 30);
   const begun = performance.now();
