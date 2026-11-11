@@ -19,7 +19,9 @@ test("local policy disable settles behind sessions.seen while stock native readi
         ? {
           harness: { url: `http://127.0.0.1:${proxy.port}` },
         }
-        : {},
+        // Exercise native I/O waiting, not the source-proven SQL identity path,
+        // which can correctly complete even while the HTTP service is frozen.
+        : { harness: { db: `${f.oc.root}/unavailable-native.db` } },
     );
     client = new WsClient(server.url);
     await client.connect();
