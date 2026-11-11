@@ -154,7 +154,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       0,
       Math.min(top, Math.max(0, viewport.scrollHeight - viewport.clientHeight)),
     );
-  const bottom = () =>
+  // Only a consumer that declares a live tail (a transcript) can be followed.
+  // A paged list's end is its oldest acquired row: reaching it is a position.
+  let tail = false;
+  const atTail = () =>
+    tail &&
     viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24;
   const notify = () => {
     for (const change of listeners) change();
@@ -302,8 +306,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     const changed = externalPosition();
     position = viewport.scrollTop;
     if (gesture || dragging) {
-      if (dragging) mode = bottom() ? "follow" : "anchored";
-      else if (gesture === "toward" && (mode === "follow" || bottom())) {
+      if (dragging) mode = atTail() ? "follow" : "anchored";
+      else if (gesture === "toward" && (mode === "follow" || atTail())) {
         mode = "follow";
       }
       if (!geometryPending) capture();
@@ -322,7 +326,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     gesture = direction;
     gestureMoved = false;
     if (gesture === "away") away();
-    else if (bottom()) mode = "follow";
+    else if (atTail()) mode = "follow";
     // An input intent at a native boundary cannot produce a scrollend event.
     // Settle that intent here rather than indefinitely blocking geometry work.
     if (
@@ -371,7 +375,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     pressed = false;
     if (dragging) {
       dragging = false;
-      mode = bottom() ? "follow" : "anchored";
+      mode = atTail() ? "follow" : "anchored";
       if (!geometryPending) capture();
       schedule();
     }
@@ -428,6 +432,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     following: () => mode === "follow",
     follow() {
       cancelNavigation();
+      tail = true;
       mode = "follow";
       gesture = undefined;
       dragging = false;

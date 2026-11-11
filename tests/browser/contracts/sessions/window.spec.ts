@@ -11,7 +11,8 @@ async function scroll(page: Page, top: number | "end") {
   await pane.hover();
   // Acquiring another page can extend the physical end. Keep requesting the
   // original target through real wheel input instead of assuming full catalog
-  // geometry was present before the first gesture.
+  // geometry was present before the first gesture. Each gesture at the end
+  // demands one more page; the list never follows it on its own.
   await expect.poll(async () => {
     const delta = await pane.evaluate(
       (e, top) =>
@@ -31,7 +32,7 @@ async function scroll(page: Page, top: number | "end") {
           ),
       top,
     );
-  }).toBeLessThan(1);
+  }, { intervals: [0, 16, 32] }).toBeLessThan(1);
 }
 const anchor = (page: Page) =>
   page.locator(viewport).evaluate((v) => {
