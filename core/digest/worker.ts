@@ -668,6 +668,9 @@ async function start(
             sqliteRetry(
               async () => {
                 try {
+                  // Accepted deletion retires queued work as well as source
+                  // metadata. A tombstone cannot require native I/O or retry.
+                  if (store!.summary([job.sessionID])[0]?.deleted_at) return;
                   if (
                     inventoryRevision > inventoryComplete ||
                     !store!.summary([job.sessionID]).length
@@ -712,8 +715,10 @@ async function start(
                 } catch (error) {
                   signal.throwIfAborted();
                   if (sqliteBusy(error)) throw error;
-                  nativeUnavailable = true;
                   const row = store!.summary([job.sessionID])[0];
+                  // Deletion may commit while this job is waiting for native I/O.
+                  if (row?.deleted_at) return;
+                  nativeUnavailable = true;
                   if (row) {
                     const saved = snapshot(row);
                     const delta: DigestDelta = {
