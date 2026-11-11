@@ -42,8 +42,9 @@ Deno.test("provider context shares user bubbles without becoming an actionable p
     );
     assertEquals(frames.prompt, false);
     assertEquals(layout.prompt, false);
-    assertEquals(Reflect.get(frames, "userBubble"), true);
-    assertEquals(Reflect.get(layout, "userBubble"), true);
+    const injected = ["skill", "system", "synthetic"].includes(origin);
+    assertEquals(Reflect.get(frames, "userBubble"), injected);
+    assertEquals(Reflect.get(layout, "userBubble"), injected);
     const markers = () => ({ frame: "transcript" as const });
     assertEquals(
       Reflect.get(messageFrames(contextual, markers), "userBubble"),

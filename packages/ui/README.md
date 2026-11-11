@@ -193,10 +193,10 @@ part kinds. Part renderers receive the client projection's optional `pending`
 input; the summary reply retains its normal rendering.
 
 Shared message framing separates `userBubble` presentation from `prompt` action
-eligibility. Visible provider-context content uses the same user bubble as
-ordinary user text, without becoming editable, recallable or a Timeline prompt.
-Transcript markers remain outside bubbles; assistant content retains its reply
-presentation.
+eligibility. Injected skill/system/synthetic context uses the same user bubble
+as ordinary user text, without becoming editable, recallable or a Timeline
+prompt. Compaction summaries and transcript markers remain outside bubbles;
+assistant content retains its reply presentation.
 
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its

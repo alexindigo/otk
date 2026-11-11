@@ -21,11 +21,13 @@ type FramedMessage = Pick<Message, "id" | "role" | "parts"> & {
 /** Provider context is visible content, never a user prompt or prompt action. */
 export function messageLayoutRole(
   message: Pick<FramedMessage, "role" | "origin">,
-): "user" | "assistant" | "context" {
+): "user" | "assistant" | "context" | "injected" {
   return message.role === "assistant"
     ? "assistant"
     : message.origin === undefined
     ? "user"
+    : ["skill", "system", "synthetic"].includes(message.origin)
+    ? "injected"
     : "context";
 }
 /** Feature-owned framing is separate from work grouping; mixed messages keep
@@ -61,7 +63,8 @@ export function messageFrames(
     copyable ||= value.copyable ?? !!value.text;
     return value;
   });
-  const userBubble = message.role === "user" &&
+  const role = messageLayoutRole(message);
+  const userBubble = (role === "user" || role === "injected") &&
     frames.some((frame) => !frame.transcript);
   return {
     copyable,
@@ -71,7 +74,7 @@ export function messageFrames(
       parts: [],
       transcript: false,
     }],
-    prompt: messageLayoutRole(message) === "user" && userBubble,
+    prompt: role === "user" && userBubble,
   };
 }
 /** Layout groups follow feature contributions, never a central part-kind list. */

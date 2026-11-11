@@ -138,7 +138,7 @@ export function createMessageLayout() {
           )
         );
         order = input.map((segment) => segment.messageID);
-        const userBubble = (role === "user" || role === "context") &&
+        const userBubble = (role === "user" || role === "injected") &&
           next.some((frame) => !frame.transcript);
         state = {
           frames: next,
