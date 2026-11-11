@@ -128,6 +128,10 @@ export class OpencodeV2DigestSink implements DigestSink {
   #closed = false;
   #lifetime = new AbortController();
   #source?: string;
+  #registration?: string;
+  #projects?: Awaited<
+    ReturnType<import("./client.ts").OpenCodeClient["project"]["list"]>
+  >;
   #projectDirectories = new Set<string>();
   #activeDirectories = new Set<string>();
   #discoveryRevision = 0;
@@ -327,6 +331,7 @@ export class OpencodeV2DigestSink implements DigestSink {
   }
   async #prepare(
     signal: AbortSignal,
+    refreshProjects = false,
   ): Promise<
     {
       client: V2Client;
@@ -337,6 +342,18 @@ export class OpencodeV2DigestSink implements DigestSink {
   > {
     const connection = this.#connection;
     this.#check(signal);
+    // Proof belongs to a service/DB generation, not each bounded SQL chunk.
+    // Registration replacement and the existing inode/connection fences retire it.
+    const registration = await this.#io(
+      signal,
+      () => Deno.readTextFile(this.config.serviceFile),
+    );
+    this.#check(signal, connection);
+    if (
+      !refreshProjects && this.#source && this.#client && this.#native &&
+      this.#projects && registration === this.#registration &&
+      this.#native.prove(this.#projects)
+    ) return { client: this.#client, projects: this.#projects };
     const service = await this.#io(
       signal,
       () => discoverV2(this.config.serviceFile, signal),
@@ -376,6 +393,15 @@ export class OpencodeV2DigestSink implements DigestSink {
       this.#native.close();
       this.#native = undefined;
     }
+    if (
+      registration !== await this.#io(
+        signal,
+        () => Deno.readTextFile(this.config.serviceFile),
+      )
+    ) throw new Error("V2 service registration changed during source proof");
+    this.#check(signal, connection);
+    this.#registration = registration;
+    this.#projects = projects;
     return { client, projects };
   }
   async #yield(signal: AbortSignal): Promise<void> {
@@ -489,7 +515,7 @@ export class OpencodeV2DigestSink implements DigestSink {
     directory?: string,
   ): Promise<{ projects: ProjectSeed[]; hints?: string[] }> {
     const connection = this.#connection,
-      { client, projects: reported } = await this.#prepare(signal);
+      { client, projects: reported } = await this.#prepare(signal, true);
     const inventory: NativeProjectTopology[] = [];
     for (const project of reported) {
       this.#check(signal, connection);
@@ -747,6 +773,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   readonly messages: Messages;
   readonly transcript: TranscriptReads;
   #provenNative?: V2NativeDb;
+  readonly #sessionProofs = new Map<
+    string,
+    { native: V2NativeDb; version: number; raw: NativeSession }
+  >();
   get #native(): DatabaseSync | undefined {
     const native = this.source.native();
     return native === this.#provenNative ? native?.db : undefined;
@@ -848,11 +878,23 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   ): Promise<NativeSession> {
     if (this.#closed) throw new Error("V2 transcript digest is stopped");
     const connection = this.#connection;
-    const { client, native } = await this.source.prepare(signal),
-      raw = await client.read(
-        (api) => api.session.get({ sessionID: ids.decode(id) }, { signal }),
-        signal,
-      );
+    const { client, native } = await this.source.prepare(signal);
+    const version = native?.dataVersion();
+    const cached = this.#sessionProofs.get(id);
+    if (native && cached?.native === native && cached.version === version) {
+      this.source.check(signal);
+      if (connection !== this.#connection) {
+        throw new Error("V2 transcript source changed");
+      }
+      this.#client = client;
+      this.#provenNative = native;
+      this.#source = `sql:${native.identity}:${client.service.pid}`;
+      return cached.raw;
+    }
+    const raw = await client.read(
+      (api) => api.session.get({ sessionID: ids.decode(id) }, { signal }),
+      signal,
+    );
     this.source.check(signal);
     if (connection !== this.#connection) {
       throw new Error("V2 transcript source changed");
@@ -916,17 +958,24 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         this.storage.diagnostic(id, error);
       }
     }
-    return this.#provenNative
-      ? { ...raw, activity: native.facts([id])[0]?.activity }
-      : activity
-      ? await withSessionActivity(client, raw, signal)
-      : raw;
+    if (this.#provenNative) {
+      const proven = { ...raw, activity: native.facts([id])[0]?.activity };
+      if (native.dataVersion() === version) {
+        if (this.#sessionProofs.size >= SCAN_ROWS) {
+          this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
+        }
+        this.#sessionProofs.set(id, { native, version: version!, raw: proven });
+      }
+      return proven;
+    }
+    return activity ? await withSessionActivity(client, raw, signal) : raw;
   }
   connection(value: number): void {
     if (value < this.#connection) return;
     if (value === this.#connection) return;
     this.#connection = value;
     this.#client = undefined;
+    this.#sessionProofs.clear();
     this.#provenNative = undefined;
     this.#deletions.clear();
     this.storage.sql.prepare(
