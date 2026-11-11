@@ -907,17 +907,18 @@ export async function collections456(input: Inputs) {
             } else expect(item.h).toBe(2);
           }
           await panel.locator("textarea").fill("My own output");
+          // V3's approved native field owns its focus paint, not the option row.
           await expect(panel.locator("textarea")).toHaveCSS(
             "outline-style",
-            "none",
+            "solid",
           );
           await expect(panel.locator("[data-question-row]:has(textarea)"))
             .toHaveCSS(
               "outline-style",
-              "solid",
+              "none",
             );
           expect(
-            await panel.locator("[data-question-row]:has(textarea)").evaluate(
+            await panel.locator("textarea").evaluate(
               (el) => {
                 const r = el.getBoundingClientRect(),
                   clip = el.closest(".otk-tabs-panels")!
