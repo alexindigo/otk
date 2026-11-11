@@ -350,7 +350,7 @@ export function request(value: unknown): ControlRequest {
       text(p.path);
       if (
         !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|command|experimental\/tool\/ids)$/
-          .test(p.path)
+          .test(new URL(String(p.path), "http://fixture").pathname)
       ) {
         throw new Error("Native path outside fixture vocabulary");
       }

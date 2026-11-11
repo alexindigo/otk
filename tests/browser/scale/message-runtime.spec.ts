@@ -110,9 +110,9 @@ test.describe("scroll", () => {
         steps.push({ direction, keyboard, before, after, geometry, pins });
         expect(geometry.text.length).toBeGreaterThan(0);
         expect(
-          geometry.text.every((text) =>
-            /^Scale fixture 0\/\d+\/\d+$/.test(text ?? "")
-          ),
+          geometry.text.flatMap((text) => (text ?? "").split("\n")).every((
+            text,
+          ) => /^Scale fixture 0\/\d+\/\d+$/.test(text)),
         ).toBe(true);
         return after;
       };
@@ -251,9 +251,13 @@ test.describe("stream", () => {
       );
       for (let n = 0; n < 1000; n++) {
         await state.release(producer.gate);
-        await expect.poll(() =>
-          page.evaluate<number>("scaleMeasurements.frames.length")
-        ).toBe(n + 1);
+        // Join the actual paint rather than adding the assertion poller's
+        // 100/250ms backoff to every consumer-stepped native update.
+        await page.waitForFunction(
+          `scaleMeasurements.frames.length===${n + 1}`,
+          undefined,
+          { timeout: 5000 },
+        );
       }
       await state.release(producer.gate);
       await expect.poll(() =>
@@ -283,7 +287,7 @@ test.describe("stream", () => {
             info: { id: string; role: string };
             parts: { type: string; text?: string }[];
           }[]
-        >(`/session/${population.a.nativeID}/message`),
+        >(`/session/${population.a.nativeID}/message?limit=1&order=desc&type=assistant`),
         reply = native.filter((m) => m.info.role === "assistant").at(-1);
       expect(reply).toBeTruthy();
       const expected = chunks.join("");

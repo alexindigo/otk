@@ -4,10 +4,11 @@ import { start } from "../../main.ts";
 import { OtkDb } from "@otk/store";
 import { cfg } from "./config.ts";
 import { beta2Migrations } from "./beta1-state.ts";
-import { FakeLlm } from "./fake-llm.ts";
+import { browserProvider } from "./browser-native.ts";
 import { freePort, waitFor } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
-import { SCALE, SessionScale } from "./session-scale.ts";
+import { SCALE } from "./session-scale.ts";
+import { createScale, scaleDiscovery } from "./scale-native.ts";
 import { remainingFiles } from "./remaining-measurements.ts";
 import { observeCatalogWatches } from "./remaining-generations.ts";
 import { servingProbe } from "./serving-probe.ts";
@@ -17,12 +18,13 @@ import { scaleReadiness } from "./scale-readiness.ts";
 import { scaleNativeEvidence } from "./scale-evidence.ts";
 import { sessionFamily, usageCost } from "@otk/client";
 import type { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
+import type { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import type { ControlRequest, Profile, TestLease } from "./fixture-control.ts";
 
 /** One stock population per isolated qualification; no browser transport here. */
 export async function populationScaleScenario(profile: Profile) {
-  const root = await tempDir("population-"), fake = new FakeLlm();
-  const native = await SessionScale.create(
+  const root = await tempDir("population-"), fake = browserProvider();
+  const native = await createScale(
     join(root, "fixture"),
     root,
     fake,
@@ -68,6 +70,7 @@ export async function populationScaleScenario(profile: Profile) {
     ? `http://127.0.0.1:${proxy.addr.port}`
     : native.url;
   config.harness.db = native.db;
+  await scaleDiscovery(native, config.harness.url);
   let files: string[] = [];
   if (profile === "contract-scale-files") {
     files = await remainingFiles(native.directory);
@@ -90,11 +93,16 @@ export async function populationScaleScenario(profile: Profile) {
     db.close();
   }
   const serving = servingProbe(false),
+    pressure: unknown[] = [],
     phases: unknown[] = [],
     sections: unknown[] = [];
   resources().defer("population serving observation", () => serving.stop());
   const app = await start(config, {
     admission: serving.start,
+    pressure: (value) => {
+      pressure.push({ at: performance.now(), ...value });
+      if (pressure.length > 100) pressure.shift();
+    },
     section: (name, ms) => {
       serving.section(name, ms);
       sections.push({ at: performance.now(), name, ms });
@@ -146,7 +154,8 @@ export async function populationScaleScenario(profile: Profile) {
       throw error;
     });
   };
-  const digest = (app.backend as OpencodeV1Adapter).digest!,
+  const digest = (app.backend as OpencodeV1Adapter | OpencodeV2ServerAdapter)
+      .digest!,
     metadata = digest.transcriptMetadata.bind(digest);
   digest.transcriptMetadata = (...args) => {
     const row = {
@@ -264,6 +273,7 @@ export async function populationScaleScenario(profile: Profile) {
             sections,
             nativeReads,
             serving: serving.samples,
+            pressure,
           };
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
