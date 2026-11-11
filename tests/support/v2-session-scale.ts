@@ -299,9 +299,8 @@ export class V2SessionScale {
         tokens: [0, 0, 0, 0, 0],
         turns: {},
       };
-      // V2 Session.Info aggregates are required native facts, independent of
-      // optional assistant usage. Keep unknown call categories in the turn
-      // manifest, but seed the session's reported aggregates explicitly.
+      // Session.Info initializes zero totals even without reported step usage.
+      // Only a reported constituent makes those aggregates known to OTK.
       const nativeTotal = { cost: 0, tokens: [0, 0, 0, 0, 0] };
       let turn = "";
       const messages = Array.from({ length: count }, (_, rank) => {
@@ -390,8 +389,11 @@ export class V2SessionScale {
           time: { created: time, streamed: time + 5, completed: time + 5 },
         };
       });
-      expected.cost = nativeTotal.cost;
-      expected.tokens = [...nativeTotal.tokens];
+      const reported = expected.calls > 0 && index !== 1;
+      expected.cost = reported ? nativeTotal.cost : null;
+      expected.tokens = reported
+        ? [...nativeTotal.tokens]
+        : Array(5).fill(null);
       await native.api.experimental.session.import({
         info: {
           ...sample,

@@ -193,6 +193,25 @@ test(
       ids.push(
         (await state.native<{ id: string }>("/session", "POST", {
           title: `Native ${i}`,
+          // The meter assertion needs reported zero usage, not native defaults.
+          ...(i === 4 && state.controller.info!.version.startsWith("2.")
+            ? {
+              messages: [{
+                type: "assistant",
+                agent: "build",
+                model: { providerID: "fake", id: "scripted" },
+                content: [],
+                cost: 0,
+                tokens: {
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+                time: { created: 1, completed: 2 },
+              }],
+            }
+            : {}),
         })).id,
       );
     }
