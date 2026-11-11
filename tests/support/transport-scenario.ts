@@ -15,6 +15,7 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
   let holding = false, entered = false, reads = 0, effects = 0;
   let shellReceipt: unknown;
   let clockAborts = 0, stripped = 0, permissionAcceptedAt: number | undefined;
+  const assistantMessages = new Set<string>();
   const release = () => {
     holding = false;
     held.resolve();
@@ -123,7 +124,9 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
         if (profile === "transport-enrichment") {
           if (
             request.method === "GET" &&
-            url.pathname.startsWith(`/session/${sessionID}/message/`)
+            url.pathname.startsWith(`/session/${sessionID}/message/`) &&
+            (oc.kind === "opencode-v1" ||
+              assistantMessages.has(url.pathname.split("/").at(-1)!))
           ) {
             reads++;
             entered = true;
@@ -156,6 +159,13 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
                       const envelope = JSON.parse(data),
                         event = envelope.payload ?? envelope,
                         part = event.properties?.part;
+                      // V2's keyed user-input hydration is essential source I/O,
+                      // not optional assistant-clock enrichment.
+                      if (
+                        event.type === "session.step.started" &&
+                        event.data?.sessionID === sessionID &&
+                        typeof event.data.assistantMessageID === "string"
+                      ) assistantMessages.add(event.data.assistantMessageID);
                       if (event.type === "permission.asked") {
                         permissionAcceptedAt = performance.now();
                       }
