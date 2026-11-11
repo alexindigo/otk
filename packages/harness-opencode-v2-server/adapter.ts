@@ -70,7 +70,6 @@ export class OpencodeV2ServerAdapter implements Harness {
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
-  #settledPending = new Set<string>();
   #running = new Map<string, number>();
   #finished = new Map<string, number>();
   #version = "";
@@ -405,7 +404,6 @@ export class OpencodeV2ServerAdapter implements Harness {
         await digest?.stop();
         await this.prompts.stop();
         this.#pending.clear();
-        this.#settledPending.clear();
         this.pending.clear();
         this.#running.clear();
         this.#shells.clear();
@@ -809,14 +807,9 @@ export class OpencodeV2ServerAdapter implements Harness {
     const key = `${kind}:${id}`,
       owner = typeof sid === "string" ? sid : this.#pending.get(key)?.sessionID;
     if (settled) {
-      this.#settledPending.add(key);
-      if (this.#settledPending.size > 4096) {
-        this.#settledPending.delete(
-          this.#settledPending.values().next().value!,
-        );
-      }
+      if (owner) this.pending.settle(kind, id, owner);
       this.#setPending(key);
-    } else if (owner && !this.#settledPending.has(key)) {
+    } else if (owner && !this.pending.settled(kind, id)) {
       const directory = event.location?.directory ??
         (owner !== "global"
           ? this.#index.getMetadata(ids.encode(owner))?.directory
@@ -909,7 +902,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             }
           }
           for (const row of rows) {
-            if (this.#settledPending.has(`${kind}:${row.id}`)) continue;
+            if (this.pending.settled(kind, row.id)) continue;
             pending.set(`${kind}:${row.id}`, {
               id: row.id,
               sessionID: row.sessionID,
@@ -968,8 +961,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#activityCurrent = true;
       this.#shells.replace(shells);
       this.#pending = pending;
-      for (const [key] of this.#pending) {
-        if (this.#settledPending.has(key)) this.#pending.delete(key);
+      for (const [key, row] of this.#pending) {
+        if (this.pending.settled(row.kind, row.id)) this.#pending.delete(key);
       }
       for (const apply of inventories) apply();
       if (reconnect) {
@@ -1121,19 +1114,6 @@ export class OpencodeV2ServerAdapter implements Harness {
         : undefined);
     if (/^(permission\.|form\.)/.test(event.type)) {
       this.#pendingEvent(event, sid, form);
-      if (typeof sid === "string") {
-        if (
-          event.type === "permission.replied" &&
-          typeof event.data.requestID === "string"
-        ) {
-          this.pending.settle("permission", event.data.requestID, sid);
-        } else if (
-          (event.type === "form.replied" || event.type === "form.cancelled") &&
-          typeof event.data.id === "string"
-        ) {
-          this.pending.settle("form", event.data.id, sid);
-        }
-      }
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
       await commit();

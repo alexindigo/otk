@@ -21,6 +21,7 @@ type NativeForm = Awaited<
 type Location = { directory: string; workspaceID?: string };
 /** One canonical pending-request owner; routing location stays private to this adapter. */
 export class V2Pending {
+  #settled = new Set<string>();
   #permissions = new Map<
     string,
     {
@@ -96,12 +97,7 @@ export class V2Pending {
             "AlreadySettledError",
           ],
         );
-        this.#permissions.delete(input.requestID);
-        changed(asking, {
-          op: "permission.remove",
-          requestID: input.requestID,
-          sessionID: asking,
-        });
+        this.settle("permission", input.requestID, ids.decode(asking));
       },
     };
     this.forms = {
@@ -254,6 +250,17 @@ export class V2Pending {
   }
   /** Explicit native settlement does not depend on the availability of another inventory. */
   settle(kind: "permission" | "form", id: string, native: string): void {
+    const existing = kind === "permission"
+      ? this.#permissions.get(id)?.request.sessionID
+      : this.#forms.get(id)?.native;
+    if (
+      existing &&
+      (kind === "permission" ? ids.decode(existing) : existing) !== native
+    ) return;
+    this.#settled.add(`${kind}:${id}`);
+    if (this.#settled.size > 4096) {
+      this.#settled.delete(this.#settled.values().next().value!);
+    }
     if (kind === "permission") {
       const pending = this.#permissions.get(id);
       if (!pending || ids.decode(pending.request.sessionID) !== native) return;
@@ -282,6 +289,10 @@ export class V2Pending {
       });
     }
     this.#notify();
+  }
+  /** Local replies and stream settlements share authority over all later snapshots. */
+  settled(kind: "permission" | "form", id: string): boolean {
+    return this.#settled.has(`${kind}:${id}`);
   }
   retireSession(native: string): void {
     for (const [id, pending] of this.#permissions) {
@@ -319,7 +330,8 @@ export class V2Pending {
   acceptPermission(location: Location, value: unknown): boolean {
     const raw = record(value);
     if (
-      typeof raw.id !== "string" || typeof raw.sessionID !== "string" ||
+      typeof raw.id !== "string" || this.settled("permission", raw.id) ||
+      typeof raw.sessionID !== "string" ||
       typeof raw.action !== "string" || !Array.isArray(raw.resources) ||
       !raw.resources.every((resource) => typeof resource === "string")
     ) return false;
@@ -327,6 +339,7 @@ export class V2Pending {
     return true;
   }
   #permission(location: Location, raw: NativePermission): void {
+    if (this.settled("permission", raw.id)) return;
     const files = mapFileDiffs(raw.metadata?.files).map((file) => ({
       ...file,
       ...(file.path ? { path: resolve(location.directory, file.path) } : {}),
@@ -393,7 +406,8 @@ export class V2Pending {
   acceptForm(location: Location, value: unknown): boolean {
     const raw = record(value);
     if (
-      typeof raw.id !== "string" || typeof raw.sessionID !== "string" ||
+      typeof raw.id !== "string" || this.settled("form", raw.id) ||
+      typeof raw.sessionID !== "string" ||
       !Array.isArray(raw.fields) ||
       !raw.fields.every((value) =>
         typeof record(value).key === "string" &&
@@ -405,6 +419,7 @@ export class V2Pending {
     return true;
   }
   #form(location: Location, raw: NativeForm): void {
+    if (this.settled("form", raw.id)) return;
     const fields = raw.fields.map((field) =>
       field.type === "number" || field.type === "integer"
         ? {
@@ -481,6 +496,7 @@ export class V2Pending {
   clear(): void {
     this.#permissions.clear();
     this.#forms.clear();
+    this.#settled.clear();
     this.#notify();
   }
   #notify(): void {

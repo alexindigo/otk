@@ -22,6 +22,94 @@ import type { InboxBaseline, SessionListPage } from "@otk/protocol";
 
 Deno.test({
   name:
+    "OC2I8 local pending settlement fences an already captured inventory before its native event",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("V2 pending inventory race", async () => {
+      const fake = new FakeLlm();
+      const native = await OpencodeV2Test.start(fake);
+      const session = await native.createSession("Pending inventory race");
+      const release = Promise.withResolvers<void>();
+      resources().defer("pending inventory gate", () => release.resolve());
+      let armed = false, captured: string | undefined, inventories = 0;
+      const settings = cfg(), counts: number[] = [];
+      const adapter = new OpencodeV2ServerAdapter(
+        {
+          serviceFile: native.serviceFile,
+          harness: settings.harness,
+          messages: settings.messages,
+        },
+        undefined,
+        () => {},
+        async (input, init) => {
+          const response = await fetch(input, init);
+          const path =
+            new URL(input instanceof Request ? input.url : String(input))
+              .pathname;
+          if (path === "/api/permission/request") {
+            inventories++;
+            const body = await response.clone().json();
+            const request = body.data?.find((row: { sessionID: string }) =>
+              row.sessionID === session.nativeID
+            );
+            if (armed && request) {
+              armed = false;
+              captured = request.id;
+              await release.promise;
+            }
+          }
+          return response;
+        },
+      );
+      resources().defer("pending race adapter", () => {
+        release.resolve();
+        return adapter.core.stop();
+      });
+      await adapter.core.start({
+        connection() {},
+        indexReset() {},
+        indexRemove() {},
+        content() {},
+        invalidate() {},
+        bootstrapComplete() {},
+        indexUpsert(entry) {
+          if (entry.id === session.id) counts.push(entry.attention.permissions);
+        },
+      });
+      armed = true;
+      fake.queue({
+        chunks: [],
+        tool: {
+          name: "shell",
+          input: { command: "printf approved", description: "Race approval" },
+        },
+      }, { chunks: ["Approved"] });
+      await native.prompt(session.id, "Ask for approval");
+      await waitFor(() => captured, Boolean);
+      const before = inventories;
+      await adapter.capabilities.permissions!.replyPermission({
+        sessionID: session.id,
+        requestID: captured!,
+        reply: "once",
+      });
+      assertEquals(counts.at(-1), 0);
+      const settled = counts.length;
+      release.resolve();
+      await waitFor(() => inventories, (value) => value > before);
+      assertEquals(
+        counts.slice(settled).filter(Boolean),
+        [],
+        "Captured pending metadata must never recreate attention after local settlement",
+      );
+      assertEquals(
+        await adapter.capabilities.permissions!.listPermissions(session.id),
+        [],
+      );
+    }),
+});
+
+Deno.test({
+  name:
     "OC2I7 saved native worktrees publish exact-scope topology without population acquisition",
   ignore: nativeKind !== "opencode-v2-server",
   fn: () =>
