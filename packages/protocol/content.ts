@@ -100,9 +100,11 @@ export type ToolResult =
     truncated: boolean;
   }
   | { kind: "skill"; text: string; directory: string; paths: string[] }
-  | { kind: "text"; text: string };
+  | { kind: "text"; text: string }
+  | { kind: "blocks"; blocks: Block[] };
 export interface ToolBase {
   callID: string;
+  source?: NativeSource;
   /** Original tool label when a source operation is normalized to a shared kind. */
   sourceName?: string;
   status: "pending" | "running" | "completed" | "error" | "denied";
@@ -227,10 +229,11 @@ export interface TaskCall extends ToolBase {
 }
 /** Features can contribute typed parts without changing a central union. */
 export interface PartKinds {
-  meta: { kind: "meta"; id: string };
+  meta: { kind: "meta"; id: string; source?: NativeSource };
   text: {
     kind: "text";
     id: string;
+    source?: NativeSource;
     blocks: Block[];
     synthetic: boolean;
     stream?: StreamStamp;
@@ -238,15 +241,17 @@ export interface PartKinds {
   reasoning: {
     kind: "reasoning";
     id: string;
+    source?: NativeSource;
     title?: string;
     blocks: Block[];
     stream?: StreamStamp;
     time: { start: number; end?: number };
   };
-  tool: { kind: "tool"; id: string; call: ToolCall };
+  tool: { kind: "tool"; id: string; call: ToolCall; source?: NativeSource };
   file: {
     kind: "file";
     id: string;
+    source?: NativeSource;
     name: string;
     mime: string;
     /** Original display source, when supplied by the backend. */
@@ -254,10 +259,11 @@ export interface PartKinds {
     path?: string;
     range?: { start: number; end: number };
   };
-  agent: { kind: "agent"; id: string; name: string };
+  agent: { kind: "agent"; id: string; name: string; source?: NativeSource };
   step: {
     kind: "step";
     id: string;
+    source?: NativeSource;
     phase: "start" | "finish";
     tokens?: Tokens;
     cost?: number;
@@ -265,10 +271,65 @@ export interface PartKinds {
   compaction: {
     kind: "compaction";
     id: string;
+    source?: NativeSource;
     /** Provider lifecycle, independent of whether this context is a prompt. */
     status?: "queued" | "running" | "completed" | "failed";
   };
-  unknown: { kind: "unknown"; id: string; label: string };
+  unknown: {
+    kind: "unknown";
+    id: string;
+    label: string;
+    source?: NativeSource;
+  };
+}
+/** Native keys and wording are opaque. Null facts never imply settlement or success. */
+export interface ActivityState {
+  key: string;
+  label: string;
+  facts: { active: boolean | null; terminal: boolean | null };
+}
+export interface ChildRef {
+  sessionID: string;
+  label: string;
+}
+export interface ActivityParameter {
+  key: string;
+  label: string;
+  value: string;
+  child?: ChildRef;
+}
+export type DisclosureCategory =
+  | "work"
+  | "toolOutput"
+  | "reasoning"
+  | "fileChanges"
+  | "system"
+  | "delegation"
+  | "outgoing"
+  | "compaction"
+  | "record"
+  | "source";
+/** Bounded inspection preview plus optional exact sent/received text for Copy. */
+export interface NativeSource {
+  kind: string;
+  preview: string;
+  bytes: number;
+  truncated: boolean;
+  payload?: string;
+}
+export interface Activity {
+  kindLabel: string;
+  layout: "row" | "boundary";
+  direction?: "outgoing";
+  category: DisclosureCategory;
+  state?: ActivityState;
+  tone: "normal" | "error";
+  title: string;
+  detail?: string;
+  parameters?: ActivityParameter[];
+  body?: Block[];
+  child?: ChildRef;
+  icon?: { name: string; label?: string };
 }
 /** Unrecognized harness parts retain their name and bounded data preview. */
 export interface ExternalPart {
@@ -276,12 +337,15 @@ export interface ExternalPart {
   id: string;
   name: string;
   data?: string;
+  activity?: Activity;
+  source?: NativeSource;
 }
 export type Part = PartKinds[keyof PartKinds] | ExternalPart;
 export interface UserMessage {
   id: string;
   sessionID: string;
   role: "user";
+  source?: NativeSource;
   /** Provider chronology; IDs and copied timestamps need not be ordered. */
   sourceOrder?: number;
   /** Context is visible, but never a user prompt or composer-selection anchor. */
@@ -303,6 +367,7 @@ export interface AssistantMessage {
   id: string;
   sessionID: string;
   role: "assistant";
+  source?: NativeSource;
   sourceOrder?: number;
   time: { created: number; completed?: number; lastOutput?: number };
   agent: string;
@@ -315,7 +380,22 @@ export interface AssistantMessage {
   interrupted: boolean;
   parts: Part[];
 }
-export type Message = UserMessage | AssistantMessage;
+/** A native action boundary, independent of prompt/recall/queue identity. */
+export interface RevertBoundary {
+  messageID: string;
+  affected: { messages: number; prompts: number };
+}
+export interface ContextMessage {
+  id: string;
+  sessionID: string;
+  role: "context";
+  sourceOrder?: number;
+  source?: NativeSource;
+  time: { created: number };
+  parts: Part[];
+  revert?: RevertBoundary;
+}
+export type Message = UserMessage | AssistantMessage | ContextMessage;
 export function isRealPrompt(message: Message): message is UserMessage {
   return message.role === "user" && message.origin === undefined;
 }

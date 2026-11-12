@@ -465,6 +465,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       if (op.op === "agent.colors") {
         for (const id of state.messageIDs) {
           const message = read(id);
+          if (message.role === "context") continue;
           put({
             ...message,
             agentColor: message.agent === undefined

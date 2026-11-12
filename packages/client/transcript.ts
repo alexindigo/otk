@@ -55,7 +55,9 @@ function promptAfter(
   message: Message,
   read: (id: string) => Message | undefined,
 ): LatestPrompt | undefined {
-  if (!isRealPrompt(message)) return previous;
+  if (!isRealPrompt(message)) {
+    return previous?.id === message.id ? undefined : previous;
+  }
   const known = previous && read(previous.id);
   if (
     known && known.id !== message.id &&
@@ -706,7 +708,7 @@ export function createTranscript(
           if (event.op === "session.selection" && latestPrompt) {
             latestPrompt = mergePromptSelection(latestPrompt, event.selection);
           }
-          if (event.op === "message.upsert" && event.message.role === "user") {
+          if (event.op === "message.upsert") {
             latestPrompt = promptAfter(
               latestPrompt,
               event.message,
@@ -1280,8 +1282,7 @@ export function createTranscript(
               }
             }
             if (
-              frame.event.op === "message.upsert" &&
-              frame.event.message.role === "user"
+              frame.event.op === "message.upsert"
             ) {
               draft.latestPrompt = promptAfter(
                 draft.latestPrompt,

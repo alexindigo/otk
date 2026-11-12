@@ -7,7 +7,7 @@ import {
   messageLayoutRole,
 } from "../components/work-log.ts";
 
-Deno.test("provider context shares user bubbles without becoming an actionable prompt", () => {
+Deno.test("provider context never shares user bubbles or actionable prompt identity", () => {
   const message: UserMessage = {
     id: "context",
     sessionID: "session",
@@ -42,9 +42,8 @@ Deno.test("provider context shares user bubbles without becoming an actionable p
     );
     assertEquals(frames.prompt, false);
     assertEquals(layout.prompt, false);
-    const injected = ["skill", "system", "synthetic"].includes(origin);
-    assertEquals(Reflect.get(frames, "userBubble"), injected);
-    assertEquals(Reflect.get(layout, "userBubble"), injected);
+    assertEquals(Reflect.get(frames, "userBubble"), false);
+    assertEquals(Reflect.get(layout, "userBubble"), false);
     const markers = () => ({ frame: "transcript" as const });
     assertEquals(
       Reflect.get(messageFrames(contextual, markers), "userBubble"),

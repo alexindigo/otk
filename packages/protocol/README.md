@@ -37,6 +37,24 @@ Harness-neutral OTK wire contracts and shared helpers, with no runtime
 dependencies. This package does not connect to a harness or sidecar, parse
 markdown, store data, or render a UI.
 
+`ContextMessage` carries non-conversation records without creating prompt,
+recall, queue, revert-count, next-prompt or Timeline anchors. A context record
+may separately supply a native `RevertBoundary` with affected message/prompt
+counts. `ExternalPart.name` is an open harness-qualified kind, not a central
+native-kind union. Its optional `Activity` supplies title, detail, generic tone,
+row/boundary layout, outgoing direction, disclosure category, parameters,
+rendered blocks, child reference and a safe icon hint. Native state keys and
+labels belong to the producer; active/terminal facts are nullable and unknown
+never means success. Activity has no visibility/hidden policy.
+
+Messages, parts and tool calls optionally retain `NativeSource`: bounded
+preview, original byte size, explicit truncation and optional exact text
+`payload`. Copy uses that payload, not the preview or rendered body. Normalized
+typed fields accompany source rather than replacing it. `ToolResult` also
+supports `kind: "blocks"` for adapter-decoded prose; literal tool/file output
+keeps its existing representation. These plain JSON shapes use the existing
+content-operation wire serialization, without a parallel content codec.
+
 `errorMessage(unknown)` supplies nonempty feedback without assuming a thrown
 value is an Error; strings and string-valued messages are preserved, other
 values are encoded when possible, and unrepresentable values use
