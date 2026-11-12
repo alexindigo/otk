@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { discoverV2, probeVersion } from "../discovery.ts";
 import { Buffer } from "node:buffer";
 
@@ -13,7 +13,7 @@ Deno.test("version probe rejects HTML, recognizes V1/V2 and preserves 401", asyn
     );
   assertEquals(
     await probeVersion(
-      "http://localhost",
+      { url: "http://localhost", source: { kind: "none" } },
       {},
       undefined,
       () => reply({ version: "2.2.6", pid: 42 }),
@@ -22,7 +22,7 @@ Deno.test("version probe rejects HTML, recognizes V1/V2 and preserves 401", asyn
   );
   assertEquals(
     await probeVersion(
-      "http://localhost",
+      { url: "http://localhost", source: { kind: "none" } },
       {},
       undefined,
       (url) =>
@@ -35,7 +35,7 @@ Deno.test("version probe rejects HTML, recognizes V1/V2 and preserves 401", asyn
   await assertRejects(
     () =>
       probeVersion(
-        "http://localhost",
+        { url: "http://localhost", source: { kind: "none" } },
         {},
         undefined,
         () => Promise.resolve(new Response("html")),
@@ -44,7 +44,13 @@ Deno.test("version probe rejects HTML, recognizes V1/V2 and preserves 401", asyn
     "neither",
   );
   await assertRejects(
-    () => probeVersion("http://localhost", {}, undefined, () => reply({}, 401)),
+    () =>
+      probeVersion(
+        { url: "http://localhost", source: { kind: "none" } },
+        {},
+        undefined,
+        () => reply({}, 401),
+      ),
     Error,
     "401",
   );
@@ -151,5 +157,117 @@ Deno.test("discovery rejects replacement identity even when endpoint credentials
   } finally {
     await server.shutdown();
     await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("registration identity mismatch takes precedence over a 401 response", async () => {
+  const root = await Deno.makeTempDir();
+  const file = root + "/service.json";
+  let info = { version: "2.2.6", pid: 42 };
+  const server = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    () => Response.json(info, { status: 401 }),
+  );
+  const url = `http://127.0.0.1:${server.addr.port}`;
+  try {
+    await Deno.writeTextFile(
+      file,
+      JSON.stringify({
+        url,
+        pid: 42,
+        version: "2.2.6",
+        password: "wrong-password",
+      }),
+    );
+    for (
+      const mismatch of [{ version: "2.2.6", pid: 43 }, {
+        version: "2.2.7",
+        pid: 42,
+      }]
+    ) {
+      info = mismatch;
+      const error = await assertRejects(() => discoverV2(file), Error, "Stale");
+      assertStringIncludes(error.message, url);
+      assertStringIncludes(error.message, `registration ${file}`);
+      assertEquals(error.message.includes("wrong-password"), false);
+    }
+    info = { version: "2.2.6", pid: 42 };
+    const error = await assertRejects(() => discoverV2(file), Error, "401");
+    assertStringIncludes(error.message, url);
+    assertStringIncludes(error.message, `registration ${file}`);
+  } finally {
+    await server.shutdown();
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("all probe failures carry URL and provenance without exposing credentials", async () => {
+  const url = "http://localhost:4097";
+  const replies: Array<typeof fetch> = [
+    () => Promise.reject(new TypeError("fetch failed")),
+    () => Promise.resolve(new Response("not JSON", { status: 503 })),
+    () =>
+      Promise.resolve(
+        new Response("{", { headers: { "content-type": "application/json" } }),
+      ),
+    () => Promise.resolve(Response.json({ version: "3.0.0", pid: 42 })),
+    (input) =>
+      Promise.resolve(
+        String(input).endsWith("/api/info")
+          ? new Response("<html>")
+          : new Response("Unauthorized", { status: 401 }),
+      ),
+  ];
+  for (const fetcher of replies) {
+    const error = await assertRejects(() =>
+      probeVersion(
+        { url, source: { kind: "config" } },
+        { authorization: "Basic secret-password" },
+        undefined,
+        fetcher,
+      ), Error);
+    assertStringIncludes(error.message, url);
+    assertStringIncludes(error.message, "credentials from config/env");
+    assertEquals(error.message.includes("secret-password"), false);
+  }
+  const abort = new AbortController();
+  const cause = new Error("caller cancelled");
+  abort.abort(cause);
+  assertEquals(
+    await assertRejects(() =>
+      probeVersion(
+        { url, source: { kind: "none" } },
+        {},
+        abort.signal,
+        () => Promise.reject(cause),
+      )
+    ),
+    cause,
+  );
+});
+
+Deno.test("probe diagnostics exclude credentials embedded in a configured URL", async () => {
+  const error = await assertRejects(() =>
+    probeVersion(
+      {
+        url:
+          "http://private-user:private-password@localhost:4097/unused?auth_token=private-token#private-fragment",
+        source: { kind: "config" },
+      },
+      {},
+      undefined,
+      () => Promise.reject(new TypeError("fetch failed")),
+    ), Error);
+  assertStringIncludes(error.message, "http://localhost:4097");
+  assertStringIncludes(error.message, "credentials from config/env");
+  for (
+    const secret of [
+      "private-user",
+      "private-password",
+      "private-token",
+      "private-fragment",
+    ]
+  ) {
+    assertEquals(error.message.includes(secret), false);
   }
 });
