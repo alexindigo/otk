@@ -11,7 +11,7 @@ test("@load @sessions SQL list boundary reads exactly 20 without cataloging, ord
   const path = join(await tempDir("list-source-"), "native.db"),
     db = new DatabaseSync(path);
   db.exec(
-    "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
+    "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,time_created INTEGER,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
   );
   const insert = db.prepare("INSERT INTO session VALUES(?,?,?,?,?,1,2,NULL)");
   db.exec("BEGIN");

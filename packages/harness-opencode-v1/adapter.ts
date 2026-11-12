@@ -768,14 +768,49 @@ export class OpencodeV1Adapter implements Harness {
     return this.#stopping;
   }
   #publication(signal: AbortSignal): HarnessSink {
+    const evidence = (entry: IndexEntry): IndexEntry => ({
+      ...entry,
+      activity: {
+        terminal: Math.max(
+          entry.activity?.terminal ?? 0,
+          this.#liveWork.has(entry.id) ? 0 : this.#terminals.get(entry.id) ?? 0,
+        ),
+        work: {
+          keys: this.#liveWork.has(entry.id)
+            ? [this.#liveWork.get(entry.id)!]
+            : [],
+          fresh: entry.activityAuthority === "current",
+        },
+        inputs: {
+          keys: [
+            ...[...this.#questions.values()].filter((p) =>
+              p.request.sessionID === entry.id
+            ).map((p) => p.request.id),
+          ],
+          fresh: entry.activityAuthority !== "stale" &&
+            entry.activityAuthority !== "unknown",
+        },
+        permissions: {
+          keys: [...this.#permissions.values()].filter((p) =>
+            p.request.sessionID === entry.id
+          ).map((p) => p.request.id),
+          fresh: entry.activityAuthority !== "stale" &&
+            entry.activityAuthority !== "unknown",
+        },
+      },
+    });
     return connectionPublication({
       ...this.#target,
+      indexUpsert: (entry) => this.#target.indexUpsert(evidence(entry)),
+      indexReset: (entries) => this.#target.indexReset(entries.map(evidence)),
       content: (id, event) => {
         if (isAttentionOp(event)) this.#target.content(id, event);
         else this.#replay.publish(id, event);
       },
     }, signal);
   }
+  #liveWork = new Map<string, string>();
+  #terminals = new Map<string, number>();
   async #shutdown(): Promise<void> {
     this.#helperObservation?.();
     this.#helperObservation = undefined;
@@ -1162,6 +1197,21 @@ export class OpencodeV1Adapter implements Harness {
         this.#controller = undefined;
       }
       if (signal.aborted) break;
+      for (const entry of this.#index.snapshotEntries()) {
+        this.#target.indexUpsert({
+          ...entry,
+          activity: {
+            ...entry.activity,
+            work: { keys: entry.activity?.work?.keys ?? [], fresh: false },
+            inputs: { keys: entry.activity?.inputs?.keys ?? [], fresh: false },
+            permissions: {
+              keys: entry.activity?.permissions?.keys ?? [],
+              fresh: false,
+            },
+          },
+          activityAuthority: "stale",
+        });
+      }
       this.#target.connection("reconnecting");
       await new Promise<void>((resolve) => {
         const wake = () => {
@@ -1344,11 +1394,23 @@ export class OpencodeV1Adapter implements Harness {
         if (!this.#current(controller)) return;
         // A complete inventory proves omitted sessions idle; unavailable
         // authority alone must retain their previous activity.
+        for (const id of this.#liveWork.keys()) {
+          if (this.#index.getMetadata(id)?.directory === directory) {
+            this.#liveWork.delete(id);
+          }
+        }
         await each(byDirectory.get(directory) ?? [], (entry) => {
+          this.#liveWork.delete(entry.id);
           entry.status = "idle";
           entry.retry = undefined;
         });
         await each(statuses, (status) => {
+          if (status.status !== "idle") {
+            this.#liveWork.set(
+              status.id,
+              `execution:${this.#connection}:${status.id}`,
+            );
+          }
           routing.add(status.id);
           const entry = entries.get(status.id) ??
             this.#activityEntry(status.id, directory);
@@ -1856,6 +1918,13 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error(`Malformed ${type}: invalid status`);
       }
       if (entry) {
+        if (status.type === "idle") this.#liveWork.delete(sessionID);
+        else if (!this.#liveWork.has(sessionID)) {
+          this.#liveWork.set(
+            sessionID,
+            `execution:${this.#connection}:${sessionID}`,
+          );
+        }
         entry.status = status.type as IndexEntry["status"];
         entry.activityAuthority = "current";
         entry.retry = entry.status === "retry"
@@ -1984,6 +2053,10 @@ export class OpencodeV1Adapter implements Harness {
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed
     ) {
+      this.#terminals.set(
+        sessionID,
+        Math.max(this.#terminals.get(sessionID) ?? 0, info.time.completed),
+      );
       const current = this.#index.getMetadata(sessionID);
       if (current) {
         current.timeUpdated = Math.max(

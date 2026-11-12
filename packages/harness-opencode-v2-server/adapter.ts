@@ -281,12 +281,8 @@ export class OpencodeV2ServerAdapter implements Harness {
         client: () => this.stream.client,
         observed: (raw) => {
           this.transcript.observe(raw);
-          // Native terminal clocks, not an old event, certify the action's
-          // current lamp. In particular Restore owns its clear-triggered run.
-          const busy = millis(raw.time.busy) > millis(raw.time.idle);
-          if (busy) this.#running.set(raw.id, millis(raw.time.busy));
-          else this.#running.delete(raw.id);
-          this.#upsert(this.#metadata(raw, busy));
+          // Metadata actions publish terminal facts, never execution ownership.
+          this.#upsert(this.#metadata(raw, this.#running.has(raw.id)));
         },
         removed: async (id, operation) => {
           const client = this.stream.client;
@@ -578,6 +574,35 @@ export class OpencodeV2ServerAdapter implements Harness {
     );
     entry = {
       ...entry,
+      activity: {
+        terminal: Math.max(
+          entry.activity?.terminal ?? 0,
+          this.#finished.get(entry.id) ?? 0,
+        ),
+        work: {
+          keys: [
+            ...(this.#running.has(ids.decode(entry.id))
+              ? [`execution:${this.#running.get(ids.decode(entry.id))}`]
+              : []),
+            ...this.#shells.keys(ids.decode(entry.id)),
+          ],
+          fresh: this.#activityCurrent,
+        },
+        inputs: {
+          keys: [...this.#pending.values()].filter((row) =>
+            !row.stale && row.sessionID !== "global" &&
+            row.kind !== "permission" && ids.encode(row.sessionID) === entry.id
+          ).map((row) => row.id),
+          fresh: this.#activityCurrent,
+        },
+        permissions: {
+          keys: [...this.#pending.values()].filter((row) =>
+            !row.stale && row.sessionID !== "global" &&
+            row.kind === "permission" && ids.encode(row.sessionID) === entry.id
+          ).map((row) => row.id),
+          fresh: this.#activityCurrent,
+        },
+      },
       attention: {
         ...entry.attention,
         ...pending.attention,
@@ -674,28 +699,12 @@ export class OpencodeV2ServerAdapter implements Harness {
   #execution(
     entry: SessionMetadata,
     ended?: number,
-    alreadyObserved = false,
+    _alreadyObserved = false,
   ): void {
-    if (!ended || ended <= (this.#finished.get(entry.id) ?? 0)) {
-      this.#upsert(entry);
-      return;
+    if (ended && ended > (this.#finished.get(entry.id) ?? 0)) {
+      this.#finished.set(entry.id, ended);
     }
-    this.#finished.set(entry.id, ended);
-    // A native execution edge is not canceled by a newer metadata snapshot.
-    // Replay its one finish transition through the existing synchronous index
-    // observer, then retain the snapshot's truthful current activity.
-    if (!alreadyObserved) {
-      if (this.#index.getMetadata(entry.id)?.status !== "busy") {
-        this.#upsert({
-          ...entry,
-          status: "busy",
-          retry: undefined,
-          attention: { ...entry.attention, error: undefined },
-        });
-      }
-      this.#upsert({ ...entry, status: "idle", retry: undefined });
-    }
-    if (alreadyObserved || entry.status !== "idle") this.#upsert(entry);
+    this.#upsert(entry);
   }
   async #hydrate(
     wanted: readonly string[],
@@ -773,6 +782,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       archived: mapped.archived,
       status: busy ? "busy" : "idle",
       activityAuthority: "current",
+      activity: metadata(raw).activity,
       ...(busy && this.#index.getMetadata(mapped.id)?.retry
         ? { retry: this.#index.getMetadata(mapped.id)!.retry }
         : {}),
@@ -979,14 +989,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           );
         } else this.#running.delete(raw.id);
         const entry = this.#metadata(raw, !!active[raw.id]);
-        const ended =
-          previousShells.has(raw.id) && !this.#shells.busy(raw.id) &&
-            !active[raw.id]
-            ? Date.now()
-            : previous !== undefined && !active[raw.id] &&
-                millis(raw.time.idle) > previous
-            ? millis(raw.time.idle)
-            : undefined;
+        const ended = previous !== undefined && !active[raw.id] &&
+            millis(raw.time.idle) > previous
+          ? millis(raw.time.idle)
+          : undefined;
         // An old outcome cannot certify a lost newer execution's success.
         if (
           previous !== undefined && !active[raw.id] &&

@@ -141,7 +141,7 @@ Deno.test("nested routes and immediate remembered leaf navigation keep exact per
       summaries: {
         "/tree": {
           directory: "/tree",
-          status: "idle",
+          status: "none",
           sessionCount: 1,
           unseenCount: 0,
           lastActivity: 2,
@@ -395,7 +395,7 @@ Deno.test("shell navigation normalizes roots and same-session reselection visits
   assertEquals(f.calls.filter((c) => c[1] === "sessions.seen"), [[
     "local",
     "sessions.seen",
-    { sessionID: "tstv1-leaf" },
+    { sessionID: "tstv1-leaf", terminal: 0 },
   ]]);
   f.navigation.openChild("tstv1-unknown");
   assertEquals(f.location.hash, "#/local/tstv1-root/tstv1-unknown");
@@ -607,7 +607,7 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
     [
       "local",
       "sessions.seen",
-      { sessionID: "tstv1-selected" },
+      { sessionID: "tstv1-selected", terminal: 1 },
     ],
   ]);
   f.resources.receive("local", {
@@ -631,6 +631,7 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   await settled();
   assertEquals(f.calls, [["local", "sessions.seen", {
     sessionID: "tstv1-selected",
+    terminal: 2,
   }]]);
   f.calls.length = 0;
   f.navigation.observeView({ ...view, selected: undefined });
@@ -841,6 +842,22 @@ for (const status of ["working", "blocked", "finished"] as const) {
       f.entries("local", [entry]);
       const inbox = f.resources.inbox("local").state.inbox;
       if (status === "finished") inbox.finishes["tstv1-selected"] = 10;
+      inbox.supervision = {
+        [entry.id]: {
+          state: status === "blocked"
+            ? "needsYou"
+            : status === "finished"
+            ? "finishedUnseen"
+            : "working",
+          terminal: status === "finished" ? 10 : 0,
+        },
+      };
+      f.resources.receive("local", {
+        t: "inbox.snapshot",
+        generation: "fixture",
+        revision: 0,
+        inbox,
+      });
       const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
       tabs.preview("tstv1-selected");
       f.consent(false);
@@ -848,7 +865,9 @@ for (const status of ["working", "blocked", "finished"] as const) {
       assertEquals(f.location.hash, "#/local/tstv1-selected");
       assertEquals(tabs.state.sessionID, "tstv1-selected");
       assert(
-        f.messages.at(-1)?.includes("phantom tab until it is idle and seen"),
+        f.messages.at(-1)?.includes(
+          "phantom tab while it has known activity or an unseen finish",
+        ),
       );
       f.consent(true);
       assertEquals(await f.navigation.close(), true);
@@ -861,6 +880,7 @@ for (const status of ["working", "blocked", "finished"] as const) {
       entry.attention.permissions = 0;
       f.entries("local", [entry]);
       inbox.seen["tstv1-selected"] = 11;
+      inbox.supervision = { [entry.id]: { state: "none", terminal: 10 } };
       f.resources.receive("local", {
         t: "inbox.snapshot",
         generation: "fixture",

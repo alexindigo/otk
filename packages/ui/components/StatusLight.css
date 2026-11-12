@@ -2,7 +2,7 @@
 .otk-status-light {
   --lamp-size: 10px;
   /* Construction stays local; semantic gel paint comes from the active theme. */
-  --lamp-color: var(--status-light-idle);
+  --lamp-color: var(--status-light-none);
   position: relative;
   display: inline-grid;
   place-items: center;
@@ -48,10 +48,10 @@
 .otk-status-light[data-blink] .otk-lamp-body {
   animation: otk-lamp-blink var(--lamp-blink-duration) linear;
 }
-.otk-status-light[data-state=idle] .otk-lamp-glow {
+.otk-status-light[data-state=none] .otk-lamp-glow {
   display: none;
 }
-.otk-status-light[data-state=idle] .otk-lamp-body {
+.otk-status-light[data-state=none] .otk-lamp-body {
   background:
     radial-gradient(circle at 50% 24%, rgb(255 255 255 / 55%) 0 14%, transparent
     30%),

@@ -166,9 +166,11 @@ test("transport.interrupt-confirmation", {
   );
   expect(frames.sent.some(({ frame }) => frame.method === "session.abort"))
     .toBe(true);
+  // An interruption is terminal evidence, not a pending input; the open,
+  // focused view acknowledges that terminal, so no evidence remains.
   await expect(
     page.locator(
-      `[data-session="${session.id}"] .otk-status-light[data-state=blocked]`,
+      `[data-session="${session.id}"] .otk-status-light[data-state=none]`,
     ),
   ).toBeVisible();
 });

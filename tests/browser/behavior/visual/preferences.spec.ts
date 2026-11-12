@@ -84,7 +84,7 @@ test("visual.appearance-real-working-lights-preferences-and-reload", {
   const light = page.locator(
     `[data-session="${session.id}"] .otk-status-light`,
   );
-  await expect(light).toHaveAttribute("data-state", "idle");
+  await expect(light).toHaveAttribute("data-state", "none");
   expect(
     await page.locator("textarea[name=prompt]").evaluate(async (el) => {
       await document.fonts.ready;
@@ -101,7 +101,7 @@ test("visual.appearance-real-working-lights-preferences-and-reload", {
   await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
     "Working with the visual system. Finished.",
   );
-  await expect(light).toHaveAttribute("data-state", "idle");
+  await expect(light).toHaveAttribute("data-state", "none");
   await page.locator(".otk-settings-entry").click();
   const { page: other, errors } = await independentPage(state, browser);
   await other.goto(state.url);

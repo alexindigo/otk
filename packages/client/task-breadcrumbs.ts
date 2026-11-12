@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexMetadata, TaskRecord } from "@otk/protocol";
+import type { InboxSnapshot, IndexMetadata, TaskRecord } from "@otk/protocol";
 import { inboxStatus, type OperationAttention } from "./inbox.ts";
 export interface TaskCrumb {
   id: string;
@@ -16,6 +16,10 @@ export function taskBreadcrumbs(
     string,
     readonly (IndexMetadata & OperationAttention)[]
   >,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision"> = {
+    seen: {},
+    finishes: {},
+  },
 ): TaskCrumb[] {
   const delegated = new Set(
     tasks.filter((t) => t.directory === task.directory && t.id !== task.id)
@@ -41,8 +45,8 @@ export function taskBreadcrumbs(
       const { entry: child, depth } = stack.pop()!;
       if (visited.has(child.id) || delegated.has(child.id)) continue;
       visited.add(child.id);
-      const status = inboxStatus(child, { seen: {}, finishes: {} });
-      if (status === "working" || status === "blocked") {
+      const status = inboxStatus(child, inbox);
+      if (status !== "none") {
         result.push({ id: child.id, helper: true, depth });
       }
       for (const entry of (children.get(child.id) ?? []).toReversed()) {

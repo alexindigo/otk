@@ -26,9 +26,11 @@ test.describe("project catalog", () => {
     // Session-bearing index-origin projects now belong to Active, not Discovered.
     await expect(page.locator(".otk-discovered-toggle")).toContainText("(1)");
     await expect(row(root + "/projects/linked")).toHaveCount(0);
-    await expect(row(empty).locator(".otk-status-light")).toHaveCount(0);
+    await expect(
+      row(empty).getByRole("img", { name: "No known activity", exact: true }),
+    ).toBeVisible();
     await expect(row(entries[1].directory).locator(".otk-status-light"))
-      .toHaveAttribute("data-state", "idle");
+      .toHaveAttribute("data-state", "none");
     await expect(row(entries[1].directory)).toHaveAttribute(
       "data-group",
       "active",
@@ -102,8 +104,16 @@ test.describe("project catalog", () => {
         "data-otk-theme",
         theme,
       );
+      // Rows are never lampless; discovered rows carry no evidence, so grey.
+      await expect(
+        page.locator(
+          "[data-group=discovered] .otk-status-light:not([data-state=none])",
+        ),
+      ).toHaveCount(0);
       await expect(page.locator("[data-group=discovered] .otk-status-light"))
-        .toHaveCount(0);
+        .toHaveCount(
+          await page.locator(".otk-project-row[data-group=discovered]").count(),
+        );
       await page.screenshot({
         path: info.outputPath(`q1-${name}-column.png`),
         fullPage: true,
@@ -125,8 +135,16 @@ test.describe("project catalog", () => {
         "true",
       );
       expect(await centers()).toEqual(column);
+      // Rows are never lampless; discovered rows carry no evidence, so grey.
+      await expect(
+        page.locator(
+          "[data-group=discovered] .otk-status-light:not([data-state=none])",
+        ),
+      ).toHaveCount(0);
       await expect(page.locator("[data-group=discovered] .otk-status-light"))
-        .toHaveCount(0);
+        .toHaveCount(
+          await page.locator(".otk-project-row[data-group=discovered]").count(),
+        );
       await page.screenshot({
         path: info.outputPath(`q1-${name}-rail.png`),
         fullPage: true,
@@ -154,7 +172,9 @@ test.describe("project catalog", () => {
       "true",
     );
     expect(await positions()).toEqual(before);
-    await expect(row(empty).locator(".otk-status-light")).toHaveCount(0);
+    await expect(
+      row(empty).getByRole("img", { name: "No known activity", exact: true }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Expand projects", exact: true })
       .click();
     await row(empty).locator(".otk-project-menu > button").click();

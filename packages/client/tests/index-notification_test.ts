@@ -58,7 +58,10 @@ Deno.test("digest updates preserve notification actions, badge membership and de
   triggers.receive("server", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: { ...entry, status: "idle" } }],
+    ops: [{
+      op: "upsert",
+      entry: { ...entry, status: "idle", activity: { terminal: 2 } },
+    }],
   });
   assertEquals([...delivered.keys()], ["toast", "badge", "os"]);
   const original = new Map(delivered);

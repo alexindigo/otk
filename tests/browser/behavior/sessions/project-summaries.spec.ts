@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { viewByUrl } from "../../pages/sessions.ts";
 import type { ProjectSummary } from "@otk/protocol";
 
 test.use({ profile: "isolated" });
@@ -32,7 +33,7 @@ test(
       `[data-project=${JSON.stringify(background.directory)}]`,
     );
     const check = async (status: ProjectSummary["status"], unseen: number) => {
-      if (status === "idle") {
+      if (status === "none") {
         await state.product("layout.patch", { discoveredCollapsed: false });
       }
       await expect.poll(async () => {
@@ -55,7 +56,7 @@ test(
           parts: [{ type: "text", text }],
         },
       });
-    await check("idle", 0);
+    await check("none", 0);
     const held = await state.queue(["Background working"], "held");
     await begin("Keep this background session working");
     await check("working", 0);
@@ -73,8 +74,11 @@ test(
     await check("working", 0);
     await state.release(held.gate);
     await expect.poll(async () => (await summary())?.status).toBe("finished");
-    await state.product("sessions.seen", { sessionID: background.id });
-    await check("idle", 0);
+    await viewByUrl(state, page, background.id);
+    // Stay until the view's acknowledgement lands, as a reading user would.
+    await expect.poll(async () => (await summary())?.unseenCount).toBe(0);
+    await viewByUrl(state, page, selected.id);
+    await check("none", 0);
     await state.product("layout.patch", { discoveredCollapsed: true });
     await state.controller.call("queueScript", {
       lease: state.lease.lease,
@@ -88,6 +92,9 @@ test(
       },
     });
     const final = await state.queue(["Background completed"], "held");
+    // Viewing the background project legitimately delivers its full entries;
+    // the routing contract below covers only the unviewed pending window.
+    const routedFrom = capture.received.length;
     await begin("Ask for permission in the background project");
     await check("blocked", 0);
     await page.screenshot({
@@ -111,9 +118,14 @@ test(
       path: info.outputPath("project-summary-finished-reloaded.png"),
       fullPage: true,
     });
-    await state.product("sessions.seen", { sessionID: background.id });
-    await check("idle", 0);
-    const entries = capture.received.flatMap((frame) => {
+    const routedTo = capture.received.length;
+    await viewByUrl(state, page, background.id);
+    // Stay until the view's acknowledgement lands, as a reading user would.
+    await expect.poll(async () => (await summary())?.unseenCount).toBe(0);
+    await viewByUrl(state, page, selected.id);
+    await check("none", 0);
+    const routed = capture.received.slice(routedFrom, routedTo);
+    const entries = routed.flatMap((frame) => {
       if (frame.t === "index.snapshot") {
         return frame.entries as import("@otk/protocol").IndexEntry[];
       }
@@ -141,7 +153,7 @@ test(
         turns: {},
       });
     }
-    expect(capture.received.some((frame) =>
+    expect(routed.some((frame) =>
       frame.t === "index.patch" &&
       (frame.ops as { op: string; id?: string }[]).some((op) =>
         op.op === "evict" && op.id === background.id

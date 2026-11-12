@@ -60,7 +60,7 @@ test(
       "data-state",
       "blocked",
     );
-    for (const state of ["blocked", "finished", "working", "idle"]) {
+    for (const state of ["blocked", "finished", "working", "none"]) {
       await expect(
         page.locator(`.otk-inbox-scroll .otk-status-light[data-state=${state}]`)
           .first(),

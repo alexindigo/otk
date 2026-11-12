@@ -325,7 +325,7 @@ export function createServerResources(o: {
       for (const id of rowDemand.rows) required.add(id);
     }
     for (const entry of input.entries) {
-      if (entry.deleted || inboxStatus(entry, input.inbox) !== "idle") {
+      if (entry.deleted || inboxStatus(entry, input.inbox) !== "none") {
         required.add(entry.id);
       }
     }

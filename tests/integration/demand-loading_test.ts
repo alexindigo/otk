@@ -22,7 +22,9 @@ test("@load @messages @transport idle prefetch serves the next older batch with 
   const native = await nativeFixture(1, true, 30);
   native.settings.messages.prefetchms = 1000;
   native.release();
-  const insert = native.db!.prepare("INSERT INTO message VALUES(?,?,?)");
+  const insert = native.db!.prepare(
+    "INSERT INTO message(id,session_id,data) VALUES(?,?,?)",
+  );
   for (let i = 0; i < 30; i++) {
     insert.run(
       `msg_${String(i).padStart(3, "0")}`,
@@ -379,7 +381,9 @@ test("@load @sessions @messages metadata demand stops newest-first at its bounda
   const source = native.db!;
   source.exec("UPDATE session SET directory='/other' WHERE id='ses_idle3'");
   source.exec("UPDATE session SET directory='/inactive' WHERE id='ses_idle4'");
-  const insert = source.prepare("INSERT INTO message VALUES(?,?,?)");
+  const insert = source.prepare(
+    "INSERT INTO message(id,session_id,data) VALUES(?,?,?)",
+  );
   for (let i = 0; i < 8; i++) {
     insert.run(
       `msg_${i}`,
@@ -558,7 +562,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     const direct: import("@otk/protocol").ProjectSummary = {
       directory: "/idle",
       hasSessions: true,
-      status: "idle",
+      status: "none",
       sessionCount: 1,
       unseenCount: 0,
       lastActivity: Number(
@@ -603,6 +607,15 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
         value.summaries?.["/idle"]?.status === "working" &&
         !value.projects.find((p) => p.directory === "/idle")?.inactive,
     );
+    native.emit("message.updated", {
+      info: {
+        id: "msg_finish",
+        sessionID: "ses_idle0",
+        role: "assistant",
+        agent: "build",
+        time: { created: 10, completed: 20 },
+      },
+    });
     native.emit("session.status", {
       sessionID: "ses_idle0",
       status: { type: "idle" },
@@ -636,7 +649,10 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
       "only the persisted unseen identity is retained",
     );
     noPopulation();
-    await client.rpc("sessions.seen", { sessionID: "opcv1-ses_idle0" });
+    await client.rpc("sessions.seen", {
+      sessionID: "opcv1-ses_idle0",
+      terminal: 20,
+    });
     const page = await client.rpc<SessionListPage>("sessions.list", {
       directory: "/idle",
     });

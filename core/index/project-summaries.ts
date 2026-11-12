@@ -6,6 +6,7 @@ import {
   type ProjectSummary,
   type ProjectTopology,
 } from "@otk/protocol";
+import { SessionSupervision } from "./supervision.ts";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
@@ -15,20 +16,18 @@ export class ProjectSummaries {
   #projects = new Map<string, Map<string, IndexMetadata>>();
   #facts = new Map<
     string,
-    { status: ProjectStatus; unseen: number; time: number; unknown: number }
+    { status: ProjectStatus; unseen: number; time: number }
   >();
   #totals = new Map<
     string,
     {
       count: number;
       unseen: number;
-      unknown: number;
       statuses: Map<ProjectStatus, number>;
       times: Map<number, number>;
       last: number;
     }
   >();
-  #permissions?: (id: string) => number;
   #locationForms: Readonly<Record<string, number>> = {};
   locationForms(values: Readonly<Record<string, number>>): void {
     const affected = new Set([
@@ -169,6 +168,7 @@ export class ProjectSummaries {
     readonly marks: (id: string) => { seen: number; finish: number },
     readonly publish: (summary: ProjectSummary) => void,
     readonly retire: (directory: string) => void = () => {},
+    readonly supervision = new SessionSupervision(),
   ) {}
   ensure(directory: string): void {
     this.#known.add(directory);
@@ -199,6 +199,7 @@ export class ProjectSummaries {
   }
   authority(value: ProjectSummary["authority"]): void {
     this.#authority = value;
+    this.supervision.freshness(value !== "stale");
     if (value !== "stale") this.#catalog = true;
     this.refresh();
   }
@@ -246,7 +247,7 @@ export class ProjectSummaries {
     }
   }
   permissions(lookup: (id: string) => number): void {
-    this.#permissions = lookup;
+    this.supervision.permissions(lookup);
     this.refresh();
   }
   refresh(): void {
@@ -264,38 +265,23 @@ export class ProjectSummaries {
       totals = {
         count: 0,
         unseen: 0,
-        unknown: 0,
         statuses: new Map(),
         times: new Map(),
         last: 0,
       };
       this.#totals.set(directory, totals);
     }
-    const a = entry.attention, marks = this.marks(entry.id);
-    const unseen = Number(!entry.parentID && marks.finish > marks.seen);
+    const marks = this.marks(entry.id);
+    const value = this.supervision.session(entry, marks.seen, marks.finish);
+    const unseen = Number(value.terminal > marks.seen);
     const fact = sign === -1 ? this.#facts.get(entry.id)! : {
-      status: a.error ||
-          a.questions + a.childQuestions +
-                (this.#authority !== "stale" && this.#permissions
-                  ? this.#permissions(entry.id)
-                  : a.permissions + a.childPermissions) > 0
-        ? "blocked" as const
-        : entry.status !== "idle"
-        ? "working" as const
-        : unseen
-        ? "finished" as const
-        : "idle" as const,
+      status: this.supervision.status(value),
       unseen,
       time: entry.timeUpdated,
-      unknown: Number(
-        entry.activityAuthority === "unknown" ||
-          entry.activityAuthority === "stale",
-      ),
     };
     if (!fact) return;
     totals.count += sign;
     totals.unseen += sign * fact.unseen;
-    totals.unknown += sign * fact.unknown;
     totals.statuses.set(
       fact.status,
       (totals.statuses.get(fact.status) ?? 0) + sign,
@@ -321,16 +307,13 @@ export class ProjectSummaries {
     const totals = this.#totals.get(directory);
     const count = totals?.count ?? 0,
       unseen = totals?.unseen ?? 0,
-      last = totals?.last ?? 0,
-      unknown = (totals?.unknown ?? 0) > 0;
+      last = totals?.last ?? 0;
     const previous = this.values.get(directory);
     const locationForms = this.#locationForms[directory] ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
       : locationForms
       ? "current"
-      : unknown
-      ? "unknown"
       : entries.size
       ? "current"
       : this.#authority;
@@ -339,7 +322,7 @@ export class ProjectSummaries {
       : PROJECT_STATUS_PRIORITY.find((s) =>
         (totals?.statuses.get(s) ?? 0) > 0
       ) ??
-        "idle";
+        "none";
     const knownCount = this.#catalog;
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
     const seed = seeds.length
@@ -362,7 +345,7 @@ export class ProjectSummaries {
       directory,
       ...(locationForms ? { locationForms } : {}),
       hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
-      status: authority === "unknown" && status === "idle" ? null : status,
+      status,
       sessionCount: seed
         ? seed.sessionCount
         : knownCount && !this.#seeded
@@ -431,7 +414,7 @@ export class ProjectSummaries {
           : null,
         status: PROJECT_STATUS_PRIORITY.find((status) =>
           summaries.some((s) => s.status === status)
-        ) ?? null,
+        ) ?? "none",
         authority: summaries.some((s) => s.authority === "unknown")
           ? "unknown"
           : summaries.some((s) => s.authority === "stale")

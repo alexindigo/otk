@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import { createTabs, inboxProjects, taskBreadcrumbs } from "@otk/client";
+import { createTabs as canonicalTabs } from "@otk/client";
+import {
+  createTabs,
+  inboxProjects,
+  taskBreadcrumbs,
+} from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 
 const entry = (id: string, timeUpdated = 1, parentID?: string): IndexEntry => ({
@@ -105,7 +110,7 @@ Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing th
   const entries = Array.from({ length: 300 }, (_, i) => entry(`session-${i}`));
   const meta = inbox([task("task", [entries[0].id])]);
   const reads = { entries: 0, inbox: 0, taskActivity: 0 };
-  const tabs = model();
+  const tabs = canonicalTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({
     directory: "/p",
     get entries() {
@@ -183,7 +188,7 @@ Deno.test("keyed task membership retains an explicitly grouped session before it
   assertEquals(tabs.sessionFor("task"), "pending");
 });
 
-Deno.test("helpers roll up to their nearest task, never become phantom tabs, and finished helpers are quiet", () => {
+Deno.test("helpers roll up to their nearest task and finished helpers remain mandatory until acknowledged", () => {
   const root = entry("root"),
     other = entry("other", 20),
     child = entry("child", 50, "root"),
@@ -203,7 +208,7 @@ Deno.test("helpers roll up to their nearest task, never become phantom tabs, and
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
     "root-task",
     "working",
-  ], ["other-task", "idle"]]);
+  ], ["other-task", "none"]]);
   nested.attention.permissions = 1;
   tabs.update(input);
   assertEquals(tabs.tabs()[0].status, "blocked");
@@ -211,15 +216,16 @@ Deno.test("helpers roll up to their nearest task, never become phantom tabs, and
   nested.attention.permissions = 0;
   meta.finishes.child = meta.finishes.nested = 200;
   tabs.update(input);
-  assertEquals(tabs.tabs().map((t) => t.status), ["idle", "idle"]);
-  assertEquals(inboxProjects(input.entries, meta, 0)[0].unread, false);
+  assertEquals(tabs.tabs().map((t) => t.status), ["finished", "none"]);
+  assertEquals(inboxProjects(input.entries, meta, 0)[0].unread, true);
+  meta.seen.child = meta.seen.nested = 200;
   meta.tasks.push(task("child-task", ["child"]));
   nested.status = "busy";
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
     ["child-task", "working"],
-    ["other-task", "idle"],
-    ["root-task", "idle"],
+    ["other-task", "none"],
+    ["root-task", "none"],
   ]);
   assertEquals(
     taskBreadcrumbs(meta.tasks[0], input.entries, meta.tasks).map((c) => c.id),
@@ -243,8 +249,14 @@ Deno.test("no-task parent owns its active helper phantom and helper previews ret
   child.attention.questions = 0;
   meta.finishes.child = 10;
   tabs.update(input);
-  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [["root", "idle"]]);
+  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
+    "root",
+    "finished",
+  ]]);
   tabs.preview("other");
+  assertEquals(tabs.tabs().map((t) => t.id), ["root", "other"]);
+  meta.seen.child = 10;
+  tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), ["other"]);
   tabs.preview("child");
   tabs.close("child");

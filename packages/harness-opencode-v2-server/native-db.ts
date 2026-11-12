@@ -89,7 +89,13 @@ export class V2NativeDb {
       (this.columns.has("title") ? "s.title" : "NULL AS title") + "," +
       (this.columns.has("time_archived")
         ? "s.time_archived"
-        : "NULL AS time_archived");
+        : "NULL AS time_archived") +
+      "," +
+      (this.columns.has("time_idle") ? "s.time_idle" : "NULL AS time_idle") +
+      "," +
+      (this.columns.has("idle_outcome")
+        ? "s.idle_outcome"
+        : "NULL AS idle_outcome");
   }
   /** Optional saved topology, paged in this worker's already source-proven DB. */
   worktrees(
@@ -127,6 +133,13 @@ export class V2NativeDb {
       archived: row.time_archived != null,
       status: "idle",
       activityAuthority: "unknown",
+      activity: {
+        terminal: ["succeeded", "failed", "interrupted"].includes(
+            String(row.idle_outcome),
+          ) && Number(row.time_idle) > 0
+          ? Number(row.time_idle)
+          : undefined,
+      },
       attention: {
         permissions: 0,
         questions: 0,

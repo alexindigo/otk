@@ -74,7 +74,10 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
     void d.accept();
   });
   await sessionContext(page, ".otk-user-bubble", "session.close");
-  expect(message).toContain("phantom tab until it is idle and seen");
+  // There is no idle state; the phantom lasts while evidence or an unseen finish does.
+  expect(message).toContain(
+    "phantom tab while it has known activity or an unseen finish",
+  );
   await expect(page).toHaveURL(/#project\//);
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
   expect(
@@ -88,7 +91,10 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await activity(state, "tstv1-otk", "release");
   await expect(page.locator('[data-tab="tstv1-otk"] .otk-status-light'))
     .toHaveAttribute("data-state", "finished");
-  await state.product("sessions.seen", { sessionID: "tstv1-otk" });
+  await state.product("sessions.seen", {
+    sessionID: "tstv1-otk",
+    terminal: (await state.product("sessions.finishes", {}))["tstv1-otk"] ?? 0,
+  });
   await expect(page.locator('[data-tab="tstv1-otk"]')).toHaveCount(0);
   await state.product("layout.patch", { rightCollapsed: false });
   expect((await state.product("session.get", { sessionID: "tstv1-otk" })).id)

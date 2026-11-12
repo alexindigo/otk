@@ -141,7 +141,7 @@ Deno.test("a replacement view baseline preserves a finish newer than an already 
   }
 });
 
-Deno.test("a helper completion cannot become a new root notification after reparenting", () => {
+Deno.test("a helper completion notifies once and reparenting cannot notify it again", () => {
   const f = fixture();
   try {
     f.resources.receive("local", {
@@ -153,7 +153,7 @@ Deno.test("a helper completion cannot become a new root notification after repar
       }],
     });
     f.finish("helper", 10);
-    assertEquals(f.notes, []);
+    assertEquals(f.notes, ["done"]);
     f.resources.receive("local", {
       t: "index.patch",
       rev: 2,
@@ -162,7 +162,7 @@ Deno.test("a helper completion cannot become a new root notification after repar
         entry: { ...shellEntry("helper"), status: "idle" },
       }],
     });
-    assertEquals(f.notes, []);
+    assertEquals(f.notes, ["done"]);
   } finally {
     f.resources.stop();
   }

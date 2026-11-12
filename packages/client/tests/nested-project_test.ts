@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { createProjectProjection } from "../project-projection.ts";
-import { createTabs } from "../tabs.ts";
+import { createTabs } from "./supervision-fixture.ts";
 import type { MergedMetadata } from "../index.ts";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 

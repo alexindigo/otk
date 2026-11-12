@@ -9,6 +9,7 @@ import {
   type ProjectRecord,
   type ProjectSummary,
   type ServerFrame,
+  type Supervision,
   type TaskRecord,
   type ViewLease,
 } from "@otk/protocol";
@@ -23,6 +24,7 @@ import type {
 } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
 import { ProjectSummaries } from "../index/project-summaries.ts";
+import { SessionSupervision } from "../index/supervision.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -57,6 +59,7 @@ export interface InboxStores {
   templates: ProjectTemplates;
 }
 interface InboxMaps {
+  supervision: Map<string, Supervision>;
   summaries: Map<string, ProjectSummary>;
   projects: Map<string, ProjectRecord>;
   tasks: Map<string, TaskRecord>;
@@ -121,14 +124,9 @@ export class InboxFeature implements FrameSource {
           .flatMap((scope) => this.index.catalog(scope))
     ) {
       if (entry.deleted) continue;
-      const a = entry.attention;
-      if (
-        entry.status !== "idle" || a.error ||
-        a.permissions + a.questions + a.childPermissions + a.childQuestions >
-          0 ||
-        !entry.parentID && (this.#finishes.get(entry.id) ?? 0) >
-            (this.#seen.get(this.user)?.get(entry.id) ?? 0)
-      ) ids.add(entry.id);
+      if ((this.#supervision.get(entry.id)?.state ?? "none") !== "none") {
+        ids.add(entry.id);
+      }
     }
     return [...ids];
   }
@@ -266,6 +264,28 @@ export class InboxFeature implements FrameSource {
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
   #finishes = new Map<string, number>();
+  #supervision = new Map<string, Supervision>();
+  readonly supervision = new SessionSupervision();
+  #supervise(id: string): void {
+    const entry = this.index.getMetadata(id);
+    const value = entry &&
+      this.supervision.session(
+        entry,
+        this.#seen.get(this.user)?.get(id) ?? 0,
+        this.#finishes.get(id),
+      );
+    if (JSON.stringify(value) === JSON.stringify(this.#supervision.get(id))) {
+      return;
+    }
+    if (value) this.#supervision.set(id, value);
+    else this.#supervision.delete(id);
+    this.#capture("supervision", id);
+    this.#queue(`supervision:${id}`, {
+      op: "supervision",
+      sessionID: id,
+      value: value ?? null,
+    }, { sessionID: id });
+  }
   #assemblies = new Set<InboxAssembly>();
   #user = "";
   readonly summaries: ProjectSummaries;
@@ -288,8 +308,8 @@ export class InboxFeature implements FrameSource {
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
     this.#templates = stores.templates.list();
     this.#policies = stores.projects.policies();
-    this.#finishes = new Map(Object.entries(stores.finishes.list()));
-    for (const { user, session, time } of stores.seen.all()) {
+    this.#finishes = new Map(Object.entries(stores.finishes.tokens()));
+    for (const { user, session, time } of stores.seen.tokens()) {
       const marks = this.#seen.get(user) ?? new Map<string, number>();
       marks.set(session, time);
       this.#seen.set(user, marks);
@@ -311,6 +331,7 @@ export class InboxFeature implements FrameSource {
         this.#summaryPending.set(directory, null);
         this.#schedule();
       },
+      this.supervision,
     );
     for (const project of this.#projects.values()) {
       this.summaries.ensure(project.directory);
@@ -332,8 +353,16 @@ export class InboxFeature implements FrameSource {
           this.summaries.refresh();
         }
       }),
-      index.observeRemoval((id) => this.summaries.remove(id)),
-      index.observeAuthority((value) => this.summaries.authority(value)),
+      index.observeRemoval((id) => {
+        this.#supervise(id);
+        this.summaries.remove(id);
+      }),
+      index.observeAuthority((value) => {
+        this.summaries.authority(value);
+        for (const entry of this.index.snapshotEntries()) {
+          this.#supervise(entry.id);
+        }
+      }),
       index.observeSeeds((values) => {
         for (const entry of this.summaries.seed(values)) this.#observe(entry);
       }),
@@ -377,8 +406,10 @@ export class InboxFeature implements FrameSource {
         }
         this.#summaryDirectories();
       }),
-      stores.finishes.listen(({ session, time }) => {
+      stores.finishes.listen(({ session, time, terminal }) => {
+        if (terminal === undefined) return;
         this.#finishes.set(session, time);
+        this.#supervise(session);
         this.summaries.mark(session);
         this.#capture("finishes", session);
         this.#queue(`finish:${session}`, {
@@ -387,12 +418,14 @@ export class InboxFeature implements FrameSource {
           time,
         }, { sessionID: session });
       }),
-      stores.seen.listen(({ user, session, time }) => {
+      stores.seen.listen(({ user, session, time, terminal }) => {
+        if (terminal === undefined) return;
         this.#identity();
         const marks = this.#seen.get(user) ?? new Map<string, number>();
         marks.set(session, time);
         this.#seen.set(user, marks);
         if (user === this.user) {
+          this.#supervise(session);
           this.summaries.mark(session);
           this.#capture("seen", session);
           this.#queue(`seen:${session}`, {
@@ -448,7 +481,14 @@ export class InboxFeature implements FrameSource {
     listen: (changed: () => void) => () => void,
   ): void {
     this.summaries.permissions(permissions);
-    this.#stops.push(listen(() => this.summaries.refresh()));
+    const changed = () => {
+      this.summaries.refresh();
+      for (const entry of this.index.snapshotEntries()) {
+        this.#supervise(entry.id);
+      }
+    };
+    changed();
+    this.#stops.push(listen(changed));
   }
   locationAttention(
     values: () => Readonly<Record<string, number>>,
@@ -476,6 +516,7 @@ export class InboxFeature implements FrameSource {
     this.#summaryPending.clear();
     this.#summaryRevision = 0;
     this.summaries?.refresh();
+    for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
   }
   get(view?: ViewLease, leased?: ReadonlySet<string>): InboxSnapshot {
     this.#identity();
@@ -508,6 +549,11 @@ export class InboxFeature implements FrameSource {
           })
           : this.#finishes,
       ),
+      supervision: Object.fromEntries(
+        leased
+          ? [...this.#supervision].filter(([id]) => leased.has(id))
+          : this.#supervision,
+      ),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
       summaries: Object.fromEntries(this.summaries.values),
@@ -527,6 +573,7 @@ export class InboxFeature implements FrameSource {
       const assembly: InboxAssembly = { dirty: new Map(), overflow: false };
       this.#assemblies.add(assembly);
       const maps: InboxMaps = {
+        supervision: new Map(),
         summaries: new Map(),
         projects: new Map(),
         tasks: new Map(),
@@ -556,6 +603,7 @@ export class InboxFeature implements FrameSource {
         await copy(source.tasks, maps.tasks);
         await copy(source.seen, maps.seen);
         await copy(source.finishes, maps.finishes);
+        await copy(source.supervision, maps.supervision);
         await copy(source.summaries, maps.summaries);
         this.#flush();
         if (assembly.overflow || generation !== this.#generation) continue;
@@ -563,7 +611,7 @@ export class InboxFeature implements FrameSource {
         for (const { kind, id } of assembly.dirty.values()) {
           const target = maps[kind] as Map<
             string,
-            ProjectRecord | TaskRecord | ProjectSummary | number
+            ProjectRecord | TaskRecord | ProjectSummary | Supervision | number
           >;
           const value = current[kind].get(id);
           if (value === undefined) target.delete(id);
@@ -578,6 +626,7 @@ export class InboxFeature implements FrameSource {
           ),
           seen: Object.fromEntries(maps.seen),
           finishes: Object.fromEntries(maps.finishes),
+          supervision: Object.fromEntries(maps.supervision),
           pathTemplates: [...this.#templates],
           discovered: [...this.#discovered],
           summaries: Object.fromEntries(maps.summaries),
@@ -598,6 +647,7 @@ export class InboxFeature implements FrameSource {
   }
   #maps(): InboxMaps {
     return {
+      supervision: this.#supervision,
       summaries: this.summaries.values,
       projects: this.#projects,
       tasks: this.#tasks,
@@ -690,13 +740,14 @@ export class InboxFeature implements FrameSource {
     tx?: StoreWrite,
   ): void {
     const s = this.stores;
+    const terminal = entry.activity?.terminal;
     if (
-      previous?.status !== undefined && previous.status !== "idle" &&
-      entry.status === "idle" && !entry.deleted && !previous.deleted
-    ) s.finishes.record(entry.id);
-    const a = entry.attention;
-    const active = entry.status !== "idle" || !!a.error ||
-      a.permissions + a.questions + a.childPermissions + a.childQuestions > 0;
+      !entry.deleted && terminal &&
+      terminal > (this.#finishes.get(entry.id) ?? 0)
+    ) s.finishes.observe(entry.id, terminal, tx);
+    this.#supervise(entry.id);
+    const state = this.#supervision.get(entry.id)?.state;
+    const active = state === "working" || state === "needsYou";
     const unseen =
       [...this.#seen.values()].some((marks) =>
         (this.#finishes.get(entry.id) ?? 0) > (marks.get(entry.id) ?? 0)
@@ -1091,15 +1142,25 @@ export class InboxFeature implements FrameSource {
     });
     rpc.register("sessions.seen", {
       execution: preparedLocalExecution(
-        (id: string) => ({ sessionID: id }),
+        (p: { sessionID: string; terminal: number }) => ({
+          sessionID: p.sessionID,
+        }),
         seenReceipt,
       ),
-      params: (p) => sessionID(p)!,
-      handler: async (ctx, id) => {
+      params: (p) => {
+        if (!Number.isSafeInteger(p.terminal) || Number(p.terminal) < 0) {
+          throw new HarnessError("params", "Expected terminal token");
+        }
+        return { sessionID: sessionID(p)!, terminal: Number(p.terminal) };
+      },
+      handler: async (ctx, { sessionID: id, terminal }) => {
         if (!this.index.get(id)?.deleted) await ctx.sessionDirectory(id);
+        if (terminal > (this.#finishes.get(id) ?? 0)) {
+          throw new HarnessError("params", "Terminal token was not published");
+        }
         return localWrite(
           ctx,
-          (tx) => s.seen.mark(user(), id, tx),
+          (tx) => s.seen.acknowledge(user(), id, terminal, tx),
           seenReceipt,
         );
       },
@@ -1113,7 +1174,7 @@ export class InboxFeature implements FrameSource {
           ? Object.fromEntries(
             [...this.#finishes].filter(([id]) => ids.has(id)),
           )
-          : s.finishes.list();
+          : s.finishes.tokens();
       },
     });
   }

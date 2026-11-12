@@ -37,7 +37,7 @@ export const THEME_SLOTS = [
   "lamp-blocked",
   "lamp-finished",
   "lamp-working",
-  "lamp-idle",
+  "lamp-none",
   "connection-connected",
   "connection-connecting",
   "connection-disconnected",

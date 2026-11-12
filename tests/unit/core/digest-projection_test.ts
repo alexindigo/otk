@@ -68,12 +68,20 @@ test("hydrated inbox observers perform zero SELECTs, preserve every finish edge 
   try {
     index.upsertMetadata(entry);
     assertEquals(reads, 0);
-    index.upsertMetadata({ ...entry, status: "busy" });
+    index.upsertMetadata({
+      ...entry,
+      status: "busy",
+      activity: { work: { keys: ["run-1"], fresh: true } },
+    });
     clock = 3;
-    index.upsertMetadata(entry);
+    index.upsertMetadata({ ...entry, activity: { terminal: 3 } });
     clock = 4;
-    index.upsertMetadata({ ...entry, status: "busy" });
-    index.upsertMetadata(entry);
+    index.upsertMetadata({
+      ...entry,
+      status: "busy",
+      activity: { work: { keys: ["run-2"], fresh: true } },
+    });
+    index.upsertMetadata({ ...entry, activity: { terminal: 4 } });
     index.applyDigest({
       id: entry.id,
       revision: 1,
@@ -83,7 +91,7 @@ test("hydrated inbox observers perform zero SELECTs, preserve every finish edge 
     });
     index.upsertMetadata(entry);
     assertEquals(reads, 0);
-    assertEquals(stores.finishes.time(entry.id), 4);
+    assertEquals(stores.finishes.tokens()[entry.id], 4);
     assertEquals(stores.tasks.get(task.id).sessions, [entry.id]);
     assertEquals(stores.projects.find("alice", "/p")?.inactive, false);
   } finally {

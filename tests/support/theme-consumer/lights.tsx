@@ -10,7 +10,7 @@ export default function Lights() {
         data-theme-lamps
         style={{ display: "flex", gap: "32px", padding: "32px" }}
       >
-        <For each={["blocked", "working", "finished", "idle"] as const}>
+        <For each={["blocked", "working", "finished", "none"] as const}>
           {(state) => (
             <div>
               <StatusLight state={state} event={event()} />
