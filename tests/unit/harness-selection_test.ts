@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { selectHarness } from "../../harness-selection.ts";
 import { cfg } from "../support/config.ts";
 
@@ -101,6 +101,53 @@ Deno.test("explicit V1 retains its offline lifetime for unknown health but not b
       kind: "opencode-v1",
       version: "unknown",
     });
+  } finally {
+    await server.shutdown();
+    await Deno.remove(root, { recursive: true });
+  }
+});
+
+Deno.test("auto fallback failures name the missing registration, URL and actual credential source", async () => {
+  const root = await Deno.makeTempDir();
+  const server = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    () => new Response("Unauthorized", { status: 401 }),
+  );
+  const url = `http://127.0.0.1:${server.addr.port}`;
+  const config = { ...cfg().harness, type: "auto", url, password: "" };
+  const env = { HOME: root, XDG_STATE_HOME: root };
+  try {
+    for (const password of ["", "secret-config-password"]) {
+      const error = await assertRejects(
+        () => selectHarness({ ...config, password }, env),
+        Error,
+        "401",
+      );
+      assertStringIncludes(
+        error.message,
+        `no opencode service registration at ${root}/opencode/service.json`,
+      );
+      assertStringIncludes(error.message, url);
+      assertStringIncludes(
+        error.message,
+        password
+          ? "credentials from config/env"
+          : "no credentials were sent (harness.url fallback)",
+      );
+      assertEquals(error.message.includes("secret-config-password"), false);
+    }
+    await server.shutdown();
+    const error = await assertRejects(() => selectHarness(config, env), Error);
+    assertStringIncludes(
+      error.message,
+      `no opencode service registration at ${root}/opencode/service.json`,
+    );
+    assertStringIncludes(error.message, url);
+    assertStringIncludes(error.message, "unreachable");
+    assertStringIncludes(
+      error.message,
+      "no credentials were sent (harness.url fallback)",
+    );
   } finally {
     await server.shutdown();
     await Deno.remove(root, { recursive: true });

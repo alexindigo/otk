@@ -19,6 +19,7 @@ export async function selectHarness(
   signal?: AbortSignal,
 ): Promise<HarnessSelection> {
   const type = config.type === "opencode1" ? "opencode-v1" : config.type;
+  let missingRegistration: string | undefined;
   if (!["auto", "opencode-v1", "opencode-v2-server"].includes(type)) {
     throw new HarnessError(
       "config",
@@ -34,7 +35,7 @@ export async function selectHarness(
       if (error instanceof Deno.errors.NotFound) missing = true;
       else {throw new HarnessError(
           "discovery",
-          "Cannot read the opencode service registration.",
+          `Cannot read the opencode service registration ${file}.`,
         );}
     }
     if (!missing || type === "opencode-v2-server") {
@@ -44,6 +45,7 @@ export async function selectHarness(
         file,
       };
     }
+    missingRegistration = file;
   }
   const headers: HeadersInit = config.password
     ? {
@@ -55,7 +57,18 @@ export async function selectHarness(
     : {};
   let probe;
   try {
-    probe = await probeVersion(config.url, headers, signal);
+    probe = await probeVersion(
+      {
+        url: config.url,
+        source: {
+          kind: config.password ? "config" : "none",
+          fallback: type === "auto",
+        },
+        missingRegistration,
+      },
+      headers,
+      signal,
+    );
   } catch (error) {
     signal?.throwIfAborted();
     // An explicit backend selection is not a readiness gate. Keep V1's cached
@@ -67,11 +80,7 @@ export async function selectHarness(
     ) {
       return { kind: "opencode-v1", version: "unknown" };
     }
-    if (error instanceof HarnessError) throw error;
-    throw new HarnessError(
-      "no-server",
-      "No opencode server is running at the configured V1 endpoint. Start opencode separately; OTK never starts it.",
-    );
+    throw error;
   }
   if (probe.kind !== "opencode-v1") {
     throw new HarnessError(

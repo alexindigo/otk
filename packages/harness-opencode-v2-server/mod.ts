@@ -6,7 +6,11 @@ export {
   serviceFile,
   serviceHeaders,
 } from "./discovery.ts";
-export type { DiscoveredService, VersionProbe } from "./discovery.ts";
+export type {
+  DiscoveredService,
+  ProbeTarget,
+  VersionProbe,
+} from "./discovery.ts";
 export { V2Client } from "./client.ts";
 export type { OpenCodeClient } from "./client.ts";
 export { opencodeV2SessionID } from "./ids.ts";

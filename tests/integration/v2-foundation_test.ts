@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { selectHarness } from "../../harness-selection.ts";
 import {
   discoverV2,
   OpencodeV2ServerAdapter,
@@ -172,6 +173,103 @@ Deno.test({
       assertEquals(welcome.sidecar.harness.kind, "opencode-v2-server");
       await ws.close();
       await app.stop();
+      assertEquals(native.process.exitCode, null);
+    }),
+});
+
+Deno.test({
+  name: "OC2PE probe failures preserve fallback and registration provenance",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("V2 probe diagnostics", async () => {
+      const native = await OpencodeV2Test.start(new FakeLlm());
+      const registration = JSON.parse(
+        await Deno.readTextFile(native.serviceFile),
+      );
+      const state = native.root + "/absent-state";
+      const missing = state + "/opencode/service.json";
+      const config = {
+        ...cfg().harness,
+        type: "auto",
+        url: registration.url,
+        password: "",
+      };
+      const env = { HOME: native.root, XDG_STATE_HOME: state };
+      const unauthorized = await assertRejects(
+        () => selectHarness(config, env),
+        Error,
+        "401",
+      );
+      assertStringIncludes(
+        unauthorized.message,
+        `no opencode service registration at ${missing}`,
+      );
+      assertStringIncludes(unauthorized.message, registration.url);
+      assertStringIncludes(
+        unauthorized.message,
+        "no credentials were sent (harness.url fallback)",
+      );
+
+      const closed = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+      const url = `http://127.0.0.1:${closed.addr.port}`;
+      closed.close();
+      const unreachable = await assertRejects(
+        () => selectHarness({ ...config, url }, env),
+        Error,
+      );
+      assertStringIncludes(
+        unreachable.message,
+        `no opencode service registration at ${missing}`,
+      );
+      assertStringIncludes(unreachable.message, url);
+      assertStringIncludes(unreachable.message, "unreachable");
+      assertStringIncludes(
+        unreachable.message,
+        "no credentials were sent (harness.url fallback)",
+      );
+
+      await Deno.mkdir(state + "/opencode", { recursive: true });
+      await Deno.writeTextFile(
+        missing,
+        JSON.stringify({ ...registration, password: "wrong-password" }),
+      );
+      const wrong = await assertRejects(
+        () => selectHarness({ ...config, type: "opencode-v2-server" }, env),
+        Error,
+        "401",
+      );
+      assertStringIncludes(wrong.message, registration.url);
+      assertStringIncludes(wrong.message, `registration ${missing}`);
+      assertEquals(wrong.message.includes("wrong-password"), false);
+
+      const replacement = Deno.serve(
+        { hostname: "127.0.0.1", port: 0, onListen() {} },
+        () =>
+          Response.json({
+            version: registration.version,
+            pid: registration.pid + 1,
+          }, { status: 401 }),
+      );
+      try {
+        const url = `http://127.0.0.1:${replacement.addr.port}`;
+        await Deno.writeTextFile(
+          missing,
+          JSON.stringify({ ...registration, url }),
+        );
+        const stale = await assertRejects(
+          () => selectHarness(config, env),
+          Error,
+          "Stale",
+        );
+        assertStringIncludes(stale.message, url);
+        assertStringIncludes(stale.message, `registration ${missing}`);
+        assertEquals(
+          stale.message.includes("authentication failed (401)"),
+          false,
+        );
+      } finally {
+        await replacement.shutdown();
+      }
       assertEquals(native.process.exitCode, null);
     }),
 });
