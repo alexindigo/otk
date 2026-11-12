@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-native-record.is-error .otk-tool-state {
+  color: var(--otk-status-error);
+}
+.otk-native-parameters {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+}
+.otk-native-parameters dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.otk-native-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
+}
+.otk-native-record.is-open .otk-tool-icon svg {
+  transform: rotate(90deg);
+}

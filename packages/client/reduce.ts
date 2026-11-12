@@ -240,12 +240,14 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
   if (op.op === "agent.colors") {
     return {
       ...state,
-      messages: state.messages.map((message) => ({
-        ...message,
-        agentColor: message.agent === undefined
-          ? undefined
-          : op.colors[message.agent],
-      })),
+      messages: state.messages.map((message) =>
+        message.role === "context" ? message : ({
+          ...message,
+          agentColor: message.agent === undefined
+            ? undefined
+            : op.colors[message.agent],
+        })
+      ),
     };
   }
   if (op.op === "session.error") {

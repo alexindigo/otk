@@ -153,6 +153,7 @@ export class PartRegistry {
   #typed = new Map<string, PartRenderer>();
   #external = new Map<string, PartRenderer>();
   #fallback?: PartRenderer;
+  #fallbackPresentation?: (part: Part, prefs: Preferences) => PartPresentation;
   #presentations = new Map<
     string,
     (part: Part, prefs: Preferences) => PartPresentation
@@ -189,9 +190,13 @@ export class PartRegistry {
       );
     }
   }
-  fallback(component: PartRenderer): void {
+  fallback(
+    component: PartRenderer,
+    presentation?: (part: Part, prefs: Preferences) => PartPresentation,
+  ): void {
     if (this.#fallback) throw new Error("Duplicate part fallback");
     this.#fallback = component;
+    this.#fallbackPresentation = presentation;
   }
   resolve(part: Part): PartRenderer | undefined {
     return (part.kind === "external"
@@ -199,9 +204,15 @@ export class PartRegistry {
       : this.#typed.get(part.kind)) ?? this.#fallback;
   }
   presentation(part: Part, prefs: Preferences): PartPresentation {
+    const external = part.kind === "external";
+    const registered = external
+      ? this.#external.has(part.name)
+      : this.#typed.has(part.kind);
     return this.#presentations.get(
-      part.kind === "external" ? `external:${part.name}` : `typed:${part.kind}`,
-    )?.(part, prefs) ?? {};
+      external ? `external:${part.name}` : `typed:${part.kind}`,
+    )?.(part, prefs) ??
+      (!registered ? this.#fallbackPresentation?.(part, prefs) : undefined) ??
+      {};
   }
 }
 

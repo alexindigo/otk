@@ -437,7 +437,7 @@ export class OpencodeV1Adapter implements Harness {
             ? message.sessionID
             : undefined,
         );
-        if (message.agent !== undefined) {
+        if (message.role !== "context" && message.agent !== undefined) {
           message.agentColor = colors?.get(message.agent);
         }
         for (const [i, part] of raw.parts.entries()) {
@@ -2093,7 +2093,7 @@ export class OpencodeV1Adapter implements Harness {
             ),
             colors = this.#colors.peek(this.#directory(sessionID), sessionID);
           if (!this.#current(controller)) return;
-          if (message.agent !== undefined) {
+          if (message.role !== "context" && message.agent !== undefined) {
             message.agentColor = colors?.get(message.agent);
           }
           content({ op: "message.upsert", message });
