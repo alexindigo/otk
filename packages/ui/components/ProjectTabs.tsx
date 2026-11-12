@@ -106,6 +106,14 @@ export default function ProjectTabs(props: {
     if (id ? props.onOpen(id) : props.onEmpty()) {
       props.model.select({ kind: "task", id: tab.id }, id);
     }
+  }, {
+    arguments: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        kind: { type: "string", enum: ["phantom", "task"] },
+      },
+    },
   });
   const controls = createTaskControls({
     commands,
@@ -114,25 +122,55 @@ export default function ProjectTabs(props: {
     tasks,
     onEmpty: () => props.onEmpty(),
   });
-  const pin = ownedAction("task.pin", controls.pin);
+  const pin = ownedAction("task.pin", controls.pin, {
+    arguments: { type: "string" },
+  });
   const taskAvailable = (target: TaskContextTarget) =>
     target.sidecarId === props.project.sidecarId &&
     tasks().some((task) =>
       task.id === target.taskID && task.directory === target.directory
     );
-  const renameTask = (target?: TaskContextTarget) =>
+  const renameTask = (target: TaskContextTarget | undefined) =>
     controls.rename(
       target ? tasks().find((task) => task.id === target.taskID)! : undefined,
     );
   const rename = ownedAction("task.rename", renameTask, {
+    arguments: {
+      type: "object",
+      optional: true,
+      properties: {
+        sidecarId: { type: "string" },
+        directory: { type: "string" },
+        taskID: { type: "string" },
+      },
+    },
     context: { kind: "task", title: () => "Rename task" },
     enabled: (_ctx, target) =>
       props.ready && (!target || taskAvailable(target)),
   });
-  ownedAction("task.reorder", controls.move);
+  ownedAction("task.reorder", controls.move, {
+    arguments: {
+      type: "object",
+      properties: {
+        task: {
+          type: "object",
+          properties: { id: { type: "string" }, directory: { type: "string" } },
+        },
+        delta: { type: "number" },
+      },
+    },
+  });
   const closeTask = (target: TaskContextTarget) =>
     controls.close(target.taskID);
   ownedAction("task.close", closeTask, {
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        directory: { type: "string" },
+        taskID: { type: "string" },
+      },
+    },
     context: { kind: "task", title: () => "Close task", destructive: true },
     enabled: (_ctx, target) => props.ready && !!target && taskAvailable(target),
   });
@@ -140,7 +178,14 @@ export default function ProjectTabs(props: {
     id: "task.add",
     title: "Add to task",
     category: "Session",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+        taskID: { type: "string" },
+      },
+    },
     context: {
       kind: "session",
       items: (target: SessionContextTarget & { taskID?: string }) =>
@@ -267,7 +312,7 @@ export default function ProjectTabs(props: {
       if (task) props.model.select({ kind: "task", id: task.id }, id);
       else props.model.preview(id);
     }
-  });
+  }, { arguments: { type: "string" } });
   const meter = createMemo(() => summaryMeter(props.entry, props.catalog));
   const cost = () =>
     props.entry?.digest.state === "ready"

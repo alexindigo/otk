@@ -8,7 +8,9 @@ Deno.test("commands: invocation context, args, enabled state, metadata and owned
     id: "external.run",
     title: "Run",
     category: "External",
-    slash: ["run", "go"],
+    name: "run",
+    aliases: ["go"],
+    arguments: { type: "object", properties: { delta: { type: "number" } } },
     enabled: (ctx) => ctx.session !== "blocked",
     run: (ctx, args: { delta: number }) => {
       calls += args.delta;
@@ -56,10 +58,9 @@ Deno.test("commands: async errors propagate to invocation owner and registries s
     id: "fail",
     title: "Fail",
     category: "External",
-    hidden: true,
     run: () => Promise.reject(new Error("owner error")),
   });
-  assertEquals(one.list(), []);
+  assertEquals(one.list().map((row) => row.cmd.id), ["fail"]);
   assertEquals(two.has("fail"), false);
   await assertRejects(() => one.run("fail"), Error, "owner error");
   release();
@@ -74,8 +75,7 @@ Deno.test("command metadata is immutable data independent of discovery and canno
     id: "external.private",
     title: "Private action",
     category: "External",
-    hidden: true,
-    slash: aliases,
+    aliases,
     enabled: () => {
       predicates++;
       return true;
@@ -87,14 +87,15 @@ Deno.test("command metadata is immutable data independent of discovery and canno
   aliases.push("caller-change");
   const metadata = hub.metadata("external.private")!;
   assertEquals(metadata.title, "Private action");
-  assertEquals(metadata.slash, ["private"]);
+  assertEquals(metadata.aliases, ["private"]);
   assertEquals(Object.isFrozen(metadata), true);
-  assertEquals(Object.isFrozen(metadata.slash), true);
-  assertThrows(() => (metadata.slash as string[]).push("bypass"), TypeError);
+  assertEquals(Object.isFrozen(metadata.aliases), true);
+  assertThrows(() => (metadata.aliases as string[]).push("bypass"), TypeError);
   assertEquals("run" in metadata, false);
   assertEquals("enabled" in metadata, false);
-  assertEquals(hub.list(), []);
-  assertEquals([predicates, calls], [0, 0]);
+  assertEquals(hub.list().map((row) => row.cmd.id), ["external.private"]);
+  assertEquals([predicates > 0, calls], [true, 0]);
+  predicates = 0;
   await hub.run("external.private");
   assertEquals([predicates, calls], [1, 1]);
   release();

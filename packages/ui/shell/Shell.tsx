@@ -69,6 +69,7 @@ export default function Shell(
     navigation,
     listInteraction,
     interact,
+    confirmCommand,
   } = createShellState({ api: props.api });
   const {
     sidecars,
@@ -100,6 +101,7 @@ export default function Shell(
       keyboard.keymap.list().filter((row) => row.command === id).map((row) =>
         row.key
       ),
+    confirmCommand,
   );
   const keyboard = createKeyboard(
     commands,
@@ -178,7 +180,7 @@ export default function Shell(
         title: "Choose theme",
         category: "Display",
         dialog: "theme",
-        slash: ["theme"],
+        name: "theme",
       },
     ]
   ) {
@@ -223,7 +225,6 @@ export default function Shell(
       id: "settings.close",
       title: "Close settings",
       category: "Connections",
-      hidden: true,
       run: navigation.closeSettings,
     }),
   );
@@ -332,7 +333,7 @@ export default function Shell(
     id: "session.title.copy",
     title: "Copy session title",
     category: "Session",
-    hidden: true,
+    arguments: { type: "object", properties: { title: { type: "string" } } },
     context: {
       kind: "session",
       order: 40,
@@ -347,7 +348,13 @@ export default function Shell(
     id: "session.task.remove",
     title: "Remove from task",
     category: "Session",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+      },
+    },
     context: { kind: "session", order: 45 },
     enabled: (_ctx, target?: SessionContextTarget) =>
       !!target && !actions.eligibility(target).live &&

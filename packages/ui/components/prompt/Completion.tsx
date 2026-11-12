@@ -36,21 +36,26 @@ export function createCompletion(
     id: "prompt.complete.close",
     title: "Close completion",
     category: "Prompt",
-    hidden: true,
     run: () => owner.clear(),
   });
   const move = ownedCommand(ctx, {
     id: "prompt.complete.move",
     title: "Move completion",
     category: "Prompt",
-    hidden: true,
+    arguments: { type: "number" },
     run: (_context, delta: number) => owner.move(delta),
   });
   const choose = ownedCommand(ctx, {
     id: "prompt.complete.choose",
     title: "Choose completion",
     category: "Prompt",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        index: { type: "number" },
+        expand: { type: "boolean", optional: true },
+      },
+    },
     run: (_context, args: { index: number; expand?: boolean }) =>
       owner.choose(args.index, args.expand),
   });

@@ -1,19 +1,40 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  type CommandArguments,
+  freezeCommandArguments,
+  noCommandArguments,
+  parseCommandArguments,
+  validateCommandArguments,
+} from "./command-arguments.ts";
+export type { CommandArguments } from "./command-arguments.ts";
 /** Invocation-time context supplied by the consumer, never browser globals. */
 export interface CommandContext {
   sidecar?: string;
   session?: string;
   focus?: string;
   dialog?: string;
+  /** Prevent reentrant text commands from invoking their own input owner. */
+  command?: string;
 }
 /** Data-only owner metadata; discovery visibility does not hide key labels. */
 export interface CommandMetadata {
   readonly id: string;
   readonly title: string;
   readonly category: string;
-  readonly slash?: readonly string[];
-  readonly hidden?: boolean;
+  readonly name?: string;
+  readonly aliases?: readonly string[];
+  readonly description?: string;
+  readonly arguments?: CommandArguments;
+  readonly scope?: string;
+  readonly instance?: string;
+  readonly source?: "builtin" | "server" | "mcp" | "skill" | "unknown";
+  /** Submissions participate in the prompt's captured send/clear lifecycle. */
+  readonly kind?: "action" | "submission";
 }
+export type CommandAvailability = { available: true } | {
+  available: false;
+  reason: string;
+};
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   /** Feature-owned context contribution; args are the target's captured data. */
   context?: {
@@ -26,20 +47,34 @@ export interface Command<A = unknown, R = unknown> extends CommandMetadata {
     order?: number;
   };
   enabled?(context: CommandContext, args?: A): boolean;
+  availability?(context: CommandContext, args?: A): CommandAvailability;
   run(context: CommandContext, args: A): R | Promise<R>;
 }
+/** A typed input cannot be registered without its runtime contract. */
+export type CommandDefinition<A = void, R = unknown> =
+  & Command<A, R>
+  & ([A] extends [void] ? unknown : { arguments: CommandArguments });
 export interface ListedCommand {
   cmd: CommandMetadata;
   enabled: boolean;
   keys: string[];
+  availability: CommandAvailability;
 }
 function commandMetadata(command: CommandMetadata): CommandMetadata {
   return Object.freeze({
     id: command.id,
     title: command.title,
     category: command.category,
-    hidden: command.hidden,
-    slash: command.slash && Object.freeze(command.slash.slice()),
+    name: command.name ?? command.id,
+    aliases: Object.freeze([...(command.aliases ?? [])]),
+    description: command.description ?? command.title,
+    arguments: command.arguments
+      ? freezeCommandArguments(command.arguments)
+      : noCommandArguments,
+    scope: command.scope ?? "application",
+    instance: command.instance,
+    source: command.source ?? "builtin",
+    kind: command.kind ?? "action",
   });
 }
 /** Empty, framework-free registry. Feature owners register and release behavior. */
@@ -53,14 +88,17 @@ export class CommandHub {
   constructor(
     readonly context: () => CommandContext = () => ({}),
     readonly keys: (id: string) => string[] = () => [],
+    readonly confirm?: (message: string) => boolean | Promise<boolean>,
   ) {}
-  register<A, R>(command: Command<A, R>): () => void {
+  register<A = void, R = unknown>(
+    command: CommandDefinition<A, R>,
+  ): () => void {
     if (!command.id || this.#commands.has(command.id)) {
       throw new Error(`Duplicate or empty command: ${command.id}`);
     }
     const copy = Object.freeze({
       ...command,
-      slash: command.slash?.slice(),
+      ...commandMetadata(command),
       context: command.context && Object.freeze({
         ...command.context,
         kind: typeof command.context.kind === "string"
@@ -92,13 +130,68 @@ export class CommandHub {
     args?: unknown,
   ): boolean {
     const command = this.#commands.get(id);
-    return !!command && (command.enabled?.(context, args) ?? true);
+    return !!command && this.availability(id, context, args).available;
   }
-  async run<R = void>(id: string, args?: unknown): Promise<R> {
-    const command = this.#commands.get(id), context = this.context();
+  availability(
+    id: string,
+    context: CommandContext = this.context(),
+    args?: unknown,
+  ): CommandAvailability {
+    const command = this.#commands.get(id);
+    if (!command) return { available: false, reason: "Command owner inactive" };
+    if (context.command === command.id) {
+      return {
+        available: false,
+        reason: "Command input is already being handled",
+      };
+    }
+    try {
+      validateCommandArguments(command.arguments ?? noCommandArguments, args);
+    } catch (error) {
+      return {
+        available: false,
+        reason: error instanceof Error
+          ? error.message
+          : "Invalid command arguments",
+      };
+    }
+    return command.availability?.(context, args) ??
+      ((command.enabled?.(context, args) ?? true) ? { available: true } : {
+        available: false,
+        reason: "Command unavailable in the current context",
+      });
+  }
+  async run<R = void>(
+    id: string,
+    args?: unknown,
+    context: CommandContext = this.context(),
+  ): Promise<R> {
+    return await this.#run<R>(id, args, context, false);
+  }
+  async #run<R>(
+    id: string,
+    args: unknown,
+    context: CommandContext,
+    confirmed: boolean,
+  ): Promise<R> {
+    const command = this.#commands.get(id);
     if (!command) throw new Error(`Unknown command: ${id}`);
-    if (!this.enabled(id, context, args)) {
-      throw new Error(`Command unavailable: ${id}`);
+    const availability = this.availability(id, context, args);
+    if (!availability.available) {
+      throw new Error(`Command unavailable: ${id}: ${availability.reason}`);
+    }
+    if (command.context?.confirm && !confirmed) {
+      if (!this.confirm) throw new Error("Command confirmation is unavailable");
+      if (!await this.confirm(command.context.confirm(args))) {
+        throw new Error("Command cancelled");
+      }
+      if (this.#commands.get(id) !== command) {
+        throw new Error("This action is no longer available.");
+      }
+      const current = this.availability(id, context, args);
+      if (!current.available) {
+        throw new Error(`Command unavailable: ${id}: ${current.reason}`);
+      }
     }
     return await command.run(context, args) as R;
   }
@@ -117,7 +210,7 @@ export class CommandHub {
       item.key === action.key
     );
     if (!current) throw new Error("This action is no longer available.");
-    return await this.run<R>(current.id, current.args);
+    return await this.#run<R>(current.id, current.args, this.context(), true);
   }
   /** Data-only menu projection; execution always rechecks the ordinary command. */
   contextActions(target: ContextTarget): ContextAction[] {
@@ -135,7 +228,9 @@ export class CommandHub {
         (command.context?.items ? [] : [{
           key: "",
           title: command.context?.title?.(target.data) ?? command.title,
-          args: target.data,
+          args: command.arguments?.type === "none" || !command.arguments
+            ? undefined
+            : target.data,
         }]);
       return items.filter((item) =>
         this.enabled(command.id, context, item.args)
@@ -155,17 +250,50 @@ export class CommandHub {
     });
   }
   list(context: CommandContext = this.context()): ListedCommand[] {
-    return [...this.#commands.values()].filter((cmd) => !cmd.hidden).map((
-      cmd,
-    ) => ({
-      cmd: commandMetadata(cmd),
-      enabled: cmd.enabled?.(context) ?? true,
-      keys: this.keys(cmd.id),
-    }));
+    return [...this.#commands.values()].map((cmd) => {
+      const availability = this.availability(cmd.id, context);
+      return {
+        cmd: commandMetadata(cmd),
+        enabled: availability.available,
+        availability,
+        keys: this.keys(cmd.id),
+      };
+    });
   }
   resolveSlash(name: string): string | undefined {
-    return [...this.#commands.values()].find((cmd) => cmd.slash?.includes(name))
-      ?.id;
+    if (this.#commands.has(name)) return name;
+    const matches = [...this.#commands.values()].filter((cmd) =>
+      cmd.name === name || cmd.aliases?.includes(name)
+    );
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous command: ${name}. Use ${
+          matches.map((cmd) => cmd.id).sort().join(", ")
+        }`,
+      );
+    }
+    return matches[0]?.id;
+  }
+  /** The same resolution owns display spellings and text invocation. */
+  spelling(id: string): string {
+    const cmd = this.#commands.get(id);
+    const name = cmd?.name ?? id;
+    try {
+      return this.resolveSlash(name) === id ? name : id;
+    } catch {
+      return id;
+    }
+  }
+  parse(name: string, text: string): { id: string; args: unknown } | undefined {
+    const id = this.resolveSlash(name);
+    if (!id) return;
+    return {
+      id,
+      args: parseCommandArguments(
+        this.#commands.get(id)!.arguments ?? noCommandArguments,
+        text,
+      ),
+    };
   }
   subscribe(listener: () => void): () => void {
     this.#listeners.add(listener);

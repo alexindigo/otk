@@ -24,7 +24,9 @@ export default function Palette(
   const rows = () => {
     revision();
     return commands.list().filter((row) => row.enabled).filter((row) =>
-      `${row.cmd.title} ${row.cmd.category} ${row.cmd.slash?.join(" ") ?? ""}`
+      `${row.cmd.title} ${row.cmd.category} ${row.cmd.name} ${
+        row.cmd.aliases?.join(" ") ?? ""
+      }`
         .toLowerCase().includes(query().toLowerCase())
     );
   };

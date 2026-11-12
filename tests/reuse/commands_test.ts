@@ -11,7 +11,8 @@ Deno.test("plain Deno command consumer changes its selected resource and tears d
       id: "counter.add",
       title: "Add to counter",
       category: "Counter",
-      slash: ["add"],
+      name: "add",
+      arguments: { type: "number", optional: true },
       run: (ctx, delta: number = 1) => {
         const next = values.get(ctx.session!)! + delta;
         values.set(ctx.session!, next);

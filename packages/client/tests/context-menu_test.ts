@@ -9,7 +9,7 @@ Deno.test("context commands: captured targets, hidden contributions, grouping, a
     id: "session.close",
     title: "Close tab",
     category: "Session",
-    hidden: true,
+    arguments: { type: "object", properties: { id: { type: "string" } } },
     context: { kind: "session", destructive: true },
     enabled: (_ctx, input?: { id: string }) => available && !!input?.id,
     run: (_ctx, input: { id: string }) => {
@@ -18,6 +18,7 @@ Deno.test("context commands: captured targets, hidden contributions, grouping, a
   });
   commands.register({
     id: "session.copy",
+    arguments: { type: "object", properties: { id: { type: "string" } } },
     title: "Copy title",
     category: "Session",
     context: {
@@ -87,7 +88,7 @@ Deno.test("context contributions: one command projects multiple independently av
     id: "task.add",
     title: "Add to task",
     category: "Task",
-    hidden: true,
+    arguments: { type: "object" },
     context: {
       kind: "session",
       items: (input: Input) =>
@@ -119,7 +120,7 @@ Deno.test("context contributions: one command projects multiple independently av
     Error,
     "This action is no longer available.",
   );
-  assertEquals(commands.list().length, 0);
+  assertEquals(commands.list().map((row) => row.cmd.id), ["task.add"]);
 });
 
 Deno.test("context invocation: released or replaced command owners cannot consume an old action", async () => {
@@ -129,6 +130,7 @@ Deno.test("context invocation: released or replaced command owners cannot consum
     id: "reply.copy",
     title: "Copy reply",
     category: "Reply",
+    arguments: { type: "string" as const },
     context: { kind: "reply" },
     run: (_ctx: unknown, text: string) => {
       received = text;
@@ -167,6 +169,7 @@ Deno.test("context areas: inner groups precede their area, app follows only area
       id: kind,
       title: kind,
       category: "Test",
+      arguments: { type: "unknown", optional: true },
       context: { kind },
       run: (_ctx, data: unknown) => data,
     });

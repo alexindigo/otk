@@ -10,7 +10,14 @@ export function registerAttentionCommands(
       id: "permission.reply",
       title: "Reply to permission",
       category: "Attention",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          requestID: { type: "string" },
+          sessionID: { type: "string" },
+          reply: { type: "string", enum: ["once", "always", "reject"] },
+        },
+      },
       run: (_ctx, input: PermissionReply & { sidecarId?: string }) =>
         actions.permission(input),
     }),
@@ -18,7 +25,17 @@ export function registerAttentionCommands(
       id: "question.reply",
       title: "Reply to question",
       category: "Attention",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          requestID: { type: "string" },
+          answers: {
+            type: "array",
+            optional: true,
+            items: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
       run: (_ctx, input: { requestID: string; answers?: string[][] }) =>
         actions.question(input),
     }),

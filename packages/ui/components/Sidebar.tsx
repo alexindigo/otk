@@ -35,11 +35,23 @@ export default function Sidebar(
   const open = ownedAction(
     "sidebar.session.open",
     (entry: MergedEntry) => props.onOpen(entry),
+    {
+      arguments: {
+        type: "object",
+        properties: { id: { type: "string" }, sidecarId: { type: "string" } },
+      },
+    },
   );
   const create = ownedAction(
     "sidebar.session.new",
     (input: { id: string; directory: string }) =>
       props.onCreate(input.id, input.directory),
+    {
+      arguments: {
+        type: "object",
+        properties: { id: { type: "string" }, directory: { type: "string" } },
+      },
+    },
   );
   const settings = ownedAction("sidebar.settings", () => props.onSettings());
   onSettled(() => {

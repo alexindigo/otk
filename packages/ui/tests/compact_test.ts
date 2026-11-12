@@ -87,7 +87,7 @@ Deno.test("compact is prompt-scoped, current-target-only and captures the shared
     ready.resolve();
     await running;
     assertEquals(calls, [{ provider: "ready", model: "current" }]);
-    assertEquals(commands.resolveSlash("compact"), undefined);
+    assertEquals(commands.resolveSlash("compact"), "session.compact");
     for (const state of ["disconnected", "unsupported", "child", "retired"]) {
       connected = state !== "disconnected";
       supported = state !== "unsupported";

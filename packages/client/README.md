@@ -983,18 +983,35 @@ the same interaction on return.
 ## Commands
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A
-feature registers `{ id, title, category, slash?, enabled?, run }` through
-`register`; the returned release function is identity-bound and idempotent.
-`unregister(id)` removes an explicit registration. `run(id, args)` snapshots
-consumer-supplied context at invocation, checks availability and returns the
-handler's value or error. Unknown and disabled IDs reject. `list(context?)`
-reports title/category, enabled state and injected key labels; `resolveSlash`
-resolves declared aliases. `subscribe` observes registration changes.
-`metadata(id)` returns frozen, data-only owner metadata even for hidden
-commands; `list` uses the same read-only projection but keeps hidden commands
-undiscoverable. Neither metadata surface exposes execution handlers or
-availability callbacks; invocation and its availability check remain owned by
-`run`.
+feature registers
+`{ id, name?, aliases?, title, description?, category,
+arguments?, scope?, instance?, kind?, availability?, run }`
+once. Every command surface projects that inventory, without per-command surface
+metadata. Names default to the semantic ID; the ID remains an exact spelling
+when friendly names collide. `resolveSlash` and `spelling` share resolution, so
+displayed names cannot invoke a different owner. Ambiguous names reject
+independently of registration order or availability. `parse(name, text)` uses
+the registered runtime schema: strings accept raw or JSON-quoted text,
+object/array/number/boolean inputs use JSON, and an object's `rest` field
+preserves the remaining text verbatim. Missing required input is unavailable,
+not an absent definition. Local-only inputs cannot be manufactured by text
+parsing.
+
+`list(context?)` returns every registered descriptor, its availability/reason
+and injected key labels. `metadata(id)` returns a frozen, serializable snapshot
+including the argument schema, never a closure. `run(id, args)` captures current
+context and rechecks the same schema and availability before invoking the owner.
+The existing `enabled` predicate remains supported with a generic refusal
+reason; owners can supply `availability` for a specific reason. A context action
+requiring confirmation uses the hub's injected third constructor port for
+ordinary invocation; an already-confirmed context-menu action does not ask
+again. `subscribe` observes registration changes; release/unregister retire the
+owner identity. There is no surface-wide hidden flag or slash opt-in.
+IPC/API/MCP exposure is not implemented by descriptor serialization.
+
+`kind: "submission"` denotes an operation using the prompt's captured-send and
+successful-clear lifecycle; ordinary actions default to `"action"`. Provenance
+(`source`) does not select execution behavior or change the argument schema.
 
 Features own registration and execution; the hub contains no shipped feature
 list, browser globals or UI runtime. Inputs and callbacks stay with the
@@ -1010,19 +1027,19 @@ return `items(data) → [{key?, title, args}]` to offer several choices through
 one registration. Give choices stable keys when their order can change. The
 ordinary enabled predicate and run handler receive each choice's args (or the
 target data for a single action). `contextActions({kind, data})` exposes
-data-only available actions, including hidden commands, without exposing
-callbacks. Targets may declare `area: true` for an enclosing application region,
-through the same target contract and kinds. `contextGroups(hub, targets)` keeps
-the first two nonempty innermost non-area groups, followed by the nearest area's
-group. The app group follows only when no non-area target was hit, including on
-area-only empty space. An unavailable non-area target still suppresses app
-actions. Empty groups are omitted. Shared action keys appear only in their most
-specific group, so an action available both in an area and the app (such as New
-session) is listed once. Destructive actions sort last; numeric order breaks
-ties inside each section. `runContext(action)` binds invocation to the exact
-registration that projected the action, then reprojects the current choices and
-rechecks availability before ordinary execution. A released owner cannot invoke
-a replacement with the same command ID. Subscribe and reproject captured targets
+data-only available actions without exposing callbacks. Targets may declare
+`area: true` for an enclosing application region, through the same target
+contract and kinds. `contextGroups(hub, targets)` keeps the first two nonempty
+innermost non-area groups, followed by the nearest area's group. The app group
+follows only when no non-area target was hit, including on area-only empty
+space. An unavailable non-area target still suppresses app actions. Empty groups
+are omitted. Shared action keys appear only in their most specific group, so an
+action available both in an area and the app (such as New session) is listed
+once. Destructive actions sort last; numeric order breaks ties inside each
+section. `runContext(action)` binds invocation to the exact registration that
+projected the action, then reprojects the current choices and rechecks
+availability before ordinary execution. A released owner cannot invoke a
+replacement with the same command ID. Subscribe and reproject captured targets
 while a menu is open; data and availability can change independently of a
 command's ID. The hub retains no DOM, selection, clipboard or target state
 outside the returned action's weak owner metadata. Optional `confirm(args)`

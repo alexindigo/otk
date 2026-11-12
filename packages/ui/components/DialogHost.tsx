@@ -19,7 +19,7 @@ export default function DialogHost(
     id: "dialog.open",
     title: "Open dialog",
     category: "Dialogs",
-    hidden: true,
+    arguments: { type: "object", properties: { id: { type: "string" } } },
     enabled: (_ctx, request?: { id: string; input?: unknown }) =>
       !request || !!dialogs.resolve(request.id),
     run: (_ctx, request: { id: string; input?: unknown }) => {
@@ -36,7 +36,6 @@ export default function DialogHost(
     id: "dialog.close",
     title: "Close dialog",
     category: "Dialogs",
-    hidden: true,
     run: () => close(),
   });
   return (

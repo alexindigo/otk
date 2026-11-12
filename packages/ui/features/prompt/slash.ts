@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptChoices, PromptRegistry } from "../../registries/prompt.ts";
-import { onSettled } from "solid-js";
+import { createSignal } from "solid-js";
 import {
   commandOptions,
   parseCommand,
@@ -11,22 +11,10 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "slash",
     create: (ctx) => {
-      onSettled(() => {
-        if (!ctx.commands.has("session.new")) {
-          return ctx.commands.register({
-            id: "session.new",
-            title: "New session",
-            category: "Session",
-            slash: ["new"],
-            run: async () => {
-              const info = await ctx.rpc("session.create", {
-                directory: await ctx.directory(),
-              });
-              await ctx.commands.run("session.open", { sessionID: info.id });
-            },
-          });
-        }
-      });
+      const [revision, setRevision] = createSignal(0);
+      ctx.mount(() =>
+        ctx.commands.subscribe(() => setRevision((value) => value + 1))
+      );
       const registered = new Map<
         string,
         { signature: string; release: () => void }
@@ -36,26 +24,14 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         for (const entry of registered.values()) entry.release();
         registered.clear();
       });
-      const options = () => {
-        const rows = ctx.commands.list().filter((row) => row.enabled).flatMap(
-          ({ cmd }) => {
-            if (!cmd.slash?.length) return [];
-            const name = cmd.slash[0];
-            return [{
-              name,
-              description: cmd.title,
-              aliases: cmd.slash.slice(1),
-              source: cmd.id.startsWith("server.command:")
-                ? server.find((row) => row.name === name)?.source ??
-                  "server" as const
-                : "builtin" as const,
-            }];
-          },
-        );
-        return rows.filter((option, index) =>
-          rows.findIndex((row) => row.name === option.name) === index
-        );
-      };
+      // CM3 adds disabled-row paint. The registry inventory itself is complete.
+      const options = () =>
+        ctx.commands.list().filter((row) => row.enabled).map(({ cmd }) => ({
+          name: ctx.commands.spelling(cmd.id),
+          description: cmd.description ?? cmd.title,
+          aliases: [...cmd.aliases ?? [], cmd.id],
+          source: cmd.source ?? "builtin" as const,
+        }));
       const catalog = () => {
         if (!mounted) return options();
         if (!ctx.props.connected || !ctx.supports("commands")) {
@@ -90,7 +66,21 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             id,
             title: command.description || command.name,
             category: "Server commands",
-            slash: [command.name, ...command.aliases],
+            name: command.name,
+            aliases: command.aliases,
+            source: command.source,
+            kind: "submission",
+            scope: "session",
+            arguments: {
+              type: "object",
+              optional: true,
+              rest: "arguments",
+              properties: {
+                arguments: { type: "string", optional: true },
+                selection: { type: "object", optional: true },
+                parts: { type: "array", optional: true },
+              },
+            },
             enabled: () => ctx.props.connected && ctx.supports("commands"),
             run: (
               _context,
@@ -140,7 +130,10 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           catalog();
         },
         source: {
-          revision: () => ctx.directoryCatalog?.state.catalog?.revision,
+          revision: () =>
+            `${revision()}:${
+              ctx.directoryCatalog?.state.catalog?.revision ?? ""
+            }`,
           trigger(input, caret) {
             const before = input.slice(0, caret);
             return /^\/[^\s]*$/.test(before)
@@ -152,17 +145,21 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           select(token, option) {
             const command = option.command;
             if (!command) return;
+            const id = ctx.commands.resolveSlash(command.name);
+            const metadata = id ? ctx.commands.metadata(id) : undefined;
+            const takesArguments = metadata?.kind === "submission" ||
+              (metadata?.arguments?.type !== "none" &&
+                !metadata?.arguments?.optional);
             ctx.change((current) => {
               const next = editDraft(
                 current,
                 current.input.slice(0, token.start) +
-                  (command.source === "builtin" ? "" : `/${command.name} `) +
+                  (takesArguments ? `/${command.name} ` : "") +
                   current.input.slice(token.end),
               );
               return next;
-            }, command.source === "builtin" ? 0 : command.name.length + 2);
-            if (command.source === "builtin") {
-              const id = ctx.commands.resolveSlash(command.name);
+            }, takesArguments ? command.name.length + 2 : 0);
+            if (!takesArguments) {
               if (id) void ctx.commands.run(id).catch(ctx.fail);
             }
           },
@@ -172,9 +169,18 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             ? parseCommand(draft.input)
             : undefined;
           if (!parsed) return false;
-          const id = ctx.commands.resolveSlash(parsed.command);
-          if (!id || id.startsWith("server.command:")) return false;
-          ctx.change((current) =>
+          let invocation;
+          try {
+            invocation = ctx.commands.parse(parsed.command, parsed.arguments);
+          } catch (error) {
+            ctx.fail(error);
+            return true;
+          }
+          if (!invocation) return false;
+          if (ctx.commands.metadata(invocation.id)?.kind === "submission") {
+            return false;
+          }
+          const prepared = ctx.change((current) =>
             current === draft
               ? editDraft(
                 current,
@@ -186,8 +192,14 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
               : current
           );
           try {
-            await ctx.commands.run(id);
+            await ctx.commands.run(invocation.id, invocation.args, {
+              ...ctx.commands.context(),
+              command: "prompt.submit",
+            });
           } catch (error) {
+            if (ctx.active()) {
+              ctx.change((current) => current === prepared ? draft : current);
+            }
             ctx.fail(error);
           }
           return true;
@@ -196,17 +208,16 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
-          const command = parsed &&
-            options().find((command) =>
-              command.name === parsed.command ||
-              command.aliases.includes(parsed.command)
-            );
-          if (!command) return false;
-          await ctx.commands.run(ctx.commands.resolveSlash(command.name)!, {
+          if (!parsed) return false;
+          const invocation = ctx.commands.parse(
+            parsed.command,
+            parseCommand(parts.find((part) => part.kind === "text")!.text)!
+              .arguments,
+          );
+          if (!invocation) return false;
+          await ctx.commands.run(invocation.id, {
+            ...(invocation.args as object ?? {}),
             selection,
-            arguments: parseCommand(
-              parts.find((part) => part.kind === "text")!.text,
-            )!.arguments,
             parts: parts.filter((
               part,
             ): part is Extract<PromptPart, { kind: "file" }> =>
