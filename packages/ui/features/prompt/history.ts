@@ -17,14 +17,12 @@ export function registerHistoryPrompt(prompt: PromptRegistry): void {
         id: "prompt.history.previous",
         title: "Previous prompt",
         category: "Prompt",
-        hidden: true,
         run: () => history.recall(-1),
       });
       const next = ownedCommand(ctx, {
         id: "prompt.history.next",
         title: "Next prompt",
         category: "Prompt",
-        hidden: true,
         run: () => history.recall(1),
       });
       return {

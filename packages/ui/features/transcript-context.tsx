@@ -147,7 +147,7 @@ export function TranscriptContext(
       id: `${kind}.copy`,
       title,
       category: "Transcript",
-      hidden: true,
+      arguments: { type: "object" },
       context: { kind },
       enabled: (_ctx, target?: ContentTarget) =>
         !!target?.source || !!target?.text,
@@ -167,7 +167,7 @@ export function TranscriptContext(
       id: `tool.copy.${source}`,
       title,
       category: "Transcript",
-      hidden: true,
+      arguments: { type: "object" },
       context: { kind: "tool" },
       enabled: (_ctx, target?: ContentTarget) => !!target?.[source],
       run: (_ctx, target: ContentTarget) => copyContent(target[source]!),
@@ -177,7 +177,7 @@ export function TranscriptContext(
     id: "tool.toggle",
     title: "Expand",
     category: "Transcript",
-    hidden: true,
+    arguments: { type: "object" },
     context: {
       kind: "tool",
       title: (target: ContentTarget) =>
@@ -191,7 +191,7 @@ export function TranscriptContext(
     id: "reply.usage",
     title: "Show usage breakdown",
     category: "Transcript",
-    hidden: true,
+    arguments: { type: "object" },
     context: { kind: "reply", order: 10 },
     enabled: (_ctx, target?: ContentTarget) => !!owner(target)?.usage,
     run: (_ctx, target: ContentTarget) => owner(target)?.usage?.(),

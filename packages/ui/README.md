@@ -795,7 +795,11 @@ level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only
 `createKeyboard` dispatcher. Components own their registrations through
 `ownedCommand` / isolated `ownedAction`; registration starts at Solid's settled
 mount and releases on unmount, so speculative replacement does not overlap a
-previous session's actions. Consumers continue to supply data and callbacks.
+previous session's actions. `ownedAction` keeps a semantic name plus a separate
+instance scope; each instance remains addressable by its full ID.
+Argument-bearing owners declare runtime schemas rather than relying on discovery
+suppression to protect handlers from missing input. Consumers continue to supply
+data and callbacks.
 
 Providers expose explicit port values, never their composition props object.
 `CommandProvider` preserves live `commands` and `keyboard` access without
@@ -820,22 +824,24 @@ stop function runs. Layers contain close-command IDs, a predicate and priority,
 with latest registration breaking ties. Composition and repeat events do not
 invoke commands.
 
-`Palette` lists the injected registry and omits unavailable commands from both
-the ordinary list and search results using the hub's existing availability
-projection. Availability changes restore or remove rows while it stays open;
-invocation still rechecks through the hub. No disabled command buttons are
-rendered. `KeysHelp` lists the injected keymap, checks overlap conflicts and
-supplies proposed overrides to `onSave`. Production OTK uses the host core's
-ordered `keymap` preference broadcast; failed saves do not optimistically change
-bindings. The shared Dialog owns focus return, modal keyboard priority and
-styles, including the prompt editor. The essential shipped bindings are
-Tab/reverse agent cycle, Enter submission, Mod+K palette, outside-text `?` help
-and top-layer Esc before double-Esc interrupt. Shift+Enter inserts a newline
-through the prompt-owned input port.
+`Palette` and slash completion enumerate the injected CommandHub, with no
+per-command surface tables or opt-in flags. Slash spelling and typed invocation
+use the hub's single resolution/schema owner. Both surfaces currently omit
+unavailable commands from the ordinary list and search results using the hub's
+existing availability projection. Availability changes restore or remove rows
+while it stays open; invocation still rechecks through the hub. No disabled
+command buttons are rendered. `KeysHelp` lists the injected keymap, checks
+overlap conflicts and supplies proposed overrides to `onSave`. Production OTK
+uses the host core's ordered `keymap` preference broadcast; failed saves do not
+optimistically change bindings. The shared Dialog owns focus return, modal
+keyboard priority and styles, including the prompt editor. The essential shipped
+bindings are Tab/reverse agent cycle, Enter submission, Mod+K palette,
+outside-text `?` help and top-layer Esc before double-Esc interrupt. Shift+Enter
+inserts a newline through the prompt-owned input port.
 
 The shared `commandHints` binding observes keymap registration, override/reset
 and command lifetimes. Prompt and inbox tooltips consume current command keys,
-including hidden prompt commands; unbound actions have no shortcut hint. Dialog
+including prompt input commands; unbound actions have no shortcut hint. Dialog
 and Editor contain no static surface hints. Permission's 1/2/3 keys are fixed
 widget data shared by its local dispatch and titles, active only on non-text
 controls in normal mode. Question's fixed Escape layer first leaves an answer
@@ -975,10 +981,11 @@ submission clear the note through the framework-free client owner.
 
 `registerCompactPrompt` contributes Compact while a root composer with a known
 next-prompt model is mounted. The command is shared by that session's context
-menu and the palette; background or cross-server targets do not list it. After
-composer readiness it captures `nextSelection` and delegates through the
-session-bound client compact port. It preserves the unsent draft and uses normal
-server-work progress and session errors, including while queued behind a reply.
+menu, palette and slash completion; background or cross-server targets do not
+list it. After composer readiness it captures `nextSelection` and delegates
+through the session-bound client compact port. It preserves the unsent draft and
+uses normal server-work progress and session errors, including while queued
+behind a reply.
 
 Revert to here uses the same prompt context/hover command and selected-session
 client revert owner. Root idle sessions advertise it only with `revert`; queued

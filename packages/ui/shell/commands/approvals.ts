@@ -14,6 +14,7 @@ export function registerApprovalCommands(commands: CommandHub, ports: {
 }): () => void {
   return commands.register({
     id: "permission.auto",
+    arguments: { type: "object", optional: true },
     title: "Toggle session auto-approve",
     category: "Attention",
     context: {

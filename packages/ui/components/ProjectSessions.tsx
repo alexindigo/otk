@@ -70,12 +70,31 @@ export default function ProjectSessions(props: {
       !!search.getClientRects().length,
     run: () => search.focus(),
   });
-  const open = ownedAction("project.session.open", props.onOpen);
+  const open = ownedAction("project.session.open", props.onOpen, {
+    arguments: {
+      type: "object",
+      properties: { id: { type: "string" }, sidecarId: { type: "string" } },
+    },
+  });
   const pin = ownedAction(
     "project.session.pin",
     (entry: MergedEntry) => props.onPin?.(entry),
+    {
+      arguments: {
+        type: "object",
+        properties: { id: { type: "string" }, sidecarId: { type: "string" } },
+      },
+    },
   );
-  const create = ownedAction("project.session.new", props.onCreate);
+  const create = ownedAction("project.session.new", props.onCreate, {
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        directory: { type: "string" },
+      },
+    },
+  });
   const run = (promise: Promise<unknown>) =>
     void promise.catch((e) => setError(failureText(e)));
   const hierarchy = createSessionTree();

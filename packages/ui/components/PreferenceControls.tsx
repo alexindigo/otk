@@ -34,6 +34,12 @@ export default function PreferenceControls(
       if (!props.ready) throw new Error("Preferences are not ready yet");
       return props.onSet(input.key, input.value);
     },
+    {
+      arguments: {
+        type: "object",
+        properties: { key: { type: "string" }, value: { type: "unknown" } },
+      },
+    },
   );
   const change = (
     key: PreferenceKey,

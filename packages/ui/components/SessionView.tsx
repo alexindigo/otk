@@ -185,7 +185,10 @@ export default function SessionView(props: {
     id: "transcript.reveal",
     title: "Reveal prompt",
     category: "Transcript",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: { messageID: { type: "string" } },
+    },
     enabled: (_ctx, target?: { messageID: string }) =>
       !!target && !!projection().messagesByID[target.messageID],
     run: async (_ctx, target: { messageID: string }) => {

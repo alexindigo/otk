@@ -14,7 +14,8 @@ export function registerSessionCommands(commands: CommandHub, actions: {
       id: "session.new",
       title: "New session",
       category: "Session",
-      slash: ["new"],
+      name: "new",
+      arguments: { type: "object", optional: true, rest: "draft" },
       context: {
         kind: ["app", "panel", "project"],
         order: -10,
@@ -30,22 +31,28 @@ export function registerSessionCommands(commands: CommandHub, actions: {
             : [{ key: "new", title: "New session", args: input }],
       },
       enabled: (_ctx, input?: { sidecarId: string; directory: string }) =>
-        actions.available(input),
+        actions.available(input?.sidecarId ? input : undefined),
       run: (_ctx, input?: { sidecarId: string; directory: string }) =>
-        actions.create(input),
+        actions.create(input?.sidecarId ? input : undefined),
     }),
     commands.register({
       id: "session.open",
       title: "Open session",
       category: "Session",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          sessionID: { type: "string" },
+        },
+      },
       run: (_ctx, input: Selection) => actions.open(input),
     }),
     commands.register({
       id: "session.child",
       title: "Open subagent",
       category: "Session",
-      hidden: true,
+      arguments: { type: "string" },
       run: (_ctx, id: string) => actions.child(id),
     }),
     commands.register({
@@ -88,7 +95,13 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
       id: "session.preview",
       title: "Preview session",
       category: "Session",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          sessionID: { type: "string" },
+        },
+      },
       context: {
         kind: "session",
         items: (target?: Selection) =>
@@ -104,7 +117,13 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
       id: "session.pin",
       title: "Open session as task",
       category: "Session",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          sessionID: { type: "string" },
+        },
+      },
       context: {
         kind: "session",
         items: (target?: Selection) => {
@@ -125,6 +144,7 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
     }),
     commands.register({
       id: "session.close",
+      arguments: { type: "object", optional: true },
       title: "Close session",
       category: "Session",
       context: {

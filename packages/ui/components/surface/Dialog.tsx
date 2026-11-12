@@ -17,7 +17,6 @@ export default function Dialog(props: {
     id: `${props.id}.close`,
     title: `Close ${props.title}`,
     category: "Dialogs",
-    hidden: true,
     run: () => props.onClose(),
   });
   onSettled(() => {

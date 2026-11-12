@@ -192,14 +192,13 @@ function RequestDock(
     id: "permission.answer",
     title: "Answer permission",
     category: "Attention",
-    hidden: true,
+    arguments: { type: "string", enum: ["once", "always", "reject"] },
     run: (_ctx, reply: PermissionReply["reply"]) => answer(reply),
   });
   const close = ownedCommand(ports, {
     id: "permission.close",
     title: "Close permission confirmation",
     category: "Attention",
-    hidden: true,
     run: () => setMode("normal"),
   });
   onSettled(() =>

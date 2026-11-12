@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { render } from "@solidjs/web";
-import { type Command, CommandHub, SidecarConnection } from "@otk/client";
+import {
+  type CommandDefinition,
+  CommandHub,
+  SidecarConnection,
+} from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
   browserThemeEnvironment,
@@ -43,8 +47,10 @@ if (server) {
 }
 const [contextCount, setContextCount] = createSignal(0);
 class ProbeHub extends CommandHub {
-  override register<A, R>(command: Command<A, R>): () => void {
-    const release = super.register(command);
+  override register<A = void, R = unknown>(
+    command: CommandDefinition<A, R>,
+  ): () => void {
+    const release = super.register<A, R>(command);
     if (command.context) setContextCount((value) => value + 1);
     return () => {
       release();
@@ -60,6 +66,7 @@ function TranscriptProbe() {
   // An independent feature uses the public shared reply vocabulary.
   ownedCommand({ commands }, {
     id: "external.reply.inspect",
+    arguments: { type: "object" },
     title: "Inspect reply identity",
     category: "Probe",
     context: { kind: "reply", order: 30 },
@@ -202,7 +209,7 @@ function Consumer() {
     id: "probe.inner",
     title: "Inspect code",
     category: "Probe",
-    hidden: true,
+    arguments: { type: "string" },
     context: { kind: "probe.code" },
     run: (_ctx, value: string) => {
       setResult(value);
@@ -212,7 +219,7 @@ function Consumer() {
     id: "probe.outer",
     title: "Inspect reply",
     category: "Probe",
-    hidden: true,
+    arguments: { type: "string" },
     context: {
       kind: "probe.reply",
       title: (value: string) => `Inspect ${value}`,
@@ -225,7 +232,6 @@ function Consumer() {
     id: "probe.close",
     title: "Close reply",
     category: "Probe",
-    hidden: true,
     context: { kind: "probe.reply", destructive: true },
     enabled: () => allowed(),
     run: () => {

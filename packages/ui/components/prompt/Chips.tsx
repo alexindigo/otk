@@ -22,10 +22,13 @@ export default function Chips(
     onRemove(chip: Chip): void;
   },
 ) {
-  const open = ownedAction("chip.open", (chip: Chip) => props.onOpen(chip));
+  const open = ownedAction("chip.open", (chip: Chip) => props.onOpen(chip), {
+    arguments: { type: "object", properties: { id: { type: "string" } } },
+  });
   const remove = ownedAction(
     "chip.remove",
     (chip: Chip) => props.onRemove(chip),
+    { arguments: { type: "object", properties: { id: { type: "string" } } } },
   );
   return (
     <div class="otk-prompt-chips">

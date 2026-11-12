@@ -105,7 +105,6 @@ export default function Scene() {
         id: `list.${id}`,
         title: id,
         category: "Probe",
-        hidden: true,
         context: { kind: "list-probe", destructive: id === "delete" },
         enabled: () => keys().includes(id),
         run: () => {
