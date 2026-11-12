@@ -6,9 +6,12 @@ signals its process, or writes its database. Native session IDs use `opcv2-`.
 
 `discoverV2(file)` preserves missing, unreadable/malformed, stale identity,
 unreachable, incompatible JSON and authentication failures before calling
-`Service.discover`. Headers come from `Service.headers` (UTF-8 Basic auth). The
-application resolves HOME/XDG paths and selects auto/V1/V2; credentials never
-enter neutral protocol frames or browser config.
+`Service.discover`. The user's managed registration owns the URL: probes,
+identity checks, adapter clients/streams and worker re-discovery use it
+verbatim, without hostname restrictions or rewriting. Headers come from
+`Service.headers` (UTF-8 Basic auth). The application resolves HOME/XDG paths
+and selects auto/V1/V2; credentials never enter neutral protocol frames or
+browser config.
 
 `V2Client.read` owns finite reads, cancellation and error classification. The
 SDK stays private. Native not-found tags establish absence; transport, timeout

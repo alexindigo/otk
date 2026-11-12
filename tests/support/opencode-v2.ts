@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
-import { Service } from "@opencode/client/service";
 import { join } from "@std/path";
 import type { ChildProcess } from "node:child_process";
 import {
@@ -36,10 +35,12 @@ export class OpencodeV2Test implements NativeFixture {
   log = "";
   #env: Record<string, string> = {};
   #logPath = "";
+  #hostname: "127.0.0.1" | "0.0.0.0" = "127.0.0.1";
   #stop: () => Promise<void> = () => Promise.resolve();
   static async start(provider: FakeLlm, options: {
     config?: Record<string, unknown>;
     env?: Record<string, string>;
+    hostname?: "127.0.0.1" | "0.0.0.0";
     prepare?(fixture: OpencodeV2Test): Promise<void>;
   } = {}): Promise<OpencodeV2Test> {
     if (nativeVersion !== "2.2.6") {
@@ -47,6 +48,7 @@ export class OpencodeV2Test implements NativeFixture {
     }
     return await acquire("V2 native fixture", async () => {
       const test = new OpencodeV2Test();
+      test.#hostname = options.hostname ?? "127.0.0.1";
       test.root = await tempDir("oc-v2-");
       test.directory = join(test.root, "project");
       const env: Record<string, string> = {
@@ -122,7 +124,7 @@ export class OpencodeV2Test implements NativeFixture {
       "serve",
       "--service",
       "--hostname",
-      "127.0.0.1",
+      this.#hostname,
       "--port",
       "0",
     ], {
@@ -153,7 +155,11 @@ export class OpencodeV2Test implements NativeFixture {
           if (this.process.exitCode !== null) {
             throw new Error(`V2 native exited: ${this.log}`);
           }
-          return nativeListeningURL(this.log.slice(offset), this.kind);
+          return nativeListeningURL(
+            this.log.slice(offset),
+            this.kind,
+            this.#hostname,
+          );
         },
         Boolean,
         120_000,
@@ -165,11 +171,7 @@ export class OpencodeV2Test implements NativeFixture {
           s.endpoint.url === announced,
         60_000,
       );
-      const endpoint = await Service.discover({
-        file: this.registration,
-        version: nativeVersion,
-      });
-      if (!endpoint) throw new Error("V2 managed fixture discovery failed");
+      const endpoint = service.endpoint;
       this.api = OpenCode.make({
         baseUrl: endpoint.url,
         headers: serviceHeaders(endpoint),

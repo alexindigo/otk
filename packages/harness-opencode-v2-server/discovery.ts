@@ -200,25 +200,15 @@ export async function discoverV2(
       `Malformed opencode service registration ${file}.`,
     );
   }
-  let url: URL;
   try {
-    url = new URL(record.url);
+    new URL(record.url);
   } catch {
     throw new HarnessError(
       "discovery",
       `Malformed opencode service URL in registration ${file}.`,
     );
   }
-  if (
-    url.protocol !== "http:" ||
-    !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
-    url.username || url.password
-  ) {
-    throw new HarnessError(
-      "discovery",
-      `Opencode V2 requires a local loopback service registration (${file}).`,
-    );
-  }
+  // The user's managed registration owns the endpoint, including its hostname.
   const candidate: Endpoint = {
     url: record.url,
     ...(typeof record.password === "string"

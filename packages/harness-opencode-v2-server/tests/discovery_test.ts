@@ -3,6 +3,57 @@ import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { discoverV2, probeVersion } from "../discovery.ts";
 import { Buffer } from "node:buffer";
 
+for (
+  const host of [
+    "0.0.0.0",
+    "127.0.0.1",
+    "192.0.2.10",
+    "opencode.home",
+    "localhost",
+    "[::]",
+    "[::1]",
+  ]
+) {
+  Deno.test(`discovery uses registration host ${host} verbatim`, async () => {
+    const root = await Deno.makeTempDir();
+    const requests: string[] = [];
+    const registered = `http://${host}:4097`;
+    const fetcher = globalThis.fetch;
+    // Observe both OTK's diagnostic probe and the SDK's identity probe without
+    // requiring a real LAN address, DNS entry or IPv6 wildcard route.
+    globalThis.fetch = (input, init) => {
+      requests.push(input instanceof Request ? input.url : String(input));
+      assertEquals(
+        new Headers(init?.headers).get("authorization"),
+        "Basic " + Buffer.from("opencode:private-password").toString("base64"),
+      );
+      return Promise.resolve(Response.json({ version: "2.2.6", pid: 42 }));
+    };
+    try {
+      const file = root + "/service.json";
+      await Deno.writeTextFile(
+        file,
+        JSON.stringify({
+          url: registered,
+          version: "2.2.6",
+          pid: 42,
+          password: "private-password",
+        }),
+      );
+      const service = await discoverV2(file);
+      assertEquals(service.endpoint.url, registered);
+      assertEquals(service.endpoint.auth?.password, "private-password");
+      assertEquals(requests, [
+        registered + "/api/info",
+        registered + "/api/info",
+      ]);
+    } finally {
+      globalThis.fetch = fetcher;
+      await Deno.remove(root, { recursive: true });
+    }
+  });
+}
+
 Deno.test("version probe rejects HTML, recognizes V1/V2 and preserves 401", async () => {
   const reply = (body: unknown, status = 200) =>
     Promise.resolve(

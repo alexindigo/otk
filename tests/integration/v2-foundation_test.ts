@@ -7,7 +7,11 @@ import {
   opencodeV2SessionID,
 } from "@otk/harness-opencode-v2-server";
 import type { HarnessSink } from "@otk/harness";
-import type { SessionMetadata } from "@otk/protocol";
+import type {
+  InboxBaseline,
+  SessionListPage,
+  SessionMetadata,
+} from "@otk/protocol";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
@@ -16,6 +20,48 @@ import { resources, withResources } from "../support/resources.ts";
 import { waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
+
+Deno.test({
+  name:
+    "OC2F3 wildcard managed registration reaches worker reads and live events",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("V2 wildcard discovery", async () => {
+      const fake = new FakeLlm();
+      fake.queue({ chunks: ["one", "two", "three", "four"], delay: 300 });
+      const native = await OpencodeV2Test.start(fake, { hostname: "0.0.0.0" });
+      const text = await Deno.readTextFile(native.registration);
+      assertEquals(new URL(JSON.parse(text).url).hostname, "0.0.0.0");
+      const target = await native.createSession("Wildcard discovery");
+      // Point the compiled consumer and its worker at the real managed record,
+      // not the fixture's loopback fault proxy registration.
+      const app = await SidecarTest.start({
+        ...native,
+        discoveryEnv: {
+          ...native.discoveryEnv,
+          XDG_STATE_HOME: native.root + "/state",
+        },
+      });
+      const ws = new WsClient(app.url);
+      await ws.connect();
+      const page = await ws.rpc<SessionListPage>("sessions.list", {
+        directory: native.directory,
+        parentID: null,
+      });
+      assertEquals(page.load.state, "complete");
+      assertEquals(page.items.map((row) => row.id), [target.id]);
+      await native.prompt(target.id, "verify wildcard live events");
+      const status = async () =>
+        (await ws.rpc<InboxBaseline>("inbox.get", {})).inbox.summaries
+          ?.[native.directory].status;
+      await waitFor(status, (value) => value === "working");
+      await waitFor(status, (value) => value === "finished", 30_000);
+      assertEquals(await Deno.readTextFile(native.registration), text);
+      await ws.close();
+      await app.stop();
+      assertEquals(native.process.exitCode, null);
+    }),
+});
 
 Deno.test({
   name:
