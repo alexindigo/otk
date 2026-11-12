@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { mapMessage, partID } from "../map.ts";
+import { mapMessage, mapTool, partID } from "../map.ts";
 import { factsFrom, scalarMessage } from "../transcript-reads.ts";
 import { Messages, type NativeMessage } from "../messages.ts";
 import { MessagePrefetchCache } from "../prefetch.ts";
@@ -39,6 +39,96 @@ const user = (key: string): NativeMessage => ({
   id: key,
   text: key,
   time: { created: 1 },
+});
+Deno.test("V2 live historical tools and snapshot checkpoints use the same interpretation", async () => {
+  const updates: ContentOp[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No native read expected");
+    },
+    policy,
+    content: (_id, op) => updates.push(op),
+    diagnostic() {},
+    invalidated() {},
+  });
+  transcript.subscriptions(id, 1);
+  try {
+    await transcript.event({
+      type: "session.step.started",
+      created: 1,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        agent: "build",
+        model: { id: "model", providerID: "test" },
+      },
+    });
+    for (
+      const [name, input, metadata] of [
+        ["read", { filePath: "/legacy.ts", offset: 190, limit: 50 }, {}],
+        ["apply_patch", {}, {
+          files: [{
+            filePath: "/legacy.ts",
+            type: "update",
+            additions: 1,
+            deletions: 1,
+          }],
+        }],
+        ["bash", { command: "pwd", workdir: "/repo" }, {}],
+        ["task", { subagent_type: "junior", description: "Inspect" }, {
+          sessionId: "ses_child",
+        }],
+      ] as const
+    ) {
+      const data = {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        id: name,
+      };
+      await transcript.event({
+        type: "session.tool.input.started",
+        created: 2,
+        data: { ...data, name },
+      });
+      await transcript.event({
+        type: "session.tool.called",
+        created: 3,
+        data: { ...data, input },
+      });
+      await transcript.event({
+        type: "session.tool.success",
+        created: 4,
+        data: { ...data, metadata, content: [{ type: "text", text: "ok" }] },
+      });
+      const op = updates.filter((o) =>
+        o.op === "part.upsert" && o.part.kind === "tool" &&
+        o.part.call.callID === name
+      ).at(-1);
+      assert(op?.op === "part.upsert" && op.part.kind === "tool");
+      const expected = mapTool({
+        type: "tool",
+        id: name,
+        name,
+        time: { created: 2, ran: 3, completed: 4 },
+        state: {
+          status: "completed",
+          input,
+          metadata: JSON.parse(JSON.stringify(metadata)),
+          content: [{ type: "text", text: "ok" }],
+        },
+      });
+      if (expected.tool === "task") {
+        expected.progress = {
+          state: "digesting",
+          toolCount: null,
+          revision: 0,
+        };
+      }
+      assertEquals(op.part.call, expected);
+    }
+  } finally {
+    await transcript.stop();
+  }
 });
 Deno.test("V2 standalone context kinds stay visible without becoming real prompts", () => {
   for (const type of ["synthetic", "system", "skill"] as const) {

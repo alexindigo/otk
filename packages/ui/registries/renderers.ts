@@ -128,7 +128,9 @@ export class ToolRegistry {
     )?.(call, context) ?? {
       icon: "◇",
       verb: call.tool === "external" ? call.name : call.tool,
-      summary: call.tool === "external" ? call.summary : call.title,
+      summary: call.tool === "external"
+        ? call.summary === call.name ? undefined : call.summary || undefined
+        : call.title,
     };
   }
 }

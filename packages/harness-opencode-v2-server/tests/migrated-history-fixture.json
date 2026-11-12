@@ -1,0 +1,766 @@
+{
+  "provenance": {
+    "v1": "1.19.3",
+    "v2": "2.2.6",
+    "route": "stock V1 initializes SQLite; stopped private fixture seed; stock V2 migration; native V2 HTTP response",
+    "rowMismatchSeeded": true,
+    "v1HistoryHTTP": false
+  },
+  "v1": [
+    {
+      "id": "msg_inve00000000000000000000002",
+      "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+      "role": "assistant",
+      "time": {
+        "created": 1792786310000,
+        "completed": 1792786310500
+      },
+      "parentID": "msg_inve00000000000000000000001",
+      "modelID": "scripted",
+      "providerID": "fake",
+      "mode": "build",
+      "agent": "junior",
+      "path": {
+        "cwd": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project",
+        "root": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls",
+      "parts": [
+        {
+          "id": "prt_inve00000000000000000000001",
+          "messageID": "msg_inve00000000000000000000002",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_0",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/alpha.ts"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786310010,
+              "end": 1792786310100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000002",
+          "messageID": "msg_inve00000000000000000000002",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_1",
+          "tool": "apply_patch",
+          "state": {
+            "status": "completed",
+            "input": {
+              "patchText": "*** Begin Patch\n*** Update File: /fixture/alpha.ts\n@@\n-old\n+new\n*** End Patch"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {
+              "files": [
+                {
+                  "filePath": "/fixture/alpha.ts",
+                  "type": "update",
+                  "patch": "--- a/fixture/alpha.ts\n+++ b/fixture/alpha.ts\n@@ -1 +1 @@\n-old\n+new"
+                }
+              ]
+            },
+            "time": {
+              "start": 1792786310010,
+              "end": 1792786310100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000003",
+          "messageID": "msg_inve00000000000000000000002",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_2",
+          "tool": "read",
+          "state": {
+            "status": "error",
+            "input": {
+              "filePath": "/fixture/beta.ts",
+              "offset": 190,
+              "limit": 50
+            },
+            "error": "File not found",
+            "time": {
+              "start": 1792786310010,
+              "end": 1792786310100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000004",
+          "messageID": "msg_inve00000000000000000000002",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_3",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "pwd",
+              "workdir": "/fixture"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786310010,
+              "end": 1792786310100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "msg_inve00000000000000000000003",
+      "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+      "role": "assistant",
+      "time": {
+        "created": 1792786311000,
+        "completed": 1792786311500
+      },
+      "parentID": "msg_inve00000000000000000000001",
+      "modelID": "scripted",
+      "providerID": "fake",
+      "mode": "build",
+      "agent": "junior",
+      "path": {
+        "cwd": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project",
+        "root": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls",
+      "parts": [
+        {
+          "id": "prt_inve00000000000000000000005",
+          "messageID": "msg_inve00000000000000000000003",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_4",
+          "tool": "task",
+          "state": {
+            "status": "completed",
+            "input": {
+              "subagent_type": "junior",
+              "description": "Legacy helper",
+              "task_id": "ses_child"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {
+              "sessionId": "ses_child"
+            },
+            "time": {
+              "start": 1792786311010,
+              "end": 1792786311100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000006",
+          "messageID": "msg_inve00000000000000000000003",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_5",
+          "tool": "skill",
+          "state": {
+            "status": "completed",
+            "input": {
+              "name": "legacy-skill"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786311010,
+              "end": 1792786311100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000007",
+          "messageID": "msg_inve00000000000000000000003",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_6",
+          "tool": "edit",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/edit.ts",
+              "oldString": "old",
+              "newString": "new"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786311010,
+              "end": 1792786311100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000008",
+          "messageID": "msg_inve00000000000000000000003",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_7",
+          "tool": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/new.ts",
+              "content": "new"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786311010,
+              "end": 1792786311100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "msg_inve00000000000000000000004",
+      "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+      "role": "assistant",
+      "time": {
+        "created": 1792786312000,
+        "completed": 1792786312500
+      },
+      "parentID": "msg_inve00000000000000000000001",
+      "modelID": "scripted",
+      "providerID": "fake",
+      "mode": "build",
+      "agent": "junior",
+      "path": {
+        "cwd": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project",
+        "root": "/home/tester/otk/.test-state/do/inv-e-fixture-1794438379352323615/project"
+      },
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls",
+      "error": {
+        "name": "MessageAbortedError",
+        "data": {
+          "message": "interrupted fixture"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_inve00000000000000000000009",
+          "messageID": "msg_inve00000000000000000000004",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_8",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/dir"
+            },
+            "output": "<path>/fixture/dir</path>\n<type>directory</type>\n<entries>\na.ts\n</entries>",
+            "title": "Legacy title",
+            "metadata": {
+              "display": {
+                "type": "directory",
+                "totalEntries": 1
+              }
+            },
+            "time": {
+              "start": 1792786312010,
+              "end": 1792786312100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000010",
+          "messageID": "msg_inve00000000000000000000004",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_9",
+          "tool": "custom",
+          "state": {
+            "status": "completed",
+            "input": {
+              "query": "native extension"
+            },
+            "output": "ok",
+            "title": "Legacy title",
+            "metadata": {},
+            "time": {
+              "start": 1792786312010,
+              "end": 1792786312100
+            }
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000011",
+          "messageID": "msg_inve00000000000000000000004",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_10",
+          "tool": "read",
+          "state": {
+            "status": "running",
+            "input": {
+              "filePath": "/fixture/running.ts"
+            },
+            "time": {
+              "start": 1792786312010
+            },
+            "metadata": {}
+          }
+        },
+        {
+          "id": "prt_inve00000000000000000000012",
+          "messageID": "msg_inve00000000000000000000004",
+          "sessionID": "ses_e33225737ffedvyGVvlSHuUAXA",
+          "type": "tool",
+          "callID": "call_inve_11",
+          "tool": "read",
+          "state": {
+            "status": "pending",
+            "input": {
+              "filePath": "/fixture/pending.ts"
+            },
+            "raw": "{}"
+          }
+        }
+      ]
+    }
+  ],
+  "v2": [
+    {
+      "id": "msg_inve00000000000000000000001",
+      "time": {
+        "created": 1792786309000
+      },
+      "text": "Inspect legacy tool history",
+      "type": "user"
+    },
+    {
+      "id": "msg_inve00000000000000000000002",
+      "time": {
+        "created": 1792786310000,
+        "completed": 1792786310500
+      },
+      "type": "assistant",
+      "agent": "junior",
+      "model": {
+        "id": "scripted",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_inve_0",
+          "name": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/alpha.ts"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786310010,
+            "completed": 1792786310100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_1",
+          "name": "apply_patch",
+          "state": {
+            "status": "completed",
+            "input": {
+              "patchText": "*** Begin Patch\n*** Update File: /fixture/alpha.ts\n@@\n-old\n+new\n*** End Patch"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {
+              "files": [
+                {
+                  "filePath": "/fixture/alpha.ts",
+                  "type": "update",
+                  "patch": "--- a/fixture/alpha.ts\n+++ b/fixture/alpha.ts\n@@ -1 +1 @@\n-old\n+new"
+                }
+              ]
+            }
+          },
+          "time": {
+            "created": 1792786310010,
+            "completed": 1792786310100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_2",
+          "name": "read",
+          "state": {
+            "status": "error",
+            "input": {
+              "filePath": "/fixture/beta.ts",
+              "offset": 190,
+              "limit": 50
+            },
+            "error": {
+              "type": "tool.execution",
+              "message": "File not found"
+            }
+          },
+          "time": {
+            "created": 1792786310010,
+            "completed": 1792786310100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_3",
+          "name": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "pwd",
+              "workdir": "/fixture"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786310010,
+            "completed": 1792786310100
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_inve00000000000000000000003",
+      "time": {
+        "created": 1792786311000,
+        "completed": 1792786311500
+      },
+      "type": "assistant",
+      "agent": "junior",
+      "model": {
+        "id": "scripted",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_inve_4",
+          "name": "task",
+          "state": {
+            "status": "completed",
+            "input": {
+              "subagent_type": "junior",
+              "description": "Legacy helper",
+              "task_id": "ses_child"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {
+              "sessionId": "ses_child"
+            }
+          },
+          "time": {
+            "created": 1792786311010,
+            "completed": 1792786311100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_5",
+          "name": "skill",
+          "state": {
+            "status": "completed",
+            "input": {
+              "name": "legacy-skill"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786311010,
+            "completed": 1792786311100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_6",
+          "name": "edit",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/edit.ts",
+              "oldString": "old",
+              "newString": "new"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786311010,
+            "completed": 1792786311100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_7",
+          "name": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/new.ts",
+              "content": "new"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786311010,
+            "completed": 1792786311100
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      }
+    },
+    {
+      "id": "msg_inve00000000000000000000004",
+      "time": {
+        "created": 1792786312000,
+        "completed": 1793709904200
+      },
+      "type": "assistant",
+      "agent": "junior",
+      "model": {
+        "id": "scripted",
+        "providerID": "fake",
+        "variant": "default"
+      },
+      "content": [
+        {
+          "type": "tool",
+          "id": "call_inve_8",
+          "name": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "/fixture/dir"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "<path>/fixture/dir</path>\n<type>directory</type>\n<entries>\na.ts\n</entries>"
+              }
+            ],
+            "metadata": {
+              "display": {
+                "type": "directory",
+                "totalEntries": 1
+              }
+            }
+          },
+          "time": {
+            "created": 1792786312010,
+            "completed": 1792786312100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_9",
+          "name": "custom",
+          "state": {
+            "status": "completed",
+            "input": {
+              "query": "native extension"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "ok"
+              }
+            ],
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786312010,
+            "completed": 1792786312100
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_10",
+          "name": "read",
+          "state": {
+            "status": "error",
+            "input": {
+              "filePath": "/fixture/running.ts"
+            },
+            "error": {
+              "type": "tool.interrupted",
+              "message": "Tool execution was interrupted before V2 migration"
+            },
+            "metadata": {}
+          },
+          "time": {
+            "created": 1792786312010
+          }
+        },
+        {
+          "type": "tool",
+          "id": "call_inve_11",
+          "name": "read",
+          "state": {
+            "status": "error",
+            "input": {
+              "filePath": "/fixture/pending.ts"
+            },
+            "error": {
+              "type": "tool.interrupted",
+              "message": "Tool execution was interrupted before V2 migration"
+            }
+          },
+          "time": {
+            "created": 1792786312000
+          }
+        }
+      ],
+      "finish": "tool-calls",
+      "cost": 0,
+      "tokens": {
+        "input": 100,
+        "output": 20,
+        "reasoning": 3,
+        "cache": {
+          "read": 0,
+          "write": 0
+        }
+      },
+      "error": {
+        "type": "aborted",
+        "message": "interrupted fixture"
+      }
+    },
+    {
+      "id": "msg_inve00000000000000000000005",
+      "time": {
+        "created": 1793796304200
+      },
+      "text": "",
+      "type": "user"
+    },
+    {
+      "id": "msg_inve00000000noVaYoihtRCK1Z",
+      "time": {
+        "created": 1793796304200
+      },
+      "type": "system",
+      "text": "The available tools have changed.\n\nThe following tools were renamed and must be called by their new names: `bash` is now `shell`; `task` is now `subagent`; `apply_patch` is now `patch`.\n\nThe `subagent` tool takes `agent` instead of `subagent_type` and `sessionID` instead of `task_id`.\n\nThe following tools now take `path` instead of `filePath`: `read`, `edit`, `write`.\n\nThe `skill` tool now takes `id` instead of `name`."
+    }
+  ],
+  "firstCreated": 1792786310000,
+  "originalEnd": 1792786312500,
+  "migratedEnd": 1793709904200,
+  "nextPrompt": 1793796304200
+}
