@@ -101,6 +101,13 @@ Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
 a complete baseline rather than inventing missing state.
 
+The inbox's per-user `supervision` map and keyed `supervision` operations
+publish `needsYou | working | finishedUnseen | none`, with the proven terminal
+token. Adapters contribute neutral `SupervisionEvidence` identities and
+inventory freshness; only the core supervision owner interprets them. Legacy
+lifecycle status is not a lamp input. `sessions.seen` requires the captured
+displayed terminal, so delayed acknowledgement cannot consume a newer finish.
+
 An additive `summaries` map and `summaryRevision` baseline field publish scalar
 `ProjectSummary` facts. The additive `inbox.summaries` message carries keyed
 replacements under an independent from/revision sequence; older consumers can

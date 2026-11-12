@@ -112,7 +112,7 @@ Deno.test("authoritative tombstones retire pending and failed operation attentio
     );
     session.deleted = { at: 2, how: "otk" };
     assertEquals(project([session]).tabs, []);
-    assertEquals(project([session]).projects[0].status, "idle");
+    assertEquals(project([session]).projects[0].status, "none");
     assertEquals(project([session]).projects[0].inactive, true);
     if (!failed) {
       rpc.receive({
@@ -142,7 +142,7 @@ Deno.test("failed automatic bookkeeping never creates mandatory attention; live 
     const { rpc, start, project } = setup();
     const session = entry("tstv1-seen");
     const params = {
-      "sessions.seen": { sessionID: session.id },
+      "sessions.seen": { sessionID: session.id, terminal: 0 },
       "projects.visit": { directory: "/p" },
       "frecency.bump": { sessionID: session.id, path: "file.ts" },
       "layout.location": {
@@ -155,7 +155,7 @@ Deno.test("failed automatic bookkeeping never creates mandatory attention; live 
     assertEquals(project([session]).tabs, [], method);
     session.deleted = { at: 2, how: "otk" };
     assertEquals(project([session]).tabs, [], method);
-    assertEquals(project([session]).projects[0].status, "idle", method);
+    assertEquals(project([session]).projects[0].status, "none", method);
     const live = entry("tstv1-live");
     start("session.rename", { sessionID: live.id, title: "Renamed" }, live.id);
     assertEquals(

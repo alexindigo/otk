@@ -73,7 +73,11 @@ test("leaf activity restores only its own policy and repo context, including lat
         stores.projects.inactive(user, directory, true);
       }
     }
-    index.upsert({ ...idle, status: "busy" });
+    index.upsert({
+      ...idle,
+      status: "busy",
+      activity: { work: { keys: ["run"], fresh: true } },
+    });
     owner = new InboxFeature(stores, index, "alice", () => Promise.resolve([]));
     index.projectSeeds([seed("/repo"), seed("/work/one"), seed("/work/two")]);
     const view = { epoch: 1, directory: "/work/one", crumbs: [], rows: [] };
@@ -91,8 +95,8 @@ test("leaf activity restores only its own policy and repo context, including lat
       assertEquals(stores.projects.get(user, "/work/one").inactive, false);
       assertEquals(stores.projects.get(user, "/work/two").inactive, true);
     }
-    index.upsert(idle);
-    stores.seen.mark("bob", idle.id);
+    index.upsert({ ...idle, activity: { terminal: 10 } });
+    stores.seen.acknowledge("bob", idle.id, 10);
     for (const user of ["alice", "bob"]) {
       for (const directory of ["/repo", "/work/one"]) {
         stores.projects.inactive(user, directory, true);

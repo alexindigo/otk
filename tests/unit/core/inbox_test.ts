@@ -75,36 +75,44 @@ test("core records real status edges at the single index owner and clears persis
     stores.projects.inactive("bob", "/p", true);
     assertEquals(discovery.get("/p"), false);
     now = 200;
-    index.upsert({ ...idle, status: "busy" });
+    index.upsert({
+      ...idle,
+      status: "busy",
+      activity: { work: { keys: ["run-1"], fresh: true } },
+    });
     assertEquals(discovery.get("/p"), true);
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     assertEquals(stores.projects.get("bob", "/p").inactive, false);
     now = 300;
-    index.upsert(idle);
-    assertEquals(stores.finishes.time("s"), 300);
+    index.upsert({ ...idle, activity: { terminal: 300 } });
+    assertEquals(stores.finishes.tokens().s, 300);
     now = 400;
     index.upsert(idle);
-    assertEquals(stores.finishes.time("s"), 300);
-    stores.seen.mark("alice", "s");
-    stores.seen.mark("bob", "s");
+    assertEquals(stores.finishes.tokens().s, 300);
+    stores.seen.acknowledge("alice", "s", 300);
+    stores.seen.acknowledge("bob", "s", 300);
     stores.projects.inactive("alice", "/p", true);
     now = 500;
-    index.upsert({ ...idle, attention: { ...idle.attention, permissions: 1 } });
+    index.upsert({
+      ...idle,
+      attention: { ...idle.attention, permissions: 1 },
+      activity: { permissions: { keys: ["permission"], fresh: true } },
+    });
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     index.upsert(idle);
     stores.projects.inactive("alice", "/p", true);
     stores.projects.inactive("bob", "/p", true);
     now = 600;
-    stores.finishes.record("s");
-    stores.seen.mark("bob", "s");
+    stores.finishes.observe("s", 600);
+    stores.seen.acknowledge("bob", "s", 600);
     index.reset([idle]);
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     assertEquals(stores.projects.get("bob", "/p").inactive, true);
-    assertEquals(stores.finishes.time("s"), 600);
+    assertEquals(stores.finishes.tokens().s, 600);
     feature.close();
     index.upsert({ ...idle, status: "busy" });
     index.upsert(idle);
-    assertEquals(stores.finishes.time("s"), 600);
+    assertEquals(stores.finishes.tokens().s, 600);
   } finally {
     feature.close();
     db.close();

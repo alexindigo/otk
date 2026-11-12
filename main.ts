@@ -76,6 +76,14 @@ export async function start(
                 retry: current.retry,
                 attention: current.attention,
                 activityAuthority: current.activityAuthority,
+                activity: {
+                  ...entry.activity,
+                  ...current.activity,
+                  terminal: Math.max(
+                    entry.activity?.terminal ?? 0,
+                    current.activity?.terminal ?? 0,
+                  ),
+                },
               }
               : entry,
           );
@@ -181,6 +189,15 @@ export async function start(
               status: current.status,
               retry: current.retry,
               attention: current.attention,
+              activityAuthority: current.activityAuthority,
+              activity: {
+                ...entry.activity,
+                ...current.activity,
+                terminal: Math.max(
+                  entry.activity?.terminal ?? 0,
+                  current.activity?.terminal ?? 0,
+                ),
+              },
             }
             : entry,
         );

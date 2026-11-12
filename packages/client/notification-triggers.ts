@@ -19,10 +19,10 @@ interface Facts {
   title: string;
 }
 const facts = (entry?: IndexEntry): Facts | undefined =>
-  !entry || entry.parentID || entry.deleted || entry.archived ? undefined : {
+  !entry || entry.deleted || entry.archived ? undefined : {
     status: entry.status,
-    permissions: entry.attention.permissions + entry.attention.childPermissions,
-    questions: entry.attention.questions + entry.attention.childQuestions,
+    permissions: entry.attention.permissions,
+    questions: entry.attention.questions,
     error: entry.attention.error,
     errorIdentity: JSON.stringify(
       entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
@@ -128,7 +128,13 @@ export class NotificationTriggers {
     const pending = new Set(previous?.roots.keys());
     for (const entry of rows) {
       pending.delete(entry.id);
-      this.#compare(sidecar, entry.id, facts(entry), !previous);
+      this.#compare(
+        sidecar,
+        entry.id,
+        facts(entry),
+        !previous,
+        entry.activity?.terminal,
+      );
     }
     for (const id of pending) this.#compare(sidecar, id, undefined, false);
     this.#connections.get(sidecar)!.rev = rev;
@@ -187,7 +193,7 @@ export class NotificationTriggers {
         ? "permission"
         : entry.questions > old.questions
         ? "question"
-        : (completedAt === undefined ? old.status !== "idle" : finished) &&
+        : finished &&
             entry.status === "idle" && !entry.error &&
             !entry.permissions && !entry.questions
         ? "done"

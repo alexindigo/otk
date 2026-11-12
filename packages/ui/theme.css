@@ -17,7 +17,7 @@
   --status-light-blocked: var(--otk-lamp-blocked);
   --status-light-finished: var(--otk-lamp-finished);
   --status-light-working: var(--otk-lamp-working);
-  --status-light-idle: var(--otk-lamp-idle);
+  --status-light-none: var(--otk-lamp-none);
   --connection-light-connected: var(--otk-connection-connected);
   --connection-light-connecting: var(--otk-connection-connecting);
   --connection-light-disconnected: var(--otk-connection-disconnected);

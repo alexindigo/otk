@@ -27,8 +27,6 @@ export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
   sessionCount: number | null;
   summary?: ProjectSummary;
-  activityKnown?: boolean;
-  unreadKnown?: boolean;
 }
 
 /** One sidecar's keyed metadata contributions. Digests never enter this owner. */
@@ -57,7 +55,6 @@ export function createProjectProjection(o: {
     members: Map<string, MergedMetadata>;
     counts: Record<InboxStatus, number>;
     unread: number;
-    unknownActivity: number;
     record?: ProjectRecord;
     summary?: ProjectSummary;
     discovered: boolean;
@@ -109,7 +106,6 @@ export function createProjectProjection(o: {
           INBOX_STATUS_PRIORITY.map((status) => [status, 0]),
         ) as Record<InboxStatus, number>,
         unread: 0,
-        unknownActivity: 0,
         discovered: false,
         operation: operationStates.get(directory),
         tasks: [],
@@ -155,7 +151,7 @@ export function createProjectProjection(o: {
       const before = sessions.get(id), entry = o.entry(id);
       const directory = entry && resolve(entry.directory, entry.projectID);
       const status = entry && inboxStatus(entry, inbox);
-      const unseen = !!entry && !entry.parentID && unread(id, inbox);
+      const unseen = !!entry && unread(id, inbox);
       if (
         before?.entry === entry && before?.status === status &&
         before?.unread === unseen && before?.directory === directory
@@ -172,10 +168,6 @@ export function createProjectProjection(o: {
         ) p.structure = undefined;
         p.counts[before.status]--;
         p.unread -= Number(before.unread);
-        p.unknownActivity -= Number(
-          before.entry.activityAuthority === "unknown" ||
-            before.entry.activityAuthority === "stale",
-        );
         if (!entry || directory !== before.directory) {
           p.members.delete(id);
           p.ids = undefined;
@@ -197,10 +189,6 @@ export function createProjectProjection(o: {
         p.members.set(id, entry);
         p.counts[status!]++;
         p.unread += Number(unseen);
-        p.unknownActivity += Number(
-          entry.activityAuthority === "unknown" ||
-            entry.activityAuthority === "stale",
-        );
         sessions.set(id, {
           entry,
           directory: directory!,
@@ -369,14 +357,14 @@ export function createProjectProjection(o: {
         for (const id of repoSessions.get(repo) ?? []) ids.add(id);
       }
       if (!changes || changes.baseline) {
-        for (const field of ["seen", "finishes"] as const) {
+        for (const field of ["seen", "finishes", "supervision"] as const) {
           for (
             const id of new Set([
-              ...Object.keys(inbox[field]),
-              ...Object.keys(next[field]),
+              ...Object.keys(inbox[field] ?? {}),
+              ...Object.keys(next[field] ?? {}),
             ])
           ) {
-            if (inbox[field][id] !== next[field][id]) {
+            if (inbox[field]?.[id] !== next[field]?.[id]) {
               ids.add(id);
             }
           }
@@ -388,12 +376,17 @@ export function createProjectProjection(o: {
           ...next,
           seen: { ...next.seen },
           finishes: { ...next.finishes },
+          supervision: { ...next.supervision },
         };
       } else {for (const id of ids) {
           for (const field of ["seen", "finishes"] as const) {
             if (next[field][id] === undefined) delete inbox[field][id];
             else inbox[field][id] = next[field][id];
           }
+          inbox.supervision ??= {};
+          if (next.supervision?.[id]) {
+            inbox.supervision[id] = next.supervision[id];
+          } else delete inbox.supervision[id];
         }}
       update(ids, dirty);
     },
@@ -430,27 +423,18 @@ export function createProjectProjection(o: {
       const p = projects.get(directory);
       if (!p) return undefined;
       const summary = p.summary;
-      const summaryReady = summary?.authority === "current" &&
-        summary.status !== null;
-      // P3 still receives session facts. Borrow them until the summary's own
-      // authority is ready, without replacing its explicit unknown scalars.
-      const fallbackCurrent = p.members.size > 0 && p.unknownActivity === 0;
+      const summaryReady = summary !== undefined;
       const status = attentionStatus(
         p.operation,
-        ...(summaryReady ? [summary.status!] : [
+        ...(summaryReady ? [summary.status ?? "none"] : [
           ...INBOX_STATUS_PRIORITY.filter((s) => p.counts[s] > 0),
-          ...(summary?.status && summary.status !== "idle"
-            ? [summary.status]
-            : []),
         ]),
       );
-      const activityKnown = !summary || summaryReady || fallbackCurrent ||
-        p.operation !== undefined || status !== "idle";
-      const hasUnseen = p.unread > 0 || summary?.status === "finished";
-      const unreadKnown = !summary || summary.unseenCount !== null ||
-        fallbackCurrent || hasUnseen;
+      // Evidence only: an unknown population adds no unseen finish.
+      const unread = (summary?.unseenCount ?? 0) > 0 || p.unread > 0 ||
+        summary?.status === "finished";
       const record = p.record;
-      const inactive = !!record?.inactive && status === "idle";
+      const inactive = !!record?.inactive && status === "none";
       const hasSessions = summary?.hasSessions ??
         (summary?.sessionCount != null
           ? summary.sessionCount > 0
@@ -481,16 +465,12 @@ export function createProjectProjection(o: {
             : "template",
           group: inactive
             ? "inactive"
-            : hasSessions || status !== "idle"
+            : hasSessions || status !== "none"
             ? "active"
             : "discovered",
           inactive,
           status,
-          unread: summary?.unseenCount != null
-            ? summary.unseenCount > 0
-            : hasUnseen,
-          activityKnown,
-          unreadKnown,
+          unread,
           visitText: text,
           ageing: age,
           sessionIDs: p.ids,

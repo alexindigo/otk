@@ -70,7 +70,15 @@ export function userSnapshot(db: Pick<OtkDb, "connection">): UserManifest {
     tables.map(
       (table) => [
         table,
-        db.connection.prepare(`SELECT * FROM ${table} ORDER BY rowid`)
+        db.connection.prepare(
+          `SELECT ${
+            table === "session_seen"
+              ? "user,session,time"
+              : table === "session_finishes"
+              ? "session,time"
+              : "*"
+          } FROM ${table} ORDER BY rowid`,
+        )
           .all() as Row[],
       ],
     ),

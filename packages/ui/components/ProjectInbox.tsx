@@ -168,9 +168,7 @@ export default function ProjectInbox(props: {
         data-inactive={project().inactive ? "true" : "false"}
         data-source={project().source}
         data-group={projectGroup(project())}
-        data-rollup={project().activityKnown === false
-          ? "unknown"
-          : project().status}
+        data-rollup={project().status}
         data-summary-authority={project().summary?.authority}
         data-project-parent={project().topology?.parentDirectory}
         data-project-repo={project().topology?.repoID}
@@ -186,8 +184,8 @@ export default function ProjectInbox(props: {
               projectGroup(project()) === "discovered"
                 ? ""
                 : ` - ${
-                  project().activityKnown === false
-                    ? "Activity unknown"
+                  project().status === "none"
+                    ? "No known activity"
                     : project().status
                 }`
             }`}
@@ -197,23 +195,13 @@ export default function ProjectInbox(props: {
               <span class="otk-project-branch" aria-hidden="true" />
             </Show>
             <span class="otk-project-marker">
-              <Show
-                when={projectGroup(project()) !== "discovered" &&
-                  project().activityKnown !== false}
-                fallback={collapsed() ? name().slice(0, 1) : undefined}
-              >
-                <StatusLight state={project().status} />
-              </Show>
+              <StatusLight state={project().status} />
             </span>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
                 <span
                   class={`otk-project-name otk-age-${project().ageing}`}
-                  data-unread={project().unreadKnown === false
-                    ? "unknown"
-                    : project().unread
-                    ? "true"
-                    : "false"}
+                  data-unread={project().unread ? "true" : "false"}
                 >
                   {name()}
                 </span>
@@ -408,7 +396,7 @@ export default function ProjectInbox(props: {
         >
           <For
             each={discovered().filter((p) =>
-              discoveredOpen() || p.status !== "idle"
+              discoveredOpen() || p.status !== "none"
             )}
             keyed={(p) => `${p.sidecarId}/${p.directory}`}
           >

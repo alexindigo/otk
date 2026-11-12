@@ -9,7 +9,7 @@ import {
   rollup,
   unread,
   visitTime,
-} from "@otk/client";
+} from "./supervision-fixture.ts";
 import { DEFAULT_PREFS, isPreference } from "@otk/protocol";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 function entry(id: string, status: IndexEntry["status"] = "idle"): IndexEntry {
@@ -76,16 +76,16 @@ Deno.test("deleted metadata cannot retain live family attention or phantom tabs"
   child.attention.permissions = 1;
   child.attention.error = "Old native failure";
   inbox.finishes.root = 10;
-  assertEquals(inboxStatus(root, inbox), "idle");
-  assertEquals(inboxStatus(child, inbox), "idle");
-  assertEquals(rollup([root, child], inbox), "idle");
+  assertEquals(inboxStatus(root, inbox), "none");
+  assertEquals(inboxStatus(child, inbox), "none");
+  assertEquals(rollup([root, child], inbox), "none");
   const tabs = createTabs(() => {
     throw new Error("No promotion expected");
   });
   try {
     tabs.update({ directory: "/p", entries: [root, child], inbox });
     assertEquals(tabs.tabs(), []);
-    assertEquals(inboxProjects([root, child], inbox, 0)[0].status, "idle");
+    assertEquals(inboxProjects([root, child], inbox, 0)[0].status, "none");
   } finally {
     tabs.stop();
   }
@@ -97,16 +97,16 @@ Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle prior
     done = entry("done"),
     blocked = entry("blocked");
   inbox.finishes.done = 10;
-  blocked.attention.childQuestions = 1;
-  assertEquals(rollup([idle], inbox), "idle");
+  blocked.attention.questions = 1;
+  assertEquals(rollup([idle], inbox), "none");
   assertEquals(rollup([idle, done], inbox), "finished");
   assertEquals(rollup([done, busy], inbox), "finished");
   assertEquals(rollup([blocked, done, busy], inbox), "blocked");
   assertEquals(inboxStatus(entry("retry", "retry"), inbox), "working");
-  blocked.attention.childQuestions = 0;
+  blocked.attention.questions = 0;
   blocked.attention.error = "failed";
   assertEquals(inboxStatus(blocked, inbox), "blocked");
-  assertEquals(rollup([], inbox), "idle");
+  assertEquals(rollup([], inbox), "none");
 });
 Deno.test("tracked and discovered projects and task tabs share attention-first aggregation independently of input order", () => {
   const inbox = snapshot(),

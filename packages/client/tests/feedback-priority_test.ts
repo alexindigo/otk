@@ -15,7 +15,10 @@ Deno.test("target feedback keeps a user action ahead of later seen and visit boo
     reply: "once",
   });
   void reply.result.catch(() => {});
-  const seen = rpc.start("sessions.seen", { sessionID: "tstv1-one" });
+  const seen = rpc.start("sessions.seen", {
+    sessionID: "tstv1-one",
+    terminal: 0,
+  });
   void seen.result.catch(() => {});
   assertEquals(sink.current()?.text, "Sending response");
   const ref = reply.state.ref;

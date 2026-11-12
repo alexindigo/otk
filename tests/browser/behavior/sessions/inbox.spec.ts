@@ -55,7 +55,10 @@ test.describe("inbox ownership", () => {
     expect(opened).toBeGreaterThanOrEqual(project.lastVisit);
     await openSession(state, page, "tstv1-otk");
     await expect.poll(async () =>
-      !!(await state.product("inbox.get", {})).inbox.seen["tstv1-otk"]
+      Object.hasOwn( // An acknowledgement exists; with no terminal its token is 0.
+        (await state.product("inbox.get", {})).inbox.seen,
+        "tstv1-otk",
+      )
     ).toBe(true);
     const visit =
       (await state.product("inbox.get", {})).inbox.projects.find((p) =>
@@ -171,7 +174,10 @@ test.describe("inbox ownership", () => {
       });
       await openSession(state, page, "tstv1-otk");
       await expect.poll(async () =>
-        !!(await state.product("inbox.get", {})).inbox.seen["tstv1-otk"]
+        Object.hasOwn( // An acknowledgement exists; with no terminal its token is 0.
+          (await state.product("inbox.get", {})).inbox.seen,
+          "tstv1-otk",
+        )
       ).toBe(true);
       const before =
         (await state.product("inbox.get", {})).inbox.projects.find((p) =>

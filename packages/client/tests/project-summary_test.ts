@@ -69,7 +69,7 @@ Deno.test("project rows consume server summaries without any session entries", (
   inbox.stop();
 });
 
-Deno.test("unknown project summaries retain explicit scalars and borrow current session attention until ready", () => {
+Deno.test("project lamps consume server supervision independently of metadata and population readiness", () => {
   let entry: MergedMetadata = {
     id: "tstv1-retained",
     directory: "/retained",
@@ -118,12 +118,10 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
     },
   });
   assertEquals(rows.row(entry.directory, 0)?.sessionCount, null);
-  assertEquals(rows.row(entry.directory, 0)?.activityKnown, false);
-  assertEquals(rows.row(entry.directory, 0)?.unreadKnown, false);
+  assertEquals(rows.row(entry.directory, 0)?.unread, false);
   entry = { ...entry, status: "busy", activityAuthority: "current" };
   rows.update([entry.id]);
-  assertEquals(rows.row(entry.directory, 0)?.status, "working");
-  assertEquals(rows.row(entry.directory, 0)?.activityKnown, true);
+  assertEquals(rows.row(entry.directory, 0)?.status, "none");
   model.receive({
     t: "inbox.patch",
     generation: "g",
@@ -133,7 +131,7 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
   });
   entry = { ...entry, status: "idle" };
   rows.update([entry.id]);
-  assertEquals(rows.row(entry.directory, 0)?.status, "finished");
+  assertEquals(rows.row(entry.directory, 0)?.status, "none");
   assertEquals(rows.row(entry.directory, 0)?.unread, true);
   assertEquals(rows.row(entry.directory, 0)?.summary?.unseenCount, null);
   model.receive({
@@ -143,8 +141,11 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
     revision: 2,
     ops: [{ op: "seen", sessionID: entry.id, time: 4 }],
   });
-  assertEquals(rows.row(entry.directory, 0)?.unread, false);
-  assertEquals(rows.row(entry.directory, 0)?.unreadKnown, true);
+  assertEquals(
+    rows.row(entry.directory, 0)?.unread,
+    false,
+    "An unknown population never erases a known acknowledgement",
+  );
   model.receive({
     t: "inbox.summaries",
     generation: "g",
@@ -152,7 +153,7 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
     revision: 1,
     summaries: [{
       ...summary,
-      status: "idle",
+      status: "none",
       sessionCount: 7,
       unseenCount: 0,
       lastActivity: 42,
@@ -163,8 +164,8 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
   rows.update([entry.id]);
   assertEquals(
     rows.row(entry.directory, 0)?.status,
-    "idle",
-    "Ready server authority must replace the transitional fallback",
+    "none",
+    "Server authority never borrows raw session status",
   );
   assertEquals(rows.row(entry.directory, 0)?.sessionCount, 7);
   model.stop();
@@ -181,7 +182,7 @@ Deno.test("known idle authority renders without session metadata or known popula
     summaries: {
       "/idle": {
         directory: "/idle",
-        status: "idle",
+        status: "none",
         authority: "current",
         sessionCount: null,
         unseenCount: null,
@@ -189,9 +190,8 @@ Deno.test("known idle authority renders without session metadata or known popula
       },
     },
   });
-  assertEquals(rows.row("/idle", 0)?.activityKnown, true);
-  assertEquals(rows.row("/idle", 0)?.status, "idle");
+  assertEquals(rows.row("/idle", 0)?.status, "none");
   assertEquals(rows.row("/idle", 0)?.sessionCount, null);
-  assertEquals(rows.row("/idle", 0)?.unreadKnown, false);
+  assertEquals(rows.row("/idle", 0)?.unread, false);
   assertEquals(rows.row("/idle", 0)?.source, "index");
 });

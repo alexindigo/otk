@@ -132,7 +132,7 @@ Deno.test("renaming a phantom promotes once with the captured new name and retai
   });
   assertEquals(
     restored.tabs().map((tab) => [tab.kind, tab.title, tab.status]),
-    [["task", "New task name", "idle"]],
+    [["task", "New task name", "none"]],
   );
   restored.stop();
   f.resources.stop();

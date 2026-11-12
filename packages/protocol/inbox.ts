@@ -48,7 +48,7 @@ export const PROJECT_STATUS_PRIORITY = [
   "blocked",
   "finished",
   "working",
-  "idle",
+  "none",
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
 /** Connection-local repository identity; checkout roots are explicit native facts. */
@@ -83,6 +83,8 @@ export interface InboxSnapshot {
   tasks: TaskRecord[];
   seen: Record<string, number>;
   finishes: Record<string, number>;
+  /** Per-user server projection; consumers never reconstruct it from status. */
+  supervision?: Record<string, import("./supervision.ts").Supervision>;
   pathTemplates: string[];
   /** Server-side template discovery; index discovery is projected from the index. */
   discovered?: string[];
@@ -106,6 +108,11 @@ export type InboxOp =
   | { op: "task.remove"; id: string }
   | { op: "seen"; sessionID: string; time: number }
   | { op: "finish"; sessionID: string; time: number }
+  | {
+    op: "supervision";
+    sessionID: string;
+    value: import("./supervision.ts").Supervision | null;
+  }
   | { op: "templates"; values: string[] }
   | { op: "discovery"; directories: string[]; failure?: PublicFailure };
 /** Feature-owned contracts, composed by the open RPC interface. */
@@ -150,7 +157,10 @@ export interface InboxRpcMethods {
     params: { id: string; sessions: string[] };
     result: TaskRecord;
   };
-  "sessions.seen": { params: { sessionID: string }; result: number };
+  "sessions.seen": {
+    params: { sessionID: string; terminal: number };
+    result: number;
+  };
   "sessions.finishes": {
     params: Record<string, never>;
     result: Record<string, number>;

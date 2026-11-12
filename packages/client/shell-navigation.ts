@@ -275,9 +275,9 @@ export function createShellNavigation(o: {
     if (!entry) return false;
     const inbox = resources.inbox(target.sidecarId).state.inbox;
     if (
-      disposition === "kept" && inboxStatus(entry, inbox) !== "idle" &&
+      disposition === "kept" && inboxStatus(entry, inbox) !== "none" &&
       !o.confirm(
-        `Close “${entry.title}”? It will stay visible as a phantom tab until it is idle and seen. The session remains in Sessions and in the agent service.`,
+        `Close "${entry.title}"? It will stay visible as a phantom tab while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )
     ) return false;
     const ids = disposition === "kept"
@@ -477,6 +477,7 @@ export function createShellNavigation(o: {
         void resources.inbox(target.sidecarId).openSession(
           target.sessionID,
           value.directory,
+          value.finish,
         ).catch(fail);
       } else if (value.finish > viewedFinish) {
         const presence = o.presence();
@@ -484,7 +485,7 @@ export function createShellNavigation(o: {
           viewedFinish = value.finish;
           void resources.sidecars.connection(target.sidecarId).rpc.call(
             "sessions.seen",
-            { sessionID: target.sessionID },
+            { sessionID: target.sessionID, terminal: value.finish },
           ).catch(fail);
         }
       }

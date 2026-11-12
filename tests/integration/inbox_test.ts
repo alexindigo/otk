@@ -113,8 +113,16 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     await rpc.call("projects.inactive", { directory: root, inactive: true });
     await waitFor(() => b.inbox().projects[0].inactive, Boolean);
     const entry = app.app.index.get("tstv1-core")!;
-    app.app.index.upsert({ ...entry, status: "busy" });
-    app.app.index.upsert({ ...entry, status: "idle" });
+    app.app.index.upsert({
+      ...entry,
+      status: "busy",
+      activity: { work: { keys: ["run"], fresh: true } },
+    });
+    app.app.index.upsert({
+      ...entry,
+      status: "idle",
+      activity: { terminal: 100 },
+    });
     await waitFor(
       () => b.inbox().finishes["tstv1-core"] && !b.inbox().projects[0].inactive,
       Boolean,
@@ -145,6 +153,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     app.app.index.upsert({
       ...entry,
       attention: { ...entry.attention, questions: 1 },
+      activity: { inputs: { keys: ["question"], fresh: true } },
     });
     await waitFor(() => !b.inbox().projects[0].inactive, Boolean);
     app.app.index.upsert(entry);
@@ -307,6 +316,7 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     await first.rpc("projects.add", { directory: empty });
     const seen = await first.rpc<number>("sessions.seen", {
       sessionID: "tstv1-core",
+      terminal: 0,
     });
     await first.close();
     await app.stop();

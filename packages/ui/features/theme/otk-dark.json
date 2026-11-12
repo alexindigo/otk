@@ -39,7 +39,7 @@
     "lamp-blocked": "#ff2e4d",
     "lamp-finished": "#e8bd42",
     "lamp-working": "#65c88b",
-    "lamp-idle": "#8e949b",
+    "lamp-none": "#8e949b",
     "connection-connected": "#5cb880",
     "connection-connecting": "#64a9df",
     "connection-disconnected": "#8e949b",

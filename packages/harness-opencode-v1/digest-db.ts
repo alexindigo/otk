@@ -44,6 +44,8 @@ const projection = [
     ? "m.time_created AS time_created"
     : `CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.${path}') END AS ${alias}`
 ).join(",");
+const terminalProjection = (session = "session") =>
+  `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) WHEN json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown') THEN json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
 
 function metadata(row: Record<string, unknown>): SessionMetadata {
   return {
@@ -58,6 +60,9 @@ function metadata(row: Record<string, unknown>): SessionMetadata {
     timeUpdated: Number(row.time_updated),
     archived: row.time_archived != null,
     status: "idle",
+    activity: {
+      terminal: Number(row.terminal) > 0 ? Number(row.terminal) : undefined,
+    },
     attention: {
       permissions: 0,
       questions: 0,
@@ -122,7 +127,7 @@ export class DigestNativeDb {
   catalog(after: string, limit: number): SessionMetadata[] {
     this.observe?.("catalog");
     return this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived FROM session WHERE id>? ORDER BY id LIMIT ?`,
+      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE id>? ORDER BY id LIMIT ?`,
     ).all(after, limit).map(metadata);
   }
   /** Ownership proofs read the API's current identities, not an older paged list. */
@@ -146,7 +151,7 @@ export class DigestNativeDb {
       values.push(before.updated, before.id);
     }
     const rows = this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived FROM session WHERE ${
+      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE ${
         filters.join(" AND ")
       } ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(...values, limit).map(metadata);
@@ -175,7 +180,7 @@ export class DigestNativeDb {
     limit: number,
   ): SessionMetadata[] {
     const rows = this.db.prepare(
-      "SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived FROM session WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?",
+      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(
       JSON.stringify(directories),
       before?.updated ?? null,
@@ -189,7 +194,9 @@ export class DigestNativeDb {
   lookup(sessions: readonly string[]): SessionMetadata[] {
     this.observe?.("identity");
     return this.db.prepare(
-      "SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived FROM session s JOIN json_each(?) wanted ON wanted.value=s.id ORDER BY s.id",
+      `SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${
+        terminalProjection("s")
+      } FROM session s JOIN json_each(?) wanted ON wanted.value=s.id ORDER BY s.id`,
     ).all(JSON.stringify(sessions.map(ids.decode))).map(metadata);
   }
   /** Bounded identity proof; malformed or unreported headers are never empty. */

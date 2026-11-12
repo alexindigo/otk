@@ -53,7 +53,7 @@ Deno.test("inbox maintains committed keys without baseline SQL or unrelated payl
     return prepare(sql);
   }) as typeof db.connection.prepare;
   try {
-    stores.seen.mark("local", "opcv1-ses_a");
+    stores.seen.acknowledge("local", "opcv1-ses_a", 1);
     await new Promise((yes) => setTimeout(yes, 0));
     assertEquals(selects, []);
     assertEquals(frames.length, 1);
@@ -89,7 +89,7 @@ Deno.test("bounded inbox baseline completes while committed marks keep changing"
     templates: new ProjectTemplates(db),
   };
   for (let i = 0; i < 20; i++) stores.tasks.create("/p", `Task ${i}`, []);
-  stores.seen.mark("local", "opcv1-ses_a");
+  stores.seen.acknowledge("local", "opcv1-ses_a", ++clock);
   const inbox = new InboxFeature(
     stores,
     new IndexStore(),
@@ -100,7 +100,7 @@ Deno.test("bounded inbox baseline completes while committed marks keep changing"
   );
   const controller = new AbortController();
   const timer = setInterval(() => {
-    stores.seen.mark("local", "opcv1-ses_a");
+    stores.seen.acknowledge("local", "opcv1-ses_a", ++clock);
   }, 1);
   let deadline: ReturnType<typeof setTimeout> | undefined;
   try {

@@ -533,11 +533,12 @@ test(
                     await expect(
                       page.locator(".otk-inactive-projects [data-project]"),
                     ).toBeVisible();
+                    // Rows are never lampless; no evidence renders grey.
                     await expect(
                       page.locator(".otk-project-row").filter({
                         hasText: "empty",
                       }).locator(".otk-status-light"),
-                    ).toHaveCount(0);
+                    ).toHaveAttribute("data-state", "none");
                   }
                   expect(
                     await page.evaluate(() => {

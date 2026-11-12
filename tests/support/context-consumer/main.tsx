@@ -147,7 +147,7 @@ function ProjectProbe() {
           added: true,
           inactive: false,
           lastVisit: 0,
-          status: "idle",
+          status: "none",
           unread: false,
           visitText: "now",
           ageing: 0,

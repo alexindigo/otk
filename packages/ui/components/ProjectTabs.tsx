@@ -485,7 +485,7 @@ export default function ProjectTabs(props: {
                 </Show>
                 <SelectionContent
                   class="otk-session-selection otk-crumb-measure-content"
-                  leading={<StatusLight small state="idle" />}
+                  leading={<StatusLight small state="none" />}
                 >
                   {title(item.id)}
                 </SelectionContent>
@@ -581,7 +581,7 @@ export default function ProjectTabs(props: {
                                 small
                                 state={entry(crumb().id)
                                   ? inboxStatus(entry(crumb().id)!, props.inbox)
-                                  : "idle"}
+                                  : "none"}
                               />
                             }
                           >

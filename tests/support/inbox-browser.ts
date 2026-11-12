@@ -55,14 +55,45 @@ export async function inboxBrowserFixture(
     archived: false,
     time: { created: entry.timeCreated, updated: entry.timeUpdated },
   });
+  // This external harness simulates positive native work/input/terminal facts
+  // on every insertion path. Status and attention counts are scenario controls,
+  // not application supervision inputs; explicit activity wins.
+  const evidence = (
+    entry: IndexEntry,
+    previous?: IndexEntry,
+  ): IndexEntry["activity"] => ({
+    terminal: entry.status === "idle" && previous?.activity?.work?.keys.length
+      ? Date.now()
+      : previous?.activity?.terminal,
+    work: {
+      keys: entry.status === "idle" ? [] : [`fixture-run:${entry.id}`],
+      fresh: true,
+    },
+    inputs: {
+      keys: Array.from(
+        { length: entry.attention.questions },
+        (_, n) => `question:${entry.id}:${n}`,
+      ),
+      fresh: true,
+    },
+    permissions: {
+      keys: Array.from(
+        { length: entry.attention.permissions },
+        (_, n) => `permission:${entry.id}:${n}`,
+      ),
+      fresh: true,
+    },
+  });
   const update = (id: string, patch: Partial<IndexEntry>) => {
-    const at = entries.findIndex((e) => e.id === id);
-    entries[at] = {
-      ...entries[at],
+    const at = entries.findIndex((e) => e.id === id), previous = entries[at];
+    const entry: IndexEntry = {
+      ...previous,
       ...patch,
-      timeUpdated: entries[at].timeUpdated + 1,
+      timeUpdated: previous.timeUpdated + 1,
     };
-    sink.indexUpsert(entries[at]);
+    entry.activity = patch.activity ?? evidence(entry, previous);
+    entries[at] = entry;
+    sink.indexUpsert(entry);
   };
   const backend: Harness = {
     core: {
@@ -170,6 +201,8 @@ export async function inboxBrowserFixture(
     entries,
     update,
     add(entry: IndexEntry) {
+      // A new native session has no earlier facts; copied activity is not its own.
+      entry = { ...entry, activity: evidence(entry) };
       entries.push(entry);
       sink.indexUpsert(entry);
     },

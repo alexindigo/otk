@@ -1,5 +1,21 @@
 # OTK application core
 
+## Evidence-based session supervision
+
+`InboxFeature` composes one `SessionSupervision` beside the index. Adapters
+supply fresh work and pending-input identities plus monotone proven terminal
+tokens. Neither legacy status transitions nor digest/population readiness create
+evidence. The per-user inbox projection carries
+`needsYou | working | finishedUnseen | none`. `none` renders grey with "No known
+activity"; stale inventories no longer count. Rollups include children, but each
+session's lamp describes only that session.
+
+`sessions.seen` acknowledges the captured displayed terminal, never server time.
+Seen/finish feature v2 retains terminal tokens separately from legacy
+observation clocks. Old clocks survive but cannot acknowledge proven history.
+Native viewed state is neither read nor written. Completion requires a proven
+terminal.
+
 ## View-scoped publication (protocol 20)
 
 A selected socket view parks optional work until the first message page settles.
@@ -400,15 +416,15 @@ API auth middleware; there is no handwritten route table.
 
 `InboxFeature` composes project/task/seen/finish/template stores and owns inbox
 RPC validation and metadata frames. `IndexStore.observe` supplies synchronous,
-immutable before/after snapshots, so a busy-to-idle edge cannot disappear inside
-a wire batch. Initial idle snapshots do not invent finish times. Activity clears
-persisted inactive marks for affected users without tracking index-only
-directories. Template discovery scans on startup and template edits, fencing
-retired/closed results; snapshots carry these directory names independently of
-tracked projects. Creation and successful action bookkeeping activate projects
-through the existing store owner; viewing visits do not. Add project creates its
-initial session. `Connections` consumes generic `FrameSource`s with welcome
-snapshots and lifetime-bound listeners; it imports no inbox feature. The shipped
+immutable before/after snapshots. Only a proven terminal token records a finish;
+status transitions cannot invent finish times. Activity clears persisted
+inactive marks for affected users without tracking index-only directories.
+Template discovery scans on startup and template edits, fencing retired/closed
+results; snapshots carry these directory names independently of tracked
+projects. Creation and successful action bookkeeping activate projects through
+the existing store owner; viewing visits do not. Add project creates its initial
+session. `Connections` consumes generic `FrameSource`s with welcome snapshots
+and lifetime-bound listeners; it imports no inbox feature. The shipped
 single-user server resolves its current configured auth username (or `local`) at
 use time as the project/seen storage key, including after first-run setup. No
 authentication contract changes are needed. Inbox RPCs are core-owned, not
@@ -541,8 +557,8 @@ recency. Metadata/SSE and committed marks update contributions; digest-only
 changes do no summary work. Inbox baselines include `summaries` and their
 independent revision; additive `inbox.summaries` frames publish changed
 projects. Automatic-permission coverage borrows the existing policy owner.
-Unknown native activity is explicit, and disconnect retains last-good facts as
-stale. No row requires session metadata to render its lamp or counts.
+Population authority is independent of supervision. Stale live evidence stops
+counting. No row requires session metadata to render its lamp or counts.
 
 Optional seed topology adds worktree leaves beneath their canonical repo. The
 summary owner preserves direct-checkout counts and deduplicates repo rollups;
@@ -663,10 +679,9 @@ injected observation callback uses unique dispatch tokens for interactive
 pressure. Mutation handlers do not consume read cancellation.
 
 Inbox observers use hydrated project policy and seen/finish projections, updated
-by committed store changes. A busy→idle edge records its returned committed
-clock without a follow-up SELECT; digest observations perform no baseline SQL
-reads. Tombstones retire approval policy without creating synthetic finish
-edges.
+by committed store changes. Proven terminals commit without a follow-up SELECT;
+digest observations perform no baseline SQL reads. Tombstones retire approval
+policy without creating synthetic finish edges.
 
 The layered `[digest]` policy is documented in `defaults/otk.toml`; positive
 integer bounds, the 200-row native ceiling and CPU duty bounds validate with
