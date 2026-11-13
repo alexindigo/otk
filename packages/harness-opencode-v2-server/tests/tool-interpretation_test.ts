@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
+import { markdown } from "@otk/content";
 import { DatabaseSync } from "node:sqlite";
 import {
   interpretTool,
@@ -59,7 +60,13 @@ for (
   Deno.test(`tool dialects ${legacy}/${current} yield equivalent typed targets`, () => {
     const a = mapTool(tool(legacy, oldInput)),
       b = mapTool(tool(current, newInput));
-    assertEquals({ ...a, sourceName: "same" }, { ...b, sourceName: "same" });
+    assertEquals(JSON.parse(a.source!.payload!), tool(legacy, oldInput));
+    assertEquals(JSON.parse(b.source!.payload!), tool(current, newInput));
+    assertEquals({ ...a, source: undefined, sourceName: "same" }, {
+      ...b,
+      source: undefined,
+      sourceName: "same",
+    });
     assertEquals(a.sourceName, legacy);
     const old = v1Tool(
       {
@@ -201,8 +208,8 @@ Deno.test("historical search, skill and task envelopes use the same result decod
   const task =
     '<task id="ses_child" state="completed">\n<summary>Inspect</summary>\n<task_result>\n**Done**\n</task_result>\n</task>';
   assertEquals(mapTool(tool("task", {}, {}, task)).outputContent, {
-    kind: "text",
-    text: "**Done**",
+    kind: "blocks",
+    blocks: markdown("**Done**"),
   });
   const skill =
     '<skill_content name="review">\n# Skill: review\n\nInspect changes\n\nBase directory for this skill: /skills/review\nRelative paths in this skill are relative to this base directory.\nNote: file list is sampled.\n\n<skill_files>\n<file>/skills/review/info.md</file>\n</skill_files>\n</skill_content>';

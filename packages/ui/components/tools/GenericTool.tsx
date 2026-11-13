@@ -16,8 +16,14 @@ export default function GenericTool(
 ): import("solid-js").Element {
   return (
     <>
-      <Show when={props.output}>
-        <ToolOutput text={props.call.output || ""} />
+      <Show
+        when={props.output || props.call.failure ||
+          props.call.status === "error"}
+      >
+        <ToolOutput
+          text={props.call.output || ""}
+          result={props.call.outputContent}
+        />
         <Show
           when={props.call.tool === "external" && props.call.outputTruncated}
         >

@@ -159,7 +159,23 @@ test("messages.revert-files-counted-strip-reload", {
   await expect(page.locator(".otk-rolled-back-strip")).toContainText(
     "1 prompt rolled back",
   );
-  await expect(page.locator("[data-message]")).toHaveCount(0);
+  // Decisions 1/20 preserve pre-prompt native controls; revert removes real prompts/replies.
+  const reverted = async () => {
+    await expect(
+      page.locator(
+        "[data-message][data-role=user], [data-message][data-role=assistant]",
+      ),
+    ).toHaveCount(0);
+    if (state.controller.info!.version.startsWith("2.")) {
+      await expect(page.locator("[data-message][data-role=context]"))
+        .toHaveCount(2);
+      for (const kind of ["agent-switched", "model-switched"]) {
+        await expect(page.locator(`[data-native-record="opencode-v2/${kind}"]`))
+          .toBeVisible();
+      }
+    } else await expect(page.locator("[data-message]")).toHaveCount(0);
+  };
+  await reverted();
   await page.locator(".otk-rollback-disclosure").click();
   await expect(page.locator(".otk-rollback-details")).toContainText(
     "revert.txt",
@@ -171,7 +187,7 @@ test("messages.revert-files-counted-strip-reload", {
   await expect(page.locator(".otk-rolled-back-strip")).toContainText(
     "1 prompt rolled back",
   );
-  await expect(page.locator("[data-message]")).toHaveCount(0);
+  await reverted();
 });
 
 isolatedTest.describe("configured message details", () => {

@@ -171,6 +171,46 @@ non-sortable IDs; synthetic/system/skill/shell/compaction rows never become
 real-prompt anchors. Text and reasoning identities count their own ordinals;
 tools use call IDs.
 
+`classify.ts` totally maps persisted records, including unknown future tags.
+Standalone context is never prompt prose. `eventMessage` mirrors the stock
+message updater before calling that classifier: instruction deltas reconstruct
+their description/metadata; synthetic and skill metadata survive. A textless
+initial instruction observation has no native message and creates none here. The
+V2 plugin owns all result-state wording and nullable settlement facts.
+Recognized subagent envelopes are removed only by exact metadata-derived
+prefix/suffix matching; malformed source remains inspectable. Foreground
+delegation renders Markdown blocks, while shell output remains literal.
+
+Typed messages, parts and calls retain source alongside their projections. Text
+payloads remain exact; structured source uses stable JSON with a bounded UTF-8
+preview, byte count and truncation fact. Ordered tool-result items keep text,
+file names, MIME and media references together. Result failure is independent of
+lifecycle: completed execute/shell calls retain completed status and also supply
+failure cause; execute's nested operations keep their order.
+
+`V2RequestRetention` owns durable permission/form observations and outcomes in
+the injected plugin storage namespace. Its private versioned schema and indexes
+are opaque to core. Application composition binds the existing OTK SQLite owner
+before the adapter starts; standalone adapters can stage records until binding.
+Closing the adapter does not delete durable records. Session deletion removes
+only that session's V2 records. Snapshot acquisition merges at most eleven
+retained candidates with a ten-message native page and carries exact
+continuation through replay capture. SQL-backed histories use native durable
+sequence, not copied clocks; the API fallback uses the existing clock-based
+source authority. Requests remain context records, never prompts or duplicated
+tool outcomes.
+
+Settlements are ephemeral native events without a sequence, so each stored
+outcome carries a plugin position `{after, rank, basis}`: the session
+aggregate's last durable sequence delivered before it, and its delivery rank
+inside that gap. A per-connection watermark gives `after` directly; without one,
+the first later durable event of that session proves it (`seq - 1`), and until
+then one keyed `max(seq)` probe through the worker channel bounds it. With no
+sequence evidence the record is placed by its native clock. The projected order
+`after + rank/(rank+1)` lies strictly between native sequences. Pages honour the
+staged revert cutoff; a committed revert retires observations at or after its
+boundary, matching native message and inbox deletion.
+
 `tool-interpretation.ts` owns current and migrated tool aliases, argument and
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,
@@ -188,10 +228,10 @@ native SQL snapshot. Page, live and recovery owners preserve closure without
 inventing an endpoint; replay barriers keep a distinct optional clock and permit
 only a fresh start to reopen.
 
-Pages contain ten native rows, chronological visible items, session metadata,
-real-prompt/reply context and an event-aligned replay clock. Cursor
-continuations omit native `order` and bind to session, epoch, cutoff and source
-identity. Reconnect stages demanded running-turn backfill and checkpoints
+History pages contain at most ten native/retained rows, current queued items,
+session metadata, real-prompt/reply context and an event-aligned replay clock.
+Cursor continuations omit native `order` and bind to session, epoch, cutoff and
+source identity. Reconnect stages demanded running-turn backfill and checkpoints
 retained streams before new deltas. Missing seeds use bounded replacement-only
 recovery; HTTP snapshots never become append seeds. Unsubscribe, cutoff,
 reconnect and stop fence late pages, recoveries, shell output and speculation.

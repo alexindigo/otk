@@ -7,6 +7,7 @@ import type { PartProps, PartRegistry } from "../../registries/renderers.ts";
 import { retainedDisclosure } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
+import Icon from "../Icon.tsx";
 import { unknownPartPresentation, unknownPartPreview } from "./unknown-part.ts";
 import NativeSource from "./NativeSource.tsx";
 
@@ -40,8 +41,20 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   const heading = () => (
     <>
       <Show when={details()}>
-        <span class="otk-tool-icon" aria-hidden="true">
+        <span class="otk-tool-icon otk-native-chevron" aria-hidden="true">
           <ChevronIcon />
+        </span>
+      </Show>
+      <Show when={activity()?.icon?.name === "warning"}>
+        <span
+          class="otk-tool-icon"
+          role="img"
+          aria-label={activity()?.icon?.label ?? "Warning"}
+        >
+          <Icon>
+            <path d="M12 3 2 21h20L12 3Z" />
+            <path d="M12 9v5m0 3v.01" />
+          </Icon>
         </span>
       </Show>
       <span class="otk-tool-verb otk-control-label" title={label()}>

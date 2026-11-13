@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 import type { ToolProps } from "../registries/renderers.ts";
 import { useUiRegistries } from "../registries/context.tsx";
 import ToolFrame from "./tools/ToolFrame.tsx";
@@ -20,12 +20,17 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
         prefs: props.prefs,
       })}
       body={() => (
-        <Show when={tools.resolve(props.call)} keyed>
-          {(renderer) => {
-            const Component = renderer;
-            return <Component {...props} />;
-          }}
-        </Show>
+        <>
+          <Show when={tools.resolve(props.call)} keyed>
+            {(renderer) => {
+              const Component = renderer;
+              return <Component {...props} />;
+            }}
+          </Show>
+          <For each={props.call.children} keyed={(call) => call.callID}>
+            {(call) => <ToolLine {...props} call={call()} waiting={false} />}
+          </For>
+        </>
       )}
     />
   );

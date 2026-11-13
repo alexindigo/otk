@@ -11,6 +11,6 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
-.otk-native-record.is-open > .otk-tool-state .otk-tool-icon svg {
+.otk-native-record.is-open > .otk-tool-state .otk-native-chevron svg {
   transform: rotate(90deg);
 }

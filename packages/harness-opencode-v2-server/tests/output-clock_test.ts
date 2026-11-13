@@ -22,6 +22,7 @@ Deno.test("V2 terminal page without an end releases streams and requires a fresh
   const updates: ContentOp[] = [];
   const api = {
     session: {
+      inbox: { list: () => Promise.resolve([]) },
       get: () =>
         Promise.resolve({
           id: "ses_clock",

@@ -40,11 +40,21 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
   const newest = await state.product("session.messages", {
     sessionID: session.id,
   }) as MessagePage;
-  // V2's terminal idle is a native control row: it owns one of the ten native slots.
-  expect(newest.items).toHaveLength(
-    state.controller.info!.version.startsWith("2.") ? 9 : 10,
+  // Decision 1 keeps idle visible in its native slot instead of omitting it.
+  const v2 = state.controller.info!.version.startsWith("2.");
+  expect(newest.items).toHaveLength(10);
+  expect(newest.items.filter((m) => m.role === "assistant")).toHaveLength(
+    v2 ? 9 : 10,
   );
-  expect(newest.items.every((m) => m.role === "assistant")).toBe(true);
+  const contexts = newest.items.filter((m) => m.role === "context");
+  expect(contexts).toHaveLength(v2 ? 1 : 0);
+  if (v2) {
+    expect(
+      contexts[0].parts.some((p) =>
+        p.kind === "external" && p.name === "opencode-v2/idle"
+      ),
+    ).toBe(true);
+  }
   expect(newest.prompt).toBeTruthy();
   expect(newest.items.some((m) => m.id === newest.prompt!.id)).toBe(false);
   expect(newest.prompt!.model).toEqual({ provider: "fake", model: "scripted" });
@@ -223,10 +233,18 @@ test(
       .toBe(markers.join("\n\n"));
     await expect(page.locator(".otk-message-footer")).toHaveCount(1);
     await expect(
-      page.getByRole("list", { name: "Reply segments", exact: true }),
+      // Decisions 1/20 keep idle separate; whole-reply Copy still acquires all 205 segments.
+      page.locator("[data-message][data-role=assistant]").getByRole("list", {
+        name: "Reply segments",
+        exact: true,
+      }),
       // Step bookkeeping adds a leading and a trailing work group around the
       // existing 102 text segments and 101 between-text tool groups.
     ).toHaveAttribute("data-acquired-count", "205");
+    if (state.controller.info!.version.startsWith("2.")) {
+      await expect(page.locator('[data-native-record="opencode-v2/idle"]'))
+        .toBeVisible();
+    }
     expect(await page.locator(".otk-work-log").count()).toBeLessThan(101);
     expect(
       capture.sent.filter(({ frame }) => frame.method === "session.messages")

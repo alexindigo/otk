@@ -174,8 +174,8 @@ Deno.test({
         () => projection.messages().flatMap((m) => m.parts),
         (parts) =>
           parts.some((p) =>
-            p.kind === "tool" && p.call.tool === "bash" &&
-            p.call.output === "early"
+            p.kind === "external" && p.activity?.kindLabel === "Shell result" &&
+            p.activity.body?.some((b) => b.b === "code" && b.text === "early")
           ),
         10000,
       );
@@ -184,8 +184,10 @@ Deno.test({
         () => projection.messages().flatMap((m) => m.parts),
         (parts) =>
           parts.some((p) =>
-            p.kind === "tool" && p.call.tool === "bash" &&
-            p.call.output === "early late" && p.call.status === "completed"
+            p.kind === "external" && p.activity?.state?.key === "exited" &&
+            p.activity.body?.some((b) =>
+              b.b === "code" && b.text === "early late"
+            )
           ),
         10000,
       );

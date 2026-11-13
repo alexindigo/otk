@@ -10,6 +10,7 @@ import {
 } from "../../pages/transcript.ts";
 import { readFile } from "node:fs/promises";
 import type { Json } from "../../../support/fixture-control.ts";
+import { nativeHistoryCount } from "../../pages/history.ts";
 
 test(
   "messages.typed-native-results-reload",
@@ -157,6 +158,9 @@ test(
     const history = await state.native<unknown[]>(
       `/session/${session.id}/message`,
     );
+    // Decision 1/addendum 2 retain native controls/outcomes; the legacy fixture facade omits controls.
+    const nativeCount = await nativeHistoryCount(state, session.id);
+    if (v2) expect(nativeCount).toBeGreaterThan(history.length);
     // Reacquired offscreen work groups use the saved reader default too.
     await state.product("prefs.set", { key: "expandWork", value: true });
     await page.reload();
@@ -164,7 +168,7 @@ test(
     await openWorkLogs(page);
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",
-      String(history.length),
+      String(nativeCount),
     );
     for (const item of cases) {
       await revealAcquired(page, item.selector + " .otk-tool-toggle");
