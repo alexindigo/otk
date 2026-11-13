@@ -151,6 +151,49 @@ test.describe("V2 records", () => {
       await expect(failed.getByRole("img", { name: "Failed" }).locator("svg"))
         .toHaveCSS("transform", "none");
       await expect(failed).toContainText("The usage limit has been reached");
+      // Native source is the shared nested Source fold, closed by default.
+      const source = failed.locator(".otk-native-source");
+      await expect(source).toHaveCount(1);
+      await expect(source.locator(".otk-tool-toggle")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+      await expect(failed.locator(".otk-native-preview")).toHaveCount(0);
+      // The state is presented once, by its parameter row.
+      await expect(failed.locator(".otk-native-parameters")).toContainText(
+        "State",
+      );
+      await expect(
+        failed.locator(".otk-tool-body > p").filter({ hasText: /^error$/ }),
+      ).toHaveCount(0);
+      // Plain and navigable values share one column edge and baseline offset.
+      const rows = await failed.locator(".otk-native-parameters").evaluate((
+        list,
+      ) =>
+        Array.from(list.querySelectorAll("dt")).map((dt) => {
+          const label = dt.getBoundingClientRect(),
+            value = dt.nextElementSibling!.querySelector(".otk-native-value")!
+              .getBoundingClientRect();
+          return {
+            left: value.left,
+            offset: (value.top + value.bottom - label.top - label.bottom) / 2,
+            child: !!dt.nextElementSibling!.querySelector("button"),
+          };
+        })
+      );
+      expect(rows.some((row) => row.child)).toBe(true);
+      expect(
+        Math.max(...rows.map((r) => r.left)) -
+          Math.min(...rows.map((r) => r.left)),
+      )
+        .toBeLessThanOrEqual(0.5);
+      expect(
+        Math.max(...rows.map((r) => r.offset)) -
+          Math.min(...rows.map((r) => r.offset)),
+      ).toBeLessThanOrEqual(1);
+      await source.locator(".otk-tool-toggle").click();
+      await expect(source.locator(".otk-native-preview")).toBeVisible();
+      await expect(source).toContainText("bytes");
       await expect(page.locator(".otk-message .otk-error[role=alert]"))
         .toContainText(
           "The usage limit has been reached",

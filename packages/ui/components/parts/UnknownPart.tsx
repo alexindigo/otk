@@ -30,9 +30,18 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     !!(activity()?.state || activity()?.body?.length ||
       activity()?.parameters?.length || preview());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
-  const child = (ref: ChildRef) => (
+  // A state already presented by the heading or a parameter is not repeated.
+  const state = () => {
+    const value = activity()?.state?.label;
+    return value && value !== label() &&
+        !activity()?.parameters?.some((p) => p.value === value)
+      ? value
+      : undefined;
+  };
+  const child = (ref: ChildRef, value?: boolean) => (
     <button
       type="button"
+      class={value ? "otk-native-value" : undefined}
       onClick={() => props.onOpenChild(ref.sessionID)}
     >
       {ref.label}
@@ -98,11 +107,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       </header>
       <Show when={expanded() && details()}>
         <div class="otk-tool-body">
-          <Show
-            when={activity()?.state && activity()?.state?.label !== label()}
-          >
-            <p>{activity()!.state!.label}</p>
-          </Show>
+          <Show when={state()}>{(value) => <p>{value()}</p>}</Show>
           <Show when={activity()?.parameters?.length}>
             <dl class="otk-native-parameters">
               <For
@@ -115,9 +120,13 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                     <dd>
                       <Show
                         when={parameter().child}
-                        fallback={parameter().value}
+                        fallback={
+                          <span class="otk-native-value">
+                            {parameter().value}
+                          </span>
+                        }
                       >
-                        {(ref) => child(ref())}
+                        {(ref) => child(ref(), true)}
                       </Show>
                     </dd>
                   </>
