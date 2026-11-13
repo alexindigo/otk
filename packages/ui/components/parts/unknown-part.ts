@@ -6,6 +6,7 @@ export function unknownPartPresentation(part: Part): PartPresentation {
   const source = "source" in part ? part.source : undefined;
   return {
     frame: "transcript",
+    required: part.kind === "external" && part.activity?.tone === "error",
     copyable: source?.payload !== undefined,
     get text() {
       return source?.payload;

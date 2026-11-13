@@ -86,6 +86,7 @@ export {
 } from "./components/status-light.ts";
 export { default as Settings } from "./components/Settings.tsx";
 export { default as VisualSettings } from "./components/VisualSettings.tsx";
+export { default as TranscriptSettings } from "./components/TranscriptSettings.tsx";
 export { paintVisualPreferences } from "./features/visual.ts";
 export { default as Login } from "./components/Login.tsx";
 export { default as Setup } from "./components/Setup.tsx";

@@ -902,10 +902,14 @@ export async function remainder(
         expect(s.centers).toBeLessThanOrEqual(.5);
         expect(Math.abs(s.right - s.parentRight)).toBeLessThanOrEqual(.5);
       }
+      // Thinking is the same saved hide/show preference, now projected as a
+      // positive checkbox; its geometry is covered by the input checks above.
       expect(g.selects.map((s: { value: string }) => s.value)).toEqual([
-        "hide",
         "auto",
       ]);
+      const thinking = page.locator('.otk-display-menu input[name="thinking"]');
+      await expect(thinking).toHaveAccessibleName("Expand thinking by default");
+      await expect(thinking).not.toBeChecked();
       // Rule 3 supersedes disabled Markdown checkbox controls with named status images.
       expect(g.tasks.map((t) => t.label)).toEqual(["Not done", "Done"]);
       await expect(page.locator(".otk-text li > input")).toHaveCount(0);

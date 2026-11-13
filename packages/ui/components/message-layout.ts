@@ -64,7 +64,8 @@ export function createMessageLayout() {
           if (
             !before || !!before.value.hidden !== !!value.hidden ||
             before.value.frame !== value.frame ||
-            !!before.value.work !== !!value.work
+            !!before.value.work !== !!value.work ||
+            !!before.value.required !== !!value.required
           ) structural = true;
           if (before) replacements.push({ before, after });
           parts.set(part.id, after);

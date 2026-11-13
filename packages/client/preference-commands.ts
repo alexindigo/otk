@@ -5,6 +5,7 @@ import {
   type PreferenceRegistry,
   type Preferences,
   preferences,
+  preferenceToggleValue,
 } from "@otk/protocol";
 export function registerPreferenceCommands(commands: CommandHub, actions: {
   ready(): boolean;
@@ -42,10 +43,17 @@ export function registerPreferenceCommands(commands: CommandHub, actions: {
           const current = actions.prefs()[key];
           return actions.set(
             key,
-            control.kind === "toggle" ? !current : control.options[
-              (control.options.findIndex((option) => option.value === current) +
-                1) % control.options.length
-            ].value,
+            control.kind === "toggle"
+              ? preferenceToggleValue(
+                control,
+                current !== preferenceToggleValue(control, true),
+              )
+              : control.options[
+                (control.options.findIndex((option) =>
+                  option.value === current
+                ) +
+                  1) % control.options.length
+              ].value,
           );
         },
       }),

@@ -98,13 +98,8 @@ test("harness.public-ui-server-metadata-formatters-and-output-policy", {
     page.locator("pre").textContent().then(
       (text) => text!.split("\n").length,
     )
-  ).toBe(10);
-  await page.locator(".otk-output-toggle").click();
-  await expect.poll(() =>
-    page.locator("pre").textContent().then(
-      (text) => text!.split("\n").length,
-    )
   ).toBe(15);
+  await expect(page.locator(".otk-output-toggle")).toHaveCount(0);
   await page.evaluate(() => {
     document.documentElement.style.setProperty(
       "--font-ui",

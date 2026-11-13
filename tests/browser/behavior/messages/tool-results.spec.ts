@@ -4,6 +4,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import {
   expandTool,
   highlightedRange,
+  openWorkLogs,
   revealAcquired,
   runNativeTool,
 } from "../../pages/transcript.ts";
@@ -156,8 +157,11 @@ test(
     const history = await state.native<unknown[]>(
       `/session/${session.id}/message`,
     );
+    // Reacquired offscreen work groups use the saved reader default too.
+    await state.product("prefs.set", { key: "expandWork", value: true });
     await page.reload();
     await openSession(state, page, session.id);
+    await openWorkLogs(page);
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",
       String(history.length),

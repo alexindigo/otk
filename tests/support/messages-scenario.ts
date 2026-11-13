@@ -395,6 +395,7 @@ export async function messagesScenario(profile: Profile) {
             name: "external-preview",
             callID: "external",
             status: "completed",
+            failure: { message: "Nested call failed: usage limit reached" },
             time: { start: 3000, end: 6000 },
             summary: "A backend-owned preview",
             output: "A short preview from another backend.",

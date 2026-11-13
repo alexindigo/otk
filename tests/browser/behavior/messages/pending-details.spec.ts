@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, reply, seed, tool } from "../../pages/attention.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("messages.pending-preview-and-ready-question-copy", {
@@ -21,6 +22,7 @@ test("messages.pending-preview-and-ready-question-copy", {
   const dock = page.locator(".otk-permission-dock");
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(dock).toContainText("+1 / \u22121");
+  await openWorkLogs(page);
   const edit = page.locator("[data-tool=edit]");
   await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
   await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");

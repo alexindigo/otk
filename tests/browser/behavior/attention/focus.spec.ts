@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -94,6 +95,7 @@ test(
     await expect(page.locator(".otk-question-dock")).toHaveCount(0);
     await expect(page.locator("textarea[name=prompt]")).toBeFocused();
     await reply(page, session.id, "Answers recorded.");
+    await openWorkLogs(page);
     await page.locator("[data-tool=question] .otk-tool-toggle").click();
     await expect(page.locator(".otk-questions")).toContainText(
       "My own details",

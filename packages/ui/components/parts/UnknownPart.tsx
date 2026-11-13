@@ -9,10 +9,14 @@ import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
 import { unknownPartPresentation, unknownPartPreview } from "./unknown-part.ts";
 
-function UnknownPart(props: PartProps): import("solid-js").Element {
-  const [expanded, setExpanded] = retainedDisclosure("activity");
+export function UnknownPart(props: PartProps): import("solid-js").Element {
   const activity = () =>
     props.part.kind === "external" ? props.part.activity : undefined;
+  const [expanded, setExpanded] = retainedDisclosure(
+    "activity",
+    () => activity()?.category ?? "record",
+    () => props.prefs,
+  );
   const preview = () => unknownPartPreview(props.part);
   const name = () =>
     props.part.kind === "external"

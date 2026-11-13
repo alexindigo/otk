@@ -5,6 +5,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import { acquireOlderHistory } from "../../pages/history.ts";
 import {
   expandTool,
+  openWorkLogs,
   revealAcquired,
   runNativeTool,
 } from "../../pages/transcript.ts";
@@ -48,7 +49,7 @@ test("messages.project-and-outside-tool-paths-reload", {
           ? { pattern: "*.txt", path: directory }
           : { filePath: file },
       );
-      const selector = `[data-message="${part.messageID}"] .otk-tool-line`;
+      const selector = `[data-message="${part.messageID}"] [data-tool]`;
       await expect(page.locator(selector)).toHaveAttribute(
         "data-tool-status",
         "completed",
@@ -61,7 +62,11 @@ test("messages.project-and-outside-tool-paths-reload", {
       await expect(page.locator(selector + " .otk-tool-target")).toHaveText(
         expected,
       );
-      await expandTool(page, selector);
+      await expandTool(
+        page,
+        selector,
+        page.locator(`[data-message="${part.messageID}"]`),
+      );
       await expect(page.locator(selector + " .otk-tool-summary")).toHaveCount(
         0,
       );
@@ -98,12 +103,16 @@ test("messages.project-and-outside-tool-paths-reload", {
       checks.push({ selector, expected, result, text: sourceText });
     }
   }
-  await runNativeTool(state, page, session.id, "bash", {
+  const bash = await runNativeTool(state, page, session.id, "bash", {
     command: "pwd",
     description: "Path presentation",
     workdir: state.directory + "/src",
   });
-  await expandTool(page, "[data-tool=bash]");
+  await expandTool(
+    page,
+    "[data-tool=bash]",
+    page.locator(`[data-message="${bash.messageID}"]`),
+  );
   await expect(page.locator("[data-tool=bash] .otk-muted .otk-path"))
     .toHaveText("src");
   const nativeCount =
@@ -112,6 +121,9 @@ test("messages.project-and-outside-tool-paths-reload", {
   await openSession(state, page, session.id);
   await acquireOlderHistory(page, nativeCount);
   for (const check of checks) {
+    await revealAcquired(page, check.selector.split(" [data-tool]")[0]);
+    const message = page.locator(check.selector.split(" [data-tool]")[0]);
+    await openWorkLogs(page, message);
     await revealAcquired(page, check.selector);
     await expect(page.locator(check.selector)).toHaveAttribute(
       "data-tool-status",
@@ -120,7 +132,7 @@ test("messages.project-and-outside-tool-paths-reload", {
     await expect(page.locator(check.selector + " .otk-tool-target")).toHaveText(
       check.expected,
     );
-    await expandTool(page, check.selector);
+    await expandTool(page, check.selector, message);
     await expect(page.locator(check.selector + " .otk-tool-summary"))
       .toHaveCount(0);
     if (check.text) {

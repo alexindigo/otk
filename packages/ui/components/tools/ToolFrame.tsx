@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ToolFrame.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
-import type { ToolCall } from "@otk/protocol";
+import type { Preferences, ToolCall } from "@otk/protocol";
+import { toolFailure } from "@otk/client";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
 import type { ToolPresentation } from "../../registries/renderers.ts";
@@ -19,16 +20,24 @@ export default function ToolFrame(
     waiting: boolean;
     body(): Element;
     presentation?: ToolPresentation;
+    prefs?: Preferences;
   },
 ): Element {
   const parent = useContentIdentity();
+  const failure = () => toolFailure(props.call);
   const identity = () => ({ ...parent, callID: props.call.callID });
   const [errorOpen, setErrorOpen] = retainedDisclosure(
     "tool-error",
+    "toolOutput",
+    () => props.prefs ?? {},
     identity(),
   );
-  const [expanded, setExpanded] = retainedDisclosure("tool", identity());
-  const open = () => expanded() ?? props.presentation?.expanded ?? false;
+  const [open, setExpanded] = retainedDisclosure(
+    "tool",
+    () => props.presentation?.category ?? "toolOutput",
+    () => props.prefs ?? {},
+    identity(),
+  );
   const expand = ownedAction("tool.toggle", () => setExpanded(!open()));
   contentOwner(identity, {
     expanded: open,
@@ -49,7 +58,10 @@ export default function ToolFrame(
             output: props.call.output,
           },
         }))}
-        class={["otk-tool-line", { "otk-tool-waiting": props.waiting }]}
+        class={["otk-tool-line", {
+          "otk-tool-waiting": props.waiting,
+          "is-error": !!failure(),
+        }]}
         data-tool={props.call.tool}
         data-tool-status={props.call.status}
       >
@@ -106,8 +118,13 @@ export default function ToolFrame(
               <span>Awaiting permission</span>
               {" "}
             </Show>
-            <Show when={props.call.status === "error"}>
-              <span>Failed</span>
+            <Show when={failure()}>
+              <span
+                class="otk-control-label otk-control-grow"
+                title={failure()}
+              >
+                Failed: {failure()}
+              </span>
               {" "}
             </Show>
             <Show
@@ -119,7 +136,7 @@ export default function ToolFrame(
               </span>
             </Show>
           </button>
-          <Show when={props.call.status === "error"}>
+          <Show when={failure()}>
             <button
               type="button"
               class="otk-tool-error-toggle"
@@ -133,8 +150,8 @@ export default function ToolFrame(
         <Show when={open()}>
           <div class="otk-tool-body">{props.body()}</div>
         </Show>
-        <Show when={props.call.status === "error" && errorOpen()}>
-          <pre class="otk-tool-error" role="alert">{props.call.error}</pre>
+        <Show when={failure() && errorOpen()}>
+          <pre class="otk-tool-error" role="alert">{failure()}</pre>
         </Show>
       </section>
     </ContentIdentityProvider>

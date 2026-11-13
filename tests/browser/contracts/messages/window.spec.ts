@@ -207,6 +207,7 @@ test.describe("diff window", () => {
     tag: ["@messages", "@contracts"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
+    await page.locator(".otk-work-fold").click();
     await page.context().grantPermissions([
       "clipboard-read",
       "clipboard-write",

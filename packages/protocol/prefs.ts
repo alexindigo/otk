@@ -7,7 +7,12 @@ export interface PreferencesRequestReceipts {
 export type PreferenceKey = Extract<keyof Preferences, string>;
 
 export type PreferenceControl =
-  | { readonly kind: "toggle" }
+  | {
+    readonly kind: "toggle";
+    /** Presentation polarity can differ from an existing stored representation. */
+    readonly onValue?: boolean | string;
+    readonly offValue?: boolean | string;
+  }
   | {
     readonly kind: "select";
     readonly options: readonly {
@@ -18,6 +23,15 @@ export type PreferenceControl =
 export interface PreferencePresentation {
   readonly order: number;
   readonly control: PreferenceControl;
+}
+export function preferenceToggleValue(
+  control: PreferenceControl,
+  on: boolean,
+): boolean | string {
+  if (control.kind !== "toggle") {
+    throw new Error("Expected a toggle preference");
+  }
+  return on ? control.onValue ?? true : control.offValue ?? false;
 }
 export type PreferenceDefinition<K extends PreferenceKey = PreferenceKey> = {
   [P in K]: {
@@ -47,12 +61,23 @@ export class PreferenceRegistry {
       const control = value.control;
       if (
         control.kind === "toggle"
-          ? typeof definition.default !== "boolean"
-          : !control.options.length || !control.options.every((option) =>
-            definition.validate(option.value)
-          ) || !control.options.some((option) =>
-            option.value === definition.default
-          )
+          ? ![false, true].every((on) =>
+            definition.validate(preferenceToggleValue(control, on))
+          ) ||
+            Object.is(
+              preferenceToggleValue(control, true),
+              preferenceToggleValue(control, false),
+            ) ||
+            ![false, true].some((on) =>
+              Object.is(definition.default, preferenceToggleValue(control, on))
+            )
+          : !control.options.length ||
+            !control.options.every((option) =>
+              definition.validate(option.value)
+            ) ||
+            !control.options.some((option) =>
+              option.value === definition.default
+            )
       ) {
         throw new Error(`Invalid preference control: ${definition.key}`);
       }
@@ -65,7 +90,7 @@ export class PreferenceRegistry {
               control.options.map((option) => Object.freeze({ ...option })),
             ),
           })
-          : Object.freeze({ kind: "toggle" as const }),
+          : Object.freeze({ ...control }),
       });
     };
     this.#definitions.set(

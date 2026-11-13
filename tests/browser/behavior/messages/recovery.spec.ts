@@ -61,9 +61,12 @@ for (const retry of [false, true]) {
       await expect.poll(() => observation().then((o) => o.snapshots.length))
         .toBe(1);
       const initial = await observation();
-      await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
-        initial.snapshots[0],
-      );
+      // An empty checkpoint has no text renderer. Compare visible source, not
+      // placeholder DOM; nonempty checkpoint bytes must still match exactly.
+      const visibleSource = () =>
+        page.locator("[data-role=assistant] .otk-text")
+          .allTextContents().then((parts) => parts.join(""));
+      await expect.poll(visibleSource).toBe(initial.snapshots[0]);
       const firstReads = initial.points.length;
       expect(firstReads).toBe(retry ? 2 : 1);
       expect(initial.lost).toBeGreaterThan(0);
@@ -103,9 +106,7 @@ for (const retry of [false, true]) {
       await expect(page.locator(".otk-response-recovery")).toHaveText(
         "Refreshing response…",
       );
-      await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
-        initial.snapshots[0],
-      );
+      await expect.poll(visibleSource).toBe(initial.snapshots[0]);
       await state.release(reply.gate);
       const expected = chunks.join("").trim();
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(

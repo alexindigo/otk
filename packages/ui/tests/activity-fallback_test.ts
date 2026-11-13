@@ -40,6 +40,7 @@ Deno.test("fallback contributes generic activity presentation without a kind reg
   );
   assert(parts.resolve(part));
   assertEquals(parts.presentation(part, DEFAULT_PREFS).frame, "transcript");
+  assertEquals(parts.presentation(part, DEFAULT_PREFS).required, true);
   const message: ContextMessage = {
     id: "notice",
     sessionID: "acmv1-session",

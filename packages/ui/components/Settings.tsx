@@ -23,6 +23,7 @@ export default function Settings(props: {
   onClose(): void;
   notifications?: import("solid-js").Element;
   appearance?: import("solid-js").Element;
+  transcript?: import("solid-js").Element;
 }): import("solid-js").Element {
   const defaults = () =>
     props.sidecars.find((item) => item.id === LOCAL_SIDECAR)?.defaults;
@@ -48,6 +49,7 @@ export default function Settings(props: {
       <ScrollRegion class="otk-settings-body">
         <div class="otk-settings-content">
           {props.appearance}
+          {props.transcript}
           {props.notifications}
           <For each={props.sidecars} keyed={(item) => item.id}>
             {(sidecar) => (

@@ -110,6 +110,8 @@ export interface ToolBase {
   status: "pending" | "running" | "completed" | "error" | "denied";
   title?: string;
   error?: string;
+  /** Interpreted result failure, independent of the native lifecycle status. */
+  failure?: { message: string };
   time: { start?: number; end?: number };
   childSessionID?: string;
   /** Native result text, when supplied; structural tools also retain their typed result. */

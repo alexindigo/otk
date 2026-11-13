@@ -79,16 +79,16 @@ style measures its own content container against `--diff-split-min`; the old
 optional pane-width input remains accepted for compatibility but does not
 control automatic layout.
 
-`ToolOutput` owns one ten-line collapsed plain-output policy; consumers supply
-content, not numeric limits. Structured file/match/skill results retain their
-semantic renderers. `PathProvider` accepts originating-server `PathSemantics` as
-data. SessionView supplies its borrowed directory catalog's flavor; ToolPath,
-Diff and tool-header presentations delegate lexical work to the shared client
-owner. Independent consumers can inject the same provider directly. The existing
-two-argument `relativeTarget` API retains POSIX semantics; its optional third
-argument supplies a different server flavor. Badge glyphs borrow the theme's UI
-font and escape it when serializing SVG. Exact usage counts and elapsed clocks
-delegate to the shared client formatters.
+`ToolOutput` renders complete output inside its caller's lazy disclosure body;
+it has no separate preview toggle or expansion store. File/match/skill results
+retain their semantic renderers. `PathProvider` accepts originating-server
+`PathSemantics` as data. SessionView supplies its borrowed directory catalog's
+flavor; ToolPath, Diff and tool-header presentations delegate lexical work to
+the shared client owner. Independent consumers can inject the same provider
+directly. The existing two-argument `relativeTarget` API retains POSIX
+semantics; its optional third argument supplies a different server flavor. Badge
+glyphs borrow the theme's UI font and escape it when serializing SVG. Exact
+usage counts and elapsed clocks delegate to the shared client formatters.
 
 `OperationFeedback`, `FieldFeedback` and `PaneState` consume client `Feedback`
 data and callbacks only. OperationFeedback supplies a row inside the caller's
@@ -146,7 +146,7 @@ callback. External protocol tools resolve by their `name`; unmatched calls use
 the fallback installed by `registerGenericTool`. `ToolLine` owns the shared
 collapsed summary and status/permission/error frame, so external renderers
 receive the same behavior. An optional third `presentation(call)` registration
-argument supplies `{icon, verb, target?, summary?, expanded?}` with the caller's
+argument supplies `{icon, verb, target?, summary?, category?}` with the caller's
 directory as a second context argument; path-owning features supply relative
 targets. Icons accept strings or feature-owned SVG render functions. The shared
 frame has no concrete tool list. The path presenter keeps project descendants
@@ -158,11 +158,11 @@ extension-based highlighting. Grep results carry path, line and text. Custom
 tool consumers can import `ToolPath` and `relativeTarget` from the public UI
 entry to share the same body and header presentation. The presentation context
 also supplies preferences: edit/patch/write owners start collapsed unless
-Display's persisted Collapse file changes toggle is off. Headers retain paths
-and reported change counts; explicit disclosure choices stay owned by the shared
-frame. Helper cards start expanded. Typed tool modules use
-`tools.registerTyped(kind, Component)`, whose call type derives from the open
-protocol `ToolKinds` map. Separate registration namespaces let an external
+Display's persisted Expand file changes by default toggle is on. Headers retain
+paths and reported change counts; explicit disclosure choices stay owned by the
+shared client disclosure owner. Helper cards start collapsed. Typed tool modules
+use `tools.registerTyped(kind, Component)`, whose call type derives from the
+open protocol `ToolKinds` map. Separate registration namespaces let an external
 `edit` coexist with typed OTK `edit` without either renderer receiving the
 other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
@@ -188,9 +188,9 @@ and favicon attention. Optional display text preserves compact/locale formatting
 while the numeric value owns inflection. Structural edit, write, patch, todo and
 question bodies keep their typed result presentation; generic output retains its
 display preference and provenance-neutral truncation notice. Unknown task agents
-have an identity-free “Unknown agent” label. Invisible bookkeeping owners
-declare themselves hidden so wire steps cannot split a visible work fold. Reply
-metadata combines contiguous source parts for one whole-reply copy.
+have an identity-free “Unknown agent” label. Bookkeeping owners render as
+inspectable record rows in the same work fold. Reply metadata combines
+contiguous source parts for one whole-reply copy.
 
 `frame: "transcript"` places a contributed part outside the ordinary message
 bubble, preserving adjacent normal content in its own frame even in mixed
@@ -622,11 +622,20 @@ its acquired prompt rows; reveal ensures the source before mounting/focusing it.
 ToolFrame and WorkLog accept lazy `body()` factories, shared by typed, external
 and fallback renderers. Closing destroys source rendering, observers, timers and
 highlight requests; the transcript's framework-free interaction owner retains
-only explicit choices and identity generations. Reasoning uses the same choice
-boundary and forced-visible reasoning has a heading, not an inert disclosure.
-Code consumes an injected content lease (or its own standalone lease). Shared
-highlight cache entries track their live leases and evict token source when the
-last lease cools; worker names and shared grammar preparation carry no source.
+only explicit choices and identity generations. Category defaults come from that
+same owner; explicit true and false win over later Settings changes. Reasoning
+keeps its toggle even when the saved default is Show. Required failure rows open
+their work group by default while leaving their tool body collapsed; lifecycle
+status and interpreted result failure remain independent. TranscriptSettings
+uses the existing preference registry and authoritative save/broadcast controls.
+Each disclosure category has one positive default-expansion toggle. Thinking and
+file changes retain their old stored values through the registry's toggle
+mapping. The separate Tool visibility section labels the existing successful-row
+and unrecognized-result visibility switches without treating them as expansion
+defaults. Code consumes an injected content lease (or its own standalone lease).
+Shared highlight cache entries track their live leases and evict token source
+when the last lease cools; worker names and shared grammar preparation carry no
+source.
 
 Focus, editing and shared context-menu origins pin their identities until their
 owners release them, including across search exclusion. The context-menu owner

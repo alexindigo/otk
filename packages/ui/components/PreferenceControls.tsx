@@ -7,6 +7,7 @@ import {
   type PreferenceRegistry,
   type Preferences,
   preferences,
+  preferenceToggleValue,
 } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
@@ -77,7 +78,9 @@ export default function PreferenceControls(
                   when={control().kind === "toggle"}
                   fallback={
                     <>
-                      {row().label}
+                      <span class="otk-control-label" title={row().label}>
+                        {row().label}
+                      </span>
                       <Select
                         containerClass="otk-preference-select"
                         name={row().key}
@@ -102,15 +105,20 @@ export default function PreferenceControls(
                   <input
                     type="checkbox"
                     name={row().key}
-                    checked={props.prefs[row().key] === true}
+                    checked={props.prefs[row().key] ===
+                      preferenceToggleValue(control(), true)}
                     onChange={(event) => {
-                      const field = event.currentTarget, value = field.checked;
+                      const field = event.currentTarget,
+                        value = preferenceToggleValue(control(), field.checked);
                       change(row().key, value, () => {
-                        field.checked = props.prefs[row().key] === true;
+                        field.checked = props.prefs[row().key] ===
+                          preferenceToggleValue(control(), true);
                       });
                     }}
                   />
-                  {row().label}
+                  <span class="otk-control-label" title={row().label}>
+                    {row().label}
+                  </span>
                 </Show>
               </label>
             );
