@@ -149,10 +149,19 @@ export interface CommandOption {
   description?: string;
   aliases: string[];
   source: "server" | "mcp" | "skill" | "builtin" | "unknown";
+  /** Adapter-owned binding to an OTK semantic action, never a surface name. */
+  action?: string;
+  /** Higher values win friendly-name collisions within this harness. */
+  priority?: number;
+  unavailable?: string;
+  /** A native name-only skill route cannot select a skill behind this command. */
+  skillConflict?: string;
 }
 export interface CommandInput {
   sessionID: string;
   command: string;
+  /** Explicit skill selection stays distinct from a same-named server command. */
+  skill?: { id?: string; name: string };
   arguments: string;
   agent?: string;
   model?: ModelRef;

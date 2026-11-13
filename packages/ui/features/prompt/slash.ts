@@ -1,12 +1,51 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PromptChoices, PromptRegistry } from "../../registries/prompt.ts";
+import type {
+  PromptChoices,
+  PromptContext,
+  PromptRegistry,
+} from "../../registries/prompt.ts";
 import { createSignal } from "solid-js";
+import { createHarnessCommands } from "@otk/client";
 import {
   commandOptions,
   parseCommand,
 } from "../../components/prompt/autocomplete.ts";
 import { editDraft } from "../../components/prompt/model.ts";
-import type { CommandOption, PromptPart } from "@otk/protocol";
+import type { CommandOption, PromptPart, SkillOption } from "@otk/protocol";
+/** Shared native submission path for catalog commands and explicit skill selections. */
+export function submitPromptCommand(
+  ctx: PromptContext,
+  command: CommandOption,
+  args: {
+    arguments?: string;
+    selection?: PromptChoices;
+    parts?: Extract<PromptPart, { kind: "file" }>[];
+    skill?: SkillOption;
+  } = {},
+) {
+  return ctx.submit(async (options) => {
+    if (!args.selection) await ctx.ready();
+    const selection = args.selection ??
+      ctx.nextSelection(ctx.change((draft) => draft)).input;
+    await ctx.rpc("session.command", {
+      sessionID: ctx.sessionID(),
+      command: command.name,
+      ...(args.skill
+        ? {
+          skill: {
+            name: args.skill.name,
+            ...(args.skill.id ? { id: args.skill.id } : {}),
+          },
+        }
+        : {}),
+      arguments: args.arguments ?? "",
+      ...selection,
+      parts: (await ctx.attachments(args.parts ?? [])).filter((
+        part,
+      ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file"),
+    }, options);
+  });
+}
 export function registerSlashPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "slash",
@@ -15,15 +54,14 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
       ctx.mount(() =>
         ctx.commands.subscribe(() => setRevision((value) => value + 1))
       );
-      const registered = new Map<
-        string,
-        { signature: string; release: () => void }
-      >();
-      let server: CommandOption[] = [], mounted = false;
-      ctx.own(() => {
-        for (const entry of registered.values()) entry.release();
-        registered.clear();
+      const owner = createHarnessCommands(ctx.commands, {
+        available: () =>
+          ctx.active() && !ctx.props.suspended && ctx.props.connected &&
+          ctx.supports("commands"),
+        execute: (command, args) => submitPromptCommand(ctx, command, args),
       });
+      ctx.own(owner.dispose);
+      let mounted = false;
       // CM3 adds disabled-row paint. The registry inventory itself is complete.
       const options = () =>
         ctx.commands.list().filter((row) => row.enabled).map(({ cmd }) => ({
@@ -38,78 +76,8 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           return options();
         }
         const values = ctx.directoryCatalog?.state.catalog?.values;
-        const next = [...values?.commands?.value ?? []];
-        for (const skill of values?.skills?.value ?? []) {
-          if (!next.some((command) => command.name === skill.name)) {
-            next.push({ ...skill, aliases: [], source: "skill" });
-          }
-        }
         if (!ctx.active()) return [];
-        server = next.map((command) => ({
-          ...command,
-          aliases: command.aliases.slice(),
-        }));
-        for (const [name, entry] of registered) {
-          if (!server.some((command) => command.name === name)) {
-            entry.release();
-            registered.delete(name);
-          }
-        }
-        for (const command of server) {
-          const name = command.name,
-            signature = JSON.stringify(command),
-            old = registered.get(name);
-          if (old?.signature === signature) continue;
-          old?.release();
-          const id = `server.command:${name}`;
-          const release = ctx.commands.register({
-            id,
-            title: command.description || command.name,
-            category: "Server commands",
-            name: command.name,
-            aliases: command.aliases,
-            source: command.source,
-            kind: "submission",
-            scope: "session",
-            arguments: {
-              type: "object",
-              optional: true,
-              rest: "arguments",
-              properties: {
-                arguments: { type: "string", optional: true },
-                selection: { type: "object", optional: true },
-                parts: { type: "array", optional: true },
-              },
-            },
-            enabled: () => ctx.props.connected && ctx.supports("commands"),
-            run: (
-              _context,
-              args: {
-                arguments?: string;
-                selection?: PromptChoices;
-                parts?: Extract<PromptPart, { kind: "file" }>[];
-              } = {},
-            ) => {
-              return ctx.submit(async (options) => {
-                if (!args.selection) await ctx.ready();
-                const selection = args.selection ??
-                  ctx.nextSelection(ctx.change((draft) => draft)).input;
-                await ctx.rpc("session.command", {
-                  sessionID: ctx.sessionID(),
-                  command: name,
-                  arguments: args.arguments ?? "",
-                  ...selection,
-                  parts: (await ctx.attachments(args.parts ?? [])).filter((
-                    part,
-                  ): part is Extract<PromptPart, { kind: "file" }> =>
-                    part.kind === "file"
-                  ),
-                }, options);
-              });
-            },
-          });
-          registered.set(name, { signature, release });
-        }
+        owner.update(values?.commands?.value ?? []);
         return options();
       };
       ctx.mount(() => {

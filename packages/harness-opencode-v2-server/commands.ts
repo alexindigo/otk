@@ -14,6 +14,7 @@ import { fromFileUrl, relative, resolve, toFileUrl } from "@std/path";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { selectAction } from "./session-actions.ts";
+import { mapCommands, mapSkills, mergeCommands } from "./catalog-readers.ts";
 type Files = NonNullable<
   Parameters<OpenCodeClient["session"]["command"]>[0]["files"]
 >;
@@ -146,24 +147,12 @@ export function commands(
       c.read((api) => api.command.list({ location }, { signal }), signal),
       c.read((api) => api.skill.list({ location }, { signal }), signal),
     ]);
-    const names = new Set(commands.data.map((c) => c.name));
     return {
       raw,
-      options: [
-        ...commands.data.map((c) => ({
-          name: c.name,
-          description: c.description ?? undefined,
-          aliases: [],
-          source: "unknown" as const,
-        })),
-        ...skills.data.filter((s) => !names.has(s.name)).map((s) => ({
-          name: s.name,
-          skillID: s.id,
-          description: s.description ?? undefined,
-          aliases: [],
-          source: "skill" as const,
-        })),
-      ],
+      options: mergeCommands(
+        mapCommands(commands.data),
+        mapSkills(skills.data),
+      ),
     };
   };
   return {
@@ -177,9 +166,21 @@ export function commands(
             input.sessionID,
             operation?.signal,
           );
-        const selected = options.find((v) => v.name === input.command),
-          command = selected?.source !== "skill" ? selected : undefined,
-          skill = selected?.skillID ? { id: selected.skillID } : undefined;
+        const command = !input.skill
+          ? options.find((v) =>
+            v.name === input.command && v.source !== "skill" &&
+            v.source !== "builtin"
+          )
+          : undefined;
+        const selected = options.find((v) =>
+          v.source === "skill" &&
+          (input.skill?.id
+            ? v.skillID === input.skill.id
+            : v.name === (input.skill?.name ?? input.command))
+        );
+        const skill = !command && selected?.skillID
+          ? { id: selected.skillID }
+          : undefined;
         if (!command && !skill) {
           throw new OperationFailure(
             "rejected",

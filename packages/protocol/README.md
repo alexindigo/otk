@@ -130,6 +130,12 @@ paths.
 `frecency.patch` frames carry keyed upserts/removals, including removals grouped
 by the original directory when global retention prunes another directory.
 
+`CommandOption` can contribute a semantic action binding, adapter-defined name
+priority, an unavailable reason, and a skill-name conflict reason. These are
+neutral catalog data; native vocabulary and precedence live only in each
+harness. `CommandInput.skill` explicitly selects a skill independently of a
+same-named server command.
+
 `ModelCatalog.defaultState` distinguishes a reported configured default from
 unknown, and `free` is `boolean|null`. Search pattern/count, diff path and todo
 priority may be absent; unknown diff status is explicit.

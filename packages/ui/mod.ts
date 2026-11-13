@@ -168,6 +168,7 @@ export { registerMetadataParts } from "./components/parts/MetadataPart.ts";
 export { registerShellPrompt } from "./features/prompt/shell.ts";
 export { registerMentionsPrompt } from "./features/prompt/mentions.ts";
 export { registerSlashPrompt } from "./features/prompt/slash.ts";
+export { registerSkillsPrompt } from "./features/prompt/skills.tsx";
 export { registerHistoryPrompt } from "./features/prompt/history.ts";
 export { registerPastePrompt } from "./features/prompt/paste.ts";
 export { registerAttachmentsPrompt } from "./features/prompt/attachments.tsx";

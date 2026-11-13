@@ -56,3 +56,13 @@
   margin: 4px var(--item-inset);
   color: var(--otk-fg-2);
 }
+.otk-picker-row.is-unavailable .otk-picker-option {
+  color: var(--otk-fg-2);
+}
+.otk-picker-heading {
+  margin: 0;
+  padding: var(--item-inset);
+  border-bottom: 1px solid var(--otk-border);
+  font-size: var(--text-ui);
+  font-weight: 500;
+}

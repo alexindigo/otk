@@ -20,6 +20,7 @@ import type {
   SkillOption,
 } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
+import { nativeCommands } from "./command-vocabulary.ts";
 
 export type NativeAgent = Awaited<
   ReturnType<OpenCodeClient["agent"]["list"]>
@@ -73,30 +74,31 @@ export function mapSkills(rows: readonly NativeSkill[]): SkillOption[] {
 }
 export function mapCommands(rows: readonly NativeCommand[]): CommandOption[] {
   // The native API does not report command origin. Do not infer it from names.
-  return rows.map(({ name, description }) => ({
-    name,
-    description,
-    aliases: [],
-    source: "unknown",
-  }));
+  return [
+    ...rows.map(({ name, description }): CommandOption => ({
+      name,
+      description,
+      aliases: [],
+      source: "unknown",
+      priority: 20,
+    })),
+    ...nativeCommands(),
+  ];
 }
 export function mergeCommands(
   commands: CommandOption[],
   skills: SkillOption[],
 ): CommandOption[] {
-  const result = new Map(commands.map((command) => [command.name, command]));
-  for (const skill of skills) {
-    if (!result.has(skill.name)) {
-      result.set(skill.name, {
-        name: skill.name,
-        description: skill.description,
-        aliases: [],
-        source: "skill",
-        skillID: skill.id,
-      });
-    }
-  }
-  return [...result.values()];
+  return [
+    ...commands,
+    ...skills.map((skill): CommandOption => ({
+      name: skill.name,
+      description: skill.description,
+      aliases: [],
+      source: "skill",
+      skillID: skill.id,
+    })),
+  ];
 }
 function selection(
   value: unknown,

@@ -391,6 +391,15 @@ labels and real chevron icons share flex centring; trigger accessible names
 include current values. Loading/error states do not also report an empty
 catalog.
 
+`registerSkillsPrompt` contributes one Skills picker and one typed activation
+owner. The harness binds its native picker command to that owner; the ordinary
+slash projection discovers it without special wiring. The shared ListPicker
+opens through its existing Popover anchor/control port and retains unavailable
+skills with their supplied reason. Disabled choices cannot receive the keyboard
+candidate or activate. Explicit skill IDs stay separate from displayed names;
+selection uses the same captured native-command submission port as server
+commands and preserves the unsent draft.
+
 Composer model labels show the provider in secondary paint before the model,
 including for backend-applied and plain-label states. Full provider/model names
 remain in picker tooltips and accessible names when visible text truncates. The
