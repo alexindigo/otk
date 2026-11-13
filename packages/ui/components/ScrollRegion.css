@@ -4,6 +4,8 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* Scrollbar colors inherit; each nested boundary keeps its own paint. */
+  scrollbar-color: auto;
 }
 :where(.otk-scroll-x) {
   overflow-y: hidden;
@@ -12,4 +14,14 @@
 :where(.otk-scroll-y) {
   overflow-x: hidden;
   overscroll-behavior-x: auto;
+}
+:where(.otk-scrollbar-thin) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--otk-fg-3) var(--otk-bg);
+}
+:where(.otk-scrollbar-hidden) {
+  scrollbar-width: none;
+}
+:where(.otk-scrollbar-hidden)::-webkit-scrollbar {
+  display: none;
 }

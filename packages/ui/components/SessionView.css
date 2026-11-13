@@ -21,12 +21,6 @@
   display: block;
   margin: 0 auto 20px;
 }
-.otk-scrollbar-hidden {
-  scrollbar-width: none;
-}
-.otk-scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-}
 .otk-retry-banner {
   background: var(--otk-surface);
   border-radius: var(--radius-card);
