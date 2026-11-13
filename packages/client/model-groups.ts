@@ -26,17 +26,20 @@ export function modelGroups(
   current?: ModelRef,
 ): ModelPickerGroup[] {
   if (!catalog) return [];
+  const favouriteKeys = new Set(favourites.map(modelKey));
+  const currentKey = current && modelKey(current);
   const entries = new Map<string, ModelPickerEntry>();
   for (const provider of catalog.providers) {
     for (const model of provider.models) {
       const ref = { provider: provider.id, model: model.id };
-      entries.set(modelKey(ref), {
-        key: modelKey(ref),
+      const key = modelKey(ref);
+      entries.set(key, {
+        key,
         ref,
         name: model.name || model.id,
         providerName: provider.name,
         free: model.free,
-        favourite: favourites.some((item) => modelKey(item) === modelKey(ref)),
+        favourite: favouriteKeys.has(key),
       });
     }
   }
@@ -57,7 +60,7 @@ export function modelGroups(
       const key = modelKey({ provider: provider.id, model: model.id });
       return !included.has(key) &&
         (model.status !== "deprecated" ||
-          (current !== undefined && key === modelKey(current)));
+          key === currentKey);
     }).toSorted((a, b) =>
       (b.releaseDate ?? "").localeCompare(a.releaseDate ?? "") ||
       a.name.localeCompare(b.name)
