@@ -834,6 +834,8 @@ export default function Shell(
                     />
                   }
                   sidecars={sidecars.state.list}
+                  discovery={sidecars.state.discovery}
+                  onCancelAdd={sidecars.cancelAdd}
                   onAdd={(url, label) =>
                     resources.add(url, label).then(() => {
                       notifications.info("Server added");

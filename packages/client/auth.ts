@@ -30,6 +30,10 @@ export async function request<T>(
     kind: (method) => bootstrapRequestMetadata[method]?.kind ?? "mutation",
   });
   try {
+    if (
+      body === undefined &&
+      bootstrapRequestMetadata[`bootstrap.${path}`]?.kind === "read"
+    ) return await http.read<T>(path, { signal });
     return await http.start<T>(path, body, { signal }).result;
   } finally {
     await http.stop();

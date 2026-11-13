@@ -11,6 +11,7 @@ import {
   createUniqueId,
   type Element,
   onCleanup,
+  Show,
   useContext,
 } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
@@ -28,6 +29,10 @@ export default function Form(
     title: string;
     submitLabel: string;
     pendingLabel?: string;
+    /** Read-only probes capture a value but do not lock the user's next edit. */
+    editableWhilePending?: boolean;
+    feedback?: Feedback | null;
+    onCancel?(): Promise<void>;
     children: Element;
     onSubmit(form: FormData): Promise<void>;
   },
@@ -48,13 +53,23 @@ export default function Form(
     return intent.state;
   };
   const pending = () => state().pending;
-  const context = { pending, feedback: () => state().feedback };
+  const feedback = () =>
+    props.feedback === undefined
+      ? state().feedback
+      : props.feedback ?? undefined;
+  const context = {
+    pending: () => pending() && !props.editableWhilePending,
+    feedback,
+  };
   let status: { focus(): void } | undefined, button!: HTMLButtonElement;
   const send = ownedAction(
     "form.submit",
     (data: FormData) => props.onSubmit(data),
     { arguments: { type: "local" } },
   );
+  const cancel = ownedAction("form.cancel", () => props.onCancel?.(), {
+    enabled: () => pending() && !!props.onCancel,
+  });
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget as HTMLFormElement);
@@ -77,7 +92,7 @@ export default function Form(
         </fieldset>
         <FieldFeedback
           action
-          feedback={state().feedback?.field ? undefined : state().feedback}
+          feedback={feedback()?.field ? undefined : feedback()}
         />
         <ActionSlot
           class="otk-form-action"
@@ -99,6 +114,11 @@ export default function Form(
             {props.submitLabel}
           </button>
         </ActionSlot>
+        <Show when={pending() && props.onCancel}>
+          <button type="button" onClick={() => void cancel()}>
+            Cancel
+          </button>
+        </Show>
       </form>
     </FormContext>
   );

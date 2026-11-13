@@ -17,6 +17,21 @@ export interface HttpRequestsOptions {
   tracker?: RequestTracker;
   kind?: RequestTrackerOptions["kind"];
 }
+/** Static transport facts only; response bodies and exception prose are not copy. */
+export class HttpReadFailure extends Error {
+  readonly reason: string;
+  constructor(readonly status?: number, kind?: "timeout" | "receipt-reset") {
+    const reason = kind === "receipt-reset"
+      ? "OTK reset the sign-in check's receipt before returning a result"
+      : kind === "timeout"
+      ? "the transport reported a timeout"
+      : status === undefined
+      ? "the browser could not obtain an OTK reply"
+      : `OTK returned invalid or interrupted request-event data (HTTP ${status})`;
+    super(reason);
+    this.reason = reason;
+  }
+}
 interface Delivery {
   secret: string;
   ref: IntentIdentity;
@@ -31,6 +46,57 @@ interface Delivery {
   attempt: number;
   stopped: boolean;
   again?: boolean;
+  failure?(cause: unknown): void;
+}
+/** HTTP/event admission is untrusted until its status, reference and shape agree. */
+function eventFrom(
+  value: unknown,
+  ref: import("@otk/protocol").RequestRef,
+): RequestEvent {
+  if (!value || typeof value !== "object") {
+    throw new TypeError("Invalid OTK request event");
+  }
+  const event = value as RequestEvent;
+  if (
+    !event.ref || event.ref.key !== ref.key ||
+    event.ref.clientID !== ref.clientID || event.ref.window !== ref.window ||
+    typeof event.ref.id !== "string"
+  ) throw new TypeError("Invalid OTK request reference");
+  const failure = (value: unknown) => {
+    const error = value as import("@otk/protocol").PublicFailure | undefined;
+    return error && typeof error.code === "string" &&
+      typeof error.diagnosticID === "string" &&
+      ["same-intent", "new-intent", "none"].includes(error.retry);
+  };
+  if (event.t === "request.rejected" && failure(event.error)) return event;
+  if (!("seq" in event) || !Number.isSafeInteger(event.seq) || event.seq < 0) {
+    throw new TypeError("Invalid OTK request sequence");
+  }
+  if (
+    event.t === "request.accepted" && Number.isFinite(event.acceptedAt) &&
+    Number.isFinite(event.retentionUntil) && typeof event.replayed === "boolean"
+  ) return event;
+  if (
+    event.t === "request.progress" && event.progress &&
+    ["queued", "running", "waiting", "reconciling"].includes(
+      event.progress.phase,
+    ) &&
+    [
+      "queued",
+      "working",
+      "stopping",
+      "publishing",
+      "backend-unavailable",
+      "checking-outcome",
+      "input-required",
+    ].includes(event.progress.code)
+  ) return event;
+  if (
+    event.t === "request.result" && event.outcome &&
+    (event.outcome.ok === true && "result" in event.outcome ||
+      event.outcome.ok === false && failure(event.outcome.error))
+  ) return event;
+  throw new TypeError("Invalid OTK request event");
 }
 /** HTTP event transport over the same tracker as WS; no completion deadline. */
 export class HttpRequests {
@@ -55,6 +121,33 @@ export class HttpRequests {
   }
   policy(value: NonNullable<HttpRequestsOptions["policy"]>): void {
     this.#policy = value;
+  }
+  /** Read-only bootstrap observation ends on a reported transport failure.
+   * Mutations keep their existing receipt/recovery semantics and never use this. */
+  async read<R>(path: string, options: RequestOptions = {}): Promise<R> {
+    const operation = this.start<R>(path, undefined, options);
+    const delivery = this.#deliveries.get(operation.state.ref.key)!;
+    const failed = Promise.withResolvers<never>();
+    delivery.failure = (cause) => {
+      failed.reject(cause);
+      operation.release();
+    };
+    const detach = operation.subscribe(() => {
+      if (
+        operation.state.phase === "waiting" &&
+        operation.state.progress?.code === "input-required"
+      ) {
+        failed.reject(new HttpReadFailure(undefined, "receipt-reset"));
+        operation.release();
+      }
+    });
+    try {
+      return await Promise.race([operation.result, failed.promise]);
+    } finally {
+      detach();
+      operation.release();
+      await delivery.work;
+    }
   }
   start<R>(
     path: string,
@@ -120,6 +213,7 @@ export class HttpRequests {
     clearTimeout(delivery.retry);
     const fetcher = this.options.fetcher ?? fetch;
     const ref = { ...delivery.ref, id };
+    let responseStatus: number | undefined;
     const run = async () => {
       let liveness: ReturnType<typeof setTimeout> | undefined;
       const observe = () => {
@@ -153,11 +247,21 @@ export class HttpRequests {
               signal: delivery.controller.signal,
             },
           );
+          responseStatus = response.status;
           if (delivery.stopped) {
             await response.body?.cancel().catch(() => {});
             return;
           }
-          const event: RequestEvent = await response.json();
+          const event = eventFrom(await response.json(), ref);
+          if (
+            event.t !== "request.rejected" &&
+            (!response.ok || response.status !== 202 ||
+              event.t !== "request.accepted")
+          ) {
+            throw new TypeError(
+              `Invalid OTK admission (HTTP ${response.status})`,
+            );
+          }
           this.tracker.connectionFor(ref.key, "connected");
           this.tracker.receive(event);
           if (event.t !== "request.accepted") return;
@@ -165,6 +269,7 @@ export class HttpRequests {
           delivery.after = event.seq;
         }
         observe();
+        responseStatus = undefined;
         const response = await fetcher(
           new URL("request-events", this.options.base),
           {
@@ -179,8 +284,9 @@ export class HttpRequests {
             signal: delivery.controller.signal,
           },
         );
+        responseStatus = response.status;
         if (!response.ok) {
-          const event: RequestEvent = await response.json();
+          const event = eventFrom(await response.json(), ref);
           if (event.t === "request.rejected") {
             this.tracker.receive(event);
             return;
@@ -203,7 +309,7 @@ export class HttpRequests {
               const line = buffer.slice(0, newline);
               buffer = buffer.slice(newline + 1);
               if (!line.trim()) continue;
-              const event: RequestEvent = JSON.parse(line);
+              const event = eventFrom(JSON.parse(line), ref);
               observe();
               this.tracker.connectionFor(ref.key, "connected");
               if ("seq" in event) delivery.after = event.seq;
@@ -227,6 +333,17 @@ export class HttpRequests {
     delivery.work = Promise.resolve().then(run).catch((cause) => {
       if (delivery.stopped) return;
       this.options.diagnostic?.(cause);
+      if (delivery.failure) {
+        delivery.failure(
+          new HttpReadFailure(
+            responseStatus,
+            cause instanceof DOMException && cause.name === "TimeoutError"
+              ? "timeout"
+              : undefined,
+          ),
+        );
+        return;
+      }
       this.tracker.connectionFor(ref.key, "reconnecting");
       if (this.#policy) {
         const delay = Math.min(
