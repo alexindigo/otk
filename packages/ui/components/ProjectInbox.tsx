@@ -198,7 +198,19 @@ export default function ProjectInbox(props: {
               <span class="otk-project-branch" aria-hidden="true" />
             </Show>
             <span class="otk-project-marker">
-              <StatusLight state={project().status} />
+              <StatusLight
+                state={project().status}
+                attention={{
+                  server: project().sidecarId,
+                  project: {
+                    directory: project().directory,
+                    repo: project().summary?.topology?.canonicalRoot ===
+                        project().directory
+                      ? project().summary?.topology?.repoID
+                      : undefined,
+                  },
+                }}
+              />
             </span>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">

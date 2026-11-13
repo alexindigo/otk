@@ -40,6 +40,7 @@ export * from "./timeline.ts";
 export * from "./permissions.ts";
 export * from "./approvals.ts";
 export * from "./approval-attention.ts";
+export * from "./attention-grace.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";

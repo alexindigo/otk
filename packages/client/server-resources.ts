@@ -102,6 +102,10 @@ export interface ServerResources {
   anyAdvertised(capability: CapabilityName): boolean;
   connectionKey(id: string): number | undefined;
   attention(id: string): ApprovalAttention;
+  /** Borrow the existing operation projection; presentation must not delay it. */
+  operationAttention?(
+    id: string,
+  ): Pick<ReturnType<typeof requestAttention>, "sessions" | "projectStates">;
   projected(id: string, sessionID: string): IndexEntry | undefined;
   projectedProject(id: string, directory: string): readonly IndexEntry[];
   observeEntries(
@@ -810,6 +814,7 @@ export function createServerResources(o: {
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
+    operationAttention,
     progress: (id, directory) => {
       const owner = progressOwner(id),
         label = "Indexing sessions";

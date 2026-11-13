@@ -42,6 +42,7 @@ export interface SessionPorts {
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
   permissions(): PermissionRequest[];
+  permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];
   forms?(): readonly import("@otk/protocol").FormRequest[];
   prefs(): Preferences;
