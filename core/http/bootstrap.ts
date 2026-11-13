@@ -12,6 +12,7 @@ import {
 import type { AuthState } from "../auth/state.ts";
 import { allowedOrigin } from "../auth/middleware.ts";
 import { clientRequestPolicy, type ServiceConfig } from "../config/schema.ts";
+import { PUBLIC_DEFAULTS } from "../config/public-defaults.ts";
 import { RpcRegistry } from "../ws/registry.ts";
 import { object, text } from "../ws/params.ts";
 import { ExecutionFailure } from "../requests/failures.ts";
@@ -200,6 +201,7 @@ export class BootstrapRequests {
           `principal:${cfg.auth.username.toLowerCase() || "local"}`,
         ),
         requests: discovery(),
+        defaults: PUBLIC_DEFAULTS,
       }),
     });
     registry.register("bootstrap.health", {

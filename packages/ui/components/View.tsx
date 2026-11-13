@@ -7,7 +7,9 @@ export function ViewHeader(
 ): Element {
   return (
     <header class="otk-view-header">
-      <h1>{props.title}</h1>
+      <h1 class="otk-control-grow otk-control-label" title={props.title}>
+        {props.title}
+      </h1>
       {props.actions}
     </header>
   );
