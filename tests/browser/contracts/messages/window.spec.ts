@@ -105,8 +105,11 @@ test.describe("prepend anchor", () => {
   test.use({ profile: "contract-messages-anchor" });
   test("messages.prepend-one-pixel-anchor", {
     tag: ["@messages", "@contracts"],
-  }, async ({ isolatedState: state, page }) => {
+  }, async ({ isolatedState: state, page }, info) => {
     // Older reserve reads are intentionally held; transcript busy is expected.
+    // Both views need a scrollable range before retaining a source; a short,
+    // entirely visible list cannot compensate past its native boundary.
+    await page.setViewportSize({ width: 1280, height: 400 });
     await state.product("layout.patch", {
       rightCollapsed: false,
       rightView: "sessions",
@@ -138,6 +141,23 @@ test.describe("prepend anchor", () => {
         ),
       }));
     const before = await measure();
+    const timeline = page.locator(".otk-timeline-list");
+    expect(
+      await timeline.evaluate((pane) => pane.scrollHeight > pane.clientHeight),
+    ).toBe(true);
+    await timeline.hover();
+    await page.mouse.wheel(0, -1);
+    const timelineAnchor = await timeline.evaluate((pane) => {
+      const bounds = pane.getBoundingClientRect();
+      const row = Array.from(
+        pane.querySelectorAll<HTMLElement>("[data-virtual-key]"),
+      )
+        .find((row) => row.getBoundingClientRect().bottom > bounds.top)!;
+      return {
+        key: row.dataset.virtualKey!,
+        top: row.getBoundingClientRect().top - bounds.top,
+      };
+    });
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "release",
@@ -146,6 +166,38 @@ test.describe("prepend anchor", () => {
       const next = await measure();
       return next.count > before.count && Math.abs(next.top - before.top) <= 1;
     }).toBe(true);
+    // Timeline shares the transaction, but its acquired end never means follow.
+    await expect.poll(() =>
+      timeline.evaluate((pane, anchor) => {
+        const row = Array.from(
+          pane.querySelectorAll<HTMLElement>("[data-virtual-key]"),
+        )
+          .find((row) => row.dataset.virtualKey === anchor.key);
+        return row
+          ? Math.abs(
+            row.getBoundingClientRect().top - pane.getBoundingClientRect().top -
+              anchor.top,
+          )
+          : Infinity;
+      }, timelineAnchor)
+    ).toBeLessThanOrEqual(1);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (
+      const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
+        "otk-light-stone",
+        "stone",
+      ]]
+    ) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.screenshot({
+        path: info.outputPath(`sc1-source-anchor-${name}.png`),
+        fullPage: true,
+      });
+    }
   });
 });
 

@@ -11,6 +11,7 @@ import {
   createMemo,
   createSignal,
   type Element,
+  flush,
   For,
   onCleanup,
   onSettled,
@@ -35,6 +36,7 @@ interface WindowContext {
   measurements(path: string): Map<string, number>;
   materializers: Set<() => boolean>;
   hold?(): () => void;
+  pin?(): () => void;
 }
 const Viewport = createContext<WindowContext | null>(null);
 /** Reuse the enclosing viewport; nested windows never make nested scroll boxes. */
@@ -143,6 +145,8 @@ export default function VirtualList(props: {
   const contextLeases = new Map<string, number>();
   const [selected, setSelected] = createSignal<string[]>([]),
     [reveals, setReveals] = createSignal<string[]>([]);
+  const [attachments, setAttachments] = createSignal<string[]>([]);
+  const attachmentLeases = new Map<string, number>();
   const [all, setAll] = createSignal<readonly string[]>();
   const materialized = () => !!all() || !!parent?.materialized();
   const estimates = new Map<string, number>(),
@@ -156,6 +160,7 @@ export default function VirtualList(props: {
   const measuring = new Map<string, number>();
   let measureFrame: number | undefined;
   let releaseParentMeasurement = parent?.hold?.();
+  let releaseGeometryMeasurement: (() => void) | undefined;
   let selectingAll = false;
   const materializedReady = () =>
     !materialized() ||
@@ -179,11 +184,57 @@ export default function VirtualList(props: {
     return offset === undefined ? undefined : origin() + offset;
   };
   const logicalAnchor = () => {
-    const anchor = model.anchor(position()),
-      base = anchor && rowStart(anchor.key);
-    return anchor && base !== undefined
-      ? { key: anchor.key, offset: viewport().scrollTop - base }
-      : undefined;
+    const root = viewport(), bounds = root.getBoundingClientRect();
+    const candidates = [...elements].flatMap(([key, element]) => {
+      if (!element.isConnected || measuring.has(key) || !model.measured(key)) {
+        return [];
+      }
+      const rect = element.getBoundingClientRect();
+      if (
+        !rect.height || rect.bottom <= bounds.top + root.clientTop ||
+        rect.top >= bounds.top + root.clientTop + root.clientHeight ||
+        Math.abs(rect.height - model.size(key)) > .01
+      ) return [];
+      const offset = bounds.top + root.clientTop - rect.top;
+      return [{ key, offset }];
+    }).sort((a, b) => Math.max(0, -a.offset) - Math.max(0, -b.offset));
+    return candidates[0];
+  };
+  const transaction = (change: () => void) => {
+    if (!positionOwner) return change();
+    const owner = positionOwner;
+    owner.transaction(() => {
+      change();
+      // Prefix updates and their keyed DOM must be one layout revision. Solid
+      // drains synchronously at native measurement boundaries; inside an effect
+      // its settled callback joins the already-running reconciliation instead.
+      flush();
+      onSettled(() => {
+        if (!disposed) owner.transaction(() => {});
+      });
+    });
+  };
+  const beginMeasurement = () => {
+    releaseParentMeasurement ??= parent?.hold?.();
+    releaseGeometryMeasurement ??= positionOwner?.hold();
+  };
+  const pin = (key: string) => {
+    const count = attachmentLeases.get(key) ?? 0;
+    attachmentLeases.set(key, count + 1);
+    if (!count) setAttachments([...attachmentLeases.keys()]);
+    const releaseParent = parent?.pin?.();
+    let live = true;
+    return () => {
+      if (!live) return;
+      live = false;
+      const count = (attachmentLeases.get(key) ?? 1) - 1;
+      if (count) attachmentLeases.set(key, count);
+      else {
+        attachmentLeases.delete(key);
+        if (!disposed) setAttachments([...attachmentLeases.keys()]);
+      }
+      releaseParent?.();
+    };
   };
   const refresh = () => setVersion((v) => v + 1);
   function queueMeasurement() {
@@ -191,43 +242,47 @@ export default function VirtualList(props: {
     measureFrame = requestAnimationFrame(() => {
       measureFrame = undefined;
       if (disposed) return;
-      let changed = false, released = false, pending = !ready() || !currentKeys;
-      for (const [key, count] of measuring) {
-        if (count > 0) continue;
-        const element = elements.get(key);
-        if (element?.isConnected) {
-          changed =
-            model.measure(key, element.getBoundingClientRect().height) ||
-            changed;
-          measuring.delete(key);
-          released = true;
-        } else if (!props.keys.includes(key)) {
-          measuring.delete(key);
-          released = true;
+      transaction(() => {
+        let changed = false,
+          released = false,
+          pending = !ready() || !currentKeys;
+        for (const [key, count] of measuring) {
+          if (count > 0) continue;
+          const element = elements.get(key);
+          if (element?.isConnected) {
+            changed =
+              model.measure(key, element.getBoundingClientRect().height) ||
+              changed;
+            measuring.delete(key);
+            released = true;
+          } else if (!props.keys.includes(key)) {
+            measuring.delete(key);
+            released = true;
+          } else pending = true;
+        }
+        if (changed || released) refresh();
+        sync();
+        if (
+          ready() && currentKeys && !measuring.size &&
+          range().visibleKeys.every((key) =>
+            elements.has(key) && model.measured(key)
+          )
+        ) {
+          const release = releaseParentMeasurement;
+          releaseParentMeasurement = undefined;
+          const releaseGeometry = releaseGeometryMeasurement;
+          releaseGeometryMeasurement = undefined;
+          release?.();
+          releaseGeometry?.();
         } else pending = true;
-      }
-      if (
-        releaseParentMeasurement && ready() && currentKeys &&
-        range().visibleKeys.every((key) =>
-          elements.has(key) || measuring.has(key)
-        )
-      ) {
-        const release = releaseParentMeasurement;
-        releaseParentMeasurement = undefined;
-        release();
-      } else if (releaseParentMeasurement) pending = true;
-      if (changed || released) {
-        refresh();
-        positionOwner?.layout();
-      }
-      sync();
-      remember();
-      if (pending) queueMeasurement();
+        remember();
+        if (pending) queueMeasurement();
+      });
     });
   }
   function holdMeasurement(key: string): () => void {
+    beginMeasurement();
     measuring.set(key, (measuring.get(key) ?? 0) + 1);
-    const releaseParent = parent?.hold?.();
     let live = true;
     return () => {
       if (!live) return;
@@ -237,17 +292,31 @@ export default function VirtualList(props: {
         measuring.set(key, count);
         queueMeasurement();
       }
-      releaseParent?.();
     };
   }
-  const changing = () => {
-    releaseParentMeasurement ??= parent?.hold?.();
+  const changing = (revision = false) => {
+    beginMeasurement();
+    if (revision) {
+      // A zero-height source cannot intersect a future range while unmounted.
+      // Its content revision revokes that old measurement and restores demand
+      // geometry, allowing empty streaming/bookkeeping rows to acquire content.
+      let invalidated = false;
+      for (const key of currentKeys ?? []) {
+        if (model.measured(key) && model.size(key) === 0) {
+          invalidated = model.invalidate(key) || invalidated;
+        }
+      }
+      if (invalidated) {
+        refresh();
+        sync();
+      }
+    }
     for (const key of elements.keys()) {
       if (!measuring.has(key)) measuring.set(key, 0);
     }
     queueMeasurement();
   };
-  createEffect(() => props.revision, () => changing());
+  createEffect(() => props.revision, () => transaction(() => changing(true)));
   const remember = () => {
     if (!currentKeys || restoring || disposed || !container.isConnected) return;
     props.onPosition?.({
@@ -258,13 +327,17 @@ export default function VirtualList(props: {
   const sync = () => {
     if (disposed || !container) return;
     const local = position(), root = viewport();
+    const available = root.clientHeight + Math.min(0, local);
+    const remaining = model.total() - Math.max(0, local);
     setTop(Math.max(0, local));
     setHeight(
       Math.max(
         0,
         Math.min(
-          root.clientHeight + Math.min(0, local),
-          model.total() - Math.max(0, local),
+          available,
+          // A zero-size collection inside the viewport still has a demanded
+          // boundary. Keep its frontier mounted so it can acquire content.
+          remaining === 0 ? available : remaining,
         ),
       ),
     );
@@ -277,6 +350,7 @@ export default function VirtualList(props: {
       ...contexts(),
       ...selected(),
       ...reveals(),
+      ...attachments(),
       ...measuring.keys(),
       ...focus() ? [focus()!] : [],
       ...all() ?? (parent?.materialized() ? props.keys : []),
@@ -311,27 +385,36 @@ export default function VirtualList(props: {
         currentKeys.every((key, i) => key === next[i])
       ) return;
       const initialized = !!currentKeys;
-      changing();
-      const previous = currentKeys;
-      positionOwner?.remap(path, (anchor) => {
-        if (included.has(anchor.key)) return anchor;
-        const at = previous?.indexOf(anchor.key) ?? -1;
-        const neighbor = previous?.slice(at + 1).find((key) =>
-          included.has(key)
-        ) ?? [...previous?.slice(0, at) ?? []].reverse().find((key) =>
-          included.has(key)
+      transaction(() => {
+        const previous = currentKeys;
+        positionOwner?.remap(path, (anchor) => {
+          if (included.has(anchor.key)) return anchor;
+          const at = previous?.indexOf(anchor.key) ?? -1;
+          const measuredNeighbor = (key: string) =>
+            included.has(key) &&
+            elements.get(key)?.isConnected && model.measured(key) &&
+            !measuring.has(key);
+          const neighbor = previous?.slice(at + 1).find((key) =>
+            measuredNeighbor(key)
+          ) ?? [...previous?.slice(0, at) ?? []].reverse().find((key) =>
+            measuredNeighbor(key)
+          );
+          const base = neighbor ? rowStart(neighbor) : undefined;
+          return neighbor && base !== undefined
+            ? { key: neighbor, offset: viewport().scrollTop - base }
+            : undefined;
+        });
+        changing();
+        model.update(
+          next,
+          (key) =>
+            estimates.get(props.role?.(key) ?? "row") ?? props.estimate ?? 1,
         );
-        return neighbor ? { key: neighbor, offset: 0 } : undefined;
+        currentKeys = next;
+        refresh();
+        sync();
+        positionOwner?.layout();
       });
-      model.update(
-        next,
-        (key) =>
-          estimates.get(props.role?.(key) ?? "row") ?? props.estimate ?? 1,
-      );
-      currentKeys = next;
-      refresh();
-      sync();
-      positionOwner?.layout();
       if (!initialized && initialPosition) {
         void positionOwner?.navigate(() => {
           if (disposed) {
@@ -456,22 +539,20 @@ export default function VirtualList(props: {
     const root = viewport();
     const lease = acquireViewport(root);
     positionOwner = lease.owner;
+    beginMeasurement();
     const unregister = positionOwner.register({
       id: path,
       depth: path.split("/").length,
-      distance: () => Math.max(0, -position()),
+      distance: () => Math.max(0, -(logicalAnchor()?.offset ?? -Infinity)),
       anchor() {
-        const local = position();
-        if (
-          !(model.total() > 0 && local > -root.clientHeight &&
-            local < model.total())
-        ) return;
         return logicalAnchor();
       },
       resolve: (anchor) => {
-        const base = rowStart(anchor.key);
+        const element = elements.get(anchor.key);
+        const base = element?.isConnected ? rowStart(anchor.key) : undefined;
         return base === undefined ? undefined : base + anchor.offset;
       },
+      retain: (anchor) => pin(anchor.key),
     });
     const releasePosition = positionOwner.subscribe(() => {
       selection();
@@ -480,21 +561,17 @@ export default function VirtualList(props: {
     });
     observer = new ResizeObserver((entries) => {
       selection();
-      let changed = false;
-      for (const entry of entries) {
-        const key = (entry.target as HTMLElement).dataset.virtualKey;
-        if (key && elements.get(key) === entry.target) {
-          changed =
-            model.measure(key, entry.target.getBoundingClientRect().height) ||
-            changed;
+      transaction(() => {
+        for (const entry of entries) {
+          const key = (entry.target as HTMLElement).dataset.virtualKey;
+          if (key && elements.get(key) === entry.target) {
+            beginMeasurement();
+            if (!measuring.has(key)) measuring.set(key, 0);
+          }
         }
-      }
-      if (changed) {
-        refresh();
-        positionOwner?.layout();
-      }
-      sync();
-      remember();
+        sync();
+        queueMeasurement();
+      });
     });
     observer.observe(root);
     observer.observe(container);
@@ -620,6 +697,7 @@ export default function VirtualList(props: {
       elements.set(input.key, element);
       observer?.observe(element);
       releaseMeasurement();
+      positionOwner?.transaction(() => {});
       return () => {
         observer?.unobserve(element);
         elements.delete(input.key);
@@ -644,6 +722,7 @@ export default function VirtualList(props: {
             measurements,
             materializers,
             hold: () => holdMeasurement(input.key),
+            pin: () => pin(input.key),
             path: `${path}/${encodeURIComponent(input.key)}`,
           }}
         >
@@ -656,6 +735,7 @@ export default function VirtualList(props: {
     disposed = true;
     if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
     releaseParentMeasurement?.();
+    releaseGeometryMeasurement?.();
     measuring.clear();
     materializers.delete(materializedReady);
     releasePins?.();
@@ -669,6 +749,7 @@ export default function VirtualList(props: {
         measurements,
         materializers,
         hold: parent?.hold,
+        pin: parent?.pin,
         path,
       }}
     >

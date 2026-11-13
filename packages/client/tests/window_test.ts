@@ -2,6 +2,32 @@
 import { assert, assertEquals } from "@std/assert";
 import { createWindow } from "@otk/client";
 
+Deno.test("zero extent retains a materialization frontier without rendering the whole collection", () => {
+  const window = createWindow();
+  const keys = Array.from({ length: 10000 }, (_, i) => `empty-${i}`);
+  window.update(keys, () => 30);
+  for (const key of keys) window.measure(key, 0);
+  assertEquals(window.range(0, 300).visibleKeys, ["empty-9999"]);
+  assertEquals(window.range(0, 0).visibleKeys, []);
+});
+
+Deno.test("an estimate equal to the measured size is still only an estimate until recorded", () => {
+  const window = createWindow();
+  window.update(["source"], () => 30);
+  assertEquals(window.measured("source"), false);
+  assertEquals(window.measure("source", 30), true);
+  assertEquals(window.measured("source"), true);
+  window.update(["older", "source"], () => 30);
+  assertEquals(window.measured("source"), true);
+  assertEquals(window.measured("older"), false);
+  assertEquals(window.measure("older", 0), true);
+  assertEquals(window.measured("older"), true);
+  assertEquals(window.offset("source"), 0);
+  assertEquals(window.invalidate("older"), true);
+  assertEquals(window.measured("older"), false);
+  assertEquals(window.offset("source"), 30);
+});
+
 Deno.test("explicit interaction pins materialize nested rows outside viewport geometry", () => {
   const window = createWindow();
   window.update(["first", "middle", "last"], () => 30);

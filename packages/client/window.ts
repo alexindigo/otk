@@ -14,8 +14,10 @@ export interface WindowRange {
 export function createWindow(measured: Map<string, number> = new Map()): {
   update(keys: readonly string[], estimate: (key: string) => number): void;
   measure(key: string, size: number): boolean;
+  invalidate(key: string): boolean;
   offset(key: string): number | undefined;
   size(key: string): number;
+  measured(key: string): boolean;
   total(): number;
   anchor(top: number): WindowAnchor | undefined;
   restore(anchor?: WindowAnchor): number | undefined;
@@ -30,6 +32,7 @@ export function createWindow(measured: Map<string, number> = new Map()): {
     positions = new Map<string, number>(),
     sums: number[] = [0],
     sizes: number[] = [];
+  let estimateSize: (key: string) => number = () => 1;
   const add = (i: number, delta: number) => {
     for (i++; i < sums.length; i += i & -i) sums[i] += delta;
   };
@@ -53,6 +56,7 @@ export function createWindow(measured: Map<string, number> = new Map()): {
   };
   return {
     update(next, estimate) {
+      estimateSize = estimate;
       keys = [...next];
       positions = new Map(keys.map((key, i) => [key, i]));
       for (const key of measured.keys()) {
@@ -72,16 +76,25 @@ export function createWindow(measured: Map<string, number> = new Map()): {
     measure(key, size) {
       const i = positions.get(key);
       if (
-        i === undefined || !Number.isFinite(size) || size <= 0 ||
-        sizes[i] === size
+        i === undefined || !Number.isFinite(size) || size < 0 ||
+        (sizes[i] === size && measured.has(key))
       ) return false;
       measured.set(key, size);
       add(i, size - sizes[i]);
       sizes[i] = size;
       return true;
     },
+    invalidate(key) {
+      const i = positions.get(key);
+      if (i === undefined || !measured.delete(key)) return false;
+      const size = Math.max(1, estimateSize(key));
+      add(i, size - sizes[i]);
+      sizes[i] = size;
+      return true;
+    },
     offset,
     size: (key) => sizes[positions.get(key) ?? -1] ?? 0,
+    measured: (key) => positions.has(key) && measured.has(key),
     total: () => prefix(keys.length),
     anchor(top) {
       const i = Math.min(at(Math.max(0, top)), keys.length - 1);
@@ -102,7 +115,15 @@ export function createWindow(measured: Map<string, number> = new Map()): {
         };
       }
       const start = height > 0
-        ? Math.max(0, at(Math.max(0, top)) - overscan)
+        // The closed acquired edge owns one materialization frontier, even
+        // when its last row has measured zero extent. It is not a source anchor.
+        ? Math.max(
+          0,
+          Math.min(
+            at(Math.max(0, top)),
+            top <= prefix(keys.length) ? keys.length - 1 : keys.length,
+          ) - overscan,
+        )
         : 0;
       const edge = Math.max(0, top) + height;
       const last = at(Math.max(0, edge - .001));
