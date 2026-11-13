@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { DEFAULT_PROJECT_AGEING, PROJECT_STATUS_PRIORITY } from "@otk/protocol";
+import {
+  attentionStatus,
+  DEFAULT_PROJECT_AGEING,
+  PROJECT_STATUS_PRIORITY,
+} from "@otk/protocol";
+export { attentionStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
   InboxOp,
@@ -25,12 +30,6 @@ export const INBOX_STATUS_PRIORITY = Object.freeze(PROJECT_STATUS_PRIORITY);
 export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
 export interface OperationAttention {
   operationStatus?: InboxStatus;
-}
-export function attentionStatus(
-  ...states: (InboxStatus | undefined)[]
-): InboxStatus {
-  return INBOX_STATUS_PRIORITY.find((state) => states.includes(state)) ??
-    "none";
 }
 export function unread(
   sessionID: string,

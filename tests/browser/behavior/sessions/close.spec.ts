@@ -87,7 +87,15 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await state.product("layout.patch", { rightCollapsed: true });
   await page.reload();
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
+  // Reloading the project page now resolves its working session (decision 7).
+  await expect(page).toHaveURL(/tstv1-otk$/);
   await expect(page.locator(".otk-right-panel")).toBeHidden();
+  // Return to the original closed-view setup before observing the finish.
+  // Closing an opened working session must still retain its mandatory phantom.
+  page.once("dialog", (d) => d.accept());
+  await sessionContext(page, '[data-tab="tstv1-otk"]', "session.close");
+  await expect(page).toHaveURL(/#project\//);
+  await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
   await activity(state, "tstv1-otk", "release");
   await expect(page.locator('[data-tab="tstv1-otk"] .otk-status-light'))
     .toHaveAttribute("data-state", "finished");

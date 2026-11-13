@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import * as client from "@otk/client";
+import { NavigationDefault } from "../../../core/features/navigation-default.ts";
+import { SessionHierarchy } from "../../../core/index/session-hierarchy.ts";
+import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import type {
   ContentSession,
   IndexEntry,
@@ -107,6 +110,52 @@ export function shellFixture(
       params: RpcParams<M>,
     ): Promise<RpcResult<M>> => {
       calls.push([id, method, params]);
+      if (method === "navigation.default") {
+        const hierarchy = new SessionHierarchy(),
+          identity = new ProjectIdentity();
+        const inbox = resources.inbox(id).state.inbox;
+        const summaries = inbox.summaries ?? {};
+        identity.learn(
+          Object.values(summaries).flatMap((summary) =>
+            (summary.scopes ?? [summary.directory]).map((directory) => ({
+              ...summary,
+              directory,
+              sessionCount: summary.sessionCount,
+              topology: summary.topology,
+            }))
+          ),
+        );
+        hierarchy.configure(identity, () => inbox.tasks, () => false);
+        index.partition(id).forEach((row) => hierarchy.entry(row));
+        const resolver = new NavigationDefault({
+          hierarchy,
+          scopes: (directory) => summaries[directory]?.scopes ?? [directory],
+          entries: (directory) => index.partition(id, directory),
+          status: (sessionID) =>
+            client.inboxStatus(index.get(id, sessionID)!, inbox),
+        });
+        const core = {
+          identities: (ids: readonly string[]) =>
+            Promise.resolve(
+              index.partition(id).filter((row) => ids.includes(row.id)),
+            ),
+          listSessions: (input: import("@otk/protocol").SessionListInput) =>
+            Promise.resolve({
+              items: index.partition(id, input.directory).filter((row) =>
+                !row.parentID
+              ).toSorted((a, b) => b.timeUpdated - a.timeUpdated).slice(
+                0,
+                input.limit,
+              ),
+              older: null,
+              generation: "fixture",
+            }),
+        } as unknown as import("@otk/harness").HarnessCore;
+        return resolver.resolve(
+          core,
+          params as { directory: string; preferred?: string },
+        ) as Promise<RpcResult<M>>;
+      }
       if (method === "sessions.identities") {
         return Promise.resolve(
           index.partition(id).filter((entry) =>

@@ -388,36 +388,26 @@ Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects n
   f.resources.stop();
 });
 
-Deno.test("project acquisition point-validates remembered sessions outside the acquired page and uses a bounded newest-root fallback", async () => {
+Deno.test("project acquisition delegates default selection without a client identity or list fallback", async () => {
   const f = fixture(), p = { sidecarId: "local", directory: "/unleased" };
-  f.resources.scope(p);
-  const loading = f.resources.projectSession(p, "remembered");
-  assertEquals(await loading, "remembered");
+  const calls: unknown[] = [];
+  f.connections.get("local")!.rpc.call = (method, params) => {
+    calls.push([method, params]);
+    return Promise.resolve(
+      (params as { preferred?: string }).preferred === "remembered"
+        ? "remembered"
+        : null,
+    ) as never;
+  };
+  assertEquals(await f.resources.projectSession(p, "remembered"), "remembered");
+  assertEquals(await f.resources.projectSession(p, "missing"), undefined);
   assertEquals(
-    f.listReads.length,
-    0,
-    "remembered identity does not enumerate a page",
+    calls,
+    ["remembered", "missing"].map((
+      preferred,
+    ) => ["navigation.default", { directory: p.directory, preferred }]),
   );
-  const missing = f.resources.projectSession(p, "missing");
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assertEquals(f.listReads[0].input, {
-    directory: p.directory,
-    parentID: null,
-    limit: 1,
-  });
-  f.listReads[0].resolve({
-    items: [{ id: "first", title: "First", directory: p.directory }],
-    older: null,
-    load: {
-      id: "fallback",
-      scope: { kind: "project-sessions", directory: p.directory },
-      boundary: { kind: "page", limit: 1 },
-      generation: "source",
-      revision: 1,
-      state: "complete",
-    },
-  });
-  assertEquals(await missing, "first");
+  assertEquals(f.listReads.length, 0);
   f.resources.stop();
 });
 
