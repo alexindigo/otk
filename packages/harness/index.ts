@@ -32,7 +32,7 @@ export class SessionIndex {
       ? {
         state: "unavailable",
         revision: entry.digest.revision,
-        toolCount: null,
+        progress: { state: "unavailable" },
       }
       : entry?.digest.helper && structuredClone(entry.digest.helper);
   }
@@ -147,6 +147,20 @@ export class SessionIndex {
       digest: {
         ...entry.digest,
         ...structuredClone(delta.summary),
+        ...(entry.digest.refreshing === undefined &&
+            delta.summary.refreshing === undefined
+          ? {}
+          : {
+            refreshing: delta.summary.refreshing ??
+              delta.summary.state === "digesting",
+          }),
+        ...(entry.digest.stale === undefined &&
+            delta.summary.stale === undefined
+          ? {}
+          : { stale: delta.summary.stale ?? false }),
+        ...(entry.digest.error === undefined
+          ? {}
+          : { error: delta.summary.error }),
         revision: delta.revision,
         turns,
       },

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { seedBrowserSession } from "../support/browser-native.ts";
@@ -305,7 +306,9 @@ for (const source of ["native-db", "api"] as const) {
               if (frame.t !== "content") return [];
               const event = frame.event;
               if (event.op === "task.progress") {
-                return event.summary.current ? [event.summary] : [];
+                return derivedValue(event.summary.progress)?.current
+                  ? [event.summary]
+                  : [];
               }
               const parts = event.op === "message.upsert"
                 ? event.message.parts
@@ -314,7 +317,7 @@ for (const source of ["native-db", "api"] as const) {
                 : [];
               return parts.flatMap((part) =>
                 part.kind === "tool" && part.call.tool === "task" &&
-                  part.call.progress?.current
+                  derivedValue(part.call.progress?.progress)?.current
                   ? [part.call.progress]
                   : []
               );
@@ -322,7 +325,7 @@ for (const source of ["native-db", "api"] as const) {
           (summary) => !!summary,
           10000,
         );
-        assertEquals(progress!.current!.name, "bash");
+        assertEquals(derivedValue(progress!.progress)!.current!.name, "bash");
         const pending = await waitFor(
           () =>
             client.rpc<{ id: string; sessionID: string }[]>("permission.list", {

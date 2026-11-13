@@ -352,3 +352,18 @@ tests.
 
 License: LGPL-3.0-only; see [LICENSE](./LICENSE). Source files retain their SPDX
 headers.
+
+# Derived results
+
+Digest totals, keyed turn usage and latest reported context carry `Derived<T>`.
+Helper summaries carry `progress: Derived<HelperProgress>` through pages and
+`task.progress` patches. A known result includes its value, finality and source
+witness. Pending and unavailable results have no value. Null reporting
+categories and reported zero remain distinct inside a known value.
+
+Session/helper `state` describes refresh activity, not value validity. Consumers
+read only the known branch; multipart transport, cached replay and worker
+recovery do not revoke knowledge. Context includes the native call identity;
+pre-contract cache rows retain a null identity rather than inventing one.
+`decodeDerived` validates the neutral envelope while the caller decodes its own
+value.

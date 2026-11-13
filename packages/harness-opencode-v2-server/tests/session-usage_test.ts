@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import type { DigestDelta } from "@otk/protocol";
@@ -124,7 +125,7 @@ for (
         { rows: 20, until: performance.now() + 1000 },
         new AbortController().signal,
       );
-      const total = deltas.at(-1)?.summary.total;
+      const total = derivedValue(deltas.at(-1)?.summary.total);
       assert(total);
       assertEquals(total.cost, example.known ? nativeCost : null);
       assertEquals(total.tokens, example.known ? zero : unknown);
@@ -148,7 +149,7 @@ for (
         example.replies.some((reply) => "tokens" in reply) ? zero : unknown,
       );
       assertEquals(
-        deltas.at(-1)?.turns.upsert.user,
+        derivedValue(deltas.at(-1)?.turns.upsert.user),
         example.replies.length ? detail.summary : undefined,
       );
       if (example.name === "all unknown replies") {

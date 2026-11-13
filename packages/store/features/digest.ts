@@ -8,5 +8,8 @@ export const digestMigrations: FeatureMigrations = {
   }, {
     version: 2,
     sql: new URL("./migrations/digest/002.sql", import.meta.url),
+  }, {
+    version: 3,
+    sql: new URL("./migrations/digest/003.sql", import.meta.url),
   }],
 };

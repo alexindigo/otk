@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { preparedBinary } from "../support/prepared-binaries.ts";
@@ -188,7 +189,8 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
     );
     await waitFor(
       () => first.client.entry(unknown.id)?.digest,
-      (value) => value?.state === "ready" && value.total?.cost === null,
+      (value) =>
+        value?.state === "ready" && derivedValue(value.total)?.cost === null,
     );
     const catalog = createDirectoryCatalogs({
       codecs: createCatalogCodecs(),

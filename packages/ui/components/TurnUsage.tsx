@@ -8,13 +8,12 @@ import {
   usageCost,
   usageTokens,
 } from "@otk/client";
-import type { UsageSummary } from "@otk/protocol";
+import { type Derived, derivedValue, type UsageSummary } from "@otk/protocol";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import UsageDetail from "./UsageDetail.tsx";
 /** Cheap index summary; only opening acquires the injected detail lifetime. */
 export default function TurnUsage(props: {
-  summary?: UsageSummary;
-  state?: string;
+  summary?: Derived<UsageSummary>;
   showCost: boolean;
   detail(): Usage | undefined;
   error?(): string | undefined;
@@ -30,10 +29,13 @@ export default function TurnUsage(props: {
   };
   onCleanup(close);
   const summary = () => {
-    if (props.state !== "ready" || !props.summary) {
-      return props.state === "unavailable" ? "Usage unavailable" : "Digesting…";
+    const value = derivedValue(props.summary);
+    if (!value) {
+      return props.summary?.state === "unavailable"
+        ? "Usage unavailable"
+        : "Digesting\u2026";
     }
-    const value = props.summary, tokens = reportedTokens(value.tokens);
+    const tokens = reportedTokens(value.tokens);
     return `${countLabel(value.calls, "model call")} · ${
       tokens === undefined
         ? "Tokens unavailable"
@@ -48,8 +50,10 @@ export default function TurnUsage(props: {
   };
   const label = () =>
     `Turn usage: ${summary()}${
-      props.state === "ready" && props.showCost && props.summary?.cost != null
-        ? `; exact cost ${usageCost(props.summary.cost, "exact")}`
+      props.showCost && derivedValue(props.summary)?.cost != null
+        ? `; exact cost ${
+          usageCost(derivedValue(props.summary)!.cost!, "exact")
+        }`
         : ""
     }`;
   return (

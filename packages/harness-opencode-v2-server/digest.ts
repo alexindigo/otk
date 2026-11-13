@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DatabaseSync } from "node:sqlite";
 import {
+  type Derived,
+  derivedValue,
   type DigestDelta,
+  type HelperProgress,
   type HelperSummary,
   type HistoryEntry,
+  knownDerived,
   OperationFailure,
   type SessionMetadata,
   type TurnUsageSnapshot,
@@ -74,7 +78,7 @@ export interface V2DigestStorage {
     deleted: DigestDelta["deleted"];
     helper?: HelperSummary;
   } | undefined;
-  turn(id: string, turn: string): UsageSummary | undefined;
+  turn(id: string, turn: string): Derived<UsageSummary> | undefined;
   known(): Iterable<
     {
       metadata: SessionMetadata;
@@ -847,11 +851,18 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         );
         return {
           ...result,
-          time: {
-            start: millis(raw.time.created),
-            ...(raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy)
-              ? { end: millis(raw.time.idle) }
-              : {}),
+          progress: result.progress.state !== "known" ? result.progress : {
+            ...result.progress,
+            value: {
+              ...result.progress.value,
+              time: {
+                start: millis(raw.time.created),
+                ...(raw.time.idle &&
+                    millis(raw.time.idle) >= millis(raw.time.busy)
+                  ? { end: millis(raw.time.idle) }
+                  : {}),
+              },
+            },
           },
         };
       },
@@ -1085,17 +1096,18 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   }
   async #commitHelper(
     entry: SessionMetadata,
-    helper: Omit<HelperSummary, "revision">,
+    helper: HelperProgress & { state: HelperSummary["state"] },
   ): Promise<void> {
     const saved = this.storage.read(entry.id), previous = saved?.helper;
+    const progress = derivedValue(previous?.progress);
     const same = previous !== undefined &&
       previous.state === helper.state &&
-      previous.toolCount === helper.toolCount &&
-      previous.current?.name === helper.current?.name &&
-      previous.current?.title === helper.current?.title &&
-      previous.current?.startedAt === helper.current?.startedAt &&
-      previous.time?.start === helper.time?.start &&
-      previous.time?.end === helper.time?.end;
+      (progress?.toolCount ?? null) === helper.toolCount &&
+      progress?.current?.name === helper.current?.name &&
+      progress?.current?.title === helper.current?.title &&
+      progress?.current?.startedAt === helper.current?.startedAt &&
+      progress?.time?.start === helper.time?.start &&
+      progress?.time?.end === helper.time?.end;
     const metadataSame = saved && ([
       "id",
       "parentID",
@@ -1115,7 +1127,20 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         revision: (saved?.summary.revision ?? 0) + 1,
       },
       helper: {
-        ...helper,
+        state: helper.state,
+        progress: helper.state === "ready"
+          ? knownDerived(
+            {
+              toolCount: helper.toolCount,
+              current: helper.current,
+              time: helper.time,
+            },
+            entry.id,
+            (previous?.revision ?? 0) + (same ? 0 : 1),
+          )
+          : {
+            state: helper.state === "unavailable" ? "unavailable" : "pending",
+          },
         revision: (previous?.revision ?? 0) + (same ? 0 : 1),
       },
       turns: { upsert: {}, remove: [] },
@@ -1247,7 +1272,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     const nativeUsage = usageReported ? record(raw) : {},
       nativeTokens = tokens(nativeUsage.tokens),
       nativeCost = reported(nativeUsage.cost);
-    const summaries: Record<string, UsageSummary> = {};
+    const summaries: Record<string, Derived<UsageSummary>> = {};
+    const revision = (previous?.summary.revision ?? 0) + 1;
     const latest = this.storage.sql.prepare(
       "SELECT scalar FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ORDER BY seq DESC LIMIT 1",
     ).get(job.sessionID);
@@ -1255,7 +1281,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       ? JSON.parse(String(latest.scalar)) as ScalarMessage
       : undefined;
     for (const turn of turns) {
-      summaries[turn] = this.#summary(job.sessionID, turn);
+      summaries[turn] = knownDerived(
+        this.#summary(job.sessionID, turn),
+        `${job.sessionID}/${turn}`,
+        revision,
+      );
     }
     const delta: DigestDelta = {
       summary: {
@@ -1266,21 +1296,30 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         messageCount: this.storage.sql.prepare(
           "SELECT COUNT(*) AS n FROM opcv2_transcript_header WHERE session_id=?",
         ).get(job.sessionID)!.n as number,
-        total: { ...total, cost: nativeCost, tokens: nativeTokens },
+        total: knownDerived(
+          { ...total, cost: nativeCost, tokens: nativeTokens },
+          job.sessionID,
+          revision,
+        ),
         ...(last
           ? {
-            last: {
-              ...(last.agent ? { agent: last.agent } : {}),
-              ...(last.model
-                ? {
-                  model: {
-                    provider: last.model.providerID,
-                    model: last.model.id,
-                  },
-                }
-                : {}),
-              context: last.usage?.tokens ?? tokens(undefined),
-            },
+            last: knownDerived(
+              {
+                callID: last.id,
+                ...(last.agent ? { agent: last.agent } : {}),
+                ...(last.model
+                  ? {
+                    model: {
+                      provider: last.model.providerID,
+                      model: last.model.id,
+                    },
+                  }
+                  : {}),
+                context: last.usage?.tokens ?? tokens(undefined),
+              },
+              `${job.sessionID}/${last.id}`,
+              revision,
+            ),
           }
           : {}),
       },
@@ -1523,7 +1562,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         "SELECT json_extract(scalar,'$.current') AS current FROM opcv2_transcript_helper WHERE session_id=? AND json_type(scalar,'$.current')='object' ORDER BY json_extract(scalar,'$.current.startedAt') DESC,message_id DESC LIMIT 1",
       ).get(job.sessionID),
       tool = last ? record(JSON.parse(String(last.current))) : undefined;
-    const helper: Omit<HelperSummary, "revision"> = {
+    const helper: HelperProgress & { state: HelperSummary["state"] } = {
       state: "ready",
       toolCount: count,
       ...(tool

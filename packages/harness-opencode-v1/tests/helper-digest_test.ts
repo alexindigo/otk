@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { TaskProgress } from "../tasks.ts";
 import type { ContentOp, HelperSummary } from "@otk/protocol";
@@ -32,15 +33,21 @@ Deno.test("helper shape is synchronous, source-free and publishes narrow dedupli
   assertEquals(shaped.progress, {
     state: "digesting",
     revision: 0,
-    toolCount: null,
+    progress: { state: "pending" },
   });
   assertEquals(hints, ["opcv1-child"]);
   const summary = progress.value = {
     state: "ready",
     revision: 2,
-    toolCount: 600,
-    current: { name: "bash", title: "Tool 1197" },
-    time: { start: 1, end: 20 },
+    progress: knownDerived(
+      {
+        toolCount: 600,
+        current: { name: "bash", title: "Tool 1197" },
+        time: { start: 1, end: 20 },
+      },
+      "child",
+      2,
+    ),
   };
   tracker.update("opcv1-child", summary);
   tracker.update("opcv1-child", summary);
@@ -64,7 +71,11 @@ Deno.test("helper link replacement, removals, cutoff and child retirement fence 
     subscribed: () => true,
     emit: (_id, op) => emitted.push(op),
   });
-  const ready: HelperSummary = { state: "ready", revision: 1, toolCount: 0 };
+  const ready: HelperSummary = {
+    state: "ready",
+    revision: 1,
+    progress: knownDerived({ toolCount: 0 }, "child", 1),
+  };
   tracker.shape(raw);
   tracker.shape({
     ...raw,

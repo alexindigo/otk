@@ -241,7 +241,11 @@ export function themeResults(directory: string, sessionID: string) {
           ...base,
           tool: "task",
           description: "Inspect the result",
-          progress: { state: "unavailable", revision: 0, toolCount: null },
+          progress: {
+            state: "unavailable",
+            revision: 0,
+            progress: { state: "unavailable" },
+          },
           childSessionID: "tstv1-child",
         },
       },

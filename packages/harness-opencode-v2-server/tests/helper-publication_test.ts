@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue, type HelperProgress } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
-import type {
-  DigestDelta,
-  HelperSummary,
-  SessionMetadata,
-} from "@otk/protocol";
+import type { DigestDelta, SessionMetadata } from "@otk/protocol";
 import {
   OpencodeV2TranscriptDigestSink,
   type V2DigestStorage,
@@ -22,11 +19,12 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
   let saved: ReturnType<V2DigestStorage["read"]>;
   const publications: DigestDelta[] = [];
   let available = true, count = 0, idle = 0, title = "Helper";
-  let current: HelperSummary["current"];
+  let current: HelperProgress["current"];
   const client = {
     service: { pid: 1 },
     read: <T>(run: (api: unknown) => Promise<T>) =>
       run({
+        message: { list: () => Promise.resolve({ data: [], cursor: {} }) },
         session: {
           get: () =>
             Promise.resolve({
@@ -109,7 +107,16 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     idle = 5;
     await scan();
     assertEquals(saved?.helper?.revision, 5);
-    assertEquals(saved?.helper?.time?.end, 5);
+    assertEquals(derivedValue(saved?.helper?.progress)?.time?.end, 5);
+    const viewed = await sink.readers["opcv2.helper.progress"]!({
+      sessionID: "opcv2-ses_helper",
+    }, new AbortController().signal);
+    assertEquals(derivedValue(viewed.progress)?.time, { start: 1, end: 5 });
+    assertEquals(
+      "time" in viewed,
+      false,
+      "Helper time belongs inside the result, not beside it",
+    );
     await scan();
     assertEquals(publications.length, 5);
     available = false;

@@ -16,7 +16,7 @@ Deno.test("unavailable helper progress patches all live siblings without parent 
   tracker.update("opcv1-child", {
     state: "unavailable",
     revision: 1,
-    toolCount: null,
+    progress: { state: "unavailable" },
   });
   assertEquals(parents, ["opcv1-parent", "opcv1-healthy"]);
 });

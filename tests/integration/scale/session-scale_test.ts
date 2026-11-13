@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { start } from "../../../main.ts";
@@ -240,14 +241,19 @@ test("real-version scale summaries match independent totals with bounded serving
       "The scoped wire snapshot must carry every explicitly requested scalar summary",
     );
     assertEquals(entry.digest.messageCount, row.expected.messages, row.id);
-    assertEquals(entry.digest.total?.calls, row.expected.calls, row.id);
+    assertEquals(
+      derivedValue(entry.digest.total)?.calls,
+      row.expected.calls,
+      row.id,
+    );
     if (row.expected.cost === null) {
-      assertEquals(entry.digest.total?.cost, null);
+      assertEquals(derivedValue(entry.digest.total)?.cost, null);
     } else {assert(
-        Math.abs(entry.digest.total!.cost! - row.expected.cost) < 1e-8,
+        Math.abs(derivedValue(entry.digest.total)!.cost! - row.expected.cost) <
+          1e-8,
         row.id,
       );}
-    const tokens = entry.digest.total!.tokens;
+    const tokens = derivedValue(entry.digest.total)!.tokens;
     assertEquals(
       [
         tokens.input,
@@ -265,7 +271,7 @@ test("real-version scale summaries match independent totals with bounded serving
       row.id,
     );
     for (const [id, expected] of Object.entries(row.expected.turns)) {
-      const actual = entry.digest.turns[id];
+      const actual = derivedValue(entry.digest.turns[id])!;
       assertEquals(actual.calls, expected.calls);
       assertEquals(actual.cost, expected.cost);
     }

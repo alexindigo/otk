@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue, knownDerived } from "@otk/protocol";
 import {
   connectRequests,
   replyRequest,
@@ -174,7 +175,11 @@ Deno.test("changed child metadata reaches the parent consumer without a child bo
         summary: { state: "ready" as const, revision: 1 },
         turns: { upsert: {}, remove: [] },
         deleted: null,
-        helper: { state: "ready" as const, revision: 1, toolCount: 2 },
+        helper: {
+          state: "ready" as const,
+          revision: 1,
+          progress: knownDerived({ toolCount: 2 }, "child", 1),
+        },
       }],
     };
     index.receive("server", frame);
@@ -182,7 +187,7 @@ Deno.test("changed child metadata reaches the parent consumer without a child bo
     const part = owner.get(target)!.state.messagesByID.a.parts[0];
     assertEquals(
       part.kind === "tool" && part.call.tool === "task" &&
-        part.call.progress?.toolCount,
+        derivedValue(part.call.progress?.progress)?.toolCount,
       2,
     );
     assertEquals(
@@ -226,15 +231,18 @@ Deno.test("borrowed helper digests patch keyed parts, deduplicate content delive
   const summary: HelperSummary = {
     state: "ready",
     revision: 1,
-    toolCount: 2,
-    time: { start: 2, end: 20 },
+    progress: knownDerived(
+      { toolCount: 2, time: { start: 2, end: 20 } },
+      "child",
+      1,
+    ),
   };
   assertEquals(projection.helpers(() => summary), true);
   const current = projection.state.messagesByID.a;
   const part = current.parts[0];
   assertEquals(
     part.kind === "tool" && part.call.tool === "task" &&
-      part.call.progress?.toolCount,
+      derivedValue(part.call.progress?.progress)?.toolCount,
     2,
   );
   assertEquals(

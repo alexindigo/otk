@@ -237,7 +237,7 @@ for (const mode of ["SQL", "API"] as const) {
       assertEquals(part.call.progress, {
         state: "unavailable",
         revision: 0,
-        toolCount: null,
+        progress: { state: "unavailable" },
       });
       assert(!JSON.stringify(result).includes("Large child output"));
       assertEquals(

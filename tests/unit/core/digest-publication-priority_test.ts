@@ -89,7 +89,7 @@ test("interactive reads cannot pause an ordered publication needed by a newer de
         turns,
       });
       if (
-        !paused && turns.length && value.delta.summary.state === "digesting"
+        !paused && turns.length
       ) {
         paused = true;
         // Hold interactive pressure after the first chunk of a larger-than-credit

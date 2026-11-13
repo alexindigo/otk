@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex } from "@otk/client";
@@ -84,7 +85,8 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     await waitFor(
       first.entry,
       (entry) =>
-        entry?.digest.state === "ready" && (entry.digest.total?.calls ?? 0) > 0,
+        entry?.digest.state === "ready" &&
+        (derivedValue(entry.digest.total)?.calls ?? 0) > 0,
     );
   } finally {
     await first.stop();
@@ -102,7 +104,8 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     await waitFor(
       rebuilt.entry,
       (entry) =>
-        entry?.digest.state === "ready" && (entry.digest.total?.calls ?? 0) > 0,
+        entry?.digest.state === "ready" &&
+        (derivedValue(entry.digest.total)?.calls ?? 0) > 0,
     );
     assertEquals(
       (await rebuilt.client.rpc<TaskRecord[]>("tasks.list", {})).find((row) =>
@@ -124,7 +127,7 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
   const offline = await run(true);
   try {
     await waitFor(offline.entry, (entry) => entry?.deleted?.how === "provider");
-    assertEquals(offline.entry()!.digest.total!.calls > 0, true);
+    assertEquals(derivedValue(offline.entry()!.digest.total)!.calls > 0, true);
     const seen = await offline.client.rpc<number>("sessions.seen", {
       sessionID: session.id,
       terminal: (await offline.client.rpc<Record<string, number>>(

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue, knownDerived } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import { SessionIndex } from "@otk/harness";
 import {
@@ -93,17 +94,21 @@ test("raw test clients expose the public keyed index contract and recover revisi
       summary: {
         state: "ready",
         revision: 1,
-        total: {
-          calls: 1,
-          cost: .75,
-          tokens: {
-            input: 10,
-            output: 2,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
+        total: knownDerived(
+          {
+            calls: 1,
+            cost: .75,
+            tokens: {
+              input: 10,
+              output: 2,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            contextPeak: 10,
           },
-          contextPeak: 10,
-        },
+          "fixture",
+          1,
+        ),
       },
       turns: { upsert: {}, remove: [] },
       deleted: null,
@@ -116,7 +121,10 @@ test("raw test clients expose the public keyed index contract and recover revisi
         ops: [{ op: "digest", ...delta }],
       }),
     );
-    await waitFor(entry, (value) => value?.digest.total?.cost === .75);
+    await waitFor(
+      entry,
+      (value) => derivedValue(value?.digest.total)?.cost === .75,
+    );
     index.applyDigest({
       ...delta,
       revision: 2,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
+  Derived,
   IndexEntry,
   Message,
   ModelCatalog,
@@ -8,6 +9,7 @@ import type {
 } from "@otk/protocol";
 import { usageCost } from "./usage.ts";
 import { exactCount } from "./format.ts";
+import { derivedValue } from "@otk/protocol";
 export function reportedTokens(
   tokens: ReportedTokens | undefined,
 ): number | undefined {
@@ -26,6 +28,12 @@ export function sessionSummary(
   entry: IndexEntry | undefined,
   message?: Message,
 ): UsageSummary | undefined {
+  return derivedValue(sessionResult(entry, message));
+}
+export function sessionResult(
+  entry: IndexEntry | undefined,
+  message?: Message,
+): Derived<UsageSummary> | undefined {
   return message
     ? message.role === "assistant"
       ? entry?.digest.turns[message.replyTo ?? message.id]
@@ -36,8 +44,9 @@ export function summaryMeter(
   entry: IndexEntry | undefined,
   catalog?: ModelCatalog,
 ): { tokens?: number; limit?: number; fraction?: number } {
-  if (entry?.digest.state !== "ready") return {};
-  const last = entry?.digest.last, tokens = reportedTokens(last?.context);
+  const last = derivedValue(entry?.digest.last),
+    tokens = reportedTokens(last?.context);
+  if (!last) return {};
   const limit = last?.model &&
     catalog?.providers.find((p) => p.id === last.model!.provider)?.models.find((
       m,
@@ -50,11 +59,10 @@ export function summaryMeter(
   };
 }
 export function digestLabel(entry: IndexEntry | undefined): string {
-  return entry?.digest.state === "ready"
-    ? "Usage unavailable"
-    : entry?.digest.state === "unavailable"
-    ? "Usage unavailable"
-    : "Pending";
+  const result = entry?.digest.total;
+  return !result || result.state === "pending"
+    ? "Pending"
+    : "Usage unavailable";
 }
 export function digestProgress(
   entries: readonly IndexEntry[],
@@ -70,7 +78,8 @@ export function deletedFacts(
   showCost: boolean,
   date: (time: number) => string,
 ): { label: string; value: string; description?: string }[] {
-  const total = entry.digest.total;
+  const total = derivedValue(entry.digest.total),
+    last = derivedValue(entry.digest.last);
   return [
     { label: "Project", value: entry.directory },
     { label: "Created", value: date(entry.timeCreated) },
@@ -81,14 +90,11 @@ export function deletedFacts(
         ? "Not yet digested"
         : exactCount(entry.digest.messageCount),
     },
-    ...(entry.digest.last?.agent
-      ? [{ label: "Last agent", value: entry.digest.last.agent }]
-      : []),
-    ...(entry.digest.last?.model
+    ...(last?.agent ? [{ label: "Last agent", value: last.agent }] : []),
+    ...(last?.model
       ? [{
         label: "Last model",
-        value:
-          `${entry.digest.last.model.provider}/${entry.digest.last.model.model}`,
+        value: `${last.model.provider}/${last.model.model}`,
       }]
       : []),
     ...(total

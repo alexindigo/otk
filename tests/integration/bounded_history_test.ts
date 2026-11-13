@@ -195,7 +195,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
       assertEquals(task.call.progress, {
         state: "unavailable",
         revision: 0,
-        toolCount: null,
+        progress: { state: "unavailable" },
       });
       assertEquals(
         reads.slice(before).filter((url) =>

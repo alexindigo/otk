@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
   type NativeMessage,
@@ -371,7 +372,7 @@ Deno.test({
       const page = await ws.rpc<MessagePage>("session.messages", {
         sessionID: parent.id,
       });
-      assertEquals(page.helpers[child]?.toolCount, 1);
+      assertEquals(derivedValue(page.helpers[child]?.progress)?.toolCount, 1);
       const mapped = page.items.flatMap((m) =>
         m.parts
       ).find((p) =>

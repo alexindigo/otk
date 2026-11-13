@@ -100,7 +100,7 @@ export async function start(
             index.applyDigest({
               id,
               revision: summary.revision,
-              summary: { ...summary, state: "digesting" },
+              summary: { ...summary, refreshing: true, stale: true },
               turns: { upsert: {}, remove: [] },
               deleted: entry.deleted ?? null,
             });
@@ -218,7 +218,7 @@ export async function start(
           index.applyDigest({
             id,
             revision: entry.digest.revision,
-            summary: { ...summary, state: "digesting" },
+            summary: { ...summary, refreshing: true, stale: true },
             turns: { upsert: {}, remove: [] },
             deleted: entry.deleted ?? null,
           });

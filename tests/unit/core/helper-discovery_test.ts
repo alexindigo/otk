@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { cfg } from "../../support/config.ts";
 import { SessionIndex } from "@otk/harness";
 import { assertEquals } from "@std/assert";
@@ -153,7 +154,10 @@ test("keyed helper discovery resolves demand without reacquiring a population ca
       [],
       new AbortController().signal,
     );
-    assertEquals(helpers.get("opcv1-child")?.toolCount, 1);
+    assertEquals(
+      derivedValue(helpers.get("opcv1-child")?.progress)?.toolCount,
+      1,
+    );
     discover = true;
     bridge.observe(1, [{
       sessionID: "opcv1-child",
@@ -169,8 +173,14 @@ test("keyed helper discovery resolves demand without reacquiring a population ca
       (value) => value?.state === "ready",
       5000,
     );
-    assertEquals(helpers.get("opcv1-child")?.toolCount, 1);
-    assertEquals(helpers.get("opcv1-child")?.current?.name, "bash");
+    assertEquals(
+      derivedValue(helpers.get("opcv1-child")?.progress)?.toolCount,
+      1,
+    );
+    assertEquals(
+      derivedValue(helpers.get("opcv1-child")?.progress)?.current?.name,
+      "bash",
+    );
   } finally {
     console.info("Helper discovery receipt", {
       catalogs,
