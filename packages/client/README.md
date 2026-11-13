@@ -966,6 +966,16 @@ Explicit pins remain materialized even when a borrowed window has zero visible
 height. An optional source-free measurement map preserves sizes across a
 window's virtual unmount without retaining its content.
 
+`measured(key)` distinguishes recorded geometry from an equal-valued estimate.
+Zero-height rows are valid recorded geometry, so bookkeeping with no rendered
+height can release its measurement lease without being promoted to a source.
+`invalidate(key)` revokes a recorded size when its source changes. Content
+windows use it to reactivate dormant zero-height rows on a content revision, so
+an initially empty streaming row can acquire content again. An in-viewport
+zero-size collection retains its closed-edge materialization frontier, not its
+whole population. That boundary can acquire content while remaining ineligible
+as a visible source anchor.
+
 Each transcript exposes `interaction`, the framework-free source-free owner of
 explicit disclosure choices, generation fences, numeric window measurements and
 the native/row identity anchor. Cooling keeps these small values; `stop()`
