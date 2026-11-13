@@ -463,7 +463,7 @@ test("native finite read deadline remains active with an owner signal", async ()
   }
 });
 
-test("failed candidate status settles before readiness and never admits later inventory reads", async () => {
+test("failed candidate status settles before readiness without blocking independent input inventories", async () => {
   const record = await recording("status", false, true);
   try {
     await record.reached;
@@ -475,8 +475,12 @@ test("failed candidate status settles before readiness and never admits later in
       true,
       "Readiness overtook the unsettled candidate read",
     );
-    assertEquals(record.paths.includes("/permission"), false);
-    assertEquals(record.paths.includes("/question"), false);
+    // Decision 6: unavailable work evidence does not invalidate input evidence.
+    assertEquals(
+      record.paths.filter((path) => path === "/permission").length,
+      1,
+    );
+    assertEquals(record.paths.filter((path) => path === "/question").length, 1);
     assertEquals(record.streamAborts(), 0);
     assertEquals(record.published, [
       "connecting",

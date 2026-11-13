@@ -8,7 +8,7 @@ export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
   >
-  & { activity?: number };
+  & { activity?: number; terminal?: number };
 export type SessionFacts = Pick<
   NativeSession,
   | "id"
@@ -19,6 +19,7 @@ export type SessionFacts = Pick<
   | "time"
   | "outcome"
   | "activity"
+  | "terminal"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -27,6 +28,22 @@ export function millis(value: unknown): number {
     : typeof value === "string"
     ? Date.parse(value)
     : 0;
+}
+/** Durable execution and shell endpoints are evidence, never work ownership. */
+export function terminalEvidence(
+  idle: unknown,
+  outcome: unknown,
+  shell?: number,
+): number | undefined {
+  const end = ["succeeded", "failed", "interrupted"].includes(String(outcome))
+    ? millis(idle)
+    : 0;
+  return Math.max(
+    Number.isFinite(end) && end > 0 ? end : 0,
+    typeof shell === "number" && Number.isFinite(shell) && shell > 0
+      ? shell
+      : 0,
+  ) || undefined;
 }
 export function session(raw: SessionFacts): ContentSession {
   return {
@@ -60,9 +77,7 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     status: "idle",
     activityAuthority: "unknown",
     activity: {
-      terminal: raw.outcome && millis(raw.time.idle) > 0
-        ? millis(raw.time.idle)
-        : undefined,
+      terminal: terminalEvidence(raw.time.idle, raw.outcome, raw.terminal),
     },
     attention: {
       permissions: 0,

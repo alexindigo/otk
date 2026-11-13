@@ -97,9 +97,16 @@ export class V2Shells {
         : event.data.id;
     if (typeof id !== "string") return;
     const shell = this.#running.get(id);
-    if (!shell) return;
+    const sessionID = shell?.sessionID ??
+      (event.type === "session.shell.ended" &&
+          typeof event.data.sessionID === "string"
+        ? event.data.sessionID
+        : undefined);
+    // A session-scoped terminal is positive evidence in its own right. A lost
+    // start (including bootstrap/reconnect) must not discard that endpoint.
+    if (!sessionID || sessionID === "global") return;
     this.#running.delete(id);
-    return { sessionID: shell.sessionID, ended: event.created };
+    return { sessionID, ended: event.created };
   }
   /** Discover every asking session's shell before mutating; never stop another session's work. */
   async interrupt(
