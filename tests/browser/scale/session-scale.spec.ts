@@ -26,6 +26,7 @@ interface Observation {
 interface Call {
   t: string;
   method: string;
+  ref?: { window: string };
   params?: { sessionID?: string; before?: string };
 }
 const viewport = ".otk-project-session-tree",
@@ -431,7 +432,8 @@ test(
       await expect(page.locator(".otk-project-sessions")).toHaveCount(0);
       await light(page, `${project} .otk-status-light[data-state=blocked]`);
       await page.locator(`${project} .otk-project-open`).click();
-      await expect(page).toHaveURL(new RegExp(`/${working.id}$`));
+      // Decision 7: blocked attention precedes the exact remembered working session.
+      await expect(page).toHaveURL(new RegExp(`/${blocked.id}$`));
       for (
         const [id, status] of [[finished.id, "finished"], [
           working.id,
@@ -527,7 +529,15 @@ test(
           f.method === "permission.list" &&
           attention.has(f.params?.sessionID ?? "")
         );
-      expect(attentionReads).toHaveLength(2);
+      // Decision 7 opens blocked after reload, demanding its dock in the new window.
+      expect(attentionReads.map((frame) => frame.params!.sessionID)).toEqual([
+        finished.id,
+        blocked.id,
+        blocked.id,
+      ]);
+      const attentionWindows = attentionReads.map((frame) => frame.ref!.window);
+      expect(attentionWindows[0]).toBe(attentionWindows[1]);
+      expect(attentionWindows[2]).not.toBe(attentionWindows[0]);
       observations.attentionReads = attentionReads;
       let lastHello = -1;
       frames.forEach((e, index) => {

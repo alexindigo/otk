@@ -206,12 +206,16 @@ test("V1 native status owns work; disconnect and candidate absence cannot refres
     time: { created: 1, updated: 2 },
   };
   let stream!: ReadableStreamDefaultController<Uint8Array>, boots = 0;
+  const inventoryReads: string[] = [];
   let holdHealth = false;
   const release = Promise.withResolvers<void>();
   const server = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const path = new URL(request.url).pathname;
+      if (["/session/status", "/permission", "/question"].includes(path)) {
+        inventoryReads.push(path);
+      }
       if (path === "/global/health") {
         if (holdHealth) await release.promise;
         return Response.json({ healthy: true, version: "1.19.3" });
@@ -275,6 +279,15 @@ test("V1 native status owns work; disconnect and candidate absence cannot refres
     });
     await waitFor(() => boots, (n) => n === 1);
     assertEquals(lamp(), "none");
+    assertEquals(
+      owner.session(index.getMetadata(id)!, 0).state,
+      "finishedUnseen",
+    );
+    assertEquals(
+      inventoryReads,
+      [],
+      "Durable terminal history is not live directory demand",
+    );
     emit("session.status", { sessionID: raw.id, status: { type: "busy" } });
     await waitFor(lamp, (state) => state === "working");
     emit("message.updated", {

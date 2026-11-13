@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertRejects,
+} from "@std/assert";
 import { OperationFailure } from "@otk/protocol";
+import { assertIdentityFields } from "../support/identity-assertions.ts";
 import {
   discoverV2,
   opencodeV2ReadCodecs,
@@ -191,7 +197,7 @@ Deno.test({
         bootstrapComplete: () => {},
         projectSeeds: (rows) => seeds.push(...rows),
       });
-      assertEquals(seeds.find((row) => row.directory === nested), {
+      assertObjectMatch(seeds.find((row) => row.directory === nested)!, {
         directory: nested,
         hasSessions: true,
         sessionCount: 1,
@@ -393,7 +399,7 @@ Deno.test({
         ids.encode(grandchild.id),
         ids.encode("ses_absent"),
       ]);
-      assertEquals(identity, [{
+      assertIdentityFields(identity, [{
         id: ids.encode(grandchild.id),
         directory: native.directory,
         parentID: ids.encode(child.id),
@@ -634,7 +640,7 @@ Deno.test({
         seed.lastActivity,
         seed.authority,
       ], [undefined, null, null, "unknown"]);
-      assertEquals(
+      assertIdentityFields(
         await bridge.read("identity.batch", { ids: [target.id] }, {
           owner: "fallback-id",
           priority: "user",

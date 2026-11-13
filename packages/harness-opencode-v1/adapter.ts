@@ -1354,7 +1354,6 @@ export class OpencodeV1Adapter implements Harness {
     // Only positive terminal history is startup demand. It borrows the existing
     // source-proven worker connection and credited, bounded read channel.
     let after = "";
-    const terminalDirectories = new Set<string>();
     const terminalParents = new Set<string>();
     for (;;) {
       if (!this.#current(controller)) return;
@@ -1382,12 +1381,14 @@ export class OpencodeV1Adapter implements Harness {
           (!previous || previous.directory !== row.directory ||
             previous.timeCreated !== row.timeCreated)
         ) return;
-        terminalDirectories.add(row.directory);
         if (row.parentID) terminalParents.add(row.parentID);
-        this.#terminalCandidates.set(
+        // Source-proven durable completions are terminal evidence themselves.
+        // They do not demand a live native instance in every historical directory.
+        // Fresh work/input inventories and subscribed events remain independent.
+        this.#terminals.set(
           row.id,
           Math.max(
-            this.#terminalCandidates.get(row.id) ?? 0,
+            this.#terminals.get(row.id) ?? 0,
             row.activity?.terminal ?? 0,
           ),
         );
@@ -1410,7 +1411,7 @@ export class OpencodeV1Adapter implements Harness {
       this.cfg.digest.batch,
       controller.signal,
     );
-    const directories = new Set<string>(terminalDirectories);
+    const directories = new Set<string>();
     if (hints) await each(hints, (directory) => directories.add(directory));
     else {await each(this.#index.snapshotEntries(), (entry) => {
         const a = entry.attention;

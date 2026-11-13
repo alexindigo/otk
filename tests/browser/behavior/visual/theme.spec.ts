@@ -251,6 +251,8 @@ test(
     await page.reload();
     await painted(page, "otk-light", "#f4eee3");
     await expect(page.locator(".otk-code .otk-token").first()).toBeAttached();
+    // Decision 18: reload restores collapsed defaults; reopen as a user would.
+    await expandTool(page, "[data-tool=edit]");
     expect((await paint()).code).toEqual(light.code);
     await openTheme(page);
     await choose(page, "system");

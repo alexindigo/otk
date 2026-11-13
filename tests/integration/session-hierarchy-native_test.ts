@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
+import { assertIdentityFields } from "../support/identity-assertions.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { test } from "../support/resources.ts";
 import { nativeKind, nativeVersion } from "../support/native.ts";
@@ -55,7 +56,7 @@ test(`native ${nativeVersion}: moved children retain their family, local anchor 
     priority: "user" as const,
   };
   try {
-    assertEquals(
+    assertIdentityFields(
       await bridge.read("identity.batch", { ids: [childID] }, options),
       [
         { id: childID, directory, parentID: parent.id },

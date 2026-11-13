@@ -158,13 +158,11 @@ export class SessionIndex {
             delta.summary.stale === undefined
           ? {}
           : { stale: delta.summary.stale ?? false }),
-        ...(entry.digest.error === undefined
-          ? {}
-          : { error: delta.summary.error }),
         revision: delta.revision,
         turns,
       },
     };
+    if (delta.summary.error === undefined) delete next.digest.error;
     if (delta.helper === null) delete next.digest.helper;
     else if (delta.helper) next.digest.helper = structuredClone(delta.helper);
     if (delta.deleted) next.deleted = structuredClone(delta.deleted);

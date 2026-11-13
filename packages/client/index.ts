@@ -385,13 +385,11 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
                     op.summary.stale === undefined
                   ? {}
                   : { stale: op.summary.stale ?? false }),
-                ...(entry.digest.error === undefined
-                  ? {}
-                  : { error: op.summary.error }),
                 revision: op.revision,
                 turns,
               },
             };
+            if (op.summary.error === undefined) delete next.digest.error;
             if (op.helper === null) delete next.digest.helper;
             else if (op.helper) next.digest.helper = structuredClone(op.helper);
             if (op.deleted) next.deleted = structuredClone(op.deleted);
