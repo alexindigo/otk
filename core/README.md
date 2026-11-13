@@ -85,6 +85,12 @@ upgrade instructions.
 
 ## Public discovery
 
+The existing plain and tracked `/api/session` responses also carry `defaults`,
+an allowlisted `{ defaultPort }` projection from the shipped
+`defaults/otk.toml`. It never projects resolved operator/auth configuration.
+Listener overrides do not change the advertised default; discovery's exact
+response and CORS stay unchanged.
+
 `GET /api/discovery` is reflectively discovered and returns only
 `{ product: "otk", protocol, version, originAllowed, signIn }`. Versions come
 from the protocol owner. `originAllowed` evaluates the request's Origin through

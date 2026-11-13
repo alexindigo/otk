@@ -20,6 +20,7 @@ import { Rpc } from "./rpc.ts";
 import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
 import { HttpRequests } from "./http-requests.ts";
 import { RequestReleased } from "./failures.ts";
+import { type PublicDefaults, publicDefaultsFrom } from "./public-defaults.ts";
 
 export type ConnectionState =
   | "connecting"
@@ -29,6 +30,7 @@ export type ConnectionState =
   | "setup required"
   | "protocol mismatch";
 export interface ConnectionSink {
+  defaults?(value: PublicDefaults): void;
   status(state: ConnectionState, error?: string, authType?: string): void;
   frame(frame: ServerFrame): boolean | void;
 }
@@ -210,6 +212,8 @@ export class SidecarConnection {
         owner: "connection",
       }).result;
       if (!current()) return;
+      const defaults = publicDefaultsFrom(auth.defaults);
+      if (defaults) this.sink.defaults?.(defaults);
       this.#policy = clientRequestPolicyFrom(auth.requests.policy);
       this.http.policy(this.#policy);
       if (auth.setupRequired || !auth.authenticated) {

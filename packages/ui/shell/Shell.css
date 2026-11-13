@@ -49,9 +49,6 @@
 .otk-corner-right {
   right: var(--corner);
 }
-.otk-main > .otk-settings {
-  padding-top: var(--corner-zone);
-}
 .otk-shell-progress {
   padding: 4px var(--lane-gutter);
 }

@@ -6,6 +6,7 @@ import { AuthState } from "../../../core/auth/state.ts";
 import { BootstrapRequests } from "../../../core/http/bootstrap.ts";
 import { test } from "../../support/resources.ts";
 import { cfg, fixture } from "./support.ts";
+import { PUBLIC_DEFAULTS } from "../../../core/config/public-defaults.ts";
 
 test("bootstrap features acknowledge setup/login/discovery and replay cookies only through their origin-bound result receipt", async () => {
   const settings = cfg();
@@ -150,6 +151,7 @@ test("bootstrap features acknowledge setup/login/discovery and replay cookies on
     assert(body.includes('"authenticated":true'));
     assert(body.includes('"policy":'));
     assert(body.includes('"principal":'));
+    assert(body.includes(`"defaults":${JSON.stringify(PUBLIC_DEFAULTS)}`));
     const logout = ref();
     await bootstrap.admit(
       "bootstrap.logout",

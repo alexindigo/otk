@@ -8,6 +8,7 @@ import {
 } from "@otk/protocol";
 import { apiBase, normalizeBase, request } from "./auth.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
+import type { PublicDefaults } from "./public-defaults.ts";
 import {
   type ConnectionOptions,
   type ConnectionState,
@@ -27,6 +28,7 @@ export interface SidecarState extends SidecarSpec {
   capabilities: CapabilityName[];
   /** Changes on each welcomed transport connection, including reconnects. */
   connectionVersion?: number;
+  defaults?: PublicDefaults;
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(
@@ -119,6 +121,12 @@ export function createSidecars(
     const connection = new SidecarConnection(
       spec.baseUrl,
       {
+        defaults(value) {
+          setState((draft) => {
+            const item = draft.list.find((item) => item.id === spec.id);
+            if (item) item.defaults = value;
+          });
+        },
         status(status, error, authType) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);

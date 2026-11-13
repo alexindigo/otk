@@ -7,6 +7,11 @@ imports and knows no native backend.
 
 ## Composition and API
 
+Settings owns a two-row page frame: the header stays in flow at its top and one
+`ScrollRegion` fills the remaining row. Its padded content is inside that
+scrollport, never a shell-imposed clearance. The serving sidecar's public
+defaults supply the remote-address hint; no port table lives in the UI.
+
 `ScrollRegion` is the shared native scrolling boundary. Its `otk-scroll` class
 owns `overflow: auto`, shrinkable minima and contained overscroll. Pass `axis`
 (`both`, `x` or `y`) to restrict a lane. Containment follows the owned axes:

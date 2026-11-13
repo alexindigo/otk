@@ -13,6 +13,7 @@ export * from "./project-navigation.ts";
 export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";
+export * from "./public-defaults.ts";
 export * from "./connection.ts";
 export * from "./rpc.ts";
 export * from "./state.ts";
