@@ -83,6 +83,24 @@ metadata/tombstones, never recoverable body history in OTK. Downgrade after
 reference migration requires a consistent pre-upgrade state backup; see the root
 upgrade instructions.
 
+## Public discovery
+
+`GET /api/discovery` is reflectively discovered and returns only
+`{ product: "otk", protocol, version, originAllowed, signIn }`. Versions come
+from the protocol owner. `originAllowed` evaluates the request's Origin through
+the same origin predicate as normal API admission; missing and opaque (`null`)
+origins are not allowed. `signIn` describes the server requirement: `setup` for
+unconfigured auth, `login` for password/TOTP, and `none` for auth disabled. It
+does not describe or validate the caller's session.
+
+This metadata is public even to a refused Origin. GET and OPTIONS on this exact
+path alone use wildcard CORS without credentialed mode. Clients fetch it with
+`credentials: "omit"`; cookies and Authorization do not affect its result, and
+it never sets cookies or admits tracked requests. Responses are not cached, so
+setup changes are visible on the next probe. No secrets, paths, configuration
+values or backend identity are exposed. Other routes retain their existing
+origin, auth and cookie behavior. Discovery adds no automatic time limit.
+
 ## Resumable request services
 
 Native registrations use `nativeExecution` and `nativeEffect`: the core fences
