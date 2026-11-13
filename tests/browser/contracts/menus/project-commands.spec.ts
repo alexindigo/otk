@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { paletteCommand } from "../../pages/menus.ts";
 
 test.use({ profile: "contract-menus-content" });
 test("menus.retired-project-command-keeps-mutation-without-late-navigation", {
@@ -10,7 +11,7 @@ test("menus.retired-project-command-keeps-mutation-without-late-navigation", {
   await openSession(state, page, "tstv1-otk");
   await page.locator(".otk-sidebar-commands button").first().click();
   await page.locator("input[name=command-search]").fill("task.rename");
-  await page.locator('[data-command^="task.rename@"]').click();
+  await paletteCommand(page, "task.rename").click();
   const dialog = page.getByRole("dialog", { name: "New task", exact: true });
   await expect(dialog).toBeVisible();
   await dialog.locator("input[name=taskName]").fill("Original project task");
@@ -33,7 +34,7 @@ test("menus.retired-project-command-keeps-mutation-without-late-navigation", {
   // A still-current owner must retain the normal create-and-select behavior.
   await page.locator(".otk-sidebar-commands button").first().click();
   await page.locator("input[name=command-search]").fill("task.rename");
-  await page.locator('[data-command^="task.rename@"]').click();
+  await paletteCommand(page, "task.rename").click();
   await expect(dialog).toBeVisible();
   await dialog.locator("input[name=taskName]").fill("Current project task");
   await dialog.getByRole("button", { name: "Save task", exact: true }).click();

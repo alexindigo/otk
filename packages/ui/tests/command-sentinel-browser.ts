@@ -39,8 +39,18 @@ async function verify(): Promise<void> {
         const name = await result.getAttribute("data-sentinel");
         const names = JSON.parse(await result.textContent());
         if (!names.includes(name)) throw new Error("Missing slash sentinel " + name);
-        await page.locator('[data-command="' + name + '"]').waitFor();
-        console.log("Random registration reached Palette and slash:", name);
+        const command = page.locator('[data-command-name="' + name + '"]');
+        await command.waitFor();
+        if (await command.getAttribute("data-command") === name) {
+          throw new Error("Sentinel must exercise distinct registry name and opaque ID");
+        }
+        await page.getByRole("button", {name:"Sentinel menu", exact:true}).click();
+        const item = page.locator(':popover-open [data-context-command-name="' + name + '"]');
+        await item.click();
+        if (await page.locator("body").getAttribute("data-executed") !== name) {
+          throw new Error("Named menu item did not invoke its registry owner");
+        }
+        console.log("Random registration reached Palette, slash and context menu:", name);
       } finally { await browser.close(); }
     `;
     const result = await new Deno.Command("node", {

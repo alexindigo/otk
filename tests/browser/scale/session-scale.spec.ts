@@ -3,6 +3,7 @@ import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { scaleWire } from "../fixtures/scale-wire.ts";
 import { sendPrompt } from "../pages/composer.ts";
+import { contextCommand } from "../pages/menus.ts";
 import type { Page } from "@playwright/test";
 
 interface Session {
@@ -200,6 +201,7 @@ test(
           offset: e.getBoundingClientRect().top - r.top,
         };
       });
+    let failure: { cause: unknown } | undefined;
     try {
       await page.goto(`${state.url}/#/local/${selected.id}`);
       await expect.poll(() => page.evaluate<number>("scale.paints.length"), {
@@ -249,7 +251,7 @@ test(
       const menu = page.locator(
         ':popover-open [role="menu"][aria-label="Context menu"]',
       );
-      await menu.locator('[data-context-command^="task.rename:"]').click();
+      await contextCommand(menu, "task.rename").click();
       await page.locator("input[name=taskName]").fill("Scale saved task");
       await page.locator('dialog button[type="submit"]').click();
       await expect(page.locator(".otk-project-tabs")).toContainText(
@@ -586,7 +588,7 @@ test(
       await page.locator(`[data-session="${last.id}"]`).click({
         button: "right",
       });
-      await menu.locator('[data-context-command^="session.rename"]').click();
+      await contextCommand(menu, "session.rename").click();
       await page.getByRole("textbox", { name: "Rename session", exact: true })
         .fill(last.title + " renamed");
       await page.keyboard.press("Enter");
@@ -631,7 +633,10 @@ test(
       ).toEqual([sessions[4].id, sessions[5].id, selected.id]);
       await expect(page.locator(`[data-session="${selected.id}"]`))
         .toHaveAttribute("aria-current", "page");
-    } finally {
+    } catch (cause) {
+      failure = { cause };
+    }
+    try {
       await info.attach("population-control-measurements", {
         body: JSON.stringify({
           initial,
@@ -641,6 +646,11 @@ test(
         }),
         contentType: "application/json",
       });
+    } catch (cause) {
+      // A timed-out/closed page must not replace the original assertion.
+      if (!failure) throw cause;
+      console.error("Could not capture scale measurements:", cause);
     }
+    if (failure) throw failure.cause;
   },
 );
