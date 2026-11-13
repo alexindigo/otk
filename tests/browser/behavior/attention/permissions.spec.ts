@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { file, prompt, reply, seed, tool } from "../../pages/attention.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
@@ -71,6 +72,7 @@ test("attention.permission-once-completes-native-output-and-idle", {
   expect(Math.abs(bounds.dock - bounds.surface)).toBeLessThan(.5);
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
+  await openWorkLogs(page);
   await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
     .toContainText("otk");
   await reply(page, session.id, "Permission completed");
@@ -260,6 +262,7 @@ test(
     await state.queue(["Covered command completed"]);
     await prompt(page, "Use the approved echo pattern");
     await reply(page, session.id, "Covered command completed");
+    await openWorkLogs(page);
     await expect(
       page.locator("[data-tool-status=completed]").filter({
         hasText: "echo covered",

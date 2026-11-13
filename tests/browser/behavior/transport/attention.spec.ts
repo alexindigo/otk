@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.describe("bootstrap", () => {
   test.use({ profile: "transport-bootstrap" });
@@ -94,6 +95,7 @@ test("transport.initial-native-permission", {
       page.locator(".otk-prompt button[type=submit],.otk-permission-dock"),
     ).toHaveCount(0);
     frames.release();
+    await openWorkLogs(page);
     await expect(page.locator(".otk-messages")).toContainText(
       "git status --short",
     );
