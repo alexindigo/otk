@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { expectPublicSession } from "../../pages/auth.ts";
 
 test(
   "transport.setup-password-cookie",
@@ -43,8 +44,11 @@ test(
     await expect(page.locator(".otk-corner-right")).toBeEnabled();
     await expect(page.locator(".otk-server-status[data-connection=local]"))
       .toHaveAttribute("title", /: connected;/);
-    expect(await (await context.request.get(open.url + "/api/session")).json())
-      .toEqual({ authenticated: true, setupRequired: false, authType: "none" });
+    await expectPublicSession(context.request, open.url, {
+      authenticated: true,
+      setupRequired: false,
+      authType: "none",
+    }, ["geometry-password"]);
   },
 );
 

@@ -5,6 +5,7 @@ import type { TaskRecord } from "@otk/protocol";
 /** Task control handlers outlive any particular menu or button presentation. */
 export function createTaskControls(ports: {
   commands: Pick<CommandHub, "run">;
+  signal: AbortSignal;
   actions(): TaskActions;
   model(): ClientTabs;
   tasks(): readonly TaskRecord[];
@@ -13,7 +14,9 @@ export function createTaskControls(ports: {
   return {
     pin: (id: string) => ports.model().pin(id),
     rename(task?: TaskRecord) {
-      const actions = ports.actions(), model = ports.model();
+      const actions = ports.actions(),
+        model = ports.model(),
+        signal = ports.signal;
       return ports.commands.run("dialog.open", {
         id: "task-name",
         input: {
@@ -23,7 +26,9 @@ export function createTaskControls(ports: {
             else {
               const created = await actions.create(name);
               if (
-                ports.model() === model && await model.taskReady(created.id) &&
+                !signal.aborted && ports.model() === model &&
+                await model.taskReady(created.id, signal) &&
+                !signal.aborted &&
                 ports.model() === model && ports.onEmpty()
               ) {
                 model.select({ kind: "task", id: created.id });

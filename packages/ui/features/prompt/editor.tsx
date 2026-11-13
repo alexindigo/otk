@@ -28,11 +28,17 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         category: "Prompt",
         context: { kind: "composer", order: 20 },
         name: "editor",
+        arguments: {
+          type: "object",
+          optional: true,
+          rest: "text",
+          properties: { text: { type: "string", optional: true } },
+        },
         enabled: () => !ctx.props.suspended,
-        run: () => {
+        run: (_context, input?: { text?: string }) => {
           ctx.change((current) => ({
             ...current,
-            editor: { text: current.input },
+            editor: { text: input?.text ?? current.input },
           }));
         },
       });
@@ -104,7 +110,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
             class="otk-icon-button"
             aria-label="Edit prompt"
             title="Edit prompt"
-            onClick={() => void open().catch(ctx.fail)}
+            onClick={() => void open(undefined).catch(ctx.fail)}
           >
             <PencilIcon />
           </button>
