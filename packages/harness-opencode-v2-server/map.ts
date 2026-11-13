@@ -96,10 +96,19 @@ export function errorText(error: unknown): string {
   return text(e.message) ?? text(e._tag) ?? "Native operation failed";
 }
 export interface MessageContext {
+  terminal?: boolean;
   order: number;
   replyTo?: string;
   agent?: string;
   model?: { providerID: string; id: string; variant?: string };
+}
+/** Native termination evidence is separate from endpoint availability. */
+export function assistantSettled(
+  raw: { time: { completed?: unknown }; error?: unknown; finish?: unknown },
+): boolean {
+  return raw.time.completed != null || !!raw.error ||
+    typeof raw.finish === "string" && !!raw.finish &&
+      !["tool-calls", "unknown"].includes(raw.finish);
 }
 /** A single snapshot mapper, also used for event terminal checkpoints. */
 export function mapMessage(
@@ -157,7 +166,7 @@ export function mapMessage(
           };
       }),
     ];
-    if (raw.time.completed) {
+    if (raw.time.completed != null) {
       parts.push({
         kind: "step",
         id: `${raw.id}:finish`,
@@ -168,9 +177,21 @@ export function mapMessage(
           : {}),
       });
     }
+    const outputs = raw.content.flatMap((p) =>
+      "time" in p && p.time?.completed !== undefined
+        ? [millis(p.time.completed)]
+        : []
+    );
+    const lastRecordedOutput = outputs.length
+      ? outputs.reduce((latest, time) => Math.max(latest, time), 0)
+      : undefined;
     return {
       ...common,
       role: "assistant",
+      ...(raw.time.completed === undefined &&
+          (context.terminal === true || assistantSettled(raw))
+        ? { terminal: true }
+        : {}),
       agent: raw.agent,
       model: { provider: raw.model.providerID, model: raw.model.id },
       replyTo: context.replyTo,
@@ -185,11 +206,11 @@ export function mapMessage(
         : undefined,
       time: {
         ...common.time,
-        ...(raw.time.completed
+        ...(raw.time.completed != null
           ? { completed: millis(raw.time.completed) }
           : {}),
         lastOutput: millis(
-          raw.time.streamed ?? raw.time.completed ?? raw.time.created,
+          raw.time.streamed ?? lastRecordedOutput ?? raw.time.created,
         ),
       },
       parts,

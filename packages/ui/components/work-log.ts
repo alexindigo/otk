@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Message, Part } from "@otk/protocol";
+import type { Message, Part, TurnTiming } from "@otk/protocol";
 import { duration } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
@@ -99,3 +99,13 @@ export function partGroups(
   return groups;
 }
 export const elapsed = (start: number, end: number) => duration(end - start);
+export const workingTime = (timing: TurnTiming | undefined) =>
+  timing?.state === "known" || timing?.state === "active"
+    ? `Worked for ${duration(timing.workingMs)}`
+    : timing?.state === "unknown"
+    ? "Time unknown"
+    : undefined;
+export const timingExplanation = (timing: TurnTiming | undefined) =>
+  timing?.state === "unknown"
+    ? timing.explanation ?? "The recorded timing evidence is incomplete."
+    : undefined;

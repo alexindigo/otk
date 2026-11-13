@@ -125,6 +125,13 @@ License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 
 ## Digest services
 
+`TurnTimingAccumulator` is the neutral timing owner. Adapters supply provenance,
+native start/end and terminal facts, busy intervals and recorded waits. It
+computes the union of busy intervals minus waits, never the span between calls
+or a next-prompt/observation clock. Terminal records without reliable endpoints
+produce an unknown result, not active work. Turn digests carry that result;
+clients and views do not reconstruct it from loaded transcript pages.
+
 `ProviderReadPort` extends the same worker/scheduler lifetime with transient,
 feature-contributed reads. `identity.batch` contributes its input/result/chunk
 types and `identityReadCodec`; application composition selects the matching

@@ -2,6 +2,7 @@
 import {
   type DiagnosticSink,
   errorMessage,
+  isAssistantTerminal,
   isAttentionOp,
   isCancellation,
   normalizeError,
@@ -29,6 +30,7 @@ import { BootstrapDb } from "./db.ts";
 import { History } from "./history.ts";
 import { consumeEvents } from "./events.ts";
 import {
+  assistantSettled,
   mapDiffs,
   mapIndex,
   mapMessage,
@@ -284,7 +286,7 @@ export class OpencodeV1Adapter implements Harness {
           [],
           messageOutput(snapshot.parts).lastOutput ?? undefined,
         );
-        if (snapshot.info.time.completed !== undefined) {
+        if (isAssistantTerminal(message)) {
           this.buffers.removeMessage(snapshot.info.id, session);
         }
         this.#sink.content(session, {
@@ -304,7 +306,7 @@ export class OpencodeV1Adapter implements Harness {
           const part = mapPart(raw);
           if (
             (part.kind === "text" || part.kind === "reasoning") && !terminal &&
-            snapshot.info.time.completed === undefined &&
+            !isAssistantTerminal(message) &&
             raw.time?.end === undefined
           ) {
             part.stream = this.buffers.replacement(
@@ -321,7 +323,7 @@ export class OpencodeV1Adapter implements Harness {
             this.#recovery.part(snapshot.info.id, raw.id, session);
           }
         }
-        if (!terminal && snapshot.info.time.completed !== undefined) {
+        if (!terminal && isAssistantTerminal(message)) {
           this.#recovery.message(snapshot.info.id, session);
         }
       },
@@ -1690,6 +1692,8 @@ export class OpencodeV1Adapter implements Harness {
           "session.updated",
           "message.updated",
           "message.removed",
+          "message.part.updated",
+          "message.part.removed",
           "session.status",
           "session.idle",
           "session.error",
@@ -1726,6 +1730,10 @@ export class OpencodeV1Adapter implements Harness {
             ? { messages: [(p.info as Info).id] }
             : type === "message.removed"
             ? { messages: [String(p.messageID)] }
+            : type.startsWith("message.part.")
+            ? {
+              messages: [String((p.part as RawPart)?.messageID ?? p.messageID)],
+            }
             : {}),
         }]);
       }
@@ -2007,22 +2015,25 @@ export class OpencodeV1Adapter implements Harness {
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
-      info.time.completed === undefined
+      !assistantSettled(info)
     ) this.buffers.beginReply(sessionID, info.id);
     const completedOutput =
       type === "message.updated" && info?.role === "assistant" &&
-        info.time.completed !== undefined
+        assistantSettled(info)
         ? this.buffers.outputEnd(info.id)
         : undefined;
     if (
       type === "message.updated" && info?.role === "assistant" &&
-      info.time.completed !== undefined
+      assistantSettled(info)
     ) {
       this.buffers.complete(info.id, (id, op) => {
         sink.content(id, op);
       });
     }
-    if (type === "message.updated" && info?.time.completed !== undefined) {
+    if (
+      type === "message.updated" && info?.role === "assistant" &&
+      assistantSettled(info)
+    ) {
       this.#recovery.checkpoint(
         sessionID,
         info.id,
@@ -2165,7 +2176,7 @@ export class OpencodeV1Adapter implements Harness {
           content({ op: "message.upsert", message });
           if (
             message.role === "assistant" &&
-            message.time.completed !== undefined &&
+            isAssistantTerminal(message) &&
             completedOutput === undefined &&
             !this.#recovery.scoped(sessionID) &&
             !this.#recovery.snapshot(sessionID).some((p) =>

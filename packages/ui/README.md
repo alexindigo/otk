@@ -225,28 +225,28 @@ client resource owns this state. It does not alter supervision lights, disable
 controls or add a loading overlay.
 
 Reply footers show model-call count, charged turn tokens and backend-reported
-cost after elapsed time. Work-log headers and footers bind one complete
-usage-owner turn range, with the grouped reply projection shared when usage is
-unavailable. The shared Popover's hover/focus preview reveals an ordered
-per-call table: existing tool labels or answered, full prompt Context, five
-token categories, reported cost and time. New input is the uncached part; a
-footnote explains New input + Cache read + Cache write = Context. The Total row
-sums calls' Context and retains category tokens and catalog-priced costs;
-unknown category prices show token counts only. Category pricing is provided by
-the framework-free reply usage owner, never reconstructed in the view. Display's
-persisted Show cost toggle defaults on; turning it off hides all footer/detail
-and context-meter cost figures while retaining tokens. Popover's generic wide
-size accommodates comparison tables; it continues to own native anchoring,
-available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
-previews have no native title tooltip; their accessible trigger label and linked
-detail description are supplied by that same owner. Click-only controls retain
-their name tooltips. ShellPorts exposes the same framework-free usage owner to
-registered panel adapters. The Sessions adapter reads keyed index digests for
-the selected project's sessions; rows present total.cost as quiet trailing
-metadata using the shared cost formatter, including known zero. Show cost also
-hides these amounts and their accessible labels. Footers, rows and meter never
-sum transcript pages; unavailable metadata stays unknown while content remains
-usable.
+cost after working time. Work-log headers, footers and opened detail bind the
+adapter's one shared timing result. There is no loaded-page timing fallback;
+missing evidence says Time unknown, with the adapter's explanation on hover. The
+shared Popover's hover/focus preview reveals an ordered per-call table: existing
+tool labels or answered, full prompt Context, five token categories, reported
+cost and time. New input is the uncached part; a footnote explains New input +
+Cache read + Cache write = Context. The Total row sums calls' Context and
+retains category tokens and catalog-priced costs; unknown category prices show
+token counts only. Category pricing is provided by the framework-free reply
+usage owner, never reconstructed in the view. Display's persisted Show cost
+toggle defaults on; turning it off hides all footer/detail and context-meter
+cost figures while retaining tokens. Popover's generic wide size accommodates
+comparison tables; it continues to own native anchoring, available-side viewport
+bounds, dismissal and keyboard focus return. Hover/focus previews have no native
+title tooltip; their accessible trigger label and linked detail description are
+supplied by that same owner. Click-only controls retain their name tooltips.
+ShellPorts exposes the same framework-free usage owner to registered panel
+adapters. The Sessions adapter reads keyed index digests for the selected
+project's sessions; rows present total.cost as quiet trailing metadata using the
+shared cost formatter, including known zero. Show cost also hides these amounts
+and their accessible labels. Footers, rows and meter never sum transcript pages;
+unavailable metadata stays unknown while content remains usable.
 
 `TurnUsage` receives a cheap nullable turn summary and injected
 detail/open/close ports. Its preview keeps one Model calls scroll/focus region

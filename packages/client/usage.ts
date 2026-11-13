@@ -4,6 +4,7 @@ import type {
   ModelCatalog,
   ReportedTokens,
   SessionUsage,
+  TurnTiming,
   TurnUsageDetail,
   UsageMessage,
   UsageTime,
@@ -25,11 +26,13 @@ export interface PricedUsage {
   categories: UsageCategory[];
 }
 export interface CallUsage extends PricedUsage {
+  timing?: TurnTiming;
   id: string;
   activity: string;
   time?: UsageTime;
 }
 export interface TurnUsage extends PricedUsage {
+  timing?: TurnTiming;
   calls: CallUsage[];
   /** Largest individual prompt, distinct from the sum of prompts or last call. */
   contextPeak: number | null;
@@ -213,6 +216,7 @@ export function createTurnPricing(): (
           ).join(", ")
           : "answered",
         time: source.time,
+        ...(source.timing ? { timing: source.timing } : {}),
       };
       rows.set(source.id, { source, value });
       return value;
@@ -241,6 +245,7 @@ export function createTurnPricing(): (
       cost: detail.summary.cost,
       contextPeak: detail.summary.contextPeak,
       time: detail.summary.time,
+      ...(detail.summary.timing ? { timing: detail.summary.timing } : {}),
     };
   };
 }

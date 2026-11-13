@@ -1083,7 +1083,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     if (
       changedID && event.data.sessionID !== "global" &&
-      /^session\.(step\.|usage\.updated|compaction\.|inbox\.delivered|revert\.)/
+      /^session\.(step\.|tool\.(called|success|failed)$|usage\.updated|compaction\.|inbox\.delivered|revert\.)/
         .test(event.type)
     ) {
       this.digest?.observe(generation, [{

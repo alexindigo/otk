@@ -29,6 +29,7 @@ test("digest storage is separate, private, metadata-only and independently durab
   );
   assertEquals(Deno.statSync(join(root, "digest.db")).mode! & 0o777, 0o600);
   const session = {
+    timing_meta: null,
     result_meta: null,
     last_result_meta: null,
     last_call_id: null,

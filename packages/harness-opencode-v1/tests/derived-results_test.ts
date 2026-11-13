@@ -171,6 +171,54 @@ async function fixture() {
   };
 }
 
+Deno.test("V1 covered turn and opened detail share working time, excluding resumed pauses", async () => {
+  const f = await fixture();
+  try {
+    const later = 1000 + 10 * 86400000;
+    f.rows.push({
+      info: {
+        id: "u",
+        sessionID: "ses_one",
+        role: "user",
+        time: { created: 1 },
+      },
+      parts: [],
+    });
+    for (const [n, start] of [1000, later].entries()) {
+      f.seed(`a${n}`, start, {
+        agent: "build",
+        providerID: "p",
+        modelID: "m",
+        time: { created: start, completed: start + 500 },
+      });
+    }
+    await f.scan();
+    const timing = derivedValue(f.turns.u)?.timing;
+    assertEquals(timing, {
+      state: "known",
+      start: 1000,
+      end: later + 500,
+      workingMs: 1000,
+    });
+    const detail = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(detail.summary.timing, timing);
+    f.rows[1].info.time = { created: 1000 };
+    f.rows[1].info.finish = "tool-calls";
+    f.sink.invalidate(id, 1);
+    await f.scan();
+    assertEquals(derivedValue(f.turns.u)?.timing, {
+      state: "unknown",
+      start: 1000,
+      terminal: true,
+      reason: "missing-end",
+    });
+    const lost = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(lost.calls[0].timing?.state, "unknown");
+  } finally {
+    f.close();
+  }
+});
+
 Deno.test("V1 helper count, current tool and time survive refresh and source outage together", async () => {
   const f = await fixture();
   const step = (cursor?: string) =>

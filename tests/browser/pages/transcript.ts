@@ -21,7 +21,7 @@ export async function nativeIdle(state: TestState, id: string) {
 /** Native idle can precede the final transcript footer layout. */
 export async function hoverCompletedUsage(page: Page) {
   await expect(page.locator(".otk-turn-time").last()).toHaveText(
-    /^\d+(?:\.\d+)?s$/,
+    /^Worked for \d+(?:\.\d+)?s$/,
   );
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
   await page.evaluate(() =>

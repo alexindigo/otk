@@ -31,6 +31,7 @@ import {
   type SessionIdentity,
   sessionListReadCodec,
   type TranscriptMetadata,
+  TurnTimingAccumulator,
 } from "@otk/harness";
 import {
   type V2Client,
@@ -1412,15 +1413,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         remove.push(turn);
         continue;
       }
-      const terminal = this.storage.sql.prepare(
-        "SELECT 1 FROM opcv2_transcript_header t WHERE t.session_id=? AND t.generation=? AND t.type='idle' AND t.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?) AND NOT EXISTS(SELECT 1 FROM opcv2_transcript_header u WHERE u.session_id=t.session_id AND u.type='user' AND u.seq<t.seq AND u.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?)) LIMIT 1",
-      ).get(
+      const terminal = this.#turnTerminal(
         job.sessionID,
+        turn,
         admitted.generation,
-        job.sessionID,
-        turn,
-        job.sessionID,
-        turn,
       );
       summaries[turn] = knownDerived(
         value,
@@ -1513,6 +1509,16 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     });
     return finished ? undefined : "continue";
   }
+  #turnTerminal(
+    id: string,
+    turn: string,
+    generation = this.#scan(id)?.generation,
+  ): boolean {
+    if (generation === undefined) return false;
+    return !!this.storage.sql.prepare(
+      "SELECT 1 FROM opcv2_transcript_header t WHERE t.session_id=? AND t.generation=? AND t.type='idle' AND t.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?) AND NOT EXISTS(SELECT 1 FROM opcv2_transcript_header u WHERE u.session_id=t.session_id AND u.type='user' AND u.seq<t.seq AND u.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?)) LIMIT 1",
+    ).get(id, generation, id, turn, id, turn);
+  }
   #summary(id: string, turn?: string): UsageSummary {
     const paths = [
       "tokens.input",
@@ -1526,10 +1532,24 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       `sum(json_extract(scalar,'$.usage.${path}')) AS v${i}`
     ).join(",");
     const row = this.storage.sql.prepare(
-      `SELECT count(*) AS calls,${numeric},min(json_extract(scalar,'$.usage.time.start')) AS start,CASE WHEN sum(json_extract(scalar,'$.usage.completed')=0)>0 THEN NULL ELSE max(json_extract(scalar,'$.usage.time.end')) END AS end,max(json_extract(scalar,'$.usage.tokens.input')+json_extract(scalar,'$.usage.tokens.cache.read')+json_extract(scalar,'$.usage.tokens.cache.write')) AS peak FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ${
+      `SELECT count(*) AS calls,${numeric},min(json_extract(scalar,'$.usage.time.start')) AS start,CASE WHEN sum(json_extract(scalar,'$.usage.completed')=0 OR json_extract(scalar,'$.usage.time.end') IS NULL)>0 THEN NULL ELSE max(json_extract(scalar,'$.usage.time.end')) END AS end,max(json_extract(scalar,'$.usage.tokens.input')+json_extract(scalar,'$.usage.tokens.cache.read')+json_extract(scalar,'$.usage.tokens.cache.write')) AS peak FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ${
         turn === undefined ? "" : "AND turn_id=?"
       }`,
     ).get(...(turn === undefined ? [id] : [id, turn]))!;
+    const timing = new TurnTimingAccumulator();
+    const settled = turn !== undefined && this.#turnTerminal(id, turn);
+    if (turn !== undefined) {
+      for (
+        const value of this.storage.sql.prepare(
+          "SELECT json_extract(scalar,'$.timing') AS timing FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' AND turn_id=? ORDER BY seq",
+        ).iterate(id, turn)
+      ) {
+        if (value.timing) {
+          const evidence = JSON.parse(String(value.timing));
+          timing.add(settled ? { ...evidence, terminal: true } : evidence);
+        }
+      }
+    }
     return {
       calls: Number(row.calls),
       cost: row.v5 == null ? null : Number(row.v5),
@@ -1543,6 +1563,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         },
       },
       contextPeak: row.peak == null ? null : Number(row.peak),
+      ...(turn === undefined ? {} : { timing: timing.result() }),
       ...(row.start == null ? {} : {
         time: {
           start: Number(row.start),
@@ -1582,8 +1603,20 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     turn?: string,
   ): Promise<UsageLedger> {
     const ledger = new UsageLedger(id, [], "reported");
+    const settled = turn !== undefined && this.#turnTerminal(id, turn);
     for (const row of await this.#stored(id, signal, turn)) {
-      if (row.usage) ledger.upsert(row.usage);
+      if (row.usage) {
+        if (settled && row.timing) {
+          const timing = new TurnTimingAccumulator();
+          timing.add({ ...row.timing, terminal: true });
+          row.usage = {
+            ...row.usage,
+            completed: true,
+            timing: timing.result(),
+          };
+        }
+        ledger.upsert(row.usage);
+      }
     }
     return ledger;
   }
@@ -1612,7 +1645,12 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ledger.tool(row.messageID, row.tool);
       }
     }
-    return ledger.detail(turnID, this.storage.read(id)?.summary.revision ?? 0);
+    const detail = ledger.detail(
+      turnID,
+      this.storage.read(id)?.summary.revision ?? 0,
+    );
+    detail.summary = this.#summary(id, turnID);
+    return detail;
   }
   async transcriptMetadata(
     id: string,

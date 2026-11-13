@@ -430,19 +430,19 @@ native reader and has no polling timer. Shipped progress comes from the existing
 worker's native digest feature v2: bounded set-oriented helper-tool projections,
 scalar private baselines/generations, authoritative stale-row sweep and atomic
 neutral helper publication. API fallback extracts the same scalar fields one
-bounded page at a time. Ordinary usage/header jobs still read zero parts.
-Helpers discovered outside OTK and explicit task references follow the same
-path. Without an injected digest, standalone adapters publish unavailable
-progress immediately rather than privately scan child history. `TaskCall`
-exposes `progress` instead of `currentTool`/`toolCount`; helper-derived time
-never rewrites its native completion clock. `requestHelper(id, changed)` owns
-provider-private hint admission and `invalidateHelper(id)` marks an
-authoritative sweep dirty. The worker composition does not inspect the sink's
-private checkpoint tables. After backfill, SQL helper jobs reconcile only the
-changed message identities, including authoritative tool removals; priority-only
-hints preserve those keys. Lost fine-grained keys fall back to a complete
-bounded generation, and API fallback continues through bounded native collection
-pages.
+bounded page at a time. Ordinary usage/header jobs project only scalar clocks,
+never part bodies. Helpers discovered outside OTK and explicit task references
+follow the same path. Without an injected digest, standalone adapters publish
+unavailable progress immediately rather than privately scan child history.
+`TaskCall` exposes `progress` instead of `currentTool`/`toolCount`;
+helper-derived time never rewrites its native completion clock.
+`requestHelper(id, changed)` owns provider-private hint admission and
+`invalidateHelper(id)` marks an authoritative sweep dirty. The worker
+composition does not inspect the sink's private checkpoint tables. After
+backfill, SQL helper jobs reconcile only the changed message identities,
+including authoritative tool removals; priority-only hints preserve those keys.
+Lost fine-grained keys fall back to a complete bounded generation, and API
+fallback continues through bounded native collection pages.
 
 The standalone sessions consumer and stock-server test are in `tests/reuse/` at
 the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.
@@ -544,14 +544,21 @@ restart discovery or helper backfill.
 
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never
-full message/part JSON. Summary scans do not query parts. Opened usage detail
-batches existing tool labels. Missing/incompatible SQL falls back to the one
-bounded `Messages` reader; unreported usage remains nullable and cannot become a
-fictitious free detailed ledger. Private baselines store allowlisted metadata
-hashes, contribution sums/unknown counts and sweep progress, not message
-content. Provider health and catalog identity samples gate local-file authority;
-failed or partial enumeration does not tombstone anything. Reappearance clears
-the tombstone under the same qualified identity.
+full message/part JSON. Turn timing adds scalar text/reasoning/tool clock
+projections to each admitted header, separating model output from tool
+settlement before the shared accumulator computes working time. Recorded
+question lifetimes are waits. Missing terminal endpoints remain unknown, never
+streaming. A retained retry without a resumed request clock is incomplete
+evidence, not a measured retry pause. Page, live and recovery paths consume the
+same native closure fact even without a completion clock. A covered terminal
+turn closes its calls without filling missing endpoints from a later call.
+Opened usage detail batches existing tool labels. Missing/incompatible SQL falls
+back to the one bounded `Messages` reader; unreported usage remains nullable and
+cannot become a fictitious free detailed ledger. Private baselines store
+allowlisted metadata hashes, contribution sums/unknown counts and sweep
+progress, not message content. Provider health and catalog identity samples gate
+local-file authority; failed or partial enumeration does not tombstone anything.
+Reappearance clears the tombstone under the same qualified identity.
 
 Ownership samples use a bounded current identity lookup, independently of the
 older keyset enumeration. A new session behind that cursor cannot falsely turn

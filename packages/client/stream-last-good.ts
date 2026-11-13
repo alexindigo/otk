@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Block, Inline, Message, Part } from "@otk/protocol";
+import { isAssistantTerminal } from "@otk/protocol";
 
 type TextPart = Extract<Part, { kind: "text" | "reasoning" }>;
 const textPart = (part?: Part): part is TextPart =>
@@ -74,7 +75,7 @@ export function retainStreamMessage(
   if (
     previous?.id !== next.id || previous.sessionID !== next.sessionID ||
     previous.role !== "assistant" || next.role !== "assistant" ||
-    previous.time.completed !== undefined || next.time.completed !== undefined
+    isAssistantTerminal(previous) || isAssistantTerminal(next)
   ) return next;
   const known = new Map(previous.parts.map((part) => [part.id, part]));
   let changed = false;
