@@ -273,6 +273,8 @@ export default function Message(
                     <WorkLog
                       time={time()}
                       identity={group().id}
+                      prefs={props.prefs}
+                      required={group().required}
                       body={() => (
                         <PartsView
                           parts={group().parts}

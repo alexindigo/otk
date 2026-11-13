@@ -108,6 +108,10 @@ test("feature contribution owns default, validation, display metadata and execut
     assertEquals(store.get().thinking, "show");
     await commands.run("prefs.toggle.thinking");
     assertEquals(store.get().thinking, "hide");
+    await commands.run("prefs.toggle.collapseFileChanges");
+    assertEquals(store.get().collapseFileChanges, false);
+    await commands.run("prefs.toggle.collapseFileChanges");
+    assertEquals(store.get().collapseFileChanges, true);
     for (const value of ["split", "unified", "auto"]) {
       await commands.run("prefs.cycle.diffStyle");
       assertEquals(store.get().diffStyle, value);

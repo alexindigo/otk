@@ -14,7 +14,7 @@ export function registerWriteTool(tools: ToolRegistry): void {
       verb: "Write",
       target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
-      expanded: context.prefs?.collapseFileChanges === false,
+      category: "fileChanges",
     }),
   );
 }

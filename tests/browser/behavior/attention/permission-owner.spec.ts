@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.use({ profile: "isolated", timezoneId: "America/Los_Angeles" });
 for (
@@ -190,6 +191,7 @@ for (
       ? "task"
       : "bash";
     if (pendingTool === "bash") {
+      await openWorkLogs(page);
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Awaiting permission",
       );

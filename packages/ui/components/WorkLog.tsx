@@ -6,12 +6,24 @@ import { ownedAction } from "../keyboard/context.tsx";
 import { elapsed, type WorkTime } from "./work-log.ts";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import DividerLabel from "./DividerLabel.tsx";
+import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
-  props: { time: WorkTime; identity?: string; body(): Element },
+  props: {
+    time: WorkTime;
+    identity?: string;
+    prefs?: Preferences;
+    required?: boolean;
+    body(): Element;
+  },
 ): Element {
-  const [expanded, setOpen] = retainedDisclosure("work:" + props.identity);
-  const open = () => expanded() ?? true;
+  const [open, setOpen] = retainedDisclosure(
+    "work:" + props.identity,
+    "work",
+    () => props.prefs ?? {},
+    undefined,
+    () => !!props.required,
+  );
   const toggle = ownedAction("work.toggle", () => setOpen(!open()));
   const label = () =>
     props.time.start !== undefined && props.time.end !== undefined

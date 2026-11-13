@@ -224,7 +224,9 @@ test(
     await expect(page.locator(".otk-message-footer")).toHaveCount(1);
     await expect(
       page.getByRole("list", { name: "Reply segments", exact: true }),
-    ).toHaveAttribute("data-acquired-count", "203");
+      // Step bookkeeping adds a leading and a trailing work group around the
+      // existing 102 text segments and 101 between-text tool groups.
+    ).toHaveAttribute("data-acquired-count", "205");
     expect(await page.locator(".otk-work-log").count()).toBeLessThan(101);
     expect(
       capture.sent.filter(({ frame }) => frame.method === "session.messages")

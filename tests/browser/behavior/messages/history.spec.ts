@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Json } from "../../../support/fixture-control.ts";
 import { readFile } from "node:fs/promises";
 import { wire } from "../../fixtures/wire.ts";
-import { prompt, toolScript } from "../../pages/transcript.ts";
+import { openWorkLogs, prompt, toolScript } from "../../pages/transcript.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 
 test(
@@ -111,6 +111,7 @@ test("messages.revert-files-counted-strip-reload", {
     newString: "after",
   }, "Finished edit.");
   await prompt(page, "Run edit");
+  await openWorkLogs(page);
   await expect(page.locator("[data-tool=edit][data-tool-status=completed]"))
     .toHaveCount(1);
   await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(

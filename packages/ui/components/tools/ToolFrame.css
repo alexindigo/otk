@@ -85,3 +85,6 @@
 .otk-tool-del {
   color: var(--otk-diff-del);
 }
+.otk-tool-line.is-error > .otk-tool-state {
+  color: var(--otk-status-error);
+}

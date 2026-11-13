@@ -2,6 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { viewing } from "../../pages/composer.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 import type { CDPSession, Page } from "@playwright/test";
 
 const source = Array.from(
@@ -132,13 +133,14 @@ for (const cpuRate of [1, 8]) {
       ).toBe(true);
       await openSession(state, page, session.id);
       if (numbered) {
+        await openWorkLogs(page);
         await page.locator(".otk-display-menu > button").click();
         const collapse = page.locator("input[name=collapseFileChanges]");
-        await expect(collapse).toBeChecked();
-        // Shared controls paint the authoritative async preference result;
-        // Playwright's immediate post-click uncheck assertion is too early.
-        await collapse.click();
         await expect(collapse).not.toBeChecked();
+        // Shared controls paint the authoritative async preference result;
+        // Playwright's immediate post-click checked assertion is too early.
+        await collapse.click();
+        await expect(collapse).toBeChecked();
         await expect.poll(() =>
           frames.received.some((frame) =>
             frame.t === "prefs" &&

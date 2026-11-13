@@ -13,6 +13,10 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await expect(page.locator(".otk-message-footer")).toHaveCount(1);
   await expect(page).toHaveTitle("Execution — otk — OTK");
   await expect(page.locator(".otk-work-fold")).toHaveCount(1);
+  await expect(page.locator(".otk-user-bubble")).toBeVisible();
+  await expect(page.locator("[data-role=assistant] .otk-text").first())
+    .toBeVisible();
+  await page.locator(".otk-work-fold").click();
   await expect(page.locator("[data-role=assistant] .otk-message-role"))
     .toHaveCount(0);
   const geometry = await page.evaluate(() => {
@@ -104,6 +108,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     .toHaveText("reported-model");
   await expect(page.getByRole("button", { name: "Attach files", exact: true }))
     .toBeAttached();
+  await revealAcquired(page, ".otk-user-bubble");
   const layout = await page.evaluate(() => {
     const lane = document.querySelector(".otk-message-flow")!,
       scroll = document.querySelector(".otk-messages")!,
@@ -205,6 +210,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       })
     ).toBe(true);
   }
+  await revealAcquired(page, "[data-tool=patch] .otk-tool-toggle");
   await page.locator("[data-tool=patch] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=patch] .otk-tool-body")).toBeVisible();
   await expect(page.locator("[data-tool=patch] .otk-tool-target")).toHaveText(

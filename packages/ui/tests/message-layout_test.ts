@@ -65,6 +65,85 @@ Deno.test("provider context never shares user bubbles or actionable prompt ident
   }
 });
 
+Deno.test("live failure presentation rebuilds the enclosing work group's required contract", () => {
+  const owner = createMessageLayout();
+  const part = (failed: boolean): Part => ({
+    id: "result",
+    kind: "external",
+    name: "fixture/result",
+    data: failed ? "failed" : "completed",
+  });
+  const present = (value: Part) => ({
+    work: { start: 1, end: 2 },
+    required: value.kind === "external" && value.data === "failed",
+  });
+  for (const failed of [false, true, false]) {
+    const layout = owner.update(
+      "reply",
+      "assistant",
+      [{
+        messageID: "source",
+        parts: [part(failed)],
+      }],
+      "prefs",
+      present,
+    );
+    assertEquals(layout.frames[0].groups[0].required ?? false, failed);
+    assertEquals(layout.frames[0].groups[0].parts.length, 1);
+  }
+});
+
+Deno.test("bookkeeping after reply text keeps its own fold across reload and required changes", () => {
+  const make = (required: boolean) =>
+    [
+      { id: "start", kind: "meta" },
+      { id: "reasoning", kind: "meta" },
+      { id: "answer", kind: "meta" },
+      {
+        id: "finish",
+        kind: "external",
+        name: "fixture/end",
+        data: String(required),
+      },
+    ] as Part[];
+  const present = (part: Part) => ({
+    work: part.id === "answer" ? undefined : {},
+    required: part.kind === "external" && part.data === "true",
+  });
+  const shape = (
+    owner: ReturnType<typeof createMessageLayout>,
+    required: boolean,
+  ) =>
+    owner.update(
+      "reply",
+      "assistant",
+      [{ messageID: "source", parts: make(required) }],
+      "prefs",
+      present,
+    )
+      .frames[0].groups.map((group) => ({
+        id: group.id,
+        parts: group.parts.map((part) => part.id),
+        work: group.work,
+        required: !!group.required,
+      }));
+  const owner = createMessageLayout();
+  const initial = shape(owner, false);
+  assertEquals(initial, [
+    { id: "start", parts: ["start", "reasoning"], work: true, required: false },
+    { id: "answer", parts: ["answer"], work: false, required: false },
+    { id: "finish", parts: ["finish"], work: true, required: false },
+  ]);
+  const failed = shape(owner, true);
+  assertEquals(
+    failed.map(({ required: _required, ...group }) => group),
+    initial.map(({ required: _required, ...group }) => group),
+  );
+  assertEquals(failed.map((group) => group.required), [false, false, true]);
+  assertEquals(shape(owner, false), initial);
+  assertEquals(shape(createMessageLayout(), false), initial);
+});
+
 Deno.test("render layout reprojects only changed source parts and keeps historical groups stable", () => {
   const part = (id: string): Part => ({ id, kind: "meta" });
   const segments = Array.from(

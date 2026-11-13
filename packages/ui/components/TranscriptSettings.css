@@ -1,0 +1,9 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-transcript-settings h2 {
+  font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
+  margin: 0 0 12px;
+}
+.otk-transcript-settings h3 {
+  font: 600 var(--text-ui)/var(--line-ui) var(--font-ui);
+  margin: 20px 0 12px;
+}

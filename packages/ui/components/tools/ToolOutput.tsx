@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ToolOutput.css" with { type: "text" };
-import { createSignal, For, Match, Show, Switch } from "solid-js";
+import { For, Match, Show, Switch } from "solid-js";
 import type { ToolResult } from "@otk/protocol";
-import { ownedAction } from "../../keyboard/context.tsx";
 import Code from "../Code.tsx";
 import Blocks from "../Blocks.tsx";
 import ToolPath from "./ToolPath.tsx";
 import { relativeTarget } from "./paths.ts";
 import { usePathSemantics } from "../PathProvider.tsx";
 import { countLabel } from "./count.ts";
-const COLLAPSED_OUTPUT_LINES = 10;
 export default function ToolOutput(
   props: {
     text: string;
@@ -17,12 +15,7 @@ export default function ToolOutput(
     directory?: string;
   },
 ): import("solid-js").Element {
-  const [open, setOpen] = createSignal(false);
   const paths = usePathSemantics();
-  const toggle = ownedAction(
-    "tool.output.toggle",
-    () => setOpen((value) => !value),
-  );
   const text = () => {
     const result = props.result;
     if (result?.kind === "paths") {
@@ -34,7 +27,6 @@ export default function ToolOutput(
     if (result?.kind === "text") return result.text;
     return props.text;
   };
-  const lines = () => text().trimEnd().split("\n");
   const file = () => props.result?.kind === "file" ? props.result : undefined;
   const matches = () =>
     props.result?.kind === "matches" ? props.result : undefined;
@@ -62,17 +54,7 @@ export default function ToolOutput(
       fallback={
         <>
           <Show when={text()}>
-            <pre class="otk-tool-output">{open()?text().trimEnd():lines().slice(0,COLLAPSED_OUTPUT_LINES).join("\n")}</pre>
-            <Show when={lines().length > COLLAPSED_OUTPUT_LINES}>
-              <button
-                class="otk-output-toggle"
-                type="button"
-                aria-expanded={open() ? "true" : "false"}
-                onClick={() => void toggle()}
-              >
-                {open() ? "Collapse output" : "Expand output"}
-              </button>
-            </Show>
+            <pre class="otk-tool-output">{text()}</pre>
           </Show>
           <Show when={pathMeta()}>
             <small class="otk-muted" data-tool-result-meta>

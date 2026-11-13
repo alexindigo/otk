@@ -10,11 +10,14 @@ export interface PartPresentation {
   /** Cheap availability; text may be a lazy getter evaluated only for copy/preview. */
   copyable?: boolean;
   hidden?: boolean;
+  /** Its row must be visible even when an enclosing group defaults closed. */
+  required?: boolean;
   /** Flow directly in the transcript rather than inside a message bubble. */
   frame?: "transcript";
 }
 import type {
   CapabilityName,
+  DisclosureCategory,
   ExternalCall,
   ExternalPart,
   Part,
@@ -44,7 +47,7 @@ export interface ToolPresentation {
   target?: string;
   summary?: string;
   changes?: { additions: number; deletions: number };
-  expanded?: boolean;
+  category?: DisclosureCategory;
   /** Feature-owned copy sources; the frame never dispatches concrete tools. */
   copy?: { command?: string; path?: string; paths?: string };
 }

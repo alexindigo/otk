@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.describe("neutral backend facts", () => {
   test.use({ profile: "contract-messages-facts" });
@@ -11,6 +12,7 @@ test.describe("neutral backend facts", () => {
     async ({ isolatedState: state, page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`${state.url}/#/local/tstv1-core`);
+      await openWorkLogs(page);
       await expect(page.locator(".otk-composer-agent")).toHaveText("Action");
       await page.locator(".otk-agent-picker > button").click();
       await expect(
@@ -83,6 +85,7 @@ test.describe("honest native metadata", () => {
   }, async ({ isolatedState: state, page }) => {
     const frames = await wire(page);
     await page.goto(`${state.url}/#/local/tstv1-core`);
+    await openWorkLogs(page);
     await expect(page.locator("[data-tool=search]")).toHaveCount(2);
     const rows = await page.locator("[data-tool=search] .otk-tool-toggle")
       .allTextContents();
@@ -109,11 +112,9 @@ test.describe("honest native metadata", () => {
       page.locator("[data-tool=external] pre").evaluate((element) =>
         element.textContent!.split("\n").length
       );
-    expect(await count()).toBe(10);
-    await page.locator("[data-tool=external] .otk-output-toggle").click();
     expect(await count()).toBe(15);
-    await page.locator("[data-tool=external] .otk-output-toggle").click();
-    expect(await count()).toBe(10);
+    await expect(page.locator("[data-tool=external] .otk-output-toggle"))
+      .toHaveCount(0);
     await page.locator("textarea[name=prompt]").fill("Keep this unsent draft");
     await page.locator(".otk-prompt").evaluate((element) => {
       const data = new DataTransfer();

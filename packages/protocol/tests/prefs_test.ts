@@ -1,6 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
-import { DEFAULT_PREFS, isPreference } from "../mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
+import {
+  DEFAULT_PREFS,
+  isPreference,
+  PreferenceRegistry,
+  preferences,
+  preferenceToggleValue,
+} from "../mod.ts";
+
+Deno.test("toggle presentation preserves legacy values while checked consistently means expanded", () => {
+  for (
+    const [key, on, off] of [["collapseFileChanges", false, true], [
+      "thinking",
+      "show",
+      "hide",
+    ]] as const
+  ) {
+    const definition = preferences.list().find((row) => row.key === key)!;
+    for (const surface of [definition.settings!, definition.display!]) {
+      assertEquals(surface.control.kind, "toggle");
+      assertEquals(preferenceToggleValue(surface.control, true), on);
+      assertEquals(preferenceToggleValue(surface.control, false), off);
+      assert(Object.isFrozen(surface.control));
+      assert(preferences.validate(key, on));
+      assert(preferences.validate(key, off));
+    }
+  }
+  assertEquals(preferenceToggleValue({ kind: "toggle" }, true), true);
+  assertEquals(preferenceToggleValue({ kind: "toggle" }, false), false);
+});
+Deno.test("toggle mappings must describe two valid stored states including the default", () => {
+  for (
+    const control of [
+      { kind: "toggle" as const },
+      { kind: "toggle" as const, onValue: "show", offValue: "show" },
+      { kind: "toggle" as const, onValue: "show", offValue: "invalid" },
+    ]
+  ) {
+    assertThrows(() =>
+      new PreferenceRegistry().register({
+        key: "thinking",
+        default: "hide",
+        label: "Thinking",
+        validate: (v): v is "show" | "hide" => v === "show" || v === "hide",
+        display: { order: 1, control },
+      })
+    );
+  }
+});
 
 Deno.test("prefs validates the entire whitelist without coercion or inherited keys", () => {
   for (const [key, value] of Object.entries(DEFAULT_PREFS)) {

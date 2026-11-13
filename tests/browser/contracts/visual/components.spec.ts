@@ -479,6 +479,11 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "siblings");
+    await expect(page.locator(".otk-work-fold")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await page.locator(".otk-work-fold").click();
     const disclosure = page.locator(".otk-rollback-disclosure");
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await disclosure.click();

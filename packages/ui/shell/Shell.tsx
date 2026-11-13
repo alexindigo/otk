@@ -39,6 +39,7 @@ import Setup from "../components/Setup.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
 import Toasts from "../components/Toasts.tsx";
 import VisualSettings from "../components/VisualSettings.tsx";
+import TranscriptSettings from "../components/TranscriptSettings.tsx";
 import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
 import RightPanel from "../components/RightPanel.tsx";
@@ -811,6 +812,14 @@ export default function Shell(
                     prefs={toggles.state.prefs}
                     ready={toggles.state.ready}
                     browser={notifications.os}
+                    onSet={(key, value) =>
+                      commands.run("prefs.set", { key, value })}
+                  />
+                }
+                transcript={
+                  <TranscriptSettings
+                    prefs={toggles.state.prefs}
+                    ready={toggles.state.ready}
                     onSet={(key, value) =>
                       commands.run("prefs.set", { key, value })}
                   />

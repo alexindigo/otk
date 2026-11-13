@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.describe("file-change preference", () => {
   test.use({ profile: "contract-messages-collapse" });
@@ -9,6 +10,7 @@ test.describe("file-change preference", () => {
   }, async ({ isolatedState: state, page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`${state.url}/#/local/tstv1-core`);
+    await openWorkLogs(page);
     await expect(page.locator(".otk-tool-line")).toHaveCount(4);
     await expect(page.locator(".otk-turn-usage > button")).toBeAttached();
     const check = async (open: boolean) => {
@@ -60,9 +62,11 @@ test.describe("file-change preference", () => {
       "const written = true;",
     );
     await page.reload();
+    await openWorkLogs(page);
     await check(false);
     await page.locator(".otk-display-menu > button").click();
-    await expect(page.locator("input[name=collapseFileChanges]")).toBeChecked();
+    await expect(page.locator("input[name=collapseFileChanges]")).not
+      .toBeChecked();
     await page.locator("input[name=collapseFileChanges]").click();
     await check(true);
     await page.keyboard.press("Escape");
@@ -70,6 +74,7 @@ test.describe("file-change preference", () => {
       false,
     );
     await page.reload();
+    await openWorkLogs(page);
     await check(true);
     await page.locator("[data-tool=edit] .otk-tool-toggle").click();
     await state.product("prefs.set", {
@@ -89,6 +94,7 @@ test.describe("file-change preference", () => {
     await expect(page.locator("[data-tool=patch] .otk-tool-body"))
       .toBeVisible();
     await page.reload();
+    await openWorkLogs(page);
     await check(true);
     await state.product("prefs.set", {
       key: "collapseFileChanges",
@@ -96,6 +102,7 @@ test.describe("file-change preference", () => {
     });
     await check(false);
     await page.reload();
+    await openWorkLogs(page);
     await check(false);
   });
 });

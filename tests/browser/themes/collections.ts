@@ -852,6 +852,9 @@ export async function collections456(input: Inputs) {
   });
   const select = async (name: string) => {
     await page.setViewportSize({ width: 1280, height: 900 });
+    // These renderer sweeps explicitly choose open work/helper bodies.
+    await state.product("prefs.set", { key: "expandWork", value: true });
+    await state.product("prefs.set", { key: "expandDelegation", value: true });
     // Each fixed source owns its disclosure input. The files scene expands
     // changes; later scenes retain the legacy default instead of inheriting it.
     await state.product("prefs.set", {
@@ -1187,15 +1190,10 @@ export async function collections456(input: Inputs) {
               .toHaveText("Path not reported");
             await page.locator("[data-tool=external] .otk-tool-toggle").click();
             const output = page.locator("[data-tool=external] pre");
-            for (const [i, count] of [10, 15, 10].entries()) {
-              expect((await output.innerText()).split("\n")).toHaveLength(
-                count,
-              );
-              if (i < 2) {
-                await page.locator("[data-tool=external] .otk-output-toggle")
-                  .click();
-              }
-            }
+            expect((await output.innerText()).split("\n")).toHaveLength(15);
+            await expect(
+              page.locator("[data-tool=external] .otk-output-toggle"),
+            ).toHaveCount(0);
           }
           if (name === "facts") {
             await page.locator(".otk-agent-picker > button").click();
@@ -1249,6 +1247,13 @@ export async function collections456(input: Inputs) {
                 `[data-tool=${tool}][data-tool-status=completed]`;
               await reveal(page, selector + " .otk-tool-toggle");
               const rows = page.locator(selector);
+              if (tool === "bash" || tool === "external") {
+                await expect(rows.first().locator(".otk-tool-toggle"))
+                  .toHaveAttribute("aria-expanded", "false");
+                await expect(rows.first().locator(".otk-tool-body"))
+                  .toHaveCount(0);
+                await shot(`tool-${tool}-collapsed-${theme.id}-1280`);
+              }
               for (let i = 0; i < await rows.count(); i++) {
                 const toggle = rows.nth(i).locator(".otk-tool-toggle");
                 if (await toggle.getAttribute("aria-expanded") === "false") {
@@ -1259,11 +1264,16 @@ export async function collections456(input: Inputs) {
                 .toBeAttached();
               if (tool === "bash" || tool === "external") {
                 const output = rows.first().locator(".otk-tool-output");
-                expect((await output.innerText()).split("\n")).toHaveLength(10);
-                await shot(`tool-${tool}-collapsed-${theme.id}-1280`);
-                await rows.first().locator(".otk-output-toggle").click();
-                expect((await output.innerText()).split("\n")).toHaveLength(
-                  tool === "bash" ? 30 : 15,
+                await expect(output).toHaveJSProperty(
+                  "textContent",
+                  tool === "bash"
+                    ? Array.from({ length: 30 }, (_, i) => String(i + 1)).join(
+                      "\n",
+                    ) + "\n"
+                    : Array.from(
+                      { length: 15 },
+                      (_, i) => `Generic line ${i + 1}`,
+                    ).join("\n"),
                 );
               }
               await shot(`tool-${tool}-${theme.id}-1280`);
@@ -1911,6 +1921,12 @@ export async function collections456(input: Inputs) {
           expect(values[1]).toEqual(values[0]);
         }
         if (scene === "siblings") {
+          const initial = theme.id === themes[0].id;
+          await expect(page.locator(".otk-work-fold")).toHaveAttribute(
+            "aria-expanded",
+            initial ? "false" : "true",
+          );
+          if (initial) await page.locator(".otk-work-fold").click();
           await expect(page.locator(".otk-work-fold")).toHaveCSS(
             "display",
             "flex",
