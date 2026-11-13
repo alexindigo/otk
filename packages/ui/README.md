@@ -593,6 +593,25 @@ only while follow intent is active. Frame/hunk scopes distinguish sibling
 collections without duplicating geometry math. Message's exposed reveal control
 focuses its visible bubble after owner-controlled positioning.
 
+The same root publishes one immutable revisioned geometry snapshot: bottom
+distance, viewport height, follow intent and acquired source ends. Consumers
+subscribe rather than install another geometry observer. Pending descendant
+measurements cannot publish an uncommitted snapshot. Window notifications keep
+their one-microtask publication path. `latest(ready)` coalesces repeated
+requests, retains the source anchor until canonical tail authority is ready,
+then uses the ordinary measured follow path. Upward input, explicit navigation
+and retirement cancel it, including late readiness. SessionView registers
+`transcript.latest` once for the button, palette and `/latest`. The control is
+an absolute overlay inside a relative transcript wrapper, centred at its bottom
+edge with one `--jump-bottom-inset`. Composer/takeover content stays outside
+that wrapper, so the control never covers it. Hidden or shown, it reserves no
+layout space and never changes transcript/composer geometry. It appears only
+more than one viewport from the bottom; temporary coverage of transcript text is
+permitted there. Only the visible button accepts pointer input; the lane passes
+it through. The existing icon button borrows menu/popover background, border,
+foreground and shadow tokens, so its raised surface separates the arrow from
+underlying text without introducing paint tokens or changing its geometry.
+
 New or changed visible rows hold temporary measurement leases through their
 ancestor windows. The lease ends only after actual DOM size has been recorded,
 so a large code/diff body cannot be recycled using its earlier estimate while

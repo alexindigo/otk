@@ -125,6 +125,8 @@ export interface TranscriptOwner {
   selected(value: boolean): void;
   viewport(value: TranscriptRange | undefined): void;
   ensure(messageID: string, signal?: AbortSignal): Promise<void>;
+  /** Join current newest-page/live-tail authority, never walk older cursors. */
+  latest(signal?: AbortSignal): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
   sibling(delta: number): Promise<string | undefined>;
@@ -382,6 +384,7 @@ export function createTranscript(
   let initialResync = false;
   let authority: TranscriptVersion | undefined,
     minimum: TranscriptVersion | undefined;
+  let nativeConnected = true;
   let retriedVersion: TranscriptVersion | undefined;
   let attentionReads: {
     events: Map<string, ContentOp>;
@@ -1041,6 +1044,43 @@ export function createTranscript(
       }
       signal?.throwIfAborted();
     },
+    latest(signal) {
+      if (signal?.aborted) return Promise.reject(signal.reason);
+      const lifetime = generation;
+      return new Promise<void>((resolve, reject) => {
+        let release = () => {};
+        const finish = (error?: unknown) => {
+          release();
+          signal?.removeEventListener("abort", abort);
+          if (error !== undefined) reject(error);
+          else resolve();
+        };
+        const abort = () => finish(signal!.reason);
+        const inspect = () => {
+          if (
+            !selected || generation !== lifetime || state.temperature === "cold"
+          ) {
+            finish(new DOMException("Transcript demand ended", "AbortError"));
+          } else if (
+            connection(target.sidecarId).connected && nativeConnected &&
+            hasBaseline && !fetching && !missing && clock && authority &&
+            state.continuity === "ready"
+          ) {
+            finish();
+          } else if (!fetching && state.error) {
+            finish(new Error(state.error));
+          }
+        };
+        release = subscribe(inspect);
+        signal?.addEventListener("abort", abort, { once: true });
+        // A ready live stream already owns its newest end. Warm-tail trimming
+        // may need a fresh *older continuation*, not another newest body read.
+        // Missing authority uses the same generation-fenced recovery owner as
+        // initial selection and reconnect. Cancelling a waiter never cancels it.
+        if (selected && missing && !fetching) void refetch();
+        inspect();
+      });
+    },
     pin(keys) {
       for (const key of keys) pins.set(key, (pins.get(key) ?? 0) + 1);
       let live = true;
@@ -1060,6 +1100,14 @@ export function createTranscript(
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
     receive(sidecarId: string, frame: ServerFrame): void {
+      if (sidecarId === target.sidecarId && frame.t === "harness") {
+        const linked = frame.state === "connected";
+        if (nativeConnected !== linked) {
+          nativeConnected = linked;
+          // Readiness changes even when last-good bodies and their clocks stay.
+          setState(() => {});
+        }
+      }
       if (
         sidecarId === target.sidecarId && frame.t === "harness" && readFacts &&
         readFacts.phase !== "ready"

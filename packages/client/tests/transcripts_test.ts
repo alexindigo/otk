@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import type {
   ClientFrame,
   ContentOp,
@@ -66,6 +66,10 @@ function fixture(policy?: MessagePolicy) {
   connection.send = (frame) => {
     if (frame.t === "request") requests.push(frame);
   };
+  Object.defineProperty(connection, "connected", {
+    configurable: true,
+    get: () => true,
+  });
   connectRequests(connection.rpc);
   connection.subscribe = (id, enabled) => {
     if (enabled) subscriptions.add(id);
@@ -121,6 +125,172 @@ const policy = {
   preloadms: 30,
   concurrency: 4,
 };
+
+Deno.test("tail readiness joins the newest baseline without traversing older history", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    const a = f.owner.get(target("a"))!;
+    let ready = false;
+    const work = a.latest().then(() => ready = true);
+    await turns();
+    assertEquals(ready, false);
+    assertEquals(f.requests.length, 1);
+    assertEquals(
+      (f.requests[0].params as { before?: string }).before,
+      undefined,
+    );
+    await f.reply();
+    await work;
+    await f.reply(); // Existing ten-message reserve, not a latest-intent read.
+    assertEquals(a.state.messageIDs.length, 20);
+    await a.latest();
+    assertEquals(f.requests, [], "current live tail needs no new page");
+    assertEquals(a.state.exhausted, false, "latest never drains history");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("cancelling a tail waiter retires it without cancelling canonical recovery", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    f.owner.receive(
+      "server",
+      { t: "welcome", messages: policy } as never,
+      true,
+    );
+    const abort = new AbortController();
+    const cancelled = a.latest(abort.signal);
+    const rejected = assertRejects(() => cancelled, DOMException);
+    const shared = a.latest();
+    assertEquals(
+      f.requests.length,
+      1,
+      "both waiters share reconnect's newest read",
+    );
+    abort.abort();
+    await rejected;
+    assertEquals(a.state.loading, true);
+    await f.reply();
+    await shared;
+    await f.reply();
+    assertEquals(a.state.continuity, "ready");
+    assertEquals(f.requests, []);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("tail readiness cannot cross a retired transcript lifetime", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    const a = f.owner.get(target("a"))!;
+    const pending = a.latest();
+    const rejected = assertRejects(() => pending, DOMException, "demand ended");
+    a.stop();
+    await rejected;
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("tail readiness waits through the disconnected interval before reconnect welcome", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    let connected = false, ready = false;
+    Object.defineProperty(f.connection, "connected", {
+      configurable: true,
+      get: () => connected,
+    });
+    const pending = a.latest().then(() => ready = true);
+    await turns();
+    assertEquals(
+      ready,
+      false,
+      "last-good content is not proof of a current live tail",
+    );
+    assertEquals(
+      f.requests,
+      [],
+      "reconnect owns recovery, not a new older read",
+    );
+    connected = true;
+    f.owner.receive(
+      "server",
+      { t: "welcome", messages: policy } as never,
+      true,
+    );
+    await turns();
+    assertEquals(ready, false, "welcome still requires the new baseline");
+    await f.reply();
+    await pending;
+    await f.reply();
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("tail readiness also waits for native link recovery and its current baseline", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    f.owner.receive("server", { t: "harness", state: "reconnecting" }, true);
+    f.owner.receive("server", {
+      t: "content",
+      sessionID: "a",
+      event: { op: "stream.reconcile" },
+    }, true);
+    let ready = false;
+    const pending = a.latest().then(() => ready = true);
+    await turns();
+    assertEquals(ready, false);
+    f.owner.receive("server", { t: "harness", state: "connected" }, true);
+    await turns();
+    assertEquals(
+      ready,
+      false,
+      "native link alone cannot replace newest-page authority",
+    );
+    await f.reply();
+    await pending;
+    await f.reply();
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("late source events cannot backfill unrequested transcript history or retire its paging action", async () => {
   const f = fixture(policy);

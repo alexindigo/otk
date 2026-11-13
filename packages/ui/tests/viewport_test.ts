@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
 
 Deno.test("large native input keeps its displacement when no new measured source is mounted yet", () => {
@@ -292,7 +292,7 @@ function viewportFixture(
     resize(): void;
     flush(): void;
     writes(): number;
-  }) => void,
+  }) => void | Promise<void>,
   { tail = true } = {},
 ) {
   const names = [
@@ -363,10 +363,17 @@ function viewportFixture(
     frames.clear();
     for (const callback of pending) callback(0);
   };
+  const cleanup = () => {
+    owner?.dispose();
+    names.forEach((name, i) => {
+      if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!);
+      else Reflect.deleteProperty(globalThis, name);
+    });
+  };
   try {
     flush();
     assertEquals(pane.scrollTop, tail ? 900 : 0);
-    run({
+    const result = run({
       pane,
       height: (value) => {
         (pane as unknown as Pane).scrollHeight = value;
@@ -375,13 +382,12 @@ function viewportFixture(
       flush,
       writes: () => (pane as unknown as Pane).writes,
     });
-  } finally {
-    owner?.dispose();
-    names.forEach((name, i) => {
-      if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!);
-      else Reflect.deleteProperty(globalThis, name);
-    });
+    if (result) return result.finally(cleanup);
+  } catch (error) {
+    cleanup();
+    throw error;
   }
+  cleanup();
 }
 
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
@@ -582,5 +588,270 @@ Deno.test("animated input continues past a scroll ending caused by compensation"
       release();
       lease.release();
     }
+  });
+});
+
+Deno.test("one geometry snapshot publishes committed bottom, intent and acquired ends", async () => {
+  let published = 0;
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    owner.history({ first: "first", last: "last", exhausted: false });
+    owner.subscribeSnapshot(() => published++);
+    const before = owner.snapshot();
+    const measured = owner.hold();
+    owner.transaction(() => height(1400));
+    assertEquals(owner.snapshot(), before, "pending geometry is not published");
+    measured();
+    flush();
+    // Delivery is joined to the existing microtask window publication.
+    await Promise.resolve();
+    const snapshot = owner.snapshot();
+    assertEquals(snapshot.distanceFromBottom, 0);
+    assertEquals(snapshot.viewportHeight, 100);
+    assertEquals(snapshot.following, true);
+    assertEquals(snapshot.history, {
+      first: "first",
+      last: "last",
+      exhausted: false,
+    });
+    assertEquals(snapshot.revision > before.revision, true);
+    lease.release();
+  });
+  assertEquals(published, 1);
+});
+
+Deno.test("jump waits for tail authority and descendant measurements, coalesces and follows growth", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    owner.keepAnchor();
+    pane.scrollTop = 500;
+    pane.dispatchEvent(new Event("scroll"));
+    flush();
+    let calls = 0;
+    const ready = Promise.withResolvers<void>();
+    const acquire = () => {
+      calls++;
+      return ready.promise;
+    };
+    const first = owner.latest(acquire);
+    assertEquals(owner.latest(acquire), first);
+    assertEquals(calls, 1);
+    assertEquals(owner.following(), false);
+    assertEquals(pane.scrollTop, 500);
+    const measured = owner.hold();
+    ready.resolve();
+    await Promise.resolve();
+    flush();
+    let settled = false;
+    void first.then(() => settled = true);
+    await Promise.resolve();
+    assertEquals(settled, false);
+    height(1800);
+    measured();
+    flush();
+    await first;
+    assertEquals(pane.scrollTop, 1700);
+    assertEquals(owner.following(), true);
+    height(2000);
+    owner.layout();
+    flush();
+    assertEquals(pane.scrollTop, 1900);
+    lease.release();
+  });
+});
+
+Deno.test("upward input cancels pending latest without late readiness stealing the reader", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    owner.keepAnchor();
+    flush();
+    const ready = Promise.withResolvers<void>();
+    let signal!: AbortSignal;
+    const jump = owner.latest((value) => {
+      signal = value;
+      return ready.promise;
+    });
+    const rejected = assertRejects(() => jump, DOMException, "superseded");
+    const event = new Event("wheel");
+    Object.defineProperty(event, "deltaY", { value: -48 });
+    pane.dispatchEvent(event);
+    pane.scrollTop -= 48;
+    pane.dispatchEvent(new Event("scroll"));
+    assertEquals(signal.aborted, true);
+    ready.resolve();
+    await rejected;
+    flush();
+    assertEquals(pane.scrollTop, 852);
+    assertEquals(owner.following(), false);
+    lease.release();
+  });
+});
+
+Deno.test("snapshot native input and resize share one immutable publication per checkpoint", async () => {
+  await viewportFixture(async ({ pane, resize, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    let publications = 0;
+    const release = owner.subscribeSnapshot(() => publications++);
+    await Promise.resolve();
+    const before = owner.snapshot(), count = publications;
+    const wheel = new Event("wheel");
+    Object.defineProperty(wheel, "deltaY", { value: -200 });
+    pane.dispatchEvent(wheel);
+    pane.scrollTop = 700;
+    pane.dispatchEvent(new Event("scroll"));
+    resize();
+    flush();
+    owner.history({ first: "new-first", last: "new-tail", exhausted: true });
+    flush();
+    await Promise.resolve();
+    const snapshot = owner.snapshot();
+    assertEquals(snapshot.distanceFromBottom, 200);
+    assertEquals(snapshot.viewportHeight, 100);
+    assertEquals(snapshot.following, false);
+    assertEquals(snapshot.history, {
+      first: "new-first",
+      last: "new-tail",
+      exhausted: true,
+    });
+    assertEquals(snapshot.revision > before.revision, true);
+    assertEquals(Object.isFrozen(snapshot), true);
+    assertEquals(Object.isFrozen(snapshot.history), true);
+    assertEquals(publications - count, 1);
+    release();
+    lease.release();
+  });
+});
+
+Deno.test("settled reader displacement transfers its pin to the newly visible measured source", () => {
+  viewportFixture(({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    pane.scrollTop = 400;
+    pane.dispatchEvent(new Event("scroll"));
+    const pins = new Set<string>();
+    const release = owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({
+        key: pane.scrollTop < 500 ? "old" : "new",
+        offset: pane.scrollTop,
+      }),
+      resolve: (anchor) => anchor.offset,
+      retain: (anchor) => {
+        pins.add(anchor.key);
+        return () => {
+          pins.delete(anchor.key);
+        };
+      },
+    });
+    try {
+      owner.keepAnchor();
+      flush();
+      assertEquals([...pins], ["old"]);
+      const measured = owner.hold();
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: 200 });
+      pane.dispatchEvent(wheel);
+      pane.scrollTop = 600;
+      pane.dispatchEvent(new Event("scroll"));
+      assertEquals(
+        [...pins],
+        ["old"],
+        "pending geometry keeps the measured attachment",
+      );
+      measured();
+      flush();
+      assertEquals(
+        pane.scrollTop,
+        600,
+        "transfer never changes reader displacement",
+      );
+      assertEquals(
+        [...pins],
+        ["new"],
+        "settled geometry releases the offscreen source pin",
+      );
+    } finally {
+      release();
+      lease.release();
+    }
+  }, { tail: false });
+});
+
+Deno.test("native re-entry into follow releases anchored-source pins even during measurement", () => {
+  viewportFixture(({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    let retained = 0;
+    const release = owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({ key: "source", offset: pane.scrollTop }),
+      resolve: (anchor) => anchor.offset,
+      retain: () => {
+        retained++;
+        return () => {
+          retained--;
+        };
+      },
+    });
+    try {
+      owner.keepAnchor();
+      pane.scrollTop = 800;
+      pane.dispatchEvent(new Event("scroll"));
+      flush();
+      assertEquals(retained, 1);
+      const measured = owner.hold();
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: 100 });
+      pane.dispatchEvent(wheel);
+      pane.scrollTop = 900;
+      pane.dispatchEvent(new Event("scroll"));
+      assertEquals(owner.following(), true);
+      assertEquals(
+        retained,
+        0,
+        "follow intent cannot retain an anchored source",
+      );
+      measured();
+      flush();
+    } finally {
+      release();
+      lease.release();
+    }
+  });
+});
+
+Deno.test("latest settlement joins descendant materialization from window publication", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    owner.keepAnchor();
+    flush();
+    await Promise.resolve();
+    let once = false, measured: (() => void) | undefined, settled = false;
+    const unsubscribe = owner.subscribe(() => {
+      if (owner.following() && !once) {
+        once = true;
+        measured = owner.hold();
+      }
+    });
+    const work = owner.latest(() => Promise.resolve()).then(() =>
+      settled = true
+    );
+    await Promise.resolve();
+    flush();
+    await Promise.resolve();
+    await Promise.resolve();
+    assertEquals(once, true);
+    assertEquals(
+      settled,
+      false,
+      "publication's new descendants still own measurement",
+    );
+    height(1800);
+    measured!();
+    flush();
+    await work;
+    assertEquals(pane.scrollTop, 1700);
+    unsubscribe();
+    lease.release();
   });
 });
