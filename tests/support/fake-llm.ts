@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { resources } from "./resources.ts";
 export interface Script {
+  failure?: { status: number; message: string };
   chunks?: string[];
   reasoning?: string[];
   delay?: number;
@@ -17,6 +18,11 @@ export class FakeLlm {
   #strict = false;
   #unexpected = 0;
   #requestLog?: string;
+  #fallback: Script = { chunks: ["Completed."] };
+  /** Provider rejection for all subsequent unqueued model calls. */
+  failRemaining(message: string, status = 403): void {
+    this.#fallback = { failure: { status, message } };
+  }
   recordRequests(path: string): void {
     this.#requestLog = path;
     Deno.writeTextFileSync(path, JSON.stringify(this.requests, null, 2));
@@ -81,9 +87,17 @@ export class FakeLlm {
           finish?: Promise<void>;
           beforeChunk?: (index: number) => Promise<void>;
         } = body.stream && !titleRequest
-          ? this.#queue.shift() ?? { chunks: ["Completed."] }
+          ? this.#queue.shift() ?? this.#fallback
           : { chunks: ["OTK session"] };
         const id = `chatcmpl-${crypto.randomUUID()}`;
+        if (script.failure) {
+          return Response.json({
+            error: {
+              message: script.failure.message,
+              type: "usage_limit_reached",
+            },
+          }, { status: script.failure.status });
+        }
         if (!body.stream) {
           return Response.json({
             id,

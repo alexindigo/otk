@@ -27,6 +27,7 @@ import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
 import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
+import { terminalToken } from "./db-hints.ts";
 import { History } from "./history.ts";
 import { consumeEvents } from "./events.ts";
 import {
@@ -197,6 +198,10 @@ export class OpencodeV1Adapter implements Harness {
     this.#questions = new PendingQuestions(
       cfg.catalogs.pending,
       (before, after) => {
+        if (before && before.request.id !== after?.request.id) {
+          this.#questionFresh.delete(before.request.id);
+        }
+        if (after) this.#questionFresh.set(after.request.id, this.#connection);
         const old = before?.request.sessionID, next = after?.request.sessionID;
         if (old !== next) {
           if (old) this.#attention.change(old, "questions", -1);
@@ -763,37 +768,49 @@ export class OpencodeV1Adapter implements Harness {
     return this.#stopping;
   }
   #publication(signal: AbortSignal): HarnessSink {
-    const evidence = (entry: IndexEntry): IndexEntry => ({
-      ...entry,
-      activity: {
-        terminal: Math.max(
-          entry.activity?.terminal ?? 0,
-          this.#liveWork.has(entry.id) ? 0 : this.#terminals.get(entry.id) ?? 0,
-        ),
-        work: {
-          keys: this.#liveWork.has(entry.id)
-            ? [this.#liveWork.get(entry.id)!]
-            : [],
-          fresh: entry.activityAuthority === "current",
+    const evidence = (entry: IndexEntry): IndexEntry => {
+      if (this.#idle.get(entry.id) === this.#connection && !signal.aborted) {
+        this.#terminals.set(
+          entry.id,
+          Math.max(
+            this.#terminals.get(entry.id) ?? 0,
+            this.#terminalCandidates.get(entry.id) ?? 0,
+          ),
+        );
+      }
+      const inputs = [...this.#questions.values()].filter((p) =>
+        p.request.sessionID === entry.id &&
+        this.#questionFresh.get(p.request.id) === this.#connection
+      ).map((p) => p.request.id);
+      const permissions = [...this.#permissions.values()].filter((p) =>
+        p.request.sessionID === entry.id && p.generation === this.#connection
+      ).map((p) => p.request.id);
+      return ({
+        ...entry,
+        activity: {
+          terminal: this.#terminals.get(entry.id) ?? 0,
+          work: {
+            keys: this.#liveWork.has(entry.id)
+              ? [this.#liveWork.get(entry.id)!.key]
+              : [],
+            fresh: !signal.aborted &&
+              this.#liveWork.get(entry.id)?.generation === this.#connection,
+          },
+          inputs: {
+            keys: inputs,
+            fresh: !signal.aborted &&
+              (inputs.length > 0 || this.#questions.known(entry.directory)),
+          },
+          permissions: {
+            keys: permissions,
+            fresh: !signal.aborted &&
+              (permissions.length > 0 ||
+                this.#permissionInventories.get(entry.directory) ===
+                  this.#connection),
+          },
         },
-        inputs: {
-          keys: [
-            ...[...this.#questions.values()].filter((p) =>
-              p.request.sessionID === entry.id
-            ).map((p) => p.request.id),
-          ],
-          fresh: entry.activityAuthority !== "stale" &&
-            entry.activityAuthority !== "unknown",
-        },
-        permissions: {
-          keys: [...this.#permissions.values()].filter((p) =>
-            p.request.sessionID === entry.id
-          ).map((p) => p.request.id),
-          fresh: entry.activityAuthority !== "stale" &&
-            entry.activityAuthority !== "unknown",
-        },
-      },
-    });
+      });
+    };
     return connectionPublication({
       ...this.#target,
       indexUpsert: (entry) => this.#target.indexUpsert(evidence(entry)),
@@ -804,8 +821,12 @@ export class OpencodeV1Adapter implements Harness {
       },
     }, signal);
   }
-  #liveWork = new Map<string, string>();
+  #liveWork = new Map<string, { key: string; generation: number }>();
   #terminals = new Map<string, number>();
+  #terminalCandidates = new Map<string, number>();
+  #idle = new Map<string, number>();
+  #questionFresh = new Map<string, number>();
+  #permissionInventories = new Map<string, number>();
   async #shutdown(): Promise<void> {
     this.#helperObservation?.();
     this.#helperObservation = undefined;
@@ -819,6 +840,12 @@ export class OpencodeV1Adapter implements Harness {
     await this.#catalogExecutor?.stop();
     this.#permissions.clear();
     this.#questions.clear();
+    this.#questionFresh.clear();
+    this.#permissionInventories.clear();
+    this.#liveWork.clear();
+    this.#terminals.clear();
+    this.#terminalCandidates.clear();
+    this.#idle.clear();
     this.#selectionIntents.clear();
     this.#reverts.clear();
     this.#transcript.release();
@@ -1324,6 +1351,54 @@ export class OpencodeV1Adapter implements Harness {
       } while (cursor);
     }
     const previousPermissions = new Map(this.#permissions);
+    // Only positive terminal history is startup demand. It borrows the existing
+    // source-proven worker connection and credited, bounded read channel.
+    let after = "";
+    const terminalDirectories = new Set<string>();
+    const terminalParents = new Set<string>();
+    for (;;) {
+      if (!this.#current(controller)) return;
+      let rows: IndexEntry[];
+      try {
+        rows = this.digest
+          ? await this.digest.read("supervision.terminals", { after }, {
+            owner: `supervision:${connection}`,
+            priority: "attention",
+            signal: controller.signal,
+          })
+          : this.#db.terminals(after, budget);
+      } catch (error) {
+        if (!this.#current(controller)) return;
+        this.diagnostic("warn", "terminal evidence unavailable", error);
+        break;
+      }
+      if (!rows.length) break;
+      await each(rows, (row) => {
+        const previous = entries.get(row.id);
+        // The standalone DB is only a candidate source until its identity agrees
+        // with this connection's API catalog. The worker already proves its file.
+        if (
+          !this.digest &&
+          (!previous || previous.directory !== row.directory ||
+            previous.timeCreated !== row.timeCreated)
+        ) return;
+        terminalDirectories.add(row.directory);
+        if (row.parentID) terminalParents.add(row.parentID);
+        this.#terminalCandidates.set(
+          row.id,
+          Math.max(
+            this.#terminalCandidates.get(row.id) ?? 0,
+            row.activity?.terminal ?? 0,
+          ),
+        );
+        entries.set(row.id, {
+          ...row,
+          ...previous,
+          activity: previous?.activity,
+        });
+      });
+      after = rows.at(-1)!.id;
+    }
     const nextPermissions = new Map<string, PendingPermission>();
     const nextQuestions = new Map<string, PendingQuestion>();
     const knownQuestionDirectories = new Set<string>();
@@ -1335,7 +1410,7 @@ export class OpencodeV1Adapter implements Harness {
       this.cfg.digest.batch,
       controller.signal,
     );
-    const directories = new Set<string>();
+    const directories = new Set<string>(terminalDirectories);
     if (hints) await each(hints, (directory) => directories.add(directory));
     else {await each(this.#index.snapshotEntries(), (entry) => {
         const a = entry.attention;
@@ -1365,30 +1440,38 @@ export class OpencodeV1Adapter implements Harness {
       local.push(entry);
       byDirectory.set(entry.directory, local);
     });
-    const routing = new Set<string>();
+    const routing = new Set<string>(terminalParents);
     const inventory = async (directory: string) => {
-      const local = new AbortController();
-      const signal = AbortSignal.any([controller.signal, local.signal]);
       const options = {
         owner: JSON.stringify(["activity", directory, this.#connection]),
         priority: "attention" as const,
-        signal,
+        signal: controller.signal,
       };
-      try {
-        const statuses = await this.#catalogReads.read("activity.status", {
-          directory,
-        }, options);
-        const permissions = await this.#catalogReads.read(
-          "activity.permissions",
-          { directory },
-          options,
-        );
-        const questions = await this.#catalogReads.read("catalog.questions", {
-          directory,
-        }, options);
-        if (!this.#current(controller)) return;
-        // A complete inventory proves omitted sessions idle; unavailable
-        // authority alone must retain their previous activity.
+      const read = async <
+        K extends
+          | "activity.status"
+          | "activity.permissions"
+          | "catalog.questions",
+      >(kind: K) => {
+        try {
+          return await this.#catalogReads.read(kind, { directory }, options);
+        } catch (error) {
+          if (!this.#current(controller)) return;
+          this.diagnostic(
+            "warn",
+            `bootstrap directory ${JSON.stringify(directory)} ${kind}`,
+            error,
+          );
+          return undefined;
+        }
+      };
+      const statuses = await read("activity.status");
+      const permissions = await read("activity.permissions");
+      const questions = await read("catalog.questions");
+      if (!this.#current(controller)) return;
+      // Each native inventory qualifies only its own facts. A failed question
+      // inventory cannot discard fresh status or permission evidence.
+      if (statuses) {
         for (const id of this.#liveWork.keys()) {
           if (this.#index.getMetadata(id)?.directory === directory) {
             this.#liveWork.delete(id);
@@ -1396,16 +1479,21 @@ export class OpencodeV1Adapter implements Harness {
         }
         await each(byDirectory.get(directory) ?? [], (entry) => {
           this.#liveWork.delete(entry.id);
+          this.#idle.set(entry.id, this.#connection);
           entry.status = "idle";
           entry.retry = undefined;
         });
         await each(statuses, (status) => {
           if (status.status !== "idle") {
+            this.#idle.delete(status.id);
             this.#liveWork.set(
               status.id,
-              `execution:${this.#connection}:${status.id}`,
+              {
+                key: `execution:${this.#connection}:${status.id}`,
+                generation: this.#connection,
+              },
             );
-          }
+          } else this.#idle.set(status.id, this.#connection);
           routing.add(status.id);
           const entry = entries.get(status.id) ??
             this.#activityEntry(status.id, directory);
@@ -1413,6 +1501,9 @@ export class OpencodeV1Adapter implements Harness {
           entry.status = status.status;
           entry.retry = status.retry;
         });
+      }
+      if (permissions) {
+        this.#permissionInventories.set(directory, this.#connection);
         await each(permissions, (request) => {
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
@@ -1425,6 +1516,7 @@ export class OpencodeV1Adapter implements Harness {
             request.id,
             {
               directory,
+              generation: this.#connection,
               request: {
                 ...request,
                 time: previousPermissions.get(request.id)?.request.time ??
@@ -1433,6 +1525,12 @@ export class OpencodeV1Adapter implements Harness {
             },
           );
         });
+      } else {
+        await each(previousPermissions, ([id, pending]) => {
+          if (pending.directory === directory) nextPermissions.set(id, pending);
+        });
+      }
+      if (questions) {
         await each(questions, (request) => {
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
@@ -1448,34 +1546,25 @@ export class OpencodeV1Adapter implements Harness {
           });
         });
         knownQuestionDirectories.add(directory);
-        await each(byDirectory.get(directory) ?? [], (entry) => {
-          entry.activityAuthority = "current";
-        });
-      } catch (error) {
-        if (!this.#current(controller)) return;
-        this.diagnostic(
-          "warn",
-          `bootstrap directory ${JSON.stringify(directory)}`,
-          error,
-        );
-        // A failed inventory is not evidence that previous work/input ended.
-        await each(byDirectory.get(directory) ?? [], (entry) => {
-          entry.activityAuthority = "stale";
-          const previous = this.#index.getMetadata(entry.id);
-          if (previous) {
-            entry.status = previous.status;
-            entry.retry = previous.retry;
-          }
-        });
-        await each(previousPermissions, ([id, pending]) => {
-          if (pending.directory === directory) nextPermissions.set(id, pending);
-        });
+      } else {
         await each(this.#questions.values(), (pending) => {
           if (pending.directory === directory) {
             nextQuestions.set(pending.request.id, pending);
           }
         });
       }
+      await each(byDirectory.get(directory) ?? [], (entry) => {
+        entry.activityAuthority = statuses && permissions && questions
+          ? "current"
+          : "stale";
+        if (!statuses) {
+          const previous = this.#index.getMetadata(entry.id);
+          if (previous) {
+            entry.status = previous.status;
+            entry.retry = previous.retry;
+          }
+        }
+      });
     };
     const remaining = directories.values();
     await Promise.all(
@@ -1520,6 +1609,16 @@ export class OpencodeV1Adapter implements Harness {
     if (!this.#current(controller)) return;
     this.#permissions = nextPermissions;
     this.#questions.reset(nextQuestions.values(), knownQuestionDirectories);
+    for (const id of this.#questionFresh.keys()) {
+      if (!nextQuestions.has(id)) this.#questionFresh.delete(id);
+    }
+    for (const pending of nextQuestions.values()) {
+      if (
+        pending.directory && knownQuestionDirectories.has(pending.directory)
+      ) {
+        this.#questionFresh.set(pending.request.id, this.#connection);
+      }
+    }
     const permissions = function* () {
       for (const { request } of nextPermissions.values()) {
         yield request.sessionID;
@@ -1575,6 +1674,10 @@ export class OpencodeV1Adapter implements Harness {
   }
   #disposeSession(id: string): void {
     const sink = this.#sink;
+    this.#liveWork.delete(id);
+    this.#terminals.delete(id);
+    this.#terminalCandidates.delete(id);
+    this.#idle.delete(id);
     this.#abortCommands(id);
     this.#errors.remove(id);
     for (const [key, pending] of this.#permissions) {
@@ -1919,11 +2022,18 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error(`Malformed ${type}: invalid status`);
       }
       if (entry) {
+        if (status.type === "idle") this.#idle.set(sessionID, this.#connection);
+        else this.#idle.delete(sessionID);
         if (status.type === "idle") this.#liveWork.delete(sessionID);
-        else if (!this.#liveWork.has(sessionID)) {
+        else if (
+          this.#liveWork.get(sessionID)?.generation !== this.#connection
+        ) {
           this.#liveWork.set(
             sessionID,
-            `execution:${this.#connection}:${sessionID}`,
+            {
+              key: `execution:${this.#connection}:${sessionID}`,
+              generation: this.#connection,
+            },
           );
         }
         entry.status = status.type as IndexEntry["status"];
@@ -1964,6 +2074,7 @@ export class OpencodeV1Adapter implements Harness {
       this.#permissions.set(request.id, {
         request: mapped,
         directory: event.directory,
+        generation: this.#connection,
       });
       if (previous !== sessionID) {
         if (previous) this.#attention.change(previous, "permissions", -1);
@@ -2055,17 +2166,20 @@ export class OpencodeV1Adapter implements Harness {
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
-      info.time.completed
+      terminalToken(info) > 0
     ) {
-      this.#terminals.set(
+      this.#terminalCandidates.set(
         sessionID,
-        Math.max(this.#terminals.get(sessionID) ?? 0, info.time.completed),
+        Math.max(
+          this.#terminalCandidates.get(sessionID) ?? 0,
+          terminalToken(info),
+        ),
       );
       const current = this.#index.getMetadata(sessionID);
       if (current) {
         current.timeUpdated = Math.max(
           current.timeUpdated,
-          info.time.completed,
+          terminalToken(info),
         );
         sink.indexUpsert(current);
       }

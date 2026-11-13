@@ -12,6 +12,7 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 export interface PendingPermission {
   request: PermissionRequest;
   directory?: string;
+  generation?: number;
 }
 export function permissions(
   client: Client,

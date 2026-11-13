@@ -104,6 +104,7 @@ export interface V2DigestReadiness {
   ): void;
 }
 export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
+  "supervision.terminals": arrayReadCodec(),
   ...transcriptReadCodecs,
   ...catalogReadCodecs,
   "history.list": arrayReadCodec<HistoryEntry>(),
@@ -197,6 +198,11 @@ export class OpencodeV2DigestSink implements DigestSink {
         ...history.readers(),
       }),
       ...this.#transcripts.readers,
+      "supervision.terminals": async ({ after }, signal) => {
+        await this.#prepare(signal, true);
+        this.#check(signal);
+        return this.#native?.terminals(after, policy.publishrows) ?? [];
+      },
       "opcv2.sessions": async (input, signal) => {
         const connection = this.#connection,
           { client } = await this.#prepare(signal);

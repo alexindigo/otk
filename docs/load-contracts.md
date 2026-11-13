@@ -7,7 +7,11 @@ history, source exhaustion or `older: null`. Interactive demand is never
 idle-gated. Optional backfill and message prefetch require `digest.idlems`
 without requests, a viewer or `digest.background`, and at most `digest.parallel`
 admitted entry-batches. Lamps remain independent. Waiting yields execution
-(AXIOM 2).
+(AXIOM 2). Positive native terminal inventories are mandatory supervision
+demand: they stream bounded scalar metadata through the existing credited worker
+read channel, without acquiring bodies, usage, helpers or the ordinary session
+catalog. OTK acknowledgements, never native viewed state, decide which finishes
+are unseen.
 
 Current-folder choice warm-up is separate from idle backfill: one page-ready
 input currently releases models, agents, commands and skills at project

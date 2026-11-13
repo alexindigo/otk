@@ -6,7 +6,7 @@ import type { Info, RawPart } from "./types.ts";
 import type { UsageMessage } from "@otk/protocol";
 import { reportedNumber, reportedTokens } from "./usage-values.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
-import { runningDirectories } from "./db-hints.ts";
+import { runningDirectories, terminalSessions } from "./db-hints.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
 export class BootstrapDb {
   #db: DatabaseSync | null = null;
@@ -34,6 +34,23 @@ export class BootstrapDb {
     } catch (e) {
       this.close();
       this.diagnostic("warn", "harness db: using API fallback", e);
+    }
+  }
+  /** Candidate endpoints, qualified by the adapter's current native status. */
+  terminals(
+    after: string,
+    limit: number,
+  ): import("@otk/protocol").SessionMetadata[] {
+    if (!this.#db) return [];
+    try {
+      return terminalSessions(this.#db, after, limit);
+    } catch (error) {
+      this.diagnostic(
+        "warn",
+        "harness db: terminal evidence unavailable",
+        error,
+      );
+      return [];
     }
   }
   /** Undefined means hints are unavailable; an empty list is authoritative. */
