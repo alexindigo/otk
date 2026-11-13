@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
+import { revealTool } from "../../pages/transcript.ts";
 
 test.describe("native page", () => {
   test.use({ profile: "transport-page" });
@@ -108,6 +109,7 @@ test.describe("native shell", () => {
       (await state.observe<{ transport: { entered: boolean } }>()).transport
         .entered
     ).toBe(true);
+    await revealTool(page, "[data-tool=bash]");
     await expect(page.locator("[data-tool=bash]")).toContainText(
       "request-native-once",
     );

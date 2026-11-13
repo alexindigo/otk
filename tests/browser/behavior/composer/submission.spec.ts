@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
+import { revealTool } from "../../pages/transcript.ts";
 
 test.use({ profile: "composer-submission" });
 for (const path of ["normal", "shell", "slash", "palette"] as const) {
@@ -54,6 +55,10 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
         await expect(prompt(page)).toHaveValue("");
       }
       if (path === "shell") {
+        await revealTool(
+          page,
+          `[data-tool=bash][data-tool-status=completed]:has([title*="SUBMISSION-SHELL-${turn}"])`,
+        );
         await expect(
           page.locator("[data-tool=bash][data-tool-status=completed]").filter({
             hasText: `SUBMISSION-SHELL-${turn}`,

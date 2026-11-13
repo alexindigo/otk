@@ -56,7 +56,11 @@ test(
     await page.goto(state.url + "/?source");
     await expect(page.locator('[data-message-command="reply.copy"]'))
       .toBeAttached();
-    await page.locator(".otk-work-fold").click();
+    await expect(page.locator(".otk-work-fold")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(page.locator(".otk-work-fold")).toHaveText("Work log");
     await expect(page.locator(".otk-work-body")).toHaveCount(0);
     await page.evaluate("sourceProbe.reset()");
     const start = performance.now();
