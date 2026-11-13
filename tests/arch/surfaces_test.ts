@@ -125,6 +125,46 @@ Deno.test("every UI CSS variable resolves to a declared theme or structural toke
   );
 });
 
+Deno.test("only VirtualList's hidden measurement layer may leave overlay flow", () => {
+  const fixture = (
+    markup = '<div class="otk-virtual-measure" aria-hidden="true" />',
+    css =
+      ".otk-virtual-measure { position: absolute; visibility: hidden; pointer-events: none; }",
+    name = "VirtualList",
+  ) =>
+    new Map([
+      [
+        "components/Host.tsx",
+        `import Content from "./${name}.tsx"; <Popover><Content /></Popover>;`,
+      ],
+      [
+        `components/${name}.tsx`,
+        `export default function Content() { return <div>${markup}</div>; }`,
+      ],
+      [`components/${name}.css`, css],
+    ]);
+  assertEquals(surfaceErrors(fixture()), []);
+  for (
+    const invalid of [
+      fixture('<div class="visible" />', ".visible { position: absolute; }"),
+      fixture('<div class="otk-virtual-measure" aria-hidden="false" />'),
+      fixture('<div class="otk-virtual-measure" />'),
+      fixture(
+        undefined,
+        ".otk-virtual-measure { position: absolute; visibility: visible; pointer-events: none; }",
+      ),
+      fixture(
+        undefined,
+        ".otk-virtual-measure { position: absolute; visibility: hidden; pointer-events: auto; }",
+      ),
+      fixture(undefined, undefined, "Impostor"),
+      fixture(
+        '<><div class="otk-virtual-measure" aria-hidden="true" /><div class="otk-virtual-measure" /></>',
+      ),
+    ]
+  ) assert(surfaceErrors(invalid).length, JSON.stringify([...invalid]));
+});
+
 Deno.test("A12 surface analysis accepts native nested flow, sticky offsets and decorative lamps", () => {
   assertEquals(
     surfaceErrors(

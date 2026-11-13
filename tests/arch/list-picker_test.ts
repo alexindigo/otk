@@ -12,6 +12,33 @@ const root = new URL("../../", import.meta.url);
 export function errors(path: string, source: string): string[] {
   return pickerErrors(path, source);
 }
+/** Row owners must be destroyed, not merely hidden, when the picker closes. */
+export function lifetimeErrors(text: string): string[] {
+  const source = new Source(text);
+  const owners = source.all.filter((node) =>
+    node.type === "JSXOpeningElement" &&
+    ["VirtualList", "For"].includes(source.name(node.name) ?? "")
+  );
+  if (!owners.length) return ["picker requires a row owner"];
+  return owners.flatMap((owner) => {
+    let current = source.parent.get(owner);
+    while (current) {
+      if (
+        current.type === "JSXElement" &&
+        source.name(current.openingElement.name) === "Show" &&
+        owner.start! >= current.openingElement.end!
+      ) {
+        const when = source.value(source.attr(current.openingElement, "when"));
+        if (
+          when?.type === "CallExpression" &&
+          source.name(when.callee) === "opened" && !when.arguments.length
+        ) return [];
+      }
+      current = source.parent.get(current);
+    }
+    return ["picker row owner remains mounted after close"];
+  });
+}
 export function readinessErrors(source: string): string[] {
   const parsed = new Source(source);
   const bodies = parsed.all.flatMap((node) => {
@@ -113,14 +140,28 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
   const picker = await Deno.readTextFile(
     new URL("packages/ui/components/ListPicker.tsx", root),
   );
-  assert(
-    picker.includes("<Show when={opened()}>") &&
-      picker.includes("buttons.clear()"),
-  );
+  assertEquals(lifetimeErrors(picker), []);
   assert(
     !picker.includes('"★"') && !picker.includes('"☆"'),
     "Generic actions inject their own content",
   );
+});
+
+Deno.test("picker row ownership rejects retained closed windows", () => {
+  for (const owner of ["VirtualList", "For"]) {
+    assertEquals(
+      lifetimeErrors(`<Show when={opened()}><${owner} /></Show>`),
+      [],
+    );
+    for (
+      const invalid of [
+        `<div hidden={!opened()}><${owner} /></div>`,
+        `<><Show when={opened()} /><${owner} /></>`,
+        `<Show when={true}><${owner} /></Show>`,
+        `<Show when={opened()} fallback={<${owner} />}><span /></Show>`,
+      ]
+    ) assert(lifetimeErrors(invalid).length, invalid);
+  }
 });
 
 Deno.test("A12 submission readiness accepts aliased ports and formatted awaits", () => {
