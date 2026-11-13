@@ -793,6 +793,7 @@ export class OpencodeV1DigestSink implements DigestSink {
           this.policy.batch,
           directory,
           reported,
+          "opencode-v1:" + native.file,
         );
         if (!page.length) break;
         projects.push(...page);
@@ -818,6 +819,19 @@ export class OpencodeV1DigestSink implements DigestSink {
               sessionCount: 0,
               lastActivity: null,
               authority: "current",
+              identities: [{
+                source: "opencode-v1:" + native.file,
+                repoID: project.id,
+                canonicalRoot: project.worktree,
+                recordedRoot: root,
+                inventory: [
+                  { directory: project.worktree, kind: "checkout" },
+                  ...(project.sandboxes ?? []).map((directory) => ({
+                    directory,
+                    kind: "unknown" as const,
+                  })),
+                ],
+              }],
               topology: {
                 repoID: project.id,
                 canonicalRoot: project.worktree,

@@ -6,6 +6,8 @@ export interface SessionMetadata {
   parentID?: string;
   directory: string;
   projectID: string;
+  /** Recorded native checkout boundary, independent of current path availability. */
+  checkoutRoot?: string;
   title: string;
   timeCreated: number;
   timeUpdated: number;

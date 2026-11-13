@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
+import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import type { IndexMetadata, ProjectSummary } from "@otk/protocol";
 
 const entry = (id = "tstv1-a"): IndexMetadata => ({
@@ -136,6 +137,34 @@ Deno.test("@load project population seeds own counts independently of keyed hydr
   assertEquals(owner.values.get("/other")?.authority, "stale");
 });
 
+Deno.test("@load population-only identity seeds never revisit acquired session contributions", () => {
+  let reads = 0;
+  const owner = new ProjectSummaries(() => {
+    reads++;
+    return { seen: 0, finish: 0 };
+  }, () => {});
+  const seed = {
+    directory: "/tree",
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current" as const,
+    identities: [{
+      source: "fixture",
+      repoID: "p",
+      canonicalRoot: "/repo",
+      recordedRoot: "/tree",
+      inventory: [{ directory: "/tree", kind: "worktree" as const }],
+    }],
+  };
+  owner.seed([seed]);
+  owner.entry({ ...entry(), directory: "/tree" });
+  reads = 0;
+  owner.seed([{ ...seed, sessionCount: 2 }]);
+  assertEquals(reads, 0);
+  assertEquals(owner.values.get("/tree")?.sessionCount, 2);
+});
+
 Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups across nested routing and stale authority", () => {
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
   owner.seed([
@@ -227,7 +256,7 @@ Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups acr
   assertEquals(owner.values.get("/new-repo")?.status, "none");
 });
 
-Deno.test("topology outlives population-only seeds; explicit clear retires only the relationship and empty inventory stays unmaterialized", () => {
+Deno.test("topology outlives population-only seeds and inventory removal; empty inventory stays unmaterialized", () => {
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
   const topology = {
     repoID: "p",
@@ -261,7 +290,8 @@ Deno.test("topology outlives population-only seeds; explicit clear retires only 
     authority: "current",
     topology: null,
   }]);
-  assertEquals(owner.values.get("/tree")?.topology, undefined);
+  assertEquals(owner.values.get("/tree")?.topology, topology);
+  assertEquals(owner.values.get("/tree")?.availability, "removed");
   owner.seed([{
     directory: "/empty",
     hasSessions: false,
@@ -306,4 +336,66 @@ Deno.test("known nested scopes retain their checkout row and exact source scope 
   assertEquals(owner.values.has("/tree/src"), false);
   assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/src"]);
   assertEquals(owner.values.get("/tree")?.sessionCount, 0);
+});
+
+Deno.test("failed identity persistence cannot retire summary contributions or defeat retry", () => {
+  let fail = false;
+  const identity = new ProjectIdentity({
+    list: () => [],
+    save: () => {
+      if (fail) throw new Error("history unavailable");
+    },
+  });
+  const owner = new ProjectSummaries(
+    () => ({ seen: 0, finish: 0 }),
+    () => {},
+    undefined,
+    undefined,
+    identity,
+  );
+  const seed = {
+    directory: "/tree/src",
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current" as const,
+    identities: [{
+      source: "fixture",
+      repoID: "p",
+      canonicalRoot: "/repo",
+      recordedRoot: "/tree",
+      inventory: [{ directory: "/tree", kind: "worktree" as const }],
+    }],
+  };
+  owner.seed([seed]);
+  const active = {
+    ...entry(),
+    directory: "/tree/src",
+    activity: { work: { keys: ["work"], fresh: true } },
+  };
+  owner.entry(active);
+  const before = structuredClone([...owner.values]);
+  const moved = {
+    ...seed,
+    identities: [{ ...seed.identities[0], canonicalRoot: "/moved" }],
+  };
+  fail = true;
+  assertThrows(() => owner.seed([moved]), Error, "history unavailable");
+  assertEquals([...owner.values], before);
+  fail = false;
+  owner.seed([moved]);
+  assertEquals(owner.values.get("/moved")?.status, "working");
+  const afterMove = structuredClone([...owner.values]);
+  fail = true;
+  assertThrows(
+    () =>
+      owner.entry({ ...active, directory: "/tree/lib", checkoutRoot: "/tree" }),
+    Error,
+    "history unavailable",
+  );
+  assertEquals([...owner.values], afterMove);
+  fail = false;
+  owner.entry({ ...active, directory: "/tree/lib", checkoutRoot: "/tree" });
+  assertEquals(owner.values.get("/tree")?.status, "working");
+  assertEquals(owner.values.get("/tree")?.sessionCount, 1);
 });

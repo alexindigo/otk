@@ -288,12 +288,26 @@ export function createProjectProjection(o: {
       ) {
         const p = ensure(directory), summary = next.summaries?.[directory];
         if (
-          JSON.stringify([p.summary?.topology, p.summary?.scopes]) !==
-            JSON.stringify([summary?.topology, summary?.scopes])
+          JSON.stringify([
+            p.summary?.topology,
+            p.summary?.scopes,
+            p.summary?.memberships,
+          ]) !==
+            JSON.stringify([
+              summary?.topology,
+              summary?.scopes,
+              summary?.memberships,
+            ])
         ) {
           for (const topology of [p.summary?.topology, summary?.topology]) {
             if (topology) repos.add(topology.repoID);
           }
+          for (
+            const membership of [
+              ...p.summary?.memberships ?? [],
+              ...summary?.memberships ?? [],
+            ]
+          ) repos.add(membership.repoID);
         }
         if (JSON.stringify(p.summary) !== JSON.stringify(summary)) {
           p.summary = summary;
@@ -477,6 +491,7 @@ export function createProjectProjection(o: {
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,
           topology: p.summary?.topology,
+          availability: p.summary?.availability,
           ...(p.summary?.topology?.parentDirectory
             ? {
               depth: 1,

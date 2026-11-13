@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Harness } from "@otk/harness";
 import {
+  Checkouts,
+  checkoutsMigrations,
   Finishes,
   finishesMigrations,
   Frecency,
@@ -83,6 +85,7 @@ export async function startApplication(
     prefsMigrations,
     frecencyMigrations,
     projectsMigrations,
+    checkoutsMigrations,
     tasksMigrations,
     seenMigrations,
     finishesMigrations,
@@ -111,6 +114,7 @@ export async function startApplication(
         seen: new Seen(store),
         finishes: new Finishes(store),
         templates: new ProjectTemplates(store),
+        checkouts: new Checkouts(store),
       },
       index,
       () => cfg.auth.username.toLowerCase() || "local",

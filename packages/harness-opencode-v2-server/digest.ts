@@ -573,6 +573,18 @@ export class OpencodeV2DigestSink implements DigestSink {
         ? [...new Set([...roots, ...this.#projectDirectories])]
         : [directory]).map((directory) => ({
           directory,
+          identities: inventory.flatMap((project) =>
+            project.canonical === directory || project.worktrees?.some((row) =>
+                row.directory === directory
+              )
+              ? topology.facts(
+                directory,
+                project.id,
+                "opencode-v2:" + this.config.db,
+                "",
+              )
+              : []
+          ),
           // Without SQL, only exact inventory roots establish native ownership.
           // A retained nested scope is unknown, not a retired relationship.
           topology: roots.has(directory) && inventory.every((row) =>
@@ -594,8 +606,16 @@ export class OpencodeV2DigestSink implements DigestSink {
       this.#check(signal, connection);
       const rows = this.#native.projects(after, this.policy.batch, directory)
         .map(
-          ({ projectID, ...row }) => ({
+          ({ projectID, owners, ...row }) => ({
             ...row,
+            identities: owners.flatMap((owner) =>
+              topology.facts(
+                row.directory,
+                owner.projectID,
+                "opencode-v2:" + this.config.db,
+                owner.path,
+              )
+            ),
             topology: topology.resolve(row.directory, projectID),
           }),
         );
@@ -611,6 +631,17 @@ export class OpencodeV2DigestSink implements DigestSink {
           directory,
         ): ProjectSeed => ({
           directory,
+          identities: inventory.flatMap((project) =>
+            project.canonical === directory ||
+              project.worktrees?.some((row) => row.directory === directory)
+              ? topology.facts(
+                directory,
+                project.id,
+                "opencode-v2:" + this.config.db,
+                "",
+              )
+              : []
+          ),
           topology: inventory.every((row) => row.worktrees !== undefined)
             ? topology.root(directory)
             : undefined,

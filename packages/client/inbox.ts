@@ -74,6 +74,7 @@ export function ageing(
 }
 export interface InboxProject extends ProjectRecord {
   topology?: ProjectTopology;
+  availability?: ProjectSummary["availability"];
   depth?: number;
   parentLabel?: string;
   /** A repo can be shown as context while its own independent policy is Inactive. */
@@ -86,30 +87,30 @@ export interface InboxProject extends ProjectRecord {
   visitText: string;
   ageing: number;
 }
-/** Resolve only authoritative exact scopes, or repo-qualified registered roots. */
+/** Consume the owner's exact scope projection; never infer membership from paths. */
 export function projectDirectory(
   directory: string,
   summaries: Readonly<Record<string, ProjectSummary>>,
   repoID?: string,
 ): string {
-  let result = directory, length = -1;
+  const leaves = new Set<string>();
   for (const summary of Object.values(summaries)) {
+    const memberships = summary.memberships?.filter((m) =>
+      m.directory === directory && (repoID === undefined || m.repoID === repoID)
+    );
+    if (memberships?.length) {
+      for (const membership of memberships) {
+        leaves.add(membership.leafDirectory);
+      }
+      continue;
+    }
     const topology = summary.topology;
     if (!topology || repoID !== undefined && topology.repoID !== repoID) {
       continue;
     }
-    if (summary.scopes?.includes(directory)) return topology.leafDirectory;
-    if (
-      repoID !== undefined &&
-      (directory === topology.leafDirectory ||
-        directory.startsWith(topology.leafDirectory + "/")) &&
-      topology.leafDirectory.length > length
-    ) {
-      result = topology.leafDirectory;
-      length = result.length;
-    }
+    if (summary.scopes?.includes(directory)) leaves.add(topology.leafDirectory);
   }
-  return result;
+  return leaves.size === 1 ? [...leaves][0] : directory;
 }
 /** Hierarchy is presentation only: directory/task identities are never rewritten. */
 export function projectHierarchy<
@@ -301,6 +302,7 @@ export function inboxProjects(
     [...tracked, ...discovered, ...templates].map((row) => ({
       ...row,
       topology: inbox.summaries?.[row.directory]?.topology,
+      availability: inbox.summaries?.[row.directory]?.availability,
     })),
   );
 }

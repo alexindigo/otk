@@ -36,7 +36,7 @@ Deno.test("V2 topology chooses the longest checkout only inside the native proje
   assertEquals(topology.root("/repo/src"), null);
 });
 
-Deno.test("V2 topology distinguishes failed inventory, ambiguous roots and retired relationships", () => {
+Deno.test("V2 topology distinguishes failed inventory and ambiguous roots without retiring native affiliation", () => {
   const failed = new V2ProjectTopology([{ id: "repo", canonical: "/repo" }]);
   assertEquals(failed.resolve("/repo/src", "repo"), undefined);
   assertEquals(failed.root("/repo"), undefined);
@@ -50,6 +50,12 @@ Deno.test("V2 topology distinguishes failed inventory, ambiguous roots and retir
     canonical: "/repo",
     worktrees: [],
   }]);
-  assertEquals(retired.resolve("/elsewhere/src", "repo"), null);
+  assertEquals(retired.facts("/elsewhere/src", "repo", "fixture", "src"), [{
+    source: "fixture",
+    repoID: "repo",
+    canonicalRoot: "/repo",
+    recordedRoot: "/elsewhere",
+    inventory: [],
+  }]);
   assertEquals(retired.root("/elsewhere"), null);
 });
