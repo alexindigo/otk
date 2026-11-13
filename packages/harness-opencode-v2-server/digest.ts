@@ -462,6 +462,10 @@ export class OpencodeV2DigestSink implements DigestSink {
   async #remember(row: SessionMetadata, signal: AbortSignal): Promise<void> {
     this.#check(signal);
     const previous = this.storage.read(row.id);
+    if (
+      previous && !previous.deleted &&
+      JSON.stringify(previous.metadata) === JSON.stringify(row)
+    ) return;
     const delta: DigestDelta = {
       summary: previous?.summary ?? { state: "digesting", revision: 0 },
       turns: { upsert: {}, remove: [] },
@@ -711,9 +715,9 @@ export class OpencodeV2DigestSink implements DigestSink {
   pending(id: string): boolean {
     return this.#transcripts.pending(id);
   }
-  invalidate(id: string, revision: number): void {
+  invalidate(id: string, revision: number, messages?: readonly string[]): void {
     this.#lists.invalidate();
-    this.#transcripts.invalidate(id, revision);
+    this.#transcripts.invalidate(id, revision, messages);
   }
   invalidateHelper(id: string): void {
     this.#transcripts.invalidateHelper(id);
@@ -790,6 +794,8 @@ interface Scan {
   source: string | null;
   after_seq: number | null;
   api_cursor: string | null;
+  targeted: number;
+  target_offset: number;
 }
 /** Selected by the application's one worker: no serving-isolate SQLite owner. */
 export class OpencodeV2TranscriptDigestSink implements DigestSink {
@@ -845,25 +851,34 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     this.readers = {
       "opcv2.helper.progress": async (input, signal) => {
         const raw = await this.#ensure(input.sessionID, signal);
+        const source = this.#source, connection = this.#connection;
         const result = await this.transcript.helperProgress(
           input.sessionID,
           signal,
         );
+        this.source.check(signal);
+        if (source !== this.#source || connection !== this.#connection) {
+          throw new Error("V2 helper source changed");
+        }
         return {
           ...result,
-          progress: result.progress.state !== "known" ? result.progress : {
-            ...result.progress,
-            value: {
-              ...result.progress.value,
-              time: {
-                start: millis(raw.time.created),
-                ...(raw.time.idle &&
-                    millis(raw.time.idle) >= millis(raw.time.busy)
-                  ? { end: millis(raw.time.idle) }
-                  : {}),
+          progress: result.progress.state !== "known"
+            ? result.progress
+            : knownDerived(
+              {
+                ...result.progress.value,
+                time: {
+                  start: millis(raw.time.created),
+                  ...(raw.time.idle &&
+                      millis(raw.time.idle) >= millis(raw.time.busy)
+                    ? { end: millis(raw.time.idle) }
+                    : {}),
+                },
               },
-            },
-          },
+              `${input.sessionID}@${source}`,
+              0,
+              !!raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy),
+            ),
         };
       },
       "opcv2.transcript": async (input, signal) => {
@@ -920,7 +935,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       }
       this.#client = client;
       this.#provenNative = native;
-      this.#source = `sql:${native.identity}:${client.service.pid}`;
+      this.#source =
+        `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
       return cached.raw;
     }
     const raw = await client.read(
@@ -932,7 +948,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       throw new Error("V2 transcript source changed");
     }
     this.#client = client;
-    this.#source = `api:${client.service.pid}:${this.#connection}`;
+    this.#source = `api:${client.service.pid}:connection:${this.#connection}`;
     this.#provenNative = undefined;
     if (!native || native !== this.source.native()) {
       return activity ? await withSessionActivity(client, raw, signal) : raw;
@@ -979,7 +995,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         throw new Error("V2 database has not observed the requested session");
       }
       this.#provenNative = native;
-      this.#source = `sql:${native.identity}:${client.service.pid}`;
+      this.#source =
+        `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
       this.#sourceError = undefined;
     } catch (error) {
       signal.throwIfAborted();
@@ -1062,17 +1079,26 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   }
   discoveryProject(_directory: string, _active: boolean): void {}
   pending(id: string): boolean {
-    return !this.#scan(id)?.complete;
+    const scan = this.#scan(id);
+    return !scan?.complete ||
+      !scan.source?.endsWith(`:connection:${this.#connection}`);
   }
   #scan(id: string): Scan | undefined {
     return this.storage.sql.prepare(
-      "SELECT generation,revision,complete,exhausted,source,after_seq,api_cursor FROM opcv2_transcript_scan WHERE session_id=?",
+      "SELECT generation,revision,complete,exhausted,source,after_seq,api_cursor,targeted,target_offset FROM opcv2_transcript_scan WHERE session_id=?",
     ).get(id) as unknown as Scan | undefined;
   }
-  invalidate(id: string, revision = 0): void {
+  invalidate(id: string, revision = 0, messages?: readonly string[]): void {
     const next = Math.max(revision, (this.#scan(id)?.revision ?? 0) + 1);
+    this.#sessionProofs.delete(id);
+    if (messages?.length && this.#scan(id)?.exhausted) {
+      this.storage.sql.prepare(
+        "UPDATE opcv2_transcript_scan SET revision=?,complete=0,targeted=1,target_offset=0 WHERE session_id=?",
+      ).run(next, id);
+      return;
+    }
     this.storage.sql.prepare(
-      "INSERT INTO opcv2_transcript_scan(session_id,revision) VALUES (?,?) ON CONFLICT(session_id) DO UPDATE SET revision=excluded.revision,complete=0,exhausted=0,source=NULL,after_seq=NULL,api_cursor=NULL",
+      "INSERT INTO opcv2_transcript_scan(session_id,revision) VALUES (?,?) ON CONFLICT(session_id) DO UPDATE SET revision=excluded.revision,complete=0,exhausted=0,source=NULL,after_seq=NULL,api_cursor=NULL,targeted=0,target_offset=0",
     ).run(id, next);
   }
   invalidateHelper(id: string): void {
@@ -1100,7 +1126,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   ): Promise<void> {
     const saved = this.storage.read(entry.id), previous = saved?.helper;
     const progress = derivedValue(previous?.progress);
+    if (helper.state !== "ready" && progress) {
+      helper = { ...progress, state: helper.state };
+    }
     const same = previous !== undefined &&
+      (helper.state !== "ready" ||
+        previous.progress.state === "known" &&
+          previous.progress.witness.source === `${entry.id}@${this.#source}`) &&
       previous.state === helper.state &&
       (progress?.toolCount ?? null) === helper.toolCount &&
       progress?.current?.name === helper.current?.name &&
@@ -1135,9 +1167,13 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
               current: helper.current,
               time: helper.time,
             },
-            entry.id,
+            `${entry.id}@${this.#source}`,
             (previous?.revision ?? 0) + (same ? 0 : 1),
+            helper.time?.end !== undefined,
+            previous?.progress,
           )
+          : previous?.progress.state === "known"
+          ? previous.progress
           : {
             state: helper.state === "unavailable" ? "unavailable" : "pending",
           },
@@ -1160,10 +1196,16 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       entry = metadata(raw),
       source = this.#source;
     let scan = this.#scan(job.sessionID);
+    // Fine keys belong to the admitted job, not durable authority. Coalescing or
+    // restart can retire them; an exhausted cursor cannot then certify refresh.
+    if (scan?.targeted && !job.messages?.length) {
+      this.invalidate(job.sessionID, scan.revision);
+      scan = this.#scan(job.sessionID);
+    }
     if (!scan || scan.source !== source) {
       const generation = (scan?.generation ?? 0) + 1;
       this.storage.sql.prepare(
-        "INSERT INTO opcv2_transcript_scan(session_id,generation,source,revision) VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET generation=excluded.generation,source=excluded.source,after_seq=NULL,api_cursor=NULL,complete=0,exhausted=0",
+        "INSERT INTO opcv2_transcript_scan(session_id,generation,source,revision) VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET generation=excluded.generation,source=excluded.source,after_seq=NULL,api_cursor=NULL,complete=0,exhausted=0,targeted=0,target_offset=0",
       ).run(
         job.sessionID,
         generation,
@@ -1172,11 +1214,19 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       );
       scan = this.#scan(job.sessionID)!;
     }
+    if (scan.complete) return;
     const admitted = { ...scan };
-    let rows = scan.exhausted ? [] : this.transcript.sqlHeaders(
+    const selected = scan.targeted && job.messages?.length
+      ? job.messages.slice(
+        scan.target_offset,
+        scan.target_offset + Math.min(budget.rows, SCAN_ROWS),
+      )
+      : undefined;
+    let rows = scan.exhausted && !selected ? [] : this.transcript.sqlHeaders(
         job.sessionID,
         scan.after_seq ?? undefined,
         Math.min(budget.rows, SCAN_ROWS),
+        selected,
       ),
       next: string | undefined;
     if (rows && !scan.exhausted) {
@@ -1197,17 +1247,37 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       rows = [...page.items].reverse().map((m) => scalarMessage(m, --order));
     }
     signal.throwIfAborted();
+    const currentScan = this.#scan(job.sessionID);
     if (
       source !== this.#source ||
-      this.#scan(job.sessionID)?.revision !== admitted.revision
+      !currentScan || currentScan.revision !== admitted.revision ||
+      currentScan.generation !== admitted.generation ||
+      currentScan.source !== admitted.source ||
+      currentScan.after_seq !== admitted.after_seq ||
+      currentScan.api_cursor !== admitted.api_cursor ||
+      currentScan.target_offset !== admitted.target_offset ||
+      currentScan.complete !== admitted.complete ||
+      this.storage.read(job.sessionID)?.deleted
     ) return "reconcile";
-    let complete = !!scan.exhausted ||
-      (this.#native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
+    let complete = selected
+      ? scan.target_offset + selected.length >= job.messages!.length
+      : !!scan.exhausted ||
+        (this.#native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
     const turns = new Set<string>();
     this.storage.transaction(() => {
       const put = this.storage.sql.prepare(
         "INSERT INTO opcv2_transcript_header(session_id,message_id,seq,type,turn_id,scalar,generation) VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET seq=excluded.seq,type=excluded.type,turn_id=excluded.turn_id,scalar=excluded.scalar,generation=excluded.generation",
       );
+      if (selected) {
+        for (
+          const old of this.storage.sql.prepare(
+            "SELECT turn_id FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+          ).all(job.sessionID, JSON.stringify(selected))
+        ) if (old.turn_id) turns.add(String(old.turn_id));
+        this.storage.sql.prepare(
+          "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+        ).run(job.sessionID, JSON.stringify(selected));
+      }
       for (const row of rows!) {
         if (row.usage && this.#native) turns.add(row.usage.turnID);
         put.run(
@@ -1236,16 +1306,20 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           ).run(job.sessionID);
         }
       }
-      this.storage.sql.prepare(
-        "UPDATE opcv2_transcript_scan SET after_seq=?,api_cursor=?,complete=?,exhausted=? WHERE session_id=?",
-      ).run(
-        rows!.at(-1)?.seq ?? scan!.after_seq,
-        next ?? null,
-        complete ? 1 : 0,
-        complete ? 1 : 0,
-        job.sessionID,
-      );
-      if (complete) {
+      if (selected) {
+        this.storage.sql.prepare(
+          "UPDATE opcv2_transcript_scan SET target_offset=? WHERE session_id=?",
+        ).run(scan!.target_offset + selected.length, job.sessionID);
+      } else {this.storage.sql.prepare(
+          "UPDATE opcv2_transcript_scan SET after_seq=?,api_cursor=?,complete=?,exhausted=? WHERE session_id=?",
+        ).run(
+          rows!.at(-1)?.seq ?? scan!.after_seq,
+          next ?? null,
+          0,
+          complete ? 1 : 0,
+          job.sessionID,
+        );}
+      if (complete && !selected && !scan!.targeted) {
         const stale = this.storage.sql.prepare(
           "SELECT message_id,turn_id FROM opcv2_transcript_header WHERE session_id=? AND generation<>? LIMIT ?",
         ).all(job.sessionID, admitted.generation, budget.rows);
@@ -1258,49 +1332,108 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         complete = stale.length < budget.rows;
         this.storage.sql.prepare(
           "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
-        ).run(complete ? 1 : 0, job.sessionID);
+        ).run(0, job.sessionID);
+      }
+      for (const turn of turns) {
+        this.storage.sql.prepare(
+          "INSERT OR IGNORE INTO opcv2_pending_turn VALUES(?,?)",
+        ).run(job.sessionID, turn);
       }
     });
-    const previous = this.storage.read(job.sessionID),
-      total = this.#summary(job.sessionID);
+    const previous = this.storage.read(job.sessionID);
     // Native sessions initialize their totals to zero even when the provider
     // reports no usage. Only observed constituent usage establishes authority;
     // once known, native totals still include charges outside the reply ledger.
-    const usageReported = !!this.storage.sql.prepare(
+    const usageReported = complete && !!this.storage.sql.prepare(
       "SELECT 1 FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' AND coalesce(json_extract(scalar,'$.usage.cost'),json_extract(scalar,'$.usage.tokens.input'),json_extract(scalar,'$.usage.tokens.output'),json_extract(scalar,'$.usage.tokens.reasoning'),json_extract(scalar,'$.usage.tokens.cache.read'),json_extract(scalar,'$.usage.tokens.cache.write')) IS NOT NULL LIMIT 1",
     ).get(job.sessionID);
     const nativeUsage = usageReported ? record(raw) : {},
       nativeTokens = tokens(nativeUsage.tokens),
       nativeCost = reported(nativeUsage.cost);
     const summaries: Record<string, Derived<UsageSummary>> = {};
+    const remove: string[] = [];
     const revision = (previous?.summary.revision ?? 0) + 1;
-    const latest = this.storage.sql.prepare(
-      "SELECT scalar FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' ORDER BY seq DESC LIMIT 1",
-    ).get(job.sessionID);
+    const latest = complete
+      ? this.storage.sql.prepare(
+        "SELECT scalar FROM opcv2_transcript_header WHERE session_id=? AND type='assistant' AND coalesce(json_extract(scalar,'$.usage.tokens.input'),json_extract(scalar,'$.usage.tokens.output'),json_extract(scalar,'$.usage.tokens.reasoning'),json_extract(scalar,'$.usage.tokens.cache.read'),json_extract(scalar,'$.usage.tokens.cache.write')) IS NOT NULL ORDER BY seq DESC LIMIT 1",
+      ).get(job.sessionID)
+      : undefined;
     const last = latest
       ? JSON.parse(String(latest.scalar)) as ScalarMessage
       : undefined;
-    for (const turn of turns) {
+    const coveredTurns = complete
+      ? this.storage.sql.prepare(
+        "SELECT turn_id FROM opcv2_pending_turn WHERE session_id=? ORDER BY turn_id LIMIT ?",
+      ).all(job.sessionID, budget.rows).map((row) => String(row.turn_id))
+      : scan.targeted
+      ? []
+      : this.storage.sql.prepare(
+        "SELECT p.turn_id FROM opcv2_pending_turn p WHERE p.session_id=? AND EXISTS(SELECT 1 FROM opcv2_transcript_header u WHERE u.session_id=p.session_id AND u.message_id=p.turn_id AND u.type='user' AND u.generation=?) AND NOT EXISTS(SELECT 1 FROM opcv2_transcript_header a WHERE a.session_id=p.session_id AND a.turn_id=p.turn_id AND a.generation<>?) ORDER BY p.turn_id LIMIT ?",
+      ).all(
+        job.sessionID,
+        admitted.generation,
+        admitted.generation,
+        budget.rows,
+      ).map((row) => String(row.turn_id));
+    for (const turn of coveredTurns) {
+      const value = this.#summary(job.sessionID, turn);
+      if (!value.calls) {
+        remove.push(turn);
+        continue;
+      }
+      const terminal = this.storage.sql.prepare(
+        "SELECT 1 FROM opcv2_transcript_header t WHERE t.session_id=? AND t.generation=? AND t.type='idle' AND t.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?) AND NOT EXISTS(SELECT 1 FROM opcv2_transcript_header u WHERE u.session_id=t.session_id AND u.type='user' AND u.seq<t.seq AND u.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?)) LIMIT 1",
+      ).get(
+        job.sessionID,
+        admitted.generation,
+        job.sessionID,
+        turn,
+        job.sessionID,
+        turn,
+      );
       summaries[turn] = knownDerived(
-        this.#summary(job.sessionID, turn),
-        `${job.sessionID}/${turn}`,
+        value,
+        `${job.sessionID}/${turn}@${source}`,
         revision,
+        !!terminal,
+        this.storage.turn(job.sessionID, turn),
       );
     }
+    const remaining = complete &&
+      Number(
+          this.storage.sql.prepare(
+            "SELECT count(*) AS n FROM opcv2_pending_turn WHERE session_id=?",
+          ).get(job.sessionID)!.n,
+        ) > coveredTurns.length;
+    const finished = complete && !remaining;
     const delta: DigestDelta = {
       summary: {
-        state: complete ? "ready" : "digesting",
+        ...(previous?.summary ?? {}),
+        state: finished ? "ready" : "digesting",
+        refreshing: !finished,
+        stale: false,
+        error: undefined,
         revision: (previous?.summary.revision ?? 0) + 1,
         digestedAt: Date.now(),
         nativeUpdatedAt: millis(raw.time.updated),
-        messageCount: this.storage.sql.prepare(
-          "SELECT COUNT(*) AS n FROM opcv2_transcript_header WHERE session_id=?",
-        ).get(job.sessionID)!.n as number,
-        total: knownDerived(
-          { ...total, cost: nativeCost, tokens: nativeTokens },
-          job.sessionID,
-          revision,
-        ),
+        messageCount: finished
+          ? this.storage.sql.prepare(
+            "SELECT COUNT(*) AS n FROM opcv2_transcript_header WHERE session_id=?",
+          ).get(job.sessionID)!.n as number
+          : previous?.summary.messageCount,
+        total: finished
+          ? knownDerived(
+            {
+              ...this.#summary(job.sessionID),
+              cost: nativeCost,
+              tokens: nativeTokens,
+            },
+            `${job.sessionID}@${source}`,
+            revision,
+            !!raw.time.idle && millis(raw.time.idle) >= millis(raw.time.busy),
+            previous?.summary.total,
+          )
+          : previous?.summary.total ?? { state: "pending" },
         ...(last
           ? {
             last: knownDerived(
@@ -1317,17 +1450,37 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
                   : {}),
                 context: last.usage?.tokens ?? tokens(undefined),
               },
-              `${job.sessionID}/${last.id}`,
+              `${job.sessionID}/${last.id}@${source}`,
               revision,
+              false,
+              previous?.summary.last,
             ),
           }
+          : finished
+          ? { last: { state: "unavailable" as const } }
           : {}),
       },
-      turns: { upsert: summaries, remove: [] },
+      turns: { upsert: summaries, remove },
       deleted: null,
     };
-    await this.#commit(entry, delta);
-    return complete ? undefined : "continue";
+    this.storage.transaction(() => {
+      for (const turn of coveredTurns) {
+        this.storage.sql.prepare(
+          "DELETE FROM opcv2_pending_turn WHERE session_id=? AND turn_id=?",
+        ).run(job.sessionID, turn);
+      }
+      this.storage.sql.prepare(
+        "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
+      ).run(finished ? 1 : 0, job.sessionID);
+      this.storage.write(entry, delta);
+    });
+    await this.storage.publish({
+      sessionID: entry.id,
+      revision,
+      metadata: entry,
+      delta,
+    });
+    return finished ? undefined : "continue";
   }
   #summary(id: string, turn?: string): UsageSummary {
     const paths = [

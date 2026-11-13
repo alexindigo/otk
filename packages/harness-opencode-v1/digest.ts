@@ -110,6 +110,7 @@ interface Replacement {
   value?: Baseline;
 }
 interface Scan {
+  committed?: number;
   source_generation?: string | null;
   source_mode?: string | null;
   after_created?: number | null;
@@ -141,6 +142,7 @@ function header(raw: DigestHeader): DigestHeader {
   }
   const result = {
     ...raw,
+    terminal: raw.terminal ?? 0,
     time_created: counter(raw.time_created, "time_created", false)!,
     time_completed: counter(raw.time_completed, "time_completed"),
   };
@@ -164,6 +166,10 @@ function fromInfo(info: Info): DigestHeader {
     turn_id: info.role === "assistant" ? info.parentID ?? info.id : null,
     time_created: info.time.created,
     time_completed: info.time.completed ?? null,
+    terminal: info.error ||
+        info.finish && !["tool-calls", "unknown"].includes(info.finish)
+      ? 1
+      : 0,
     agent: info.agent ?? null,
     variant: info.model?.variant ?? null,
     provider_id: info.providerID ?? null,
@@ -229,6 +235,12 @@ export class OpencodeV1DigestSink implements DigestSink {
   #excludedDirectories = new Set<string>();
   #discoveryRevision = 0;
   discoveryProject(directory: string, active: boolean): void {
+    if (
+      active
+        ? this.#activeDirectories.has(directory) &&
+          !this.#excludedDirectories.has(directory)
+        : this.#excludedDirectories.has(directory)
+    ) return;
     this.#discoveryRevision++;
     if (active) {
       this.#excludedDirectories.delete(directory);
@@ -560,10 +572,13 @@ export class OpencodeV1DigestSink implements DigestSink {
     const saved = this.storage.read(id);
     if (!saved || saved.deleted) return false;
     const scan = this.storage.sql.prepare(
-      "SELECT dirty,complete_revision FROM opcv1_scan WHERE session_id=?",
+      "SELECT dirty,complete_revision,source_generation FROM opcv1_scan WHERE session_id=?",
     ).get(id);
     return saved.summary.state !== "ready" ||
-      !!scan && (!!scan.dirty || scan.complete_revision === null);
+      !!scan &&
+        (!!scan.dirty || scan.complete_revision === null ||
+          !!this.#native && (this.#nativeVerified || this.#projectVerified) &&
+            scan.source_generation !== this.#native.identity);
   }
   #invalidateMissingScan(id: string, revision: number): void {
     if (
@@ -1301,15 +1316,24 @@ export class OpencodeV1DigestSink implements DigestSink {
       ...(hints === undefined ? {} : { hints }),
     };
   }
-  invalidate(id: string, revision: number): void {
+  invalidate(
+    id: string,
+    revision: number,
+    _messages?: readonly string[],
+  ): void {
     this.#lists.invalidate();
     this.#invalidateScan(id, revision);
   }
   #invalidateScan(id: string, revision: number): void {
     const native = ids.decode(id);
     this.storage.sql.prepare(
-      "INSERT INTO opcv1_scan(session_id,native_id,after_message,scan_generation,observed_revision,complete_revision,dirty) VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1,covered_created=NULL,covered_message=NULL",
-    ).run(id, native, revision);
+      "INSERT INTO opcv1_scan(session_id,native_id,after_message,scan_generation,observed_revision,complete_revision,dirty,committed) VALUES(?,?,NULL,0,?,NULL,1,?) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1,covered_created=NULL,covered_message=NULL",
+    ).run(
+      id,
+      native,
+      revision,
+      this.storage.read(id)?.summary.total?.state === "known" ? 1 : 0,
+    );
     this.#observed.set(id, ++this.#observation);
   }
   async deleted(
@@ -1500,6 +1524,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         "scan_generation",
         "time_created",
         "time_completed",
+        "terminal",
         "agent",
         "provider_id",
         "model_id",
@@ -1516,7 +1541,12 @@ export class OpencodeV1DigestSink implements DigestSink {
       for (const key of this.#adjust(id, value, 1)) turns.add(key);
     }
   }
-  #summary(id: string, turn: string, changes: Replacement[]): UsageSummary {
+  #summary(
+    id: string,
+    turn: string,
+    changes: Replacement[],
+    covered = false,
+  ): UsageSummary {
     const aggregate = this.storage.sql.prepare(
       "SELECT * FROM opcv1_aggregates WHERE session_id=? AND turn_id=?",
     ).get(id, turn);
@@ -1540,7 +1570,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       Number(aggregate?.[`${key}_unknown`] ?? 0) > 0
     );
     let clock = previous?.time, peak = previous?.contextPeak ?? 0;
-    const recompute = !previous ||
+    const recompute = covered || !previous ||
       changes.some(({ previous: old }) =>
         belongs(old) &&
         (old!.time_created === previous.time?.start ||
@@ -1623,6 +1653,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       observed_revision: job.revision,
       complete_revision: null,
       dirty: 1,
+      committed: snapshot.summary.total?.state === "known" ? 1 : 0,
     };
     const targetOffset = job.cursor?.startsWith("target:")
       ? Number(job.cursor.slice(7))
@@ -1678,6 +1709,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     const restart = !targeted &&
       (sourceChanged || (!job.cursor || job.cursor === "reconcile") &&
           (!(scan.after_message === "~sweep" ||
+            scan.after_message === "~publish" ||
             (mode === "api" ? scan.api_cursor : scan.after_message)) ||
             scan.complete_revision !== null) ||
         !!job.boundary && !!scan.dirty);
@@ -1697,7 +1729,9 @@ export class OpencodeV1DigestSink implements DigestSink {
     let raw: DigestHeader[];
     let next: string | undefined;
     try {
-      if (!targeted && scan.after_message === "~sweep") raw = [];
+      if (
+        !targeted && ["~sweep", "~publish"].includes(scan.after_message ?? "")
+      ) raw = [];
       else if (targeted) {
         raw = native!.replacements(
           targets.map((messageID) => ({ sessionID: id, messageID })),
@@ -1755,6 +1789,9 @@ export class OpencodeV1DigestSink implements DigestSink {
         summary: {
           ...current.saved.summary,
           state: "unavailable",
+          stale: true,
+          refreshing: false,
+          error: String(error),
           revision: current.saved.summary.revision + 1,
         },
         turns: { upsert: {}, remove: [] },
@@ -1837,6 +1874,9 @@ export class OpencodeV1DigestSink implements DigestSink {
         summary: {
           ...current.saved.summary,
           state: "unavailable",
+          stale: true,
+          refreshing: false,
+          error: String(error),
           revision: current.saved.summary.revision + 1,
         },
         turns: { upsert: {}, remove: [] },
@@ -1925,28 +1965,95 @@ export class OpencodeV1DigestSink implements DigestSink {
         remove: string[] = [];
       for (const turn of affected) {
         if (turn) {
-          const summary = this.#summary(id, turn, changes);
-          if (summary.calls) {
-            upsert[turn] = knownDerived(summary, `${id}/${turn}`, revision);
-          } else remove.push(turn);
+          this.storage.sql.prepare(
+            "INSERT OR IGNORE INTO opcv1_pending_turn VALUES(?,?)",
+          ).run(id, turn);
         }
       }
+      const covered = new Set(
+        !targeted && !current.dirty &&
+          Number(current.observed_revision) === observed
+          ? this.storage.sql.prepare(
+            "SELECT p.turn_id FROM opcv1_pending_turn p WHERE p.session_id=? AND EXISTS(SELECT 1 FROM opcv1_messages u WHERE u.session_id=p.session_id AND u.message_id=p.turn_id AND u.role='user' AND u.scan_generation=?) AND NOT EXISTS(SELECT 1 FROM opcv1_messages a WHERE a.session_id=p.session_id AND a.role='assistant' AND coalesce(a.turn_id,a.message_id)=p.turn_id AND a.scan_generation<>?) ORDER BY p.turn_id LIMIT ?",
+          ).all(id, generation, generation, budget.rows).map((row) =>
+            String(row.turn_id)
+          )
+          : [],
+      );
+      const publish = ready
+        ? this.storage.sql.prepare(
+          "SELECT turn_id FROM opcv1_pending_turn WHERE session_id=? ORDER BY turn_id LIMIT ?",
+        ).all(id, budget.rows).map((row) => String(row.turn_id))
+        : [...covered];
+      for (const turn of publish) {
+        if (turn) {
+          const summary = this.#summary(
+            id,
+            turn,
+            changes,
+            ready || covered.has(turn),
+          );
+          if (summary.calls) {
+            const last = this.storage.sql.prepare(
+              "SELECT terminal FROM opcv1_messages WHERE session_id=? AND role='assistant' AND coalesce(turn_id,message_id)=? ORDER BY time_created DESC,message_id DESC LIMIT 1",
+            ).get(id, turn);
+            upsert[turn] = knownDerived(
+              summary,
+              `${id}/${turn}@${source}`,
+              revision,
+              (ready || covered.has(turn)) && !!last?.terminal,
+              this.storage.turn(id, turn),
+            );
+          } else remove.push(turn);
+          if (ready || covered.has(turn)) {
+            this.storage.sql.prepare(
+              "DELETE FROM opcv1_pending_turn WHERE session_id=? AND turn_id=?",
+            ).run(id, turn);
+          }
+        }
+      }
+      if (
+        ready &&
+        this.storage.sql.prepare(
+          "SELECT 1 FROM opcv1_pending_turn WHERE session_id=? LIMIT 1",
+        ).get(id)
+      ) next = "publish";
       const latest = this.storage.sql.prepare(
-        "SELECT * FROM opcv1_messages WHERE session_id=? AND role='assistant' ORDER BY time_created DESC,message_id DESC LIMIT 1",
+        "SELECT * FROM opcv1_messages WHERE session_id=? AND role='assistant' AND coalesce(input,output,reasoning,cache_read,cache_write) IS NOT NULL ORDER BY time_created DESC,message_id DESC LIMIT 1",
       ).get(id) as unknown as Baseline | undefined;
-      const total = this.#summary(id, "", changes);
+      const total = this.#summary(id, "", changes, ready);
+      const terminal = this.storage.sql.prepare(
+        "SELECT terminal FROM opcv1_messages WHERE session_id=? AND role='assistant' ORDER BY time_created DESC,message_id DESC LIMIT 1",
+      ).get(id);
       const count = this.storage.sql.prepare(
         "SELECT message_count FROM opcv1_aggregates WHERE session_id=? AND turn_id=''",
       ).get(id)?.message_count ?? 0;
       delta = {
         summary: {
-          state: ready ? "ready" : "digesting",
+          state: ready && !next ? "ready" : "digesting",
+          refreshing: !ready || !!next,
+          stale: false,
           revision,
-          messageCount: Number(count),
-          total: knownDerived(total, id, revision),
+          messageCount:
+            !ready && currentSaved.summary.total?.state === "known" &&
+              !!scan.committed
+              ? currentSaved.summary.messageCount
+              : Number(count),
+          total: !ready && currentSaved.summary.total?.state === "known" &&
+              !!scan.committed
+            ? currentSaved.summary.total
+            : knownDerived(
+              total,
+              `${id}@${source}`,
+              revision,
+              ready && (!total.calls || !!terminal?.terminal),
+              currentSaved.summary.total,
+            ),
           nativeUpdatedAt: snapshot.metadata.timeUpdated,
           ...(ready ? { digestedAt: Date.now() } : {}),
-          ...(latest
+          ...(!ready && currentSaved.summary.last?.state === "known"
+            ? { last: currentSaved.summary.last }
+            : latest
             ? {
               last: knownDerived(
                 {
@@ -1970,27 +2077,32 @@ export class OpencodeV1DigestSink implements DigestSink {
                     },
                   },
                 },
-                `${id}/${latest.message_id}`,
+                `${id}/${latest.message_id}@${source}`,
                 revision,
+                false,
+                currentSaved.summary.last,
               ),
             }
-            : {}),
+            : { last: { state: "unavailable" as const } }),
         },
         turns: { upsert, remove },
         deleted: null,
       };
       this.storage.sql.prepare(
-        "UPDATE opcv1_scan SET after_message=?,complete_revision=?,dirty=? WHERE session_id=?",
+        "UPDATE opcv1_scan SET after_message=?,complete_revision=?,dirty=?,committed=max(committed,?) WHERE session_id=?",
       ).run(
-        next === "sweep"
+        next === "publish"
+          ? "~publish"
+          : next === "sweep"
           ? "~sweep"
           : next === "reconcile" || targeted
           ? null
           : mode === "sql"
           ? next ?? null
           : null,
-        ready ? observed : null,
+        ready && !next ? observed : null,
         ready ? 0 : Number(current.dirty),
+        ready ? 1 : 0,
         id,
       );
       if (!targeted) {
@@ -2004,11 +2116,13 @@ export class OpencodeV1DigestSink implements DigestSink {
           mode === "sql"
             ? position?.created ?? scan.after_created ?? null
             : null,
-          next === "sweep" || next === "reconcile" ? "" : mode,
+          next === "sweep" || next === "reconcile" || next === "publish"
+            ? ""
+            : mode,
           position?.messageID ?? null,
           position?.messageID ?? null,
           mode === "api" && next &&
-            !["boundary", "sweep", "reconcile"].includes(next)
+            !["boundary", "sweep", "reconcile", "publish"].includes(next)
             ? next
             : null,
           position?.created ?? scan.covered_created ?? null,
@@ -2180,7 +2294,9 @@ export class OpencodeV1DigestSink implements DigestSink {
         helper: {
           state: "unavailable",
           revision,
-          progress: { state: "unavailable" },
+          progress: saved.helper?.progress.state === "known"
+            ? saved.helper.progress
+            : { state: "unavailable" },
         },
       };
       this.storage.transaction(() => this.storage.write(saved.metadata, delta));
@@ -2311,9 +2427,13 @@ export class OpencodeV1DigestSink implements DigestSink {
                 },
               }),
             },
-            id,
+            `${id}@${source}`,
             revision,
+            false,
+            saved.helper?.progress,
           )
+          : saved.helper?.progress.state === "known"
+          ? saved.helper.progress
           : { state: "pending" },
       };
       delta = {

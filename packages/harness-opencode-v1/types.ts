@@ -29,6 +29,7 @@ interface MessageInfo {
     cache: { read: number; write: number };
   };
   error?: { name: string; data: { message?: string; ref?: string } };
+  finish?: string;
 }
 /** Optional native metadata can use null; the neutral mapping owns absence. */
 export type Info =

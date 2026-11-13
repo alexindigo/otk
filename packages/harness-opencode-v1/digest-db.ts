@@ -14,6 +14,7 @@ export interface DigestHeader {
   turn_id: string | null;
   time_created: number;
   time_completed: number | null;
+  terminal?: number;
   agent: string | null;
   provider_id: string | null;
   model_id: string | null;
@@ -43,7 +44,8 @@ const projection = [
   alias === "time_created"
     ? "m.time_created AS time_created"
     : `CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.${path}') END AS ${alias}`
-).join(",");
+).join(",") +
+  ",CASE WHEN json_valid(m.data) AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown'))) THEN 1 ELSE 0 END AS terminal";
 const terminalProjection = (session = "session") =>
   `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) WHEN json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown') THEN json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
 
