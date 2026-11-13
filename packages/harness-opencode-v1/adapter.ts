@@ -554,7 +554,7 @@ export class OpencodeV1Adapter implements Harness {
     registry.register("catalogs", {
       watch: (directory, listener, signal) => {
         signal.throwIfAborted();
-        const lease = this.catalogs.acquire(directory);
+        const lease = this.catalogs.acquire(directory, true);
         const stop = lease.subscribe(() => listener(lease.snapshot()));
         const release = () => {
           stop();
@@ -562,25 +562,18 @@ export class OpencodeV1Adapter implements Harness {
         };
         signal.addEventListener("abort", release, { once: true });
         const value = lease.snapshot();
-        for (
-          const kind of Object.keys(
-            value.values,
-          ) as (keyof import("@otk/protocol").DirectoryCatalogKinds)[]
-        ) {
-          void lease.get(kind).catch(
-            () => {/* shared resource publishes unavailable */},
-          );
-        }
         queueMicrotask(() => {
           if (!signal.aborted) listener(lease.snapshot());
         });
         return Promise.resolve(value);
       },
-      refresh: async (directory, signal) => {
+      demand: (directory, demand, signal) =>
+        this.catalogs.demand(directory, demand, signal),
+      refresh: async (directory, signal, kinds) => {
         signal?.throwIfAborted();
         const lease = this.catalogs.acquire(directory);
         try {
-          await lease.refresh();
+          await lease.refresh(signal, kinds);
           signal?.throwIfAborted();
         } finally {
           lease.release();

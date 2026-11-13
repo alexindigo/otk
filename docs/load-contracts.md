@@ -9,6 +9,17 @@ without requests, a viewer or `digest.background`, and at most `digest.parallel`
 admitted entry-batches. Lamps remain independent. Waiting yields execution
 (AXIOM 2).
 
+Current-folder choice warm-up is separate from idle backfill: one page-ready
+input currently releases models, agents, commands and skills at project
+acquisition. Those reads use revocable background admission, without an idle
+silence delay. Consumer demand promotes/joins the same kind; essential reads
+interpose and cancellation joins native cleanup. Other kinds require their
+consumer, and files start only on a file mention/completion. A passive watch
+does not acquire any kind or enumerate other folders. Proofs:
+`tests/unit/catalog-demand_test.ts`,
+`packages/client/tests/server-resources_test.ts` and the `@load` catalog-demand
+case in `tests/browser/behavior/composer/model-picker.spec.ts` on both natives.
+
 All contracts below have permanent integration/browser proofs tagged `@load`
 plus their owning areas. Integration tags are in test names; Playwright tags are
 test metadata. Supporting unit proofs run in the full unit gate.

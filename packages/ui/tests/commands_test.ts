@@ -29,6 +29,7 @@ const suppliedCatalog = (commands: CommandOption[]): DirectoryCatalogLease => ({
   state: { catalog: commandCatalog(commands) },
   subscribe: () => () => {},
   ready: () => Promise.resolve(),
+  warm: () => Promise.resolve(),
   refresh: () => Promise.resolve(),
   release() {},
   view() {
@@ -171,8 +172,13 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
   let active = true;
   let generation = 0, revision = 0;
   const errors: unknown[] = [];
+  const demands: string[][] = [];
   const owner = createDirectoryCatalogs({
     codecs: createCatalogCodecs(),
+    demand: (_directory, kinds) => {
+      demands.push(kinds);
+      return Promise.resolve();
+    },
     diagnostic: (cause) => errors.push(cause),
     watch: () => {
       const at = String(++generation);
@@ -213,6 +219,7 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
   return {
     commands,
     errors,
+    demands,
     reconnect: () =>
       owner.receive({ t: "welcome" } as Parameters<typeof owner.receive>[0]),
     refresh: lease.refresh,
@@ -226,6 +233,32 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
     },
   };
 }
+Deno.test("slash completion expresses command demand without refreshing inventories", async () => {
+  const consumer = catalogConsumer(() =>
+    Promise.resolve([{
+      name: "probe",
+      description: "Demanded command",
+      source: "server",
+      aliases: [],
+    }])
+  );
+  try {
+    await consumer.ready();
+    assertEquals(consumer.demands, []);
+    assertEquals(
+      (await consumer.source.options({ start: 0, end: 1, query: "probe" }))[0]
+        .label,
+      "/probe",
+    );
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    assertEquals(consumer.demands, [["commands"]]);
+    await consumer.source.options({ start: 0, end: 2, query: "pr" });
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    assertEquals(consumer.demands, [["commands"]]);
+  } finally {
+    consumer.stop();
+  }
+});
 Deno.test("registry retains unavailable commands while slash rendering waits for CM3", async () => {
   const consumer = catalogConsumer(() => Promise.resolve([]));
   let available = false;

@@ -3,12 +3,17 @@ import {
   type ContentSession,
   type IndexEntry,
   isSessionID,
+  type ModelCatalog,
   type ServerFrame,
 } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import type { IndexChanges } from "./index.ts";
 import type { DirectoryCatalogLease } from "./directory-catalogs.ts";
 import type { FrecencyCatalogLease } from "./frecency-catalogs.ts";
+import {
+  type CatalogBinding,
+  createCatalogBinding,
+} from "./catalog-resource.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { emptyContent } from "./reduce.ts";
 import {
@@ -132,7 +137,8 @@ export function createSession(
     changes: metadataChanges,
   });
   let selected: Selection | undefined, resource: TranscriptOwner | undefined;
-  let release: (() => void) | undefined, models: ModelCatalogOwner | undefined;
+  let release: (() => void) | undefined,
+    models: CatalogBinding<ModelCatalog> | undefined;
   let catalog: ReturnType<NonNullable<typeof catalogs>>,
     catalogPath: string | undefined;
   const releaseCatalog = () => {
@@ -231,58 +237,63 @@ export function createSession(
       release = resource?.subscribe(sync);
     }
     resource?.selected(!!ready);
+    let folderChanged = false;
     if (ready && data?.directory && data.directory !== catalogPath) {
       releaseCatalog();
       catalog = catalogs?.(selected!, data.directory);
       catalogPath = data.directory;
+      folderChanged = true;
     }
-    if (ready && !models) {
+    if (ready && (!models || folderChanged)) {
       const target = selected!, sidecar = connection(target.sidecarId);
-      models = catalog?.directory.view("models") ?? createModelCatalog({
-        connection: () =>
-          catalogConnection?.(target) ??
-            {
-              key: version,
-              connected: sidecar.supports("models"),
-              available: sidecar.supports("models"),
-            },
-        load: async (signal) => {
-          // Speculative catalogs cannot occupy native I/O ahead of the captured
-          // selection's essential first attempt. A failed attempt also releases it.
-          signal.throwIfAborted();
-          const initial = transcripts.get(target);
-          if (initial?.state.loading) {
-            await new Promise<void>((resolve, reject) => {
-              let release = () => {};
-              const cleanup = () => {
-                release();
-                signal.removeEventListener("abort", abort);
-              };
-              const abort = () => {
-                cleanup();
-                reject(signal.reason);
-              };
-              const check = () => {
-                if (!initial.state.loading) {
+      models ??= createCatalogBinding<ModelCatalog>(factory);
+      models.bind(
+        catalog?.directory.view("models") ?? createModelCatalog({
+          connection: () =>
+            catalogConnection?.(target) ??
+              {
+                key: version,
+                connected: sidecar.supports("models"),
+                available: sidecar.supports("models"),
+              },
+          load: async (signal) => {
+            // Speculative catalogs cannot occupy native I/O ahead of the captured
+            // selection's essential first attempt. A failed attempt also releases it.
+            signal.throwIfAborted();
+            const initial = transcripts.get(target);
+            if (initial?.state.loading) {
+              await new Promise<void>((resolve, reject) => {
+                let release = () => {};
+                const cleanup = () => {
+                  release();
+                  signal.removeEventListener("abort", abort);
+                };
+                const abort = () => {
                   cleanup();
-                  resolve();
-                }
-              };
-              release = initial.subscribe(check);
-              signal.addEventListener("abort", abort, { once: true });
-              if (signal.aborted) abort();
-              else check();
-            });
-          }
-          signal.throwIfAborted();
-          return await sidecar.rpc.call(
-            "models.list",
-            { sessionID: target.sessionID },
-            signal,
-          );
-        },
-        factory,
-      });
+                  reject(signal.reason);
+                };
+                const check = () => {
+                  if (!initial.state.loading) {
+                    cleanup();
+                    resolve();
+                  }
+                };
+                release = initial.subscribe(check);
+                signal.addEventListener("abort", abort, { once: true });
+                if (signal.aborted) abort();
+                else check();
+              });
+            }
+            signal.throwIfAborted();
+            return await sidecar.rpc.call(
+              "models.list",
+              { sessionID: target.sessionID },
+              signal,
+            );
+          },
+          factory,
+        }),
+      );
       models.connect();
     }
     sync();

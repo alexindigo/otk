@@ -6,6 +6,147 @@ import { wire } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/composer.ts";
 
 test.use({ profile: "composer-pickers" });
+test("composer.catalog-demand-warms-the-selected-native-working-folder", {
+  tag: ["@composer", "@load", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const directory = `${state.directory}/nested`;
+  await state.controller.call("writeProjectFiles", {
+    lease: state.lease.lease,
+    files: { "nested/pk2-folder.txt": "Nested folder" },
+  });
+  const session = await state.product("session.create", {
+    directory,
+    title: "Nested catalog demand",
+  });
+  const frames = await wire(page);
+  await page.goto(`${state.url}/#/local/${session.id}`);
+  await expect(prompt(page)).toBeVisible();
+  await expect.poll(() =>
+    [
+      ...new Set(
+        frames.received.filter((frame) =>
+          frame.t === "catalog.chunk" && frame.directory === directory &&
+          frame.last &&
+          ["agents", "commands", "models", "skills"].includes(
+            String(frame.kind),
+          )
+        ).map((frame) => frame.kind),
+      ),
+    ].sort()
+  ).toEqual(["agents", "commands", "models", "skills"]);
+  expect(
+    frames.sent.some(({ frame }) =>
+      frame.method === "catalogs.demand" &&
+      frame.params?.directory === directory && frame.params?.intent === "warm"
+    ),
+  ).toBe(true);
+  const picker = page.locator(".otk-model-picker");
+  await picker.locator(":scope > button").click();
+  await expect(picker.locator("[role=option]").first()).toBeVisible();
+});
+test(
+  "composer.catalog-demand-warms-current-choices-and-discovers-files-on-mention",
+  {
+    tag: ["@composer", "@load", "@isolated"],
+  },
+  async ({ isolatedState: state, page }) => {
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Catalog demand",
+    });
+    await state.controller.call("writeProjectFiles", {
+      lease: state.lease.lease,
+      files: { "pk2-demand.txt": "Mention-only discovery" },
+    });
+    const frames = await wire(page);
+    await page.goto(`${state.url}/#/local/${session.id}`);
+    await expect(prompt(page)).toBeVisible();
+    const completeKinds = () =>
+      [
+        ...new Set(
+          frames.received.filter((frame) =>
+            frame.t === "catalog.chunk" && frame.last
+          ).map((frame) => frame.kind),
+        ),
+      ].sort();
+    // Pending-question authority has an independent consumer on V1. It is not
+    // choice warm-up and must not be suppressed with unused optional catalogs.
+    await expect.poll(() =>
+      completeKinds().filter((kind) =>
+        ["agents", "commands", "models", "skills"].includes(String(kind))
+      )
+    ).toEqual([
+      "agents",
+      "commands",
+      "models",
+      "skills",
+    ]);
+    for (const kind of ["files", "resources", "resourceTemplates", "config"]) {
+      expect(completeKinds()).not.toContain(kind);
+    }
+    const demands = () =>
+      frames.sent.filter(({ frame }) =>
+        frame.t === "request" && frame.method === "catalogs.demand"
+      ).map(({ frame }) => frame.params);
+    expect(demands()).toEqual([{
+      directory: state.directory,
+      kinds: ["models", "agents", "commands", "skills"],
+      intent: "warm",
+    }]);
+    await prompt(page).fill("@pk2-demand");
+    await expect(page.locator(".otk-autocomplete")).toContainText(
+      "pk2-demand.txt",
+    );
+    expect(demands()).toContainEqual({
+      directory: state.directory,
+      kinds: ["files"],
+      intent: "consumer",
+    });
+    expect(completeKinds()).toContain("files");
+    const resources = frames.received.some((frame) =>
+      frame.t === "welcome" &&
+      (frame.sidecar as { harness: { capabilities?: string[] } }).harness
+        .capabilities?.includes("resources")
+    );
+    if (resources) {
+      expect(demands()).toContainEqual({
+        directory: state.directory,
+        kinds: ["resources"],
+        intent: "consumer",
+      });
+    } else expect(completeKinds()).not.toContain("resources");
+    expect(completeKinds()).not.toContain("resourceTemplates");
+    await prompt(page).fill("");
+    const before = demands().length;
+    const picker = page.locator(".otk-model-picker");
+    await picker.locator(":scope > button").click();
+    await expect(picker.locator("[role=option]").first()).toBeVisible();
+    expect(demands()).toHaveLength(before);
+    await picker.locator(".otk-picker-status button").click();
+    await expect.poll(() =>
+      frames.sent.filter(({ frame }) => frame.method === "catalogs.refresh")
+        .map(({ frame }) => frame.params)
+    ).toEqual([{ directory: state.directory, kinds: ["models"] }]);
+    await expect(picker.locator("[role=status]")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await prompt(page).fill("/skills");
+    await prompt(page).press("Enter");
+    await expect(page.getByRole("combobox", { name: "Search skills" }))
+      .toBeVisible();
+    await page.locator(".otk-skills-picker .otk-picker-status button").click();
+    await expect.poll(() =>
+      frames.sent.filter(({ frame }) => frame.method === "catalogs.refresh")
+        .map(({ frame }) => frame.params)
+    ).toEqual([
+      { directory: state.directory, kinds: ["models"] },
+      { directory: state.directory, kinds: ["skills"] },
+    ]);
+    await expect(page.locator(".otk-skills-picker [role=status]")).toHaveCount(
+      0,
+    );
+    expect(frames.sent.filter(({ frame }) => frame.method === "catalogs.watch"))
+      .toHaveLength(1);
+  },
+);
 test("composer.model-picker-warm-before-open-and-independent-candidate", {
   tag: ["@composer", "@isolated"],
 }, async ({ isolatedState: state, page }, info) => {

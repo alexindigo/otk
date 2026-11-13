@@ -73,6 +73,7 @@ export async function composerContractScenario(profile: Profile) {
         return Promise.resolve(directoryCatalog);
       },
       refresh: () => Promise.resolve(),
+      demand: () => Promise.resolve(),
     };
     capabilities.files = {
       findFiles: () =>

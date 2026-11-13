@@ -115,16 +115,18 @@ ignore it. Status/count/recency authority is current, stale or unknown, and
 unknown values are nullable. Session entries continue unchanged until scoped
 publication is selected.
 
-The optional `catalogs` capability contributes `catalogs.watch {directory}` and
-`catalogs.refresh {directory}`. A watch is a connection-bound, explicitly
-releasable request lease. `DirectoryCatalogKinds` and `CatalogChunkKinds`
-compose open per-feature interfaces from `catalogs/`. `createCatalogCodecs()`
-selects the shipped codecs; independent consumers inject additional codecs
-without editing transport dispatch. Metadata snapshots expose
-preparing/ready/unavailable and last-good values. Contiguous `catalog.chunk`
-transfers stage one complete kind before publication; chunks never expose a
-partial usable list. Catalogs declare server path style and canonical file
-paths.
+The optional `catalogs` capability contributes `catalogs.watch {directory}`,
+`catalogs.demand {directory,kinds,intent}` and
+`catalogs.refresh {directory,kinds?}`. A watch is passive; demand distinguishes
+warm-up from consumer intent, while refresh replaces selected or already
+demanded kinds. A watch is a connection-bound, explicitly releasable request
+lease. `DirectoryCatalogKinds` and `CatalogChunkKinds` compose open per-feature
+interfaces from `catalogs/`. `createCatalogCodecs()` selects the shipped codecs;
+independent consumers inject additional codecs without editing transport
+dispatch. Metadata snapshots expose preparing/ready/unavailable and last-good
+values. Contiguous `catalog.chunk` transfers stage one complete kind before
+publication; chunks never expose a partial usable list. Catalogs declare server
+path style and canonical file paths.
 
 `frecency.list` returns `{directory,revision,entries}`. Committed
 `frecency.patch` frames carry keyed upserts/removals, including removals grouped

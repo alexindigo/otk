@@ -4,6 +4,7 @@ import type {
   CatalogChunkKinds,
   CatalogCodec,
   CatalogCodecs,
+  CatalogDemandIntent,
   CatalogValue,
   DirectoryCatalog,
   DirectoryCatalogKinds,
@@ -18,6 +19,7 @@ export interface DirectoryCatalogLease {
   readonly state: DirectoryCatalogState;
   subscribe(listener: () => void): () => void;
   ready(kind?: keyof DirectoryCatalogKinds): Promise<void>;
+  warm(kinds: readonly (keyof DirectoryCatalogKinds)[]): Promise<void>;
   refresh(): Promise<void>;
   view<K extends keyof DirectoryCatalogKinds>(
     kind: K,
@@ -42,7 +44,12 @@ interface Resource {
   subscribe(listener: () => void): () => void;
   watch?: { result: Promise<DirectoryCatalog>; release(): void };
   work?: Promise<void>;
-  refresh?: Promise<void>;
+  refreshes: Map<string, Promise<void>>;
+  controller: AbortController;
+  demands: Map<
+    keyof DirectoryCatalogKinds,
+    { intent: CatalogDemandIntent; work?: Promise<void> }
+  >;
   staging: Map<
     Kind,
     {
@@ -60,22 +67,95 @@ export function createDirectoryCatalogs(o: {
   watch(
     directory: string,
   ): { result: Promise<DirectoryCatalog>; release(): void };
-  refresh(directory: string): Promise<void>;
+  demand(
+    directory: string,
+    kinds: (keyof DirectoryCatalogKinds)[],
+    intent: CatalogDemandIntent,
+    signal: AbortSignal,
+  ): Promise<void>;
+  refresh(
+    directory: string,
+    kinds?: (keyof DirectoryCatalogKinds)[],
+    signal?: AbortSignal,
+  ): Promise<void>;
   codecs: CatalogCodecs;
   factory?: StateFactory;
   diagnostic?(cause: unknown): void;
 }): ClientDirectoryCatalogs {
   const resources = new Map<string, Resource>();
   let stopped = false;
-  const refresh = (r: Resource) => {
-    if (r.refresh) return r.refresh;
-    const work = Promise.resolve().then(() => o.refresh(r.directory)).finally(
+  const refresh = (r: Resource, kinds?: (keyof DirectoryCatalogKinds)[]) => {
+    const key = JSON.stringify(kinds ? [...kinds].sort() : null);
+    const pending = r.refreshes.get(key);
+    if (pending) return pending;
+    const signal = r.controller.signal;
+    const work = Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return o.refresh(r.directory, kinds, signal);
+    }).finally(
       () => {
-        if (r.refresh === work) r.refresh = undefined;
+        if (r.refreshes.get(key) === work) r.refreshes.delete(key);
       },
     );
-    r.refresh = work;
+    r.refreshes.set(key, work);
     return work;
+  };
+  const demand = async (
+    r: Resource,
+    kinds: readonly (keyof DirectoryCatalogKinds)[],
+    intent: CatalogDemandIntent,
+  ): Promise<void> => {
+    const version = r.version;
+    await r.work;
+    if (!r.alive) return;
+    if (version !== r.version) return demand(r, kinds, intent);
+    const generation = r.current.catalog?.generation;
+    const selected: (keyof DirectoryCatalogKinds)[] = [],
+      joined: Promise<void>[] = [];
+    for (const kind of kinds) {
+      const value = r.current.catalog?.values[kind];
+      if (!value) continue; // Only harness-advertised kinds can be requested.
+      const previous = r.demands.get(kind);
+      if (
+        previous &&
+        (previous.intent === "consumer" || intent === "warm" ||
+          value.state === "ready")
+      ) {
+        // Warm-up can batch kinds, but a finished kind never waits for its peers.
+        if (previous.work && value.state !== "ready") {
+          joined.push(previous.work);
+        }
+        continue;
+      }
+      r.demands.set(kind, { intent });
+      selected.push(kind);
+    }
+    if (selected.length) {
+      const work = o.demand(r.directory, selected, intent, r.controller.signal);
+      for (const kind of selected) r.demands.get(kind)!.work = work;
+      joined.push(work);
+      void work.then(() => {}, () => {}).finally(() => {
+        for (const kind of selected) {
+          const current = r.demands.get(kind);
+          if (current?.work === work) current.work = undefined;
+        }
+      });
+    }
+    try {
+      await Promise.all(joined);
+    } catch (cause) {
+      if (!r.alive) return;
+      if (version !== r.version) return demand(r, kinds, intent);
+      // Availability and native replacement belong to the kind stream, not a
+      // second RPC outcome. Follow its replacement or expose its published error.
+      if (
+        generation !== r.current.catalog?.generation ||
+        kinds.some((kind) =>
+          r.current.catalog?.values[kind]?.state === "unavailable"
+        )
+      ) return;
+      throw cause;
+    }
   };
   const install = (r: Resource, catalog: DirectoryCatalog) => {
     const previous = r.current.catalog;
@@ -110,6 +190,13 @@ export function createDirectoryCatalogs(o: {
   };
   const watch = (r: Resource) => {
     const at = ++r.version;
+    r.controller.abort();
+    r.controller = new AbortController();
+    const demands = [...r.demands].map(([kind, value]) =>
+      [kind, value.intent] as const
+    );
+    r.demands.clear();
+    r.refreshes.clear();
     r.watch?.release();
     r.staging.clear();
     const operation = o.watch(r.directory);
@@ -120,10 +207,21 @@ export function createDirectoryCatalogs(o: {
       .catch((cause) => {
         if (r.alive && at === r.version) o.diagnostic?.(cause);
       });
+    for (const intent of ["warm", "consumer"] as const) {
+      const kinds = demands.filter(([, value]) => value === intent).map((
+        [kind],
+      ) => kind);
+      if (kinds.length) {
+        void demand(r, kinds, intent).catch((cause) => {
+          if (r.alive && at === r.version) o.diagnostic?.(cause);
+        });
+      }
+    }
   };
   const retire = (r: Resource) => {
     r.alive = false;
     r.version++;
+    r.controller.abort();
     r.watch?.release();
     r.watch = undefined;
     r.staging.clear();
@@ -159,7 +257,7 @@ export function createDirectoryCatalogs(o: {
       builder.revision !== frame.revision || builder.next !== frame.part
     ) {
       r.staging.delete(frame.kind);
-      void refresh(r).catch((cause) => o.diagnostic?.(cause));
+      void refresh(r, [frame.kind]).catch((cause) => o.diagnostic?.(cause));
       return;
     }
     try {
@@ -180,7 +278,7 @@ export function createDirectoryCatalogs(o: {
     } catch (cause) {
       r.staging.delete(frame.kind);
       o.diagnostic?.(cause);
-      void refresh(r).catch((error) => o.diagnostic?.(error));
+      void refresh(r, [frame.kind]).catch((error) => o.diagnostic?.(error));
     }
   };
   return {
@@ -205,6 +303,9 @@ export function createDirectoryCatalogs(o: {
           state,
           staging: new Map(),
           retired: new Set(),
+          controller: new AbortController(),
+          demands: new Map(),
+          refreshes: new Map(),
           notify: () =>
             store.update((s) => {
               s.revision++;
@@ -229,7 +330,9 @@ export function createDirectoryCatalogs(o: {
       const ready = async (kind?: keyof DirectoryCatalogKinds) => {
         await resource.work;
         if (!kind || !alive || !resource.alive) return;
+        await demand(resource, [kind], "consumer");
         if (
+          !alive || !resource.alive ||
           !resource.current.catalog?.values[kind] ||
           resource.current.catalog.values[kind]?.state !== "digesting"
         ) return;
@@ -249,6 +352,8 @@ export function createDirectoryCatalogs(o: {
         state: resource.state,
         subscribe,
         ready,
+        warm: (kinds) =>
+          alive ? demand(resource, kinds, "warm") : Promise.resolve(),
         refresh: () => alive ? refresh(resource) : Promise.resolve(),
         view<K extends keyof DirectoryCatalogKinds>(
           kind: K,
@@ -279,7 +384,8 @@ export function createDirectoryCatalogs(o: {
             connect() {},
             ready: () => ready(kind),
             refresh: async () => {
-              await lease.refresh();
+              if (!alive) return;
+              await refresh(resource, [kind]);
               await ready(kind);
             },
             dispose() {},

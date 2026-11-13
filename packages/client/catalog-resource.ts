@@ -23,6 +23,75 @@ export interface CatalogOwner<T> {
   dispose(): void;
 }
 
+export interface CatalogBinding<T> extends CatalogOwner<T> {
+  bind(owner: CatalogOwner<T>): void;
+}
+/** A stable borrowed view across folder resolution; values stay with their owner. */
+export function createCatalogBinding<T>(
+  factory: StateFactory = createState,
+): CatalogBinding<T> {
+  const store = factory({ revision: 0 });
+  const empty: CatalogState<T> = {
+    available: false,
+    loading: false,
+    error: "",
+  };
+  let current: CatalogOwner<T> | undefined, stop: (() => void) | undefined;
+  let alive = true, version = 0;
+  let changed = Promise.withResolvers<void>();
+  const notify = () =>
+    store.update((s) => {
+      s.revision++;
+    });
+  const invalidate = () => {
+    version++;
+    changed.resolve();
+    changed = Promise.withResolvers<void>();
+  };
+  const binding: CatalogBinding<T> = {
+    get state() {
+      void store.state.revision;
+      return current?.state ?? empty;
+    },
+    subscribe: (listener) => store.subscribe(() => listener(binding.state)),
+    connect: (connection) => current?.connect(connection),
+    bind(owner) {
+      if (!alive || current === owner) return;
+      stop?.();
+      const previous = current;
+      current = owner;
+      stop = owner.subscribe(notify);
+      invalidate();
+      previous?.dispose();
+      notify();
+    },
+    async ready() {
+      while (alive && current) {
+        const at = version;
+        await Promise.race([current.ready(), changed.promise]);
+        if (at === version) return;
+      }
+    },
+    async refresh() {
+      if (!alive || !current) return;
+      const at = version;
+      await Promise.race([current.refresh(), changed.promise]);
+      if (at !== version) await binding.ready();
+    },
+    dispose() {
+      if (!alive) return;
+      alive = false;
+      stop?.();
+      const previous = current;
+      current = undefined;
+      invalidate();
+      previous?.dispose();
+      notify();
+    },
+  };
+  return binding;
+}
+
 export function createCatalogResource<T>(options: {
   connection(): CatalogConnection;
   load(signal: AbortSignal): Promise<T>;
