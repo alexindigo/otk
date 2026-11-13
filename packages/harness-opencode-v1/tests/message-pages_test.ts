@@ -53,7 +53,13 @@ Deno.test("@load @messages standalone demanded miss joins canceled speculative I
             role: "user",
             time: { created: 1 },
           },
-          parts: [],
+          parts: [{
+            id: "p",
+            sessionID: "s",
+            messageID: read === 1 ? "new" : "old",
+            type: "text",
+            text: "Real prompt",
+          }],
         }], { headers: read === 1 ? { "x-next-cursor": "older" } : {} });
       } finally {
         active--;
@@ -312,7 +318,13 @@ function fixture() {
             role: "user",
             time: { created: 10 },
           },
-          parts: [],
+          parts: [{
+            id: "p10",
+            sessionID: "s",
+            messageID: "m10",
+            type: "text",
+            text: "Real prompt",
+          }],
         }),
       );
     }
@@ -326,7 +338,13 @@ function fixture() {
             role: "user",
             time: { created: i + (older ? 0 : 10) },
           },
-          parts: [],
+          parts: [{
+            id: `p${i}`,
+            sessionID: "s",
+            messageID: `m${String(i + (older ? 0 : 10)).padStart(2, "0")}`,
+            type: "text",
+            text: "Real prompt",
+          }],
         })),
         { headers: older ? {} : { "x-next-cursor": native } },
       ));

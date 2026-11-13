@@ -101,6 +101,23 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
     event("message.updated", { info: message }),
     event("message.part.updated", {
       part: {
+        id: "subtask",
+        sessionID: session.id,
+        messageID: message.id,
+        type: "subtask",
+        description: "Inspect",
+        prompt: "Inspect data",
+      },
+    }),
+    event("message.part.delta", {
+      sessionID: session.id,
+      messageID: message.id,
+      partID: "subtask",
+      field: "description",
+      delta: " records",
+    }),
+    event("message.part.updated", {
+      part: {
         id: "prt_fixture",
         sessionID: session.id,
         messageID: message.id,
@@ -194,12 +211,21 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
     assertEquals(reconnects, 0);
     // Removal retires the optional clock before its scheduled read is admitted.
     assertEquals(nativeReads, 0);
-    const finished = ops.find((op) => op.op === "message.upsert");
+    const finished = ops.find((op) =>
+      op.op === "message.upsert" && op.message.role === "assistant"
+    );
     assert(
       finished?.op === "message.upsert" &&
         finished.message.role === "assistant",
     );
     assertEquals(finished.message.time.lastOutput, 3);
+    assert(
+      ops.some((op) =>
+        op.op === "part.upsert" && op.part.kind === "external" &&
+        op.part.id === "subtask" &&
+        op.part.activity?.detail === "Inspect records"
+      ),
+    );
     assert(entries.some((entry) => entry.attention.permissions === 1));
     assert(entries.some((entry) => entry.attention.questions === 1));
     assert(
@@ -214,17 +240,23 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
         "session.error",
         "session.error",
         "permission.upsert",
+        "message.upsert",
         "permission.remove",
         "question.upsert",
+        "message.upsert",
         "question.remove",
         "question.upsert",
+        "message.upsert",
         "question.remove",
         "message.upsert",
+        "part.upsert",
+        "part.upsert",
         "part.upsert",
         "part.remove",
         "diff.set",
         "todo.set",
         "message.remove",
+        "message.upsert",
         "session.error",
       ],
     );

@@ -34,11 +34,18 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
     }),
   ).toHaveText("Preference proof.");
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
-  // Step-finish follows the answer text on both lanes, so transparent bookkeeping forms
-  // a second work group. Observe the completed turn, not a streaming prefix.
+  // V1 bookkeeping is an independent native record; V2 retains a second work
+  // group. Both must remain visible without changing the preference proof.
   const folds = page.locator(".otk-work-fold");
-  const count = 2;
+  const v1 = state.controller.version.startsWith("1.");
+  const count = v1 ? 1 : 2;
   await expect(folds).toHaveCount(count);
+  if (v1) {
+    const step = page.locator('[data-native-record="opencode-v1/step-finish"]');
+    await expect(step).toHaveCount(1);
+    await expect(step).toBeVisible();
+    await expect(step).toContainText("Step finished");
+  }
   for (let i = 0; i < count; i++) {
     await expect(folds.nth(i)).toHaveAttribute("aria-expanded", "false");
   }

@@ -114,14 +114,23 @@ Deno.test("native null agent metadata becomes absent for primary and mention con
 
 Deno.test("native null restored user selections become absent without rewriting valid identities", () => {
   for (const empty of [undefined, null]) {
-    const message = mapMessage(JSON.parse(JSON.stringify({
-      id: "message",
-      sessionID: "session",
-      role: "user",
-      time: { created: 1 },
-      agent: empty,
-      model: empty,
-    })));
+    const message = mapMessage(
+      JSON.parse(JSON.stringify({
+        id: "message",
+        sessionID: "session",
+        role: "user",
+        time: { created: 1 },
+        agent: empty,
+        model: empty,
+      })),
+      [{
+        id: "p",
+        sessionID: "session",
+        messageID: "message",
+        type: "text",
+        text: "Real prompt",
+      }],
+    );
     assert(message.role === "user");
     assertEquals([message.agent, message.model, message.variant], [
       undefined,
@@ -134,14 +143,23 @@ Deno.test("native null restored user selections become absent without rewriting 
     }
   }
   for (const variant of [undefined, null, "mixed_CASE", ""]) {
-    const message = mapMessage(JSON.parse(JSON.stringify({
-      id: "message",
-      sessionID: "session",
-      role: "user",
-      time: { created: 1 },
-      agent: "custom_AGENT",
-      model: { providerID: "Provider/ID", modelID: "Model/ID", variant },
-    })));
+    const message = mapMessage(
+      JSON.parse(JSON.stringify({
+        id: "message",
+        sessionID: "session",
+        role: "user",
+        time: { created: 1 },
+        agent: "custom_AGENT",
+        model: { providerID: "Provider/ID", modelID: "Model/ID", variant },
+      })),
+      [{
+        id: "p",
+        sessionID: "session",
+        messageID: "message",
+        type: "text",
+        text: "Real prompt",
+      }],
+    );
     assert(message.role === "user");
     assertEquals(message.agent, "custom_AGENT");
     assertEquals(message.model, { provider: "Provider/ID", model: "Model/ID" });

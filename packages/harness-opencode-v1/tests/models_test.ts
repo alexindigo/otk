@@ -306,7 +306,13 @@ Deno.test("user-message mapping lifts native model.variant without adding it to 
       time: { created: 1 },
       agent: "build",
       model: { providerID: "fake", modelID: "scripted", variant },
-    });
+    }, [{
+      id: "p",
+      sessionID: "session",
+      messageID: "message",
+      type: "text",
+      text: "Real prompt",
+    }]);
     assert(message.role === "user");
     assertEquals(message.variant, variant);
     assertEquals(message.model, { provider: "fake", model: "scripted" });

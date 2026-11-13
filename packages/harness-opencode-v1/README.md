@@ -1,5 +1,25 @@
 # @otk/harness-opencode-v1
 
+`records.ts` owns native record classification and content-proven prompt
+identity. Synthetic-only or header-only user records are context, never prompt
+anchors. Mixed messages retain their prompt and carry each synthetic expansion
+as an outgoing part. Snapshot, live projection, worker SQL and API fallback
+share this evidence contract. Bookkeeping, compaction, interruption, delegation,
+retry and unknown records remain visible with their native source; task result
+envelopes share one decoder and render as blocks.
+
+`V1RecordRetention` owns the versioned V1 request/outcome and retry schema.
+Application composition injects an isolated `PluginStorage` through
+`storage(storage)` before startup; values persist through OTK restarts in the
+existing OTK database, never in the native database. Other plugins cannot read
+or overwrite this namespace. Standalone adapters without injection retain only
+process-local records. Timeline reads are bounded and merge with native pages
+without changing native continuation semantics. Active retry status remains
+separate from historical retry records and their provider action links. Request
+observations from native inventories and live asks share retention; richer raw
+asks and terminal outcomes cannot be downgraded by later inventories. Outcome
+summaries use the requested tool/target or question header/text, not IDs.
+
 The public `Client` also supports explicit
 `classification: read | effect |
 stream` and optional neutral `operation`

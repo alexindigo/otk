@@ -922,17 +922,22 @@ test("agent colours are shared per directory across sessions, pages, events and 
           emptyContent(),
         );
       await wait(() =>
-        rendered().messages.length === expected.length &&
-        rendered().messages.every((message) =>
-          message.role !== "context" && message.agentColor === "#abcdef"
-        )
+        rendered().messages.filter((message) => message.role === "assistant")
+            .length === expected.length &&
+        rendered().messages.filter((message) => message.role === "assistant")
+          .every((message) => message.agentColor === "#abcdef")
       );
       assertEquals(
-        rendered().messages.map((message) => message.id).sort(),
+        rendered().messages.filter((message) => message.role === "assistant")
+          .map((message) => message.id).sort(),
         [...expected].sort(),
       );
-      for (const message of rendered().messages) {
-        assert(message.role !== "context");
+      for (
+        const message of rendered().messages.filter((message) =>
+          message.role === "assistant"
+        )
+      ) {
+        assertEquals(message.role, "assistant");
         assertEquals(message.agentColor, "#abcdef");
       }
     }

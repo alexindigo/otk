@@ -211,6 +211,12 @@ independent child navigation. Unknown parts show their name and a byte-bounded
 data preview, with the original size and an explicit truncation fact. No native
 kind or state is interpreted by these shared consumers.
 
+Fallback source inspection has its own nested `NativeSource` disclosure. The
+existing client disclosure owner resolves the `source` category default and
+retains explicit per-part choices independently of the activity body. Size,
+truncation and bounded source text mount only while that nested fold is open. An
+expanded record does not repeat a state label identical to its heading.
+
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its
 lifetime, so continued backend steps share one indicator and terminal replies

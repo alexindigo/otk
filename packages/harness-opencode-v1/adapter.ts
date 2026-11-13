@@ -40,6 +40,8 @@ import {
   mapStreamingShell,
 } from "./map.ts";
 import { MessageClocks } from "./message-clocks.ts";
+import { eventRecord, isPrompt, RecordProjection } from "./records.ts";
+import { V1RecordRetention } from "./record-retention.ts";
 import { SelectionIntents } from "./selection-intent.ts";
 import { messageOutput } from "./message-clock.ts";
 import { mapPermission } from "./map.ts";
@@ -107,6 +109,10 @@ const contentEvents = new Set([
   "session.diff",
 ]);
 export class OpencodeV1Adapter implements Harness {
+  #retention = new V1RecordRetention();
+  storage(storage: import("@otk/harness").PluginStorage): void {
+    this.#retention.bind(storage);
+  }
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
   readonly kind = "opencode-v1";
@@ -158,6 +164,7 @@ export class OpencodeV1Adapter implements Harness {
   #replay: ContentReplay;
   #transcript: Transcript;
   #recovery: MessageRecovery;
+  #records: RecordProjection;
   #reverts = new Map<string, string>();
   #connection = 0;
   #digestRevision = 0;
@@ -180,6 +187,7 @@ export class OpencodeV1Adapter implements Harness {
     readonly digest?: DigestPort,
     readonly diagnostic: DiagnosticSink = () => {},
   ) {
+    this.#records = new RecordProjection(cfg.messages);
     this.#replay = new ContentReplay({
       ...cfg.messages,
       nonce: () => crypto.randomUUID(),
@@ -284,12 +292,22 @@ export class OpencodeV1Adapter implements Harness {
         if (ids.encode(snapshot.info.sessionID) !== session) {
           throw new Error("Recovery session identity mismatch");
         }
+        this.#records.seed(snapshot);
+        if (snapshot.info.role === "user" || snapshot.info.summary === true) {
+          this.#sink.content(session, {
+            op: "message.upsert",
+            message: mapMessage(snapshot.info, snapshot.parts),
+          });
+          return;
+        }
         // A point read may discover the header for the first time. Publish it
         // before its parts; HTTP observations never advance native output clocks.
         const message = mapMessage(
           snapshot.info,
           [],
           messageOutput(snapshot.parts).lastOutput ?? undefined,
+          mapPart,
+          snapshot.parts,
         );
         if (isAssistantTerminal(message)) {
           this.buffers.removeMessage(snapshot.info.id, session);
@@ -298,6 +316,13 @@ export class OpencodeV1Adapter implements Harness {
           op: "message.upsert",
           message: { ...message, parts: [] },
         });
+        for (const part of message.parts) {
+          this.#sink.content(session, {
+            op: "part.upsert",
+            messageID: message.id,
+            part,
+          });
+        }
         this.buffers.epoch(session, this.#replay.clock(session).epoch);
         for (const raw of snapshot.parts) {
           if (!parts.has(raw.id)) continue;
@@ -396,6 +421,7 @@ export class OpencodeV1Adapter implements Harness {
         this.#tasks.release(id);
         this.#recovery.release(id);
         this.#clocks.release(id);
+        this.#records.release(id === undefined ? undefined : ids.decode(id));
         if (id === undefined) this.#selectionIntents.clear();
         else this.#selectionIntents.release(ids.decode(id));
         this.#releaseRevert(id);
@@ -438,6 +464,7 @@ export class OpencodeV1Adapter implements Harness {
           digest.transcriptMetadata(id, turns, signal, cutoff, boundary)
         : undefined,
       decorate: (message, raw, directory) => {
+        if (this.buffers.subscribed(message.sessionID)) this.#records.seed(raw);
         const colors = this.#colors.peek(
           directory,
           this.buffers.subscribed(message.sessionID)
@@ -466,6 +493,7 @@ export class OpencodeV1Adapter implements Harness {
           ) => [turn, known![turn]]),
         );
       },
+      retained: (id, before, limit) => this.#retention.page(id, before, limit),
     });
     this.core = sessions(
       this.client,
@@ -893,6 +921,7 @@ export class OpencodeV1Adapter implements Harness {
     if (!count) this.#reverts.delete(id);
     if (!count) this.#recovery.release(id);
     if (!count) this.#clocks.release(id);
+    if (!count) this.#records.release(ids.decode(id));
     if (!count) this.#selectionIntents.release(ids.decode(id));
     if (!count) this.#releaseRevert(id);
     if (!count) this.#transcript.release(id);
@@ -965,7 +994,7 @@ export class OpencodeV1Adapter implements Harness {
           if (typeof input === "string") command = input;
         }
         if (
-          message.info.role === "user" &&
+          isPrompt(message.info, message.parts) &&
           message.info.id >= session.revert.messageID
         ) {
           messageCount++;
@@ -1252,6 +1281,7 @@ export class OpencodeV1Adapter implements Harness {
     const sink = this.#sink;
     this.#hydrated.clear();
     this.#recovery.release();
+    this.#records.release();
     this.#reverts.clear();
     this.#selectionIntents.clear();
     this.#tasks.release();
@@ -1506,6 +1536,12 @@ export class OpencodeV1Adapter implements Harness {
       if (permissions) {
         this.#permissionInventories.set(directory, this.#connection);
         await each(permissions, (request) => {
+          this.#retention.observe(
+            request.sessionID,
+            `permission:${request.id}`,
+            { ...request },
+            request.time,
+          );
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
             entries.set(
@@ -1533,6 +1569,9 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (questions) {
         await each(questions, (request) => {
+          this.#retention.observe(request.sessionID, `question:${request.id}`, {
+            ...request,
+          }, Date.now());
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
             entries.set(
@@ -1994,6 +2033,7 @@ export class OpencodeV1Adapter implements Harness {
       if (typeof id !== "string" || !id) {
         throw new Error("Malformed session.deleted: session id missing");
       }
+      this.#retention.remove(ids.encode(id));
       if (!this.digest) this.#disposeSession(ids.encode(id));
       if (this.digest?.projects) {
         const seeds = await this.digest.projects(
@@ -2013,6 +2053,7 @@ export class OpencodeV1Adapter implements Harness {
         attempt?: number;
         message?: string;
         next?: number;
+        action?: Record<string, unknown>;
       } = type === "session.idle" ? { type: "idle" } : p.status as {
         type: IndexEntry["status"];
         attempt?: number;
@@ -2021,6 +2062,24 @@ export class OpencodeV1Adapter implements Harness {
       };
       if (!status || !["idle", "busy", "retry"].includes(status.type)) {
         throw new Error(`Malformed ${type}: invalid status`);
+      }
+      if (status.type === "retry") {
+        const key = `retry:${
+          event.payload.id ?? `${status.attempt}:${status.next}`
+        }`;
+        const previous = this.#retention.get(sessionID, key);
+        const created = previous?.created ?? Date.now();
+        const message = eventRecord(
+          ids.decode(sessionID),
+          key,
+          created,
+          "session.retry",
+          status,
+        );
+        this.#retention.put({ id: key, sessionID, created, message });
+        if (this.buffers.subscribed(sessionID)) {
+          sink.content(sessionID, { op: "message.upsert", message });
+        }
       }
       if (entry) {
         if (status.type === "idle") this.#idle.set(sessionID, this.#connection);
@@ -2071,6 +2130,13 @@ export class OpencodeV1Adapter implements Harness {
       const time = this.#permissions.get(request.id)?.request.time ??
         Date.now();
       const mapped = mapPermission(request, time);
+      this.#retention.observe(
+        sessionID,
+        `permission:${request.id}`,
+        p,
+        time,
+        true,
+      );
       const previous = this.#permissions.get(request.id)?.request.sessionID;
       this.#permissions.set(request.id, {
         request: mapped,
@@ -2092,6 +2158,27 @@ export class OpencodeV1Adapter implements Harness {
       return;
     }
     if (type === "permission.replied") {
+      const key = `permission:${String(p.requestID)}`;
+      const retained = this.#retention.get(sessionID, key);
+      const created = retained?.created ?? Date.now();
+      const message = eventRecord(
+        ids.decode(sessionID),
+        key,
+        created,
+        type,
+        p,
+        retained?.request,
+      );
+      this.#retention.put({
+        id: key,
+        sessionID,
+        created,
+        request: retained?.request,
+        message,
+      });
+      if (this.buffers.subscribed(sessionID)) {
+        sink.content(sessionID, { op: "message.upsert", message });
+      }
       const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
       if (previous) {
@@ -2109,6 +2196,13 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error("Malformed question.asked: request id missing");
       }
       const request = mapQuestion(p as unknown as RawQuestion);
+      this.#retention.observe(
+        sessionID,
+        `question:${String(p.id)}`,
+        p,
+        Date.now(),
+        true,
+      );
       this.#question(String(p.id), request, event.directory);
       sink.content(sessionID, {
         op: "question.upsert",
@@ -2117,6 +2211,27 @@ export class OpencodeV1Adapter implements Harness {
       return;
     }
     if (type === "question.replied" || type === "question.rejected") {
+      const key = `question:${String(p.requestID)}`;
+      const retained = this.#retention.get(sessionID, key);
+      const created = retained?.created ?? Date.now();
+      const message = eventRecord(
+        ids.decode(sessionID),
+        key,
+        created,
+        type,
+        p,
+        retained?.request,
+      );
+      this.#retention.put({
+        id: key,
+        sessionID,
+        created,
+        request: retained?.request,
+        message,
+      });
+      if (this.buffers.subscribed(sessionID)) {
+        sink.content(sessionID, { op: "message.upsert", message });
+      }
       this.#question(String(p.requestID));
       sink.content(sessionID, {
         op: "question.remove",
@@ -2186,12 +2301,18 @@ export class OpencodeV1Adapter implements Harness {
       }
     }
     if (type === "message.removed") {
+      this.#records.remove(ids.decode(sessionID), String(p.messageID));
       this.#clocks.release(sessionID, String(p.messageID));
       this.#selectionIntents.release(ids.decode(sessionID));
       this.#recovery.message(String(p.messageID), sessionID);
       this.buffers.removeMessage(String(p.messageID));
     }
     if (type === "message.part.removed") {
+      this.#records.remove(
+        ids.decode(sessionID),
+        String(p.messageID),
+        String(p.partID),
+      );
       this.#clocks.release(sessionID, String(p.messageID));
       this.#recovery.part(String(p.messageID), String(p.partID), sessionID);
       this.buffers.forgetPart(String(p.messageID), String(p.partID));
@@ -2199,6 +2320,10 @@ export class OpencodeV1Adapter implements Harness {
     if (type === "message.part.updated" && raw && raw.tool !== "task") {
       this.#tasks.remove(sessionID, raw.messageID, raw.id);
     }
+    const record = type === "message.part.updated" && raw &&
+        this.buffers.subscribed(sessionID)
+      ? this.#records.part(raw)
+      : undefined;
     let finishedPart: Part | undefined;
     if (type === "message.part.updated" && raw) {
       this.#clocks.release(sessionID, raw.messageID);
@@ -2221,6 +2346,8 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (
         (raw.type === "text" || raw.type === "reasoning") &&
+        !raw.synthetic && record?.info.role !== "user" &&
+        !record?.info.summary &&
         raw.time?.start !== undefined && raw.time.end === undefined
       ) {
         this.buffers.upsert(
@@ -2237,6 +2364,8 @@ export class OpencodeV1Adapter implements Harness {
         }
       } else if (
         (raw.type === "text" || raw.type === "reasoning") &&
+        !raw.synthetic && record?.info.role !== "user" &&
+        !record?.info.summary &&
         raw.time?.end !== undefined
       ) {
         if (this.buffers.subscribed(sessionID)) {
@@ -2251,6 +2380,10 @@ export class OpencodeV1Adapter implements Harness {
     }
     if (
       type === "message.part.delta" && p.field === "text" &&
+      !this.#records.get(ids.decode(sessionID), String(p.messageID))?.parts
+        .some((part) =>
+          part.id === p.partID && (part.synthetic || part.time === undefined)
+        ) &&
       this.buffers.append(
         String(p.partID),
         String(p.delta),
@@ -2278,9 +2411,10 @@ export class OpencodeV1Adapter implements Harness {
       case "message.updated":
         {
           this.#selectionIntents.header(info!);
+          const native = this.#records.header(info!);
           const message = mapMessage(
               info!,
-              [],
+              info!.role === "user" || info!.summary ? native.parts : [],
               completedOutput ?? this.buffers.outputTime(info!.id),
             ),
             colors = this.#colors.peek(this.#directory(sessionID), sessionID);
@@ -2288,7 +2422,16 @@ export class OpencodeV1Adapter implements Harness {
           if (message.role !== "context" && message.agent !== undefined) {
             message.agentColor = colors?.get(message.agent);
           }
-          content({ op: "message.upsert", message });
+          const boundaries = message.role === "assistant" ? message.parts : [];
+          content({
+            op: "message.upsert",
+            message: message.role === "assistant"
+              ? { ...message, parts: [] }
+              : message,
+          });
+          for (const part of boundaries) {
+            content({ op: "part.upsert", messageID: message.id, part });
+          }
           if (
             message.role === "assistant" &&
             isAssistantTerminal(message) &&
@@ -2326,6 +2469,13 @@ export class OpencodeV1Adapter implements Harness {
         break;
       case "message.part.updated": {
         if (!raw) break;
+        if (record && (record.info.role === "user" || record.info.summary)) {
+          content({
+            op: "message.upsert",
+            message: mapMessage(record.info, record.parts),
+          });
+          break;
+        }
         const part = finishedPart ||
           this.buffers.snapshot(raw.id, sessionID, raw.messageID)?.part ||
           mapPart(raw);
@@ -2345,10 +2495,30 @@ export class OpencodeV1Adapter implements Harness {
         break;
       }
       case "message.part.delta": {
-        if (p.field !== "text") break;
         const id = String(p.partID);
+        const raw = this.#records.delta(
+          ids.decode(sessionID),
+          String(p.messageID),
+          id,
+          String(p.field),
+          String(p.delta),
+        );
+        if (raw) {
+          const record = this.#records.get(raw.sessionID, raw.messageID)!;
+          if (record.info.role === "user" || record.info.summary) {
+            content({
+              op: "message.upsert",
+              message: mapMessage(record.info, record.parts),
+            });
+          } else {content({
+              op: "part.upsert",
+              messageID: raw.messageID,
+              part: mapPart(raw),
+            });}
+          break;
+        }
         if (
-          !this.buffers.append(
+          p.field !== "text" || !this.buffers.append(
             id,
             String(p.delta),
             (id, op) => {
@@ -2367,6 +2537,18 @@ export class OpencodeV1Adapter implements Harness {
           messageID: String(p.messageID),
           partID: String(p.partID),
         });
+        {
+          const record = this.#records.get(
+            ids.decode(sessionID),
+            String(p.messageID),
+          );
+          if (record && (record.info.role === "user" || record.info.summary)) {
+            content({
+              op: "message.upsert",
+              message: mapMessage(record.info, record.parts),
+            });
+          }
+        }
         break;
       case "todo.updated":
         content({

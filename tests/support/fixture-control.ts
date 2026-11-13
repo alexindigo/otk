@@ -137,6 +137,7 @@ export const profiles = {
   "contract-messages-session-cost": "neutral",
   "contract-messages-reading": "neutral",
   "contract-messages-migrated-history": "neutral",
+  "contract-messages-v1-notices": "neutral",
   "contract-messages-public-ui": "neutral",
   "contract-messages-recorded-files": "v1",
   "contract-messages-recorded-tools": "v1",

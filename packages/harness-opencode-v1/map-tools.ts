@@ -2,9 +2,10 @@
 import type { Todo, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
+import { nativeSource } from "./records.ts";
 import { mapFileTool } from "./file-tools.ts";
 import { preview } from "./previews.ts";
-import { toolResult } from "./tool-results.ts";
+import { taskEnvelope, toolResult } from "./tool-results.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 const childSession = (value: unknown): string | undefined =>
   typeof value === "string" ? ids.encode(value) : undefined;
@@ -38,19 +39,23 @@ export function mapTodos(value: unknown): Todo[] {
 }
 export function mapTool(part: RawPart): ToolCall {
   const state = part.state!;
+  const task = part.tool === "task" && state.output
+    ? taskEnvelope(state.output)
+    : undefined;
   const base: ToolBase = {
     callID: part.callID!,
     sourceName: part.tool,
-    status: state.status === "error" &&
+    status: task?.state === "error" ? "error" : state.status === "error" &&
         /QuestionRejectedError|rejected permission|specified a rule|user dismissed/i
           .test(state.error || "")
       ? "denied"
       : state.status,
     title: state.title,
-    error: state.error,
+    error: state.error ?? (task?.state === "error" ? task.text : undefined),
     time: { start: state.time?.start, end: state.time?.end },
     output: state.output,
     outputContent: toolResult(part),
+    source: nativeSource("tool", part, state.output),
   };
   const input = state.input, metadata = state.metadata ?? {};
   if (part.tool === "task") {
