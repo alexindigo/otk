@@ -27,6 +27,14 @@ export async function menusScenario(profile: Profile) {
     replies: PermissionReply[] = [],
     answers: unknown[] = [];
   let aborts = 0;
+  // The external harness owns explicit run evidence, not a status-to-lamp fallback.
+  const work = (keys: string[]) => {
+    f.app.index.upsert({
+      ...f.app.index.get("tstv1-core")!,
+      status: keys.length ? "busy" : "idle",
+      activity: { work: { keys, fresh: true } },
+    });
+  };
   const capabilities: Capabilities = {};
   if (profile === "contract-menus-hints") {
     capabilities.prompt = {
@@ -36,6 +44,7 @@ export async function menusScenario(profile: Profile) {
       },
       abort: () => {
         aborts++;
+        work([]);
         return Promise.resolve();
       },
     };
@@ -160,10 +169,7 @@ export async function menusScenario(profile: Profile) {
           if (
             profile === "contract-menus-hints" && frame.params.action === "hold"
           ) {
-            f.app.index.upsert({
-              ...f.app.index.get("tstv1-core")!,
-              status: "busy",
-            });
+            work(["shortcut-held-run"]);
           } else if (
             "update" in f && frame.params.action === "hold" &&
             frame.params.sessionID === "tstv1-second"
