@@ -108,6 +108,48 @@ test(
   },
 );
 
+test("scale.single-visible-task-pages-both-ways", {
+  tag: ["@scale", "@sessions"],
+}, async ({ isolatedState: state, page }, info) => {
+  const { ids } = await state.observe<{ ids: string[] }>();
+  await page.setViewportSize({ width: 600, height: 800 });
+  await page.goto(`${state.url}/#/local/${ids[150]}`);
+  await expect(page.locator("textarea[name=prompt]")).toBeVisible();
+  for (const theme of stripThemes) {
+    await state.product("prefs.set", { key: "theme", value: theme.id });
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-otk-theme",
+      theme.id,
+    );
+    await page.evaluate(() => document.fonts.ready.then(() => true));
+    const lane = page.locator(".otk-task-list");
+    await lane.evaluate((el) => el.scrollLeft = 0);
+    await expect.poll(async () => (await stripGeometry(page)).left).toBe(0);
+    const first = await stripGeometry(page);
+    expect(first.full).toEqual([first.tabs[0].id]);
+    await page.getByRole("button", { name: "Next tasks", exact: true }).click();
+    await expect.poll(async () => (await stripGeometry(page)).full).toEqual([
+      first.tabs[1].id,
+    ]);
+    expect((await stripGeometry(page)).left).toBeGreaterThan(first.left);
+    for (const direction of ["next", "previous"]) {
+      if (direction === "previous") {
+        await page.getByRole("button", { name: "Previous tasks", exact: true })
+          .click();
+        await expect.poll(async () => (await stripGeometry(page)).left).toBe(0);
+        expect((await stripGeometry(page)).full).toEqual(first.full);
+      }
+      await page.mouse.move(400, 500);
+      const path = info.outputPath(`fx7-narrow-${direction}-${theme.name}.png`);
+      await page.screenshot({ path });
+      await info.attach(`narrow-${direction}-${theme.name}`, {
+        path,
+        contentType: "image/png",
+      });
+    }
+  }
+});
+
 test("scale.shell-contained-with-300-required-tabs", {
   tag: ["@scale", "@sessions"],
 }, async ({ isolatedState: state, page }) => {
