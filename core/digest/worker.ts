@@ -254,10 +254,7 @@ async function publish(value: DigestPublication): Promise<void> {
       const from = part * policy.publishrows, to = from + policy.publishrows;
       const delta: DigestDelta = {
         ...value.delta,
-        summary: {
-          ...value.delta.summary,
-          state: part === count - 1 ? value.delta.summary.state : "digesting",
-        },
+        summary: value.delta.summary,
         turns: {
           upsert: Object.fromEntries(turns.slice(from, to)),
           remove: remove.slice(
@@ -311,9 +308,7 @@ async function publishStored(
             helper: progress ? helper(progress) : null,
             summary: {
               ...saved.summary,
-              state: cached && !saved.deleted
-                ? "digesting"
-                : saved.summary.state,
+              ...(cached && !saved.deleted ? { refreshing: true } : {}),
             },
             turns: {
               upsert: Object.fromEntries(

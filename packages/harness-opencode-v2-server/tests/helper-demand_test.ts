@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { assertEquals, assertRejects } from "@std/assert";
 import { Messages, type NativeMessage, SCAN_ROWS } from "../messages.ts";
 import { TranscriptReads } from "../transcript-reads.ts";
@@ -67,8 +68,14 @@ Deno.test("V2 demanded helper API reads bounded pages, yields, normalizes names 
     {
       state: "ready",
       revision: 0,
-      toolCount: SCAN_ROWS + 1,
-      current: { name: "bash", title: "Probe", startedAt: 10 },
+      progress: knownDerived(
+        {
+          toolCount: SCAN_ROWS + 1,
+          current: { name: "bash", title: "Probe", startedAt: 10 },
+        },
+        "opcv2-ses_child",
+        0,
+      ),
     },
   );
   assertEquals(requests.map((r) => [r.limit, r.order, r.cursor]), [[

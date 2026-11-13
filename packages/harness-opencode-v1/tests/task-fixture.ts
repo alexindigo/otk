@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import type { HelperSummary } from "@otk/protocol";
 import type { RawPart } from "../types.ts";
 export const task: RawPart = {
@@ -19,7 +20,13 @@ export const task: RawPart = {
 export const ready: HelperSummary = {
   state: "ready",
   revision: 2,
-  toolCount: 1,
-  current: { name: "bash", title: "Current changed" },
-  time: { start: 1, end: 20 },
+  progress: knownDerived(
+    {
+      toolCount: 1,
+      current: { name: "bash", title: "Current changed" },
+      time: { start: 1, end: 20 },
+    },
+    "child",
+    2,
+  ),
 };

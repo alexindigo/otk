@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { coreBackendFixture } from "./core-backend.ts";
 import { fixture } from "./config.ts";
 import { resources } from "./resources.ts";
@@ -108,8 +109,12 @@ export async function sessionsCoreScenario(profile: Profile) {
     f.app.index.applyDigest({
       id: f.session.id,
       revision: 1,
-      summary: { state: "ready", revision: 1, total },
-      turns: { upsert: { turn: total }, remove: [] },
+      summary: {
+        state: "ready",
+        revision: 1,
+        total: knownDerived(total, "fixture", 1),
+      },
+      turns: { upsert: { turn: knownDerived(total, "turn", 1) }, remove: [] },
       deleted: null,
     });
   }

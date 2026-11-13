@@ -5,7 +5,7 @@ import type {
   Message,
   ModelRef,
 } from "./content.ts";
-import type { UsageSummary } from "./digest.ts";
+import type { Derived, UsageSummary } from "./digest.ts";
 
 export const MESSAGE_PAGE_SIZE = 10;
 export const MAX_MESSAGE_CURSOR_LENGTH = 4096;
@@ -57,6 +57,9 @@ export interface ReplyBoundary {
 export interface HelperSummary {
   state: "digesting" | "ready" | "unavailable";
   revision: number;
+  progress: Derived<HelperProgress>;
+}
+export interface HelperProgress {
   toolCount: number | null;
   current?: { name: string; title?: string; startedAt?: number };
   time?: { start: number; end?: number };
@@ -75,7 +78,10 @@ export interface MessagePage {
   older: MessageCursor | null;
   prompt?: LatestPrompt;
   catchup: ClockedContent[];
-  turns: Record<string, { summary?: UsageSummary; boundary: ReplyBoundary }>;
+  turns: Record<
+    string,
+    { summary?: Derived<UsageSummary>; boundary: ReplyBoundary }
+  >;
   helpers: Record<string, HelperSummary>;
   recovering: { messageID: string; partID: string; generation: number }[];
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { join } from "@std/path";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
@@ -163,17 +164,21 @@ export async function sessionsScenario(profile: Profile) {
         summary: {
           state: "ready",
           revision: 1,
-          total: {
-            calls: 1,
-            cost,
-            tokens: {
-              input: 10,
-              output: 2,
-              reasoning: 0,
-              cache: { read: 0, write: 0 },
+          total: knownDerived(
+            {
+              calls: 1,
+              cost,
+              tokens: {
+                input: 10,
+                output: 2,
+                reasoning: 0,
+                cache: { read: 0, write: 0 },
+              },
+              contextPeak: 10,
             },
-            contextPeak: 10,
-          },
+            "fixture",
+            1,
+          ),
         },
         turns: { upsert: {}, remove: [] },
         deleted: null,
@@ -449,17 +454,21 @@ export async function sessionsScenario(profile: Profile) {
               summary: {
                 state: "ready",
                 revision,
-                total: {
-                  calls: 1,
-                  cost: 2.5,
-                  tokens: {
-                    input: 10,
-                    output: 2,
-                    reasoning: 0,
-                    cache: { read: 0, write: 0 },
+                total: knownDerived(
+                  {
+                    calls: 1,
+                    cost: 2.5,
+                    tokens: {
+                      input: 10,
+                      output: 2,
+                      reasoning: 0,
+                      cache: { read: 0, write: 0 },
+                    },
+                    contextPeak: 10,
                   },
-                  contextPeak: 10,
-                },
+                  "fixture",
+                  revision,
+                ),
               },
               turns: { upsert: {}, remove: [] },
               deleted: frame.params.target === "backgrounds"

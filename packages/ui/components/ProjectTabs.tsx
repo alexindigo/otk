@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionSummary } from "@otk/client";
 import { exactCount, failureText, overflowPreference } from "@otk/client";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
@@ -314,10 +315,7 @@ export default function ProjectTabs(props: {
     }
   }, { arguments: { type: "string" } });
   const meter = createMemo(() => summaryMeter(props.entry, props.catalog));
-  const cost = () =>
-    props.entry?.digest.state === "ready"
-      ? props.entry.digest.total?.cost ?? undefined
-      : undefined;
+  const cost = () => sessionSummary(props.entry)?.cost ?? undefined;
   const contextRange = () =>
     countLabel(
       meter().limit!,

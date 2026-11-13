@@ -11,8 +11,11 @@ import { HistoryReader } from "./history.ts";
 import { sessionDirectory } from "./directory.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
+  type Derived,
+  derivedValue,
   type DigestDelta,
   type HelperSummary,
+  knownDerived,
   type SessionMetadata,
   type TurnUsageSnapshot,
   UsageLedger,
@@ -57,7 +60,7 @@ export interface OpencodeV1DigestStorage {
   sql: Pick<DatabaseSync, "prepare">;
   transaction<T>(run: () => T): T;
   read(id: string): DigestSnapshot | undefined;
-  turn(id: string, turn: string): UsageSummary | undefined;
+  turn(id: string, turn: string): Derived<UsageSummary> | undefined;
   known(): Iterable<DigestSnapshot>;
   write(
     metadata: SessionMetadata,
@@ -1188,17 +1191,21 @@ export class OpencodeV1DigestSink implements DigestSink {
               digestedAt: Date.now(),
               nativeUpdatedAt: metadata.timeUpdated,
               messageCount: 0,
-              total: {
-                calls: 0,
-                cost: 0,
-                tokens: {
-                  input: 0,
-                  output: 0,
-                  reasoning: 0,
-                  cache: { read: 0, write: 0 },
+              total: knownDerived(
+                {
+                  calls: 0,
+                  cost: 0,
+                  tokens: {
+                    input: 0,
+                    output: 0,
+                    reasoning: 0,
+                    cache: { read: 0, write: 0 },
+                  },
+                  contextPeak: 0,
                 },
-                contextPeak: 0,
-              },
+                metadata.id,
+                delta.summary.revision,
+              ),
             };
           }
           this.storage.write(metadata, delta);
@@ -1518,8 +1525,8 @@ export class OpencodeV1DigestSink implements DigestSink {
         ? null
         : Number(aggregate?.[`${key}_sum`] ?? 0);
     const previous = turn
-      ? this.storage.turn(id, turn)
-      : this.storage.read(id)?.summary.total;
+      ? derivedValue(this.storage.turn(id, turn))
+      : derivedValue(this.storage.read(id)?.summary.total);
     const belongs = (value: Baseline | undefined) =>
       value?.role === "assistant" &&
       (!turn || (value.turn_id ?? value.message_id) === turn);
@@ -1914,12 +1921,14 @@ export class OpencodeV1DigestSink implements DigestSink {
         Number(current.observed_revision) === observed;
       if (!next && !ready) next = "reconcile";
       const revision = currentSaved.summary.revision + 1;
-      const upsert: Record<string, UsageSummary> = {}, remove: string[] = [];
+      const upsert: Record<string, Derived<UsageSummary>> = {},
+        remove: string[] = [];
       for (const turn of affected) {
         if (turn) {
           const summary = this.#summary(id, turn, changes);
-          if (summary.calls) upsert[turn] = summary;
-          else remove.push(turn);
+          if (summary.calls) {
+            upsert[turn] = knownDerived(summary, `${id}/${turn}`, revision);
+          } else remove.push(turn);
         }
       }
       const latest = this.storage.sql.prepare(
@@ -1934,28 +1943,36 @@ export class OpencodeV1DigestSink implements DigestSink {
           state: ready ? "ready" : "digesting",
           revision,
           messageCount: Number(count),
-          total,
+          total: knownDerived(total, id, revision),
           nativeUpdatedAt: snapshot.metadata.timeUpdated,
           ...(ready ? { digestedAt: Date.now() } : {}),
           ...(latest
             ? {
-              last: {
-                ...(latest.agent === null ? {} : { agent: latest.agent }),
-                ...(latest.provider_id && latest.model_id
-                  ? {
-                    model: {
-                      provider: latest.provider_id,
-                      model: latest.model_id,
+              last: knownDerived(
+                {
+                  callID: latest.message_id,
+                  ...(latest.agent === null ? {} : { agent: latest.agent }),
+                  ...(latest.provider_id && latest.model_id
+                    ? {
+                      model: {
+                        provider: latest.provider_id,
+                        model: latest.model_id,
+                      },
+                    }
+                    : {}),
+                  context: {
+                    input: latest.input,
+                    output: latest.output,
+                    reasoning: latest.reasoning,
+                    cache: {
+                      read: latest.cache_read,
+                      write: latest.cache_write,
                     },
-                  }
-                  : {}),
-                context: {
-                  input: latest.input,
-                  output: latest.output,
-                  reasoning: latest.reasoning,
-                  cache: { read: latest.cache_read, write: latest.cache_write },
+                  },
                 },
-              },
+                `${id}/${latest.message_id}`,
+                revision,
+              ),
             }
             : {}),
         },
@@ -2160,7 +2177,11 @@ export class OpencodeV1DigestSink implements DigestSink {
         summary: { ...saved.summary, revision },
         turns: { upsert: {}, remove: [] },
         deleted: saved.deleted,
-        helper: { state: "unavailable", revision, toolCount: null },
+        helper: {
+          state: "unavailable",
+          revision,
+          progress: { state: "unavailable" },
+        },
       };
       this.storage.transaction(() => this.storage.write(saved.metadata, delta));
       await this.storage.publish({ sessionID: id, revision, delta });
@@ -2264,28 +2285,36 @@ export class OpencodeV1DigestSink implements DigestSink {
       const helper: HelperSummary = {
         state: ready ? "ready" : "digesting",
         revision,
-        toolCount: ready ? count : null,
-        ...(ready && current
-          ? {
-            current: {
-              name: String(current.name),
-              ...(current.title === null
-                ? {}
-                : { title: String(current.title) }),
-              ...(current.time_start === null
-                ? {}
-                : { startedAt: Number(current.time_start) }),
+        progress: ready
+          ? knownDerived(
+            {
+              toolCount: ready ? count : null,
+              ...(ready && current
+                ? {
+                  current: {
+                    name: String(current.name),
+                    ...(current.title === null
+                      ? {}
+                      : { title: String(current.title) }),
+                    ...(current.time_start === null
+                      ? {}
+                      : { startedAt: Number(current.time_start) }),
+                  },
+                }
+                : {}),
+              ...(time.start === null ? {} : {
+                time: {
+                  start: Number(time.start),
+                  ...(time.end === null || time.unfinished
+                    ? {}
+                    : { end: Number(time.end) }),
+                },
+              }),
             },
-          }
-          : {}),
-        ...(time.start === null ? {} : {
-          time: {
-            start: Number(time.start),
-            ...(time.end === null || time.unfinished
-              ? {}
-              : { end: Number(time.end) }),
-          },
-        }),
+            id,
+            revision,
+          )
+          : { state: "pending" },
       };
       delta = {
         summary: { ...saved.summary, revision },

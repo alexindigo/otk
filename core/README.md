@@ -572,6 +572,14 @@ or stored task identities.
 
 ## Worker-backed digest services
 
+Derived units carry their own pending/unavailable/known result independently of
+refresh activity. Known values retain their source witness and finality through
+store migration, bounded multipart replay, both index reducers and helper
+content patches. Transport completion cannot certify or revoke a value. Worker
+unready notifications mark refresh/staleness, without changing retained results.
+The single SQLite owner, scheduler, publication credits and cancellation fences
+are unchanged.
+
 Socket view lifetimes retain viewer presence even for an empty welcomed view.
 Optional digest/helper batches and cached replay require a request-free
 `digest.idlems` interval. HTTP ingress and validated WS acquisition requests

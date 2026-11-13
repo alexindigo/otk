@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
@@ -105,8 +106,7 @@ export default function Message(
     onRetryRecovery?(): void;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
-    summary?: UsageSummary;
-    digestState?: string;
+    summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
     usageError?(): string | undefined;
     prefs: Preferences;
@@ -198,7 +198,7 @@ export default function Message(
   // Select one turn range for both consumers; complete usage metadata wins over
   // the loaded-page reply projection. Unsupported backends share that projection.
   const time = () =>
-    props.summary?.time ?? {
+    derivedValue(props.summary)?.time ?? {
       start: props.message.time.created,
       end: props.message.role === "assistant"
         ? props.message.time.completed
@@ -390,7 +390,6 @@ export default function Message(
                       </span>
                       <TurnUsage
                         summary={props.summary}
-                        state={props.digestState}
                         detail={() => props.usage}
                         error={props.usageError}
                         open={props.openUsage}

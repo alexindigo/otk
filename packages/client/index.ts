@@ -373,6 +373,20 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
               digest: {
                 ...entry.digest,
                 ...structuredClone(op.summary),
+                ...(entry.digest.refreshing === undefined &&
+                    op.summary.refreshing === undefined
+                  ? {}
+                  : {
+                    refreshing: op.summary.refreshing ??
+                      op.summary.state === "digesting",
+                  }),
+                ...(entry.digest.stale === undefined &&
+                    op.summary.stale === undefined
+                  ? {}
+                  : { stale: op.summary.stale ?? false }),
+                ...(entry.digest.error === undefined
+                  ? {}
+                  : { error: op.summary.error }),
                 revision: op.revision,
                 turns,
               },

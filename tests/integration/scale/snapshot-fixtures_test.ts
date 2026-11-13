@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import {
   assert,
   assertEquals,
@@ -374,7 +375,10 @@ v1Test(
       );
       const entry = client.entry(target.id)!;
       assertEquals(entry.digest.messageCount, target.expected.messages);
-      assertEquals(entry.digest.total!.calls, target.expected.calls);
+      assertEquals(
+        derivedValue(entry.digest.total)!.calls,
+        target.expected.calls,
+      );
       assertEquals(await fileHashes(template), original);
       await client.close();
       await call("endTest", { lease: restored.lease.lease });

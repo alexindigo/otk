@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
+import type { DigestPublication } from "@otk/harness";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { preparedBinary } from "../support/prepared-binaries.ts";
@@ -41,15 +43,7 @@ test("compiled independent worker consumer digests off-source with empty runtime
         error += new TextDecoder().decode(chunk);
       }
     })();
-    const rows: {
-      delta: {
-        summary: {
-          state: string;
-          messageCount?: number;
-          total?: { calls: number };
-        };
-      };
-    }[] = [];
+    const rows: DigestPublication[] = [];
     const stdout = (async () => {
       let buffer = "";
       for await (const chunk of process.stdout) {
@@ -88,7 +82,7 @@ test("compiled independent worker consumer digests off-source with empty runtime
     () => first.rows.at(-1),
     (row) =>
       row?.delta.summary.state === "ready" &&
-      (row.delta.summary.total?.calls ?? 0) > 0,
+      (derivedValue(row.delta.summary.total)?.calls ?? 0) > 0,
   );
   await first.stop();
   const second = run();
@@ -96,7 +90,7 @@ test("compiled independent worker consumer digests off-source with empty runtime
     () => second.rows.at(-1),
     (row) =>
       row?.delta.summary.state === "ready" &&
-      (row.delta.summary.total?.calls ?? 0) > 0,
+      (derivedValue(row.delta.summary.total)?.calls ?? 0) > 0,
   );
   await second.stop();
 });

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "@std/path";
@@ -45,14 +46,19 @@ test("real native helper summaries decorate pages, removals patch only progress 
       return index.state.entries[`test/${child.id}`];
     };
     await waitFor(entry, (value) => value?.digest.helper?.state === "ready");
-    assertEquals(entry().digest.helper?.toolCount, 1);
+    assertEquals(derivedValue(entry().digest.helper?.progress)?.toolCount, 1);
     const page = await client.rpc<MessagePage>("session.messages", {
       sessionID: parent.id,
     });
     assertEquals(page.items.length, 10);
-    assertEquals(page.helpers[child.id].toolCount, 1);
-    assertEquals(page.helpers[child.id].current?.name, "bash");
-    assert(page.helpers[child.id].time?.end !== undefined);
+    assertEquals(derivedValue(page.helpers[child.id].progress)!.toolCount, 1);
+    assertEquals(
+      derivedValue(page.helpers[child.id].progress)!.current?.name,
+      "bash",
+    );
+    assert(
+      derivedValue(page.helpers[child.id].progress)!.time?.end !== undefined,
+    );
     const tasks = page.items.flatMap((m) => m.parts).filter((p) =>
       p.kind === "tool" && p.call.tool === "task"
     );
@@ -66,8 +72,14 @@ test("real native helper summaries decorate pages, removals patch only progress 
       `/session/${child.id}/message/${work.info.id}/part/${tool.id}`,
       { method: "DELETE" },
     );
-    await waitFor(entry, (value) => value?.digest.helper?.toolCount === 0);
-    assertEquals(entry().digest.helper?.current, undefined);
+    await waitFor(
+      entry,
+      (value) => derivedValue(value?.digest.helper?.progress)?.toolCount === 0,
+    );
+    assertEquals(
+      derivedValue(entry().digest.helper?.progress)?.current,
+      undefined,
+    );
     await client.close();
     client = undefined;
     await server.stop();
@@ -111,7 +123,10 @@ test("real native helper summaries decorate pages, removals patch only progress 
     const reloaded = await client.rpc<MessagePage>("session.messages", {
       sessionID: parent.id,
     });
-    assertEquals(reloaded.helpers[child.id].toolCount, 0);
+    assertEquals(
+      derivedValue(reloaded.helpers[child.id].progress)!.toolCount,
+      0,
+    );
   } finally {
     await client?.close();
     await server?.stop();

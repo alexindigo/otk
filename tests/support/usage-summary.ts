@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionUsage, UsageMessage, UsageSummary } from "@otk/protocol";
-import { type TurnUsageDetail, UsageLedger } from "@otk/protocol";
+import { knownDerived, type TurnUsageDetail, UsageLedger } from "@otk/protocol";
 import type { IndexStore } from "../../core/index/store.ts";
 /** External backend fixtures publish their summary contract independently of UI detail demand. */
 export function turnDetail(
@@ -55,8 +55,20 @@ export function publishUsage(
     summary: {
       state: "ready",
       revision,
-      total: summarize(value.total, value.messages),
-      ...(last ? { last: { model: last.model, context: last.tokens } } : {}),
+      total: knownDerived(
+        summarize(value.total, value.messages),
+        value.sessionID,
+        revision,
+      ),
+      ...(last
+        ? {
+          last: knownDerived(
+            { callID: last.id, model: last.model, context: last.tokens },
+            last.id,
+            revision,
+          ),
+        }
+        : {}),
     },
     turns: {
       upsert: Object.fromEntries(
@@ -64,7 +76,14 @@ export function publishUsage(
           [id, turn],
         ) => [
           id,
-          summarize(turn, value.messages.filter((call) => call.turnID === id)),
+          knownDerived(
+            summarize(
+              turn,
+              value.messages.filter((call) => call.turnID === id),
+            ),
+            id,
+            revision,
+          ),
         ]),
       ),
       remove: [],

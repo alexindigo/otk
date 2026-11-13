@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { join } from "@std/path";
 import type { PermissionRequest } from "@otk/protocol";
 import { coreBackendFixture } from "./core-backend.ts";
@@ -171,17 +172,21 @@ export async function attentionScenario(profile: Profile) {
                 state: "ready",
                 revision: rev,
                 messageCount: 1,
-                total: {
-                  calls: 1,
-                  cost: .75,
-                  tokens: {
-                    input: 9,
-                    output: 1,
-                    reasoning: 0,
-                    cache: { read: 0, write: 0 },
+                total: knownDerived(
+                  {
+                    calls: 1,
+                    cost: .75,
+                    tokens: {
+                      input: 9,
+                      output: 1,
+                      reasoning: 0,
+                      cache: { read: 0, write: 0 },
+                    },
+                    contextPeak: 9,
                   },
-                  contextPeak: 9,
-                },
+                  "fixture",
+                  rev,
+                ),
               },
               turns: { upsert: {}, remove: [] },
               deleted: action === "fail" ? { at: 3, how: "provider" } : null,

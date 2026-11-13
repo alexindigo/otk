@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import {
   compareTranscriptVersion,
   type ContentClock,
@@ -124,7 +125,9 @@ export function createSessionUsage(
         bytes: 0,
         overflow: false,
         again: false,
-        summary: JSON.stringify(indexed(target)?.digest.turns[target.turnID]),
+        summary: JSON.stringify(
+          derivedValue(indexed(target)?.digest.turns[target.turnID]),
+        ),
       };
       resources.set(key, resource);
       let unleased = [...resources.values()].filter((item) =>
@@ -374,7 +377,7 @@ export function createSessionUsage(
             continue;
           }
           const summary = JSON.stringify(
-            entry.digest.turns[resource.target.turnID],
+            derivedValue(entry.digest.turns[resource.target.turnID]),
           );
           if (resource.summary !== summary) {
             resource.summary = summary;

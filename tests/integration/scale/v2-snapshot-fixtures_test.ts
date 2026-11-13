@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { basename, join } from "@std/path";
 import { nativeKind } from "../../support/native.ts";
@@ -144,15 +145,15 @@ for (const variant of SCALE_VARIANTS) {
           selected.expected.messages,
         );
         assertEquals(
-          client.entry(selected.id)?.digest.total?.calls,
+          derivedValue(client.entry(selected.id)?.digest.total)?.calls,
           selected.expected.calls,
         );
         assertEquals(
-          client.entry(selected.id)?.digest.total?.cost,
+          derivedValue(client.entry(selected.id)?.digest.total)?.cost,
           selected.expected.cost,
         );
         assertEquals(
-          client.entry(selected.id)?.digest.total?.tokens.input,
+          derivedValue(client.entry(selected.id)?.digest.total)?.tokens.input,
           selected.expected.tokens[0],
         );
         // Each recipe seeds omitted usage at 1 and explicit zeros at 2.
@@ -170,11 +171,11 @@ for (const variant of SCALE_VARIANTS) {
             120000,
           );
           assertEquals(
-            client.entry(target.id)?.digest.total?.cost,
+            derivedValue(client.entry(target.id)?.digest.total)?.cost,
             target.expected.cost,
           );
           assertEquals(
-            client.entry(target.id)?.digest.total?.tokens.input,
+            derivedValue(client.entry(target.id)?.digest.total)?.tokens.input,
             target.expected.tokens[0],
           );
           const [turnID, expected] = Object.entries(target.expected.turns)[0];

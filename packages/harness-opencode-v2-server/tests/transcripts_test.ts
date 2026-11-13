@@ -120,7 +120,7 @@ Deno.test("V2 live historical tools and snapshot checkpoints use the same interp
       if (expected.tool === "task") {
         expected.progress = {
           state: "digesting",
-          toolCount: null,
+          progress: { state: "pending" },
           revision: 0,
         };
       }

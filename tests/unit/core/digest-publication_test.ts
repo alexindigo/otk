@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import { createIndex } from "@otk/client";
 import type { IndexOp, ServerFrame } from "@otk/protocol";
@@ -127,7 +128,10 @@ test("a scoped batch preserves metadata and every selected turn when coalescing 
         id: metadata.id,
         revision: n + 1,
         summary: { revision: n + 1, state: "ready" },
-        turns: { upsert: { [key]: total }, remove: [] },
+        turns: {
+          upsert: { [key]: knownDerived(total, key, n + 1) },
+          remove: [],
+        },
         deleted: null,
       });
     }
@@ -141,7 +145,7 @@ test("a scoped batch preserves metadata and every selected turn when coalescing 
       id: metadata.id,
       revision: 3,
       summary: { revision: 3, state: "ready" },
-      turns: { upsert: { c: total }, remove: [] },
+      turns: { upsert: { c: knownDerived(total, "c", 3) }, remove: [] },
       deleted: null,
     });
     server.applyDigest({

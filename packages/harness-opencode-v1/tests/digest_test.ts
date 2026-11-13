@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { cfg } from "../../../tests/support/config.ts";
 import { assertAlmostEquals, assertEquals, assertRejects } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
@@ -71,7 +72,10 @@ test("requested metadata coverage is descending, inclusive and extensible withou
       ["x", "b"],
     );
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "digesting");
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .5);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      .5,
+    );
     assertEquals(
       f.derived.prepare("SELECT complete_revision FROM opcv1_scan").get()
         ?.complete_revision,
@@ -93,7 +97,10 @@ test("requested metadata coverage is descending, inclusive and extensible withou
       "a",
     );
     await f.scan();
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1.25);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      1.25,
+    );
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
     f.native.prepare("DELETE FROM message WHERE id='z'").run();
     f.sink.invalidate("opcv1-ses_one", 2);
@@ -102,12 +109,15 @@ test("requested metadata coverage is descending, inclusive and extensible withou
       created: 4,
     });
     assertEquals(
-      f.values.get("opcv1-ses_one")!.summary.total?.cost,
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
       1.25,
       "partial coverage cannot sweep retained older contributions",
     );
     await f.scan();
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      1,
+    );
   } finally {
     f.close();
   }
@@ -158,7 +168,10 @@ test("a time-budget subdivision cannot complete a short SQL boundary range befor
       undefined,
       boundary,
     );
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      1,
+    );
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "digesting");
   } finally {
     f.close();
@@ -264,7 +277,10 @@ test("accepted deletion is durable without inventory, idempotent, generation-fen
     assertEquals(f.values.get("opcv1-ses_one")!.deleted, null);
     await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 2]);
     assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .25);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      .25,
+    );
     const revision = f.values.get("opcv1-ses_one")!.summary.revision;
     await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 2]);
     assertEquals(f.values.get("opcv1-ses_one")!.summary.revision, revision);
@@ -553,7 +569,10 @@ test("a descending SQL checkpoint restarts in the opaque API domain without doub
       revision: 1,
     };
     const cursor = await f.sink.step(job, { rows: 2, until: Infinity }, signal);
-    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, .5);
+    assertEquals(
+      derivedValue(f.values.get(job.sessionID)?.summary.total)?.cost,
+      .5,
+    );
     f.loseSQL();
     assertEquals(
       await f.sink.step(
@@ -577,9 +596,15 @@ test("a descending SQL checkpoint restarts in the opaque API domain without doub
       },
     );
     assertEquals(f.apiPages, [null]);
-    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, .5);
+    assertEquals(
+      derivedValue(f.values.get(job.sessionID)?.summary.total)?.cost,
+      .5,
+    );
     await f.scan();
-    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, 1.25);
+    assertEquals(
+      derivedValue(f.values.get(job.sessionID)?.summary.total)?.cost,
+      1.25,
+    );
     assertEquals(f.values.get(job.sessionID)?.summary.state, "ready");
     assertEquals(f.apiPages, [null, "api:2", "api:4"]);
   } finally {
@@ -622,7 +647,10 @@ test("API demand stops inside a page and resumes through the native cursor owner
       "one bounded metadata page plus the bounded prompt projection",
     );
     await f.scan();
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      1,
+    );
     assertEquals(f.values.get("opcv1-ses_one")!.summary.messageCount, 5);
   } finally {
     f.close();
@@ -660,7 +688,9 @@ test("an API dirty sweep never persists its reconciliation phase as a native cur
     );
     await f.scan();
     assertEquals(
-      Math.round(f.values.get(job.sessionID)!.summary.total!.cost! * 100),
+      Math.round(
+        derivedValue(f.values.get(job.sessionID)!.summary.total)!.cost! * 100,
+      ),
       530,
     );
     assertEquals(f.apiPages, [null, "api:2", null, "api:2"]);
@@ -696,7 +726,10 @@ test("API boundary ties follow the source's binary message identity order", asyn
       ["a"],
     );
     await f.scan();
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .75);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      .75,
+    );
   } finally {
     f.close();
   }
@@ -861,7 +894,10 @@ for (
       if (change === "deletion") {
         assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
       } else {
-        assertEquals(f.values.get("opcv1-ses_one")!.summary.total!.cost, .75);
+        assertEquals(
+          derivedValue(f.values.get("opcv1-ses_one")!.summary.total)!.cost,
+          .75,
+        );
         assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
       }
     } finally {
@@ -884,7 +920,7 @@ test("a newly created API identity does not turn a matching paged native invento
     await f.sink.catalog(new AbortController().signal);
     const value = await f.scan();
     assertEquals(value.summary.state, "ready");
-    assertEquals(value.summary.total!.cost, null);
+    assertEquals(derivedValue(value.summary.total)!.cost, null);
     assertEquals(
       f.queries.scans > 0,
       true,
@@ -979,7 +1015,10 @@ test("catalog empty proofs do not overtake a raced message invalidation", async 
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "digesting");
     await f.scan();
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total!.cost, .25);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)!.cost,
+      .25,
+    );
   } finally {
     f.close();
   }
@@ -1023,7 +1062,10 @@ test("deleted usage detail rejects before native reads while retaining last repo
       "deleted",
     );
     assertEquals(f.queries.scans, before);
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .5);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      .5,
+    );
   } finally {
     f.close();
   }
@@ -1038,10 +1080,10 @@ test("native scalar digest replacement, unknown accounting, sweep removal and ho
     let value = await f.scan();
     assertEquals(value.summary.state, "ready");
     assertEquals(value.summary.messageCount, 2);
-    assertEquals(value.summary.total?.cost, null);
-    assertEquals(value.summary.total?.tokens.input, null);
-    assertEquals(value.summary.total?.tokens.output, 4);
-    assertEquals(value.summary.total?.time?.end, undefined);
+    assertEquals(derivedValue(value.summary.total)?.cost, null);
+    assertEquals(derivedValue(value.summary.total)?.tokens.input, null);
+    assertEquals(derivedValue(value.summary.total)?.tokens.output, 4);
+    assertEquals(derivedValue(value.summary.total)?.time?.end, undefined);
     const unknown = await f.sink.detail(
       value.metadata.id,
       "user",
@@ -1056,17 +1098,20 @@ test("native scalar digest replacement, unknown accounting, sweep removal and ho
     value = await f.scan(["a", "b"]);
     assertEquals(f.queries.scans, before.scans);
     assertEquals(f.queries.replacements, before.replacements + 1);
-    assertEquals(Math.round(value.summary.total!.cost! * 100), 30);
-    assertEquals(value.summary.total?.tokens.input, 30);
-    assertEquals(value.summary.total?.time?.end, 20);
-    assertEquals(value.summary.total?.contextPeak, 29);
-    assertEquals(value.turns.user.calls, 2);
+    assertEquals(
+      Math.round(derivedValue(value.summary.total)!.cost! * 100),
+      30,
+    );
+    assertEquals(derivedValue(value.summary.total)?.tokens.input, 30);
+    assertEquals(derivedValue(value.summary.total)?.time?.end, 20);
+    assertEquals(derivedValue(value.summary.total)?.contextPeak, 29);
+    assertEquals(derivedValue(value.turns.user)!.calls, 2);
     value = await f.scan(["a", "b"]);
-    assertEquals(value.turns.user.calls, 2);
+    assertEquals(derivedValue(value.turns.user)!.calls, 2);
     f.native.prepare("DELETE FROM message WHERE id='a'").run();
     value = await f.scan();
     assertEquals(value.summary.messageCount, 1);
-    assertAlmostEquals(value.summary.total!.cost!, 0.2, 1e-12);
+    assertAlmostEquals(derivedValue(value.summary.total)!.cost!, 0.2, 1e-12);
     assertEquals(
       (await f.sink.detail(
         value.metadata.id,
@@ -1191,12 +1236,17 @@ test("a raced edit behind a scan cursor is reconciled before any ready publicati
       if (++count > 20) throw new Error("Scan did not converge");
     }
     assertEquals(
-      Math.round(f.values.get(job.sessionID)!.summary.total!.cost! * 100),
+      Math.round(
+        derivedValue(f.values.get(job.sessionID)!.summary.total)!.cost! * 100,
+      ),
       550,
     );
     for (const delta of f.publications) {
       if (delta.summary.state === "ready") {
-        assertEquals(Math.round(delta.summary.total!.cost! * 100), 550);
+        assertEquals(
+          Math.round(derivedValue(delta.summary.total)!.cost! * 100),
+          550,
+        );
       }
     }
   } finally {
@@ -1212,19 +1262,25 @@ test("baseline and neutral summary roll back together; malformed metadata retain
     f.seed("a", 5, 20);
     f.failNextWrite();
     await assertRejects(() => f.scan(["a"]), Error, "injected commit failure");
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      1,
+    );
     assertEquals(
       f.derived.prepare("SELECT cost FROM opcv1_messages WHERE message_id='a'")
         .get()!.cost,
       1,
     );
     await f.scan(["a"]);
-    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 5);
+    assertEquals(
+      derivedValue(f.values.get("opcv1-ses_one")!.summary.total)?.cost,
+      5,
+    );
     f.native.prepare("INSERT INTO message VALUES('b','ses_one','invalid-json')")
       .run();
     const value = await f.scan();
     assertEquals(value.summary.state, "unavailable");
-    assertEquals(value.summary.total?.cost, 5);
+    assertEquals(derivedValue(value.summary.total)?.cost, 5);
   } finally {
     f.close();
   }
@@ -1255,8 +1311,8 @@ test("a durable sweep cursor resumes without rereading history and authoritative
     assertEquals(f.queries.scans, scans);
     assertEquals(value.summary.state, "ready");
     assertEquals(value.summary.messageCount, 0);
-    assertEquals(value.summary.total?.cost, 0);
-    assertEquals(value.summary.total?.tokens.input, 0);
+    assertEquals(derivedValue(value.summary.total)?.cost, 0);
+    assertEquals(derivedValue(value.summary.total)?.tokens.input, 0);
   } finally {
     f.close();
   }

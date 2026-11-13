@@ -39,7 +39,7 @@ import type { SessionErrorState } from "@otk/protocol";
 import {
   createTranscriptProjection,
   failureText,
-  sessionSummary,
+  sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
 } from "@otk/client";
@@ -515,11 +515,10 @@ export default function SessionView(props: {
                                     target(),
                                     props.catalog,
                                   )}
-                                  summary={sessionSummary(
+                                  summary={sessionResult(
                                     props.entry,
                                     message(),
                                   )}
-                                  digestState={props.entry?.digest.state}
                                   openUsage={props.openUsage
                                     ? () => props.openUsage!(turnID())
                                     : undefined}

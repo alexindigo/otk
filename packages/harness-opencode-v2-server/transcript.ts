@@ -224,7 +224,10 @@ export class Transcript {
       summaries?(
         id: string,
         turns: readonly string[],
-      ): Record<string, import("@otk/protocol").UsageSummary>;
+      ): Record<
+        string,
+        import("@otk/protocol").Derived<import("@otk/protocol").UsageSummary>
+      >;
       helper?(id: string): import("@otk/protocol").HelperSummary | undefined;
       requestHelper?(id: string): void;
       agents?(
@@ -1869,7 +1872,7 @@ export class Transcript {
     return this.#helperProgress.get(child) ?? this.options.helper?.(child) ?? {
       state: "digesting",
       revision: 0,
-      toolCount: null,
+      progress: { state: "pending" },
     };
   }
   helper(child: string, summary: import("@otk/protocol").HelperSummary): void {

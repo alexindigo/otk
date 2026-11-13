@@ -379,7 +379,11 @@ export async function messagesScenario(profile: Profile) {
             status: "completed",
             time: { start: 2000, end: 3000 },
             description: "Inspect the result",
-            progress: { state: "unavailable", revision: 0, toolCount: null },
+            progress: {
+              state: "unavailable",
+              revision: 0,
+              progress: { state: "unavailable" },
+            },
             childSessionID: "tstv1-child",
           },
         },

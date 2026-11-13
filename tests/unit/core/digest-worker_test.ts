@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { type Derived, derivedValue } from "@otk/protocol";
 import { cfg } from "../../support/config.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
@@ -62,7 +63,7 @@ test("public worker port publishes real native totals and recovers committed met
         summary: {
           state: string;
           messageCount?: number;
-          total?: { calls: number };
+          total?: Derived<{ calls: number }>;
         };
       };
     }
@@ -92,7 +93,7 @@ test("public worker port publishes real native totals and recovers committed met
           summary: {
             state: string;
             messageCount?: number;
-            total?: { calls: number };
+            total?: Derived<{ calls: number }>;
           };
         };
       },
@@ -149,7 +150,7 @@ test("public worker port publishes real native totals and recovers committed met
         () => summaries.get(session.id),
         (value) =>
           value?.delta.summary.state === "ready" &&
-          (value.delta.summary.total?.calls ?? 0) >= round + 1,
+          (derivedValue(value.delta.summary.total)?.calls ?? 0) >= round + 1,
       );
       assertEquals(
         summaries.get(session.id)?.delta.summary.messageCount! >= 2,
@@ -181,7 +182,7 @@ test("public worker port publishes real native totals and recovers committed met
       () => summaries.get(session.id),
       (value) =>
         value?.delta.summary.state === "ready" &&
-        (value.delta.summary.total?.calls ?? 0) >= 3,
+        (derivedValue(value.delta.summary.total)?.calls ?? 0) >= 3,
     );
     await waitFor(() => turnKeys.size, (count) => count === 3);
     assertEquals(turnKeys.size, 3);

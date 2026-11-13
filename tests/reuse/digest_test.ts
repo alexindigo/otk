@@ -18,7 +18,7 @@ import {
   DigestStore,
   type DigestUsageRecord,
 } from "@otk/store";
-import type { UsageSummary } from "@otk/protocol";
+import { type Derived, derivedValue, type UsageSummary } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
 import {
@@ -29,8 +29,8 @@ import {
 import { cfg } from "../support/config.ts";
 import { tempDir, test } from "../support/resources.ts";
 
-function summary(row: DigestUsageRecord): UsageSummary {
-  return {
+function summary(row: DigestUsageRecord): Derived<UsageSummary> {
+  const value: UsageSummary = {
     calls: row.call_count ?? 0,
     cost: row.cost,
     tokens: {
@@ -47,12 +47,22 @@ function summary(row: DigestUsageRecord): UsageSummary {
       },
     }),
   };
+  const result = row.result_meta ? JSON.parse(row.result_meta) : {
+    state: "known",
+    final: false,
+    witness: { source: "cache/legacy", revision: row.revision },
+  };
+  return result.state === "known" ? { ...result, value } : result;
 }
 function scalars(
-  value: UsageSummary | undefined,
+  result: Derived<UsageSummary> | undefined,
   revision: number,
 ): DigestUsageRecord {
+  const value = derivedValue(result);
+  const metadata = result && { ...result };
+  if (metadata?.state === "known") Reflect.deleteProperty(metadata, "value");
   return {
+    result_meta: metadata ? JSON.stringify(metadata) : null,
     revision,
     call_count: value?.calls ?? null,
     cost: value?.cost ?? null,
@@ -155,7 +165,7 @@ test("independent public-entry consumer composes native sink, scheduler and deri
     },
     publish: () => {},
     write(metadata, delta, checkpoint) {
-      const value = delta.summary, last = value.last;
+      const value = delta.summary, last = derivedValue(value.last);
       const row: DigestSessionRecord = {
         ...scalars(value.total, value.revision),
         id: metadata.id,
@@ -191,7 +201,7 @@ test("independent public-entry consumer composes native sink, scheduler and deri
             ...scalars(total, value.revision),
             session_id: metadata.id,
             turn_id,
-            call_count: total.calls,
+            call_count: derivedValue(total)!.calls,
           })),
           remove: delta.turns.remove.map((turn_id) => ({
             session_id: metadata.id,
@@ -243,7 +253,10 @@ test("independent public-entry consumer composes native sink, scheduler and deri
     }, "visible");
     while (await scheduler.tick()) { /* independent consumer owns its pump */ }
     assertEquals(read(session.id)?.summary.state, "ready");
-    assertEquals(read(session.id)?.summary.total?.calls, expectedCalls);
+    assertEquals(
+      derivedValue(read(session.id)?.summary.total)?.calls,
+      expectedCalls,
+    );
     assertEquals(
       store.turns([session.id], "", 10).reduce(
         (count, row) => count + row.call_count,
