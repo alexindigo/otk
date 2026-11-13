@@ -43,6 +43,10 @@ test("messages.priced-native-multistep-usage-display-persistence", {
       m.tokens.cache.write!,
     ];
   expect(steps).toHaveLength(3);
+  const detail = await state.product("usage.get", {
+    sessionID: session.id,
+    turnID: steps[0].replyTo ?? steps[0].id,
+  });
   const native = await state.native<
     {
       info: { role: string; tokens: AssistantMessage["tokens"]; cost: number };
@@ -120,7 +124,11 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     expect(Math.abs(Number(values[i][8].replace(/[$,]/g, "")) - m.cost!))
       .toBeLessThanOrEqual(.005);
     expect(values[i][9]).toBe(
-      `${((m.time.completed! - m.time.created) / 1000).toFixed(1)}s`,
+      `${
+        ((detail.calls[i].timing?.state === "known"
+          ? detail.calls[i].timing.workingMs
+          : NaN) / 1000).toFixed(1)
+      }s`,
     );
   }
   const totals = await page.locator(".otk-usage-breakdown tfoot tr").evaluate(
@@ -143,9 +151,13 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     expect(Math.abs(costs[i] - sums[i] * rate / 1e6)).toBeLessThanOrEqual(1e-9);
   }
   const turnTime = `${
-    ((steps.at(-1)!.time.completed! - steps[0].time.created) / 1000).toFixed(1)
+    ((detail.summary.timing?.state === "known"
+      ? detail.summary.timing.workingMs
+      : NaN) / 1000).toFixed(1)
   }s`;
-  await expect(page.locator(".otk-turn-time")).toHaveText(turnTime);
+  await expect(page.locator(".otk-turn-time")).toHaveText(
+    `Worked for ${turnTime}`,
+  );
   await expect(page.locator(".otk-work-fold span").first()).toHaveText(
     `Worked for ${turnTime}`,
   );

@@ -2,17 +2,39 @@
 import type { SessionUsage, UsageMessage, UsageSummary } from "@otk/protocol";
 import { knownDerived, type TurnUsageDetail, UsageLedger } from "@otk/protocol";
 import type { IndexStore } from "../../core/index/store.ts";
+import { TurnTimingAccumulator } from "@otk/harness";
+/** These scripted external-harness fixtures declare each call interval busy. */
+function fixtureTiming(calls: UsageMessage[]) {
+  const owner = new TurnTimingAccumulator();
+  for (const call of calls) {
+    if (call.time) {
+      owner.add({
+        ...call.time,
+        terminal: call.completed,
+        source: "scripted-fixture",
+        busy: call.time.end === undefined
+          ? []
+          : [{ start: call.time.start, end: call.time.end }],
+        waits: [],
+      });
+    }
+  }
+  return owner.result();
+}
 /** External backend fixtures publish their summary contract independently of UI detail demand. */
 export function turnDetail(
   value: SessionUsage,
   turnID: string,
   clock: TurnUsageDetail["clock"] = { epoch: "fixture", seq: 0 },
 ): TurnUsageDetail {
-  return {
+  const detail: TurnUsageDetail = {
     ...new UsageLedger(value.sessionID, value.messages).detail(turnID),
     version: { generation: 0, revision: 0 },
     clock,
   };
+  detail.summary.timing = fixtureTiming(detail.calls);
+  for (const call of detail.calls) call.timing = fixtureTiming([call]);
+  return detail;
 }
 export function publishUsage(
   index: IndexStore,
@@ -28,6 +50,7 @@ export function publishUsage(
     tokens: total.tokens,
     cost: total.cost,
     time: total.time,
+    timing: fixtureTiming(calls),
     calls: calls.length,
     contextPeak:
       calls.some((call) =>

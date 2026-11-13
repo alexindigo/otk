@@ -176,6 +176,18 @@ result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,
 bounded scalar fields and never tool input/output bodies for helper summaries.
 
+Turn timing supplies native streamed model intervals and scalar tool clocks to
+the shared accumulator. Bounded header batches project clocks, never tool
+bodies. Retained legacy identity/model/creation/update evidence identifies
+substituted migration completions in the existing source-proven read-only SQL
+owner. Those endpoints are not working-time evidence: the result says Time
+unknown and carries the migration explanation. A resumed V2 streamed edge uses
+its current evidence, never an old completion. Terminality is independent of
+endpoint availability. Header, tool-clock and migration evidence share one
+native SQL snapshot. Page, live and recovery owners preserve closure without
+inventing an endpoint; replay barriers keep a distinct optional clock and permit
+only a fresh start to reopen.
+
 Pages contain ten native rows, chronological visible items, session metadata,
 real-prompt/reply context and an event-aligned replay clock. Cursor
 continuations omit native `order` and bind to session, epoch, cutoff and source

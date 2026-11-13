@@ -8,6 +8,7 @@ import {
 import {
   type ContentOp,
   type ContentSession,
+  isAssistantTerminal,
   type LatestPrompt,
   MAX_MESSAGE_CURSOR_LENGTH,
   type Message,
@@ -19,7 +20,7 @@ import {
 import type { StreamBuffers } from "@otk/content";
 import type { Messages, NativeMessage } from "./messages.ts";
 import type { Session } from "./types.ts";
-import { mapMessage, mapPart } from "./map.ts";
+import { assistantSettled, mapMessage, mapPart } from "./map.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import {
   MessagePrefetchCache,
@@ -418,7 +419,7 @@ export class Transcript {
           (raw) => {
             if (
               raw.info.role === "assistant" &&
-              raw.info.time.completed !== undefined
+              assistantSettled(raw.info)
             ) {
               buffers.removeMessage(raw.info.id, id);
               this.options.reconciled?.(id, raw.info.id);
@@ -427,7 +428,7 @@ export class Transcript {
               mapMessage(raw.info, raw.parts, undefined, (part) => {
                 if (
                   raw.info.role !== "assistant" ||
-                  raw.info.time.completed !== undefined
+                  assistantSettled(raw.info)
                 ) {
                   return mapPart(part);
                 }
@@ -551,7 +552,7 @@ export class Transcript {
       if (this.options.scopedRecovery?.(id)) {
         items = items.map((message) => {
           if (
-            message.role !== "assistant" || message.time.completed !== undefined
+            message.role !== "assistant" || isAssistantTerminal(message)
           ) return message;
           return {
             ...message,
@@ -694,9 +695,9 @@ function overlay(items: Message[], event: ContentOp): Message[] {
   if (event.op === "message.upsert") {
     const previous = items.find((m) => m.id === event.message.id);
     if (
-      previous?.role === "assistant" && previous.time.completed !== undefined &&
+      previous?.role === "assistant" && isAssistantTerminal(previous) &&
       event.message.role === "assistant" &&
-      event.message.time.completed === undefined
+      !isAssistantTerminal(event.message) && !event.restart
     ) return items;
     const value = {
       ...event.message,

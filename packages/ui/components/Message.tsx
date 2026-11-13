@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { derivedValue } from "@otk/protocol";
+import { derivedValue, isAssistantTerminal } from "@otk/protocol";
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
@@ -9,7 +9,12 @@ import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
 import type { UsageSummary } from "@otk/protocol";
-import { createMessageLayout, elapsed, messageLayoutRole } from "./work-log.ts";
+import {
+  createMessageLayout,
+  messageLayoutRole,
+  timingExplanation,
+  workingTime,
+} from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
@@ -185,25 +190,16 @@ export default function Message(
           : text()
       : undefined,
     lastID: props.lastID ?? props.message.id,
-    completed: props.message.role === "assistant" &&
-      props.message.time.completed !== undefined,
+    completed: isAssistantTerminal(props.message),
     queued: props.queued,
   });
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
   const streaming = () =>
-    props.message.role === "assistant" &&
-    props.message.time.completed === undefined;
-  // Select one turn range for both consumers; complete usage metadata wins over
-  // the loaded-page reply projection. Unsupported backends share that projection.
-  const time = () =>
-    derivedValue(props.summary)?.time ?? {
-      start: props.message.time.created,
-      end: props.message.role === "assistant"
-        ? props.message.time.completed
-        : undefined,
-    };
+    props.message.role === "assistant" && !isAssistantTerminal(props.message);
+  // Only the adapter's shared accumulator supplies a whole-turn duration.
+  const time = () => derivedValue(props.summary)?.timing;
   const error = () =>
     props.message.role === "assistant" && !props.message.interrupted
       ? props.message.error?.message
@@ -384,11 +380,12 @@ export default function Message(
                       <span>
                         {message().model.provider}/{message().model.model}
                       </span>
-                      <span class="otk-turn-time">
-                        {time().end === undefined ? "streaming" : elapsed(
-                          time().start,
-                          time().end!,
-                        )}
+                      <span
+                        class="otk-turn-time"
+                        title={timingExplanation(time())}
+                      >
+                        {workingTime(time()) ??
+                          (streaming() ? "streaming" : "Time unknown")}
                       </span>
                       <TurnUsage
                         summary={props.summary}

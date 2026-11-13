@@ -13,6 +13,7 @@ export class DigestDb extends SqliteDb {
   }
 }
 export interface DigestUsageRecord {
+  timing_meta?: string | null;
   result_meta?: string | null;
   call_count: number | null;
   cost: number | null;
@@ -99,6 +100,7 @@ export interface DigestPersistence {
   transaction<T>(run: () => T): T;
 }
 const sessionColumns = [
+  "timing_meta",
   "result_meta",
   "last_result_meta",
   "last_call_id",
@@ -162,6 +164,7 @@ const helperColumns = [
   "time_end",
 ] as const;
 const turnColumns = [
+  "timing_meta",
   "result_meta",
   "session_id",
   "turn_id",

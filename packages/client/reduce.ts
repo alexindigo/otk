@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   compareMessages,
+  isAssistantTerminal,
   mergePromptSelection,
   sessionErrorMessage,
   type SessionErrorState,
@@ -57,7 +58,7 @@ export function contentMetadata(
   >;
 }
 function output(message: Message, lastOutput?: number): Message {
-  return message.role === "assistant" && message.time.completed === undefined &&
+  return message.role === "assistant" && !isAssistantTerminal(message) &&
       lastOutput !== undefined
     ? {
       ...message,
@@ -77,9 +78,9 @@ export function reduceMessage(
   if (op.op === "message.remove") return undefined;
   if (op.op === "message.upsert") {
     if (
-      previous?.role === "assistant" && previous.time.completed !== undefined &&
+      previous?.role === "assistant" && isAssistantTerminal(previous) &&
       op.message.role === "assistant" &&
-      op.message.time.completed === undefined && !op.restart
+      !isAssistantTerminal(op.message) && !op.restart
     ) return previous;
     const message: Message = {
       ...op.message,
@@ -93,7 +94,7 @@ export function reduceMessage(
     if (message.role === "assistant" && op.message.role === "assistant") {
       message.time = {
         ...op.message.time,
-        lastOutput: op.message.time.completed !== undefined
+        lastOutput: isAssistantTerminal(op.message)
           ? op.message.time.lastOutput
           : Math.max(
             op.message.time.lastOutput || op.message.time.created,
@@ -137,8 +138,7 @@ export function reduceMessage(
     if (
       (op.part.kind === "text" || op.part.kind === "reasoning") &&
       op.part.stream &&
-      ((previous.role === "assistant" &&
-        previous.time.completed !== undefined) ||
+      (isAssistantTerminal(previous) ||
         ((target?.kind === "text" || target?.kind === "reasoning") &&
           target.stream?.epoch === op.part.stream.epoch &&
           (target.stream.generation > op.part.stream.generation ||
@@ -147,7 +147,7 @@ export function reduceMessage(
     ) return previous;
     const parts = [...previous.parts];
     const part = previous.role === "assistant" &&
-        previous.time.completed === undefined &&
+        !isAssistantTerminal(previous) &&
         (op.part.kind === "text" || op.part.kind === "reasoning") &&
         (op.part.stream?.mode === "replace" || op.part.stream?.recovering)
       ? retainStreamPart(target, op.part)
@@ -156,7 +156,7 @@ export function reduceMessage(
     else parts[index] = part;
     return output({ ...previous, parts }, op.lastOutput);
   }
-  if (previous.role === "assistant" && previous.time.completed !== undefined) {
+  if (isAssistantTerminal(previous)) {
     return previous;
   }
   if (

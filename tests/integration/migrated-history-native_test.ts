@@ -2,8 +2,12 @@
 import { assert, assertEquals } from "@std/assert";
 import {
   mapMessage,
+  Messages,
   type NativeMessage,
+  TranscriptReads,
 } from "@otk/harness-opencode-v2-server";
+import { DatabaseSync } from "node:sqlite";
+import { TurnTimingAccumulator } from "@otk/harness";
 import { nativeKind } from "../support/native.ts";
 
 Deno.test({
@@ -52,5 +56,32 @@ Deno.test({
     const shell = calls.find((c) => c.tool === "bash");
     assert(shell?.tool === "bash");
     assertEquals(shell.cwd, "/fixture");
+    const database = new DatabaseSync(
+      receipt.fixture.replace(/fixture\.json$/, "data/opencode/opencode.db"),
+      { readOnly: true },
+    );
+    try {
+      const reads = new TranscriptReads(
+        new Messages(() => {
+          throw new Error("No native HTTP after shutdown");
+        }),
+        () => database,
+      );
+      const rows = reads.sqlHeaders(
+        "opcv2-" + receipt.session,
+        undefined,
+        200,
+      )!;
+      const timing = new TurnTimingAccumulator();
+      for (const row of rows) if (row.timing) timing.add(row.timing);
+      const result = timing.result();
+      assert(result?.state === "unknown");
+      assertEquals(result.reason, "migration");
+      assertEquals(result.terminal, true);
+      assertEquals(result.end, undefined);
+      assertEquals(result.start, fixture.firstCreated);
+    } finally {
+      database.close();
+    }
   },
 });

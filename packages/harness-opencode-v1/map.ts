@@ -63,6 +63,13 @@ const tokens = (value?: Tokens): Tokens =>
       cache: { read: value.cache.read, write: value.cache.write },
     }
     : { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
+/** Native termination evidence is separate from endpoint availability. */
+export function assistantSettled(
+  info: Pick<Info, "time" | "error" | "finish">,
+): boolean {
+  return info.time.completed !== undefined || !!info.error ||
+    !!info.finish && !["tool-calls", "unknown"].includes(info.finish);
+}
 export function mapMessage(
   info: Info,
   parts: RawPart[] = [],
@@ -99,6 +106,9 @@ export function mapMessage(
   return {
     ...common,
     role: "assistant",
+    ...(info.time.completed === undefined && assistantSettled(info)
+      ? { terminal: true }
+      : {}),
     agent: info.agent,
     replyTo: info.parentID ?? undefined,
     time: {

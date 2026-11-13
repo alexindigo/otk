@@ -5,6 +5,7 @@ import type {
   ProviderReadCodecs,
   TranscriptMetadata,
 } from "@otk/harness";
+import { TurnTimingAccumulator } from "@otk/harness";
 import "./read-kinds.ts";
 import {
   type HelperProgress,
@@ -30,6 +31,7 @@ import {
 } from "./tool-interpretation.ts";
 import { type Messages, type NativeMessage, SCAN_ROWS } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
+import { timingEvidence } from "./turn-timing.ts";
 
 export interface ScalarMessage {
   id: string;
@@ -40,6 +42,7 @@ export interface ScalarMessage {
   agent?: string;
   model?: MessageContext["model"];
   usage?: UsageMessage;
+  timing?: import("@otk/harness").TurnTimingEvidence;
 }
 export interface TranscriptFacts {
   source: string;
@@ -116,7 +119,7 @@ export function scalarMessage(
     type: raw.type,
     seq,
     created: millis(raw.time.created),
-    completed: "completed" in raw.time && raw.time.completed
+    completed: "completed" in raw.time && raw.time.completed != null
       ? millis(raw.time.completed)
       : undefined,
     agent: "agent" in raw ? raw.agent : undefined,
@@ -129,6 +132,7 @@ export function scalarMessage(
       : undefined,
   };
   if (raw.type === "assistant") {
+    result.timing = timingEvidence(raw);
     result.usage = {
       sourceOrder: seq,
       id: raw.id,
@@ -136,9 +140,12 @@ export function scalarMessage(
       model: { provider: raw.model.providerID, model: raw.model.id },
       tokens: tokens(raw.tokens),
       cost: reported(raw.cost),
-      completed: !!raw.time.completed,
+      completed: result.timing.terminal,
       time: { start: result.created, end: result.completed },
     };
+    const timing = new TurnTimingAccumulator();
+    timing.add(result.timing);
+    result.usage.timing = timing.result();
   }
   return result;
 }
@@ -185,6 +192,10 @@ export function factsFrom(
     }
     if (selected.has(row.id)) {
       contexts[row.id] = {
+        ...(row.completed === undefined &&
+            row.timing?.source === "legacy-migration" && row.timing.terminal
+          ? { terminal: true }
+          : {}),
         order: row.seq,
         replyTo: row.type === "assistant" ? replyTo : undefined,
         agent,
@@ -344,6 +355,19 @@ export class TranscriptReads {
       ),
     };
   }
+  #migrationSQL(sql: Pick<DatabaseSync, "prepare">): string {
+    const columns = new Set(
+      sql.prepare("PRAGMA table_info(message)").all().map((row) =>
+        String(row.name)
+      ),
+    );
+    if (
+      !["id", "session_id", "time_created", "time_updated", "data"].every((
+        name,
+      ) => columns.has(name))
+    ) return "0";
+    return `EXISTS(SELECT 1 FROM message old WHERE old.session_id=m.session_id AND old.id=m.id AND old.time_created=m.time_created AND CASE WHEN json_valid(old.data) AND json_valid(m.data) THEN json_extract(m.data,'$.time.created')=old.time_created AND json_extract(m.data,'$.time.streamed') IS NULL AND json_extract(old.data,'$.role')='assistant' AND json_extract(old.data,'$.providerID') IS json_extract(m.data,'$.model.providerID') AND json_extract(old.data,'$.modelID') IS json_extract(m.data,'$.model.id') AND (old.time_updated IS json_extract(m.data,'$.time.completed') OR (json_extract(m.data,'$.time.completed') IS NULL AND json_extract(old.data,'$.time.completed') IS NULL)) ELSE 0 END)`;
+  }
   sqlHeaders(
     sessionID: string,
     before: number | undefined,
@@ -353,6 +377,15 @@ export class TranscriptReads {
     const sql = this.native();
     if (!sql) return;
     const rows = sql.prepare(`SELECT id,type,seq,time_created,
+      ${this.#migrationSQL(sql)} AS migrated,
+      CASE WHEN m.type='assistant' THEN (SELECT json_group_array(json(clock)) FROM (
+        SELECT json_object('type',p.type,'name',json_extract(p.data,'$.name'),'time',json(json_extract(p.data,'$.time'))) AS clock FROM session_part p WHERE p.session_id=m.session_id AND p.message_id=m.id AND p.type='tool' AND json_valid(p.data)
+        UNION ALL SELECT json_object('type',json_extract(p.value,'$.type'),'name',json_extract(p.value,'$.name'),'time',json(json_extract(p.value,'$.time'))) FROM json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p WHERE json_extract(p.value,'$.type')='tool'
+      )) ELSE '[]' END AS clocks,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.time.created') AS native_created,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.time.streamed') AS streamed,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.error.type') AS error_type,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.finish') AS finish,
       json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.time.completed') AS completed,
       json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.agent') AS agent,
       json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.model') AS model,
@@ -375,7 +408,9 @@ export class TranscriptReads {
         id: String(r.id),
         type: r.type as NativeMessage["type"],
         seq: Number(r.seq),
-        created: Number(r.time_created),
+        created: r.native_created == null
+          ? Number(r.time_created)
+          : millis(r.native_created),
         completed: r.completed == null ? undefined : millis(r.completed),
         agent: text(r.agent),
         model:
@@ -388,6 +423,16 @@ export class TranscriptReads {
             : undefined,
       };
       if (row.type === "assistant") {
+        row.timing = timingEvidence({
+          time: {
+            created: row.created,
+            completed: row.completed,
+            streamed: r.streamed,
+          },
+          error: r.error_type == null ? undefined : { type: r.error_type },
+          finish: r.finish,
+          content: JSON.parse(String(r.clocks ?? "[]")),
+        }, !!r.migrated);
         row.usage = {
           sourceOrder: row.seq,
           id: row.id,
@@ -398,9 +443,12 @@ export class TranscriptReads {
           },
           tokens: tokens(r.tokens ? JSON.parse(String(r.tokens)) : undefined),
           cost: reported(r.cost),
-          completed: row.completed !== undefined,
+          completed: row.timing.terminal,
           time: { start: row.created, end: row.completed },
         };
+        const timing = new TurnTimingAccumulator();
+        timing.add(row.timing);
+        row.usage.timing = timing.result();
       }
       return row;
     });
@@ -490,6 +538,8 @@ export class TranscriptReads {
       ...new Set([...input.messages, ...(latest ? [String(latest.id)] : [])]),
     ];
     const rows = sql.prepare(`SELECT id,type,seq,
+      ${this.#migrationSQL(sql)} AS migrated,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.time.completed') AS completed,
       (SELECT u.id FROM session_message u WHERE u.session_id=m.session_id AND u.type='user' AND u.seq<=m.seq ORDER BY u.seq DESC LIMIT 1) AS user_id,
       (SELECT json_extract(CASE WHEN json_valid(a.data) THEN a.data ELSE '{}' END,'$.agent') FROM session_message a WHERE a.session_id=m.session_id AND a.type='agent-switched' AND a.seq<=m.seq ORDER BY a.seq DESC LIMIT 1) AS agent,
       (SELECT json_extract(CASE WHEN json_valid(a.data) THEN a.data ELSE '{}' END,'$.model') FROM session_message a WHERE a.session_id=m.session_id AND a.type='model-switched' AND a.seq<=m.seq ORDER BY a.seq DESC LIMIT 1) AS model,
@@ -510,6 +560,9 @@ export class TranscriptReads {
           ? record(JSON.parse(String(row.model)))
           : record(following.model);
       contexts[String(row.id)] = {
+        ...(row.type === "assistant" && row.completed == null && row.migrated
+          ? { terminal: true }
+          : {}),
         order: Number(row.seq),
         replyTo: row.type === "assistant" ? text(row.user_id) : undefined,
         agent: text(row.agent) ?? text(following.agent),

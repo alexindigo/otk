@@ -3,15 +3,15 @@ import "./TurnUsage.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
-import { elapsed } from "./work-log.ts";
+import { timingExplanation, workingTime } from "./work-log.ts";
 import UsageCost from "./UsageCost.tsx";
 
 /** Presentation only; the usage owner supplies every call, price and clock. */
 export default function UsageDetail(
   props: { usage?: Usage; error?: string; showCost: boolean },
 ): import("solid-js").Element {
-  const duration = (time: Usage["time"]) =>
-    time?.end === undefined ? "—" : elapsed(time.start, time.end);
+  const duration = (time: Usage["timing"]) =>
+    workingTime(time)?.replace("Worked for ", "") ?? "Time unknown";
   const count = (value: number | null) =>
     value === null ? "Not reported" : exactCount(value);
   return (
@@ -129,7 +129,9 @@ export default function UsageDetail(
                           <UsageCost value={call().cost} />
                         </td>
                       </Show>
-                      <td>{duration(call().time)}</td>
+                      <td title={timingExplanation(call().timing)}>
+                        {duration(call().timing)}
+                      </td>
                     </tr>
                   )}
                 </For>
@@ -160,7 +162,9 @@ export default function UsageDetail(
                       <UsageCost value={usage().cost} />
                     </td>
                   </Show>
-                  <td>{duration(usage().time)}</td>
+                  <td title={timingExplanation(usage().timing)}>
+                    {duration(usage().timing)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

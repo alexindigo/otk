@@ -36,7 +36,7 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
     cache: { read: 10, write: 12 },
   });
   assertEquals(usage.cost, .2);
-  assertEquals(records.get("2")?.time.created, 1);
+  assertEquals(records.get("2")?.time.created, 2);
   assertEquals(records.get("2")?.interrupted, true);
   const projected = replyMessages([
     step("1", "user"),
@@ -46,7 +46,7 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
   assertEquals(projected.map((message) => message.id), ["1", "3"]);
   assertEquals(projected.map((message) => message.lastID), ["2", "3"]);
   assertEquals(projected[0].parts.map((part) => part.id), ["text-1", "text-2"]);
-  assertEquals(projected[0].time.created, 1);
+  assertEquals(projected[0].time.created, 2);
   assertEquals(replyMessages([step("1", ""), step("2", "")]).length, 1);
   assertEquals(records.get("2")?.parts.map((part) => part.id), [
     "text-1",
