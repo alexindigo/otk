@@ -23,6 +23,12 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       canonical,
     );
     await expect(row(directory)).toHaveAttribute("data-group", "active");
+    await expect(row(directory)).toHaveAttribute(
+      "data-project-availability",
+      "removed",
+    );
+    await expect(row(directory).locator(".otk-project-availability"))
+      .toHaveText("removed");
   }
   await row(one).locator(".otk-project-open").click();
   await expect(row(one + "/src")).toHaveCount(0);
@@ -44,9 +50,26 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   ) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    for (const directory of [one, two]) {
+      const geometry = await row(directory).evaluate((element) => {
+        const name = element.querySelector(".otk-project-name")!
+          .getBoundingClientRect();
+        const label = element.querySelector(".otk-project-availability")!
+          .getBoundingClientRect();
+        return {
+          nameCenter: name.y + name.height / 2,
+          labelCenter: label.y + label.height / 2,
+          height: element.getBoundingClientRect().height,
+        };
+      });
+      expect(Math.abs(geometry.nameCenter - geometry.labelCenter))
+        .toBeLessThanOrEqual(1);
+      expect(geometry.height).toBe(32);
+    }
     await page.screenshot({
       path: info.outputPath(`ph1-${label}-removed.png`),
       fullPage: true,
+      animations: "disabled",
     });
   }
   await state.product("projects.inactive", { directory: two, inactive: true });
