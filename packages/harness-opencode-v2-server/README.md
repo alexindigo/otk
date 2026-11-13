@@ -187,9 +187,17 @@ read and does not retain completed transcripts.
 selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read
 channel, derived SQLite owner and the index owner's source-proven read-only
 native connection. Background headers exclude text, tool inputs and output.
-Helper summaries use SQL count/current aggregates, at most one scalar row per
-admitted message, never the on-intent tool-detail reader or body API pages.
-Viewer-acquired parent/helper links separately borrow the transient
+Private header and pending-turn staging retain published results until covered
+replacement and stale-row retirement finish. Turn publication is bounded too;
+only a covered native idle boundary can finalize a turn. Latest context selects
+the last reported call, including reported zero. Complete scans are idempotent:
+unchanged admission performs no digest commit, while known changed message keys
+use bounded replacements instead of restarting history. Full invalidation and
+source replacement retain the authoritative bounded sweep path. Helper refresh
+and source outage retain the coherent count/current/time result independently of
+refresh state. Helper summaries use SQL count/current aggregates, at most one
+scalar row per admitted message, never the on-intent tool-detail reader or body
+API pages. Viewer-acquired parent/helper links separately borrow the transient
 `opcv2.helper.progress` read channel. Its cancellable, bounded pages may use the
 API when SQL is unavailable; only scalar progress survives each page. Tool
 events refresh existing demand, never acquire an unviewed helper. The last

@@ -529,6 +529,13 @@ checkpoints without deleting baselines or totals. Partial coverage never sweeps
 stale rows or declares global readiness. Source exhaustion does both atomically;
 raced dirty replacements require another authoritative sweep. Helpers own their
 independent, source-fenced projection cursor rather than finishing all headers.
+Pending turn identities survive bounded reconciliation and stale sweeping.
+Previously committed turn and session results are retained until a coherent
+replacement is covered; terminal finish/error evidence and complete call
+membership are both required for finality. Latest context ignores unreported
+calls but accepts reported zero. Helper count/current/time stay together through
+refresh and source outage. Repeated unchanged project-policy input does not
+restart discovery or helper backfill.
 
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never

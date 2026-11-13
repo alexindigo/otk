@@ -16,7 +16,15 @@ export function knownDerived<T>(
   source: string,
   revision: number,
   final = false,
+  previous?: Derived<T>,
 ): Derived<T> {
+  if (previous?.state === "known") {
+    if (
+      previous.witness.source === source && previous.final === final &&
+      JSON.stringify(previous.value) === JSON.stringify(value)
+    ) return previous;
+    revision = previous.witness.revision + 1;
+  }
   return { state: "known", value, final, witness: { source, revision } };
 }
 export function derivedValue<T>(result: Derived<T> | undefined): T | undefined {

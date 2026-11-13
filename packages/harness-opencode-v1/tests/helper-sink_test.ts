@@ -257,11 +257,12 @@ for (const api of [false, true]) {
       helper = await scan();
       assertEquals(derivedValue(helper.progress)!.time, { start: 0 });
       if (!api) {
+        const retained = structuredClone(helper.progress);
         native.prepare("UPDATE part SET data='invalid' WHERE id='p0001'").run();
         sink.invalidateHelper("opcv1-child");
         helper = await scan();
         assertEquals(helper.state, "unavailable");
-        assertEquals(helper.progress.state, "unavailable");
+        assertEquals(helper.progress, retained);
       }
     } finally {
       sink.close();
