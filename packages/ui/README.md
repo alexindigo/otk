@@ -1098,17 +1098,19 @@ numbers/types; foreground covers variables). Switching only changes paint, never
 source, grammar, worker lifecycle or cache. Hosts must select/apply a theme; the
 UI provider does not install concrete data.
 
-`StatusLight` takes a state (`blocked`, `working`, `finished`, `idle`), optional
+`StatusLight` takes a state (`blocked`, `working`, `finished`, `none`), optional
 small sizing and an event identity. Rows use 10px marbles, small lights 8px;
 working breathes only its glow in a slow 2.6-second eased cycle, while its
 marble body stays steady; a new event blinks once. Accessible labels and native
 tooltips accompany every state. The four semantic `lamp-*` theme slots paint
-needs-you red, unseen-finished amber, working green and idle grey. `theme.css`
-exposes shared `--status-light-*` aliases; the component owns only construction:
-radial top highlight, colour-mixed dark rim and glow. Each theme's gel colours
-meet 3:1 non-text contrast across base, hover and selected surfaces.
-`sessionLight` maps the existing session index without inventing unread marks;
-the caller supplies a finished state when its model has seen information.
+needs-you red, unseen-finished amber, working green and no-evidence grey.
+`theme.css` exposes shared `--status-light-*` aliases; the component owns only
+construction: radial top highlight, colour-mixed dark rim and glow. Each theme's
+gel colours meet 3:1 non-text contrast across base, hover and selected surfaces.
+`sessionLight` renders the server supervision projection, never legacy session
+status. There is no idle or unknown lamp state. `LIGHT_STATES` owns the public
+state inventory and `LightState` derives from its keys; galleries enumerate that
+mapping instead of maintaining a second inventory.
 
 Connection health uses `ConnectionLight` and its own connected, connecting,
 reconnecting, disconnected and error states. Its pure `connectionState`
