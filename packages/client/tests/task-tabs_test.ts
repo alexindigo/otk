@@ -84,6 +84,23 @@ Deno.test("task readiness settles on owner replacement and stop, never joins a r
   assertEquals(await tabs.taskReady("late"), false);
 });
 
+Deno.test("task readiness cancellation releases one borrower without retiring shared publication", async () => {
+  const tabs = model(), lifetime = new AbortController();
+  const input = { directory: "/p", entries: [], inbox: inbox() };
+  tabs.update(input);
+  const retired = tabs.taskReady("late", lifetime.signal);
+  const retained = tabs.taskReady("late");
+  lifetime.abort();
+  assertEquals(await retired, false);
+  input.inbox.tasks.push(task("late", []));
+  tabs.update(input);
+  assertEquals(await retained, true);
+  assertEquals(await tabs.taskReady("late", lifetime.signal), false);
+  assertEquals(await tabs.taskReady("late"), true);
+  tabs.select({ kind: "task", id: "late" });
+  assertEquals(tabs.state.selected, { kind: "task", id: "late" });
+});
+
 Deno.test("authoritative task removal retains the viewed tombstone as a preview", () => {
   const tabs = model(),
     deleted = {

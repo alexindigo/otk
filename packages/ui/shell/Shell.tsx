@@ -566,58 +566,63 @@ export default function Shell(
                       </div>
                     }
                   >
-                    <Show when={project()}>
-                      <ProjectTabs
-                        reserveTrailing={layout().rightCollapsed}
-                        project={project()!}
-                        model={tabsFor(project()!)}
-                        currentEntry={(id) =>
-                          resources.entry(project()!.sidecarId, id)}
-                        inbox={inbox(project()!.sidecarId).state.inbox}
-                        entry={actions.selectedEntry()}
-                        eligible={(target) => actions.eligibility(target).live}
-                        catalog={session.models?.state.available
-                          ? session.models.state.value
-                          : undefined}
-                        showCost={toggles.state.prefs.showCost}
-                        session={info()}
-                        rename={rename}
-                        displayMenu={
-                          <DisplayMenu
-                            prefs={toggles.state.prefs}
-                            ready={toggles.state.ready}
-                            error={toggles.state.error}
-                            onSet={(key, value) =>
-                              commands.run("prefs.set", { key, value })}
+                    <Show when={project()} keyed>
+                      {(owner) => (
+                        <>
+                          <ProjectTabs
+                            reserveTrailing={layout().rightCollapsed}
+                            project={owner}
+                            model={tabsFor(owner)}
+                            currentEntry={(id) =>
+                              resources.entry(owner.sidecarId, id)}
+                            inbox={inbox(owner.sidecarId).state.inbox}
+                            entry={actions.selectedEntry()}
+                            eligible={(target) =>
+                              actions.eligibility(target).live}
+                            catalog={session.models?.state.available
+                              ? session.models.state.value
+                              : undefined}
+                            showCost={toggles.state.prefs.showCost}
+                            session={info()}
+                            rename={rename}
+                            displayMenu={
+                              <DisplayMenu
+                                prefs={toggles.state.prefs}
+                                ready={toggles.state.ready}
+                                error={toggles.state.error}
+                                onSet={(key, value) =>
+                                  commands.run("prefs.set", { key, value })}
+                              />
+                            }
+                            ready={resources.connected(owner.sidecarId)}
+                            onOpen={(id) => {
+                              return navigate({
+                                sidecarId: owner.sidecarId,
+                                sessionID: id,
+                              });
+                            }}
+                            onEmpty={navigation.projectHome}
+                            onCreateSession={(task) =>
+                              navigation.createIn(
+                                owner.sidecarId,
+                                owner.directory,
+                                task,
+                              )}
+                            actions={resources.taskActions(owner)}
                           />
-                        }
-                        ready={resources.connected(project()!.sidecarId)}
-                        onOpen={(id) => {
-                          return navigate({
-                            sidecarId: project()!.sidecarId,
-                            sessionID: id,
-                          });
-                        }}
-                        onEmpty={navigation.projectHome}
-                        onCreateSession={(task) =>
-                          navigation.createIn(
-                            project()!.sidecarId,
-                            project()!.directory,
-                            task,
-                          )}
-                        actions={resources.taskActions(project()!)}
-                      />
-                      <ProgressStatus
-                        class="otk-shell-progress"
-                        text={session.transcript?.state.load?.state ===
-                              "loading" &&
-                            !session.state.loading &&
-                            session.transcript.progress?.().busy
-                          ? session.transcript.progress().text
-                          : resources.progress(project()!.sidecarId).busy
-                          ? resources.progress(project()!.sidecarId).text
-                          : ""}
-                      />
+                          <ProgressStatus
+                            class="otk-shell-progress"
+                            text={session.transcript?.state.load?.state ===
+                                  "loading" &&
+                                !session.state.loading &&
+                                session.transcript.progress?.().busy
+                              ? session.transcript.progress().text
+                              : resources.progress(owner.sidecarId).busy
+                              ? resources.progress(owner.sidecarId).text
+                              : ""}
+                          />
+                        </>
+                      )}
                     </Show>
                     <Show
                       when={session.state.selection}
@@ -811,10 +816,9 @@ export default function Shell(
                   />
                 }
                 sidecars={sidecars.state.list}
-                onAdd={(url, label) =>
-                  resources.add(url, label).then(() => {
-                    notifications.info("Server added");
-                  })}
+                onAdd={(url, label) => resources.add(url, label).then(() => {
+                  notifications.info("Server added");
+                })}
                 onRemove={(id) => navigation.removeServer(id)}
                 onLogin={(id, input) => sidecars.connection(id).login(input)}
                 onSetup={(input) =>

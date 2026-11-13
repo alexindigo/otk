@@ -87,6 +87,7 @@ function fixture() {
   const first = project("/first"),
     second = project("/second"),
     commands = new CommandHub();
+  let lifetime = new AbortController();
   let current = first, editor!: Editor, emptyAllowed = true, navigations = 0;
   commands.register({
     id: "dialog.open",
@@ -99,6 +100,9 @@ function fixture() {
   });
   const controls = createTaskControls({
     commands,
+    get signal() {
+      return lifetime.signal;
+    },
     actions: () => current.actions,
     model: () => current.model,
     tasks: () => current.input.inbox.tasks,
@@ -111,8 +115,11 @@ function fixture() {
     first,
     second,
     controls,
+    retire: () => lifetime.abort(),
     editor: () => editor,
     select: (value: typeof first) => {
+      lifetime.abort();
+      lifetime = new AbortController();
       current = value;
     },
     block: () => {
@@ -167,6 +174,74 @@ Deno.test("task editor saves retain their project and never navigate a replaceme
   assertEquals(f.first.model.state.selected, undefined);
   assertEquals(f.second.model.state.selected, undefined);
   assertEquals(f.navigations(), 0);
+});
+
+Deno.test("retired task controls retain captured mutations without waiting or navigating", async () => {
+  const f = fixture();
+  await f.controls.rename();
+  f.retire();
+  await f.editor().input.save("Captured project task");
+  assertEquals(f.first.calls, [["create", "Captured project task"]]);
+  assertEquals(f.navigations(), 0);
+  assertEquals(f.first.model.state.selected, undefined);
+  assertEquals(await f.first.model.taskReady("plan"), true);
+});
+
+Deno.test("retiring task controls cancels only their pending publication wait", async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>();
+  const ready = f.first.model.taskReady.bind(f.first.model);
+  f.first.model.taskReady = (id, signal) => {
+    const waiting = ready(id, signal);
+    entered.resolve();
+    return waiting;
+  };
+  f.first.actions.create = (name) => {
+    f.first.calls.push(["create", name]);
+    return Promise.resolve({
+      id: "held",
+      directory: "/first",
+      name,
+      order: 2,
+      sessions: [],
+    });
+  };
+  await f.controls.rename();
+  const saved = f.editor().input.save("Held publication");
+  await entered.promise;
+  f.retire();
+  await saved;
+  assertEquals(f.first.calls, [["create", "Held publication"]]);
+  assertEquals(f.navigations(), 0);
+  assertEquals(f.first.model.state.selected, undefined);
+  assertEquals(await ready("plan"), true);
+});
+
+Deno.test("replaced task presentation cancels its wait and admits the next owner's navigation", async () => {
+  const f = fixture(), entered = Promise.withResolvers<void>();
+  const ready = f.first.model.taskReady.bind(f.first.model);
+  f.first.model.taskReady = (id, signal) => {
+    const waiting = ready(id, signal);
+    entered.resolve();
+    return waiting;
+  };
+  f.first.actions.create = (name) =>
+    Promise.resolve({
+      id: "held",
+      directory: "/first",
+      name,
+      order: 2,
+      sessions: [],
+    });
+  await f.controls.rename();
+  const saved = f.editor().input.save("Old owner task");
+  await entered.promise;
+  f.select(f.second);
+  await saved;
+  assertEquals(f.navigations(), 0);
+  await f.controls.rename();
+  await f.editor().input.save("New owner task");
+  assertEquals(f.navigations(), 1);
+  assertEquals(f.second.model.state.selected, { kind: "task", id: "new" });
 });
 
 Deno.test("task creation joins canonical publication before selecting the returned identity", async () => {
