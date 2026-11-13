@@ -295,7 +295,8 @@ The transcript preference owner contributes `showCost` and
 `collapseFileChanges`, both on by default, with shared Display toggles and
 preference command metadata. Cost visibility does not alter stored usage or
 token counts. File-change disclosure is presentation-only and does not change
-tool results.
+tool results. The transcript `scrollbar` preference also defaults on; explicitly
+saved false values still hide it. Defaults never rewrite saved choices.
 
 `usage` is an optional capability, advertised only when implemented.
 `usage.get {sessionID,turnID}` / `getUsage(sessionID,turnID,signal?)` returns

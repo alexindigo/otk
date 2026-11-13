@@ -12,8 +12,11 @@ owns `overflow: auto`, shrinkable minima and contained overscroll. Pass `axis`
 (`both`, `x` or `y`) to restrict a lane. Containment follows the owned axes:
 horizontal code, diff and table lanes delegate vertical wheels to their bounded
 enclosing viewport. Native fields, semantic elements and borrowed viewport roots
-use the exported `scrollRegion(axis)` class binding without another wrapper.
-Layout, content and scroll-position owners stay with their components. Borrowed
+use the exported `scrollRegion(axis)` class binding without another wrapper. The
+optional scrollbar paint (`native`, `thin`, `hidden`) is shared by the component
+and `scrollRegion(axis, scrollbar)` binding. Only the transcript opts into thin
+themed paint; nested scroll boundaries retain their own native paint. Layout,
+content and scroll-position owners stay with their components. Borrowed
 VirtualLists do not create another scrollport. Component CSS never redeclares
 scrolling or overscroll policy; the architecture gate enforces this with no
 exceptions, including code and table content. Full-shell application

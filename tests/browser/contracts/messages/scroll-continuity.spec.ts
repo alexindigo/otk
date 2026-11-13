@@ -46,7 +46,90 @@ type ProbeGlobal = typeof globalThis & { invF: ScrollEvidence };
 
 test.use({
   browserName: process.env.INV_F_BROWSER === "firefox" ? "firefox" : "chromium",
+  // Playwright's headless Firefox injects an !important agent stylesheet hiding
+  // every scrollbar. Use a real Firefox window (under Xvfb in the guest).
+  headless: process.env.INV_F_BROWSER !== "firefox",
 });
+
+test(
+  "messages.transcript-scrollbar-default-theme-and-saved-choice",
+  { tag: ["@messages", "@contracts"] },
+  async ({ state, page }) => {
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Transcript position feedback",
+    });
+    await state.queue([
+      "The transcript keeps its native position feedback.\n\n".repeat(50) +
+      "```ts\nconst nativeScrollbar = true;\n```",
+    ]);
+    await state.native(`/session/${session.id}/prompt_async`, "POST", {
+      parts: [{ type: "text", text: "Explain the scrollbar." }],
+    });
+    await openSession(state, page, session.id);
+    const pane = page.getByRole("region", { name: "Transcript", exact: true });
+    const paint = () =>
+      pane.evaluate((element) => {
+        const style = getComputedStyle(element);
+        const swatch = document.createElement("span");
+        element.append(swatch);
+        swatch.style.color = "var(--otk-fg-3)";
+        const thumb = getComputedStyle(swatch).color;
+        swatch.style.color = "var(--otk-bg)";
+        const track = getComputedStyle(swatch).color;
+        swatch.remove();
+        return {
+          width: style.scrollbarWidth,
+          color: style.scrollbarColor,
+          thumb,
+          track,
+        };
+      });
+    expect((await state.product("prefs.get", {})).scrollbar).toBe(true);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect.poll(async () => {
+        const style = await paint();
+        return {
+          width: style.width,
+          themed: style.color === `${style.thumb} ${style.track}`,
+        };
+      }).toEqual({ width: "thin", themed: true });
+    }
+    const nested = pane.locator("pre.otk-scroll").last();
+    await expect.poll(() =>
+      nested.evaluate((element) => ({
+        width: getComputedStyle(element).scrollbarWidth,
+        color: getComputedStyle(element).scrollbarColor,
+      }))
+    ).toEqual({ width: "auto", color: "auto" });
+    const prompt = page.locator("textarea[name=prompt]");
+    await expect.poll(() =>
+      prompt.evaluate((element) => ({
+        width: getComputedStyle(element).scrollbarWidth,
+        color: getComputedStyle(element).scrollbarColor,
+      }))
+    ).toEqual({ width: "auto", color: "auto" });
+    await page.locator(".otk-display-menu > button").click();
+    await page.locator("input[name=scrollbar]").click();
+    await page.keyboard.press("Escape");
+    expect((await state.product("prefs.get", {})).scrollbar).toBe(false);
+    await expect.poll(async () => (await paint()).width).toBe("none");
+    await page.reload();
+    await expect.poll(async () => (await paint()).width).toBe("none");
+    expect((await state.product("prefs.get", {})).scrollbar).toBe(false);
+    await page.locator(".otk-display-menu > button").click();
+    await page.locator("input[name=scrollbar]").click();
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await paint()).width).toBe("thin");
+    await page.reload();
+    await expect.poll(async () => (await paint()).width).toBe("thin");
+    expect((await state.product("prefs.get", {})).scrollbar).toBe(true);
+  },
+);
 
 test(
   "messages.slow-upward-scroll-retains-visible-source",

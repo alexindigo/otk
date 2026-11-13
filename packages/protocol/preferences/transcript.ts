@@ -57,7 +57,7 @@ export function registerTranscriptPreferences(
   });
   registry.register({
     key: "scrollbar",
-    default: false,
+    default: true,
     validate: booleanPreference,
     label: "Scrollbar",
     display: { order: 6, control: { kind: "toggle" } },
