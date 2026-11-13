@@ -39,6 +39,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
     },
     params(p) {
       const model = p.model === undefined ? undefined : object(p.model),
+        skill = p.skill === undefined ? undefined : object(p.skill),
         parts = p.parts === undefined ||
             (Array.isArray(p.parts) && p.parts.length === 0)
           ? []
@@ -52,6 +53,11 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       return {
         sessionID: sessionID(p)!,
         command: text(p, "command")!,
+        ...(skill
+          ? {
+            skill: { name: text(skill, "name")!, id: text(skill, "id", true) },
+          }
+          : {}),
         arguments: text(p, "arguments", true) ?? "",
         agent: text(p, "agent", true),
         variant: text(p, "variant", true),

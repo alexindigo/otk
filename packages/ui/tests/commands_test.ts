@@ -295,13 +295,16 @@ Deno.test("slash catalog owns response generations and updates changed native me
       consumer.commands.resolveSlash("latest-alias"),
       "server.command:probe",
     );
-    assertEquals(consumer.commands.list()[0].cmd.title, "Latest");
+    assertEquals(
+      consumer.commands.metadata("server.command:probe")?.title,
+      "Latest",
+    );
     const changed = consumer.refresh();
     await Promise.resolve();
     pending[2]([{
       name: "probe",
       description: "Changed",
-      source: "skill",
+      source: "server",
       aliases: ["changed-alias"],
     }]);
     await changed;
@@ -310,7 +313,10 @@ Deno.test("slash catalog owns response generations and updates changed native me
       consumer.commands.resolveSlash("changed-alias"),
       "server.command:probe",
     );
-    assertEquals(consumer.commands.list()[0].cmd.title, "Changed");
+    assertEquals(
+      consumer.commands.metadata("server.command:probe")?.title,
+      "Changed",
+    );
   } finally {
     consumer.stop();
   }

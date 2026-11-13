@@ -30,6 +30,9 @@ export interface CommandMetadata {
   readonly source?: "builtin" | "server" | "mcp" | "skill" | "unknown";
   /** Submissions participate in the prompt's captured send/clear lifecycle. */
   readonly kind?: "action" | "submission";
+  /** An adapter contribution borrows the semantic owner's schema and behavior. */
+  readonly action?: string;
+  readonly priority?: number;
 }
 export type CommandAvailability = { available: true } | {
   available: false;
@@ -75,6 +78,8 @@ function commandMetadata(command: CommandMetadata): CommandMetadata {
     instance: command.instance,
     source: command.source ?? "builtin",
     kind: command.kind ?? "action",
+    action: command.action,
+    priority: command.priority,
   });
 }
 /** Empty, framework-free registry. Feature owners register and release behavior. */
@@ -95,6 +100,15 @@ export class CommandHub {
   ): () => void {
     if (!command.id || this.#commands.has(command.id)) {
       throw new Error(`Duplicate or empty command: ${command.id}`);
+    }
+    const visited = new Set([command.id]);
+    let action = command.action;
+    while (action) {
+      if (visited.has(action)) {
+        throw new Error(`Cyclic command binding: ${command.id}`);
+      }
+      visited.add(action);
+      action = this.#commands.get(action)?.action;
     }
     const copy = Object.freeze({
       ...command,
@@ -119,7 +133,16 @@ export class CommandHub {
   }
   metadata(id: string): CommandMetadata | undefined {
     const command = this.#commands.get(id);
-    return command && commandMetadata(command);
+    if (!command) return;
+    const metadata = commandMetadata(command);
+    const target = command.action && this.metadata(command.action);
+    return target
+      ? Object.freeze({
+        ...metadata,
+        arguments: target.arguments,
+        kind: target.kind ?? "action",
+      })
+      : metadata;
   }
   unregister(id: string): void {
     if (this.#commands.delete(id)) this.#changed();
@@ -146,7 +169,10 @@ export class CommandHub {
       };
     }
     try {
-      validateCommandArguments(command.arguments ?? noCommandArguments, args);
+      validateCommandArguments(
+        this.metadata(id)!.arguments ?? noCommandArguments,
+        args,
+      );
     } catch (error) {
       return {
         available: false,
@@ -155,11 +181,14 @@ export class CommandHub {
           : "Invalid command arguments",
       };
     }
-    return command.availability?.(context, args) ??
-      ((command.enabled?.(context, args) ?? true) ? { available: true } : {
-        available: false,
-        reason: "Command unavailable in the current context",
-      });
+    const available: CommandAvailability =
+      command.availability?.(context, args) ??
+        ((command.enabled?.(context, args) ?? true) ? { available: true } : {
+          available: false,
+          reason: "Command unavailable in the current context",
+        });
+    if (!available.available || !command.action) return available;
+    return this.availability(command.action, context, args);
   }
   async run<R = void>(
     id: string,
@@ -193,7 +222,9 @@ export class CommandHub {
         throw new Error(`Command unavailable: ${id}: ${current.reason}`);
       }
     }
-    return await command.run(context, args) as R;
+    return command.action
+      ? await this.#run<R>(command.action, args, context, confirmed)
+      : await command.run(context, args) as R;
   }
   /** Projection refreshes share consent only while their contributor is identical. */
   sameContextOwner(left: ContextAction, right: ContextAction): boolean {
@@ -253,7 +284,7 @@ export class CommandHub {
     return [...this.#commands.values()].map((cmd) => {
       const availability = this.availability(cmd.id, context);
       return {
-        cmd: commandMetadata(cmd),
+        cmd: this.metadata(cmd.id)!,
         enabled: availability.available,
         availability,
         keys: this.keys(cmd.id),
@@ -265,14 +296,16 @@ export class CommandHub {
     const matches = [...this.#commands.values()].filter((cmd) =>
       cmd.name === name || cmd.aliases?.includes(name)
     );
-    if (matches.length > 1) {
+    const priority = Math.max(...matches.map((cmd) => cmd.priority ?? 0));
+    const preferred = matches.filter((cmd) => (cmd.priority ?? 0) === priority);
+    if (preferred.length > 1) {
       throw new Error(
         `Ambiguous command: ${name}. Use ${
-          matches.map((cmd) => cmd.id).sort().join(", ")
+          preferred.map((cmd) => cmd.id).sort().join(", ")
         }`,
       );
     }
-    return matches[0]?.id;
+    return preferred[0]?.id;
   }
   /** The same resolution owns display spellings and text invocation. */
   spelling(id: string): string {
@@ -290,7 +323,7 @@ export class CommandHub {
     return {
       id,
       args: parseCommandArguments(
-        this.#commands.get(id)!.arguments ?? noCommandArguments,
+        this.metadata(id)!.arguments ?? noCommandArguments,
         text,
       ),
     };

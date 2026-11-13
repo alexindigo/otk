@@ -38,10 +38,15 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await expect(prompt(page)).toHaveValue("");
   await reply(state, page, session.id, "Project command received.");
   await state.queue(["Skill command received."]);
-  await prompt(page).fill("/canary ");
+  await prompt(page).fill("/skills");
   await prompt(page).press("Enter");
+  await page.getByRole("combobox", { name: "Search skills" }).fill("canary");
+  await page.locator(".otk-skills-picker .otk-picker-option").filter({
+    hasText: "canary",
+  }).click();
+  // NT1 keeps injected skill context visible without a user bubble.
   await expect(
-    page.locator(".otk-user-message .otk-user-bubble .otk-text").filter({
+    page.locator(".otk-messages .otk-text").filter({
       hasText: "SKILL-FIXTURE content",
     }),
   ).toBeVisible();

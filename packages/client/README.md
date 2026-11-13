@@ -996,6 +996,18 @@ preserves the remaining text verbatim. Missing required input is unavailable,
 not an absent definition. Local-only inputs cannot be manufactured by text
 parsing.
 
+Harness catalogs contribute neutral `action`, `priority` and `unavailable` data
+through `createHarnessCommands`. Bindings borrow the semantic owner's current
+schema, availability, confirmation and execution. Releasing that owner makes its
+binding unavailable. Higher adapter-supplied priority wins friendly-name
+collisions; equal priorities remain ambiguous. Exact IDs stay addressable.
+Native names and version rules never enter this owner.
+
+`skillChoices` retains skills separately and applies only an adapter-supplied
+`skillConflict` explanation. Skills never register individual slash commands.
+`session.command` can carry an explicit skill identity independently of a
+same-named server command.
+
 `list(context?)` returns every registered descriptor, its availability/reason
 and injected key labels. `metadata(id)` returns a frozen, serializable snapshot
 including the argument schema, never a closure. `run(id, args)` captures current

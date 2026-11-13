@@ -35,6 +35,7 @@ import {
   registerSearchTool,
   registerSessionsPanel,
   registerShellPrompt,
+  registerSkillsPrompt,
   registerSkillTool,
   registerSlashPrompt,
   registerTaskDialogs,
@@ -79,6 +80,7 @@ export function applicationUi(): UiRegistries {
   registerShellPrompt(ui.prompt);
   registerMentionsPrompt(ui.prompt);
   registerSlashPrompt(ui.prompt);
+  registerSkillsPrompt(ui.prompt);
   registerHistoryPrompt(ui.prompt);
   registerPastePrompt(ui.prompt);
   registerAttachmentsPrompt(ui.prompt);
