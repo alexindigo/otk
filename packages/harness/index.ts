@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export type { PluginStorage } from "./plugin-storage.ts";
 import {
   type DigestIndexDelta,
   type IndexEntry,

@@ -10,6 +10,8 @@ import {
   OtkDb,
   permissionMigrations,
   PermissionStore,
+  pluginStorageMigrations,
+  PluginStore,
   Prefs,
   prefsMigrations,
   Projects,
@@ -94,11 +96,13 @@ export async function startApplication(
     permissionMigrations,
     sessionReferenceMigrations,
     requestsMigrations,
+    pluginStorageMigrations,
   ], cfg.storage);
   const sources: FrameSource[] = [...options.sources ?? []];
   try {
     options.signal?.throwIfAborted();
     await options.upgrade?.(store);
+    backend.storage?.(new PluginStore(store).scope(backend.core.kind));
     options.signal?.throwIfAborted();
     const prefs = new Prefs(store, prefsOptions);
     const index = options.index ?? new IndexStore();
