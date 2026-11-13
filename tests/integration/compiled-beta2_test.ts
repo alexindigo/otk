@@ -194,6 +194,10 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
     );
     const catalog = createDirectoryCatalogs({
       codecs: createCatalogCodecs(),
+      demand: (directory, kinds, intent) =>
+        first.client.rpc("catalogs.demand", { directory, kinds, intent }).then(
+          () => {},
+        ),
       watch: (directory) => {
         let ref: RequestRef | undefined;
         return {
@@ -227,6 +231,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
     };
     try {
       await lease.ready();
+      const filesReady = lease.ready("files");
       await waitFor(
         pump,
         (value) =>
@@ -234,6 +239,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
             file.path === "README.md"
           ) === true,
       );
+      await filesReady;
       await Deno.writeTextFile(
         join(native.directory, "compiled-new.txt"),
         "Compiled file update",

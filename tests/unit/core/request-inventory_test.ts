@@ -279,6 +279,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "history.list",
     "history.attachments",
     "catalogs.watch",
+    "catalogs.demand",
     "catalogs.refresh",
     "frecency.list",
     "frecency.bump",
@@ -320,7 +321,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 25, // Typed forms add one read and two native effects to the inventory.
+      read: 26, // Per-kind catalog demand is independent of the watch lease.
       native: 19,
       local: 10,
       "prepared-local": 6,

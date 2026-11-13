@@ -17,6 +17,16 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
           ctx.frecencyCatalog?.revision,
         ],
         options: (token) => {
+          // File discovery belongs to an actual mention, never composer mount.
+          // Kind publications advance the source revision independently, so a
+          // slow resource catalog cannot hold completed file/agent suggestions.
+          void Promise.all([
+            ctx.directoryCatalog?.ready("files"),
+            ctx.directoryCatalog?.ready("agents"),
+            ...(ctx.supports("resources")
+              ? [ctx.directoryCatalog?.ready("resources")]
+              : []),
+          ]).catch(ctx.fail);
           const catalog = ctx.directoryCatalog?.state.catalog;
           return Promise.resolve(mentionOptions({
             files: catalog?.values.files?.value ?? [],

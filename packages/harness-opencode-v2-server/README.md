@@ -121,9 +121,13 @@ application worker port can be injected as the fifth constructor argument;
 standalone API integrations use the same neutral scheduler and read-admission
 owners. No history database is opened in the serving isolate.
 
-`V2Catalogs` borrows the shared `DirectoryCatalogs` owner. Agents retain
-separate native IDs and display names; commands use unknown provenance when
-native does not report it, and skill commands retain their skill IDs.
+`V2Catalogs` borrows the shared `DirectoryCatalogs` owner. Per-kind
+warm/consumer demand is independent of passive subscriptions; warm reads yield
+at background priority without an optional idle delay. Files and MCP kinds are
+not acquired by watching. Model/agent/command/skill warm-up is selected by the
+current-folder client composition, not by the adapter's kind inventory. Agents
+retain separate native IDs and display names; commands use unknown provenance
+when native does not report it, and skill commands retain their skill IDs.
 `listCommands` is a reader for action composition, not an advertisement of
 command execution. Model catalogs retain every price tier, provider
 availability, variants, configuration provenance and the applied/configured

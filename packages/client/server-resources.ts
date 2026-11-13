@@ -162,6 +162,11 @@ export function createServerResources(o: {
   index: ClientIndex;
   factory?: StateFactory;
   error?: (error: unknown) => void;
+  /** One release input for catalog warm-up. Until decision 30, acquisition is page-ready. */
+  pageReady?: (
+    project: ProjectSelection,
+    release: () => void,
+  ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
   const pendingForms = factory<
@@ -183,6 +188,7 @@ export function createServerResources(o: {
     key: string;
     directory: DirectoryCatalogLease;
     frecency: FrecencyCatalogLease;
+    stopReady?: () => void;
   } | undefined;
   const directoryOwner = (id: string) => {
     let owner = catalogs.get(id);
@@ -193,8 +199,17 @@ export function createServerResources(o: {
         diagnostic: o.error,
         watch: (directory) =>
           sidecars.connection(id).rpc.start("catalogs.watch", { directory }),
-        refresh: (directory) =>
-          sidecars.connection(id).rpc.call("catalogs.refresh", { directory })
+        demand: (directory, kinds, intent, signal) =>
+          sidecars.connection(id).rpc.call("catalogs.demand", {
+            directory,
+            kinds,
+            intent,
+          }, signal).then(() => {}),
+        refresh: (directory, kinds, signal) =>
+          sidecars.connection(id).rpc.call("catalogs.refresh", {
+            directory,
+            kinds,
+          }, signal)
             .then(() => {}),
       });
       catalogs.set(id, owner);
@@ -210,10 +225,17 @@ export function createServerResources(o: {
     return owner;
   };
   const bindVisibleCatalog = () => {
-    const project = visible?.project;
+    const displayed = visible?.project;
+    const current = selected && selected.sidecarId === displayed?.sidecarId
+      ? o.index.getMetadata(selected.sidecarId, selected.sessionID)
+      : undefined;
+    const project = displayed && current?.directory && !current.deleted
+      ? { ...displayed, directory: current.directory }
+      : displayed;
     const key = project &&
       JSON.stringify([project.sidecarId, project.directory]);
     if (visibleCatalog?.key === key) return;
+    visibleCatalog?.stopReady?.();
     visibleCatalog?.directory.release();
     visibleCatalog?.frecency.release();
     visibleCatalog = undefined;
@@ -223,6 +245,18 @@ export function createServerResources(o: {
         directory: directoryOwner(project.sidecarId).acquire(project.directory),
         frecency: frecencyOwner(project.sidecarId).acquire(project.directory),
       };
+      const lease = visibleCatalog.directory;
+      const release = () => {
+        if (visibleCatalog?.directory !== lease) return;
+        void lease.warm(["models", "agents", "commands", "skills"]).catch((
+          cause,
+        ) => o.error?.(cause));
+      };
+      const stopReady = (o.pageReady ?? ((_project, ready) => ready()))(
+        project,
+        release,
+      );
+      if (stopReady) visibleCatalog.stopReady = stopReady;
     }
   };
   const approvalModels = new Map<string, ApprovalModel>();
@@ -604,6 +638,10 @@ export function createServerResources(o: {
         projectOwners.get(id)?.update(o.index.changes(id)!.metadata);
         if (o.index.changes(id)!.metadata.length) {
           refreshOperations(id, previous);
+          if (
+            selected?.sidecarId === id &&
+            o.index.changes(id)!.metadata.includes(selected.sessionID)
+          ) bindVisibleCatalog();
         }
       }
     }
@@ -984,6 +1022,7 @@ export function createServerResources(o: {
       projectReleases.clear();
       projectOwners.clear();
       operationCache.clear();
+      visibleCatalog?.stopReady?.();
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
       visibleCatalog = undefined;

@@ -12,6 +12,7 @@ import {
 } from "@otk/harness";
 import type {
   AgentsCapability,
+  CatalogDemand,
   CommandOption,
   DirectoryCatalog,
   DirectoryCatalogKinds,
@@ -167,17 +168,17 @@ export class V2Catalogs {
       watchFiles: true,
       diagnostic,
       contributions: {
-        config: (directory, signal, owner) =>
+        config: (directory, signal, owner, intent) =>
           source.read("catalog.config", { directory }, {
             owner,
             signal,
-            priority: "visible",
+            priority: intent === "warm" ? "background" : "user",
           }),
-        resourceTemplates: (directory, signal, owner) =>
+        resourceTemplates: (directory, signal, owner, intent) =>
           source.read("catalog.resourceTemplates", { directory }, {
             owner,
             signal,
-            priority: "visible",
+            priority: intent === "warm" ? "background" : "user",
           }),
       },
     });
@@ -227,7 +228,7 @@ export class V2Catalogs {
     signal: AbortSignal,
   ): Promise<DirectoryCatalog> {
     signal.throwIfAborted();
-    const lease = this.catalogs.acquire(directory);
+    const lease = this.catalogs.acquire(directory, true);
     const release = () => {
       unsubscribe();
       lease.release();
@@ -237,23 +238,27 @@ export class V2Catalogs {
     });
     signal.addEventListener("abort", release, { once: true });
     const value = lease.snapshot();
-    for (
-      const kind of Object.keys(value.values) as (keyof DirectoryCatalogKinds)[]
-    ) {
-      void lease.get(kind, signal).catch(
-        () => {/* each shared kind publishes unavailable */},
-      );
-    }
     queueMicrotask(() => {
       if (!signal.aborted) listener(lease.snapshot());
     });
     return Promise.resolve(value);
   }
-  async refresh(directory: string, signal?: AbortSignal): Promise<void> {
+  demand(
+    directory: string,
+    demand: CatalogDemand,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return this.catalogs.demand(directory, demand, signal);
+  }
+  async refresh(
+    directory: string,
+    signal?: AbortSignal,
+    kinds?: readonly (keyof DirectoryCatalogKinds)[],
+  ): Promise<void> {
     signal?.throwIfAborted();
     const lease = this.catalogs.acquire(directory);
     try {
-      await lease.refresh(signal);
+      await lease.refresh(signal, kinds);
       signal?.throwIfAborted();
     } finally {
       lease.release();

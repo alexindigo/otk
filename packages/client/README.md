@@ -64,17 +64,27 @@ transcripts do not acquire another inventory.
 
 ## Directory and keyed metadata resources (protocol17)
 
-`createDirectoryCatalogs({watch,refresh,codecs,factory?})` owns one demanded
-resource per canonical directory; `ServerResources` owns one such collection per
-sidecar. `acquire(directory)` returns an identity-bound borrower with `state`,
-`subscribe`, `ready(kind?)`, `refresh`, `view(kind)` and `release`. Kind views
-implement the existing catalog-owner contract without another read or cache. The
-shipped selected session, composer and meter borrow those views. Active-project
-demand keeps them across same-directory session visits. Last release retires the
-watch, incomplete transfers and volatile values; reconnect rebinds current
-demand and fences old results. External compositions inject equivalent leases
-through the ordinary session/composer ports. Standalone `createModelCatalog` and
-load-port composers remain independently usable.
+`createDirectoryCatalogs({watch,demand,refresh,codecs,factory?})` owns one
+demanded resource per canonical directory; `ServerResources` owns one such
+collection per sidecar. `acquire(directory)` returns an identity-bound borrower
+with `state`, `subscribe`, `ready(kind?)`, `refresh`, `view(kind)` and
+`release`. Kind views implement the existing catalog-owner contract without
+another read or cache. The shipped selected session, composer and meter borrow
+those views. Active-project demand keeps them across same-directory session
+visits. Last release retires the watch, incomplete transfers and volatile
+values; reconnect rebinds current demand and fences old results. Watching alone
+performs no native acquisition. `warm(kinds)` releases low-priority, revocable
+reads without an idle delay; `ready(kind)` promotes/joins that kind on consumer
+intent. A kind view refreshes only itself. File mentions request files, and
+resources only when supported. ServerResources has one injected
+`pageReady(project, release)` input; its current default releases models,
+agents, commands and skills at project acquisition. The selected session's
+native working folder wins over its displayed repository root; project-only
+routes use the project folder. Metadata moves rebind the same directory lease
+and release input. The input can move once decision 30 is settled without
+changing the owner. External compositions inject equivalent leases through the
+ordinary session/composer ports. Standalone `createModelCatalog` and load-port
+composers remain independently usable.
 
 Session bootstrap/reconnect facts are scoped to the selected server. A borrowed
 directory model view keeps its own native invalidation lifetime; the selected
@@ -494,6 +504,12 @@ to `createComposerSelection` and borrow the same state and work as the meter.
 Composer disposal releases its subscription, not the session's resource.
 Standalone composers create the same resource locally when none is supplied. No
 catalog is copied into another store.
+
+Within a selected session, the model view remains stable while its underlying
+owner changes on initial folder resolution or a native folder move. It forwards
+state/subscriptions and readiness to the current owner, racing replacement with
+pending work; it retains no catalog value. Selection retirement disposes that
+binding, so old consumers cannot follow a replacement session.
 
 Agent and model catalogs share one framework-free resource lifecycle. It
 reserves in-flight identity before publishing loading, aborts retired

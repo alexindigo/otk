@@ -23,6 +23,7 @@ Deno.test("directory demand shares watch and publishes only complete contiguous 
       };
     },
     refresh: () => Promise.resolve(),
+    demand: () => Promise.resolve(),
     codecs: createCatalogCodecs(),
   });
   const a = owner.acquire("/p"), b = owner.acquire("/p");
@@ -77,6 +78,7 @@ Deno.test("unrelated catalog metadata cannot invalidate a kind's chunk transfer"
       release() {},
     }),
     refresh: () => Promise.resolve(),
+    demand: () => Promise.resolve(),
     codecs: createCatalogCodecs(),
   });
   const lease = owner.acquire("/p");

@@ -59,7 +59,10 @@ function metadata(): InboxSnapshot {
     pathTemplates: [],
   };
 }
-function fixture(factory?: StateFactory) {
+function fixture(
+  factory?: StateFactory,
+  pageReady?: Parameters<typeof createServerResources>[0]["pageReady"],
+) {
   const calls: unknown[] = [], order: string[] = [];
   const listReads: {
     input: import("@otk/protocol").SessionListInput;
@@ -152,6 +155,7 @@ function fixture(factory?: StateFactory) {
   const resources = createServerResources({
     index,
     factory,
+    pageReady,
     sidecars: (listener) => {
       receive = listener;
       return sidecars;
@@ -169,6 +173,102 @@ function fixture(factory?: StateFactory) {
     listReads,
   };
 }
+
+Deno.test("catalog page-ready input gates only current-folder warm-up, including project-only routes", async () => {
+  const ready: (() => void)[] = [];
+  const f = fixture(undefined, (_project, release) => {
+    ready.push(release);
+  });
+  const connection = f.connections.get("local")!;
+  connection.rpc.start = (_method, params) =>
+    ({
+      result: Promise.resolve({
+        directory: (params as { directory: string }).directory,
+        generation: "g",
+        revision: 0,
+        paths: { style: "posix", separator: "/" },
+        values: Object.fromEntries(
+          ["models", "agents", "commands", "skills", "files", "resources"].map((
+            kind,
+          ) => [kind, { state: "digesting", revision: 0 }]),
+        ),
+      }),
+      release() {},
+    }) as never;
+  f.store.update((state) => {
+    state.list[0].capabilities = ["catalogs"];
+  });
+  const settle = async () => {
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+  };
+  const demands = () =>
+    f.calls.filter((call) => (call as unknown[])[1] === "catalogs.demand");
+  try {
+    f.resources.scope({ sidecarId: "local", directory: "/p" });
+    await settle();
+    assertEquals(demands(), []);
+    ready[0]();
+    await settle();
+    assertEquals(demands(), [["local", "catalogs.demand", {
+      directory: "/p",
+      kinds: ["models", "agents", "commands", "skills"],
+      intent: "warm",
+    }]]);
+    // A same-folder session visit borrows the resource without another release point.
+    f.resources.scope({ sidecarId: "local", directory: "/p" }, ["session"]);
+    await settle();
+    assertEquals(ready.length, 1);
+    assertEquals(demands().length, 1);
+    f.resources.scope({ sidecarId: "local", directory: "/other" });
+    await settle();
+    ready[0](); // Retired page-ready callbacks cannot warm the wrong folder.
+    await settle();
+    assertEquals(demands().length, 1);
+    ready[1]();
+    await settle();
+    assertEquals((demands()[1] as unknown[])[2], {
+      directory: "/other",
+      kinds: ["models", "agents", "commands", "skills"],
+      intent: "warm",
+    });
+    // Navigation may display the repository while the selected composer uses a
+    // nested native folder. The same release input follows that actual folder.
+    f.receive("local", {
+      t: "index.snapshot",
+      rev: 0,
+      entries: [entry("nested", "/other/src")],
+    });
+    f.resources.scope({ sidecarId: "local", directory: "/other" }, [], {
+      sidecarId: "local",
+      sessionID: "nested",
+    });
+    await settle();
+    assertEquals(ready.length, 3);
+    ready[2]();
+    await settle();
+    assertEquals((demands()[2] as unknown[])[2], {
+      directory: "/other/src",
+      kinds: ["models", "agents", "commands", "skills"],
+      intent: "warm",
+    });
+    f.receive("local", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{ op: "upsert", entry: entry("nested", "/other/moved") }],
+    });
+    await settle();
+    assertEquals(ready.length, 4);
+    ready[3]();
+    await settle();
+    assertEquals((demands()[3] as unknown[])[2], {
+      directory: "/other/moved",
+      kinds: ["models", "agents", "commands", "skills"],
+      intent: "warm",
+    });
+  } finally {
+    f.resources.stop();
+  }
+});
 
 Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects nested idle rows and tasks without a flat project", async () => {
   const f = fixture(), project = { sidecarId: "local", directory: "/tree" };

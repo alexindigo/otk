@@ -4,6 +4,7 @@ import type {
   CatalogChunkKinds,
   CatalogCodec,
   CatalogCodecs,
+  CatalogDemand,
   DirectoryCatalog,
   DirectoryCatalogKinds,
   ServerFrame,
@@ -23,6 +24,17 @@ export function registerCatalogs(
 ): void {
   const port = harness.capabilities.catalogs;
   if (!port) return;
+  const kinds = (value: unknown): (keyof DirectoryCatalogKinds)[] => {
+    if (
+      !Array.isArray(value) ||
+      value.some((kind) =>
+        typeof kind !== "string" || !Object.hasOwn(codecs, kind)
+      )
+    ) {
+      throw new HarnessError("params", "Expected selected catalog kinds");
+    }
+    return [...new Set(value)] as (keyof DirectoryCatalogKinds)[];
+  };
   rpc.register("catalogs.watch", {
     execution: {
       kind: "lease",
@@ -107,11 +119,36 @@ export function registerCatalogs(
       return metadata(value);
     },
   });
+  rpc.register("catalogs.demand", {
+    execution: readExecution((p: { directory: string }) => ({
+      directory: p.directory,
+    })),
+    params: (p): CatalogDemand & { directory: string } => {
+      const intent = text(p, "intent");
+      if (intent !== "warm" && intent !== "consumer") {
+        throw new HarnessError("params", "Expected catalog demand intent");
+      }
+      return {
+        directory: projectPath(text(p, "directory")!),
+        kinds: kinds(p.kinds),
+        intent,
+      };
+    },
+    handler: async (ctx, p) => {
+      await port.demand(p.directory, p, ctx.execution?.signal);
+      return null;
+    },
+  });
   rpc.register("catalogs.refresh", {
-    execution: readExecution((directory: string) => ({ directory })),
-    params: (p) => projectPath(text(p, "directory")!),
-    handler: async (ctx, directory) => {
-      await port.refresh(directory, ctx.execution?.signal);
+    execution: readExecution((p: { directory: string }) => ({
+      directory: p.directory,
+    })),
+    params: (p) => ({
+      directory: projectPath(text(p, "directory")!),
+      kinds: p.kinds === undefined ? undefined : kinds(p.kinds),
+    }),
+    handler: async (ctx, p) => {
+      await port.refresh(p.directory, ctx.execution?.signal, p.kinds);
       return null;
     },
   });

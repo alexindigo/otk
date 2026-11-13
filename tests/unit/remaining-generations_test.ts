@@ -14,12 +14,21 @@ const wire = (socket: string, sent: boolean, frame: object) => ({
 });
 const generation = (
   socket: string,
+  demand = {
+    kinds: ["models", "agents", "commands", "skills"],
+    intent: "warm",
+  },
 ) => [
   wire(socket, true, { t: "hello" }),
   wire(socket, false, { t: "welcome" }),
   ...["catalogs.watch", "frecency.list"].map((method) =>
     wire(socket, true, { t: "request", method, params: { directory: "/p" } })
   ),
+  wire(socket, true, {
+    t: "request",
+    method: "catalogs.demand",
+    params: { directory: "/p", ...demand },
+  }),
 ];
 const watches = (): CatalogWatchObservation[] =>
   [true, false].map((closed, n) => ({
@@ -33,7 +42,7 @@ const watches = (): CatalogWatchObservation[] =>
     latePublications: 0,
   }));
 
-Deno.test("connection generations admit exactly two acquisitions each and join prior native watch cleanup", () => {
+Deno.test("connection generations admit one watch, warm intent and frecency read and join prior native watch cleanup", () => {
   const events = [...generation("old"), ...generation("new")];
   assertEquals(assertCatalogGenerations(events, watches(), "/p").length, 2);
   const closed = watches();
@@ -45,6 +54,7 @@ Deno.test("generation proof rejects duplicated demand, refresh, missing load and
   for (
     const method of [
       "catalogs.watch",
+      "catalogs.demand",
       "frecency.list",
       "catalogs.refresh",
       "find.files",
@@ -76,4 +86,25 @@ Deno.test("generation proof rejects duplicated demand, refresh, missing load and
   const late = watches();
   late[0].latePublications = 1;
   assertThrows(() => assertCatalogGenerations(events, late, "/p"));
+});
+
+Deno.test("generation proof rejects broadened warm-up and unsolicited consumer intent", () => {
+  for (
+    const demand of [
+      {
+        kinds: ["models", "agents", "commands", "skills", "files"],
+        intent: "warm",
+      },
+      { kinds: ["models", "agents", "commands", "skills"], intent: "consumer" },
+      { kinds: ["models", "agents", "commands"], intent: "warm" },
+    ]
+  ) {
+    assertThrows(() =>
+      assertCatalogGenerations(
+        [...generation("old"), ...generation("new", demand)],
+        watches(),
+        "/p",
+      )
+    );
+  }
 });

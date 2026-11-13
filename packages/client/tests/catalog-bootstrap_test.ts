@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import {
   createDirectoryCatalogs,
   createSession,
@@ -18,9 +18,15 @@ import {
 for (const borrowed of [true, false]) {
   Deno.test(`session bootstrap respects catalog ownership and server identity (borrowed=${borrowed})`, async () => {
     let watches = 0, refreshes = 0, modelReads = 0;
+    let directory = "/p";
     const value = { providers: [], defaultState: "unknown" as const };
+    const moved = {
+      providers: [{ id: "nested", name: "Nested folder", models: [] }],
+      defaultState: "unknown" as const,
+    };
     const catalogs = createDirectoryCatalogs({
       codecs: createCatalogCodecs(),
+      demand: () => Promise.resolve(),
       watch(directory) {
         watches++;
         return {
@@ -29,7 +35,13 @@ for (const borrowed of [true, false]) {
             generation: "g",
             revision: 0,
             paths: { style: "posix" as const, separator: "/" as const },
-            values: { models: { state: "ready" as const, revision: 0, value } },
+            values: {
+              models: {
+                state: "ready" as const,
+                revision: 0,
+                value: directory === "/p" ? value : moved,
+              },
+            },
           }),
           release() {},
         };
@@ -51,14 +63,14 @@ for (const borrowed of [true, false]) {
       const result = frame.method === "session.messages"
         ? fixturePage("s", [], undefined, {
           id: "s",
-          directory: "/p",
+          directory,
           title: "Selected",
           projectID: "p",
           archived: false,
           time: { created: 1, updated: 1 },
         })
         : frame.method === "models.list"
-        ? value
+        ? directory === "/p" ? value : moved
         : [];
       queueMicrotask(() => replyRequest(connection.rpc, frame, result));
     };
@@ -67,7 +79,7 @@ for (const borrowed of [true, false]) {
       () => connection,
       () => ({
         id: "s",
-        directory: "/p",
+        directory,
         title: "Selected",
         projectID: "p",
         archived: false,
@@ -135,6 +147,19 @@ for (const borrowed of [true, false]) {
         "Explicit refresh still reaches the directory owner",
       );
       assertEquals(watches, borrowed ? 1 : 0);
+      const previous = session.models, beforeMove = modelReads;
+      directory = "/p/nested";
+      session.receive("core", { t: "index.patch", rev: 1, ops: [] });
+      await settle();
+      assert(session.models);
+      await session.models.ready();
+      assertStrictEquals(session.models, previous);
+      assertEquals(
+        session.models.state.value?.providers[0].name,
+        "Nested folder",
+      );
+      assertEquals(watches, borrowed ? 2 : 0);
+      assertEquals(modelReads, beforeMove + (borrowed ? 0 : 1));
     } finally {
       session.stop();
       catalogs.stop();
