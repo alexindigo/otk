@@ -50,6 +50,7 @@ export const profiles = {
   "contract-sessions-inbox": "neutral",
   "contract-sessions-panel": "neutral",
   "contract-sessions-memory": "neutral",
+  "contract-sessions-default": "neutral",
   "contract-sessions-membership": "neutral",
   "contract-sessions-hierarchy": "neutral",
   "contract-sessions-family": "neutral",

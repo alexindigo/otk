@@ -149,7 +149,8 @@ test.describe("filtered and unmounted supervision", () => {
         page.locator(`${project} .otk-status-light[data-state=blocked]`),
       );
       await page.locator(`${project} .otk-project-open`).click();
-      await expect(page).toHaveURL(/tstv1-background-working$/);
+      // Decision 7: blocked attention outranks the remembered working session.
+      await expect(page).toHaveURL(/tstv1-background-blocked$/);
       for (
         const [id, status] of [["tstv1-atmosphera", "finished"], [
           "tstv1-background-working",

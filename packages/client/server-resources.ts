@@ -871,28 +871,10 @@ export function createServerResources(o: {
     },
     async projectSession(project, preferred) {
       const connection = sidecars.connection(project.sidecarId);
-      if (preferred) {
-        const identities = await connection.rpc.call("sessions.identities", {
-          ids: [preferred],
-        });
-        if (
-          identities.some((row) =>
-            row.id === preferred &&
-            (row.hierarchy?.projectDirectory ??
-                projectOwner(project.sidecarId).resolve(row.directory)) ===
-              projectOwner(project.sidecarId).resolve(project.directory)
-          )
-        ) return preferred;
-      }
-      for (const { directory } of listInputs(project)) {
-        const page = await connection.rpc.call("sessions.list", {
-          directory,
-          parentID: null,
-          limit: 1,
-        });
-        if (page.items[0]) return page.items[0].id;
-      }
-      return undefined;
+      return await connection.rpc.call("navigation.default", {
+        directory: project.directory,
+        preferred,
+      }) ?? undefined;
     },
     projectDirectory: (sidecar, directory, repoID) =>
       projectOwner(sidecar).resolve(directory, repoID),

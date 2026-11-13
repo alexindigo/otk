@@ -83,6 +83,7 @@ export function createShellNavigation(o: {
     error: "",
   });
   let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
+  let projectDefault = false, projectPageOnly = false;
   const fail = (error: unknown): void => {
     if (resources.ownsFailure?.(error)) return;
     store.update((draft) => {
@@ -94,6 +95,7 @@ export function createShellNavigation(o: {
       draft.error = "";
     });
   let locations: readonly ProjectLocation[] = [];
+  let locationsReady = false, resolving = -1;
   const presentation = (
     p: ProjectSelection,
     repoID?: string,
@@ -123,7 +125,9 @@ export function createShellNavigation(o: {
     frame(id, frame) {
       if (id === LOCAL_SIDECAR && frame.t === "prefs") {
         locations = frame.prefs.shellLayout.projectLocations ?? [];
+        locationsReady = true;
       }
+      if (frame.t === "prefs" || frame.t === "welcome") resolveProject();
     },
   });
   const project = (value?: ProjectSelection): void => {
@@ -157,6 +161,7 @@ export function createShellNavigation(o: {
     },
     apply(hash) {
       projectOnly = false;
+      projectDefault = false;
       const target = route(hash),
         projectTarget = projectRoute(hash),
         previous = session.state.selection;
@@ -179,6 +184,7 @@ export function createShellNavigation(o: {
         project();
       } else {
         projectOnly = !!projectTarget;
+        projectDefault = !!projectTarget && !projectPageOnly;
         clearError();
         session.open(target);
         project(
@@ -196,6 +202,7 @@ export function createShellNavigation(o: {
             projectTarget,
             resources.connected(projectTarget.sidecarId),
           );
+          if (projectDefault) resolveProject(projectTarget);
         }
       }
       if (changes) guard.clear();
@@ -222,6 +229,37 @@ export function createShellNavigation(o: {
       ).catch(fail);
     }
     return true;
+  };
+  const resolveProject = (input?: ProjectSelection): void => {
+    const value = input ?? store.state.project;
+    const target = value &&
+      { sidecarId: value.sidecarId, directory: value.directory };
+    if (
+      (!input && !projectDefault) || !target || !locationsReady ||
+      (!input && store.state.settings) ||
+      !resources.connected(target.sidecarId) || resolving === revision
+    ) return;
+    const at = revision;
+    resolving = at;
+    void resources.projectSession(target, lastLocation(target)?.sessionID).then(
+      (id) => {
+        if (id && revision === at) {
+          navigate({ sidecarId: target.sidecarId, sessionID: id });
+        }
+      },
+    ).catch((error) => {
+      if (revision === at) fail(error);
+    });
+  };
+  // Home/close are explicit project-page intents, not default-selection intents.
+  const projectPage = (target: ProjectSelection): boolean => {
+    projectPageOnly = true;
+    try {
+      return navigation.open(projectHash(target));
+    } finally {
+      projectPageOnly = false;
+      projectDefault = false;
+    }
   };
   const createIn = async (
     sidecarId: string,
@@ -310,7 +348,7 @@ export function createShellNavigation(o: {
       guard.clear();
       const next = entry.parentID ?? remaining;
       if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
-      else navigation.open(projectHash(p));
+      else projectPage(p);
     }
     for (const id of ids) model.close(id);
     return true;
@@ -327,36 +365,20 @@ export function createShellNavigation(o: {
       target = presentation(target);
       if (
         store.state.project?.sidecarId === target.sidecarId &&
-        store.state.project?.directory === target.directory
+        store.state.project.directory === target.directory &&
+        session.state.selection && resources.connected(target.sidecarId)
       ) {
+        revision++;
         closeSettings();
         void resources.inbox(target.sidecarId).openProject(target.directory)
           .catch(fail);
-        if (session.state.selection) return;
-      }
-      const remembered = lastLocation(target)?.sessionID;
-      const saved = remembered && resources.entry(target.sidecarId, remembered);
-      // A scoped index is not a project catalog. An incidental attention row
-      // cannot replace the remembered selection or the catalog's first root.
-      const existing = saved &&
-          presentation({
-              sidecarId: target.sidecarId,
-              directory: saved.directory,
-            }, saved.projectID).directory === target.directory
-        ? saved
-        : undefined;
-      if (existing) {
-        navigate({ sidecarId: target.sidecarId, sessionID: existing.id });
+        resolveProject(target);
         return;
       }
       if (navigation.open(projectHash(target))) {
+        projectDefault = true;
         closeSettings();
-        const at = revision;
-        void resources.projectSession(target, remembered).then((id) => {
-          if (id && revision === at) {
-            navigate({ sidecarId: target.sidecarId, sessionID: id });
-          }
-        }).catch(fail);
+        resolveProject(target);
       }
     },
     openChild: (id) => {
@@ -364,7 +386,7 @@ export function createShellNavigation(o: {
     },
     projectHome: () =>
       !!store.state.project &&
-      navigation.open(projectHash(store.state.project)),
+      projectPage(store.state.project),
     preview(target) {
       if (!navigate(target)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
@@ -440,6 +462,7 @@ export function createShellNavigation(o: {
           !value.settings
         ) {
           observeProject(target, value.connected);
+          resolveProject();
         } else viewed = "";
         return;
       }
@@ -492,6 +515,7 @@ export function createShellNavigation(o: {
     },
     start: navigation.start,
     stop() {
+      revision++;
       navigation.stop();
       releaseLocations();
       pendingLocations.clear();

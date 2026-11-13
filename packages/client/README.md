@@ -695,13 +695,19 @@ observations mark seen only while focused and visible. Browser confirmation,
 history and presence remain injectable. `shellTitle` is the pure
 session/project/application title projection.
 
-Project switches restore the last accepted session through this same navigation
-owner. Locations live in the existing host-sidecar `shellLayout` preference;
-`layout.location` merges one server/directory intent at the persistence owner,
-so concurrent project visits cannot overwrite one another. Pending saves bridge
-immediate switches; preference broadcasts own the saved snapshot. Current task
-membership resolves the restored session's tab, including helper ancestry.
-Missing or closed locations fall back to the ordinary first-root selection.
+Project clicks and cold/reloaded project routes call `navigation.default` on the
+selected server. One core resolver uses SessionHierarchy membership and the
+shared attention order first, then validates the exact remembered session
+(children included), then compares one newest native root per exact checkout
+scope. Explicit session links remain explicit selections, not project-default
+intents. ShellNavigation applies the result only while its captured revision is
+current; same-project clicks do not bypass resolution. Locations live in the
+existing host-sidecar `shellLayout` preference; `layout.location` merges one
+server/directory intent at the persistence owner, so concurrent project visits
+cannot overwrite one another. Pending saves bridge immediate switches;
+preference broadcasts own the saved snapshot. Current task membership resolves
+the restored session's tab, including helper ancestry. Missing, foreign or
+closed locations use the same resolver's newest-root fallback.
 
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without

@@ -2,6 +2,7 @@
 import type { RequestMetadata } from "../request-metadata.ts";
 export const layoutRequestMetadata: Readonly<Record<string, RequestMetadata>> =
   {
+    "navigation.default": { kind: "read", pending: "Opening project" },
     "layout.patch": { kind: "mutation", pending: "Saving layout" },
     "layout.location": {
       kind: "mutation",
@@ -35,6 +36,10 @@ export interface LayoutPreferences {
   shellLayout: ShellLayout;
 }
 export interface LayoutRpcMethods {
+  "navigation.default": {
+    params: { directory: string; preferred?: string };
+    result: string | null;
+  };
   "layout.patch": { params: Partial<ShellLayout>; result: Preferences };
   "layout.location": { params: ProjectLocation; result: Preferences };
 }

@@ -4,9 +4,30 @@ import type { Prefs } from "@otk/store";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { localExecution, localWrite } from "../requests/policies.ts";
 import { preferencesReceipt } from "./prefs.ts";
+import type { NavigationDefault } from "./navigation-default.ts";
+import { readExecution } from "../requests/policies.ts";
+import { sessionID, text } from "../ws/params.ts";
+import { projectPath } from "./project-scan.ts";
 
 /** Field intents merge at the authoritative owner, never against view props. */
-export function register(rpc: RpcRegistry, prefs: Prefs<Preferences>): void {
+export function register(
+  rpc: RpcRegistry,
+  prefs: Prefs<Preferences>,
+  navigation?: NavigationDefault,
+): void {
+  if (navigation) {
+    rpc.register("navigation.default", {
+      execution: readExecution((p: { directory: string }) => ({
+        directory: p.directory,
+      })),
+      params: (p) => ({
+        directory: projectPath(text(p, "directory")!),
+        preferred: sessionID(p, "preferred", true),
+      }),
+      handler: (ctx, p) =>
+        navigation.resolve(ctx.harness.core, p, ctx.execution?.signal),
+    });
+  }
   const receipt = preferencesReceipt(prefs.options);
   rpc.register("layout.patch", {
     execution: localExecution(

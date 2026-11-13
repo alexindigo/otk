@@ -57,6 +57,7 @@ import { InboxFeature } from "./core/features/inbox.ts";
 import { PermissionFeature } from "./core/features/approvals.ts";
 import { RequestAttention } from "./core/features/request-attention.ts";
 import { registerDigests } from "./core/features/digests.ts";
+import { NavigationDefault } from "./core/features/navigation-default.ts";
 import {
   createCatalogCodecs,
   registerCatalogs,
@@ -128,7 +129,17 @@ export async function startApplication(
     sources.push(inbox);
     inbox.register(rpc);
     registerPrefs(rpc, backend, prefs);
-    registerLayout(rpc, prefs);
+    registerLayout(
+      rpc,
+      prefs,
+      new NavigationDefault({
+        hierarchy: index.hierarchy,
+        scopes: (directory) =>
+          inbox.summaries.values.get(directory)?.scopes ?? [directory],
+        entries: (directory) => index.catalog(directory),
+        status: (id) => inbox.navigationStatus(id),
+      }),
+    );
     sources.push(
       registerFrecency(rpc, backend, new Frecency(store, frecencyOptions)),
     );
