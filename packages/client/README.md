@@ -902,15 +902,19 @@ affected repo membership.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
-single-preview tabs. Only top-level no-task sessions can be phantom tasks;
-helpers roll work and attention into their nearest task or top-level parent.
-Helper navigation retains the viewed session under that tab's identity.
-`select`, `preview`, `pin` (also the double-click action),
-`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
-transitions. Required activity tabs never disappear when a preview is replaced;
-an idle/seen selected phantom remains until selection leaves. Inputs remain
-owned by their index/metadata models, and tabs never delete sessions. Concurrent
-pins share promotion; late completion cannot steal a newer selection.
+single-preview tabs. Every ungrouped mandatory session, including a child, has
+its own phantom and lamp. Helper navigation selects the checkout-local display
+root or owning task; foreign parents are breadcrumb links. Native family
+identity, local anchors and task ownership come from SessionHierarchy;
+standalone consumers use the same neutral projector. `tasksFollowParent`
+defaults off and crosses server connections through the view, not by rewriting
+stored membership or native paths. `select`, `preview`, `pin` (also the
+double-click action), `rename(sessionID, title, callback)` and
+`send(sessionID, callback)` own tab transitions. Required activity tabs never
+disappear when a preview is replaced; an idle/seen selected phantom remains
+until selection leaves. Inputs remain owned by their index/metadata models, and
+tabs never delete sessions. Concurrent pins share promotion; late completion
+cannot steal a newer selection.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
@@ -940,11 +944,11 @@ unknown. The session's shared catalog loads independently of the transcript and
 rejects stale results; refresh errors retain last good metadata. The meter binds
 the owner's whole-session reported cost directly, independently of its
 latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` preserves
-explicit membership order and adds working/blocked phantom descendants of every
-member. Finished helpers disappear even while selected and remain reachable in
-Sessions. Traversal is iterative, cycle-safe and stops at another task's
-explicit membership. Helper URLs retain their owning task; removing membership
-preserves the viewed helper under its top-level parent's phantom task.
+explicit membership order and adds working, blocked and unseen-finished
+descendants of every member. A finished helper retires only once acknowledged.
+Traversal is iterative, cycle-safe and stops at another task's explicit
+membership. Helper URLs retain their owning task; removing membership preserves
+the viewed helper under its top-level parent's phantom task.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;

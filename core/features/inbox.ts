@@ -4,6 +4,7 @@ import {
   type InboxBaseline,
   type InboxOp,
   type InboxSnapshot,
+  type IndexEntry,
   type IndexMetadata,
   isSessionID,
   type ProjectRecord,
@@ -81,7 +82,24 @@ interface InboxPublication {
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
   #taskProjects = new Map<string, readonly TaskRecord[]>();
-  #projectTasks(directory: string): readonly TaskRecord[] {
+  #projectTasks(
+    directory: string,
+    followParent = false,
+  ): readonly TaskRecord[] {
+    if (followParent) {
+      const scopes = this.summaries.values.get(directory)?.scopes ??
+        [directory];
+      const inherited = new Set(
+        scopes.flatMap((scope) =>
+          this.index.catalog(scope).flatMap((entry) =>
+            this.index.hierarchy.node(entry.id, true)?.taskID ?? []
+          )
+        ),
+      );
+      return [...this.#tasks.values()].filter((task) =>
+        scopes.includes(task.directory) || inherited.has(task.id)
+      );
+    }
     let value = this.#taskProjects.get(directory);
     if (!value) {
       value = [...this.#tasks.values()].filter((task) =>
@@ -118,7 +136,7 @@ export class InboxFeature implements FrameSource {
     const directory = this.#directory(view);
     if (!directory) return [];
     const ids = new Set<string>();
-    for (const task of this.#projectTasks(directory)) {
+    for (const task of this.#projectTasks(directory, view.tasksFollowParent)) {
       for (const id of task.sessions) ids.add(id);
     }
     for (
@@ -133,6 +151,12 @@ export class InboxFeature implements FrameSource {
     }
     return [...ids];
   }
+  project(entry: IndexEntry, view: ViewLease): IndexEntry {
+    return {
+      ...entry,
+      hierarchy: this.index.hierarchy.node(entry.id, view.tasksFollowParent),
+    };
+  }
   open(
     view: () => ViewLease,
     id: string,
@@ -140,11 +164,21 @@ export class InboxFeature implements FrameSource {
   ): FrameSource {
     const listeners = new Set<(frame: ServerFrame) => void>();
     let revision = 0;
+    let taskScopes = new Set<string>();
+    const currentTaskScopes = () => {
+      const scope = view(), directory = this.#directory(scope);
+      return new Set(
+        directory && scope.tasksFollowParent
+          ? this.#projectTasks(directory, true).map((task) => task.directory)
+          : [],
+      );
+    };
     const emit = (frame: ServerFrame) => {
       for (const listener of listeners) listener(frame);
     };
     const baseline = (): InboxBaseline => {
       this.#flush();
+      taskScopes = currentTaskScopes();
       return {
         generation: this.#generation,
         revision,
@@ -161,15 +195,19 @@ export class InboxFeature implements FrameSource {
       const scope = view(),
         directory = this.#directory(scope),
         leased = entries();
+      const nextTaskScopes = currentTaskScopes();
       const ops = changes.filter((change) =>
         change.directory !== undefined
           ? directory !== undefined &&
-            (this.summaries.values.get(directory)?.scopes ?? [directory])
-              .includes(change.directory)
+            ((this.summaries.values.get(directory)?.scopes ?? [directory])
+              .includes(change.directory) ||
+              taskScopes.has(change.directory) ||
+              nextTaskScopes.has(change.directory))
           : change.sessionID !== undefined
           ? leased.has(change.sessionID)
           : true
       ).map((change) => change.value);
+      taskScopes = nextTaskScopes;
       if (!ops.length) return;
       const from = revision;
       revision += ops.length;
@@ -214,6 +252,9 @@ export class InboxFeature implements FrameSource {
       ) rowsChanged();
     });
     const stopRemoval = this.index.observeRemoval(rowsChanged);
+    // Cached page structures carry task ownership too. Reproject a demanded
+    // page after membership changes, through the existing list resource owner.
+    const stopTasks = this.stores.tasks.listen(rowsChanged);
     const hydrate = async (signal?: AbortSignal) => {
       const scope = view();
       const keys = [
@@ -243,6 +284,7 @@ export class InboxFeature implements FrameSource {
         this.#publications.delete(publish);
         stopRows();
         stopRemoval();
+        stopTasks();
         listeners.clear();
         this.#views.delete(id);
       },
@@ -336,6 +378,12 @@ export class InboxFeature implements FrameSource {
       },
       this.supervision,
       new ProjectIdentity(stores.checkouts),
+      this.index.hierarchy,
+    );
+    this.index.hierarchy.configure(
+      this.summaries.identity,
+      () => [...this.#tasks.values()],
+      (id) => (this.#supervision.get(id)?.state ?? "none") !== "none",
     );
     for (const project of this.#projects.values()) {
       this.summaries.ensure(project.directory);
@@ -369,6 +417,7 @@ export class InboxFeature implements FrameSource {
       }),
       index.observeSeeds((values) => {
         for (const entry of this.summaries.seed(values)) this.#observe(entry);
+        this.index.hierarchy.invalidate();
       }),
       stores.projects.listen((change) => {
         this.#identity();
@@ -440,6 +489,7 @@ export class InboxFeature implements FrameSource {
         }
       }),
       stores.tasks.listen((change) => {
+        this.index.hierarchy.invalidate();
         for (const task of change.upsert) {
           this.#invalidateTasks(task.directory);
           this.#tasks.set(task.id, task);
@@ -532,7 +582,9 @@ export class InboxFeature implements FrameSource {
       ).map((p) => ({ ...p })),
       tasks: [
         ...(view
-          ? directory ? this.#projectTasks(directory) : []
+          ? directory
+            ? this.#projectTasks(directory, view.tasksFollowParent)
+            : []
           : this.#tasks.values()),
       ].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).map((
         t,

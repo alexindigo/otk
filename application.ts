@@ -137,6 +137,7 @@ export async function startApplication(
       backend,
       (directory, tx) => inbox.activate(directory, tx),
       cfg.digest.publishrows,
+      index.hierarchy,
     );
     registerSessionActions(
       rpc,

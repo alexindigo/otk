@@ -335,6 +335,39 @@ export async function sessionsScenario(profile: Profile) {
     // The fallback is the newest root, independently of a remembered location.
     f.update(base.id, {});
   }
+  if (profile === "contract-sessions-family") {
+    const directory = join(root, "worktrees", "family");
+    await Deno.mkdir(directory, { recursive: true });
+    for (const [n, scope] of [directory, base.directory].entries()) {
+      f.add({
+        ...base,
+        id: `tstv1-family-${n}`,
+        directory: scope,
+        parentID: base.id,
+        title: n ? "Local sibling" : "Moved child",
+      });
+    }
+    f.app.index.projectSeeds([base.directory, directory].map((scope) => ({
+      directory: scope,
+      hasSessions: true,
+      sessionCount: scope === directory ? 1 : 2,
+      lastActivity: 1,
+      authority: "current" as const,
+      topology: {
+        repoID: base.projectID,
+        canonicalRoot: base.directory,
+        leafDirectory: scope,
+        ...(scope === directory ? { parentDirectory: base.directory } : {}),
+      },
+    })));
+    f.app.index.projectAuthority("current");
+    await c.rpc("tasks.create", {
+      directory: base.directory,
+      name: "Parent task",
+      sessions: [base.id],
+    });
+    f.update("tstv1-family-0", { status: "busy" });
+  }
   if (profile === "contract-sessions-hierarchy") {
     f.add({
       ...base,

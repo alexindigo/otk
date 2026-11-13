@@ -105,6 +105,26 @@ export class SessionLists {
     if (sql && cursor?.mode !== "api") {
       items = native.listSessions(input, cursor, limit);
       older = items.length === limit ? encode(items.at(-1)!) : null;
+    } else if (typeof input.parentID === "string") {
+      // The native family endpoint, unlike a directory listing, keeps moved
+      // children. Its response is scoped to this parent, never all sessions.
+      const response = await client.request(
+        `/session/${ids.decode(input.parentID)}/children`,
+        { signal },
+      );
+      const rows: Session[] = await wait(response.json());
+      const candidates = rows.map(mapIndex).filter((row) =>
+        row.parentID === input.parentID &&
+        (!cursor || row.timeUpdated < cursor.updated ||
+          row.timeUpdated === cursor.updated && ids.decode(row.id) < cursor.id)
+      )
+        .sort((a, b) =>
+          b.timeUpdated - a.timeUpdated || b.id.localeCompare(a.id)
+        );
+      items = candidates.slice(0, limit);
+      older = candidates.length > limit
+        ? encode(items.at(-1)!, "family")
+        : null;
     } else {
       items = [];
       older = null;

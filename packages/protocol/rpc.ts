@@ -191,7 +191,12 @@ export interface RpcMethods
   };
   "sessions.identities": {
     params: { ids: string[] };
-    result: { id: string; directory: string; parentID?: string }[];
+    result: {
+      id: string;
+      directory: string;
+      parentID?: string;
+      hierarchy?: import("./session-hierarchy.ts").SessionHierarchyNode;
+    }[];
   };
   "session.children": {
     params: { sessionID: string; before?: string };

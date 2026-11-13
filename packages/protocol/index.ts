@@ -8,6 +8,8 @@ export interface SessionMetadata {
   projectID: string;
   /** Recorded native checkout boundary, independent of current path availability. */
   checkoutRoot?: string;
+  /** Application-owned family/task/visibility projection, independent of leases. */
+  hierarchy?: import("./session-hierarchy.ts").SessionHierarchyNode;
   title: string;
   timeCreated: number;
   timeUpdated: number;

@@ -17,6 +17,7 @@ import {
   type StateFactory,
 } from "@otk/client";
 import type { InboxSnapshot, IndexEntry, ServerFrame } from "@otk/protocol";
+import { DEFAULT_PREFS } from "@otk/protocol";
 
 function entry(id = "session", directory = "/p"): IndexEntry {
   return {
@@ -37,6 +38,33 @@ function entry(id = "session", directory = "/p"): IndexEntry {
     },
   };
 }
+
+Deno.test("hierarchy preference reaches every server view before deferred bindings paint", () => {
+  const f = fixture((initial) => ({ ...createState(initial), update() {} }));
+  const views: { tasksFollowParent?: boolean }[] = [];
+  for (const connection of f.connections.values()) {
+    connection.view = (view) => {
+      views.push(view);
+    };
+  }
+  try {
+    f.resources.scope({ sidecarId: "local", directory: "/p" });
+    views.length = 0;
+    f.receive("local", {
+      t: "prefs",
+      prefs: { ...DEFAULT_PREFS, tasksFollowParent: true },
+    });
+    assertEquals(views.length, 2);
+    assert(views.every((view) => view.tasksFollowParent === true));
+    assertEquals(
+      f.resources.tabSnapshot({ sidecarId: "local", directory: "/p" })
+        .followParent,
+      true,
+    );
+  } finally {
+    f.resources.stop();
+  }
+});
 function metadata(): InboxSnapshot {
   return {
     projects: [{

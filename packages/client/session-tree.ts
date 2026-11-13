@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type IndexMetadata,
+  projectSessionHierarchy,
   sessionAncestors,
   type SessionListRow,
   type SessionLookup,
@@ -29,6 +30,14 @@ export function familySelection<T extends { sessionID: string }>(
   selection: T,
   lookup: SessionLookup,
 ): T {
+  const node = lookup(selection.sessionID)?.hierarchy;
+  if (node) {
+    const rootID = node.rootID ?? node.anchorID;
+    if (rootID !== selection.sessionID) return { ...selection, rootID };
+    const current = { ...selection };
+    Reflect.deleteProperty(current, "rootID");
+    return current;
+  }
   const ancestors = sessionAncestors(selection.sessionID, lookup);
   return ancestors.length
     ? { ...selection, rootID: ancestors.at(-1) }
@@ -58,28 +67,19 @@ export function sessionTree<T extends SessionStructure>(
   const scopes = new Set(directories);
   const sessions = entries.filter((e) => scopes.has(e.directory));
   const byID = new Map(sessions.map((e) => [e.id, e]));
-  const ordered = tasks.filter((t) => scopes.has(t.directory))
+  const nodes = entries.every((entry) => entry.hierarchy)
+    ? undefined
+    : projectSessionHierarchy(entries, tasks, {
+      project: (scope) => scopes.has(scope) ? directory : scope,
+    });
+  const inherited = new Set(sessions.map((entry) => entry.hierarchy?.taskID));
+  const ordered = tasks.filter((t) =>
+    scopes.has(t.directory) || inherited.has(t.id)
+  )
     .sort((a, b) => a.order - b.order);
-  const explicit = new Map<string, string>();
-  for (const task of ordered) {
-    for (const id of task.sessions) {
-      if (!explicit.has(id)) explicit.set(id, task.id);
-    }
-  }
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
-  const ownership = new Map(explicit);
-  const groupFor = (entry: T): string => {
-    const path: string[] = [], seen = new Set<string>();
-    let id: string | undefined = entry.id;
-    while (id && byID.has(id) && !ownership.has(id) && !seen.has(id)) {
-      path.push(id);
-      seen.add(id);
-      id = parents.get(id);
-    }
-    const group = id ? ownership.get(id) ?? "" : "";
-    for (const key of path) ownership.set(key, group);
-    return group;
-  };
+  const groupFor = (entry: T): string =>
+    (entry.hierarchy ?? nodes?.get(entry.id))?.taskID ?? "";
   const buckets = new Map<string, T[]>();
   for (const session of sessions) {
     const id = groupFor(session);
@@ -168,7 +168,9 @@ export function createSessionTree(): {
             return entry.id === previous.id &&
               entry.directory === previous.directory &&
               entry.parentID === previous.parentID &&
-              entry.title === previous.title;
+              entry.title === previous.title &&
+              JSON.stringify(entry.hierarchy) ===
+                JSON.stringify(previous.hierarchy);
           }));
       const sameTasks = tasks === previousTasks ||
         (!!previousTasks && tasks.length === previousTasks.length &&

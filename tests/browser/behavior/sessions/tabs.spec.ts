@@ -261,6 +261,18 @@ test.describe("phantom ownership", () => {
       await visibleOnScreen(page.locator("[data-tab=tstv1-otk]"));
       await expect(page.locator("[data-tab=tstv1-preview-b]")).toHaveCSS(
         "font-style",
+        "normal",
+      );
+      await expect(page.locator("[data-tab=tstv1-preview-b]")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(page.locator("[data-tab=tstv1-otk]")).toHaveAttribute(
+        "aria-selected",
+        "false",
+      );
+      await expect(page.locator("[data-tab=tstv1-otk]")).toHaveCSS(
+        "font-style",
         "italic",
       );
       await state.controller.call("scenario", {

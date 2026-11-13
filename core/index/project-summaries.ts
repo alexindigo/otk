@@ -8,6 +8,7 @@ import {
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
 import { ProjectIdentity } from "./project-identity.ts";
+import type { SessionHierarchy } from "./session-hierarchy.ts";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
@@ -55,7 +56,8 @@ export class ProjectSummaries {
   #direct = new Map<string, ProjectSummary>();
   /** Repository and checkout ownership belongs exclusively to ProjectIdentity. */
   leaf(directory: string, repoID?: string): string {
-    return this.identity.leaf(directory, repoID);
+    return this.hierarchy?.project(directory, repoID) ??
+      this.identity.leaf(directory, repoID);
   }
   context(directory: string): string | undefined {
     return this.#topology.get(directory)?.parentDirectory;
@@ -159,6 +161,7 @@ export class ProjectSummaries {
     readonly retire: (directory: string) => void = () => {},
     readonly supervision = new SessionSupervision(),
     readonly identity = new ProjectIdentity(),
+    readonly hierarchy?: SessionHierarchy,
   ) {}
   ensure(directory: string): void {
     this.#known.add(directory);

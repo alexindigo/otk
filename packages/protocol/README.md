@@ -65,6 +65,15 @@ these helpers.
 
 ## Public API
 
+`SessionHierarchyNode` separates global `familyID`/`rootID` and ancestry
+coverage from checkout-local `anchorID`/`projectDirectory`, nearest task
+ownership and mandatory visibility. Core publishes it on index metadata, session
+metadata and structural list rows. `projectSessionHierarchy` is the shared
+neutral projector for the application owner and standalone snapshot consumers.
+Task inheritance is checkout-local by default; `tasksFollowParent` is the opt-in
+Settings toggle. Parent-scoped list queries include children across checkout
+boundaries.
+
 Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 
 | API                                                            | Purpose                                 |

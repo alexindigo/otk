@@ -141,12 +141,12 @@ export function createSessionLists(
           pending.abort.signal.aborted || list.revision !== revision ||
           list.items !== acquired
         ) return;
-        if (info.directory !== list.input.directory) continue;
         entries.set(parent, {
           id: info.id,
           directory: info.directory,
           parentID: info.parentID,
           title: info.title,
+          hierarchy: info.hierarchy,
         });
       }
       if (entries.size !== list.items.length) {
@@ -277,6 +277,7 @@ export function createSessionLists(
             directory: item.directory,
             title: item.title,
             parentID: item.parentID,
+            hierarchy: item.hierarchy,
           });
         } else list.retained.delete(item.id);
       }

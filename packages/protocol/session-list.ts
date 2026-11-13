@@ -5,7 +5,8 @@ export const SESSION_LIST_SIZE = 20;
 export const MAX_SESSION_LIST_SIZE = 200;
 export interface SessionListInput {
   directory: string;
-  /** null selects roots; absence selects all project sessions. */
+  /** null selects roots; absence selects all project sessions. A qualified
+   * parent selects its direct children across checkout boundaries. */
   parentID?: string | null;
   query?: string;
   before?: string;
@@ -71,7 +72,7 @@ export interface LoadChunk {
 /** Current-project row discovery has no status, marks, digests or history. */
 export type SessionStructure = Pick<
   IndexMetadata,
-  "id" | "directory" | "parentID" | "title"
+  "id" | "directory" | "parentID" | "title" | "hierarchy"
 >;
 export type SessionListRow =
   | { key: string; kind: "heading"; group: string; title: string }

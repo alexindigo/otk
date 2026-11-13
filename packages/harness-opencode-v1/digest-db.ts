@@ -138,8 +138,10 @@ export class DigestNativeDb {
     before: { updated: number; id: string } | undefined,
     limit: number,
   ): SessionMetadata[] {
-    const filters = ["directory=?"],
-      values: (string | number | null)[] = [input.directory];
+    const filters = typeof input.parentID === "string" ? [] : ["directory=?"],
+      values: (string | number | null)[] = typeof input.parentID === "string"
+        ? []
+        : [input.directory];
     if (input.parentID !== undefined) {
       filters.push("parent_id IS ?");
       values.push(input.parentID === null ? null : ids.decode(input.parentID));

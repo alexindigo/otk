@@ -26,6 +26,7 @@ export function liveSessionInfo(
     directory: entry.directory,
     projectID: entry.projectID,
     parentID: entry.parentID,
+    hierarchy: entry.hierarchy,
     archived: entry.archived,
     time: { created: entry.timeCreated, updated: entry.timeUpdated },
   };

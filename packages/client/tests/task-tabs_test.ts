@@ -250,7 +250,7 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   );
 });
 
-Deno.test("no-task parent owns its active helper phantom and helper previews retain root tab identity", () => {
+Deno.test("ungrouped mandatory helpers keep their own tab and viewing them selects their root tab", () => {
   const root = entry("root"),
     child = entry("child", 2, "root"),
     other = entry("other");
@@ -259,19 +259,27 @@ Deno.test("no-task parent owns its active helper phantom and helper previews ret
     input = { directory: "/p", entries: [root, child, other], inbox: meta };
   child.attention.questions = 1;
   tabs.update(input);
-  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [["root", "blocked"]]);
+  // AXIOM 1: a root's lamp cannot replace an ungrouped child's visible tab.
+  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
+    "child",
+    "blocked",
+  ]]);
   tabs.preview(child.id);
   assertEquals(tabs.state.selected, { kind: "session", id: "root" });
   assertEquals(tabs.state.sessionID, "child");
+  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
+    ["child", "blocked"],
+    ["root", "none"],
+  ]);
   child.attention.questions = 0;
   meta.finishes.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "root",
+    "child",
     "finished",
-  ]]);
+  ], ["root", "none"]]);
   tabs.preview("other");
-  assertEquals(tabs.tabs().map((t) => t.id), ["root", "other"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["child", "other"]);
   meta.seen.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), ["other"]);

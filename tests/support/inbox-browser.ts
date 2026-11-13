@@ -119,7 +119,8 @@ export async function inboxBrowserFixture(
         Promise.resolve(entries.filter((e) => e.parentID === id).map(content)),
       listSessions: (input) => {
         const values = entries.filter((entry) =>
-          entry.directory === input.directory &&
+          (typeof input.parentID === "string" ||
+            entry.directory === input.directory) &&
           (input.parentID === undefined ||
             (input.parentID === null
               ? !entry.parentID
