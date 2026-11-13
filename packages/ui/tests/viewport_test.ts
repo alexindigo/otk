@@ -540,3 +540,47 @@ for (const input of ["wheel", "keydown"]) {
     });
   }
 }
+
+Deno.test("animated input continues past a scroll ending caused by compensation", () => {
+  viewportFixture(({ pane, height, flush }) => {
+    const lease = acquireViewport(pane);
+    let prefix = 300;
+    const release = lease.owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({ key: "row", offset: pane.scrollTop - prefix }),
+      resolve: (anchor) => prefix + anchor.offset,
+    });
+    try {
+      lease.owner.keepAnchor();
+      for (let n = 0; n < 4; n++) flush();
+      const event = new Event("keydown");
+      Object.defineProperty(event, "key", { value: "PageUp" });
+      pane.dispatchEvent(event);
+      pane.scrollTop = 800;
+      pane.dispatchEvent(new Event("scroll"));
+      // Measured content above the source compensates mid-animation.
+      prefix += 100;
+      height(1100);
+      lease.owner.layout();
+      for (let n = 0; n < 4; n++) flush();
+      assertEquals(pane.scrollTop, 900);
+      pane.dispatchEvent(new Event("scrollend"));
+      // The browser keeps animating the same PageUp while geometry is pending.
+      lease.owner.layout();
+      pane.scrollTop = 600;
+      pane.dispatchEvent(new Event("scroll"));
+      for (let n = 0; n < 4; n++) flush();
+      assertEquals(pane.scrollTop, 600);
+      pane.dispatchEvent(new Event("scrollend"));
+      prefix += 100;
+      height(1200);
+      lease.owner.layout();
+      for (let n = 0; n < 4; n++) flush();
+      assertEquals(pane.scrollTop, 700);
+    } finally {
+      release();
+      lease.release();
+    }
+  });
+});
