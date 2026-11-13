@@ -6,6 +6,18 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   tag: ["@messages", "@contracts", "@composer"],
 }, async ({ isolatedState: state, page }) => {
   await page.goto(state.url);
+  // Decision 6: all evidence states render, including grey for no evidence.
+  const lights = page.locator("[data-visual-gallery] .otk-status-light");
+  await expect(lights).toHaveCount(5);
+  expect(
+    await lights.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-state"))
+    ),
+  ).toEqual(["blocked", "working", "finished", "none", "working"]);
+  await expect(lights.nth(3)).toHaveAttribute(
+    "aria-label",
+    "No known activity",
+  );
   await expect(page.locator("#registered .otk-tool-toggle")).toHaveCount(2);
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(0);
   await page.locator("#registered > .otk-tool-line .otk-tool-toggle").click();

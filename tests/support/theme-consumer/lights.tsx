@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For } from "solid-js";
-import { ActivityIndicator, ConnectionLight, StatusLight } from "@otk/ui";
+import {
+  ActivityIndicator,
+  ConnectionLight,
+  LIGHT_STATES,
+  type LightState,
+  StatusLight,
+} from "@otk/ui";
 export default function Lights() {
   const [event, setEvent] = createSignal(0);
   return (
@@ -10,7 +16,7 @@ export default function Lights() {
         data-theme-lamps
         style={{ display: "flex", gap: "32px", padding: "32px" }}
       >
-        <For each={["blocked", "working", "finished", "none"] as const}>
+        <For each={Object.keys(LIGHT_STATES) as LightState[]}>
           {(state) => (
             <div>
               <StatusLight state={state} event={event()} />
