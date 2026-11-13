@@ -920,7 +920,9 @@ double-click action), `rename(sessionID, title, callback)` and
 disappear when a preview is replaced; an idle/seen selected phantom remains
 until selection leaves. Inputs remain owned by their index/metadata models, and
 tabs never delete sessions. Concurrent pins share promotion; late completion
-cannot steal a newer selection.
+cannot steal a newer selection. `belongsToTab(tabID, sessionID)` borrows the
+exact supervision membership for lamp presentation: a task's owned sessions, or
+a phantom's own session. Consumers do not reconstruct it from raw ancestry.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
@@ -1111,6 +1113,14 @@ press-twice lifetime; the hub still owns invocation-time availability and
 registration identity, including after an item was armed.
 
 ## Notifications
+
+`createAttentionGrace({clock?, factory?})` owns one 500 ms deadline per
+sidecar/permission identity and one shared scheduler. Accepted evidence/content
+arrivals and settlements feed it independently of mounted views. Composer
+eligibility and reduced-motion lamp paint borrow that same deadline; late
+mounts, duplicates and preference changes never start another grace. Questions
+remain immediate. Supervision, mandatory visibility, notification routing,
+badges and sound do not consume this presentation delay.
 
 `createApprovals(rpc, lookup, factory?)` is a per-sidecar authoritative policy
 and activity resource. Welcome invalidates older operations; `approvals` frames

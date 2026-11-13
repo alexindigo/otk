@@ -144,6 +144,10 @@ export default function Sidebar(
                             </time>
                             <span class="otk-row-status">
                               <StatusLight
+                                attention={{
+                                  server: entry().sidecarId,
+                                  session: entry().id,
+                                }}
                                 state={sessionLight(entry())}
                                 event={entry().timeUpdated}
                               />

@@ -468,7 +468,20 @@ export default function ProjectTabs(props: {
                   >
                     <SelectionContent
                       class="otk-session-selection"
-                      leading={<StatusLight small state={tab().status} />}
+                      leading={
+                        <StatusLight
+                          small
+                          state={tab().status}
+                          attention={{
+                            server: props.project.sidecarId,
+                            family: {
+                              id: tab().id,
+                              contains: (id) =>
+                                props.model.belongsToTab(tab().id, id),
+                            },
+                          }}
+                        />
+                      }
                     >
                       <span class="otk-control-label">
                         <Show
@@ -643,6 +656,10 @@ export default function ProjectTabs(props: {
                             leading={
                               <StatusLight
                                 small
+                                attention={{
+                                  server: props.project.sidecarId,
+                                  session: crumb().id,
+                                }}
                                 state={entry(crumb().id)
                                   ? inboxStatus(entry(crumb().id)!, props.inbox)
                                   : "none"}

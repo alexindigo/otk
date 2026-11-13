@@ -43,7 +43,7 @@ export function registerPermissionTakeover(
     component: PermissionTakeover,
     active: (session) =>
       !!oldestPermission(
-        waitingPermissions(session),
+        visiblePermissions(session),
         session.sessionID(),
         session.entry,
       ),
@@ -56,6 +56,11 @@ function waitingPermissions(session: SessionPorts) {
     )
     : session.permissions();
 }
+function visiblePermissions(session: SessionPorts) {
+  return waitingPermissions(session).filter((request) =>
+    session.permissionVisible?.(request) ?? true
+  );
+}
 function PermissionTakeover(
   props: { notice?: () => import("solid-js").Element; focusNotice?(): void } =
     {},
@@ -63,7 +68,7 @@ function PermissionTakeover(
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () =>
     oldestPermission(
-      waitingPermissions(session),
+      visiblePermissions(session),
       session.sessionID(),
       session.entry,
     );

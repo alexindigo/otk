@@ -1144,6 +1144,14 @@ status. There is no idle or unknown lamp state. `LIGHT_STATES` owns the public
 state inventory and `LightState` derives from its keys; galleries enumerate that
 mapping instead of maintaining a second inventory.
 
+The shell's `AttentionProvider` binds the shared client grace owner to accepted
+permission evidence/content and system reduced motion plus Animations off.
+Composer permission takeovers wait 500 ms; scoped session, family and project
+lamps stay immediate unless reduced motion is active, when they retain their
+previous state until that same request deadline. Other input stays immediate.
+Neither takeovers nor lamps install grace timers. `presentedOnScreen` keeps
+reserving the request for its one presentation throughout grace.
+
 Connection health uses `ConnectionLight` and its own connected, connecting,
 reconnecting, disconnected and error states. Its pure `connectionState`
 projection requires both the serving transport and agent link to be connected
