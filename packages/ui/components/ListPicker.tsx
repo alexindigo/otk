@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ListPicker.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
 import {
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   type Element,
-  For,
   Show,
 } from "solid-js";
+import { isCancellation } from "@otk/protocol";
+import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
+import { pickerProjection } from "./picker-projection.ts";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -61,30 +63,36 @@ export default function ListPicker<T = string>(props: {
   const [highlighted, setHighlighted] = createSignal<string>();
   const [opened, setOpened] = createSignal(false);
   let popover!: PopoverControl,
+    window: VirtualListControl | undefined,
     root: HTMLDivElement | undefined,
     search: HTMLInputElement | undefined;
-  const buttons = new Map<string, HTMLDivElement>();
-  const groups = () =>
-    props.groups.map((group) => ({
-      ...group,
-      items: group.items.filter((item) =>
-        `${item.label} ${item.description ?? ""} ${item.search ?? ""}`
-          .toLowerCase().includes(query().trim().toLowerCase())
-      ),
-    })).filter((group) => group.items.length);
-  const rows = () => groups().flatMap((group) => group.items);
-  const available = () => rows().filter((item) => !item.unavailable);
-  const candidate = () => {
-    const items = available();
-    return items.find((item) => item.key === highlighted())?.key ??
-      items.find((item) => item.key === props.selected)?.key ?? items[0]?.key;
-  };
+  // Catalog projection has no query/candidate dependency. A query scans once;
+  // each row then borrows indexed facts rather than rebuilding the population.
+  const groups = createMemo(() => props.groups);
+  const snapshot = createMemo(() => pickerProjection(groups(), query()));
+  const candidate = createMemo(() => {
+    const { indices, available } = snapshot();
+    const highlightedKey = highlighted(), selectedKey = props.selected;
+    return highlightedKey !== undefined && indices.has(highlightedKey)
+      ? highlightedKey
+      : selectedKey !== undefined && indices.has(selectedKey)
+      ? selectedKey
+      : available[0];
+  });
+  const pins = createMemo(() =>
+    [...new Set([candidate(), props.selected])].flatMap((key) =>
+      key !== undefined && snapshot().items.has(key) ? [`option:${key}`] : []
+    )
+  );
   createEffect(
-    () => opened() ? { key: candidate(), groups: groups() } : undefined,
+    () => opened() ? { key: candidate(), snapshot: snapshot() } : undefined,
     (current) => {
       if (current?.key !== undefined) {
-        buttons.get(current.key)?.scrollIntoView({
-          block: "nearest",
+        void window?.reveal(`option:${current.key}`).catch((error) => {
+          if (
+            !isCancellation(error) && opened() &&
+            snapshot() === current.snapshot && candidate() === current.key
+          ) throw error;
         });
       }
     },
@@ -93,21 +101,21 @@ export default function ListPicker<T = string>(props: {
     if (open) (props.search ? search : root)?.focus();
   });
   const pick = (key: string) => {
-    const item = rows().find((item) => item.key === key);
+    const item = snapshot().items.get(key);
     if (!item || item.unavailable) return;
     props.onPick(item.value);
     popover.close(props.focusAfterPick);
   };
   const move = (key: string) => {
-    const items = available();
+    const { available: items, indices } = snapshot();
     if (!items.length) return;
-    const at = items.findIndex((item) => item.key === candidate());
+    const at = indices.get(candidate()!) ?? 0;
     const next = key === "Home"
       ? 0
       : key === "End"
       ? items.length - 1
       : (at + (key === "ArrowUp" ? -1 : 1) + items.length) % items.length;
-    setHighlighted(items[next].key);
+    setHighlighted(items[next]);
   };
   return (
     <Popover
@@ -140,7 +148,7 @@ export default function ListPicker<T = string>(props: {
       }}
       onClose={() => {
         setOpened(false);
-        buttons.clear();
+        window = undefined;
         root = undefined;
         search = undefined;
       }}
@@ -200,107 +208,144 @@ export default function ListPicker<T = string>(props: {
             />
           </Show>
           {props.status}
-          <div
+          <VirtualList
             id={id}
-            class={[scrollRegion(), "otk-picker-groups"]}
-            role="listbox"
-            aria-label={props.label}
-          >
-            <For each={groups()} keyed={(group) => group.key}>
-              {(group) => (
-                <section role="group" aria-label={group().label}>
-                  <Show when={group().label}>
-                    <h3 class="otk-control-label" title={group().label}>
-                      {group().label}
-                    </h3>
-                  </Show>
-                  <For each={group().items} keyed={(item) => item.key}>
-                    {(item) => (
-                      <div
-                        role="option"
-                        id={`${id}-${encodeURIComponent(item().key)}`}
-                        data-picker-key={item().key}
-                        aria-disabled={item().unavailable ? "true" : undefined}
-                        data-otk-selection="vertical"
-                        {...selection({
-                          kind: "selected",
-                          selected: props.selected === item().key,
-                          highlighted: candidate() === item().key,
-                          class: `otk-picker-row${
-                            item().unavailable ? " is-unavailable" : ""
-                          }`,
-                        })}
-                        ref={(el) => {
-                          buttons.set(item().key, el);
-                        }}
-                        onPointerMove={() => {
-                          if (!item().unavailable) setHighlighted(item().key);
-                        }}
+            class="otk-picker-groups"
+            listRole="listbox"
+            label={props.label}
+            keys={snapshot().keys}
+            revision={snapshot()}
+            pinned={pins()}
+            samples={[
+              { role: "heading", class: "otk-picker-group-heading" },
+              {
+                role: "first-heading",
+                class: "otk-picker-group-heading is-first",
+              },
+              {
+                role: "option",
+                class: "otk-picker-estimate",
+              },
+              {
+                role: "description",
+                class: "otk-picker-estimate has-description",
+              },
+            ]}
+            role={(key) => {
+              const row = snapshot().rows.get(key);
+              return row?.kind === "heading"
+                ? row.first ? "first-heading" : "heading"
+                : row?.item?.description || row?.item?.unavailable
+                ? "description"
+                : "option";
+            }}
+            itemAttributes={(key) => {
+              const row = snapshot().rows.get(key);
+              return row?.kind === "option"
+                ? { role: "group", "aria-label": row.label }
+                : { role: "presentation" };
+            }}
+            control={(control) => {
+              window = control;
+            }}
+            render={(key) => {
+              const initial = snapshot().rows.get(key)!;
+              const row = () => snapshot().rows.get(key) ?? initial;
+              if (initial.kind === "heading") {
+                return (
+                  <h3
+                    class={`otk-control-label otk-picker-group-heading${
+                      row().first ? " is-first" : ""
+                    }`}
+                    title={row().label}
+                  >
+                    {row().label}
+                  </h3>
+                );
+              }
+              const item = () => row().item!;
+              return (
+                <div
+                  role="option"
+                  id={`${id}-${encodeURIComponent(item().key)}`}
+                  data-picker-key={item().key}
+                  aria-disabled={item().unavailable ? "true" : undefined}
+                  aria-posinset={row().position}
+                  aria-setsize={row().size}
+                  data-otk-selection="vertical"
+                  {...selection({
+                    kind: "selected",
+                    selected: props.selected === item().key,
+                    highlighted: candidate() === item().key,
+                    class: `otk-picker-row${
+                      item().unavailable ? " is-unavailable" : ""
+                    }`,
+                  })}
+                  onPointerMove={() => {
+                    if (!item().unavailable) setHighlighted(item().key);
+                  }}
+                >
+                  <SelectionContent>
+                    <button
+                      type="button"
+                      class="otk-picker-option"
+                      disabled={!!item().unavailable}
+                      aria-description={item().unavailable}
+                      onFocus={() => setHighlighted(item().key)}
+                      onClick={() => pick(item().key)}
+                    >
+                      <span
+                        class="otk-picker-name"
+                        style={{ color: item().color }}
                       >
-                        <SelectionContent>
-                          <button
-                            type="button"
-                            class="otk-picker-option"
-                            disabled={!!item().unavailable}
-                            aria-description={item().unavailable}
-                            onFocus={() => setHighlighted(item().key)}
-                            onClick={() => pick(item().key)}
+                        <span
+                          class="otk-control-label"
+                          title={item().label}
+                        >
+                          {item().label}
+                        </span>
+                        <Show when={item().description}>
+                          <small
+                            class="otk-control-label"
+                            title={item().description}
                           >
-                            <span
-                              class="otk-picker-name"
-                              style={{ color: item().color }}
-                            >
-                              <span
-                                class="otk-control-label"
-                                title={item().label}
-                              >
-                                {item().label}
-                              </span>
-                              <Show when={item().description}>
-                                <small
-                                  class="otk-control-label"
-                                  title={item().description}
-                                >
-                                  {item().description}
-                                </small>
-                              </Show>
-                              <Show when={item().unavailable}>
-                                <small
-                                  class="otk-control-label"
-                                  title={item().unavailable}
-                                >
-                                  {item().unavailable}
-                                </small>
-                              </Show>
-                            </span>
-                            <Show when={item().tag}>
-                              <small class="otk-picker-tag">{item().tag}</small>
-                            </Show>
-                          </button>
-                          <Show when={item().action}>
-                            {(action) => (
-                              <button
-                                type="button"
-                                class="otk-picker-action otk-icon-button"
-                                disabled={!!item().unavailable}
-                                aria-label={action().label}
-                                title={action().label}
-                                onClick={() => action().run()}
-                                onFocus={() => setHighlighted(item().key)}
-                              >
-                                {action().content}
-                              </button>
-                            )}
-                          </Show>
-                        </SelectionContent>
-                      </div>
-                    )}
-                  </For>
-                </section>
-              )}
-            </For>
-          </div>
-          <Show when={!props.loading && !props.error && !rows().length}>
+                            {item().description}
+                          </small>
+                        </Show>
+                        <Show when={item().unavailable}>
+                          <small
+                            class="otk-control-label"
+                            title={item().unavailable}
+                          >
+                            {item().unavailable}
+                          </small>
+                        </Show>
+                      </span>
+                      <Show when={item().tag}>
+                        <small class="otk-picker-tag">{item().tag}</small>
+                      </Show>
+                    </button>
+                    <Show when={item().action}>
+                      {(action) => (
+                        <button
+                          type="button"
+                          class="otk-picker-action otk-icon-button"
+                          disabled={!!item().unavailable}
+                          aria-label={action().label}
+                          title={action().label}
+                          onClick={() => action().run()}
+                          onFocus={() => setHighlighted(item().key)}
+                        >
+                          {action().content}
+                        </button>
+                      )}
+                    </Show>
+                  </SelectionContent>
+                </div>
+              );
+            }}
+          />
+          <Show when={!props.loading && !props.error && !snapshot().items.size}>
             <p class="otk-picker-empty">
               {query() ? "No matches." : "No options available."}
             </p>

@@ -94,6 +94,8 @@ const frame = () =>
 
 /** Measured identity geometry, shared by lists, transcripts and part collections. */
 export default function VirtualList(props: {
+  id?: string;
+  listRole?: "list" | "listbox";
   keys: readonly string[];
   label: string;
   scope?: string;
@@ -755,10 +757,11 @@ export default function VirtualList(props: {
     >
       <div
         ref={container}
+        id={props.id}
         class={`otk-virtual-list ${
           borrowed ? "otk-virtual-borrowed" : scrollRegion()
         } ${props.class ?? ""}`}
-        role="list"
+        role={props.listRole ?? "list"}
         aria-label={props.label}
         data-acquired-count={props.keys.length}
         onFocusIn={(event) => acceptFocus(event.target)}
