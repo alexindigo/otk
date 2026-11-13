@@ -5,6 +5,7 @@ import type { SessionListInput, SessionMetadata } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { SessionFacts } from "./metadata.ts";
 import { sessionRecencySql } from "./recency.ts";
+import { recordedCheckout } from "./project-topology.ts";
 
 const required = {
   project: ["id", "worktree"],
@@ -86,6 +87,7 @@ export class V2NativeDb {
     return "s.id,s.parent_id,s.directory,s.project_id,s.time_created,s.time_updated," +
       sessionRecencySql(this.columns, this.messageClocks) +
       " AS activity_time," +
+      (this.columns.has("path") ? "s.path," : "NULL AS path,") +
       (this.columns.has("title") ? "s.title" : "NULL AS title") + "," +
       (this.columns.has("time_archived")
         ? "s.time_archived"
@@ -124,6 +126,15 @@ export class V2NativeDb {
       id: ids.encode(String(row.id)),
       directory: String(row.directory),
       projectID: String(row.project_id),
+      ...(recordedCheckout(String(row.directory), row.path as string | null) ===
+          undefined
+        ? {}
+        : {
+          checkoutRoot: recordedCheckout(
+            String(row.directory),
+            row.path as string | null,
+          ),
+        }),
       ...(row.parent_id == null
         ? {}
         : { parentID: ids.encode(String(row.parent_id)) }),
@@ -170,6 +181,7 @@ export class V2NativeDb {
         projectID: String(row.project_id),
         activity: Number(row.activity_time),
         location: { directory: String(row.directory) },
+        ...(typeof row.path === "string" ? { subpath: row.path } : {}),
         ...(row.title == null ? {} : { title: String(row.title) }),
         ...(row.parent_id == null ? {} : { parentID: String(row.parent_id) }),
         time: {
@@ -205,14 +217,21 @@ export class V2NativeDb {
     after: string,
     limit: number,
     directory?: string,
-  ): (ProjectSeed & { projectID?: string })[] {
+  ): (ProjectSeed & {
+    projectID?: string;
+    owners: { projectID: string; path: string | null }[];
+  })[] {
     this.observe?.("project-seeds");
     return this.db.prepare(
-      `SELECT directory,CASE WHEN COUNT(*)=1 THEN MIN(project_id) END AS project_id,SUM(count) AS count,MAX(latest) AS latest FROM (SELECT project_id,directory,COUNT(*) AS count,MAX(${
+      `SELECT directory,CASE WHEN COUNT(DISTINCT project_id)=1 THEN MIN(project_id) END AS project_id,json_group_array(json_object('projectID',project_id,'path',path)) AS owners,SUM(count) AS count,MAX(latest) AS latest FROM (SELECT project_id,directory,${
+        this.columns.has("path") ? "path" : "NULL AS path"
+      },COUNT(*) AS count,MAX(${
         sessionRecencySql(this.columns, this.messageClocks)
       }) AS latest FROM session_v2 s WHERE directory>? ${
         directory === undefined ? "" : "AND directory=?"
-      } GROUP BY project_id,directory) GROUP BY directory ORDER BY directory LIMIT ?`,
+      } GROUP BY project_id,directory${
+        this.columns.has("path") ? ",path" : ""
+      }) GROUP BY directory ORDER BY directory LIMIT ?`,
     )
       .all(
         ...(directory === undefined
@@ -223,6 +242,7 @@ export class V2NativeDb {
           ? {}
           : { projectID: String(row.project_id) }),
         directory: String(row.directory),
+        owners: JSON.parse(String(row.owners)),
         hasSessions: true,
         sessionCount: Number(row.count),
         lastActivity: Number(row.latest),

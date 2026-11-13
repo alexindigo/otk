@@ -1,5 +1,21 @@
 # OTK application core
 
+## Durable project identity
+
+`InboxFeature` composes one `ProjectIdentity`, backed by the independently
+migrated `Checkouts` store in `otk.db`. Adapters supply native identity and
+inventory facts; ProjectSummaries consumes the owner's checkout projection.
+Native source/repository identity owns membership, while canonical paths remain
+mutable locators. Recorded checkout roots and learned history survive pruning,
+native restarts and canonical relocation. `present | removed | unknown` is an
+independent availability fact, never an automatic inactivity policy.
+
+Summary `memberships` retain exact scopes and every native owner on shared
+paths. Clients consume these exact mappings and never perform prefix inference.
+Insufficient root evidence remains unresolved instead of merging a removed
+nested checkout into the canonical root. Grouped scalar reads remain bounded;
+identity does not require a session catalog or transcript scan.
+
 ## Evidence-based session supervision
 
 `InboxFeature` composes one `SessionSupervision` beside the index. Adapters

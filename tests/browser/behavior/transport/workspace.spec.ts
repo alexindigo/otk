@@ -14,11 +14,17 @@ const markdown = [
 isolatedTest("transport.workspace-projects", {
   tag: ["@transport", "@isolated", "@sessions"],
 }, async ({ isolatedState: state, page }, info) => {
-  // V2 exposes the canonical repo context above this fixture's scoped leaf.
-  const projects = info.project.name === "oc-2.2.6" ? 3 : 2;
-  const root = await state.native<{ id: string }>("/session", "POST", {
-    title: "Root session",
-  });
+  // These uncommitted fixture directories have no native repository identity.
+  // The global native bucket must not invent a third canonical-repository row.
+  const projects = 2;
+  const root = await state.native<{ id: string; projectID: string }>(
+    "/session",
+    "POST",
+    {
+      title: "Root session",
+    },
+  );
+  if (info.project.name === "oc-2.2.6") expect(root.projectID).toBe("global");
   const child = await state.native<{ id: string }>("/session", "POST", {
     title: "Child session",
     parentID: root.id,
@@ -35,6 +41,7 @@ isolatedTest("transport.workspace-projects", {
   );
   await openSession(state, page, root.id);
   await expect(page.locator("[data-project]")).toHaveCount(projects);
+  await expect(page.locator("[data-project-parent]")).toHaveCount(0);
   await expect(page.locator("[data-session]")).toHaveCount(2);
   expect(
     await page.locator(`[data-session="${child.id}"]`).evaluate((element) =>

@@ -15,6 +15,7 @@ import {
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import type {
+  Checkouts,
   Finishes,
   Projects,
   ProjectTemplates,
@@ -25,6 +26,7 @@ import type {
 import type { IndexStore } from "../index/store.ts";
 import { ProjectSummaries } from "../index/project-summaries.ts";
 import { SessionSupervision } from "../index/supervision.ts";
+import { ProjectIdentity } from "../index/project-identity.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -57,6 +59,7 @@ export interface InboxStores {
   seen: Seen;
   finishes: Finishes;
   templates: ProjectTemplates;
+  checkouts?: Checkouts;
 }
 interface InboxMaps {
   supervision: Map<string, Supervision>;
@@ -332,6 +335,7 @@ export class InboxFeature implements FrameSource {
         this.#schedule();
       },
       this.supervision,
+      new ProjectIdentity(stores.checkouts),
     );
     for (const project of this.#projects.values()) {
       this.summaries.ensure(project.directory);

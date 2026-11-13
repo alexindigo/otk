@@ -49,13 +49,29 @@ export interface HarnessSink {
 }
 export interface ProjectSeed {
   directory: string;
-  /** Omission retains known facts; null explicitly retires the relationship. */
+  /** Native facts for the core identity owner; one per distinct native owner. */
+  identities?: readonly ProjectIdentityFact[];
+  /** Compatibility for injected harnesses; removal never erases learned ownership. */
   topology?: import("@otk/protocol").ProjectTopology | null;
   /** Omitted when native population authority is unavailable. */
   hasSessions?: boolean;
   sessionCount: number | null;
   lastActivity: number | null;
   authority: "current" | "stale" | "unknown";
+}
+export interface ProjectIdentityFact {
+  /** Persistent native source identity, independent of current connection. */
+  source: string;
+  repoID: string;
+  canonicalRoot?: string;
+  /** Null means unrecorded; an empty native subpath instead proves an exact root. */
+  recordedRoot?: string | null;
+  historicalRoots?: readonly string[];
+  /** Undefined is a failed/unsupported read, never an authoritative empty set. */
+  inventory?: readonly {
+    directory: string;
+    kind: "checkout" | "worktree" | "unknown";
+  }[];
 }
 export interface SessionIdentity {
   id: string;

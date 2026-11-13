@@ -3,6 +3,7 @@ import type { ContentSession, SessionMetadata } from "@otk/protocol";
 import type { OpenCodeClient } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { sessionRecency } from "./recency.ts";
+import { recordedCheckout } from "./project-topology.ts";
 export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
@@ -18,6 +19,7 @@ export type SessionFacts = Pick<
   | "time"
   | "outcome"
   | "activity"
+  | "subpath"
 >;
 export function millis(value: unknown): number {
   return typeof value === "number"
@@ -47,6 +49,9 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     id: mapped.id,
     directory: mapped.directory,
     projectID: mapped.projectID,
+    ...(recordedCheckout(mapped.directory, raw.subpath) === undefined
+      ? {}
+      : { checkoutRoot: recordedCheckout(mapped.directory, raw.subpath) }),
     title: mapped.title,
     parentID: mapped.parentID,
     archived: mapped.archived,

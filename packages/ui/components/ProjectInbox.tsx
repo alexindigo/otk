@@ -172,6 +172,7 @@ export default function ProjectInbox(props: {
         data-summary-authority={project().summary?.authority}
         data-project-parent={project().topology?.parentDirectory}
         data-project-repo={project().topology?.repoID}
+        data-project-availability={project().availability}
       >
         <SelectionContent class="otk-project-content">
           <button
@@ -179,7 +180,9 @@ export default function ProjectInbox(props: {
             class="otk-project-open"
             aria-label={`Open project ${name()}${
               project().parentLabel ? ` in ${project().parentLabel}` : ""
-            }${duplicate() ? ` on ${project().label}` : ""}`}
+            }${duplicate() ? ` on ${project().label}` : ""}${
+              project().availability === "removed" ? " (removed)" : ""
+            }`}
             title={`${project().directory} · ${project().label}${
               projectGroup(project()) === "discovered"
                 ? ""
@@ -188,7 +191,7 @@ export default function ProjectInbox(props: {
                     ? "No known activity"
                     : project().status
                 }`
-            }`}
+            }${project().availability === "removed" ? " (removed)" : ""}`}
             onClick={() => void open(project())}
           >
             <Show when={project().depth && !collapsed()}>
@@ -205,6 +208,9 @@ export default function ProjectInbox(props: {
                 >
                   {name()}
                 </span>
+                <Show when={project().availability === "removed"}>
+                  <span class="otk-project-availability">removed</span>
+                </Show>
                 <Show when={project().inactive && project().parentLabel}>
                   <span
                     class="otk-project-parent otk-control-label"
