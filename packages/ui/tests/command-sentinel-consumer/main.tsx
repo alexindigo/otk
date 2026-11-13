@@ -3,6 +3,7 @@ import { render } from "@solidjs/web";
 import { CommandHub } from "@otk/client";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import Palette from "../../components/Palette.tsx";
+import CommandMenu from "../../components/CommandMenu.tsx";
 import { registerSlashPrompt } from "../../features/prompt/slash.ts";
 import { type PromptContext, PromptRegistry } from "../../registries/prompt.ts";
 
@@ -24,15 +25,22 @@ const slash = prompt.create(ctx)[0].source!;
 render(() => (
   <CommandProvider commands={commands}>
     <Palette onClose={() => {}} />
+    <CommandMenu
+      label="Sentinel menu"
+      trigger="Context"
+      targets={() => [{ kind: "sentinel", data: undefined }]}
+    />
   </CommandProvider>
 ), document.getElementById("app")!);
 const name = crypto.randomUUID();
-// Register AFTER both consumers exist, with no surface-specific metadata.
+// Register after consumers exist, with no slash/palette opt-in metadata.
 commands.register({
-  id: name,
+  id: crypto.randomUUID(),
+  name,
   title: name,
   category: "Sentinel",
-  run: () => {},
+  context: { kind: "sentinel" },
+  run: () => document.body.dataset.executed = name,
 });
 const options = await slash.options({ start: 0, end: 1, query: name });
 const result = document.createElement("output");

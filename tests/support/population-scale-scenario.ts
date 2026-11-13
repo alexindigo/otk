@@ -12,7 +12,8 @@ import { createScale, scaleDiscovery } from "./scale-native.ts";
 import { remainingFiles } from "./remaining-measurements.ts";
 import { observeCatalogWatches } from "./remaining-generations.ts";
 import { servingProbe } from "./serving-probe.ts";
-import { nativeBinary, nativeVersion } from "./native.ts";
+import { nativeBinary, nativeKind, nativeVersion } from "./native.ts";
+import { seedScaleSeen } from "./scale-seen.ts";
 import { WsClient } from "./ws-client.ts";
 import { scaleReadiness } from "./scale-readiness.ts";
 import { scaleNativeEvidence } from "./scale-evidence.ts";
@@ -91,6 +92,17 @@ export async function populationScaleScenario(profile: Profile) {
       }
     });
     db.close();
+  }
+  if (profile === "contract-scale-sessions") {
+    // This case qualifies new interactive work over viewed history. First-run
+    // unseen history has its own supervision contract and would correctly take
+    // priority over the working project lamp this case needs to exercise.
+    const db = new OtkDb(config.state.path, beta2Migrations, config.storage);
+    try {
+      seedScaleSeen(db, native.db, nativeKind, native.manifest.sessions);
+    } finally {
+      db.close();
+    }
   }
   const serving = servingProbe(false),
     pressure: unknown[] = [],

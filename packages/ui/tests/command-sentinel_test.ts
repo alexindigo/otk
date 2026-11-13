@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 
-Deno.test("one randomly named registration reaches the real Palette and slash completion source", async () => {
+Deno.test("one randomly named registration reaches Palette, slash and context menu by public name", async () => {
   // Native bundler plugins belong to this child, not the ordinary unit runner.
   const result = await new Deno.Command(Deno.execPath(), {
     args: [
