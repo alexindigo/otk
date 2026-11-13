@@ -229,7 +229,9 @@ export class Connections {
         !Number.isSafeInteger(raw.epoch) || Number(raw.epoch) < 0 ||
         raw.directory !== undefined && typeof raw.directory !== "string" ||
         raw.selected !== undefined && !isSessionID(raw.selected) ||
-        raw.query !== undefined && typeof raw.query !== "string"
+        raw.query !== undefined && typeof raw.query !== "string" ||
+        raw.tasksFollowParent !== undefined &&
+          typeof raw.tasksFollowParent !== "boolean"
       ) {
         throw new HarnessError("params", "Invalid view lease");
       }
@@ -240,6 +242,7 @@ export class Connections {
         crumbs: list(raw.crumbs),
         rows: list(raw.rows),
         query: raw.query as string | undefined,
+        tasksFollowParent: raw.tasksFollowParent as boolean | undefined,
       };
     };
     const snapshots = async () => {

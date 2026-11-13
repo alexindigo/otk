@@ -254,8 +254,11 @@ export class V2NativeDb {
     before: { updated: number; id: string } | undefined,
     limit: number,
   ): SessionMetadata[] {
-    const filters = ["s.directory=?"],
-      values: (string | number | null)[] = [input.directory];
+    // A parent identity is global, even when a child moved to another checkout.
+    const filters = typeof input.parentID === "string" ? [] : ["s.directory=?"],
+      values: (string | number | null)[] = typeof input.parentID === "string"
+        ? []
+        : [input.directory];
     if (input.parentID !== undefined) {
       filters.push("s.parent_id IS ?");
       values.push(input.parentID === null ? null : ids.decode(input.parentID));

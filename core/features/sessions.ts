@@ -23,12 +23,14 @@ import { createdReceipt } from "./session-receipts.ts";
 import type { ContentSession } from "@otk/protocol";
 import type { StoreWrite } from "@otk/store";
 import type { RpcContext } from "../ws/registry.ts";
+import type { SessionHierarchy } from "../index/session-hierarchy.ts";
 
 export function register(
   rpc: RpcRegistry,
   _harness: Harness,
   created?: (directory: string, tx?: StoreWrite) => void,
   publishrows = SESSION_LIST_SIZE,
+  hierarchy?: SessionHierarchy,
 ): void {
   const generation = crypto.randomUUID();
   const begin = (
@@ -102,8 +104,25 @@ export function register(
       }
       return [...new Set(p.ids)] as string[];
     },
-    handler: (ctx, ids) =>
-      ctx.harness.core.identities(ids, ctx.execution?.signal),
+    handler: async (ctx, ids) => {
+      const rows = await ctx.harness.core.identities(
+        ids,
+        ctx.execution?.signal,
+      );
+      if (!hierarchy) return rows;
+      await hierarchy.prepare(
+        rows,
+        (keys, signal) => ctx.harness.core.identities(keys, signal),
+        ctx.execution?.signal,
+      );
+      return rows.map((row) => ({
+        ...row,
+        hierarchy: hierarchy.node(
+          row.id,
+          ctx.request?.view?.().tasksFollowParent,
+        ),
+      }));
+    },
   });
   const serveList = async (
     ctx: RpcContext,
@@ -135,7 +154,17 @@ export function register(
     };
     signal.throwIfAborted();
     let revision = 0;
-    const items = cached?.items ?? [];
+    const items = cached?.items.map((item) =>
+      hierarchy
+        ? {
+          ...item,
+          hierarchy: hierarchy.node(
+            item.id,
+            ctx.request?.view?.().tasksFollowParent,
+          ),
+        }
+        : item
+    ) ?? [];
     if (identity) {
       for (
         let offset = 0;
@@ -158,6 +187,11 @@ export function register(
       }
     }
     const value = await ctx.harness.core.listSessions(input, signal);
+    await hierarchy?.prepare(
+      value.items,
+      (ids, signal) => ctx.harness.core.identities(ids, signal),
+      signal,
+    );
     signal.throwIfAborted();
     const result: SessionListPage = {
       items: value.items.map(({ id, directory, parentID, title }) => ({
@@ -165,6 +199,14 @@ export function register(
         directory,
         parentID,
         title,
+        ...(hierarchy
+          ? {
+            hierarchy: hierarchy.node(
+              id,
+              ctx.request?.view?.().tasksFollowParent,
+            ),
+          }
+          : {}),
       })),
       older: value.older,
       load: {
@@ -202,9 +244,22 @@ export function register(
         id,
         ctx.execution?.signal,
       );
+      await hierarchy?.prepare(
+        [session],
+        (ids, signal) => ctx.harness.core.identities(ids, signal),
+        ctx.execution?.signal,
+      );
       ctx.execution?.signal.throwIfAborted();
       return {
         ...session,
+        ...(hierarchy
+          ? {
+            hierarchy: hierarchy.node(
+              id,
+              ctx.request?.view?.().tasksFollowParent,
+            ),
+          }
+          : {}),
         load: { ...load, revision: 1, state: "complete" as const },
       };
     },

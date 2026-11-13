@@ -67,4 +67,15 @@ export const taskBreadcrumbs: typeof crumbs = (
   tasks,
   indexed,
   value = { seen: {}, finishes: {} },
-) => crumbs(task, entries, tasks, indexed, projected(entries, value));
+  followParent,
+  projection,
+) =>
+  crumbs(
+    task,
+    entries,
+    tasks,
+    indexed,
+    projected(entries, value),
+    followParent,
+    projection,
+  );

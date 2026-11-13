@@ -86,6 +86,7 @@ export class RequestAttention implements FrameSource {
       title: entry.title,
       directory: entry.directory,
       projectID: entry.projectID,
+      hierarchy: entry.hierarchy,
       status: "idle",
       archived: false,
       timeCreated: 0,

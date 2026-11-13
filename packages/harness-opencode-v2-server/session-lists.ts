@@ -105,7 +105,9 @@ export class V2SessionLists {
           (api) =>
             api.session.list(
               native ? { cursor: native, limit: MAX_SESSION_LIST_SIZE } : {
-                directory: input.directory,
+                directory: typeof input.parentID === "string"
+                  ? undefined
+                  : input.directory,
                 search: input.query,
                 parentID: input.parentID === null
                   ? "null"

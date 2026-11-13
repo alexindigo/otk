@@ -53,27 +53,10 @@ export function createAttentionProjection(o: {
     initialized = false,
     stopped = false;
   let generation = crypto.randomUUID(), revision = 0;
-  let waitingCache = new Map<string, boolean>();
+  let waitingCache = new Map<string, string | undefined>();
   const waiting = (id: string) => {
     if (!linked) return true;
-    const seen = new Set<string>();
-    let result = true;
-    while (!seen.has(id)) {
-      if (waitingCache.has(id)) {
-        result = waitingCache.get(id)!;
-        break;
-      }
-      if (enabled.has(id)) {
-        result = false;
-        break;
-      }
-      seen.add(id);
-      const parent = o.entry(id)?.parentID;
-      if (!parent) break;
-      id = parent;
-    }
-    for (const current of seen) waitingCache.set(current, result);
-    return result;
+    return !autoApproveOwner(id, [...enabled], o.entry, waitingCache);
   };
   const subtree = (id: string, ids: Set<string>) => {
     const pending = new Set([id]);

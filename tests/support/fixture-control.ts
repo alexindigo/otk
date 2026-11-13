@@ -52,6 +52,7 @@ export const profiles = {
   "contract-sessions-memory": "neutral",
   "contract-sessions-membership": "neutral",
   "contract-sessions-hierarchy": "neutral",
+  "contract-sessions-family": "neutral",
   "contract-sessions-axiom": "neutral",
   "contract-sessions-phantom": "neutral",
   "contract-sessions-close": "neutral",

@@ -414,6 +414,7 @@ export function compareMessages(a: Message, b: Message): number {
     : a.time.created - b.time.created || a.id.localeCompare(b.id);
 }
 export interface ContentSession {
+  hierarchy?: import("./session-hierarchy.ts").SessionHierarchyNode;
   id: string;
   directory: string;
   title: string;

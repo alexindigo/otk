@@ -3,6 +3,7 @@ import { HarnessError } from "@otk/harness";
 import { ACTIVITY_PAGE_SIZE, OperationFailure } from "@otk/protocol";
 import {
   type ApprovalSnapshot,
+  autoApproveOwner,
   canAutoApprove,
   isSessionID,
   type OperationContext,
@@ -198,20 +199,13 @@ export class PermissionFeature implements FrameSource {
   }
   owner(id: string): string | undefined {
     if (this.index.getMetadata(id)?.deleted) return;
-    return this.#owner(id, (id) => this.index.getMetadata(id));
+    return this.index.hierarchy.owner(id, this.#enabled);
   }
   #owner(
     id: string,
     lookup: (id: string) => { parentID?: string } | undefined,
   ): string | undefined {
-    const seen = new Set<string>();
-    while (!seen.has(id)) {
-      seen.add(id);
-      if (this.#enabled.has(id)) return id;
-      const parent = lookup(id)?.parentID;
-      if (!parent) return;
-      id = parent;
-    }
+    return autoApproveOwner(id, [...this.#enabled], lookup);
   }
   #enqueue(owner?: string): void {
     if (!owner || !this.#enabled.has(owner)) return;
@@ -385,7 +379,7 @@ export class PermissionFeature implements FrameSource {
         source: owner ? "auto" : "manual",
         owner,
         message: input.message,
-      }, this.index.ancestors(request.sessionID));
+      }, this.index.hierarchy.ancestors(request.sessionID));
       await context?.beforeEffect();
       await this.capability.replyPermission(input, context);
       if (!this.#closed) this.store.finish(journal, { outcome: "confirmed" });

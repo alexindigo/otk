@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { sessionSummary } from "@otk/client";
+import { hashFor, sessionSummary } from "@otk/client";
 import { exactCount, failureText, overflowPreference } from "@otk/client";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
@@ -251,6 +251,20 @@ export default function ProjectTabs(props: {
     () => props.onCreateSession(active()),
   );
   const tabs = createMemo(() => props.model.tabs());
+  const openTitle = () => {
+    const id = props.model.state.sessionID;
+    return id
+      ? (props.session?.id === id ? props.session.title : entry(id)?.title)
+      : undefined;
+  };
+  const separateTitle = () => {
+    const current = openTitle();
+    return current &&
+        tabs().find((tab) => tab.id === props.model.state.selected?.id)
+            ?.title !== current
+      ? current
+      : undefined;
+  };
   const crumbs = createMemo(() => {
     tabs();
     return props.model.crumbs();
@@ -326,6 +340,10 @@ export default function ProjectTabs(props: {
       ? props.session.title
       : entry(id)?.title ?? "Session unavailable";
   const openCrumb = ownedAction("task.session.open", (id: string) => {
+    if (crumbs().some((crumb) => crumb.id === id && crumb.external)) {
+      props.onOpen(id);
+      return;
+    }
     const task = active();
     if (props.onOpen(id)) {
       if (task) props.model.select({ kind: "task", id: task.id }, id);
@@ -440,6 +458,10 @@ export default function ProjectTabs(props: {
                     title={tab().title}
                     aria-label={tab().title || "Session"}
                     data-tab={tab().id}
+                    data-open-session={!separateTitle() &&
+                        props.model.state.selected?.id === tab().id
+                      ? props.model.state.sessionID
+                      : undefined}
                     data-status={entry(props.model.state.sessionID ?? "")
                       ?.status}
                     {...native.attributes}
@@ -472,6 +494,17 @@ export default function ProjectTabs(props: {
           onClick={() => pageTabs("next")}
         />
         <Show when={props.ready}>
+          <Show when={separateTitle()}>
+            {(title) => (
+              <span
+                class="otk-open-session-title"
+                aria-label="Open session"
+                data-open-session={props.model.state.sessionID}
+              >
+                <span class="otk-control-label">{title()}</span>
+              </span>
+            )}
+          </Show>
           <button
             type="button"
             class="otk-icon-button otk-task-new"
@@ -542,12 +575,21 @@ export default function ProjectTabs(props: {
                   sidecarId: props.project.sidecarId,
                   sessionID: crumb().id,
                 }, "chip");
-              const Control = dynamic(() => editing() ? "div" : "button");
+              const Control = dynamic(() =>
+                editing() ? "div" : crumb().external ? "a" : "button"
+              );
               return (
                 <>
                   {(() => {
                     const native = nativeAttributes(() => ({
-                      onClick: () => {
+                      onClick: (event: MouseEvent) => {
+                        if (crumb().external) {
+                          if (
+                            event.button !== 0 || event.ctrlKey ||
+                            event.metaKey || event.shiftKey || event.altKey
+                          ) return;
+                          event.preventDefault();
+                        }
                         if (!editing()) run(openCrumb(crumb().id));
                       },
                     }));
@@ -559,7 +601,13 @@ export default function ProjectTabs(props: {
                           </span>
                         </Show>
                         <Control
-                          type="button"
+                          type={crumb().external ? undefined : "button"}
+                          href={crumb().external
+                            ? hashFor({
+                              sidecarId: props.project.sidecarId,
+                              sessionID: crumb().id,
+                            })
+                            : undefined}
                           ref={[
                             contextTarget(() => sessionTarget(crumb().id)),
                             native.ref,
