@@ -16,10 +16,20 @@ export function seedScaleSeen(
   try {
     const rows = native.prepare(
       kind === "opencode-v1"
-        ? `SELECT session_id AS id,
-            MAX(json_extract(data, '$.time.completed')) AS terminal
-          FROM message WHERE json_extract(data, '$.role') = 'assistant'
-          GROUP BY session_id`
+        ? `WITH latest AS (
+            SELECT session_id AS id, data, time_created,
+              row_number() OVER (
+                PARTITION BY session_id ORDER BY time_created DESC, id DESC
+              ) AS rank
+            FROM message
+            WHERE json_valid(data) AND json_extract(data, '$.role') = 'assistant'
+          ) SELECT id, CASE
+            WHEN json_extract(data, '$.error') IS NOT NULL THEN
+              coalesce(json_extract(data, '$.time.completed'), time_created)
+            WHEN json_extract(data, '$.finish') IS NOT NULL
+              AND json_extract(data, '$.finish') NOT IN ('tool-calls', 'unknown')
+              THEN json_extract(data, '$.time.completed')
+          END AS terminal FROM latest WHERE rank = 1`
         : `SELECT id, time_idle AS terminal FROM session_v2
           WHERE idle_outcome IN ('succeeded', 'failed', 'interrupted')`,
     ).all();
