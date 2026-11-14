@@ -28,6 +28,7 @@ export function registerToolPart(parts: PartRegistry): void {
       );
     },
     (part, prefs) => ({
+      timing: part.call.time,
       required: !!toolFailure(part.call),
       work: prefs.toolDetails || part.call.status !== "completed" ||
           !!toolFailure(part.call)

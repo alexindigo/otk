@@ -6,6 +6,8 @@ export interface WorkTime {
 }
 export interface PartPresentation {
   work?: WorkTime;
+  /** Recorded busy/wait evidence, separate from work-log membership. */
+  timing?: import("@otk/protocol").SegmentTimingEvidence;
   text?: string;
   /** Cheap availability; text may be a lazy getter evaluated only for copy/preview. */
   copyable?: boolean;

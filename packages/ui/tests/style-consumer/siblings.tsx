@@ -9,7 +9,7 @@ export default function Scene() {
       <section class="style-panel" id="work">
         <h2>Independent work log</h2>
         <WorkLog
-          time={{ state: "known", start: 0, end: 4200, workingMs: 4200 }}
+          workingMs={4200}
           body={() => <p>Owned work content</p>}
         />
         <RolledBackStrip

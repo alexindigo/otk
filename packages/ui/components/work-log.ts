@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, Part, TurnTiming } from "@otk/protocol";
+import { TurnTimingAccumulator } from "@otk/protocol";
 import { duration } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
@@ -10,6 +11,7 @@ export interface PartGroup {
   parts: Part[];
   work: boolean;
   required?: boolean;
+  workingMs?: number;
 }
 export interface PartFrame {
   id: string;
@@ -99,11 +101,27 @@ export function partGroups(
         ...(value.required ? { required: true } : {}),
       });}
   }
+  for (const group of groups) {
+    if (group.work) {
+      const workingMs = segmentWorkingTime(group.parts, presentation);
+      if (workingMs !== undefined) group.workingMs = workingMs;
+    }
+  }
   return groups;
 }
 export const elapsed = (start: number, end: number) => duration(end - start);
-export const workingTime = (timing: TurnTiming | undefined) =>
-  timing?.state === "known" || timing?.state === "active"
+export const segmentWorkingTime = (
+  parts: Part[],
+  presentation: (part: Part) => PartPresentation,
+) =>
+  TurnTimingAccumulator.segment(parts.flatMap((part) => {
+    const timing = presentation(part).timing;
+    return timing ? [timing] : [];
+  }));
+export const workingTime = (timing: TurnTiming | number | undefined) =>
+  typeof timing === "number"
+    ? `Worked for ${duration(timing)}`
+    : timing?.state === "known" || timing?.state === "active"
     ? `Worked for ${duration(timing.workingMs)}`
     : timing?.state === "unknown"
     ? "Time unknown"

@@ -396,9 +396,11 @@ lane. User messages are right-aligned bubbles without role labels. Expandable
 work-log folds hold compact tool rows and thinking lines; file targets are
 project-relative and a single edit's diff sits directly below its row. One
 metadata line per reply shows reported agent/model/timing and charged turn
-model-call count, tokens and cost. Work-log headers and reply footers share the
-complete turn's first-call start to last-call end. Hover or focus usage for an
-ordered model-call table with tool labels, full prompt Context, New input,
+model-call count, tokens and cost. One timing owner computes recorded busy time
+minus waits. Work-log headers show their own segment's working time, or plain
+Work log when its clocks are unproven; reply footers retain the turn total, or
+Time unknown with its recorded explanation. Hover or focus usage for an ordered
+model-call table with tool labels, full prompt Context, New input,
 output/reasoning/cache tokens, reported cost and call time. Context is New input
 plus Cache read and Cache write; its Total sums every call's prompt. The Total
 row retains model-priced category costs without counting Context twice in
