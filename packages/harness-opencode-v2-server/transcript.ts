@@ -9,7 +9,9 @@ import {
   knownDerived,
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
+  OperationFailure,
   sessionErrorMessage,
+  sourceAt,
 } from "@otk/protocol";
 import type {
   ContentOp,
@@ -19,7 +21,7 @@ import type {
   MessagePolicy,
   TranscriptInvalidation,
 } from "@otk/protocol";
-import type { V2Client } from "./client.ts";
+import { errorTag, type V2Client, V2MissingSession } from "./client.ts";
 import {
   eventMessage,
   Messages,
@@ -32,6 +34,7 @@ import {
 import {
   assistantSettled,
   completeTokens,
+  deriveInboxMessage,
   inboxMessage,
   mapMessage,
   type MessageContext,
@@ -42,7 +45,12 @@ import {
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
-import { nativeSource } from "./native-source.ts";
+import {
+  nativeSource,
+  parseSourceRef,
+  referenced,
+  sourceFailure,
+} from "./native-source.ts";
 import {
   positionOrder,
   type RequestPosition,
@@ -340,10 +348,76 @@ export class Transcript {
       failed: options.diagnostic,
     });
   }
+  /** Derives one referenced source again from the owner that minted it. */
+  async source(
+    id: string,
+    ref: string,
+    signal: AbortSignal,
+  ): Promise<import("@otk/protocol").NativeSourceView> {
+    let value: ReturnType<typeof parseSourceRef>;
+    try {
+      value = parseSourceRef(ref);
+    } catch {
+      throw sourceFailure("reference");
+    }
+    let derived: Message | undefined;
+    if (value.origin === "request") {
+      derived = (await this.requests.get(id, value.id))?.outcome;
+      if (!derived) throw sourceFailure("request");
+    } else {
+      try {
+        if (value.origin === "inbox") {
+          const row = (await this.reader.inbox(id, signal)).find((row) =>
+            row.id === value.id
+          );
+          if (!row) throw sourceFailure("inbox");
+          derived = deriveInboxMessage(
+            row.id,
+            row as unknown as Record<string, unknown>,
+            millis(row.time.created),
+            id,
+            { order: 0 },
+          );
+        } else {
+          derived = mapMessage(
+            await this.reader.get(id, value.id, signal),
+            id,
+            { order: 0 },
+          );
+        }
+      } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof HarnessError && error.code.startsWith("source.")) {
+          throw error;
+        }
+        throw sourceFailure(
+          error instanceof V2MissingSession ||
+            /NotFound/.test(errorTag(error) ?? "")
+            ? "message"
+            : error instanceof OperationFailure &&
+                error.outcome === "unavailable"
+            ? "unreachable"
+            : "read",
+        );
+      }
+    }
+    signal.throwIfAborted();
+    const view = sourceAt(derived, value.path);
+    if (!view) throw sourceFailure("item");
+    return view;
+  }
   #publish(id: string, event: ContentOp): void {
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
       if (event.op === "message.upsert") {
-        event = { ...event, message: this.#decorateAgent(event.message, id) };
+        event = {
+          ...event,
+          message: referenced(
+            this.#decorateAgent(event.message, id),
+            event.message.id,
+          ),
+        };
+      } else if (event.op === "part.upsert") {
+        event = { ...event, part: referenced(event.part, event.messageID) };
       }
       this.replay.publish(id, event);
     }
@@ -1055,7 +1129,9 @@ export class Transcript {
           };
         }
       }
-      items = items.filter((m) => covered.has(m.id));
+      items = items.filter((m) => covered.has(m.id)).map((m) =>
+        referenced(m, m.id)
+      );
       const turnIDs = [
         ...new Set(
           items.flatMap((m) =>

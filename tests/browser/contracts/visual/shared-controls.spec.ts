@@ -115,7 +115,7 @@ test(
     const calls = await page.locator("[data-calls]").textContent();
     await field.click();
     await expect(page.locator(".otk-visual-settings [role=alert]")).toHaveText(
-      /No publishable failure reason is available/,
+      /OTK has no further details/,
     );
     await expect(field).toBeChecked();
     await expect(page.locator("[data-calls]")).toHaveText(calls!);

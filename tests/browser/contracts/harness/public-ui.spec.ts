@@ -48,7 +48,7 @@ for (const draft of [false, true]) {
       }
       await page.locator(".otk-copy-message").click();
       await expect(page.locator(".otk-message [role=alert]")).toHaveText(
-        /No publishable failure reason is available/,
+        /OTK has no further details/,
       );
       await expect(page.locator("body")).toContainText(
         "Keep this reply available",
@@ -80,7 +80,7 @@ test("harness.public-ui-unknown-failure-owned-feedback", {
     ) {
       await page.locator(control).click();
       await expect(page.locator(`[${region}] [role=alert]`)).toHaveText(
-        /No publishable failure reason is available/,
+        /OTK has no further details/,
       );
     }
     await expect(page.locator("[data-login] input[name=username]")).toHaveValue(

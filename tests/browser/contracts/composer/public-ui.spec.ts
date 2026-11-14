@@ -45,7 +45,7 @@ test("composer.public-ui-sync-async-paste-drop-refusals-retain-input", {
       await expect(
         page.locator(".otk-prompt [role=alert] .otk-failure-content"),
       )
-        .toHaveText(/No publishable failure reason is available/);
+        .toHaveText(/OTK has no further details/);
       await expect(page.locator(".otk-prompt textarea")).toHaveValue(
         "Retain this unsent input",
       );

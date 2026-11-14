@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContextMessage, ExternalPart, NativeSource } from "@otk/protocol";
+import {
+  type ContextMessage,
+  type ExternalPart,
+  type NativeSource,
+  referenceSources,
+} from "@otk/protocol";
 import { markdown } from "@otk/content";
+import { HarnessError } from "@otk/harness";
 import type { Info, RawPart } from "./types.ts";
 import { preview } from "./previews.ts";
 import type { NativeMessage } from "./messages.ts";
@@ -24,6 +30,63 @@ export function isPrompt(info: Info, parts: readonly RawPart[]): boolean {
 export function promptEvidenceSQL(message = "m"): string {
   const types = promptTypes.map((type) => `'${type}'`).join(",");
   return `EXISTS (SELECT 1 FROM part prompt_part WHERE prompt_part.message_id=${message}.id AND +prompt_part.session_id=${message}.session_id AND json_valid(prompt_part.data) AND json_extract(prompt_part.data,'$.type') IN (${types}) AND (json_extract(prompt_part.data,'$.type')!='text' OR coalesce(json_extract(prompt_part.data,'$.synthetic'),0)!=1))`;
+}
+/** V1 owns its source reference format: the derivation origin and location. */
+export interface V1SourceRef {
+  origin: "message" | "record";
+  id: string;
+  path: string;
+}
+export function sourceRef(value: V1SourceRef): string {
+  return "v1:" + btoa(JSON.stringify([value.origin, value.id, value.path]))
+    .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+export function parseSourceRef(ref: string): V1SourceRef {
+  try {
+    if (!ref.startsWith("v1:")) throw new Error();
+    const [origin, id, path] = JSON.parse(
+      atob(ref.slice(3).replaceAll("-", "+").replaceAll("_", "/")),
+    );
+    if (
+      !["message", "record"].includes(origin) || typeof id !== "string" ||
+      !id || typeof path !== "string"
+    ) throw new Error();
+    return { origin, id, path };
+  } catch {
+    throw new TypeError("Invalid V1 source reference");
+  }
+}
+const sourceFailures = {
+  reference: [
+    "This source reference is no longer valid",
+    "Reload the conversation, then open Source again",
+  ],
+  record: [
+    "The retained record no longer exists",
+    "This record's source is no longer available",
+  ],
+  message: [
+    "The native message for this record no longer exists",
+    "This record's source is no longer available",
+  ],
+  item: [
+    "The native message no longer contains this record",
+    "This record's source is no longer available",
+  ],
+  unreachable: ["opencode is not reachable", "Retry"],
+  read: ["opencode could not return the native message", "Retry"],
+} as const;
+/** V1 says why a Source read failed, in words a person can act on. */
+export function sourceFailure(kind: keyof typeof sourceFailures): HarnessError {
+  const [reason, recovery] = sourceFailures[kind];
+  return new HarnessError(`source.${kind}`, reason, { reason, recovery });
+}
+/** A loaded copy of a retained record; the retained value keeps its source. */
+export function recordReference<T extends ContextMessage>(message: T): T {
+  return referenceSources(
+    structuredClone(message),
+    (path) => sourceRef({ origin: "record", id: message.id, path }),
+  );
 }
 export function nativeSource(
   kind: string,

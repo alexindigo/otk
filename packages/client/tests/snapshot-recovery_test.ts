@@ -309,7 +309,7 @@ Deno.test("essential transcript publishes independently of failed or held attent
     await f.until(() =>
       !!f.owner.state.error &&
       f.owner.state.error.failure?.reason ===
-        "No publishable failure reason is available"
+        "OTK has no further details"
     );
     assertEquals(
       f.owner.state.content.questions.map((question) => question.id),

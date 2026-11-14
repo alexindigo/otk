@@ -12,6 +12,7 @@ import type { InboxRpcMethods } from "./inbox.ts";
 import type { LayoutRpcMethods } from "./preferences/layout.ts";
 import type { ModelsRpcMethods } from "./models.ts";
 import type { UsageRpcMethods } from "./usage.ts";
+import type { SourceRpcMethods } from "./native-source.ts";
 import type { ApprovalRpcMethods } from "./approvals.ts";
 import type { SessionActionsRpcMethods } from "./capabilities/session-actions.ts";
 import type { RestoreRpcMethods } from "./capabilities/restore.ts";
@@ -195,6 +196,7 @@ export interface RpcMethods
     LayoutRpcMethods,
     ModelsRpcMethods,
     UsageRpcMethods,
+    SourceRpcMethods,
     SessionActionsRpcMethods,
     RestoreRpcMethods,
     DigestsRpcMethods,

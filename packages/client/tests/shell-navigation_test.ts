@@ -418,7 +418,7 @@ Deno.test("shell navigation owns route state, unknown-server errors, project vis
   f.navigation.fail(new Error("plain failure"));
   assertEquals(
     f.navigation.state.error && f.navigation.state.error.failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   f.navigation.clearError();
   assertEquals(f.navigation.state.error, "");

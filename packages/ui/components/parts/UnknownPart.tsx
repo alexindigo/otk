@@ -8,7 +8,11 @@ import { retainedDisclosure } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
 import Icon from "../Icon.tsx";
-import { unknownPartPresentation, unknownPartPreview } from "./unknown-part.ts";
+import {
+  unknownPartPresentation,
+  unknownPartPreview,
+  unknownPartSource,
+} from "./unknown-part.ts";
 import NativeSource from "./NativeSource.tsx";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
@@ -20,6 +24,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     () => props.prefs,
   );
   const preview = () => unknownPartPreview(props.part);
+  const reference = () => unknownPartSource(props.part);
   const name = () =>
     props.part.kind === "external"
       ? props.part.name
@@ -28,7 +33,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       : props.part.kind;
   const details = () =>
     !!(activity()?.state || activity()?.body?.length ||
-      activity()?.parameters?.length || preview());
+      activity()?.parameters?.length || preview() || reference());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
@@ -138,8 +143,12 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
           <Show when={activity()?.body}>
             {(body) => <Blocks blocks={body()} conceal={props.prefs.conceal} />}
           </Show>
-          <Show when={preview()}>
-            {(value) => <NativeSource preview={value()} prefs={props.prefs} />}
+          <Show when={preview() || reference()}>
+            <NativeSource
+              reference={reference()}
+              preview={preview()}
+              prefs={props.prefs}
+            />
           </Show>
         </div>
       </Show>

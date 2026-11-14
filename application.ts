@@ -50,6 +50,7 @@ import {
   registerSessionActions,
   registerSessions,
   registerShell,
+  registerSource,
   registerUsage,
   RpcRegistry,
   type ServiceConfig,
@@ -167,6 +168,7 @@ export async function startApplication(
     registerAgents(rpc, backend);
     registerModels(rpc, backend);
     registerUsage(rpc, backend);
+    registerSource(rpc, backend);
     registerDigests(rpc, backend);
     registerCatalogs(
       rpc,

@@ -14,7 +14,11 @@ export interface FailurePresentation {
   recovery: string;
   count: number;
   occurrences: readonly string[];
+  /** No feature-authored reason: Details carry the diagnostic ID instead. */
+  generic?: boolean;
 }
+/** Plain words when no owner published a reason; never jargon. */
+export const GENERIC_FAILURE_REASON = "OTK has no further details";
 export interface Feedback {
   /** Opaque operation and failure correlation, never display copy. */
   identity?: string;
@@ -87,8 +91,8 @@ export class FailurePresenter {
       : "The requested action";
     const target = this.context.target?.(facts.target ?? {}) ??
       { label: facts.target?.label ?? "OTK" };
-    const reason = facts.reason ?? enrichment?.text ??
-      "No publishable failure reason is available";
+    const known = facts.reason ?? enrichment?.text;
+    const reason = known ?? GENERIC_FAILURE_REASON;
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
     const pending = facts.outcome === "unknown" ||
       facts.outcome === "unavailable" || enrichment?.kind === "pending";
@@ -112,6 +116,7 @@ export class FailurePresenter {
       recovery,
       count: 1,
       occurrences: [failure.diagnosticID],
+      ...(known ? {} : { generic: true }),
     };
     return {
       ...enrichment,

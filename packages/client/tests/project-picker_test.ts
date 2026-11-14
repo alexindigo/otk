@@ -109,7 +109,7 @@ Deno.test("project picker owns server and welcome identity, current failures and
     });
     assertEquals(
       f.owner.state.error && f.owner.state.error.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
     await f.owner.ready();
     assertEquals(

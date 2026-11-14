@@ -6,6 +6,7 @@ import { sessionActionsRequestMetadata } from "./capabilities/session-actions.ts
 import { restoreRequestMetadata } from "./capabilities/restore.ts";
 import { modelsRequestMetadata } from "./models.ts";
 import { usageRequestMetadata } from "./usage.ts";
+import { sourceRequestMetadata } from "./native-source.ts";
 import { digestsRequestMetadata } from "./capabilities/digests.ts";
 import { approvalsRequestMetadata } from "./approvals.ts";
 import { layoutRequestMetadata } from "./preferences/layout.ts";
@@ -21,6 +22,7 @@ export function createRequestMetadata(): RequestMetadataRegistry {
       restoreRequestMetadata,
       modelsRequestMetadata,
       usageRequestMetadata,
+      sourceRequestMetadata,
       digestsRequestMetadata,
       approvalsRequestMetadata,
       layoutRequestMetadata,

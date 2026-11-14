@@ -9,7 +9,8 @@ import type {
 import type { SessionMetadata } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
-import { isPrompt, nativeSource, recordPart } from "./records.ts";
+import { isPrompt, nativeSource, recordPart, sourceRef } from "./records.ts";
+import { referenceSources } from "@otk/protocol";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type {
   Info,
@@ -60,11 +61,25 @@ export function assistantSettled(
   return info.time.completed !== undefined || !!info.error ||
     !!info.finish && !["tool-calls", "unknown"].includes(info.finish);
 }
+/** Loaded messages carry plugin-owned source references, never their raw source. */
 export function mapMessage(
   info: Info,
   parts: RawPart[] = [],
   observed?: number,
-  partMapper: (part: RawPart) => Part = mapPart,
+  partMapper: (part: RawPart) => Part = derivePart,
+  evidence: readonly RawPart[] = parts,
+): Message {
+  return referenceSources(
+    deriveMessage(info, parts, observed, partMapper, evidence),
+    (path) => sourceRef({ origin: "message", id: info.id, path }),
+  );
+}
+/** The exact derivation a Source read repeats to reach one referenced source. */
+export function deriveMessage(
+  info: Info,
+  parts: RawPart[] = [],
+  observed?: number,
+  partMapper: (part: RawPart) => Part = derivePart,
   evidence: readonly RawPart[] = parts,
 ): Message {
   const mappedParts = parts.map((part) => partMapper(part));
@@ -212,6 +227,16 @@ export function mapMessage(
   };
 }
 export function mapPart(part: RawPart): Part {
+  return referencePart(derivePart(part), part.messageID);
+}
+/** References any source a later shaping step attached to a loaded part. */
+export function referencePart<T extends Part>(part: T, messageID: string): T {
+  return referenceSources(
+    part,
+    (path) => sourceRef({ origin: "message", id: messageID, path }),
+  );
+}
+export function derivePart(part: RawPart): Part {
   part = { ...part };
   // Non-image uploads retain their existing on-intent attachment reference,
   // not a second embedded byte copy in transcript metadata.

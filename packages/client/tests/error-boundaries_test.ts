@@ -19,7 +19,7 @@ Deno.test("catalog failure publication normalizes unknown values and keeps last-
     await pending;
     assertEquals(
       owner.state.error && owner.state.error.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
     assertEquals(owner.state.value, { providers: [], defaultState: "unknown" });
     assertEquals(owner.state.loading, false);
@@ -27,7 +27,7 @@ Deno.test("catalog failure publication normalizes unknown values and keeps last-
     await owner.refresh();
     assertEquals(
       owner.state.error && owner.state.error.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
   } finally {
     owner.dispose();

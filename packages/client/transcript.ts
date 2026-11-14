@@ -119,6 +119,12 @@ export interface TranscriptOwner {
     messageID: string,
     text: (part: Part) => string | undefined,
   ): Promise<string>;
+  /** Exact native source behind a plugin-owned reference, read on demand. */
+  /** One read per reference, success or failure, until Retry replaces it. */
+  nativeSource?(
+    ref: string,
+    options?: { retry?: boolean },
+  ): Promise<import("@otk/protocol").NativeSourceView>;
   subscribe(listener: (state: TranscriptState) => void): () => void;
   /** Live completions in this open lifetime; snapshots/paging are silent. */
   onToolCompleted(
@@ -140,6 +146,8 @@ export interface TranscriptOwner {
   usesMetadata(ids: ReadonlySet<string>): boolean;
   stop(): void;
 }
+/** Opened Source folds in one transcript lifetime, each a bounded preview. */
+const SOURCE_RESULTS = 64;
 export function createTranscript(
   target: BodyTarget,
   connection: (id: string) => SidecarConnection,
@@ -907,10 +915,33 @@ export function createTranscript(
       void work.then(reserve);
     }
   };
+  const sources = new Map<
+    string,
+    Promise<import("@otk/protocol").NativeSourceView>
+  >();
   const owner: TranscriptOwner = {
     progress: () => readProgress.display("page", readLabel),
     projection,
     interaction,
+    nativeSource: (ref, options) => {
+      if (options?.retry) sources.delete(ref);
+      let read = sources.get(ref);
+      if (read) {
+        // Most recently used stays; the oldest bounded entry leaves first.
+        sources.delete(ref);
+      } else {
+        read = connection(target.sidecarId).rpc.call("source.get", {
+          sessionID: target.sessionID,
+          ref,
+        });
+        read.catch(() => {});
+        if (sources.size >= SOURCE_RESULTS) {
+          sources.delete(sources.keys().next().value!);
+        }
+      }
+      sources.set(ref, read);
+      return read;
+    },
     async source(messageID, text) {
       const id = generation;
       await owner.ensure(messageID);
@@ -1513,6 +1544,7 @@ export function createTranscript(
     stop(): void {
       readProgress.stop();
       interaction.clear();
+      sources.clear();
       owner.temperature("cold");
     },
   };

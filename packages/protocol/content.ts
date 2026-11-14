@@ -313,13 +313,23 @@ export type DisclosureCategory =
   | "compaction"
   | "record"
   | "source";
-/** Bounded inspection preview plus optional exact sent/received text for Copy. */
+/** A loaded item's native source: an opaque plugin-owned reference that a
+ * Source fold reads on demand, plus exact text only for declared content (Copy).
+ * Inspection fields exist only while the producing plugin derives the source. */
 export interface NativeSource {
+  kind: string;
+  ref?: string;
+  preview?: string;
+  bytes?: number;
+  truncated?: boolean;
+  payload?: string;
+}
+/** The bounded inspection result a Source fold presents. */
+export interface NativeSourceView {
   kind: string;
   preview: string;
   bytes: number;
   truncated: boolean;
-  payload?: string;
 }
 export interface Activity {
   kindLabel: string;

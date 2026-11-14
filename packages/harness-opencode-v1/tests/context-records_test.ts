@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { isRealPrompt } from "@otk/protocol";
-import { mapMessage, mapPart } from "../map.ts";
+import { deriveMessage, derivePart, mapMessage, mapPart } from "../map.ts";
+import { reachable } from "./source-support.ts";
 import type { Info, RawPart } from "../types.ts";
 import { ContentReplay } from "@otk/harness";
 import { StreamBuffers } from "@otk/content";
@@ -60,28 +61,33 @@ Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown ident
       "future-record",
     ]
   ) {
-    const part = mapPart({
+    const raw = {
       ...text(false),
       type,
       snapshot: "sha",
       hash: "h",
       files: ["a.ts"],
       reason: "stop",
-    });
+    };
+    const part = mapPart(raw);
     assert(part.kind === "external");
     assert(part.activity);
-    assert(part.source?.payload?.includes('"hash":"h"'));
+    // Bookkeeping is not copy content: only its reference is loaded.
+    assertEquals(part.source?.payload, undefined);
+    assert(reachable(part, derivePart(raw)).preview.includes('"hash":"h"'));
     assertEquals(part.name, `opencode-v1/${type}`);
     assertEquals(part.content, undefined);
   }
-  const part = mapPart({
+  const large = {
     ...text(false),
     type: "future-record",
     text: "x".repeat(70_000),
-  });
+  };
+  const part = mapPart(large);
   assert(part.kind === "external");
-  assertEquals(part.source?.truncated, true);
-  assertEquals(JSON.parse(part.source!.payload!).text.length, 70_000);
+  const view = reachable(part, derivePart(large));
+  assertEquals(view.truncated, true);
+  assert(view.bytes > 70_000);
 });
 Deno.test("V1 summary and interruption remain source-linked context boundaries", () => {
   const assistant: Info = {
@@ -177,14 +183,18 @@ Deno.test("V1 failed task result and independent assistant failure retain both e
   const error = "The usage limit has been reached";
   const envelope =
     `<task id="child" state="error">\n<summary>Background task failed: investigate</summary>\n<task_error>\n${error}\n</task_error>\n</task>`;
-  const result = mapMessage(info, [{
-    ...text(true),
-    text: envelope,
-  }]);
+  const envelopeParts = [{ ...text(true), text: envelope }];
+  const result = mapMessage(info, envelopeParts);
   assertEquals(result.role, "context");
-  assertEquals(result.source?.payload, envelope);
+  assert(
+    reachable(result, deriveMessage(info, envelopeParts)).preview.includes(
+      '"id":"m"',
+    ),
+  );
   const row = result.parts[0];
   assert(row.kind === "external");
+  // Declared content keeps its exact text for Copy.
+  assertEquals(row.source?.payload, envelope);
   assertEquals(row.activity?.tone, "error");
   assertEquals(row.activity?.child?.sessionID, "opcv1-child");
   assert(JSON.stringify(row.activity?.body).includes(error));
