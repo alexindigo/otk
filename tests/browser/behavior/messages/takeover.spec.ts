@@ -41,7 +41,11 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
     "1px",
   );
   await expect(page.locator(".otk-prompt")).toBeHidden();
-  await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(0);
+  // Triage decision 5: the hidden composer keeps its Send mounted; the
+  // takeover's own primary is the visible action.
+  await expect(page.locator(".otk-prompt button[type=submit]")).toBeHidden();
+  await expect(page.locator(".otk-permission-dock [data-primary-action]"))
+    .toBeVisible();
   await openSession(state, page, other.id);
   await page.locator("textarea[name=prompt]").fill("Other session's draft");
   await openSession(state, page, a.id);
