@@ -164,6 +164,39 @@ Deno.test("legacy read wrappers decode only coherent bodies and retain raw outpu
     truncated: false,
   });
 });
+Deno.test("legacy read projections retain truncation from every native evidence source", () => {
+  const file =
+    "<path>/a.ts</path>\n<type>file</type>\n<content>\n1: old\n\n(End of file - total 1 lines)\n</content>";
+  const directory =
+    "<path>/repo</path>\n<type>directory</type>\n<entries>\na.ts\n\n(1 entries)\n</entries>";
+  for (const truncated of [false, true]) {
+    const read = mapTool(
+      tool("read", { filePath: "/a.ts" }, { truncated }, file),
+    );
+    assert(read.outputContent?.kind === "file");
+    assertEquals(read.outputContent.truncated, truncated);
+    assertEquals(read.output, file);
+    for (const displayTruncated of [false, true]) {
+      const listed = mapTool(tool("read", { filePath: "/repo" }, {
+        truncated,
+        display: {
+          type: "directory",
+          path: "/repo",
+          entries: ["a.ts"],
+          offset: 1,
+          totalEntries: 1,
+          truncated: displayTruncated,
+        },
+      }, directory));
+      assert(listed.outputContent?.kind === "paths");
+      assertEquals(
+        listed.outputContent.truncated,
+        truncated || displayTruncated,
+      );
+      assertEquals(listed.output, directory);
+    }
+  }
+});
 Deno.test("legacy patch metadata and current metadata preserve the same diff", () => {
   const patch = "--- /a.ts\n+++ /a.ts\n@@ -1 +1 @@\n-old\n+new\n";
   const a = mapTool(
