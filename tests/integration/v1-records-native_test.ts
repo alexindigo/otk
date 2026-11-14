@@ -252,6 +252,61 @@ test("OC1R1 stock V1 synthetic-only and mixed records keep visible parts and tru
   }
 });
 
+test("OC1R6 stock V1 malformed task relationships preserve both live context and transcript pages", async () => {
+  const fake = new FakeLlm(), native = await OpencodeTest.start(fake);
+  const target = await native.createSession("Malformed task relationship");
+  const server = await SidecarTest.start(native),
+    client = new WsClient(server.url);
+  const envelope =
+    '<task id="child/path" state="completed">\n<task_result>\nComplete native source\n</task_result>\n</task>';
+  try {
+    await client.connect();
+    client.send({ t: "subscribe", sessionID: target.id });
+    const raw = await native.request<NativeMessage>(
+      `/session/${target.id}/message`,
+      {
+        method: "POST",
+        body: {
+          noReply: true,
+          parts: [{ type: "text", synthetic: true, text: envelope }],
+        },
+      },
+    );
+    const visible = (message: MessagePage["items"][number]) => {
+      assertEquals(message.role, "context");
+      const part = message.parts[0];
+      assert(part.kind === "external");
+      assertEquals(part.activity?.direction, "outgoing");
+      assertEquals(part.activity?.child, undefined);
+      assert(
+        JSON.stringify(part.activity?.body).includes("Complete native source"),
+      );
+    };
+    const page = await waitFor(
+      () =>
+        client.rpc<MessagePage>("session.messages", { sessionID: target.id }),
+      (page) => page.items.some((message) => message.id === raw.info.id),
+    );
+    visible(page.items.find((message) => message.id === raw.info.id)!);
+    const frame = await waitFor(
+      () =>
+        client.frames.findLast((frame) =>
+          frame.t === "content" && frame.event.op === "message.upsert" &&
+          frame.event.message.id === raw.info.id &&
+          frame.event.message.parts.length > 0
+        ),
+      (frame) => frame !== undefined,
+    );
+    assert(frame?.t === "content" && frame.event.op === "message.upsert");
+    visible(frame.event.message);
+  } finally {
+    await client.close();
+    await server.stop();
+    await native.stop();
+    await fake.stop();
+  }
+});
+
 test("OC1R2 stock V1 failed task and independent parent provider failure both retain exact errors", async () => {
   const fake = new FakeLlm(), error = "The usage limit has been reached";
   let calls = 0;
