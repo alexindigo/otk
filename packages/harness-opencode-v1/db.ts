@@ -112,12 +112,16 @@ export class BootstrapDb {
   revertedUserCount(id: string, cutoff: string): number | undefined {
     id = ids.decode(id);
     if (!this.#db) return;
-    return Number(
-      this.#db.prepare(`
+    try {
+      return Number(
+        this.#db.prepare(`
       SELECT count(*) AS count FROM message m
       WHERE m.session_id = ? AND m.id >= ? AND json_extract(m.data, '$.role') = 'user' AND ${promptEvidenceSQL()}
     `).get(id, cutoff)!.count,
-    );
+      );
+    } catch {
+      return;
+    }
   }
   /** First non-synthetic text or attachment labels, oldest first, bounded rows. */
   revertedPrompts(
