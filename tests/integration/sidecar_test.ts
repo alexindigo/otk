@@ -58,6 +58,7 @@ v1Test(
         "revert",
         "sessionActions",
         "shell",
+        "source",
         "usage",
       ]);
       const session = await client.rpc<ContentSession>("session.create", {
