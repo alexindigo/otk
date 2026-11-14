@@ -115,6 +115,8 @@ export class SessionLists {
       const rows: Session[] = await wait(response.json());
       const candidates = rows.map(mapIndex).filter((row) =>
         row.parentID === input.parentID &&
+        (!input.query ||
+          row.title.toLowerCase().includes(input.query.toLowerCase())) &&
         (!cursor || row.timeUpdated < cursor.updated ||
           row.timeUpdated === cursor.updated && ids.decode(row.id) < cursor.id)
       )
