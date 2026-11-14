@@ -36,6 +36,21 @@ export function config(): ServiceConfig {
     env: Deno.env.toObject(),
   });
 }
+/** Turn detail stays in the digest store; a view lease loads it by key. */
+function leaseTurnDetail(
+  index: IndexStore,
+  digest: DigestBridge,
+  diagnostic: DiagnosticSink,
+  signal = new AbortController().signal,
+): void {
+  index.turnLoader = (id) => {
+    void digest.hydrate([id], signal, true).catch((error) => {
+      if (!isCancellation(error)) {
+        diagnostic("warn", "session digest", error);
+      }
+    });
+  };
+}
 export async function start(
   cfg: ServiceConfig,
   diagnostics?: ServingDiagnostics,
@@ -109,6 +124,7 @@ export async function start(
       },
       diagnostic: (error) => diagnostic("warn", "session digest", error),
     });
+    leaseTurnDetail(index, digest, diagnostic, signal);
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
@@ -227,6 +243,7 @@ export async function start(
     },
     diagnostic: (error) => diagnostic("warn", "session digest", error),
   });
+  leaseTurnDetail(index, digest, diagnostic, signal);
   const backend = new OpencodeV1Adapter(
     cfg,
     new StreamBuffers(),

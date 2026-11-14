@@ -101,9 +101,15 @@ test("plugin scans seek an indexed namespace and prefix range with bounded conti
     other.transaction(() => {
       for (let i = 0; i < 2000; i++) other.set(`m/${i}`, "foreign");
     });
+    // The owner prepares each fixed shape once; observe each statement once.
+    const observed = new WeakSet<object>();
     db.connection.prepare = function (sql) {
       const statement = prepare.call(this, sql);
-      if (sql.startsWith("SELECT key,value FROM plugin_storage")) {
+      if (
+        sql.startsWith("SELECT key,value FROM plugin_storage") &&
+        !observed.has(statement)
+      ) {
+        observed.add(statement);
         const all = statement.all.bind(statement);
         statement.all = (...params) => {
           const explain = prepare.call(

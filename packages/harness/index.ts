@@ -39,6 +39,37 @@ export class SessionIndex {
   }
   #entries = new Map<string, IndexEntry>();
   #children = new Map<string, Set<string>>();
+  #turnInterest = new Map<string, number>();
+  /** Set by an owner that keeps turn detail durably (the digest store). Then
+   * unleased turn detail is not resident here: a lease loads it from the owner. */
+  turnLoader?: (id: string) => void;
+  /** Lease turn detail for one identity; released detail leaves the index. */
+  retainTurns(id: string): () => void {
+    const count = this.#turnInterest.get(id) ?? 0;
+    this.#turnInterest.set(id, count + 1);
+    if (!count) this.turnLoader?.(id);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.#turnInterest.get(id) ?? 1) - 1;
+      if (remaining > 0) {
+        this.#turnInterest.set(id, remaining);
+        return;
+      }
+      this.#turnInterest.delete(id);
+      const entry = this.#entries.get(id);
+      if (!this.turnLoader || !entry) return;
+      if (!Object.keys(entry.digest.turns).length) return;
+      this.#entries.set(
+        id,
+        immutable({ ...entry, digest: { ...entry.digest, turns: {} } }),
+      );
+    };
+  }
+  #resident(id: string): boolean {
+    return !this.turnLoader || this.#turnInterest.has(id);
+  }
   get(id: string): IndexEntry | undefined {
     const entry = this.#entries.get(id);
     return entry && structuredClone(entry);
@@ -135,14 +166,12 @@ export class SessionIndex {
     const entry = this.#entries.get(delta.id);
     if (!entry || delta.revision < entry.digest.revision) return false;
     const previous = entry;
-    const turns =
-      !Object.keys(delta.turns.upsert).length && !delta.turns.remove.length
-        ? entry.digest.turns
-        : {
-          ...entry.digest.turns,
-          ...structuredClone(delta.turns.upsert),
-        };
-    for (const id of delta.turns.remove) delete turns[id];
+    const merge = this.#resident(delta.id) &&
+      (!!Object.keys(delta.turns.upsert).length || !!delta.turns.remove.length);
+    const turns = merge
+      ? { ...entry.digest.turns, ...structuredClone(delta.turns.upsert) }
+      : entry.digest.turns;
+    if (merge) { for (const id of delta.turns.remove) delete turns[id]; }
     const next: IndexEntry = {
       ...entry,
       digest: {

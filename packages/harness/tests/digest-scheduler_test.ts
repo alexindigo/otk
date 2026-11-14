@@ -394,7 +394,9 @@ test("time-budget adaptation retains the configured native-read amortization flo
     close() {},
     step(_job, budget, _signal, execution) {
       rows.push(budget.rows);
-      execution.charge(1000);
+      // Expensive per-row work: the quota shrinks, but never below the floor.
+      execution.rows?.(budget.rows);
+      execution.charge(10 * budget.rows);
       return Promise.resolve(rows.length < 3 ? "next" : undefined);
     },
   });
@@ -405,6 +407,88 @@ test("time-budget adaptation retains the configured native-read amortization flo
   while (await scheduler.tick()) { /* bounded slices */ }
   assertEquals(digestRowFloor(policy), 13);
   assertEquals(rows, [100, 13, 13]);
+  await scheduler.stop();
+});
+test("a slow fixed-cost chunk cannot pin later work to the row floor; cheap work recovers the quota", async () => {
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+    now: () => 0,
+  });
+  const quotas: number[] = [];
+  let phase: "fixed" | "rows" | "cheap" = "fixed", steps = 0;
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("not requested")),
+    close() {},
+    step(_job, budget, _signal, execution) {
+      quotas.push(budget.rows);
+      // Sessions differ in size; the examined rows vary naturally.
+      const examined = [budget.rows, 0, 2, Math.ceil(budget.rows / 2)][
+        steps++ % 4
+      ];
+      execution.rows?.(examined);
+      execution.charge(
+        phase === "fixed"
+          ? 250 // proof/commit/publication, independent of rows
+          : phase === "rows"
+          ? 1 + 2 * examined
+          : 1 + 0.01 * examined,
+      );
+      return Promise.resolve(steps < 60 ? "next" : undefined);
+    },
+  });
+  scheduler.enqueue(
+    { provider: "test-v1", sessionID: "fixed", updated: 1 },
+    "background",
+  );
+  while (await scheduler.tick()) {
+    if (steps === 20) phase = "rows";
+    if (steps === 40) phase = "cheap";
+  }
+  // Once rows vary, a large fixed cost alone no longer shrinks the quota.
+  assertEquals(quotas.slice(2, 20).every((rows) => rows === 100), true);
+  // Expensive rows shrink it to the per-row budget (8 ms / 2 ms), not below the floor.
+  assertEquals(quotas.slice(25, 40).every((rows) => rows === 13), true);
+  // Cheap rows recover it.
+  assertEquals(quotas.slice(-3), [100, 100, 100]);
+  await scheduler.stop();
+});
+test("an essential read interposes between fixed-cost background chunks", async () => {
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+    now: () => 0,
+  });
+  const order: string[] = [];
+  let steps = 0;
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("not requested")),
+    close() {},
+    step(_job, budget, _signal, execution) {
+      order.push(`chunk:${budget.rows}`);
+      execution.rows?.(steps % 2 ? 0 : budget.rows);
+      execution.charge(250);
+      return Promise.resolve(++steps < 4 ? "next" : undefined);
+    },
+  });
+  scheduler.enqueue(
+    { provider: "test-v1", sessionID: "bulk", updated: 1 },
+    "background",
+  );
+  assertEquals(await scheduler.tick(), true);
+  const essential = scheduler.execute(() => {
+    order.push("essential");
+    return Promise.resolve();
+  }, new AbortController().signal);
+  while (await scheduler.tick()) { /* drain */ }
+  await essential;
+  assertEquals(order[0], "chunk:100");
+  assertEquals(order[1], "essential");
+  assertEquals(order.slice(2), ["chunk:13", "chunk:100", "chunk:100"]);
   await scheduler.stop();
 });
 test("requested identities bypass parked idle keys and release their original optional admission after upgrade", async () => {

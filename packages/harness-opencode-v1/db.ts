@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DiagnosticSink } from "@otk/protocol";
 import { DatabaseSync } from "node:sqlite";
+import { cachedStatements } from "@otk/harness";
 import type { NativeMessage } from "./messages.ts";
 import type { Info, RawPart } from "./types.ts";
 import type { UsageMessage } from "@otk/protocol";
@@ -16,7 +17,7 @@ export class BootstrapDb {
     readonly diagnostic: DiagnosticSink = () => {},
   ) {
     try {
-      this.#db = new DatabaseSync(file, { readOnly: true });
+      this.#db = cachedStatements(new DatabaseSync(file, { readOnly: true }));
       const required = {
         session: ["id", "directory", "time_updated"],
         message: ["id", "session_id", "data"],

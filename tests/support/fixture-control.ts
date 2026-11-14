@@ -168,7 +168,11 @@ export interface Commands {
     target?: "remote" | "selected";
   };
   releaseGate: { lease: string; gate: string };
-  observe: { lease?: string };
+  observe: {
+    lease?: string;
+    /** Narrow polling selection; omitted means the full evidence export. */
+    select?: { fields?: string[]; entry?: string };
+  };
   materializeSnapshot: { lease: string; key: string };
   nativeRequest: {
     lease: string;
@@ -271,7 +275,7 @@ export function request(value: unknown): ControlRequest {
       "target",
     ],
     releaseGate: ["lease", "gate"],
-    observe: ["lease"],
+    observe: ["lease", "select"],
     materializeSnapshot: ["lease", "key"],
     nativeRequest: ["lease", "path", "method", "body", "project", "target"],
     productRpc: ["lease", "method", "params"],
@@ -292,6 +296,18 @@ export function request(value: unknown): ControlRequest {
     text(p.lease);
   }
   if (command === "observe" && p.lease !== undefined) text(p.lease);
+  if (command === "observe" && p.select !== undefined) {
+    const select = object(p.select);
+    keys(select, ["fields", "entry"]);
+    if (
+      select.fields !== undefined &&
+      (!Array.isArray(select.fields) || select.fields.length > 32 ||
+        !select.fields.every((field) =>
+          typeof field === "string" && /^[a-zA-Z]{1,64}$/.test(field)
+        ))
+    ) throw new Error("Invalid observation fields");
+    if (select.entry !== undefined) text(select.entry);
+  }
   switch (command) {
     case "start":
       if (

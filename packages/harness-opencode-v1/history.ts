@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
+import { cachedStatements } from "@otk/harness";
 import {
   type AttachmentPolicy,
   type DiagnosticSink,
@@ -259,7 +260,9 @@ export class HistoryDatabase {
         const identity = `${stat.dev}:${stat.ino}:${stat.birthtime?.getTime()}`;
         if (this.#db && identity !== this.#identity) this.close();
         if (!this.#db) {
-          this.#db = new DatabaseSync(this.file, { readOnly: true });
+          this.#db = cachedStatements(
+            new DatabaseSync(this.file, { readOnly: true }),
+          );
           this.#identity = identity;
         }
         return this.#db;

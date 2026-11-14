@@ -61,3 +61,32 @@ test("canceling a dependent reservation withdraws only its predecessor donation"
   replay.release();
   unrelated.release();
 });
+test("one bounded publication set waits for each identity's predecessor and fences its successors", async () => {
+  const order = new DigestPublicationOrder((readiness) => readiness);
+  const held = Promise.withResolvers<void>(), seen: string[] = [];
+  const signal = new AbortController().signal;
+  const earlier = order.reserve("b").run(signal, async () => {
+    await held.promise;
+    seen.push("b-earlier");
+  });
+  const set = order.reserveAll(["a", "b", "c"], "background", true);
+  const later = order.reserve("c", "interactive").run(signal, () => {
+    seen.push("c-later");
+    return Promise.resolve();
+  });
+  // A required successor donates its priority to the whole set.
+  assertEquals(set.priority(), "interactive");
+  assertEquals(set.required(), true);
+  const batch = set.run(signal, () => {
+    seen.push("set");
+    return Promise.resolve();
+  });
+  await order.reserve("other").run(signal, () => {
+    seen.push("independent");
+    return Promise.resolve();
+  });
+  assertEquals(seen, ["independent"]);
+  held.resolve();
+  await Promise.all([earlier, batch, later]);
+  assertEquals(seen, ["independent", "b-earlier", "set", "c-later"]);
+});

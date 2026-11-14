@@ -89,6 +89,8 @@ export interface V2DigestStorage {
   >;
   write(metadata: SessionMetadata, delta: DigestDelta): void;
   publish(value: DigestPublication): void | Promise<void>;
+  /** One credited publication for a bounded set committed together. */
+  publishAll?(values: readonly DigestPublication[]): Promise<void>;
   diagnostic(id: string | undefined, error: unknown): void;
 }
 export interface V2DigestReadiness {
@@ -266,7 +268,7 @@ export class OpencodeV2DigestSink implements DigestSink {
       "identity.batch": (input, signal) => this.identities(input.ids, signal),
       "sessions.list": async (input, signal) => {
         const result = await this.#list(input, signal);
-        for (const row of result.items) await this.#remember(row, signal);
+        await this.#remember(result.items, signal);
         await readiness.listed?.(result.items, signal);
         if (result.older) {
           const next = { ...input, before: result.older };
@@ -466,27 +468,39 @@ export class OpencodeV2DigestSink implements DigestSink {
     this.#check(signal, connection);
     return result;
   }
-  async #remember(row: SessionMetadata, signal: AbortSignal): Promise<void> {
+  /** Commit one bounded metadata page, then publish its new identities once. */
+  async #remember(
+    rows: readonly SessionMetadata[],
+    signal: AbortSignal,
+  ): Promise<void> {
     this.#check(signal);
-    const previous = this.storage.read(row.id);
-    if (
-      previous && !previous.deleted &&
-      JSON.stringify(previous.metadata) === JSON.stringify(row)
-    ) return;
-    const delta: DigestDelta = {
-      summary: previous?.summary ?? { state: "digesting", revision: 0 },
-      turns: { upsert: {}, remove: [] },
-      deleted: null,
-    };
-    this.storage.write(row, delta);
-    if (!previous) {
-      await this.storage.publish({
-        sessionID: row.id,
-        revision: delta.summary.revision,
-        metadata: row,
-        delta,
-      });
-    }
+    const added: DigestPublication[] = [];
+    this.storage.transaction(() => {
+      for (const row of rows) {
+        const previous = this.storage.read(row.id);
+        if (
+          previous && !previous.deleted &&
+          JSON.stringify(previous.metadata) === JSON.stringify(row)
+        ) continue;
+        const delta: DigestDelta = {
+          summary: previous?.summary ?? { state: "digesting", revision: 0 },
+          turns: { upsert: {}, remove: [] },
+          deleted: null,
+        };
+        this.storage.write(row, delta);
+        if (!previous) {
+          added.push({
+            sessionID: row.id,
+            revision: delta.summary.revision,
+            metadata: row,
+            delta,
+          });
+        }
+      }
+    });
+    if (!added.length) return;
+    if (this.storage.publishAll) await this.storage.publishAll(added);
+    else for (const value of added) await this.storage.publish(value);
   }
   async hydrate(
     wanted: readonly string[],
@@ -519,8 +533,8 @@ export class OpencodeV2DigestSink implements DigestSink {
         }
       }
       this.#check(signal, connection);
+      await this.#remember(rows, signal);
       for (const row of rows) {
-        await this.#remember(row, signal);
         result.push(row);
         if (row.parentID && !seen.has(row.parentID)) pending.push(row.parentID);
       }
@@ -720,10 +734,8 @@ export class OpencodeV2DigestSink implements DigestSink {
     if (revision !== this.#discoveryRevision) {
       return { entries: [], complete: false };
     }
-    for (const row of rows) {
-      await this.#remember(row, signal);
-      await this.#yield(signal);
-    }
+    await this.#remember(rows, signal);
+    await this.#yield(signal);
     if (revision !== this.#discoveryRevision) {
       return { entries: [], complete: false };
     }
@@ -1229,32 +1241,37 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     job: DigestJob,
     budget: DigestBudget,
     signal: AbortSignal,
-    _execution?: DigestExecution,
+    execution?: DigestExecution,
   ): Promise<string | undefined> {
     if (job.projection === "helper") {
-      return await this.#helperStep(job, budget, signal);
+      return await this.#helperStep(job, budget, signal, execution);
     }
     const raw = await this.#ensure(job.sessionID, signal),
       entry = metadata(raw),
       source = this.#source;
-    let scan = this.#scan(job.sessionID);
+    // The durable scan is the fence; scan creation/reset joins the step's one
+    // transaction instead of committing before native reads.
+    const stored = this.#scan(job.sessionID);
+    let scan: Scan | undefined = stored, persist = false;
     // Fine keys belong to the admitted job, not durable authority. Coalescing or
     // restart can retire them; an exhausted cursor cannot then certify refresh.
     if (scan?.targeted && !job.messages?.length) {
-      this.invalidate(job.sessionID, scan.revision);
-      scan = this.#scan(job.sessionID);
+      this.#sessionProofs.delete(job.sessionID);
+      scan = { ...scan, revision: scan.revision + 1, source: null };
     }
     if (!scan || scan.source !== source) {
-      const generation = (scan?.generation ?? 0) + 1;
-      this.storage.sql.prepare(
-        "INSERT INTO opcv2_transcript_scan(session_id,generation,source,revision) VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET generation=excluded.generation,source=excluded.source,after_seq=NULL,api_cursor=NULL,complete=0,exhausted=0,targeted=0,target_offset=0",
-      ).run(
-        job.sessionID,
-        generation,
+      scan = {
+        generation: (scan?.generation ?? 0) + 1,
+        revision: scan?.revision ?? 0,
+        complete: 0,
+        exhausted: 0,
         source,
-        scan?.revision ?? 0,
-      );
-      scan = this.#scan(job.sessionID)!;
+        after_seq: null,
+        api_cursor: null,
+        targeted: 0,
+        target_offset: 0,
+      };
+      persist = true;
     }
     if (scan.complete) return;
     const admitted = { ...scan };
@@ -1289,99 +1306,137 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       rows = [...page.items].reverse().map((m) => scalarMessage(m, --order));
     }
     signal.throwIfAborted();
-    const currentScan = this.#scan(job.sessionID);
-    if (
-      source !== this.#source ||
-      !currentScan || currentScan.revision !== admitted.revision ||
-      currentScan.generation !== admitted.generation ||
-      currentScan.source !== admitted.source ||
-      currentScan.after_seq !== admitted.after_seq ||
-      currentScan.api_cursor !== admitted.api_cursor ||
-      currentScan.target_offset !== admitted.target_offset ||
-      currentScan.complete !== admitted.complete ||
-      this.storage.read(job.sessionID)?.deleted
-    ) return "reconcile";
+    execution?.rows?.(rows.length);
+    const native = !!this.#native;
+    const outcome = this.storage.transaction(() => {
+      const current = this.#scan(job.sessionID);
+      if (
+        source !== this.#source ||
+        (["generation", "revision", "complete", "exhausted", "source"] as const)
+          .some((key) => current?.[key] !== stored?.[key]) ||
+        (["after_seq", "api_cursor", "targeted", "target_offset"] as const)
+          .some((key) => current?.[key] !== stored?.[key]) ||
+        this.storage.read(job.sessionID)?.deleted
+      ) return undefined;
+      if (persist) {
+        this.storage.sql.prepare(
+          "INSERT INTO opcv2_transcript_scan(session_id,generation,source,revision) VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET generation=excluded.generation,source=excluded.source,revision=excluded.revision,after_seq=NULL,api_cursor=NULL,complete=0,exhausted=0,targeted=0,target_offset=0",
+        ).run(job.sessionID, admitted.generation, source, admitted.revision);
+      }
+      return this.#apply(
+        job,
+        budget,
+        raw,
+        entry,
+        source,
+        admitted,
+        rows!,
+        selected,
+        next,
+        native,
+      );
+    });
+    if (!outcome) return "reconcile";
+    await this.storage.publish({
+      sessionID: entry.id,
+      revision: outcome.revision,
+      metadata: entry,
+      delta: outcome.delta,
+    });
+    return outcome.finished ? undefined : "continue";
+  }
+  /** One synchronous step body inside the caller's transaction. */
+  #apply(
+    job: DigestJob,
+    budget: DigestBudget,
+    raw: NativeSession,
+    entry: SessionMetadata,
+    source: string,
+    scan: Scan,
+    rows: ScalarMessage[],
+    selected: string[] | undefined,
+    next: string | undefined,
+    native: boolean,
+  ): { delta: DigestDelta; revision: number; finished: boolean } {
+    const admitted = scan;
     let complete = selected
       ? scan.target_offset + selected.length >= job.messages!.length
       : !!scan.exhausted ||
-        (this.#native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
+        (native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
     const turns = new Set<string>();
-    this.storage.transaction(() => {
-      const put = this.storage.sql.prepare(
-        "INSERT INTO opcv2_transcript_header(session_id,message_id,seq,type,turn_id,scalar,generation) VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET seq=excluded.seq,type=excluded.type,turn_id=excluded.turn_id,scalar=excluded.scalar,generation=excluded.generation",
+    const put = this.storage.sql.prepare(
+      "INSERT INTO opcv2_transcript_header(session_id,message_id,seq,type,turn_id,scalar,generation) VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET seq=excluded.seq,type=excluded.type,turn_id=excluded.turn_id,scalar=excluded.scalar,generation=excluded.generation",
+    );
+    if (selected) {
+      for (
+        const old of this.storage.sql.prepare(
+          "SELECT turn_id FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+        ).all(job.sessionID, JSON.stringify(selected))
+      ) if (old.turn_id) turns.add(String(old.turn_id));
+      this.storage.sql.prepare(
+        "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+      ).run(job.sessionID, JSON.stringify(selected));
+    }
+    for (const row of rows) {
+      if (row.usage && native) turns.add(row.usage.turnID);
+      put.run(
+        job.sessionID,
+        row.id,
+        row.seq,
+        row.type,
+        native ? row.usage?.turnID ?? null : null,
+        JSON.stringify(row),
+        admitted.generation,
       );
-      if (selected) {
-        for (
-          const old of this.storage.sql.prepare(
-            "SELECT turn_id FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
-          ).all(job.sessionID, JSON.stringify(selected))
-        ) if (old.turn_id) turns.add(String(old.turn_id));
+    }
+    if (!native) {
+      for (const row of rows) {
+        if (row.type !== "user") continue;
+        // Descending acquisition discovers each real prompt after its calls.
+        // Rebind only those unanchored calls, never an idle execution group.
         this.storage.sql.prepare(
-          "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
-        ).run(job.sessionID, JSON.stringify(selected));
+          "UPDATE opcv2_transcript_header SET turn_id=?,scalar=json_set(scalar,'$.usage.turnID',?) WHERE session_id=? AND type='assistant' AND turn_id IS NULL AND seq>?",
+        ).run(row.id, row.id, job.sessionID, row.seq);
+        turns.add(row.id);
       }
-      for (const row of rows!) {
-        if (row.usage && this.#native) turns.add(row.usage.turnID);
-        put.run(
-          job.sessionID,
-          row.id,
-          row.seq,
-          row.type,
-          this.#native ? row.usage?.turnID ?? null : null,
-          JSON.stringify(row),
-          admitted.generation,
-        );
-      }
-      if (!this.#native) {
-        for (const row of rows!) {
-          if (row.type !== "user") continue;
-          // Descending acquisition discovers each real prompt after its calls.
-          // Rebind only those unanchored calls, never an idle execution group.
-          this.storage.sql.prepare(
-            "UPDATE opcv2_transcript_header SET turn_id=?,scalar=json_set(scalar,'$.usage.turnID',?) WHERE session_id=? AND type='assistant' AND turn_id IS NULL AND seq>?",
-          ).run(row.id, row.id, job.sessionID, row.seq);
-          turns.add(row.id);
-        }
-        if (complete) {
-          this.storage.sql.prepare(
-            "UPDATE opcv2_transcript_header SET turn_id=message_id,scalar=json_set(scalar,'$.usage.turnID',message_id) WHERE session_id=? AND type='assistant' AND turn_id IS NULL",
-          ).run(job.sessionID);
-        }
-      }
-      if (selected) {
+      if (complete) {
         this.storage.sql.prepare(
-          "UPDATE opcv2_transcript_scan SET target_offset=? WHERE session_id=?",
-        ).run(scan!.target_offset + selected.length, job.sessionID);
-      } else {this.storage.sql.prepare(
-          "UPDATE opcv2_transcript_scan SET after_seq=?,api_cursor=?,complete=?,exhausted=? WHERE session_id=?",
-        ).run(
-          rows!.at(-1)?.seq ?? scan!.after_seq,
-          next ?? null,
-          0,
-          complete ? 1 : 0,
-          job.sessionID,
-        );}
-      if (complete && !selected && !scan!.targeted) {
-        const stale = this.storage.sql.prepare(
-          "SELECT message_id,turn_id FROM opcv2_transcript_header WHERE session_id=? AND generation<>? LIMIT ?",
-        ).all(job.sessionID, admitted.generation, budget.rows);
-        for (const old of stale) {
-          if (old.turn_id) turns.add(String(old.turn_id));
-        }
-        this.storage.sql.prepare(
-          "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
-        ).run(job.sessionID, JSON.stringify(stale.map((r) => r.message_id)));
-        complete = stale.length < budget.rows;
-        this.storage.sql.prepare(
-          "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
-        ).run(0, job.sessionID);
+          "UPDATE opcv2_transcript_header SET turn_id=message_id,scalar=json_set(scalar,'$.usage.turnID',message_id) WHERE session_id=? AND type='assistant' AND turn_id IS NULL",
+        ).run(job.sessionID);
       }
-      for (const turn of turns) {
-        this.storage.sql.prepare(
-          "INSERT OR IGNORE INTO opcv2_pending_turn VALUES(?,?)",
-        ).run(job.sessionID, turn);
+    }
+    if (selected) {
+      this.storage.sql.prepare(
+        "UPDATE opcv2_transcript_scan SET target_offset=? WHERE session_id=?",
+      ).run(scan.target_offset + selected.length, job.sessionID);
+    } else {this.storage.sql.prepare(
+        "UPDATE opcv2_transcript_scan SET after_seq=?,api_cursor=?,complete=?,exhausted=? WHERE session_id=?",
+      ).run(
+        rows.at(-1)?.seq ?? scan.after_seq,
+        next ?? null,
+        0,
+        complete ? 1 : 0,
+        job.sessionID,
+      );}
+    if (complete && !selected && !scan.targeted) {
+      const stale = this.storage.sql.prepare(
+        "SELECT message_id,turn_id FROM opcv2_transcript_header WHERE session_id=? AND generation<>? LIMIT ?",
+      ).all(job.sessionID, admitted.generation, budget.rows);
+      for (const old of stale) {
+        if (old.turn_id) turns.add(String(old.turn_id));
       }
-    });
+      this.storage.sql.prepare(
+        "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+      ).run(job.sessionID, JSON.stringify(stale.map((r) => r.message_id)));
+      complete = stale.length < budget.rows;
+      this.storage.sql.prepare(
+        "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
+      ).run(0, job.sessionID);
+    }
+    const pendingTurn = this.storage.sql.prepare(
+      "INSERT OR IGNORE INTO opcv2_pending_turn VALUES(?,?)",
+    );
+    for (const turn of turns) pendingTurn.run(job.sessionID, turn);
     const previous = this.storage.read(job.sessionID);
     // Native sessions initialize their totals to zero even when the provider
     // reports no usage. Only observed constituent usage establishes authority;
@@ -1418,21 +1473,20 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         budget.rows,
       ).map((row) => String(row.turn_id));
     for (const turn of coveredTurns) {
-      const value = this.#summary(job.sessionID, turn);
-      if (!value.calls) {
-        remove.push(turn);
-        continue;
-      }
-      const terminal = this.#turnTerminal(
+      const covered = this.#coveredTurn(
         job.sessionID,
         turn,
         admitted.generation,
       );
+      if (!covered.value.calls) {
+        remove.push(turn);
+        continue;
+      }
       summaries[turn] = knownDerived(
-        value,
+        covered.value,
         `${job.sessionID}/${turn}@${source}`,
         revision,
-        !!terminal,
+        covered.terminal,
         this.storage.turn(job.sessionID, turn),
       );
     }
@@ -1504,24 +1558,15 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     if (delta.summary.messageCount === undefined) {
       delete delta.summary.messageCount;
     }
-    this.storage.transaction(() => {
-      for (const turn of coveredTurns) {
-        this.storage.sql.prepare(
-          "DELETE FROM opcv2_pending_turn WHERE session_id=? AND turn_id=?",
-        ).run(job.sessionID, turn);
-      }
-      this.storage.sql.prepare(
-        "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
-      ).run(finished ? 1 : 0, job.sessionID);
-      this.storage.write(entry, delta);
-    });
-    await this.storage.publish({
-      sessionID: entry.id,
-      revision,
-      metadata: entry,
-      delta,
-    });
-    return finished ? undefined : "continue";
+    const covered = this.storage.sql.prepare(
+      "DELETE FROM opcv2_pending_turn WHERE session_id=? AND turn_id=?",
+    );
+    for (const turn of coveredTurns) covered.run(job.sessionID, turn);
+    this.storage.sql.prepare(
+      "UPDATE opcv2_transcript_scan SET complete=? WHERE session_id=?",
+    ).run(finished ? 1 : 0, job.sessionID);
+    this.storage.write(entry, delta);
+    return { delta, revision, finished };
   }
   #turnTerminal(
     id: string,
@@ -1533,7 +1578,16 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       "SELECT 1 FROM opcv2_transcript_header t WHERE t.session_id=? AND t.generation=? AND t.type='idle' AND t.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?) AND NOT EXISTS(SELECT 1 FROM opcv2_transcript_header u WHERE u.session_id=t.session_id AND u.type='user' AND u.seq<t.seq AND u.seq>(SELECT max(seq) FROM opcv2_transcript_header WHERE session_id=? AND turn_id=?)) LIMIT 1",
     ).get(id, generation, id, turn, id, turn);
   }
-  #summary(id: string, turn?: string): UsageSummary {
+  /** One covered-turn projection: value, timing and terminal witness together. */
+  #coveredTurn(
+    id: string,
+    turn: string,
+    generation = this.#scan(id)?.generation,
+  ): { value: UsageSummary; terminal: boolean } {
+    const terminal = this.#turnTerminal(id, turn, generation);
+    return { value: this.#summary(id, turn, terminal), terminal };
+  }
+  #summary(id: string, turn?: string, settled = false): UsageSummary {
     const paths = [
       "tokens.input",
       "tokens.output",
@@ -1551,7 +1605,6 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       }`,
     ).get(...(turn === undefined ? [id] : [id, turn]))!;
     const timing = new TurnTimingAccumulator();
-    const settled = turn !== undefined && this.#turnTerminal(id, turn);
     if (turn !== undefined) {
       for (
         const value of this.storage.sql.prepare(
@@ -1663,7 +1716,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       turnID,
       this.storage.read(id)?.summary.revision ?? 0,
     );
-    detail.summary = this.#summary(id, turnID);
+    detail.summary = this.#coveredTurn(id, turnID).value;
     return detail;
   }
   async transcriptMetadata(
@@ -1710,6 +1763,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     job: DigestJob,
     budget: DigestBudget,
     signal: AbortSignal,
+    execution?: DigestExecution,
   ): Promise<string | undefined> {
     const raw = await this.#ensure(job.sessionID, signal, false),
       source = this.#source;
@@ -1741,6 +1795,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       Math.min(budget.rows, SCAN_ROWS),
       selected,
     );
+    execution?.rows?.(headers?.length ?? 0);
     const aggregates = headers && this.transcript.helperAggregates(
       job.sessionID,
       selected ?? headers.map((h) => h.id),

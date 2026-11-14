@@ -12,6 +12,7 @@ export * from "./clock-reads.ts";
 export { DigestScheduler } from "./digest-scheduler.ts";
 export { ReadAdmission } from "./read-admission.ts";
 export { NativeReadiness } from "./native-readiness.ts";
+export { cachedStatements } from "./sqlite-statements.ts";
 /** Harness-neutral lifecycle, session contracts and optional capabilities. */
 export * from "./types.ts";
 export { CapabilityRegistry, requireCapability } from "./registry.ts";

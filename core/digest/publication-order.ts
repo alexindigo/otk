@@ -54,37 +54,59 @@ export class DigestPublicationOrder {
     priority: DigestPriority = "interactive",
     optional = false,
   ): DigestPublicationReservation {
-    const previous = this.#tails.get(identity);
-    const done = Promise.withResolvers<void>();
-    const tail = (previous?.tail ?? Promise.resolve()).then(() => done.promise);
-    const node: Node = {
-      previous,
-      tail,
-      retired: false,
-      optional,
-      priority,
-      effective: priority,
-      required: !optional,
-    };
-    this.#tails.set(identity, node);
-    this.#refresh(identity);
+    return this.reserveAll([identity], priority, optional);
+  }
+  /** One credited publication for a bounded set, each identity still ordered. */
+  reserveAll(
+    identities: readonly string[],
+    priority: DigestPriority = "interactive",
+    optional = false,
+  ): DigestPublicationReservation {
+    const parts = [...new Set(identities)].map((identity) => {
+      const previous = this.#tails.get(identity);
+      const done = Promise.withResolvers<void>();
+      const tail = (previous?.tail ?? Promise.resolve()).then(() =>
+        done.promise
+      );
+      const node: Node = {
+        previous,
+        tail,
+        retired: false,
+        optional,
+        priority,
+        effective: priority,
+        required: !optional,
+      };
+      this.#tails.set(identity, node);
+      this.#refresh(identity);
+      return { identity, previous, done, tail, node };
+    });
     let started = false;
     const release = () => {
-      if (node.retired) return;
-      node.retired = true;
-      done.resolve();
-      this.#refresh(identity);
-      // A canceled middle node cannot sever its predecessor's ordering fence.
-      void tail.then(() => {
-        if (this.#tails.get(identity) === node) this.#tails.delete(identity);
-      });
+      for (const { identity, done, tail, node } of parts) {
+        if (node.retired) continue;
+        node.retired = true;
+        done.resolve();
+        this.#refresh(identity);
+        // A canceled middle node cannot sever its predecessor's ordering fence.
+        void tail.then(() => {
+          if (this.#tails.get(identity) === node) this.#tails.delete(identity);
+        });
+      }
     };
     const reservation: DigestPublicationReservation = {
       release,
-      priority: () => node.effective,
-      required: () => node.required,
+      priority: () =>
+        parts.reduce<DigestPriority>(
+          (best, { node }) =>
+            ranks.indexOf(node.effective) < ranks.indexOf(best)
+              ? node.effective
+              : best,
+          priority,
+        ),
+      required: () => parts.some(({ node }) => node.required),
       run: async (signal, publish) => {
-        if (started || node.retired) {
+        if (started || parts.some(({ node }) => node.retired)) {
           throw new Error("Publication reservation is retired");
         }
         started = true;
@@ -93,7 +115,13 @@ export class DigestPublicationOrder {
           return await this.schedule(signal, async () => {
             executing = true;
             try {
-              await this.wait(previous?.tail ?? Promise.resolve());
+              await this.wait(
+                Promise.all(
+                  parts.map(({ previous }) =>
+                    previous?.tail ?? Promise.resolve()
+                  ),
+                ).then(() => {}),
+              );
               signal.throwIfAborted();
               return await publish();
             } finally {
