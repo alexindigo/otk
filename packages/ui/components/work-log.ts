@@ -34,12 +34,15 @@ export function messageLayoutRole(
 export function partFrames(
   parts: Part[],
   presentation: (part: Part) => PartPresentation,
+  reply = false,
 ): PartFrame[] {
   const frames: PartFrame[] = [];
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    const transcript = value.frame === "transcript", previous = frames.at(-1);
+    // Inside a reply, work belongs to the reply's own flow and work log.
+    const transcript = value.frame === "transcript" && !(reply && value.work),
+      previous = frames.at(-1);
     if (!transcript && previous && !previous.transcript) {
       previous.parts.push(part);
     } else frames.push({ id: part.id, parts: [part], transcript });
@@ -61,7 +64,7 @@ export function messageFrames(
     const value = presentation(part);
     copyable ||= value.copyable ?? !!value.text;
     return value;
-  });
+  }, message.role === "assistant");
   const role = messageLayoutRole(message);
   const userBubble = role === "user" &&
     frames.some((frame) => !frame.transcript);

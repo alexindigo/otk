@@ -41,6 +41,8 @@ Deno.test("V1 content establishes prompt identity; synthetic-only and empty head
   assertEquals(part.activity?.direction, "outgoing");
   assertEquals(part.activity?.category, "outgoing");
   assertEquals(part.source?.payload, "**kept**");
+  // The exact sent text is declared message content; bookkeeping is not.
+  assertEquals(part.content, true);
   for (const type of ["file", "agent"]) {
     assert(isRealPrompt(mapMessage(info, [{ ...text(true), type }])));
   }
@@ -70,6 +72,7 @@ Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown ident
     assert(part.activity);
     assert(part.source?.payload?.includes('"hash":"h"'));
     assertEquals(part.name, `opencode-v1/${type}`);
+    assertEquals(part.content, undefined);
   }
   const part = mapPart({
     ...text(false),

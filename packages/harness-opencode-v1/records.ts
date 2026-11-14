@@ -50,6 +50,10 @@ export function recordPart(part: RawPart): ExternalPart {
     name: `opencode-v1/${part.type}`,
     data: source.preview,
     source,
+    // Native text is the record's message content; other kinds are bookkeeping.
+    ...(part.type === "text" || part.type === "reasoning"
+      ? { content: true }
+      : {}),
   };
   const parameters = Object.entries(part).filter(([key]) =>
     !["id", "sessionID", "messageID", "type", "text"].includes(key)

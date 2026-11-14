@@ -95,6 +95,7 @@ export function createMessageLayout() {
         const frames = partFrames(
           rows.map((row) => row.part),
           (part) => parts.get(part.id)!.value,
+          role === "assistant",
         );
         if (!frames.length && role === "assistant") {
           frames.push({ id, parts: [], transcript: false });

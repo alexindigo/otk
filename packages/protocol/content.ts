@@ -341,6 +341,9 @@ export interface ExternalPart {
   data?: string;
   activity?: Activity;
   source?: NativeSource;
+  /** Producer-declared message content: Copy includes `source.payload`.
+   * Unset for bookkeeping, which stays visible and inspectable via `source`. */
+  content?: boolean;
 }
 export type Part = PartKinds[keyof PartKinds] | ExternalPart;
 export interface UserMessage {
