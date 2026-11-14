@@ -170,7 +170,9 @@ export default function ListPicker<T = string>(props: {
               move(event.key);
             } else if (
               event.key === "Enter" &&
-              !(event.target as HTMLElement).closest(".otk-picker-action")
+              !(event.target as HTMLElement).closest(
+                "button:not(.otk-picker-option), a[href]",
+              )
             ) {
               if (event.repeat) return;
               event.preventDefault();

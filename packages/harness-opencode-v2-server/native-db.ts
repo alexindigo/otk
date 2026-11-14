@@ -19,7 +19,8 @@ const required = {
     "time_updated",
   ],
 };
-/** Opened only by the existing digest worker. Never creates/migrates native data. */
+/** Read-only native metadata owner; the application opens it in the digest worker.
+ * Never creates or migrates native data. */
 export class V2NativeDb {
   readonly db: DatabaseSync;
   readonly identity: string;

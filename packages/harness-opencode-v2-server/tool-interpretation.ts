@@ -14,6 +14,10 @@ const record = (v: unknown): Record<string, unknown> =>
     : {};
 const text = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+const failureText = (...values: unknown[]): string | undefined =>
+  values.map(text).find((value) =>
+    value !== undefined && value.trim().length > 0
+  );
 const millis = (v: unknown): number =>
   typeof v === "number" ? v : typeof v === "string" ? Date.parse(v) || 0 : 0;
 const preview = (v: unknown): string =>
@@ -152,8 +156,12 @@ export function mapTool(tool: Tool): ToolCall {
       ...(failed
         ? {
           failure: {
-            message: text(child.error) ?? text(record(child.error).message) ??
-              text(meta.message) ?? output ?? "Nested call failed",
+            message: failureText(
+              child.error,
+              record(child.error).message,
+              meta.message,
+              output,
+            ) ?? "Nested call failed",
           },
         }
         : {}),
@@ -163,17 +171,23 @@ export function mapTool(tool: Tool): ToolCall {
     };
   });
   const processFailure = name === "bash" ? shellFailure(meta) : undefined;
+  const executeFailed = name === "execute" &&
+    (meta.error === true || children.some((c) => c.failure));
   const resultFailure = processFailure ??
-    (name === "execute" &&
-        (meta.error === true || children.some((c) => c.failure))
-      ? text(meta.message) ?? text(record(meta.error).message) ??
-        children.find((c) => c.failure)?.failure?.message ?? output ??
-        "Script failed"
+    (executeFailed
+      ? failureText(
+        meta.message,
+        record(meta.error).message,
+        children.find((c) => c.failure)?.failure?.message,
+        output,
+      ) ?? "Script failed"
       : undefined);
   const base: ToolBase = {
     callID: tool.id,
     source: nativeSource("tool", tool),
-    ...(resultFailure ? { failure: { message: resultFailure } } : {}),
+    ...(resultFailure !== undefined
+      ? { failure: { message: resultFailure } }
+      : {}),
     ...(children.length ? { children } : {}),
     sourceName: tool.name,
     status: state.status === "streaming"

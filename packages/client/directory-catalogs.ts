@@ -34,6 +34,10 @@ export interface ClientDirectoryCatalogs {
   stop(): void;
 }
 type Kind = keyof DirectoryCatalogKinds & keyof CatalogChunkKinds;
+interface DemandRecord {
+  intent: CatalogDemandIntent;
+  work?: Promise<void>;
+}
 interface Resource {
   directory: string;
   refs: number;
@@ -47,10 +51,7 @@ interface Resource {
   work?: Promise<void>;
   refreshes: Map<string, Promise<void>>;
   controller: AbortController;
-  demands: Map<
-    keyof DirectoryCatalogKinds,
-    { intent: CatalogDemandIntent; work?: Promise<void> }
-  >;
+  demands: Map<keyof DirectoryCatalogKinds, DemandRecord>;
   staging: Map<
     Kind,
     {
@@ -105,14 +106,16 @@ export function createDirectoryCatalogs(o: {
     r: Resource,
     kinds: readonly (keyof DirectoryCatalogKinds)[],
     intent: CatalogDemandIntent,
+    active?: () => boolean,
   ): Promise<void> => {
     const version = r.version;
     await r.work;
-    if (!r.alive) return;
-    if (version !== r.version) return demand(r, kinds, intent);
+    if (!r.alive || active && !active()) return;
+    if (version !== r.version) return demand(r, kinds, intent, active);
     const generation = r.current.catalog?.generation;
     const selected: (keyof DirectoryCatalogKinds)[] = [],
       joined: Promise<void>[] = [];
+    const reservations = new Map<keyof DirectoryCatalogKinds, DemandRecord>();
     for (const kind of kinds) {
       const value = r.current.catalog?.values[kind];
       if (!value) continue; // Only harness-advertised kinds can be requested.
@@ -125,15 +128,23 @@ export function createDirectoryCatalogs(o: {
         // Warm-up can batch kinds, but a finished kind never waits for its peers.
         if (previous.work && value.state !== "ready") {
           joined.push(previous.work);
+          reservations.set(kind, previous);
         }
         continue;
       }
-      r.demands.set(kind, { intent });
+      const reservation = { intent };
+      r.demands.set(kind, reservation);
+      reservations.set(kind, reservation);
       selected.push(kind);
     }
     if (selected.length) {
-      const work = o.demand(r.directory, selected, intent, r.controller.signal);
-      for (const kind of selected) r.demands.get(kind)!.work = work;
+      let work: Promise<void>;
+      try {
+        work = o.demand(r.directory, selected, intent, r.controller.signal);
+      } catch (cause) {
+        work = Promise.reject(cause);
+      }
+      for (const kind of selected) reservations.get(kind)!.work = work;
       joined.push(work);
       void work.then(() => {}, () => {}).finally(() => {
         for (const kind of selected) {
@@ -146,11 +157,17 @@ export function createDirectoryCatalogs(o: {
       await Promise.all(joined);
     } catch (cause) {
       if (!r.alive) return;
-      if (version !== r.version) return demand(r, kinds, intent);
+      if (version !== r.version) return demand(r, kinds, intent, active);
       // Availability and native replacement belong to the kind stream, not a
       // second RPC outcome. Follow its replacement or expose its published error.
+      if (generation !== r.current.catalog?.generation) return;
+      for (const [kind, reservation] of reservations) {
+        if (
+          r.current.catalog?.values[kind]?.state !== "unavailable" &&
+          r.demands.get(kind) === reservation
+        ) r.demands.delete(kind);
+      }
       if (
-        generation !== r.current.catalog?.generation ||
         kinds.some((kind) =>
           r.current.catalog?.values[kind]?.state === "unavailable"
         )
@@ -328,12 +345,23 @@ export function createDirectoryCatalogs(o: {
           releases.delete(stop);
         };
       };
+      const released = Promise.withResolvers<void>();
+      const stopRetired = subscribe(() => {
+        if (!resource.alive) {
+          released.resolve();
+          stopRetired();
+        }
+      });
       const ready = async (kind?: keyof DirectoryCatalogKinds) => {
-        await resource.work;
-        if (!kind || !alive || !resource.alive) return;
-        await demand(resource, [kind], "consumer");
+        if (!alive || !resource.alive) return;
+        await Promise.race([
+          kind
+            ? demand(resource, [kind], "consumer", () => alive)
+            : resource.work,
+          released.promise,
+        ]);
         if (
-          !alive || !resource.alive ||
+          !kind || !alive || !resource.alive ||
           !resource.current.catalog?.values[kind] ||
           resource.current.catalog.values[kind]?.state !== "digesting"
         ) return;
@@ -402,6 +430,7 @@ export function createDirectoryCatalogs(o: {
         release() {
           if (!alive) return;
           alive = false;
+          released.resolve();
           // Wake kind readiness before releasing this borrower's callbacks.
           resource.notify();
           for (const stop of releases) stop();
