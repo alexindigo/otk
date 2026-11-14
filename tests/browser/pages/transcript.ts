@@ -91,7 +91,12 @@ export async function expandTool(
   selector: string,
   scope?: Locator,
 ) {
-  await openWorkLogs(page, scope ?? page);
+  // A new live tool can arrive after an older open fold, or outside the mounted
+  // range when a takeover shrinks the viewport. Use the same native reveal
+  // acquisition as other live tools; explicit scopes were already acquired by
+  // their caller and must not be moved to the tail.
+  if (scope) await openWorkLogs(page, scope);
+  else await revealTool(page, selector);
   const toggle = page.locator(selector + " .otk-tool-toggle");
   await expect(toggle).toBeAttached();
   if (await toggle.getAttribute("aria-expanded") !== "true") {
@@ -100,15 +105,19 @@ export async function expandTool(
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
-/** Reveal a new tool at the tail, grouped or an ungrouped native shell. */
+/** Retain an acquired tool, or acquire a new tail tool through native scrolling. */
 export async function revealTool(page: Page, selector: string) {
   const row = page.locator(selector);
-  const closed = page.locator('.otk-work-fold[aria-expanded="false"]');
-  await expect.poll(async () => {
-    await scrollTranscript(page, true);
-    if (await closed.count()) await openWorkLogs(page);
-    return await row.count();
-  }).toBeGreaterThan(0);
+  // Historical callers may already have acquired this source. Moving to the
+  // tail would retire their target before the same reveal can retain it.
+  if (!await row.count()) {
+    const closed = page.locator('.otk-work-fold[aria-expanded="false"]');
+    await expect.poll(async () => {
+      await scrollTranscript(page, true);
+      if (await closed.count()) await openWorkLogs(page);
+      return await row.count();
+    }).toBeGreaterThan(0);
+  }
   await revealAcquired(page, selector);
   await expect(row).toBeVisible();
 }

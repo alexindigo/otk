@@ -111,14 +111,25 @@ export async function stripContract(page: Page, count: number) {
         after: await stripGeometry(page),
       }),
     }).toBe(
-      first.full.at(-1),
+      first.full.length === 1
+        ? first.tabs[
+          first.tabs.findIndex((tab) => tab.id === first.full[0]) + 1
+        ]
+          .id
+        : first.full.at(-1),
     );
     const second = await stripGeometry(page);
+    expect(second.left).toBeGreaterThan(first.left);
     await page.getByRole("button", { name: "Previous tasks", exact: true })
       .click();
     await expect.poll(async () => (await stripGeometry(page)).full.at(-1)).toBe(
-      second.full[0],
+      second.full.length === 1
+        ? second.tabs[
+          second.tabs.findIndex((tab) => tab.id === second.full[0]) - 1
+        ].id
+        : second.full[0],
     );
+    expect((await stripGeometry(page)).left).toBeLessThan(second.left);
     await lane.hover();
     await page.mouse.wheel(0, 180);
     await expect.poll(async () => (await stripGeometry(page)).left)
