@@ -206,6 +206,23 @@ Lost admission delivery reattaches by receipt without submitting credential
 input again. A reset bootstrap receipt remains input-required; feature
 composition can re-read configured state or offer an explicit fresh sign-in.
 
+`HttpRequests.read` gives read-only bootstrap observation a terminal transport
+failure and joined cancellation, without changing mutation receipt recovery.
+Admission status and event references/shapes are validated before tracker
+delivery. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
+steps. Each started step retains one result and its elapsed time. Elapsed time
+never creates a deadline: only a reported failure or explicit cancellation ends
+a held read. Public `/api/discovery` uses omitted credentials; the existing
+session check uses the unchanged cookie strategy.
+
+Sidecar additions join by normalized URL and release that join after every
+outcome and transport cleanup. Only validated ready/login/setup outcomes install
+a server. `state.discovery` supplies the latest attempt's captured target and
+steps; `cancelAdd` joins its cancellation. Settings borrows this state and keeps
+the editable next input separate from the captured attempt. Client-owned
+`FeedbackFailure` passes classified action/target/reason/recovery copy through
+the existing failure feedback path, never arbitrary transport exception prose.
+
 `FailurePresenter` is an empty feature-extensible registry for safe `Feedback`.
 Unknown failures use fixed copy. `RequestFailure` carries structured public
 facts and a fixed message; `localFailure` reports its original cause to an
