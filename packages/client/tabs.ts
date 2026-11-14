@@ -59,6 +59,8 @@ export interface ClientTabs {
   state: TabState;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
+  /** Naming for the selected task/phantom, independent of the tab population. */
+  selectedTitle(): string | undefined;
   tasks(): readonly TaskRecord[];
   crumbs(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
@@ -310,6 +312,16 @@ export function createTabs(
     state: store.state,
     subscribe: store.subscribe,
     tabs,
+    selectedTitle() {
+      void store.state.revision;
+      prepare();
+      const selected = store.state.selected;
+      return selected?.kind === "task"
+        ? taskByID.get(selected.id)?.name
+        : selected
+        ? byID.get(selected.id)?.title
+        : undefined;
+    },
     tasks() {
       void store.state.revision;
       prepare();
