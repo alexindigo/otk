@@ -26,7 +26,7 @@ function failure(field?: string) {
     diagnosticID: "feedback-stability",
     ...(field ? { field } : {}),
     facts: {
-      action: "Saving task",
+      actionLabel: "Saving task",
       target: { label: "Retained task" },
       reason,
     },

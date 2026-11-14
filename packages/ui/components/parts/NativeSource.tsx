@@ -42,7 +42,7 @@ export default function NativeSource(props: {
       setLoaded({
         state: "failed",
         failure: failureValue(new Error("Source is unavailable here"), {
-          action: "Load source",
+          actionLabel: "Load source",
           reason: "This view has no source reader",
           recovery: "Open the conversation in its own view",
         }),
@@ -59,7 +59,7 @@ export default function NativeSource(props: {
       if (!live || current !== attempt) return;
       setLoaded({
         state: "failed",
-        failure: failureValue(error, { action: "Load source" }),
+        failure: failureValue(error, { actionLabel: "Load source" }),
       });
     });
   };

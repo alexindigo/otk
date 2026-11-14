@@ -171,7 +171,7 @@ function RequestDock(
       if (feedback) feedback.fail(error);
       else if (active) {
         setError(
-          failureValue(error, { action: "Sending permission response" }),
+          failureValue(error, { actionLabel: "Sending permission response" }),
         );
       }
     } finally {

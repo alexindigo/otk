@@ -328,8 +328,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         id,
         anchor: { key: anchor.key, offset: anchor.offset + delta },
       }));
+      // Input can reach unmaterialized space before a window starts its geometry
+      // barrier. Keep transfer pending until an intersecting measured source is
+      // captured, even when the first capture attempt finds no mounted row.
+      readerCapturePending = true;
       if (geometryPending) {
-        readerCapturePending = true;
         // Reader motion is a displacement of the saved identities, even when
         // their DOM offsets have already changed in this layout transaction.
         schedule();

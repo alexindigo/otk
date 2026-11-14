@@ -67,7 +67,9 @@ export default function ThemePicker(props: {
         await props.onSave(selected());
         if (active) cancel();
       } catch (error) {
-        if (active) setError(failureValue(error, { action: "Saving theme" }));
+        if (active) {
+          setError(failureValue(error, { actionLabel: "Saving theme" }));
+        }
       } finally {
         if (active) setPending(false);
       }
@@ -124,7 +126,7 @@ export default function ThemePicker(props: {
             } catch (error) {
               if (active) {
                 setError(
-                  failureValue(error, { action: "Saving theme" }),
+                  failureValue(error, { actionLabel: "Saving theme" }),
                 );
               }
             } finally {

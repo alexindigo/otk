@@ -17,7 +17,7 @@ Deno.test("linked failure feedback keeps existing channel preferences and on-scr
       retry: "none",
       diagnosticID: "channel-proof",
       facts: {
-        action: "Running session",
+        actionLabel: "Running session",
         target: { sidecarId: "channel-fixture", sessionID: "tstv1-session" },
         reason: "The session failed",
       },

@@ -99,7 +99,7 @@ export default function ProjectTabs(props: {
     );
   const entry = (id: string) => props.model.entry(id);
   const fail = (error: unknown) => {
-    setError(failureValue(error, { action: "Changing session tabs" }));
+    setError(failureValue(error, { actionLabel: "Changing session tabs" }));
   };
   const run = (action: Promise<unknown>) => {
     void action.catch(fail);

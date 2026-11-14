@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HttpRequests } from "./http-requests.ts";
 import type { ClientRequestPolicy, RequestWindow } from "@otk/protocol";
-import type { RequestMetadata } from "@otk/protocol";
-export const bootstrapRequestMetadata: Readonly<
-  Record<string, RequestMetadata>
-> = {
-  "bootstrap.session": { kind: "read", pending: "Connecting" },
-  "bootstrap.health": { kind: "read", pending: "Checking server" },
-  "bootstrap.login": { kind: "mutation", pending: "Signing in" },
-  "bootstrap.setup": { kind: "mutation", pending: "Configuring server" },
-  "bootstrap.logout": { kind: "mutation", pending: "Signing out" },
-};
+import { bootstrapRequestMetadata } from "./bootstrap-request-metadata.ts";
+export { bootstrapRequestMetadata } from "./bootstrap-request-metadata.ts";
 export interface AuthStatus {
   authenticated: boolean;
   setupRequired: boolean;

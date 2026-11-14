@@ -82,9 +82,16 @@ test(
       "Qualified session reply.",
     );
     await page.goto(`${state.url}/#/local/${native.id}`);
-    await expect(page.locator(".otk-global-error")).toHaveText(
+    // FP1 retains the compatibility reason inside its complete failure contract.
+    const failure = page.locator(".otk-global-error");
+    await expect(failure).toHaveCount(1);
+    await expect(failure).toHaveAttribute("role", "alert");
+    await expect(failure).toContainText("Opening session link failed for OTK");
+    await expect(failure).toContainText(
       "This session link is from an older version. Open Sessions to choose a session.",
     );
+    // The compatibility reason already names the next step; do not invent another.
+    await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
     expect(
       frames.sent.some(({ frame }) =>
         frame.params?.sessionID === native.id || frame.sessionID === native.id

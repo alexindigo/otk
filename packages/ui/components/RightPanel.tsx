@@ -42,7 +42,7 @@ export default function RightPanel(props: {
       setError("");
     },
     fail: (error) =>
-      setError(failureValue(error, { action: "Saving panel layout" })),
+      setError(failureValue(error, { actionLabel: "Saving panel layout" })),
   });
   const width = resize.width;
   const native = nativeAttributes(() => resize.handlers);
@@ -51,7 +51,7 @@ export default function RightPanel(props: {
       await props.onLayout(patch);
       setError("");
     } catch (error) {
-      setError(failureValue(error, { action: "Saving panel layout" }));
+      setError(failureValue(error, { actionLabel: "Saving panel layout" }));
     }
   };
   function Views(input: { rail: boolean }) {

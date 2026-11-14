@@ -51,7 +51,7 @@ export default function PreferenceControls(
     setError("");
     void set({ key, value }).catch((failure: unknown) => {
       if (alive) {
-        setError(failureValue(failure, { action: "Saving preferences" }));
+        setError(failureValue(failure, { actionLabel: "Saving preferences" }));
       }
     }).finally(() => {
       if (alive) restore();

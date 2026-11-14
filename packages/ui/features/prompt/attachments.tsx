@@ -144,7 +144,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
               patch({
                 pending: false,
                 error: failureValue(error, {
-                  action: "Reading attachment",
+                  actionLabel: "Reading attachment",
                   target: ctx.failureTarget?.() ??
                     { sessionID: ctx.sessionID() },
                 }),

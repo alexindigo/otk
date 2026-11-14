@@ -25,12 +25,18 @@ import { projectHash, projectName } from "./project-navigation.ts";
 import type { Note } from "./notifications.ts";
 import { localFailure, RequestFailure, RequestReleased } from "./failures.ts";
 import type { RequestTracker } from "./requests.ts";
+import { bootstrapRequestMetadata } from "./bootstrap-request-metadata.ts";
 
 /** Shipped failure vocabulary. The reusable presenter itself has no feature list. */
 export function createFailurePresenter(): FailurePresenter {
   const metadata = createRequestMetadata();
+  for (
+    const [method, description] of Object.entries(bootstrapRequestMetadata)
+  ) {
+    metadata.register(method, description);
+  }
   const presenter = new FailurePresenter({
-    action: (key) => metadata.get(key)?.pending ?? key,
+    action: (key) => metadata.get(key)?.pending,
     target: (target) => ({
       label: target.sessionID
         ? sessionTitle(target.sessionID, target.label)

@@ -187,7 +187,7 @@ export default function FormDock(
       if (alive) {
         setError(
           failureValue(cause, {
-            action: "Sending form response",
+            actionLabel: "Sending form response",
             target: props.failureTarget,
           }),
         );
@@ -342,7 +342,7 @@ export default function FormDock(
                     >
                       <FeedbackStatus
                         feedback={errorFeedback(derived().issues[field().key], {
-                          action: "Sending form response",
+                          actionLabel: "Sending form response",
                           target: props.failureTarget,
                         })}
                       />

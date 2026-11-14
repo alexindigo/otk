@@ -42,7 +42,8 @@ test("attention.native-failure-toast-identifies-the-background-session", {
       exact: true,
     }),
   ).toHaveAttribute("href", `#/local/${failed.id}`);
-  await expect(toast).toContainText("OTK will not repeat this action");
+  // This native failure supplies a reason, not an owner-authored recovery step.
+  await expect(toast.locator(".otk-failure-recovery")).toHaveCount(0);
   await expect(page.locator('.otk-toast[data-kind="done"]')).toHaveCount(0);
   if (info.project.name === "oc-2.2.6") {
     await expect(

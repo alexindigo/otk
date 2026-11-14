@@ -69,6 +69,8 @@ export interface RequestTrackerOptions {
   clientID?: string;
   server?: string;
   sidecarId?: string;
+  /** Captured server wording supplied by its connection owner, not a selected view. */
+  serverLabel?: string;
   /** Borrow canonical keyed metadata at admission, never a mutable selected session. */
   sessionTitle?(sessionID: string): string | undefined;
   /** Opaque authenticated identity supplied by the transport composition. */
@@ -326,7 +328,10 @@ export class RequestTracker {
   }
   #target(target: import("@otk/protocol").FailureTarget | undefined) {
     const label = target?.label ||
-      (target?.sessionID && this.options.sessionTitle?.(target.sessionID));
+      (target?.sessionID && this.options.sessionTitle?.(target.sessionID)) ||
+      (!target?.sessionID && !target?.directory
+        ? this.options.serverLabel
+        : undefined);
     return label ? { ...target, label } : target;
   }
   start<M extends RpcMethod>(

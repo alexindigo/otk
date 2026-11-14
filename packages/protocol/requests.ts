@@ -42,10 +42,14 @@ export interface FailureTarget {
 }
 /** Producer-selected public facts, never request bodies or raw exception data. */
 export interface FailureFacts {
+  /** Opaque action identity, resolved through the selected description registry. */
   action?: string;
+  /** Feature-authored public wording when no registered action description exists. */
+  actionLabel?: string;
   target?: FailureTarget;
   reason?: string;
   status?: number;
+  /** Specific next step from the action/cause owner; omit when none is known. */
   recovery?: string;
   outcome?: "unknown" | "unavailable" | "rejected";
 }

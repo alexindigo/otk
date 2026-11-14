@@ -399,7 +399,7 @@ export function createDirectoryCatalogs(o: {
                 ? presentFailure({
                   ...current.failure,
                   facts: {
-                    action: `Loading ${kind}`,
+                    actionLabel: `Loading ${kind}`,
                     target: { directory: resource.directory },
                     ...current.failure.facts,
                   },

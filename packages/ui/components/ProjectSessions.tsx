@@ -105,7 +105,7 @@ export default function ProjectSessions(props: {
   });
   const run = (promise: Promise<unknown>) =>
     void promise.catch((e) =>
-      setError(failureValue(e, { action: "Opening session" }))
+      setError(failureValue(e, { actionLabel: "Opening session" }))
     );
   const hierarchy = createSessionTree();
   const rows = createMemo(() => {

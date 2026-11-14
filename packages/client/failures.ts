@@ -11,7 +11,8 @@ export interface FailurePresentation {
   heading: string;
   target: { label: string; href?: string };
   reason: string;
-  recovery: string;
+  /** Specific next step supplied by the action/cause owner, absent otherwise. */
+  recovery?: string;
   count: number;
   occurrences: readonly string[];
   /** No feature-authored reason: Details carry the diagnostic ID instead. */
@@ -57,7 +58,7 @@ export class FailurePresenter {
   #groups = new Map<string, { identity: string; occurrences: Set<string> }>();
   constructor(
     readonly context: {
-      action?(key: string): string;
+      action?(key: string): string | undefined;
       target?(target: FailureTarget): { label: string; href?: string };
     } = {},
   ) {}
@@ -86,9 +87,8 @@ export class FailurePresenter {
     };
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
-    const action = facts.action
-      ? this.context.action?.(facts.action) ?? facts.action
-      : "The requested action";
+    const action = (facts.action && this.context.action?.(facts.action)) ||
+      facts.actionLabel || "The requested action";
     const target = this.context.target?.(facts.target ?? {}) ??
       { label: facts.target?.label ?? "OTK" };
     const known = facts.reason ?? enrichment?.text;
@@ -99,14 +99,9 @@ export class FailurePresenter {
     const heading = pending
       ? `Checking whether ${action} finished`
       : `${action} failed`;
-    const recovery = facts.recovery ??
-      (pending
-        ? "OTK is checking the original outcome and will not repeat the action without evidence"
-        : failure.retry === "same-intent"
-        ? "OTK will not repeat this action automatically. Review the target's current state"
-        : failure.retry === "new-intent"
-        ? "Review the target and input before starting a new action"
-        : "OTK will not repeat this action. Review the target's current state");
+    // Retry policy classifies execution, not advice. Only an owner that knows
+    // this action and cause can supply a useful next step.
+    const recovery = facts.recovery?.trim() || undefined;
     const presentation: FailurePresentation = {
       value: failure,
       action,
@@ -121,8 +116,11 @@ export class FailurePresenter {
     return {
       ...enrichment,
       kind: pending ? "pending" : "error",
-      text:
-        `${heading} for ${target.label}: ${presentation.reason}. ${recovery}.`,
+      text: [
+        `${heading} for ${target.label}: ${presentation.reason}`,
+        ...recovery ? [recovery] : [],
+      ].map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`)
+        .join(" "),
       diagnosticID: failure.diagnosticID,
       field: failure.field ?? enrichment?.field,
       failure: presentation,
@@ -132,10 +130,13 @@ export class FailurePresenter {
   groupingKey(failure: PublicFailure): string {
     const shown = this.#present(failure).failure!;
     const target = failure.facts?.target;
+    const key = failure.facts?.action;
+    // Unknown identities stay distinct even though their public wording is generic.
+    const action = key ? this.context.action?.(key) || key : shown.action;
     return JSON.stringify([
       target?.sidecarId ?? "local",
       target?.sessionID ?? target?.directory ?? "OTK",
-      shown.action,
+      action,
       shown.reason,
       shown.recovery,
       failure.retry,

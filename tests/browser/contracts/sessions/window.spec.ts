@@ -130,7 +130,7 @@ test.describe("measured Sessions", () => {
   test(
     "sessions.measured-window-identity-focus-menu-search-anchor-editor-and-scope",
     { tag: ["@sessions", "@contracts", "@isolated"] },
-    async ({ isolatedState: state, page }) => {
+    async ({ isolatedState: state, page }, info) => {
       test.setTimeout(90_000);
       const task = await state.product("tasks.create", {
         directory: state.directory,
@@ -256,8 +256,29 @@ test.describe("measured Sessions", () => {
       await scroll(page, 3000);
       const editing = await anchor(page);
       await input.press("Enter");
-      await expect(page.locator(".otk-title-editor [role=alert]"))
-        .toBeVisible();
+      // FP1's shared row track owns the alert, not the editor's internal subtree.
+      const failure = page.locator(
+        ".otk-session-row.is-editing .otk-list-row-feedback [role=alert]",
+      );
+      await expect(failure).toHaveCount(1);
+      await expect(failure).toBeVisible();
+      await expect(failure).toHaveAttribute("aria-atomic", "true");
+      await expect(failure).not.toHaveAttribute("aria-hidden", "true");
+      const failureID = await failure.getAttribute("id");
+      expect(failureID).toBeTruthy();
+      expect((await input.getAttribute("aria-describedby"))!.split(/\s+/))
+        .toContain(failureID);
+      await expect(input).toHaveAttribute("aria-invalid", "true");
+      await expect(failure).toContainText(
+        "Renaming session failed for Window session 050",
+      );
+      await expect(
+        failure.getByRole("link", { name: "Window session 050", exact: true }),
+      )
+        .toHaveAttribute("href", "#/local/tstv1-w-50");
+      await expect(failure).toContainText("OTK has no further details");
+      await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
+      await expect(input).toHaveValue("Retained editor");
       await expect.poll(() =>
         page.locator(".otk-session-row.is-editing").evaluate((e) =>
           e.getBoundingClientRect().height
@@ -286,6 +307,25 @@ test.describe("measured Sessions", () => {
           return Math.max(...ys) - Math.min(...ys) <= 1;
         }),
       ).toBe(true);
+      // Capture only after the unchanged anchor/geometry proof. Explicitly reveal
+      // the retained editor for the review, not as a fix for feedback movement.
+      await input.scrollIntoViewIfNeeded();
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        // Saving a theme can blur the retained editor and start another save.
+        // Review the settled rejection, never that real retry's pending frame.
+        await expect(input).not.toHaveAttribute("aria-busy", "true");
+        await expect(failure).toBeVisible();
+        await expect(failure).toContainText("Renaming session failed");
+        await info.attach(`fx17-rename-failure-${theme}`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      }
       await search.fill("No matching sessions while editing");
       await expect(page.locator(".otk-session-row")).toHaveCount(1);
       await expect(input).toHaveValue("Retained editor");

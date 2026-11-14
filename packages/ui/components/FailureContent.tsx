@@ -19,7 +19,9 @@ export default function FailureContent(
         </Show>.
       </span>
       <span>{props.failure.reason}</span>
-      <span>{props.failure.recovery}</span>
+      <Show when={props.failure.recovery}>
+        {(recovery) => <span class="otk-failure-recovery">{recovery()}</span>}
+      </Show>
       <Show when={props.failure.count > 1}>
         <span>{props.failure.count} identical failures</span>
       </Show>

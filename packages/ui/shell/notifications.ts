@@ -246,7 +246,7 @@ export function applicationNotifications(input: {
       }
       if (frame.t === "error") {
         fail(frame, {
-          action: "Receiving server update",
+          actionLabel: "Receiving server update",
           target: { sidecarId: sidecar },
           reason: frame.message || frame.code,
         });

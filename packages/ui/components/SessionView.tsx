@@ -301,7 +301,7 @@ export default function SessionView(props: {
         if (!isCancellation(error)) {
           setRevealError(
             failureValue(error, {
-              action: "Revealing prompt",
+              actionLabel: "Revealing prompt",
               target: {
                 sidecarId: props.sidecarId,
                 sessionID: props.info?.id,
@@ -655,7 +655,7 @@ export default function SessionView(props: {
                   void latest().catch((error) => {
                     if (!isCancellation(error)) {
                       setRevealError(failureValue(error, {
-                        action: "Revealing latest messages",
+                        actionLabel: "Revealing latest messages",
                         target: {
                           sidecarId: props.sidecarId,
                           sessionID: props.info?.id,

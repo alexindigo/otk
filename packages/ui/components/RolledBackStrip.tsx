@@ -45,7 +45,7 @@ export function RolledBackContent(
       await action();
     } catch (error) {
       setFeedback(
-        failureValue(error, { action: "Restoring rolled-back prompts" }),
+        failureValue(error, { actionLabel: "Restoring rolled-back prompts" }),
       );
     }
   };

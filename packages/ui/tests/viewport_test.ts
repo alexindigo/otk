@@ -36,6 +36,68 @@ Deno.test("large native input keeps its displacement when no new measured source
   });
 });
 
+Deno.test("reader input before materialization transfers the anchor after measurement", () => {
+  viewportFixture(({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), retained = new Set<string>();
+    let visible = true, second = 400;
+    const release = lease.owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () =>
+        visible
+          ? {
+            key: pane.scrollTop < second ? "old" : "visible",
+            offset: pane.scrollTop - (pane.scrollTop < second ? 0 : second),
+          }
+          : undefined,
+      resolve: (anchor) =>
+        (anchor.key === "visible" ? second : 0) + anchor.offset,
+      retain: (anchor) => {
+        retained.add(anchor.key);
+        return () => retained.delete(anchor.key);
+      },
+    });
+    try {
+      for (let n = 0; n < 4; n++) flush();
+      visible = false;
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: 500 });
+      pane.dispatchEvent(wheel);
+      pane.scrollTop = 500;
+      pane.dispatchEvent(new Event("scroll"));
+      pane.dispatchEvent(new Event("scrollend"));
+      assertEquals(
+        [...retained],
+        ["old"],
+        "the old measured attachment bridges unmounted space",
+      );
+      // Materialization starts after reader input, not before it.
+      const measured = lease.owner.hold();
+      visible = true;
+      measured();
+      for (let n = 0; n < 4; n++) flush();
+      assertEquals(
+        [...retained],
+        ["visible"],
+        "settlement must transfer even when input preceded the geometry barrier",
+      );
+      lease.owner.transaction(() => {
+        second += 120;
+        height(1120);
+      });
+      assertEquals(
+        pane.scrollTop,
+        620,
+        "feedback growth between old and visible sources compensates at the visible anchor",
+      );
+    } finally {
+      release();
+      lease.release();
+    }
+    assertEquals([...retained], []);
+  }, { tail: false });
+});
+
 for (const input of ["wheel", "keydown"]) {
   Deno.test(`${input} transfers the retained source after the final measurement lease`, () => {
     viewportFixture(({ pane, height, flush }) => {

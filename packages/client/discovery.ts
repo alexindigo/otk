@@ -35,7 +35,7 @@ export function discoveryFailure(
 ): FeedbackFailure {
   return new FeedbackFailure(
     errorFeedback(reason, {
-      action: "Checking OTK",
+      actionLabel: "Checking OTK",
       target: { label: target },
       recovery: next,
     })!,

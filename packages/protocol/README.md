@@ -26,6 +26,12 @@ unknown effect outcomes; its cause is diagnostic. `canonicalRequest` rejects
 unsupported/nonfinite JSON inputs and `requestFingerprint` hashes their equality
 representation asynchronously.
 
+`FailureFacts.action` is an opaque identity, never display copy. Consumers
+resolve it through their selected descriptions. Optional `actionLabel` carries
+an explicit feature-authored public description; an unresolved key without one
+receives plain generic wording rather than exposing its identity. Reasons,
+routing facts and diagnostic identity retain their existing meaning.
+
 Shipped metadata receipt contracts live beside their feature contracts and are
 composed into `RequestReceipts` by interface inheritance, following `RpcMethods`
 and the JSR-compatible preference pattern. Task/project records, selected

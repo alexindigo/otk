@@ -115,6 +115,10 @@ ellipsizes while the complete accessible description remains available.
 the previous subscription and restores the target's retained state on remount;
 it never cancels an operation or stores a second pending map.
 
+FailureContent renders recovery only when the action/cause owner supplies it. An
+absent next step has no empty row or replacement advice; all inline and toast
+consumers borrow that same optional-recovery presentation.
+
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use
@@ -662,6 +666,13 @@ row, retained together with its enclosing row chain. Estimated spacers locate
 mounting work but never become anchors; entering one retains the adjacent
 measured source until the new content is measured. Solid's flush/settled
 boundary joins its deferred DOM reconciliation to the same geometry commit.
+
+Reader displacement marks source transfer pending even when the target rows have
+not materialized and no measurement barrier has started yet. The old attachment
+bridges that space only until an intersecting measured source can replace it;
+feedback growth then compensates against the reader's visible identity rather
+than an obsolete offscreen row. Retry/edit feedback keeps its normal-flow
+height.
 
 Native selections pin the complete intersecting logical range before recycling,
 including interior child windows and reverse selections. Select all in a focused
