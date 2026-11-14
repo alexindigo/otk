@@ -109,8 +109,12 @@ test.describe("native shell", () => {
       (await state.observe<{ transport: { entered: boolean } }>()).transport
         .entered
     ).toBe(true);
-    await revealTool(page, "[data-tool=bash]");
-    await expect(page.locator("[data-tool=bash]")).toContainText(
+    // NT2: a V2 user shell is a plugin-owned shell record, not a bash tool call.
+    const shell = state.controller.info!.version.startsWith("2.")
+      ? '[data-native-record="opencode-v2/shell"]'
+      : "[data-tool=bash]";
+    await revealTool(page, shell);
+    await expect(page.locator(shell)).toContainText(
       "request-native-once",
     );
     await expect(page.locator(".otk-operation-feedback.is-pending"))

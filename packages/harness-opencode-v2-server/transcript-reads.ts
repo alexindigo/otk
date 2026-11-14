@@ -73,6 +73,7 @@ function jsonCodec<
   K extends
     | "opcv2.transcript"
     | "opcv2.message.prefetch"
+    | "opcv2.request.anchor"
     | "opcv2.helper.progress",
 >(): ProviderReadCodec<K> {
   return {
@@ -107,6 +108,7 @@ export const transcriptReadCodecs: ProviderReadCodecs = {
   "opcv2.helper.progress": jsonCodec<"opcv2.helper.progress">(),
   "opcv2.transcript": jsonCodec<"opcv2.transcript">(),
   "opcv2.message.prefetch": jsonCodec<"opcv2.message.prefetch">(),
+  "opcv2.request.anchor": jsonCodec<"opcv2.request.anchor">(),
 };
 export function scalarMessage(
   raw: NativeMessage,
@@ -519,6 +521,21 @@ export class TranscriptReads {
         ? `api:fallback:${this.source?.() ?? "sql"}`
         : this.source?.() ?? "api",
     };
+  }
+  /** One index probe of native sequence: the latest message, or one message.
+   * No body, no population. Absent without a source-proven database. */
+  sequence(sessionID: string, messageID?: string): { seq?: number } {
+    const sql = this.native();
+    if (!sql) return {};
+    const sid = ids.decode(sessionID),
+      row = messageID
+        ? sql.prepare(
+          "SELECT seq FROM session_message WHERE session_id=? AND id=?",
+        ).get(sid, messageID)
+        : sql.prepare(
+          "SELECT seq FROM session_message WHERE session_id=? ORDER BY seq DESC LIMIT 1",
+        ).get(sid);
+    return row ? { seq: Number(row.seq) } : {};
   }
   sqlFacts(input: TranscriptInput): TranscriptFacts | undefined {
     const sql = this.native();

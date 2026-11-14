@@ -58,6 +58,9 @@ type Pending = {
 };
 /** Managed-service connection, native identity and capability composition. */
 export class OpencodeV2ServerAdapter implements Harness {
+  storage(storage: import("@otk/harness").PluginStorage): void {
+    this.transcript.requests.bind(storage);
+  }
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
   readonly digest?: DigestPort;
@@ -768,7 +771,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   ): Promise<void> {
     if (generation !== this.#generation) return;
     this.#errors.remove(id);
-    this.transcript.release(id);
+    await this.transcript.deleted(id);
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);

@@ -109,6 +109,7 @@ Deno.test("V2 live historical tools and snapshot checkpoints use the same interp
         type: "tool",
         id: name,
         name,
+        executed: false,
         time: { created: 2, ran: 3, completed: 4 },
         state: {
           status: "completed",
@@ -140,9 +141,10 @@ Deno.test("V2 standalone context kinds stay visible without becoming real prompt
       ...(type === "skill" ? { skill: "canary", name: "Canary" } : {}),
     } as NativeMessage;
     const mapped = mapMessage(raw, id, { order: 1 })!;
-    assertEquals(mapped.role === "user" && mapped.origin, type);
+    assertEquals(mapped.role, "context");
     const part = mapped.parts[0];
-    assertEquals(part.kind === "text" && part.synthetic, false);
+    assert(part.kind === "external" && part.activity);
+    assertEquals(part.name, `opencode-v2/${type}`);
     assertEquals(mapped.role === "user" && mapped.origin === undefined, false);
   }
 });
@@ -158,7 +160,7 @@ Deno.test("V2 compaction carries its own lifecycle without becoming a prompt", (
       time: { created: 1 },
     } as NativeMessage;
     const message = mapMessage(raw, id, { order: 1 })!;
-    assertEquals(message.role === "user" && message.origin, "compaction");
+    assertEquals(message.role, "context");
     const part = message.parts.find((part) => part.kind === "compaction")!;
     assertEquals(Reflect.get(part, "status"), status);
     assertEquals(JSON.parse(JSON.stringify(part)).status, status);
@@ -201,9 +203,8 @@ Deno.test("V2 queued compaction is provider context and keeps its inbox owner", 
       "msg_queued",
     );
     assertEquals(
-      event?.op === "message.upsert" && event.message.role === "user" &&
-        event.message.origin,
-      "compaction",
+      event?.op === "message.upsert" && event.message.role,
+      "context",
     );
     assertEquals(
       event?.op === "message.upsert" &&
@@ -457,7 +458,7 @@ Deno.test("V2 all native message kinds are context or controls, never fake real 
     const m = mapMessage(r, id, { order: i });
     return m ? [m] : [];
   });
-  assertEquals(mapped.length, 7);
+  assertEquals(mapped.length, rows.length);
   const projection = createTranscriptProjection();
   projection.replace(mapped);
   projection.busy(true);
@@ -504,6 +505,7 @@ Deno.test("V2 real-user anchors and selection follow seq, not copied clocks or f
     }),
   );
   assertEquals(projection.state.messageIDs, [
+    "msg_fork_2",
     "msg_fork_9",
     "msg_fork_10",
     "msg_fork_11",
@@ -709,7 +711,9 @@ Deno.test("V2 unknown native content stays bounded and cannot become a prompt an
     id,
     { order: 2 },
   )!;
-  assert(future.role === "user" && future.origin === "external");
+  assertEquals(future.role, "context");
+  assert(future.source?.truncated);
+  assertEquals(future.source?.preview.length, 16384);
   assertEquals(createTranscriptProjection().state.queuedIDs.size, 0);
 });
 Deno.test("V2 untested cutoff scan uses bounded ordinary pages and preserves exact continuation", async () => {
@@ -811,6 +815,7 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
   let block = false;
   const api = {
     session: {
+      inbox: { list: () => Promise.resolve([]) },
       get: () =>
         Promise.resolve({
           id: "ses_fixture",
