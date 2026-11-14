@@ -1202,8 +1202,8 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           ? knownDerived(
             {
               toolCount: helper.toolCount,
-              current: helper.current,
-              time: helper.time,
+              ...(helper.current ? { current: helper.current } : {}),
+              ...(helper.time ? { time: helper.time } : {}),
             },
             `${entry.id}@${this.#source}`,
             (previous?.revision ?? 0) + (same ? 0 : 1),
@@ -1445,7 +1445,6 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         state: finished ? "ready" : "digesting",
         refreshing: !finished,
         stale: false,
-        error: undefined,
         revision: (previous?.summary.revision ?? 0) + 1,
         digestedAt: Date.now(),
         nativeUpdatedAt: millis(raw.time.updated),
@@ -1496,6 +1495,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       turns: { upsert: summaries, remove },
       deleted: null,
     };
+    // A coherent replacement clears source failures in memory as well as on wire.
+    delete delta.summary.error;
+    if (delta.summary.messageCount === undefined) {
+      delete delta.summary.messageCount;
+    }
     this.storage.transaction(() => {
       for (const turn of coveredTurns) {
         this.storage.sql.prepare(

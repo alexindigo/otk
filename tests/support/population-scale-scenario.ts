@@ -93,10 +93,10 @@ export async function populationScaleScenario(profile: Profile) {
     });
     db.close();
   }
-  if (profile === "contract-scale-sessions") {
+  if (["contract-scale-sessions", "contract-scale-paint"].includes(profile)) {
     // This case qualifies new interactive work over viewed history. First-run
     // unseen history has its own supervision contract and would correctly take
-    // priority over the working project lamp this case needs to exercise.
+    // priority over the working lamp or remembered paint target under test.
     const db = new OtkDb(config.state.path, beta2Migrations, config.storage);
     try {
       seedScaleSeen(db, native.db, nativeKind, native.manifest.sessions);

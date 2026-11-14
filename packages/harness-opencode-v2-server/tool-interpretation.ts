@@ -110,7 +110,11 @@ export function toolProgress(
   created: unknown,
 ) {
   const value = interpretTool(name, input, metadata);
-  return { name: value.name, title: value.title, startedAt: millis(created) };
+  return {
+    name: value.name,
+    ...(value.title === undefined ? {} : { title: value.title }),
+    startedAt: millis(created),
+  };
 }
 export function mapTool(tool: Tool): ToolCall {
   const state = tool.state;

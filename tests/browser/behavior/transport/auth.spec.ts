@@ -100,10 +100,21 @@ test(
   "transport.authenticated-remote",
   { tag: ["@transport", "@isolated"] },
   async ({ isolatedState: state, page }, info) => {
-    await state.native("/session", "POST", { title: "First host" });
+    const local = await state.native<{ directory: string; projectID: string }>(
+      "/session",
+      "POST",
+      { title: "First host" },
+    );
     const remote = await state.controller.call<
-      { url: string; session: { id: string } }
+      {
+        url: string;
+        session: { id: string; directory: string; projectID: string };
+      }
     >("auxiliary", { lease: state.lease.lease, kind: "remote-password" });
+    if (info.project.name === "oc-2.2.6") {
+      expect(local.projectID).toBe("global");
+      expect(remote.session.projectID).toBe("global");
+    }
     await page.goto(state.url);
     await page.locator(".otk-settings-entry").click();
     await page.locator("input[name=url]").fill(remote.url);
@@ -145,9 +156,23 @@ test(
       expect.objectContaining({ baseUrl: remote.url, label: "Remote agent" }),
     ]);
     await page.reload();
+    // PH1: two real uncommitted projects, not an invented global-repository row.
     await expect(page.locator(".otk-project-inbox [data-project]")).toHaveCount(
-      info.project.name === "oc-2.2.6" ? 3 : 2,
+      2,
     );
+    await expect(
+      page.locator(
+        `[data-server=local][data-project=${JSON.stringify(local.directory)}]`,
+      ),
+    ).toHaveCount(1);
+    await expect(
+      page.locator(
+        `[data-server]:not([data-server=local])[data-project=${
+          JSON.stringify(remote.session.directory)
+        }]`,
+      ),
+    ).toHaveCount(1);
+    await expect(page.locator("[data-project-parent]")).toHaveCount(0);
     await expect(page.locator("[data-session]")).toHaveCount(1);
     await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
       "Reply from the second sidecar",

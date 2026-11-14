@@ -58,10 +58,10 @@ test("4615 tasks retain ordered memberships while seen and task changes publish 
       "INSERT INTO task_sessions VALUES(?,?,?)",
     );
     const seen = db.connection.prepare(
-      "INSERT INTO session_seen(user,session,time) VALUES(?,?,?)",
+      "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?)",
     );
     const finish = db.connection.prepare(
-      "INSERT INTO session_finishes(session,time) VALUES(?,?)",
+      "INSERT INTO session_finishes(session,time,terminal) VALUES(?,0,?)",
     );
     for (let n = 0; n < 4615; n++) {
       task.run(
@@ -90,6 +90,8 @@ test("4615 tasks retain ordered memberships while seen and task changes publish 
     const baseline = await report.time("baseline", () => inbox.baseline());
     assertEquals(baseline.inbox.tasks.length, 4615);
     assertEquals(Object.keys(baseline.inbox.seen).length, 4615);
+    assertEquals(baseline.inbox.seen["opcv1-ses_2"], 2);
+    assertEquals(baseline.inbox.finishes["opcv1-ses_2"], 3);
     const original = db.connection.prepare.bind(db.connection),
       statements: string[] = [];
     db.connection.prepare = ((sql: string) => {
@@ -113,13 +115,15 @@ test("4615 tasks retain ordered memberships while seen and task changes publish 
     const frames: ServerFrame[] = [];
     const release = inbox.listen((frame) => frames.push(frame));
     statements.length = 0;
-    stores.seen.mark("local", "opcv1-ses_2");
+    // SV1 publishes exact displayed terminal acknowledgements, not legacy clocks.
+    stores.seen.acknowledge("local", "opcv1-ses_2", 3);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assertEquals(statements.filter((sql) => /^\s*SELECT/i.test(sql)), []);
     assertEquals(frames.map((frame) => frame.t), ["inbox.patch"]);
     const mark = frames[0];
     assert(mark.t === "inbox.patch");
     assertEquals(mark.ops.map((op) => op.op), ["seen"]);
+    assertEquals(inbox.get().seen["opcv1-ses_2"], 3);
     frames.length = 0;
     stores.tasks.rename("task-2", "Only changed task");
     await new Promise((resolve) => setTimeout(resolve, 0));

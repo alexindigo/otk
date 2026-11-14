@@ -142,6 +142,52 @@ test("derived codecs retain witnesses, finality, null reporting and explicit no-
   ) assertThrows(() => decodeDerived(invalid, (value) => value), TypeError);
 });
 
+test("digest recovery has the same absent-error shape in memory and on wire", () => {
+  const server = new SessionIndex(), client = createIndex();
+  server.upsertMetadata(metadata);
+  client.receive("one", {
+    t: "index.snapshot",
+    rev: 1,
+    entries: server.snapshotEntries().map((entry) => structuredClone(entry)),
+  });
+  let revision = 1;
+  for (const error of ["Source failure", undefined]) {
+    const delta = {
+      id: metadata.id,
+      revision: ++revision,
+      summary: {
+        state: "ready" as const,
+        revision,
+        total: usage,
+        ...(error === undefined ? {} : { error }),
+      },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    };
+    server.applyDigest(delta);
+    client.receive(
+      "one",
+      JSON.parse(JSON.stringify({
+        t: "index.patch",
+        rev: revision,
+        ops: [{ op: "digest", ...delta }],
+      })),
+    );
+    for (
+      const entry of [server.get(metadata.id), client.get("one", metadata.id)]
+    ) {
+      assertEquals(Object.hasOwn(entry!.digest, "error"), error !== undefined);
+      assertEquals(entry!.digest.error, error);
+      assertEquals(entry!.digest, JSON.parse(JSON.stringify(entry!.digest)));
+      assertEquals(entry!.digest.total, usage);
+    }
+    assertEquals(
+      client.get("one", metadata.id)!.digest,
+      server.get(metadata.id)!.digest,
+    );
+  }
+});
+
 test("multipart cached replay under held credit and worker restart preserve each known unit", async () => {
   const root = await tempDir("digest-result-replay-");
   const db = new DigestDb(

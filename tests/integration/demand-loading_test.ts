@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertObjectMatch } from "@std/assert";
 import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { cfg } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { assertIdentityFields } from "../support/identity-assertions.ts";
 import { DatabaseSync } from "node:sqlite";
 import type { SessionListPage } from "@otk/protocol";
 import type { DigestPressure } from "../../core/digest/protocol.ts";
@@ -559,7 +560,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     await waitFor(snapshot, (value) => value.discovered?.length === 130);
     const first = await snapshot();
     // Topology is now additive; scalar authority and no-population reads stay exact.
-    const direct: import("@otk/protocol").ProjectSummary = {
+    const direct: import("@otk/protocol").ProjectSummaryFacts = {
       directory: "/idle",
       hasSessions: true,
       status: "none",
@@ -570,14 +571,18 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
           .time_updated,
       ),
       authority: "current",
+    };
+    assertObjectMatch(first.summaries!["/idle"], {
+      ...direct,
       topology: {
         repoID: "idle",
         canonicalRoot: "/idle",
         leafDirectory: "/idle",
       },
       scopes: ["/idle"],
-    };
-    assertEquals(first.summaries?.["/idle"], { ...direct, direct });
+      direct,
+    });
+    assertEquals(first.summaries!["/idle"].scopes, ["/idle"]);
     assertEquals(first.projects, []);
     assertEquals(
       [...app.index.values()].length,
@@ -770,7 +775,10 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
       "sessions.identities",
       { ids: ["opcv1-ses_idle499"] },
     );
-    assertEquals(remembered, [{ id: "opcv1-ses_idle499", directory: "/idle" }]);
+    assertIdentityFields(remembered, [{
+      id: "opcv1-ses_idle499",
+      directory: "/idle",
+    }]);
     assertEquals(reads(), before, "point validation never enumerates a list");
     console.info(
       JSON.stringify({
