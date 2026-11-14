@@ -7,15 +7,24 @@ import { fixture } from "../support/config.ts";
 import { test } from "../support/resources.ts";
 import { seedScaleSeen } from "../support/scale-seen.ts";
 
+function v1Schema(native: DatabaseSync, sessions: readonly string[]) {
+  native.exec(`CREATE TABLE session(id TEXT, parent_id TEXT, directory TEXT,
+    project_id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER,
+    time_archived INTEGER);
+    CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);`);
+  const insert = native.prepare(
+    "INSERT INTO session VALUES(?,NULL,'/fixture','project',?,1,100,NULL)",
+  );
+  for (const id of sessions) insert.run(id, id);
+}
+
 for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
   test(`scale viewed-history fixture acknowledges exact ${kind} seed terminals only`, async () => {
     const root = await fixture(),
       path = join(root, "native.db"),
       native = new DatabaseSync(path);
     if (kind === "opencode-v1") {
-      native.exec(
-        "CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT)",
-      );
+      v1Schema(native, ["seed", "other", "empty"]);
       const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
       for (
         const [id, terminal] of [["seed", 10], ["seed", 20], ["other", 99]]
@@ -69,22 +78,20 @@ for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
   });
 }
 
-test("scale viewed-history fixture follows the latest valid V1 assistant terminal", async () => {
+test("scale viewed-history fixture follows the native V1 terminal inventory", async () => {
   const root = await fixture(),
     path = join(root, "native.db"),
     native = new DatabaseSync(path);
-  native.exec(
-    "CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT)",
-  );
-  const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
   const sessions = [
     "error",
     "error-completed",
     "tool-calls",
     "unknown",
-    "unfinished",
+    "completion-only",
     "same-clock",
   ];
+  v1Schema(native, sessions);
+  const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
   for (const id of sessions) {
     insert.run(
       "old",
@@ -105,7 +112,7 @@ test("scale viewed-history fixture follows the latest valid V1 assistant termina
     }],
     ["tool-calls", { finish: "tool-calls", time: { completed: 40 } }],
     ["unknown", { finish: "unknown", time: { completed: 40 } }],
-    ["unfinished", { time: { completed: 40 } }],
+    ["completion-only", { time: { completed: 40 } }],
     ["same-clock", { finish: "stop", time: { completed: 40 } }],
   ] as const;
   for (const [id, fields] of latest) {
@@ -151,6 +158,9 @@ test("scale viewed-history fixture follows the latest valid V1 assistant termina
         ["error", 30],
         ["error-completed", 31],
         ["same-clock", 30],
+        ["tool-calls", 20],
+        ["unknown", 20],
+        ["completion-only", 40],
       ]),
     );
     const changed = new DatabaseSync(path);
