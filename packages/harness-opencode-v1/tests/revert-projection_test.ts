@@ -6,8 +6,9 @@ import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
-for (const sql of [true, false]) {
-  test(`revert projection bounds oldest previews and shares metadata-only history mapping (${sql ? "SQL" : "API"})`, async () => {
+for (const mode of ["SQL", "API", "incompatible SQL"]) {
+  const sql = mode === "SQL";
+  test(`revert projection bounds oldest previews and shares metadata-only history mapping (${mode})`, async () => {
     const db = join(await tempDir("revert-projection-"), "native.db");
     const messages = Array.from({ length: 55 }, (_, i) => {
       const id = `msg_${String(i).padStart(4, "0")}`;
@@ -75,7 +76,14 @@ for (const sql of [true, false]) {
       writer.exec("COMMIT");
       writer.close();
     }
-    const bytes = sql ? await Deno.readFile(db) : undefined;
+    if (mode === "incompatible SQL") {
+      const writer = new DatabaseSync(db);
+      writer.exec(
+        "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+      );
+      writer.close();
+    }
+    const bytes = mode !== "API" ? await Deno.readFile(db) : undefined;
     let pages = 0;
     const adapter = new Opencode1Adapter(
       {
