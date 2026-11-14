@@ -26,6 +26,8 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
     finishes.observe("s", 200);
     // Delayed viewing of the old terminal cannot acknowledge the new one.
     assertEquals(seen.acknowledge("alice", "s", 100), 100);
+    // Opening can await its visit while a finish acknowledgement overtakes it.
+    assertEquals(seen.acknowledge("alice", "s", 0), 100);
     finishes.observe("s", 50);
     assertEquals(finishes.tokens(), { s: 200 });
     assertEquals(seen.tokens().map((row) => [row.user, row.time]), [[

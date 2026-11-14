@@ -199,7 +199,14 @@ export class V2SessionScale {
                 id,
                 title: `Load session ${i}`,
                 location: { directory },
-                time: { created: 1700000000000, updated: 1700000000010 },
+                // Completed bodies alone do not prove a native terminal.
+                // These populations are finished-unseen, not merely historical.
+                outcome: "succeeded",
+                time: {
+                  created: 1700000000000,
+                  updated: 1700000000010,
+                  idle: 1700000000010,
+                },
               },
               messages: [
                 {

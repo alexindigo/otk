@@ -759,6 +759,37 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   assertEquals(f.calls.length, 2);
   f.stop();
 });
+for (const finishOrder of ["before open", "after open"] as const) {
+  Deno.test(`seen acknowledges each displayed terminal once: finish ${finishOrder}`, async () => {
+    const f = fixture();
+    const view = {
+      selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: finishOrder === "before open" ? 41 : 0,
+    };
+    try {
+      f.navigation.observeView(view);
+      await settled();
+      for (const finish of [41, 41, 0, 41]) {
+        f.navigation.observeView({ ...view, finish });
+      }
+      await settled();
+      assertEquals(
+        f.calls.filter((call) => call[1] === "sessions.seen"),
+        (finishOrder === "before open" ? [41] : [0, 41]).map((terminal) => [
+          "local",
+          "sessions.seen",
+          { sessionID: view.selected.sessionID, terminal },
+        ]),
+      );
+    } finally {
+      f.stop();
+    }
+  });
+}
 Deno.test("shell navigation preview and pin share guarded target transitions and avoid duplicate helper tasks", async () => {
   const f = fixture();
   f.entries("local", [

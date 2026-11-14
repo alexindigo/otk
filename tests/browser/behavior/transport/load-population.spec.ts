@@ -4,6 +4,7 @@ import { Controller } from "../../fixtures/protocol.ts";
 import { finishState, TestState } from "../../fixtures/test-state.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import type { TestLease } from "../../../support/fixture-control.ts";
+import type { ServerFrame } from "@otk/protocol";
 
 interface NativeObservation {
   population: number;
@@ -32,6 +33,7 @@ interface IndexFrame {
     directory?: string;
     sessions?: string[];
     sessionIDs?: string[];
+    terminal?: number;
   };
 }
 function counts(values: string[]) {
@@ -51,6 +53,7 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
     http: Record<string, number>;
     native: Record<string, number>;
     catalogCeiling: number;
+    acknowledgements: number;
   }[] = [];
   try {
     for (const size of ["small", "large"] as const) {
@@ -77,6 +80,8 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         const sessionReads: { at: number; value: string }[] = [],
           directories: { at: number; value: string }[] = [],
           errors: string[] = [];
+        const seen: { sessionID: string; terminal: number }[] = [];
+        const finishes: number[] = [];
         page.on("pageerror", (error) => errors.push(String(error)));
         page.on(
           "request",
@@ -86,11 +91,19 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
               value: `${r.method()} ${new URL(r.url()).pathname}`,
             }),
         );
+        // Passive capture keeps the socket's own frame order: holding a subset
+        // of frames would reorder inbox epochs against RPC results.
         page.on("websocket", (socket) => {
           socket.on("framesent", ({ payload }) => {
             const frame = JSON.parse(payload.toString()) as IndexFrame;
             if (frame.t !== "request") return;
             rpc.push({ at: Date.now(), value: frame.method! });
+            if (frame.method === "sessions.seen") {
+              seen.push({
+                sessionID: frame.params!.sessionID!,
+                terminal: frame.params!.terminal!,
+              });
+            }
             const targets = [
               ...(frame.params?.sessionID ? [frame.params.sessionID] : []),
               ...(frame.params?.sessions ?? []),
@@ -109,15 +122,29 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
               });
             }
           });
-          socket.on(
-            "framereceived",
-            ({ payload }) =>
-              incoming.push({
-                at: Date.now(),
-                frame: JSON.parse(payload.toString()),
-                bytes: Buffer.byteLength(payload),
-              }),
-          );
+          socket.on("framereceived", ({ payload }) => {
+            const frame = JSON.parse(payload.toString()) as ServerFrame;
+            const terminal = frame.t === "inbox.snapshot"
+              ? frame.inbox.finishes[initial.selected]
+              : frame.t === "inbox.patch"
+              ? Math.max(
+                0,
+                ...frame.ops.flatMap((op) =>
+                  op.op === "finish" && op.sessionID === initial.selected
+                    ? [op.time]
+                    : []
+                ),
+              )
+              : 0;
+            if (terminal && !finishes.includes(terminal)) {
+              finishes.push(terminal);
+            }
+            incoming.push({
+              at: Date.now(),
+              frame: frame as IndexFrame,
+              bytes: Buffer.byteLength(payload),
+            });
+          });
         });
         const start = Date.now(), until = start + 30000;
         const window = (values: { at: number; value: string }[]) =>
@@ -141,12 +168,28 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
           await expect(page.locator("textarea[name=prompt]")).toBeVisible();
           await expect(page.locator(".otk-messages [data-message]").first())
             .toBeVisible();
+          await expect.poll(() => finishes.length).toBe(1);
+          // A finish learned after opening is acknowledged while focused.
+          await page.locator("textarea[name=prompt]").focus();
+          await expect.poll(() => seen.some((s) => s.terminal === finishes[0]))
+            .toBe(true);
           await page.waitForTimeout(Math.max(0, until - Date.now()));
         } finally {
           active = false;
           await requests;
         }
         const end = await state.observe<NativeObservation>();
+        expect(finishes).toHaveLength(1);
+        // Exactly one acknowledgement per cause: opening acknowledges what is
+        // known then (0 before the finish arrives, else the finish itself); a
+        // finish learned after opening is a second, distinct cause. The opening
+        // one awaits its visit, so the two may reach the wire in either order;
+        // storage keeps the maximum.
+        const tokens = seen.map((s) => s.terminal).sort((a, b) => a - b);
+        expect(seen.every((s) => s.sessionID === initial.selected)).toBe(true);
+        expect([[finishes[0]], [0, finishes[0]]]).toContainEqual(tokens);
+        const acknowledged = await state.product("inbox.get", {});
+        expect(acknowledged.inbox.seen[initial.selected]).toBe(finishes[0]);
         const received = incoming.filter((row) =>
           row.at >= start && row.at <= until
         );
@@ -197,8 +240,14 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
             );
           }
         }
+        // Acknowledgements follow their observed causes above; every other
+        // method must be identical across populations.
+        const { "sessions.seen": acknowledgements, ...methods } = counts(
+          window(rpc),
+        );
+        expect(acknowledgements).toBe(seen.length);
         const measured = {
-          rpc: counts(window(rpc)),
+          rpc: methods,
           http: counts(window(http)),
           native: counts(
             end.requests.filter((r) => r.at <= until).map((r) =>
@@ -206,6 +255,7 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
             ),
           ),
           catalogCeiling: initial.catalogBudget.ceiling,
+          acknowledgements,
         };
         results.push(measured);
         measurements.push({
@@ -213,6 +263,7 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
           ...initial,
           requests: undefined,
           seconds: 30,
+          seen: { acknowledged: seen, published: finishes },
           ...measured,
           indexFrames: index.length,
           indexBytes: index.reduce((n, f) => n + f.bytes, 0),
@@ -245,11 +296,21 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         "/file",
       ].map((path) => `GET ${path}`),
     );
-    const essential = (value: Record<string, number>) =>
-      Object.fromEntries(
-        Object.entries(value).filter(([path]) => !catalog.has(path)),
+    // Each acknowledgement validates its session's identity. The V1 identity
+    // owner (harness-opencode-v1 digest `identities`) gates that read on one
+    // native liveness probe, so probes follow acknowledgement causes, not
+    // population; all remaining probes stay exact.
+    const health = "GET /global/health";
+    const essential = (result: (typeof results)[number]) => {
+      const native = Object.fromEntries(
+        Object.entries(result.native).filter(([path]) => !catalog.has(path)),
       );
-    expect(essential(results[1].native)).toEqual(essential(results[0].native));
+      if (native[health] !== undefined) {
+        native[health] -= result.acknowledgements;
+      }
+      return native;
+    };
+    expect(essential(results[1])).toEqual(essential(results[0]));
     for (const result of results) {
       const catalogTotal = Object.entries(result.native)
         .filter(([endpoint]) => catalog.has(endpoint))
