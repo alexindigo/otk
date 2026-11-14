@@ -171,6 +171,40 @@ async function fixture() {
   };
 }
 
+Deno.test("V1 source-only rebuild renews every retained turn witness across pages", async () => {
+  const f = await fixture();
+  try {
+    for (let n = 1; n <= 5; n++) f.seed(`a${n}`, n, { parentID: `u${n}` });
+    await f.scan();
+    const before = structuredClone(f.turns);
+    f.sink.connection(1);
+    f.sink.invalidate(id, 1);
+    await f.scan();
+    const total = f.saved()!.summary.total!;
+    assertEquals(total.state, "known");
+    if (total.state !== "known") throw new Error("missing total");
+    const source = total.witness.source.split("@").at(-1);
+    for (let n = 1; n <= 5; n++) {
+      const turn = f.turns[`u${n}`];
+      assertEquals(derivedValue(turn), derivedValue(before[`u${n}`]));
+      assertEquals(
+        turn.state === "known" && turn.witness.source.split("@").at(-1),
+        source,
+      );
+    }
+    const current = structuredClone(f.turns);
+    f.sink.invalidate(id, 2);
+    await f.scan();
+    assertEquals(
+      f.turns,
+      current,
+      "ordinary equal-content scans do not republish turn witnesses",
+    );
+  } finally {
+    f.close();
+  }
+});
+
 Deno.test("V1 helper count, current tool and time survive refresh and source outage together", async () => {
   const f = await fixture();
   const step = (cursor?: string) =>

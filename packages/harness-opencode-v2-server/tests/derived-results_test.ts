@@ -19,7 +19,7 @@ const zero = {
   reasoning: 0,
   cache: { read: 0, write: 0 },
 };
-async function fixture(disk = false) {
+async function fixture(disk = false, apiOnly = false) {
   const root = await Deno.makeTempDir({ prefix: "derived-v2-" });
   const db = new DatabaseSync(root + "/native.db"),
     sql = new DatabaseSync(disk ? root + "/digest.db" : ":memory:");
@@ -53,6 +53,7 @@ async function fixture(disk = false) {
           get: ({ sessionID }: { sessionID: string }) =>
             Promise.resolve({ ...raw, id: sessionID }),
         },
+        message: { list: () => Promise.resolve({ data: [], cursor: {} }) },
       }),
   } as unknown as V2Client;
   const sink = new OpencodeV2TranscriptDigestSink(
@@ -92,11 +93,36 @@ async function fixture(disk = false) {
     },
     {},
     {
-      prepare: () => Promise.resolve({ client, native }),
-      native: () => native,
+      prepare: () =>
+        Promise.resolve({ client, native: apiOnly ? undefined : native }),
+      native: () => apiOnly ? undefined : native,
       check: (signal) => signal.throwIfAborted(),
     },
   );
+  const pages: (string | undefined)[] = [];
+  if (apiOnly) {
+    sink.messages.page = (_id, limit, cursor) => {
+      pages.push(cursor);
+      const offset = Number(cursor ?? 0);
+      const rows = db.prepare(
+        "SELECT id,type,data FROM session_message ORDER BY seq DESC LIMIT ? OFFSET ?",
+      ).all(limit, offset);
+      const count = Number(
+        db.prepare("SELECT count(*) AS n FROM session_message").get()!.n,
+      );
+      return Promise.resolve({
+        items: rows.reverse().map((row) => ({
+          id: String(row.id),
+          type: row.type,
+          content: [],
+          ...JSON.parse(String(row.data)),
+        })),
+        ...(offset + rows.length < count
+          ? { next: String(offset + rows.length) }
+          : {}),
+      });
+    };
+  }
   const seed = (
     key: string,
     seq: number,
@@ -144,6 +170,7 @@ async function fixture(disk = false) {
     turns,
     publications,
     records,
+    pages,
     saved: () => records.get(id),
     close: async () => {
       sink.close();
@@ -154,6 +181,132 @@ async function fixture(disk = false) {
     },
   };
 }
+
+Deno.test("V2 retired connection cannot commit a held API page", async () => {
+  const f = await fixture(false, true);
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>();
+  const page = f.sink.messages.page.bind(f.sink.messages);
+  f.sink.messages.page = async (...args) => {
+    const value = await page(...args);
+    entered.resolve();
+    await release.promise;
+    return value;
+  };
+  try {
+    f.seed("u", 1, "user");
+    f.seed("a", 2, "assistant", { cost: 1, tokens: zero });
+    const pending = f.step();
+    await entered.promise;
+    f.sink.connection(1);
+    const before = f.sql.prepare("SELECT total_changes() AS n").get()!.n;
+    release.resolve();
+    assertEquals(await pending, "reconcile");
+    assertEquals(f.sql.prepare("SELECT total_changes() AS n").get()!.n, before);
+    assertEquals(f.publications, []);
+    f.sink.messages.page = page;
+    await f.scan();
+    assertEquals(derivedValue(f.turns.u)?.calls, 1);
+    assertEquals(
+      f.turns.u.state === "known" &&
+        f.turns.u.witness.source.endsWith("connection:1"),
+      true,
+    );
+  } finally {
+    release.resolve();
+    await f.close();
+  }
+});
+
+Deno.test("V2 API selected refresh restarts the full cursor domain and retains older contributions", async () => {
+  const f = await fixture(false, true);
+  try {
+    f.seed("u", 1, "user");
+    for (let n = 2; n <= 7; n++) {
+      f.seed(`a${n}`, n, "assistant", { cost: 1, tokens: zero });
+    }
+    await f.scan();
+    assertEquals(derivedValue(f.turns.u)?.cost, 6);
+    f.seed("a2", 2, "assistant", { cost: 10, tokens: zero });
+    const before = structuredClone(f.turns.u);
+    f.pages.length = 0;
+    f.sink.invalidate(id, 1, ["a2"]);
+    await f.step(["a2"]);
+    assertEquals(
+      f.turns.u,
+      before,
+      "an unrelated first page is not a selected replacement",
+    );
+    await f.scan(["a2"]);
+    assertEquals(derivedValue(f.turns.u)?.cost, 15);
+    assertEquals(
+      f.sql.prepare("SELECT count(*) AS n FROM opcv2_transcript_header").get()!
+        .n,
+      7,
+    );
+    assertEquals(f.pages.length > 1, true);
+  } finally {
+    await f.close();
+  }
+});
+
+Deno.test("V2 selected idle dependencies refresh both old and new turns across bounded batches", async () => {
+  const f = await fixture();
+  const final = (key: string) => {
+    const turn = f.turns[key];
+    return turn.state === "known" && turn.final;
+  };
+  try {
+    for (let n = 0; n < 4; n++) {
+      f.seed(`u${n}`, n * 10 + 1, "user");
+      f.seed(`a${n}`, n * 10 + 2, "assistant", { cost: 1, tokens: zero });
+    }
+    await f.scan();
+    for (let n = 0; n < 4; n++) {
+      assertEquals(
+        final(`u${n}`),
+        false,
+      );
+    }
+    const keys = ["i0", "i1", "i2", "i3"];
+    for (let n = 0; n < 4; n++) f.seed(keys[n], n * 10 + 3, "idle");
+    const retained = structuredClone(f.turns);
+    f.sink.invalidate(id, 1, keys);
+    await f.step(keys);
+    assertEquals(
+      f.turns,
+      retained,
+      "partial selected replacement cannot publish half a group",
+    );
+    await f.scan(keys);
+    for (let n = 0; n < 4; n++) {
+      assertEquals(
+        final(`u${n}`),
+        true,
+      );
+    }
+    f.db.exec("DELETE FROM session_message WHERE type='idle'");
+    f.sink.invalidate(id, 2, keys);
+    await f.scan(keys);
+    for (let n = 0; n < 4; n++) {
+      assertEquals(
+        final(`u${n}`),
+        false,
+      );
+    }
+    f.seed("moving", 3, "idle");
+    f.sink.invalidate(id, 3, ["moving"]);
+    await f.scan(["moving"]);
+    assertEquals(f.turns.u0.state === "known" && f.turns.u0.final, true);
+    f.seed("moving", 13, "idle");
+    f.sink.invalidate(id, 4, ["moving"]);
+    await f.scan(["moving"]);
+    assertEquals(f.turns.u0.state === "known" && f.turns.u0.final, false);
+    assertEquals(f.turns.u1.state === "known" && f.turns.u1.final, true);
+  } finally {
+    await f.close();
+  }
+});
 
 Deno.test("V2 retains covered results while rebuilding and retires removed turns after the sweep", async () => {
   const f = await fixture();
