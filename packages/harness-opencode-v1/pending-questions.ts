@@ -15,7 +15,8 @@ interface Capture {
   changes: Map<string, PendingQuestion | undefined>;
   overflow: boolean;
 }
-/** One live pending metadata owner, independent of body/catalog subscribers. */
+/** One live pending metadata owner, independent of body/catalog subscribers.
+ * Every question it admits, from any transport, is reported as observed. */
 export class PendingQuestions {
   #values = new Map<string, PendingQuestion>();
   #captures = new Set<Capture>();
@@ -27,6 +28,7 @@ export class PendingQuestions {
       before: PendingQuestion | undefined,
       after: PendingQuestion | undefined,
     ) => void = () => {},
+    readonly observed: (request: QuestionRequest) => void = () => {},
   ) {}
   known(directory: string): boolean {
     return this.#known.has(directory);
@@ -71,6 +73,7 @@ export class PendingQuestions {
       }
     }
     this.#values.set(request.id, value);
+    this.observed(value.request);
     if (directory !== undefined) this.#record(request.id, directory, value);
     this.changed(before, value);
   }
@@ -140,6 +143,7 @@ export class PendingQuestions {
         for (const [id, value] of next) {
           const before = this.#values.get(id);
           this.#values.set(id, value);
+          this.observed(value.request);
           this.changed(before, value);
         }
         this.#known.add(directory);
@@ -158,6 +162,7 @@ export class PendingQuestions {
         ...value,
         generation: this.#generation,
       });
+      this.observed(value.request);
     }
     this.#known = new Set(known);
   }
