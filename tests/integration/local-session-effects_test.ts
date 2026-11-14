@@ -95,7 +95,7 @@ test("local policy disable settles behind sessions.seen while stock native readi
   } finally {
     proxy.thaw();
     await client?.close();
-    await f.stop();
     await proxy.stop();
+    await f.stop();
   }
 });

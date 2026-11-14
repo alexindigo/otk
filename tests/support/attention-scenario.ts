@@ -426,8 +426,9 @@ async function nativeAttention(profile: Profile) {
           held.resolve();
           frozen.thaw();
           await c.close();
-          await remote?.stop();
-          await f.stop();
+          // The enclosing scope owns dependency order: sidecars, relays, then
+          // native services. An early native stop leaves live relays reconnecting
+          // to a retired upstream during controller teardown.
           return null;
         default:
           throw new Error("Command outside native attention scene");

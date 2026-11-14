@@ -230,6 +230,9 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
       }
     },
     release,
+    async stop() {
+      await freeze?.stop();
+    },
     disconnect() {
       if (profile !== "transport-reconnect" || !freeze) {
         throw new Error("Scenario does not own a controlled disconnect");
