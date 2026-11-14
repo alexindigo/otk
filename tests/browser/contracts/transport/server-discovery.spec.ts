@@ -76,6 +76,10 @@ test("transport.server-discovery-outcomes-and-cancel", {
         await page.locator(`[data-theme-choice="${theme}"]`).click();
         await page.getByRole("button", { name: "Save theme", exact: true })
           .click();
+        // Theme paint is a preview, not save completion. Background native
+        // inputs cannot take focus until the modal releases its lifetime.
+        await expect(page.getByRole("dialog", { name: "Theme", exact: true }))
+          .toHaveCount(0);
         await expect(page.locator("html")).toHaveAttribute(
           "data-otk-theme",
           theme,
