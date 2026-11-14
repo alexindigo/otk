@@ -7,7 +7,14 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
-import { createForm, failureText, forgetForm } from "@otk/client";
+import {
+  createForm,
+  createPrimaryAction,
+  failureText,
+  forgetForm,
+} from "@otk/client";
+import PrimaryAction from "./PrimaryAction.tsx";
+import { bindPrimaryAction } from "../state/primary-action.ts";
 import type { FormAnswer, FormRequest } from "@otk/protocol";
 import { solidState } from "../state/binding.ts";
 import Takeover from "./surface/Takeover.tsx";
@@ -20,6 +27,7 @@ import type {
   TakeoverDefinition,
 } from "../registries/shell.ts";
 import { useSessionPorts } from "../registries/session.tsx";
+import { ownedAction } from "../keyboard/context.tsx";
 import "./QuestionDock.css" with { type: "text" };
 import "./FormDock.css" with { type: "text" };
 export function registerGlobalForms(
@@ -44,6 +52,8 @@ export function registerGlobalForms(
               >
                 {(request) => (
                   <FormDock
+                    connected={server().status === "connected" &&
+                      server().harness === "connected"}
                     request={request()}
                     onReply={(answer) =>
                       shell.connection(server().id).rpc.call("form.reply", {
@@ -81,6 +91,7 @@ export function registerFormTakeover(
         >
           {(request) => (
             <FormDock
+              connected={session.connected?.() ?? true}
               request={request()}
               onDirty={(value, text) => session.dirty("forms", value, text)}
               onReply={(answer) =>
@@ -101,6 +112,7 @@ export function registerFormTakeover(
 export default function FormDock(
   props: {
     request: FormRequest;
+    connected?: boolean;
     onReply(answer: FormAnswer): Promise<void>;
     onCancel(message?: string): Promise<void>;
     onDirty?(dirty: boolean, text?: string): void;
@@ -124,7 +136,7 @@ export default function FormDock(
     }
   });
   const send = async (cancel = false, feedback?: string) => {
-    if (pending()) return;
+    if (pending() || !alive || props.connected === false) return;
     attempt(true);
     if (!cancel && Object.keys(derived().issues).length) {
       form.review(false);
@@ -143,6 +155,26 @@ export default function FormDock(
       if (alive) setPending(false);
     }
   };
+  const primary = createPrimaryAction({
+    label: () => form.state.review ? "Send answers" : "Review answers",
+    unavailable: () =>
+      !alive
+        ? "Form is no longer active"
+        : props.connected === false
+        ? "Reconnect to respond"
+        : Object.values(derived().issues)[0],
+    pending,
+    pendingReason: "Sending response",
+    run: () => {
+      attempt(true);
+      if (form.state.review) return send();
+      form.review(true);
+    },
+  });
+  const primaryState = bindPrimaryAction(primary);
+  const answer = ownedAction("Answer form", () => primary.invoke(), {
+    enabled: () => primaryState().available,
+  });
   return (
     <section
       class="otk-question-dock otk-form-dock"
@@ -160,8 +192,13 @@ export default function FormDock(
             onCollapse={collapse}
           />
         }
-        actions={
+        actions={() => (
           <div class="otk-question-actions">
+            <PrimaryAction
+              state={primaryState()}
+              class="otk-primary otk-pill"
+              onInvoke={() => void answer()}
+            />
             <Show
               when={!pending()}
               fallback={
@@ -170,22 +207,6 @@ export default function FormDock(
                 />
               }
             >
-              <Show when={!form.state.review}>
-                <button
-                  type="button"
-                  class="otk-primary otk-pill"
-                  onClick={() => {
-                    attempt(true);
-                    if (!Object.keys(derived().issues).length) {
-                      form.review(
-                        true,
-                      );
-                    }
-                  }}
-                >
-                  Review answers
-                </button>
-              </Show>
               <Show when={form.state.review}>
                 <button
                   type="button"
@@ -193,13 +214,6 @@ export default function FormDock(
                   onClick={() => form.review(false)}
                 >
                   Edit answers
-                </button>
-                <button
-                  type="button"
-                  class="otk-primary otk-pill"
-                  onClick={() => void send()}
-                >
-                  Send answers
                 </button>
               </Show>
               <button
@@ -218,7 +232,7 @@ export default function FormDock(
               </button>
             </Show>
           </div>
-        }
+        )}
       >
         <Show
           when={!collapsed()}

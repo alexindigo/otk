@@ -142,6 +142,34 @@ Deno.test("stale empty inventories cannot retire a still-pending request deadlin
   owner.stop();
 });
 
+Deno.test("fresh absence retires lamp grace without restarting a presented request", () => {
+  const time = clock();
+  const owner = createAttentionGrace({ clock: time });
+  const scope = () => true;
+  owner.light("row", "working", "a", scope, true);
+  assertEquals(owner.permission("a", "s", "p"), false);
+  time.tick(500);
+  assertEquals(owner.permission("a", "s", "p"), true);
+  // Native inventory can report the reply before the content removal arrives.
+  owner.observe("a", "s", { permissions: { keys: [], fresh: true } });
+  assertEquals(owner.permission("a", "s", "p"), true);
+  assertEquals(owner.permission("a", "s", "p"), true);
+  assertEquals(time.pendingTimers, 0);
+
+  assertEquals(owner.permission("a", "s", "q"), false);
+  time.tick(200);
+  owner.observe("a", "s", { permissions: { keys: [], fresh: true } });
+  // An absent request no longer holds the lamp, nor restarts its own deadline.
+  assertEquals(owner.light("row", "blocked", "a", scope, true), "blocked");
+  assertEquals(owner.permission("a", "s", "q"), false);
+  time.tick(300);
+  assertEquals(owner.permission("a", "s", "q"), true);
+  owner.settled("a", "p");
+  owner.settled("a", "q");
+  assertEquals(time.pendingTimers, 0);
+  owner.stop();
+});
+
 Deno.test("lamp grace borrows tab ownership, excluding children assigned to another task", () => {
   const time = clock();
   const owner = createAttentionGrace({ clock: time });

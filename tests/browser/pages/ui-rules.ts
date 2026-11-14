@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import {
+  DISABLED_SECONDARY,
+  primaryViolations,
+  readPrimary,
+} from "./primary-action.ts";
 
 /** Read-only rendered probes, shared by focused contracts and the complete theme sweep. */
 export async function auditUiRules(
@@ -7,7 +12,16 @@ export async function auditUiRules(
   info: Pick<TestInfo, "attach">,
   state: string,
 ) {
-  const values = await page.evaluate((state) => {
+  const failures = await uiRuleFailures(page, info, state);
+  expect.soft(failures, "UI rules: " + state).toEqual([]);
+}
+/** Failures only; the adversarial contract drives this without the soft assertion. */
+export async function uiRuleFailures(
+  page: Page,
+  info: Pick<TestInfo, "attach">,
+  state: string,
+) {
+  const values = await page.evaluate(([state, secondary]) => {
     const regions: Record<string, string> = {
       sidebar: ".otk-project-inbox,.otk-right-rail",
       tabs: ".otk-task-strip",
@@ -118,13 +132,12 @@ export async function auditUiRules(
             state,
             box: [rect.x, rect.y, rect.width, rect.height],
             controls: controls.filter(visible).length,
-            disabled: controls.filter((el) =>
-              el.matches(":disabled,[aria-disabled=true]")
-            ).length,
+            // Rule 3 binds secondary controls; the declared primary keeps its
+            // own visible, reasoned and single contract below.
+            disabled: controls.filter((el) => el.matches(secondary)).length,
             staticHints:
               Array.from(root.querySelectorAll("kbd")).filter(visible).filter(
-                (el) =>
-                  !el.closest(".otk-palette-list,.otk-keys-list"),
+                (el) => !el.closest(".otk-palette-list,.otk-keys-list"),
               ).length,
             wrapping,
             rings,
@@ -156,41 +169,47 @@ export async function auditUiRules(
         },
       )
     );
-  }, state);
+  }, [state, DISABLED_SECONDARY] as const);
+  const primary = await readPrimary(page);
   await info.attach("ui-rules-" + state, {
-    body: JSON.stringify(values, null, 2),
+    body: JSON.stringify({ regions: values, primary }, null, 2),
     contentType: "application/json",
   });
-  const failures = values.flatMap((region) => [
-    ...(region.disabled
-      ? [{ region: region.region, rule: 3, count: region.disabled }]
-      : []),
-    ...(region.staticHints
-      ? [{ region: region.region, rule: 4, count: region.staticHints }]
-      : []),
-    ...region.stateInline.map((value) => ({
-      region: region.region,
-      rule: 10,
+  return [
+    ...primaryViolations(primary).map((value) => ({
+      region: "primary",
+      rule: 3,
       value,
     })),
-    ...region.icons.filter((icon) =>
-      Math.max(...icon.gaps) - Math.min(...icon.gaps) > 1
-    ).map((value) => ({ region: region.region, rule: 1, value })),
-    ...region.slots.filter((slot) =>
-      Math.abs(slot.width - slot.height) > 1 || slot.position !== "static" ||
-      slot.transform !== "none" || slot.centre.some((delta) => delta > 0.5)
-    ).map((value) => ({ region: region.region, rule: 2, value })),
-    ...region.wrapping.filter((label) =>
-      !label.nowrap || !(label.height <= label.line + 1)
-    ).map((value) => ({ region: region.region, rule: 5, value })),
-    ...region.toggles.filter((toggle) =>
-      toggle.classOn !== toggle.on || toggle.selection
-    ).map((value) => ({ region: region.region, rule: 6, value })),
-    ...region.rings.filter((ring) =>
-      ring.outline > 0 && ring.style !== "none" &&
-      (!ring.visible || !ring.control)
-    ).map((value) => ({ region: region.region, rule: 7, value })),
-  ]);
-  expect.soft(failures, "UI rules: " + state).toEqual([]);
-  return values;
+    ...values.flatMap((region) => [
+      ...(region.disabled
+        ? [{ region: region.region, rule: 3, count: region.disabled }]
+        : []),
+      ...(region.staticHints
+        ? [{ region: region.region, rule: 4, count: region.staticHints }]
+        : []),
+      ...region.stateInline.map((value) => ({
+        region: region.region,
+        rule: 10,
+        value,
+      })),
+      ...region.icons.filter((icon) =>
+        Math.max(...icon.gaps) - Math.min(...icon.gaps) > 1
+      ).map((value) => ({ region: region.region, rule: 1, value })),
+      ...region.slots.filter((slot) =>
+        Math.abs(slot.width - slot.height) > 1 || slot.position !== "static" ||
+        slot.transform !== "none" || slot.centre.some((delta) => delta > 0.5)
+      ).map((value) => ({ region: region.region, rule: 2, value })),
+      ...region.wrapping.filter((label) =>
+        !label.nowrap || !(label.height <= label.line + 1)
+      ).map((value) => ({ region: region.region, rule: 5, value })),
+      ...region.toggles.filter((toggle) =>
+        toggle.classOn !== toggle.on || toggle.selection
+      ).map((value) => ({ region: region.region, rule: 6, value })),
+      ...region.rings.filter((ring) =>
+        ring.outline > 0 && ring.style !== "none" &&
+        (!ring.visible || !ring.control)
+      ).map((value) => ({ region: region.region, rule: 7, value })),
+    ]),
+  ];
 }

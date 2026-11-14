@@ -26,7 +26,8 @@ test(
     await expect.poll(() =>
       action.boundingBox().then((r) => r && [r.width, r.height])
     ).toEqual([28, 28]);
-    await expect(page.locator(".otk-send-button")).toHaveCount(0);
+    await expect(page.locator(".otk-send-button")).toBeVisible();
+    await expect(page.locator(".otk-send-button")).toBeDisabled();
     await page.evaluate(() =>
       (globalThis as unknown as Window).composerReads[0].complete()
     );

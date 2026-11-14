@@ -55,6 +55,7 @@ export * from "./prompt-history.ts";
 export * from "./prompt-selection.ts";
 export * from "./composer-selection.ts";
 export * from "./prompt-completion.ts";
+export * from "./primary-action.ts";
 export * from "./model-catalog.ts";
 export * from "./model-groups.ts";
 export * from "./model-preferences.ts";
