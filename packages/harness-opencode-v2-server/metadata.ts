@@ -54,6 +54,11 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     timeUpdated: mapped.time.updated,
     status: "idle",
     activityAuthority: "unknown",
+    activity: {
+      terminal: raw.outcome && millis(raw.time.idle) > 0
+        ? millis(raw.time.idle)
+        : undefined,
+    },
     attention: {
       permissions: 0,
       questions: 0,

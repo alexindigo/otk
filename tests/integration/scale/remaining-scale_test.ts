@@ -58,10 +58,10 @@ test("4615 tasks retain ordered memberships while seen and task changes publish 
       "INSERT INTO task_sessions VALUES(?,?,?)",
     );
     const seen = db.connection.prepare(
-      "INSERT INTO session_seen VALUES(?,?,?)",
+      "INSERT INTO session_seen(user,session,time) VALUES(?,?,?)",
     );
     const finish = db.connection.prepare(
-      "INSERT INTO session_finishes VALUES(?,?)",
+      "INSERT INTO session_finishes(session,time) VALUES(?,?)",
     );
     for (let n = 0; n < 4615; n++) {
       task.run(

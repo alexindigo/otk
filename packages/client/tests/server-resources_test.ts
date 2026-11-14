@@ -55,6 +55,7 @@ function metadata(): InboxSnapshot {
     }],
     seen: { session: 1 },
     finishes: { session: 2 },
+    supervision: { session: { state: "needsYou", terminal: 2 } },
     pathTemplates: [],
   };
 }
@@ -186,7 +187,7 @@ Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects n
     summaries: {
       "/tree": {
         directory: "/tree",
-        status: "idle",
+        status: "none",
         hasSessions: true,
         sessionCount: 1,
         unseenCount: 0,
@@ -456,6 +457,7 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
       tasks: [],
       seen: {},
       finishes: { a: 2 },
+      supervision: { a: { state: "finishedUnseen", terminal: 2 } },
       discovered: ["/empty"],
     },
   });
@@ -471,13 +473,17 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     t: "inbox.patch",
     generation: "fixture",
     from: 0,
-    revision: 1,
-    ops: [{ op: "seen", sessionID: "a", time: 3 }],
+    revision: 2,
+    ops: [{ op: "seen", sessionID: "a", time: 3 }, {
+      op: "supervision",
+      sessionID: "a",
+      value: { state: "none", terminal: 2 },
+    }],
   });
   assertEquals(
     f.resources.projectRow({ sidecarId: "local", directory: a.directory }, 100)
       ?.status,
-    "idle",
+    "none",
   );
   assertStrictEquals(
     f.resources.projects(100).find((r) => r.directory === b.directory),
@@ -492,10 +498,25 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     }],
   });
   const moved = f.resources.projects(100);
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 2,
+    revision: 3,
+    ops: [{
+      op: "supervision",
+      sessionID: "a",
+      value: { state: "working", terminal: 2 },
+    }],
+  });
+  const currentMoved = f.resources.projects(100);
   assertEquals(moved.some((r) => r.directory === a.directory), false);
   assertEquals(f.resources.duplicateProjectName("shared"), false);
   assertEquals(moved.find((r) => r.directory === "/moved")?.sessionIDs, "a");
-  assertEquals(moved.find((r) => r.directory === "/moved")?.status, "working");
+  assertEquals(
+    currentMoved.find((r) => r.directory === "/moved")?.status,
+    "working",
+  );
   f.receive("local", {
     t: "index.patch",
     rev: 2,
@@ -524,7 +545,7 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     t: "inbox.snapshot",
     generation: "fixture",
     revision: 0,
-    inbox: { ...metadata(), finishes: {} },
+    inbox: { ...metadata(), finishes: {}, supervision: {} },
   });
   const p = { sidecarId: "local", directory: "/p" };
   f.resources.projects(100);
@@ -567,7 +588,7 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     seq: 1,
     outcome: { ok: true, result: null },
   });
-  assertEquals(f.resources.projectRow(p, 100)?.status, "idle");
+  assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   f.receive("local", {
     t: "index.patch",
     rev: 1,
@@ -579,16 +600,38 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
       },
     }],
   });
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 1,
+    revision: 2,
+    ops: [{
+      op: "supervision",
+      sessionID: "session",
+      value: { state: "needsYou", terminal: 0 },
+    }],
+  });
   assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
   f.receive("local", {
     t: "approvals",
     approvals: { enabled: ["session"], revision: 1 },
   });
-  assertEquals(f.resources.projectRow(p, 100)?.status, "idle");
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 2,
+    revision: 3,
+    ops: [{
+      op: "supervision",
+      sessionID: "session",
+      value: { state: "none", terminal: 0 },
+    }],
+  });
+  assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   f.store.update((state) => {
     state.list[0].harness = "reconnecting";
   });
-  assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
+  assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   f.resources.stop();
 });
 
@@ -722,6 +765,17 @@ Deno.test("server resources project per-server attention and labelled projects f
     f.resources.entries().map((e) => [e.sidecarId, e.attention.permissions]),
     [["local", 0], ["remote", 1]],
   );
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 0,
+    revision: 1,
+    ops: [{
+      op: "supervision",
+      sessionID: "session",
+      value: { state: "working", terminal: 2 },
+    }],
+  });
   assertEquals(
     f.resources.projectEntries({ sidecarId: "local", directory: "/other" }),
     [],

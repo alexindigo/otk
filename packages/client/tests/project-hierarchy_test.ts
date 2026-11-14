@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { inboxProjects, projectHierarchy } from "../inbox.ts";
+import { inboxProjects, projectHierarchy } from "./supervision-fixture.ts";
 import type { InboxSnapshot, ProjectSummary } from "@otk/protocol";
 
 Deno.test("scalar project hierarchy keeps mandatory leaves in Active and quiet archived siblings in Inactive without acquired sessions", () => {
@@ -38,7 +38,7 @@ Deno.test("scalar project hierarchy keeps mandatory leaves in Active and quiet a
       [
         summary("/repo", "working"),
         summary("/tree/one", "working"),
-        summary("/tree/quiet", "idle"),
+        summary("/tree/quiet", "none"),
       ].map((s) => [s.directory, s]),
     ),
   };
@@ -60,8 +60,8 @@ Deno.test("scalar project hierarchy keeps mandatory leaves in Active and quiet a
     "b",
     "b",
   ]);
-  inbox.summaries!["/repo"].status = "idle";
-  inbox.summaries!["/tree/one"].status = "idle";
+  inbox.summaries!["/repo"].status = "none";
+  inbox.summaries!["/tree/one"].status = "none";
   inbox.projects[0].inactive = false;
   const contextual = inboxProjects([], inbox, 5);
   assertEquals(contextual[0].group, "active");

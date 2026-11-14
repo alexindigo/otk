@@ -71,6 +71,7 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     });
     seenClock = await first.client.rpc<number>("sessions.seen", {
       sessionID: session.id,
+      terminal: 0,
     });
     fake.queue({ chunks: ["Source digest reply"] });
     await oc.request(`/session/${session.id}/message`, {
@@ -126,6 +127,10 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     assertEquals(offline.entry()!.digest.total!.calls > 0, true);
     const seen = await offline.client.rpc<number>("sessions.seen", {
       sessionID: session.id,
+      terminal: (await offline.client.rpc<Record<string, number>>(
+        "sessions.finishes",
+        {},
+      ))[session.id] ?? 0,
     });
     assertEquals(seen > 0, true);
     assertEquals(

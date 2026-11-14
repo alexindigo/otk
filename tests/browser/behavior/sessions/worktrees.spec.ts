@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { activity, visibleOnScreen } from "../../pages/sessions.ts";
+import { activity, viewByUrl, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-worktrees" });
 test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
@@ -19,7 +19,7 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
   await page.goto(state.url);
   await expect(row(one)).toHaveAttribute("data-rollup", "working");
   await expect(row(canonical)).toHaveAttribute("data-rollup", "working");
-  await expect(row(two)).toHaveAttribute("data-rollup", "idle");
+  await expect(row(two)).toHaveAttribute("data-rollup", "none");
   await expect(row(one)).toHaveAttribute("data-project-parent", canonical);
   await row(one).locator(".otk-project-open").click();
   await visibleOnScreen(page.locator("[data-kind=phantom]").first());
@@ -163,10 +163,12 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
   await visibleOnScreen(
     row(archived).locator(".otk-status-light[data-state=finished]"),
   );
-  await state.product("sessions.seen", { sessionID: "tstv1-worktree-2" });
+  // Finishes are acknowledged by viewing them in OTK, not by a status reset.
+  await viewByUrl(state, page, "tstv1-worktree-2");
+  await expect(row(archived)).toHaveAttribute("data-rollup", "none");
+  await viewByUrl(state, page, "tstv1-worktree-0");
   await activity(state, "tstv1-worktree-0", "release");
-  await state.product("sessions.seen", { sessionID: "tstv1-worktree-0" });
-  await expect(row(canonical)).toHaveAttribute("data-rollup", "idle");
+  await expect(row(canonical)).toHaveAttribute("data-rollup", "none");
   await state.product("projects.inactive", {
     directory: canonical,
     inactive: true,

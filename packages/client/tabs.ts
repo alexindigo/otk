@@ -207,10 +207,16 @@ export function createTabs(
       ),
     }));
     for (const entry of entries) {
-      if (entry.parentID || grouped.has(entry.id)) continue;
-      const status = rollup(families.get(entry.id) ?? [entry], inbox);
       if (
-        status !== "idle" || store.state.preview === entry.id ||
+        grouped.has(entry.id) || ownership.get(entry.id) ||
+        entry.parentID && byID.has(entry.parentID)
+      ) continue;
+      const status = rollup(
+        families.get(familyKeys.get(entry.id) ?? entry.id) ?? [entry],
+        inbox,
+      );
+      if (
+        status !== "none" || store.state.preview === entry.id ||
         (store.state.selected?.kind === "session" &&
           store.state.selected.id === entry.id)
       ) {
@@ -311,7 +317,7 @@ export function createTabs(
         (tab &&
           { id: tab.id, directory: input.directory, sessions: tab.sessions });
       return cachedCrumbs = task
-        ? taskBreadcrumbs(task, entries, tasks, children)
+        ? taskBreadcrumbs(task, entries, tasks, children, input.inbox)
         : [];
     },
     sessionFor,

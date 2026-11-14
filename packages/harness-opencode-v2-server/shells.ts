@@ -28,6 +28,11 @@ export class V2Shells {
       shell.sessionID === sessionID
     );
   }
+  keys(sessionID: string): string[] {
+    return [...this.#running.values()].filter((shell) =>
+      shell.sessionID === sessionID
+    ).map((shell) => shell.id);
+  }
   clear(): void {
     this.#running.clear();
   }
@@ -94,7 +99,7 @@ export class V2Shells {
     const shell = this.#running.get(id);
     if (!shell) return;
     this.#running.delete(id);
-    return { sessionID: shell.sessionID, ended: event.created ?? Date.now() };
+    return { sessionID: shell.sessionID, ended: event.created };
   }
   /** Discover every asking session's shell before mutating; never stop another session's work. */
   async interrupt(

@@ -122,7 +122,9 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  // The child's finish was never viewed, so its crumb stays (AXIOM 1).
+  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
+    .toHaveAttribute("data-state", "finished");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   expect(
     frames.sent.some(({ frame }) =>
@@ -196,9 +198,10 @@ test.describe("native helper lifecycle", () => {
     await state.release(gate.gate);
     await expect(crumb).toHaveCount(0);
     await expect(page.locator(`[data-session="${child.id}"]`)).toBeVisible();
+    // The viewed finish is acknowledged; with no evidence left the lamp is grey.
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
-      "idle",
+      "none",
     );
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await page.reload();

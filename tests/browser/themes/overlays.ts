@@ -883,7 +883,7 @@ export async function lights(
           "blocked",
           "working",
           "finished",
-          "idle",
+          "none",
           "working",
         ]);
         expect(lamps.map((l) => l.size)).toEqual([10, 10, 10, 10, 8]);
@@ -891,7 +891,7 @@ export async function lights(
           "Needs you",
           "Working",
           "Finished, not seen",
-          "Idle",
+          "No known activity",
         ]);
         for (const lamp of lamps) {
           expect(lamp.height).toBe(lamp.size);
@@ -932,8 +932,8 @@ export async function lights(
         );
         if (!reduced) {
           for (const lamp of construction) {
-            expect(lamp.glow === "none").toBe(lamp.state === "idle");
-            if (lamp.state !== "idle") expect(lamp.halo).toContain("6px");
+            expect(lamp.glow === "none").toBe(lamp.state === "none");
+            if (lamp.state !== "none") expect(lamp.halo).toContain("6px");
             expect(lamp.body).toBe("1");
           }
         } else {

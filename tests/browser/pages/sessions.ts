@@ -26,6 +26,12 @@ export async function visibleOnScreen(locator: Locator) {
     })
   ).toBe(true);
 }
+/** Views a session by URL, as the user would; OTK acknowledges what is viewed.
+ * Unlike openSession it leaves the panels' layout untouched. */
+export async function viewByUrl(state: TestState, page: Page, id: string) {
+  await page.goto(`${state.url}/#/local/${encodeURIComponent(id)}`);
+  await expect(page).toHaveURL(new RegExp(`${id}$`));
+}
 export async function collapsed(page: Page) {
   await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
     "data-collapsed",

@@ -543,7 +543,7 @@ test("real metadata actions settle with their writes and replay original results
     await execute("projects.inactive", { directory: "/p", inactive: true });
     await execute("projects.visit", { directory: "/p", active: true });
     await execute("projects.templates", { templates: ["/p/{project}"] });
-    await execute("sessions.seen", { sessionID: "tstv1-two" });
+    await execute("sessions.seen", { sessionID: "tstv1-two", terminal: 0 });
     await execute("prefs.set", { key: "showCost", value: false });
     await execute("layout.patch", { rightCollapsed: false });
     await execute("layout.location", {

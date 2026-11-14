@@ -111,10 +111,20 @@ test.describe("task tabs", () => {
       ).toEqual([exec.id, plan.id]);
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      await expect(
-        page.locator("[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]"),
-      )
-        .toHaveCount(0);
+      // Unseen helper finishes stay visible until acknowledged (AXIOM 1).
+      const helpers = page.locator(
+        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+      );
+      await expect(helpers.locator(".otk-status-light[data-state=finished]"))
+        .toHaveCount(2);
+      const finishes = await state.product("sessions.finishes", {});
+      for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
+        await state.product("sessions.seen", {
+          sessionID,
+          terminal: finishes[sessionID],
+        });
+      }
+      await expect(helpers).toHaveCount(0);
       await expect(
         page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
       )
@@ -295,7 +305,11 @@ test.describe("phantom ownership", () => {
         "aria-selected",
         "true",
       );
-      await state.product("sessions.seen", { sessionID: "tstv1-otk" });
+      await state.product("sessions.seen", {
+        sessionID: "tstv1-otk",
+        terminal: (await state.product("sessions.finishes", {}))["tstv1-otk"] ??
+          0,
+      });
       await page.locator(`[data-tab="${task.id}"]`).click();
       await expect(page.locator("[data-tab=tstv1-otk]")).toHaveCount(0);
       expect(await state.product("session.get", { sessionID: "tstv1-otk" }))

@@ -38,7 +38,7 @@ function fixture() {
     store = new OtkDb(root, migrations, { busyms: 0 }),
     db = store.connection;
   db.exec(
-    `INSERT INTO tasks VALUES('task','/repo','Keep order',7); INSERT INTO task_sessions VALUES('task','opcv1-ses_one',3),('task','opcv1-ses_unproven',9); INSERT INTO session_seen VALUES('alice','opcv1-ses_one',12),('bob','opcv1-ses_one',14); INSERT INTO session_finishes VALUES('opcv1-ses_one',15); INSERT INTO permission_auto VALUES('opcv1-ses_one'); INSERT INTO permission_activity VALUES(1,'opcv1-ses_one','per_one','{"sessionID":"opcv1-ses_one","patterns":["opcv1-ses_one"]}','once','auto','opcv1-ses_one',NULL,11,'confirmed',NULL); INSERT INTO permission_activity_family VALUES('opcv1-ses_one',1); INSERT INTO prefs VALUES('shellLayout','{"projectLocations":[{"sidecarId":"foreign","directory":"/repo","sessionID":"opcv1-ses_one"},{"sidecarId":"local","directory":"/repo","sessionID":"opcv1-ses_one"}]}',19)`,
+    `INSERT INTO tasks VALUES('task','/repo','Keep order',7); INSERT INTO task_sessions VALUES('task','opcv1-ses_one',3),('task','opcv1-ses_unproven',9); INSERT INTO session_seen(user,session,time) VALUES('alice','opcv1-ses_one',12),('bob','opcv1-ses_one',14); INSERT INTO session_finishes(session,time) VALUES('opcv1-ses_one',15); INSERT INTO permission_auto VALUES('opcv1-ses_one'); INSERT INTO permission_activity VALUES(1,'opcv1-ses_one','per_one','{"sessionID":"opcv1-ses_one","patterns":["opcv1-ses_one"]}','once','auto','opcv1-ses_one',NULL,11,'confirmed',NULL); INSERT INTO permission_activity_family VALUES('opcv1-ses_one',1); INSERT INTO prefs VALUES('shellLayout','{"projectLocations":[{"sidecarId":"foreign","directory":"/repo","sessionID":"opcv1-ses_one"},{"sidecarId":"local","directory":"/repo","sessionID":"opcv1-ses_one"}]}',19)`,
   );
   const receipts: [string, unknown][] = [
     ["session-created", {
@@ -206,7 +206,9 @@ Deno.test("V2 proven reference upgrade awaits proof, preserves all allowlisted r
 Deno.test("V2 reference collision rolls back every owner and the marker", async () => {
   const f = fixture();
   try {
-    f.db.exec("INSERT INTO session_seen VALUES('alice','opcv2-ses_one',99)");
+    f.db.exec(
+      "INSERT INTO session_seen(user,session,time) VALUES('alice','opcv2-ses_one',99)",
+    );
     const before = f.db.prepare("SELECT * FROM task_sessions ORDER BY position")
       .all();
     await assertRejects(

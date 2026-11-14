@@ -44,11 +44,9 @@ export function applicationNotifications(input: {
       visible: document.visibilityState === "visible",
       prefs: input.prefs(),
       open: selected && input.viewing()
-        ? {
-          sidecar: selected.sidecarId,
-          session: selected.rootID || selected.sessionID,
-        }
+        ? { sidecar: selected.sidecarId, session: selected.sessionID }
         : undefined,
+      lookup: input.entry,
     };
   };
   let sequence = 0;

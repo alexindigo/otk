@@ -10,6 +10,7 @@ export interface SessionMetadata {
   timeCreated: number;
   timeUpdated: number;
   archived: boolean;
+  activity?: import("./supervision.ts").SupervisionEvidence;
   status: "idle" | "busy" | "retry";
   /** Missing retains the standalone harness's authoritative metadata contract. */
   activityAuthority?: "current" | "stale" | "unknown";

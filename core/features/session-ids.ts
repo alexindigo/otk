@@ -102,16 +102,17 @@ export function createSessionReferenceUpgrade(
       options.checkpoint?.("task_sessions");
 
       db.exec(
-        "CREATE TABLE session_ref_seen (user TEXT NOT NULL, session TEXT NOT NULL, time INTEGER NOT NULL, PRIMARY KEY(user,session))",
+        "CREATE TABLE session_ref_seen (user TEXT NOT NULL, session TEXT NOT NULL, time INTEGER NOT NULL, terminal INTEGER NOT NULL, PRIMARY KEY(user,session))",
       );
       const seen = db.prepare(
-        "INSERT INTO session_ref_seen VALUES(?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time)",
+        "INSERT INTO session_ref_seen VALUES(?,?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time),terminal=MAX(terminal,excluded.terminal)",
       );
       for (const row of db.prepare("SELECT * FROM session_seen").all()) {
         seen.run(
           String(row.user),
           convert(String(row.session), "session_seen.session"),
           row.time,
+          row.terminal,
         );
       }
       db.exec(
@@ -120,15 +121,16 @@ export function createSessionReferenceUpgrade(
       options.checkpoint?.("session_seen");
 
       db.exec(
-        "CREATE TABLE session_ref_finishes (session TEXT PRIMARY KEY, time INTEGER NOT NULL)",
+        "CREATE TABLE session_ref_finishes (session TEXT PRIMARY KEY, time INTEGER NOT NULL, terminal INTEGER NOT NULL)",
       );
       const finishes = db.prepare(
-        "INSERT INTO session_ref_finishes VALUES(?,?) ON CONFLICT(session) DO UPDATE SET time=MAX(time,excluded.time)",
+        "INSERT INTO session_ref_finishes VALUES(?,?,?) ON CONFLICT(session) DO UPDATE SET time=MAX(time,excluded.time),terminal=MAX(terminal,excluded.terminal)",
       );
       for (const row of db.prepare("SELECT * FROM session_finishes").all()) {
         finishes.run(
           convert(String(row.session), "session_finishes.session"),
           row.time,
+          row.terminal,
         );
       }
       db.exec(

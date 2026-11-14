@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createInbox, inboxProjects } from "@otk/client";
+import { createInbox, inboxProjects } from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 
 Deno.test("catalog merges tracked, indexed and template directories once, ordering discovery by source, activity and name", () => {
@@ -46,11 +46,11 @@ Deno.test("catalog merges tracked, indexed and template directories once, orderi
   ];
   const rows = inboxProjects(entries, inbox, 100);
   assertEquals(rows.map((p) => [p.directory, p.source, p.status]), [
-    ["/tracked", "tracked", "idle"],
+    ["/tracked", "tracked", "none"],
     ["/indexed", "index", "finished"],
-    ["/old", "index", "idle"],
-    ["/alpha", "template", "idle"],
-    ["/zebra", "template", "idle"],
+    ["/old", "index", "none"],
+    ["/alpha", "template", "none"],
+    ["/zebra", "template", "none"],
   ]);
   assertEquals(rows.find((p) => p.directory === "/alpha")?.visitText, "");
   assertEquals(rows.map((p) => [p.directory, p.group]), [
@@ -91,7 +91,7 @@ Deno.test("catalog viewing records visits without activation; successful actions
   assertEquals(calls, [
     ["projects.visit", { directory: "/discovered" }],
     ["projects.visit", { directory: "/discovered" }],
-    ["sessions.seen", { sessionID: "s" }],
+    ["sessions.seen", { sessionID: "s", terminal: 0 }],
     ["projects.visit", { directory: "/discovered", active: true }],
   ]);
 });

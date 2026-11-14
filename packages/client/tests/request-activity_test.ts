@@ -174,7 +174,7 @@ Deno.test("a project-owned creation has activity before a task or session ID exi
   }, 64);
   const read = connection.rpc.start("tasks.list", { directory: "/empty" });
   void read.result.catch(() => {});
-  assertEquals(resources.projects(2)[0].status, "idle");
+  assertEquals(resources.projects(2)[0].status, "none");
   const create = connection.rpc.start("tasks.create", {
     directory: "/empty",
     name: "perf",

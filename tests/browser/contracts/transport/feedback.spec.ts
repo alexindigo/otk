@@ -194,7 +194,7 @@ test.describe("background task", () => {
       lease: state.lease.lease,
       action: "release",
     });
-    await expect(project).toHaveAttribute("data-rollup", "idle");
+    await expect(project).toHaveAttribute("data-rollup", "none");
     expect(
       (await state.product("tasks.list", { directory: entries[0].directory }))
         .map((task) => task.name),

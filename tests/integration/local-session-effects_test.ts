@@ -42,7 +42,7 @@ test("local policy disable settles behind sessions.seen while stock native readi
       t: "request",
       ref,
       method: "sessions.seen",
-      params: { sessionID: session.id },
+      params: { sessionID: session.id, terminal: 0 },
     });
     await client.wait((frame) =>
       frame.t === "request.progress" && frame.ref.key === ref.key &&

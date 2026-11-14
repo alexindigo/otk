@@ -16,6 +16,7 @@ export * from "./policies/titles.ts";
 export * from "./paths.ts";
 export * from "./index.ts";
 export * from "./inbox.ts";
+export * from "./supervision.ts";
 export * from "./messages.ts";
 export * from "./models.ts";
 export * from "./usage.ts";

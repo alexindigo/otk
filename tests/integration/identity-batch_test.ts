@@ -93,7 +93,7 @@ test("stock native batch identity consumer, task grouping, tombstone seen and un
     await waitFor(() => client.entry(child.id), Boolean);
     await oc.request(`/session/${child.id}`, { method: "DELETE" });
     await waitFor(() => client.entry(child.id)?.deleted, Boolean);
-    await client.rpc("sessions.seen", { sessionID: child.id });
+    await client.rpc("sessions.seen", { sessionID: child.id, terminal: 0 });
     assertEquals(
       (await client.rpc<TaskRecord[]>("tasks.list", {}))[0].sessions,
       [parent.id, child.id],

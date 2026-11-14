@@ -691,8 +691,8 @@ Deno.test({
         readFailures = 0;
       index.observe((entry, previous) => {
         if (
-          entry.id === target.id && previous?.status === "busy" &&
-          entry.status === "idle"
+          entry.id === target.id &&
+          (entry.activity?.terminal ?? 0) > (previous?.activity?.terminal ?? 0)
         ) finishes++;
       });
       const adapter = new OpencodeV2ServerAdapter(

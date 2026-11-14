@@ -88,7 +88,8 @@ test(
       });
     await expect.poll(async () => (await children()).length).toBe(1);
     const [child] = await children();
-    const note = page.locator(toast(b.id, sidecar));
+    // The request's owner is the child; its one notification carries that identity.
+    const note = page.locator(toast(child.id, sidecar));
     await expect(note).toContainText("Allow once");
     await expect(note).toHaveCount(1);
     await collapsed(page);

@@ -358,7 +358,10 @@ test(
           "data-status",
           "idle",
         );
-        await state.product("sessions.seen", { sessionID: s.id });
+        await state.product("sessions.seen", {
+          sessionID: s.id,
+          terminal: (await state.product("sessions.finishes", {}))[s.id] ?? 0,
+        });
         await page.reload();
         await expect(page.locator(`[data-tab="${task.id}"]`)).toBeVisible();
         await expect(page.locator(`[data-tab="${task.id}"]`)).toContainText(

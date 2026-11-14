@@ -80,14 +80,26 @@ Deno.test("project summaries own status priority, persisted marks, recency and u
   owner.authority("current");
   assertEquals(owner.values.get("/empty")?.sessionCount, 0);
   const a = entry();
-  owner.entry({ ...a, status: "busy" });
+  owner.entry({
+    ...a,
+    status: "busy",
+    activity: { work: { keys: ["run-a"], fresh: true } },
+  });
   assertEquals(owner.values.get("/other")?.status, "working");
   finish = 3;
   owner.entry(a);
   assertEquals(owner.values.get("/other")?.status, "finished");
-  owner.entry({ ...entry("tstv1-b"), status: "busy" });
+  owner.entry({
+    ...entry("tstv1-b"),
+    status: "busy",
+    activity: { work: { keys: ["run-b"], fresh: true } },
+  });
   assertEquals(owner.values.get("/other")?.status, "finished");
-  owner.entry({ ...a, attention: { ...a.attention, questions: 1 } });
+  owner.entry({
+    ...a,
+    attention: { ...a.attention, questions: 1 },
+    activity: { inputs: { keys: ["question-a"], fresh: true } },
+  });
   assertEquals(owner.values.get("/other")?.status, "blocked");
   seen = 4;
   owner.mark(a.id);
@@ -98,7 +110,7 @@ Deno.test("project summaries own status priority, persisted marks, recency and u
   assertEquals(owner.values.get("/other")?.authority, "stale");
   owner.remove("tstv1-b");
   assertEquals(owner.values.get("/other")?.sessionCount, 1);
-  assertEquals(owner.values.get("/other")?.status, "idle");
+  assertEquals(owner.values.get("/other")?.status, "none");
   const before = emitted.length;
   owner.entry(a);
   assertEquals(emitted.length, before);
@@ -163,7 +175,12 @@ Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups acr
     },
   ]);
   owner.authority("current");
-  owner.entry({ ...entry(), directory: "/trees/one/src", status: "busy" });
+  owner.entry({
+    ...entry(),
+    directory: "/trees/one/src",
+    status: "busy",
+    activity: { work: { keys: ["run"], fresh: true } },
+  });
   assertEquals(owner.values.get("/trees/one")?.status, "working");
   assertEquals(owner.values.get("/trees/one")?.sessionCount, 4);
   assertEquals(owner.values.get("/trees/one")?.scopes, [
@@ -178,7 +195,7 @@ Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups acr
   assertEquals(owner.leaf("/trees/one/lib", "other"), "/trees/one/lib");
   assertEquals(owner.values.has("/trees/one/src"), false);
   owner.authority("stale");
-  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "none");
   assertEquals(owner.values.get("/repo")?.authority, "stale");
   owner.seed([{
     directory: "/trees/one",
@@ -205,9 +222,9 @@ Deno.test("worktree summaries keep leaf counts and deduplicated repo rollups acr
       parentDirectory: "/new-repo",
     },
   }]);
-  assertEquals(owner.values.get("/repo")?.status, "idle");
+  assertEquals(owner.values.get("/repo")?.status, "none");
   assertEquals(owner.values.get("/repo")?.sessionCount, 2);
-  assertEquals(owner.values.get("/new-repo")?.status, "working");
+  assertEquals(owner.values.get("/new-repo")?.status, "none");
 });
 
 Deno.test("topology outlives population-only seeds; explicit clear retires only the relationship and empty inventory stays unmaterialized", () => {

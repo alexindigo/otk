@@ -268,10 +268,9 @@ unseen state and recency, with local request attention overlaid by its existing
 owner. Additive `inbox.summaries` frames have their own revision fence and share
 complete-inbox gap recovery. Unknown native activity never paints an idle lamp.
 Standalone consumers without summaries retain the metadata projection contract.
-Until summary authority is current and its counts are known, the P3 projection
-borrows retained per-session attention and seen/finish facts. Unknown scalar
-counts remain null; absent activity/unread authority is presented as unknown,
-never an invented idle lamp or seen mark. Ready summaries replace that fallback.
+The server's supervision projection governs lamps independently of population
+readiness. Missing supervision is `none`, rendered grey as "No known activity".
+There is no raw-status fallback. Unknown population counts remain null.
 
 The inbox owns accepted metadata synchronously and publishes a binding clock,
 matching the keyed index: projection observers and commands never wait for a
@@ -792,11 +791,11 @@ the local layout/preference RPC ports share this owner.
 `createInbox(rpc, factory?, report?)` receives connection-local `inbox.snapshot`
 and `inbox.patch` frames, including the snapshot sent on every hello.
 `openProject`, `openSession` and `act` reset the server-owned visit clock;
-opening a session also records its seen timestamp. Wrap sends, approvals,
-answers and interrupts in `act(directory, callback)`. Successful actions request
-activation through the same visit bookkeeping port; opening/viewing never
-requests activation. Session creation is tracked by the server's creation
-registration. For submissions,
+opening a session also acknowledges its captured terminal token. Wrap sends,
+approvals, answers and interrupts in `act(directory, callback)`. Successful
+actions request activation through the same visit bookkeeping port;
+opening/viewing never requests activation. Session creation is tracked by the
+server's creation registration. For submissions,
 `createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
 session-bound admission port: it resolves the captured project's directory,
 enters the existing tab `send` promotion, then runs the mode-specific callback
@@ -854,19 +853,21 @@ replication.
 the shared pure projections for column, rail and badges. Supply the connection's
 index entries, its metadata and an explicit current time. Ageing defaults to
 2h/8h/24h and accepts the validated `projectAgeing` preference (milliseconds).
+`unread` requires session metadata, not only an ID: retained finish marks never
+make a deleted session unread. Restored sessions use the same retained marks.
 Keep each server's inputs separate when merging the resulting project rows.
 `inboxProjects` shares the Active/Discovered/Inactive classification with the
 keyed project owner. Active means known sessions, Discovered means
 template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
-population counts, so hydrating an existing session cannot increment them.
-Discovered rows have no light. `INBOX_STATUS_PRIORITY` owns aggregate light
-priority: needs you, finished but unseen, working, idle. Project and task lights
-both use `rollup`; presentation does not rank states. Finished subsessions do
-not raise unseen attention. Task tabs sort by this priority, then newest family
-`timeUpdated`, with identity as a stable tie-break. Stored task order remains
-available for future pinning; it does not drive the strip. Discovery retains its
-recency/name order.
+population counts, so hydrating an existing session cannot increment them. Every
+project row has a light. `INBOX_STATUS_PRIORITY` owns aggregate light priority:
+needs you, finished but unseen, working, none. Project and task lights consume
+supervision; presentation does not rank states. Finished children retain unseen
+attention until acknowledged. Task tabs sort by this priority, then newest
+family `timeUpdated`, with identity as a stable tie-break. Stored task order
+remains available for future pinning; it does not drive the strip. Discovery
+retains its recency/name order.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project

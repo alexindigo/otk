@@ -193,7 +193,11 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
     },
     indexUpsert(entry) {
       index.upsert(entry);
-      published.push(`upsert:${entry.id}`);
+      published.push(
+        `${
+          entry.activityAuthority === "stale" ? "stale" : "upsert"
+        }:${entry.id}`,
+      );
     },
     indexRemove(id) {
       index.remove(id);
@@ -396,7 +400,7 @@ for (const stage of ["event colour", "event message"] as const) {
       // An independent color result may publish while this connection is live.
       assert(
         after.slice(0, retired).every((value) =>
-          value === "content:agent.colors"
+          value === "content:agent.colors" || value === "stale:opcv1-root"
         ),
       );
       assertEquals(after.slice(retired), [

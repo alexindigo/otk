@@ -30,41 +30,40 @@ export function attentionStatus(
   ...states: (InboxStatus | undefined)[]
 ): InboxStatus {
   return INBOX_STATUS_PRIORITY.find((state) => states.includes(state)) ??
-    "idle";
+    "none";
 }
+/** Retained finish marks are unread only while their session is live. */
 export function unread(
-  sessionID: string,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes">,
+  session: Pick<IndexMetadata, "id" | "deleted">,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): boolean {
+  if (session.deleted) return false;
+  const sessionID = session.id;
   return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
 }
 export function inboxStatus(
   entry: IndexMetadata & OperationAttention,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes">,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): InboxStatus {
   // Tombstones retain historical metadata, never authority for live attention.
-  if (entry.deleted) return "idle";
-  const a = entry.attention;
-  if (
-    a.error ||
-    a.permissions + a.questions + a.childPermissions + a.childQuestions > 0
-  ) return "blocked";
+  if (entry.deleted) return "none";
+  const state = inbox.supervision?.[entry.id]?.state;
   return attentionStatus(
     entry.operationStatus,
-    entry.status !== "idle"
-      ? "working"
-      : !entry.parentID && unread(entry.id, inbox)
+    state === "needsYou"
+      ? "blocked"
+      : state === "finishedUnseen"
       ? "finished"
-      : "idle",
+      : state ?? "none",
   );
 }
 export function rollup(
   entries: readonly (IndexMetadata & OperationAttention)[],
-  inbox: Pick<InboxSnapshot, "seen" | "finishes">,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): InboxStatus {
   const states = entries.map((entry) => inboxStatus(entry, inbox));
   return INBOX_STATUS_PRIORITY.find((status) => states.includes(status)) ??
-    "idle";
+    "none";
 }
 export function visitTime(lastVisit: number, now: number): string {
   return relativeTime(lastVisit, now);
@@ -205,17 +204,12 @@ export function inboxProjects(
     sessions: readonly (IndexMetadata & OperationAttention)[],
   ) => {
     const summary = inbox.summaries?.[directory];
-    return summary?.authority === "current" && summary.status !== null
+    return summary
       ? attentionStatus(
-        summary.status,
+        summary.status ?? "none",
         ...sessions.map((entry) => entry.operationStatus),
       )
-      : attentionStatus(
-        summary?.status && summary.status !== "idle"
-          ? summary.status
-          : undefined,
-        rollup(sessions, inbox),
-      );
+      : rollup(sessions, inbox);
   };
   const tracked = [...records.values()].filter((project) =>
     project.inactive || inbox.discovered?.includes(project.directory) ||
@@ -229,7 +223,7 @@ export function inboxProjects(
         entry.directory === project.directory
       );
       const status = statusFor(project.directory, sessions);
-      const inactive = project.inactive && status === "idle";
+      const inactive = project.inactive && status === "none";
       const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
         ...project,
@@ -242,7 +236,7 @@ export function inboxProjects(
         inactive,
         status,
         unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
-          sessions.some((s) => !s.parentID && unread(s.id, inbox)),
+          sessions.some((s) => unread(s, inbox)),
         visitText: visitTime(project.lastVisit, clock),
         ageing: ageing(project.lastVisit, clock, thresholds),
       };
@@ -285,7 +279,7 @@ export function inboxProjects(
       lastVisit: 0,
       status: statusFor(directory, sessions),
       unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
-        sessions.some((s) => !s.parentID && unread(s.id, inbox)),
+        sessions.some((s) => unread(s, inbox)),
       visitText: "",
       ageing: 0,
     };
@@ -301,7 +295,7 @@ export function inboxProjects(
       added: false,
       inactive: false,
       lastVisit: 0,
-      status: "idle",
+      status: "none",
       unread: false,
       visitText: "",
       ageing: 0,
@@ -341,7 +335,11 @@ export interface InboxModel {
   receive(frame: ServerFrame): void;
   promote(session: TabSession, options?: RequestOptions): Promise<TaskRecord>;
   openProject(directory: string): Promise<void>;
-  openSession(sessionID: string, directory: string): Promise<void>;
+  openSession(
+    sessionID: string,
+    directory: string,
+    terminal?: number,
+  ): Promise<void>;
   act<T>(
     directory: string,
     action: () => Promise<T>,
@@ -405,6 +403,9 @@ export function createInbox(
       tasks: [...value.inbox.tasks],
       seen: { ...value.inbox.seen },
       finishes: { ...value.inbox.finishes },
+      ...(value.inbox.supervision
+        ? { supervision: { ...value.inbox.supervision } }
+        : {}),
     };
     current.ready = true;
     clock.update((draft) => {
@@ -498,6 +499,11 @@ export function createInbox(
         break;
       case "finish":
         draft.finishes[op.sessionID] = op.time;
+        break;
+      case "supervision":
+        draft.supervision ??= {};
+        if (op.value) draft.supervision[op.sessionID] = op.value;
+        else delete draft.supervision[op.sessionID];
         break;
       case "templates":
         draft.pathTemplates = op.values;
@@ -621,6 +627,7 @@ export function createInbox(
               break;
             case "seen":
             case "finish":
+            case "supervision":
               sessions.add(op.sessionID);
               break;
             case "task.upsert":
@@ -652,9 +659,13 @@ export function createInbox(
     async openProject(directory: string): Promise<void> {
       await rpc.call("projects.visit", { directory });
     },
-    async openSession(sessionID: string, directory: string): Promise<void> {
+    async openSession(
+      sessionID: string,
+      directory: string,
+      terminal = current.inbox.supervision?.[sessionID]?.terminal ?? 0,
+    ): Promise<void> {
       await rpc.call("projects.visit", { directory });
-      await rpc.call("sessions.seen", { sessionID });
+      await rpc.call("sessions.seen", { sessionID, terminal });
     },
     /** Wrap send/approve/answer/interrupt so every successful action resets visits. */
     async act<T>(

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { taskBreadcrumbs } from "@otk/client";
+import { taskBreadcrumbs } from "./supervision-fixture.ts";
 import type { IndexEntry } from "@otk/protocol";
 Deno.test("breadcrumbs keep member order, include active nested helpers and cannot duplicate grouped children or cycles", () => {
   const make = (id: string, parentID?: string): IndexEntry => ({

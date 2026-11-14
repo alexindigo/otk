@@ -155,7 +155,7 @@ test("project and visible-row acquisition scopes inbox marks, policies and retai
       name: "Other task",
       sessions: [other.id],
     });
-    await control.rpc("sessions.seen", { sessionID: other.id });
+    await control.rpc("sessions.seen", { sessionID: other.id, terminal: 0 });
     await control.rpc("permission.auto", {
       sessionID: other.id,
       enabled: true,
@@ -223,7 +223,7 @@ test("project and visible-row acquisition scopes inbox marks, policies and retai
       { inbox: import("@otk/protocol").InboxSnapshot }
     >("inbox.get", {});
     assertEquals(acquired.inbox.tasks.map((value) => value.id), [task.id]);
-    assert(acquired.inbox.seen[other.id] > 0);
+    assertEquals(acquired.inbox.seen[other.id], 0);
     await client.wait((frame) =>
       frame.t === "approvals" && frame.approvals.enabled.includes(other.id)
     );

@@ -148,8 +148,9 @@ export async function nativeStates({
     );
     for (const theme of themes) {
       await paint(theme);
+      // An interruption is terminal evidence acknowledged by this open view.
       const marker = page.locator(
-        `[data-session="${native.emptyID}"] .otk-status-light[data-state=blocked]`,
+        `[data-session="${native.emptyID}"] .otk-status-light[data-state=none]`,
       );
       await expect(marker).toBeVisible();
       expect(

@@ -24,8 +24,8 @@ function seed(db: OtkDb) {
   db.connection.exec(`
     INSERT INTO tasks VALUES ('task','/project','Keep task',0);
     INSERT INTO task_sessions VALUES ('task','ses_one',3),('task','opcv1-ses_one',7),('task','ses_other',9);
-    INSERT INTO session_seen VALUES ('alice','ses_one',4),('alice','opcv1-ses_one',8),('bob','ses_one',6);
-    INSERT INTO session_finishes VALUES ('ses_one',5),('opcv1-ses_one',3);
+    INSERT INTO session_seen(user,session,time) VALUES ('alice','ses_one',4),('alice','opcv1-ses_one',8),('bob','ses_one',6);
+    INSERT INTO session_finishes(session,time) VALUES ('ses_one',5),('opcv1-ses_one',3);
     INSERT INTO permission_auto VALUES ('ses_one'),('opcv1-ses_one');
     INSERT INTO permission_activity VALUES (42,'ses_one','per_1','{"sessionID":"ses_one","patterns":["ses_one"],"extra":true}','once','auto','ses_other','keep message',17,'confirmed',NULL);
     INSERT INTO permission_activity VALUES (43,'ses_one','per_2','{invalid','reject','manual',NULL,NULL,18,'failed','keep error');
@@ -118,15 +118,16 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
     );
     assertEquals(
       db.connection.prepare("SELECT * FROM session_seen ORDER BY user").all(),
-      [{ user: "alice", session: "opcv1-ses_one", time: 8 }, {
+      [{ user: "alice", session: "opcv1-ses_one", time: 8, terminal: 0 }, {
         user: "bob",
         session: "opcv1-ses_one",
         time: 6,
+        terminal: 0,
       }],
     );
     assertEquals(
       db.connection.prepare("SELECT * FROM session_finishes").all(),
-      [{ session: "opcv1-ses_one", time: 5 }],
+      [{ session: "opcv1-ses_one", time: 5, terminal: 0 }],
     );
     assertEquals(db.connection.prepare("SELECT * FROM permission_auto").all(), [
       { session: "opcv1-ses_one" },

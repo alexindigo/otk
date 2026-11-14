@@ -124,10 +124,12 @@ Deno.test("status lamps consume semantic theme paint through the shared role ali
     !/--lamp-color:\s*#/.test(css),
     "The component must not own gel colours",
   );
-  for (const state of ["blocked", "finished", "working", "idle"]) {
+  for (const state of ["blocked", "finished", "working", "none"]) {
     assert(css.includes(`--lamp-color: var(--status-light-${state})`));
     assert(
-      shared.includes(`--status-light-${state}: var(--otk-lamp-${state})`),
+      shared.includes(
+        `--status-light-${state}: var(--otk-lamp-${state})`,
+      ),
     );
   }
 });

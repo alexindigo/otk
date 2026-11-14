@@ -17,7 +17,7 @@ test("sessions.idle-active-project-seeds-zero-native-instance-wake", {
       '.otk-project-row[data-group="active"] .otk-status-light',
     )
       .evaluateAll((es) => es.map((e) => e.getAttribute("data-state"))),
-  ).toEqual(["idle", "idle"]);
+  ).toEqual(["none", "none"]);
   expect(
     (await state.observe<{ discovery: { creations: string[] } }>()).discovery
       .creations,

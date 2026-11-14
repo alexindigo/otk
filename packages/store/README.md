@@ -1,5 +1,12 @@
 # @otk/store
 
+Seen/finish feature v2 preserves legacy observation clocks and adds separate
+provider terminal watermarks. `Finishes.observe` records only a supplied proven
+token; `Seen.acknowledge` advances only the displayed token for that user.
+`tokens()` hydrates these watermarks. Missing/legacy acknowledgements are zero,
+not an imported native viewed baseline. Both writes join `StoreWrite`; legacy
+clock APIs remain separate and cannot publish supervision evidence.
+
 Disk-backed SQLite storage for preferences, canonical frecency paths and inbox
 metadata. Uses `node:sqlite` and `@std/path`; depends on no other OTK package.
 Import only the public `@otk/store` entry. Applications supply their preference

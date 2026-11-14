@@ -7,6 +7,7 @@ import {
   NotificationHub,
   notificationPolicy,
   NotificationTriggers,
+  presentedOnScreen,
 } from "@otk/client";
 const entry = (id = "a", change: Partial<IndexEntry> = {}): IndexEntry => ({
   id,
@@ -44,7 +45,7 @@ Deno.test("newly acquired live pending attention alerts without acquiring unrela
     ops: [{
       op: "upsert",
       entry: entry("pending", {
-        attention: { ...entry().attention, childPermissions: 1 },
+        attention: { ...entry().attention, permissions: 1 },
       }),
     }],
   });
@@ -65,7 +66,7 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   triggers.receive("s", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: entry() }],
+    ops: [{ op: "upsert", entry: entry("a", { activity: { terminal: 2 } }) }],
   });
   assertEquals(emitted.map((n) => [n.id, n.kind]), [["s/a", "done"]]);
   assertEquals(
@@ -98,9 +99,9 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   triggers.receive("s", {
     t: "index.patch",
     rev: 5,
-    ops: [{ op: "upsert", entry: entry() }],
+    ops: [{ op: "upsert", entry: entry("child") }],
   });
-  assertEquals(removed.at(-1), "s/a");
+  assertEquals(removed.at(-1), "s/child");
   triggers.reset("s");
   triggers.receive("s", { t: "index.snapshot", rev: 8, entries: [root] });
   assertEquals(emitted.length, 2);
@@ -108,7 +109,7 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   triggers.receive("other", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: entry() }],
+    ops: [{ op: "upsert", entry: entry("a", { activity: { terminal: 2 } }) }],
   });
   assertEquals(emitted.at(-1)?.id, "other/a");
 });
@@ -176,6 +177,50 @@ Deno.test("notification policy focus/open/hidden, unavailable OS fallback, gener
   assertEquals(
     policy(note({ sessionRef: undefined }), () => false, true).channels,
     ["toast"],
+  );
+});
+Deno.test("one presentation per request: the open view's docks own their subtree's requests", () => {
+  const tree: Record<string, { parentID?: string }> = {
+    root: {},
+    child: { parentID: "root" },
+    grandchild: { parentID: "child" },
+    other: {},
+  };
+  const ctx = {
+    focused: true,
+    visible: true,
+    prefs: { ...DEFAULT_PREFS },
+    open: { sidecar: "s", session: "root" },
+    lookup: (_sidecar: string, id: string) => tree[id],
+  };
+  const policy = notificationPolicy(() => ctx);
+  const at = (session: string, kind: Note["kind"]) =>
+    note({ id: `s/${session}`, kind, sessionRef: { sidecar: "s", session } });
+  for (const kind of ["permission", "question"] as const) {
+    assertEquals(policy(at("grandchild", kind), () => true, true).channels, []);
+    assertEquals(policy(at("other", kind), () => true, true).channels, [
+      "toast",
+      "badge",
+    ]);
+  }
+  // A descendant's finish is its own; viewing the parent does not present it.
+  assertEquals(policy(at("child", "done"), () => true, true).channels, [
+    "toast",
+    "badge",
+  ]);
+  ctx.open.session = "child";
+  // A parent's request is not in the child's docks.
+  assertEquals(policy(at("root", "permission"), () => true, true).channels, [
+    "toast",
+    "badge",
+  ]);
+  assertEquals(policy(at("child", "done"), () => true, true).channels, []);
+  assertEquals(
+    presentedOnScreen(at("grandchild", "permission"), {
+      ...ctx,
+      focused: false,
+    }),
+    false,
   );
 });
 Deno.test("delivery ownership prevents stale timers/actions/async enrichment from consuming replacements", async () => {
@@ -277,7 +322,7 @@ Deno.test("root notification resolution retains other pending family attention i
     ops: [{
       op: "upsert",
       entry: entry("a", {
-        attention: { ...entry().attention, childPermissions: 1, questions: 1 },
+        attention: { ...entry().attention, permissions: 1, questions: 1 },
       }),
     }],
   });
@@ -335,7 +380,7 @@ Deno.test("question edges, archive/remove and async command completion preserve 
     ops: [{
       op: "upsert",
       entry: entry("a", {
-        attention: { ...entry().attention, childQuestions: 1 },
+        attention: { ...entry().attention, questions: 1 },
       }),
     }],
   });
