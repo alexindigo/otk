@@ -91,7 +91,7 @@ export class FailurePresenter {
       : "The requested action";
     const target = this.context.target?.(facts.target ?? {}) ??
       { label: facts.target?.label ?? "OTK" };
-    const known = facts.reason ?? enrichment?.text;
+    const known = [facts.reason, enrichment?.text].find((text) => text?.trim());
     const reason = known ?? GENERIC_FAILURE_REASON;
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
     const pending = facts.outcome === "unknown" ||
