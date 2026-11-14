@@ -121,7 +121,7 @@ for (
         }
         await expect(picker.locator("[role=alert] .otk-failure-content"))
           .toHaveText(
-            /No publishable failure reason is available/,
+            /OTK has no further details/,
           );
         await expect(picker).not.toContainText(
           kind === "missing"
@@ -167,7 +167,7 @@ for (
           await picker.locator(".otk-picker-status > button").click();
           await expect(picker.locator("[role=alert] .otk-failure-content"))
             .toHaveText(
-              /No publishable failure reason is available/,
+              /OTK has no further details/,
             );
           await expect(picker).not.toContainText("Refresh failed");
           await expect(picker.locator(".otk-picker-name > span").first())

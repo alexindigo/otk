@@ -6,6 +6,7 @@ import {
   FailurePresenter,
   type Feedback,
   type FeedbackOwner,
+  GENERIC_FAILURE_REASON,
 } from "./failures.ts";
 import type {
   FailureFacts,
@@ -231,7 +232,7 @@ export function sessionFailure(
       target: { ...prior?.facts?.target, ...context.target },
       reason: publicFailureReason(
         prior?.facts?.reason ?? observation?.message ?? reason ??
-          "No publishable failure reason is available",
+          GENERIC_FAILURE_REASON,
       ),
       status: prior?.facts?.status ?? observation?.status,
     },

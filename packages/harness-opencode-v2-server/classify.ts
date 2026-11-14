@@ -11,7 +11,8 @@ import type {
 import type { NativeMessage, NativeSession } from "./messages.ts";
 import { session } from "./metadata.ts";
 import { mapTool, shellFailure } from "./tool-interpretation.ts";
-import { nativeSource } from "./native-source.ts";
+import { nativeSource, sourceRef } from "./native-source.ts";
+import { referenceSources } from "@otk/protocol";
 import { subagentBody } from "./tool-results.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
@@ -466,6 +467,18 @@ function activityPart(
 /** Inbox admission is not a prompt anchor for contextual payloads. Classification
  * is still mapMessage; queue presentation adds only the native admission facts. */
 export function inboxMessage(
+  id: string,
+  item: Record<string, unknown>,
+  created: number,
+  sessionID: string,
+  context: MessageContext,
+): Message {
+  return referenceSources(
+    deriveInboxMessage(id, item, created, sessionID, context),
+    (path) => sourceRef({ origin: "inbox", id, path }),
+  );
+}
+export function deriveInboxMessage(
   id: string,
   item: Record<string, unknown>,
   created: number,

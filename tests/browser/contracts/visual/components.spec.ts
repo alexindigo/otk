@@ -201,7 +201,7 @@ test(
       expect(description.errors).toBe(1);
       if (name === "notes") expect(description.ids).toContain("notes-help");
       await expect(page.getByRole("alert")).toHaveText(
-        /No publishable failure reason is available/,
+        /OTK has no further details/,
       );
       await expandedFailure(page, ".otk-form", before);
       await expect(page.locator("textarea")).toHaveValue("Keep this text");
@@ -287,7 +287,7 @@ test(
     expect((await panel.boundingBox())!.height).toBe(before.height);
     await page.evaluate("styleTest.settleMenu(true)");
     await expect(panel.getByRole("alert")).toHaveText(
-      /No publishable failure reason is available/,
+      /OTK has no further details/,
     );
     await expect(panel.getByRole("alert")).toHaveCount(1);
     await expect(action).toBeFocused();

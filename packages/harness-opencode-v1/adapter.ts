@@ -7,6 +7,7 @@ import {
   isCancellation,
   latestTerminal,
   normalizeError,
+  sourceAt,
   type TerminalEvidence,
 } from "@otk/protocol";
 import type { ContentOp, Part, RevertInfo, Todo } from "@otk/protocol";
@@ -34,15 +35,24 @@ import { History } from "./history.ts";
 import { consumeEvents } from "./events.ts";
 import {
   assistantSettled,
+  deriveMessage,
   mapDiffs,
   mapIndex,
   mapMessage,
   mapPart,
   mapSession,
   mapStreamingShell,
+  referencePart,
 } from "./map.ts";
 import { MessageClocks } from "./message-clocks.ts";
-import { eventRecord, isPrompt, RecordProjection } from "./records.ts";
+import {
+  eventRecord,
+  isPrompt,
+  parseSourceRef,
+  RecordProjection,
+  recordReference,
+  sourceFailure,
+} from "./records.ts";
 import { V1RecordRetention } from "./record-retention.ts";
 import { SelectionIntents } from "./selection-intent.ts";
 import { messageOutput } from "./message-clock.ts";
@@ -478,11 +488,11 @@ export class OpencodeV1Adapter implements Harness {
         }
         for (const [i, part] of raw.parts.entries()) {
           if (part.type === "tool" && part.tool === "task") {
-            message.parts[i] = {
+            message.parts[i] = referencePart({
               kind: "tool",
               id: part.id,
               call: this.#tasks.shape(part),
-            };
+            }, part.messageID);
           }
         }
         return message;
@@ -495,7 +505,8 @@ export class OpencodeV1Adapter implements Harness {
           ) => [turn, known![turn]]),
         );
       },
-      retained: (id, before, limit) => this.#retention.page(id, before, limit),
+      retained: (id, before, limit) =>
+        this.#retention.page(id, before, limit).map(recordReference),
     });
     this.core = sessions(
       this.client,
@@ -651,6 +662,41 @@ export class OpencodeV1Adapter implements Harness {
           },
         },
     );
+    registry.register("source", {
+      getSource: async (id, ref, signal) => {
+        let value: ReturnType<typeof parseSourceRef>;
+        try {
+          value = parseSourceRef(ref);
+        } catch {
+          throw sourceFailure("reference");
+        }
+        let derived;
+        if (value.origin === "record") {
+          derived = this.#retention.get(id, value.id)?.message;
+          if (!derived) throw sourceFailure("record");
+        } else {
+          try {
+            const raw = await this.#messages.get(id, value.id, signal);
+            derived = deriveMessage(raw.info, raw.parts);
+          } catch (error) {
+            signal?.throwIfAborted();
+            throw sourceFailure(
+              error instanceof NativeRequestFailure &&
+                error.original instanceof HttpFailure &&
+                error.original.status === 404
+                ? "message"
+                : error instanceof NativeRequestFailure &&
+                    error.outcome === "unavailable"
+                ? "unreachable"
+                : "read",
+            );
+          }
+        }
+        const view = sourceAt(derived, value.path);
+        if (!view) throw sourceFailure("item");
+        return view;
+      },
+    });
     if (digest) {
       registry.register("digests", {
         scope: (owner, value) => digest.scope(owner, value),
@@ -2077,7 +2123,10 @@ export class OpencodeV1Adapter implements Harness {
         );
         this.#retention.put({ id: key, sessionID, created, message });
         if (this.buffers.subscribed(sessionID)) {
-          sink.content(sessionID, { op: "message.upsert", message });
+          sink.content(sessionID, {
+            op: "message.upsert",
+            message: recordReference(message),
+          });
         }
       }
       if (entry) {
@@ -2176,7 +2225,10 @@ export class OpencodeV1Adapter implements Harness {
         message,
       });
       if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, { op: "message.upsert", message });
+        sink.content(sessionID, {
+          op: "message.upsert",
+          message: recordReference(message),
+        });
       }
       const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
@@ -2229,7 +2281,10 @@ export class OpencodeV1Adapter implements Harness {
         message,
       });
       if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, { op: "message.upsert", message });
+        sink.content(sessionID, {
+          op: "message.upsert",
+          message: recordReference(message),
+        });
       }
       this.#question(String(p.requestID));
       sink.content(sessionID, {
@@ -2484,6 +2539,7 @@ export class OpencodeV1Adapter implements Harness {
         if (part.kind === "tool" && intent) part.call.selectionIntent = intent;
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = this.#tasks.shape(raw);
+          referencePart(part, raw.messageID);
           if (!this.#current(controller)) return;
         }
         const lastOutput = this.buffers.outputTime(raw.messageID);

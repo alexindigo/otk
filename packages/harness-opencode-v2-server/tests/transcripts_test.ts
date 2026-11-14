@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { referenced } from "../native-source.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { mapMessage, mapTool, partID } from "../map.ts";
 import { factsFrom, scalarMessage } from "../transcript-reads.ts";
@@ -125,7 +126,15 @@ Deno.test("V2 live historical tools and snapshot checkpoints use the same interp
           revision: 0,
         };
       }
-      assertEquals(op.part.call, expected);
+      // Live delivery is the loaded form: the same interpretation, with its
+      // source behind the plugin reference.
+      assertEquals(
+        op.part.call,
+        referenced(
+          { kind: "tool", id: op.part.id, call: expected },
+          op.messageID,
+        ).call,
+      );
     }
   } finally {
     await transcript.stop();
@@ -713,7 +722,7 @@ Deno.test("V2 unknown native content stays bounded and cannot become a prompt an
   )!;
   assertEquals(future.role, "context");
   assert(future.source?.truncated);
-  assertEquals(future.source?.preview.length, 16384);
+  assertEquals(future.source?.preview?.length, 16384);
   assertEquals(createTranscriptProjection().state.queuedIDs.size, 0);
 });
 Deno.test("V2 untested cutoff scan uses bounded ordinary pages and preserves exact continuation", async () => {

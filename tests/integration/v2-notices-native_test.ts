@@ -10,6 +10,7 @@ import {
   type Message,
   MESSAGE_PAGE_SIZE,
   type MessagePage,
+  type NativeSourceView,
 } from "@otk/protocol";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
@@ -296,6 +297,21 @@ Deno.test({
         `Expected SQL authority, got ${cursor.source}`,
       );
       assertEquals(page.items.at(-1)?.id, `request:${form.id}`);
+      // Loaded items keep plugin references; each Source read is exact.
+      const record = page.items.at(-1)!,
+        reply = page.items.find((row) => row.role === "assistant")!;
+      const cases: [Message, string][] = [[record, form.id], [
+        reply,
+        reply.id,
+      ]];
+      for (const [item, expected] of cases) {
+        assertEquals(item.source?.preview, undefined);
+        const exact = await ws.rpc<NativeSourceView>("source.get", {
+          sessionID: target.id,
+          ref: item.source!.ref!,
+        });
+        assert(exact.preview.includes(expected), exact.preview);
+      }
     }),
 });
 /** Read-only view of the plugin's own stored record; never transcript demand. */

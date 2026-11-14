@@ -243,7 +243,7 @@ test("menus.project-dots-shared-projection-owned-failure-and-readiness", {
   await expect(dots.getByRole("menuitem")).toBeFocused();
   await dots.getByRole("menuitem").click();
   const alert = page.locator("#project-probe .otk-project-error");
-  await expect(alert).toHaveText(/No publishable failure reason is available/);
+  await expect(alert).toHaveText(/OTK has no further details/);
   await expect.poll(() =>
     dots.getByRole("menuitem").evaluate((el) =>
       document.getElementById(el.getAttribute("aria-describedby")!) ===

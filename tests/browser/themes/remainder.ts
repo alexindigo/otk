@@ -96,7 +96,7 @@ export async function remainder(
       await shot(`public-form-pending-${theme.id}`);
       await page.evaluate("styleTest.feedback('error')");
       await expect(page.locator("[role=alert]")).toHaveText(
-        /No publishable failure reason is available/,
+        /OTK has no further details/,
       );
       await expandedFailure(page, ".otk-form", before);
       await expect(page.locator(".otk-form input").first()).toHaveJSProperty(
@@ -192,7 +192,7 @@ export async function remainder(
       await shot(`public-menu-pending-${theme.id}`);
       await page.evaluate("styleTest.settleMenu(true)");
       await expect(menu.locator("[role=alert]")).toHaveText(
-        /No publishable failure reason is available/,
+        /OTK has no further details/,
       );
       const feedbackHeight = await menu.getByRole("alert").evaluate((el) =>
         el.getBoundingClientRect().height +

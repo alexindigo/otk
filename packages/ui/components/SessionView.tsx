@@ -328,6 +328,7 @@ export default function SessionView(props: {
     <HighlightProvider lease={highlightLease()}>
       <TranscriptContext
         interaction={props.transcript?.interaction}
+        nativeSource={props.transcript?.nativeSource}
         visibility={attachSource}
       >
         <PathProvider

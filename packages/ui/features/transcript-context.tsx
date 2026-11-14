@@ -13,7 +13,11 @@ import {
   createTranscriptInteraction,
   type TranscriptInteraction,
 } from "@otk/client";
-import type { DisclosureCategory, Preferences } from "@otk/protocol";
+import type {
+  DisclosureCategory,
+  NativeSourceView,
+  Preferences,
+} from "@otk/protocol";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
@@ -54,6 +58,15 @@ interface ContentActions {
 const Identity = createContext<ContentIdentity>({});
 const Actions = createContext<ContentActions | null>(null);
 const Interaction = createContext<TranscriptInteraction | null>(null);
+type SourceReader = (
+  ref: string,
+  options?: { retry?: boolean },
+) => Promise<NativeSourceView>;
+const Sources = createContext<SourceReader | null>(null);
+/** The transcript's on-demand reader for plugin-owned source references. */
+export function useNativeSource(): SourceReader | null {
+  return useContext(Sources);
+}
 export function contentGeneration() {
   const interaction = useContext(Interaction);
   return (id: string) => interaction?.generation(id) ?? id;
@@ -134,6 +147,7 @@ export function TranscriptContext(
   props: {
     children: Element;
     interaction?: TranscriptInteraction;
+    nativeSource?: SourceReader;
     visibility?(
       element: HTMLElement,
       messageID: string,
@@ -211,29 +225,31 @@ export function TranscriptContext(
   });
   return (
     <Visibility value={props.visibility ?? null}>
-      <Interaction value={interaction}>
-        <Actions
-          value={{
-            bind: (identity, value) => {
-              const id = key(identity);
-              if (owners.has(id)) {
-                throw new Error(
-                  "Duplicate transcript action owner",
-                );
-              }
-              owners.set(id, value);
-              setRevision((value) => value + 1);
-              return () => {
-                if (owners.get(id) !== value) return;
-                owners.delete(id);
+      <Sources value={props.nativeSource ?? null}>
+        <Interaction value={interaction}>
+          <Actions
+            value={{
+              bind: (identity, value) => {
+                const id = key(identity);
+                if (owners.has(id)) {
+                  throw new Error(
+                    "Duplicate transcript action owner",
+                  );
+                }
+                owners.set(id, value);
                 setRevision((value) => value + 1);
-              };
-            },
-          }}
-        >
-          {props.children}
-        </Actions>
-      </Interaction>
+                return () => {
+                  if (owners.get(id) !== value) return;
+                  owners.delete(id);
+                  setRevision((value) => value + 1);
+                };
+              },
+            }}
+          >
+            {props.children}
+          </Actions>
+        </Interaction>
+      </Sources>
     </Visibility>
   );
 }

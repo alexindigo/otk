@@ -70,7 +70,7 @@ Deno.test("revert owner serializes intents without optimistic content and retire
   await f.owner.restore();
   assertEquals(
     f.owner.state.error && f.owner.state.error.failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   f.result(Promise.resolve({ id: "b" } as ContentSession));
   await f.owner.restore();

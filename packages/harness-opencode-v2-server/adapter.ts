@@ -273,6 +273,14 @@ export class OpencodeV2ServerAdapter implements Harness {
     const capabilities: Capabilities = {
       ...digestCapabilities,
       ...catalogCapabilities,
+      source: {
+        getSource: (id, ref, signal) =>
+          this.transcript.source(
+            id,
+            ref,
+            signal ?? new AbortController().signal,
+          ),
+      },
       prompt: this.prompts,
       permissions: this.pending.permissions,
       forms: this.pending.forms,

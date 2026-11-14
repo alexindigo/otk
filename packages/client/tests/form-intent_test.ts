@@ -62,7 +62,7 @@ Deno.test("form feedback is structured and safe, and definite failure retains th
   assertEquals(owner.state.captured, { name: "kept" });
   assertEquals(
     owner.state.feedback?.failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   const key = owner.state.key;
   await assertRejects(() =>
