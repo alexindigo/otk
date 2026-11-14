@@ -76,6 +76,23 @@ test("bootstrap DB degrades on missing schema without creating a missing databas
   degraded.close();
 });
 
+test("revert scalar reports unavailable optional SQL without writing or hiding identity errors", async () => {
+  const file = await fixture(), db = new DatabaseSync(file);
+  db.exec(
+    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+  );
+  db.close();
+  const before = await Deno.readFile(file), reader = new BootstrapDb(file);
+  try {
+    assertEquals(reader.revertedUserCount("opcv1-s", "m"), undefined);
+    assertEquals(reader.revertedPrompts("opcv1-s", "m", 10), undefined);
+    assertEquals(reader.nextMessageID("opcv1-s", "m"), null);
+  } finally {
+    reader.close();
+  }
+  assertEquals(await Deno.readFile(file), before);
+});
+
 test("bootstrap DB distinguishes an authoritative empty hint set from a failed query", async () => {
   const file = await fixture(), db = new DatabaseSync(file);
   db.exec(
