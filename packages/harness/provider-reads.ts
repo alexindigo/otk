@@ -34,7 +34,14 @@ export interface ProviderReadKinds
     ResourceReadKinds,
     FileReadKinds,
     QuestionReadKinds,
-    ConfigReadKinds {}
+    ConfigReadKinds {
+  /** Bounded native terminal metadata, independent of body/list/digest demand. */
+  "supervision.terminals": {
+    input: { after: string };
+    result: import("@otk/protocol").SessionMetadata[];
+    chunk: import("@otk/protocol").SessionMetadata[];
+  };
+}
 export interface ProviderReadOptions {
   optional?: boolean;
   owner: string;

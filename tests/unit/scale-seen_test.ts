@@ -7,15 +7,52 @@ import { fixture } from "../support/config.ts";
 import { test } from "../support/resources.ts";
 import { seedScaleSeen } from "../support/scale-seen.ts";
 
+function v1Schema(native: DatabaseSync, sessions: readonly string[]) {
+  native.exec(`CREATE TABLE session(id TEXT, parent_id TEXT, directory TEXT,
+    project_id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER,
+    time_archived INTEGER);
+    CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);`);
+  const insert = native.prepare(
+    "INSERT INTO session VALUES(?,NULL,'/fixture','project',?,1,100,NULL)",
+  );
+  for (const id of sessions) insert.run(id, id);
+}
+
+function v2Schema(
+  native: DatabaseSync,
+  sessions: readonly {
+    id: string;
+    idle?: number;
+    outcome?: string;
+  }[],
+) {
+  native.exec(`CREATE TABLE project(id TEXT, worktree TEXT);
+    INSERT INTO project VALUES('project','/fixture');
+    CREATE TABLE session_v2(id TEXT, project_id TEXT, directory TEXT,
+      parent_id TEXT, time_created INTEGER, time_updated INTEGER,
+      time_idle INTEGER, idle_outcome TEXT);
+    CREATE TABLE session_message(id TEXT, session_id TEXT, seq INTEGER,
+      type TEXT, time_created INTEGER, data TEXT);`);
+  const insert = native.prepare(
+    "INSERT INTO session_v2 VALUES(?,'project','/fixture',NULL,1,100,?,?)",
+  );
+  for (const row of sessions) {
+    insert.run(row.id, row.idle ?? null, row.outcome ?? null);
+  }
+}
+
+function v2Shell(native: DatabaseSync, id: string, terminal: number) {
+  native.prepare("INSERT INTO session_message VALUES(?,?,1,'shell',1,?)")
+    .run(`shell-${id}`, id, JSON.stringify({ time: { completed: terminal } }));
+}
+
 for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
   test(`scale viewed-history fixture acknowledges exact ${kind} seed terminals only`, async () => {
     const root = await fixture(),
       path = join(root, "native.db"),
       native = new DatabaseSync(path);
     if (kind === "opencode-v1") {
-      native.exec(
-        "CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT)",
-      );
+      v1Schema(native, ["seed", "other", "empty"]);
       const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
       for (
         const [id, terminal] of [["seed", 10], ["seed", 20], ["other", 99]]
@@ -38,11 +75,11 @@ for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
         JSON.stringify({ role: "user", time: { created: 30 } }),
       );
     } else {
-      native.exec(
-        `CREATE TABLE session_v2(id TEXT, time_idle INTEGER, idle_outcome TEXT);
-        INSERT INTO session_v2 VALUES('seed',20,'succeeded'),('other',99,'failed'),
-          ('empty',30,NULL);`,
-      );
+      v2Schema(native, [
+        { id: "seed", idle: 20, outcome: "succeeded" },
+        { id: "other", idle: 99, outcome: "failed" },
+        { id: "empty", idle: 30 },
+      ]);
     }
     native.close();
     const store = new OtkDb(join(root, "state"), [seenMigrations], {
@@ -69,22 +106,20 @@ for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
   });
 }
 
-test("scale viewed-history fixture follows the latest valid V1 assistant terminal", async () => {
+test("scale viewed-history fixture follows the native V1 terminal inventory", async () => {
   const root = await fixture(),
     path = join(root, "native.db"),
     native = new DatabaseSync(path);
-  native.exec(
-    "CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT)",
-  );
-  const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
   const sessions = [
     "error",
     "error-completed",
     "tool-calls",
     "unknown",
-    "unfinished",
+    "completion-only",
     "same-clock",
   ];
+  v1Schema(native, sessions);
+  const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
   for (const id of sessions) {
     insert.run(
       "old",
@@ -105,7 +140,7 @@ test("scale viewed-history fixture follows the latest valid V1 assistant termina
     }],
     ["tool-calls", { finish: "tool-calls", time: { completed: 40 } }],
     ["unknown", { finish: "unknown", time: { completed: 40 } }],
-    ["unfinished", { time: { completed: 40 } }],
+    ["completion-only", { time: { completed: 40 } }],
     ["same-clock", { finish: "stop", time: { completed: 40 } }],
   ] as const;
   for (const [id, fields] of latest) {
@@ -151,6 +186,9 @@ test("scale viewed-history fixture follows the latest valid V1 assistant termina
         ["error", 30],
         ["error-completed", 31],
         ["same-clock", 30],
+        ["tool-calls", 20],
+        ["unknown", 20],
+        ["completion-only", 40],
       ]),
     );
     const changed = new DatabaseSync(path);
@@ -176,6 +214,80 @@ test("scale viewed-history fixture follows the latest valid V1 assistant termina
       ),
       tokens,
     );
+  } finally {
+    store.close();
+  }
+});
+
+for (
+  const [name, idle, outcome, shell, expected] of [
+    ["shell-only", undefined, undefined, 30, 30],
+    ["shell-newer", 20, "succeeded", 30, 30],
+    ["idle-newer", 40, "failed", 30, 40],
+    ["idle-interrupted", 40, "interrupted", 30, 40],
+    ["invalid-idle", 50, "unknown", 30, 30],
+    ["no-terminal", 50, undefined, undefined, undefined],
+  ] as const
+) {
+  test(`scale viewed-history fixture follows native V2 ${name} terminal evidence`, async () => {
+    const root = await fixture(),
+      path = join(root, "native.db"),
+      native = new DatabaseSync(path);
+    v2Schema(native, [
+      { id: "seed", idle, outcome },
+      { id: "unmapped", idle: 99, outcome: "succeeded" },
+    ]);
+    if (shell !== undefined) v2Shell(native, "seed", shell);
+    v2Shell(native, "unmapped", 120);
+    native.close();
+    const store = new OtkDb(join(root, "state"), [seenMigrations], {
+      busyms: 5000,
+    });
+    try {
+      seedScaleSeen(store, path, "opencode-v2-server", [{
+        id: "mapped-seed",
+        nativeID: "seed",
+      }]);
+      assertEquals(
+        new Seen(store).tokens(),
+        expected === undefined
+          ? []
+          : [{ user: "local", session: "mapped-seed", time: expected }],
+      );
+      assertEquals(new Seen(store).time("local", "mapped-seed"), 0);
+    } finally {
+      store.close();
+    }
+  });
+}
+
+test("scale viewed-history fixture traverses every native V2 terminal page with exact identities", async () => {
+  const root = await fixture(),
+    path = join(root, "native.db"),
+    native = new DatabaseSync(path);
+  const sessions = Array.from(
+    { length: 205 },
+    (_, i) => ({ id: `native-${String(i).padStart(3, "0")}` }),
+  );
+  v2Schema(native, sessions);
+  for (const [i, row] of sessions.entries()) v2Shell(native, row.id, 1000 + i);
+  native.close();
+  const store = new OtkDb(join(root, "state"), [seenMigrations], {
+    busyms: 5000,
+  });
+  try {
+    seedScaleSeen(
+      store,
+      path,
+      "opencode-v2-server",
+      sessions.map((row) => ({ id: `mapped-${row.id}`, nativeID: row.id })),
+    );
+    const tokens = new Seen(store).tokens();
+    assertEquals(tokens.length, sessions.length);
+    const values = new Map(tokens.map((row) => [row.session, row.time]));
+    for (const [i, row] of sessions.entries()) {
+      assertEquals(values.get(`mapped-${row.id}`), 1000 + i);
+    }
   } finally {
     store.close();
   }

@@ -282,6 +282,15 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.wait,
     );
     this.readers = {
+      "supervision.terminals": ({ after }, signal) => {
+        signal.throwIfAborted();
+        const native = this.#native;
+        if (
+          !native || !(this.#nativeVerified || this.#projectVerified) ||
+          native.fileIdentity() !== native.identity
+        ) return Promise.resolve([]);
+        return Promise.resolve(native.terminals(after, policy.publishrows));
+      },
       "opcv1.message.prefetch": async (input, signal) => {
         const page = await this.#messages.page(
           input.sessionID,

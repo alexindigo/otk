@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { ProjectSeed, SessionIdentity } from "@otk/harness";
 import type { SessionListInput, SessionMetadata } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
-import type { SessionFacts } from "./metadata.ts";
+import { type SessionFacts, terminalEvidence } from "./metadata.ts";
 import { sessionRecencySql } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
 
@@ -18,7 +18,8 @@ const required = {
     "time_updated",
   ],
 };
-/** Opened only by the existing digest worker. Never creates/migrates native data. */
+/** Read-only native metadata owner; the application opens it in the digest worker.
+ * Never creates or migrates native data. */
 export class V2NativeDb {
   readonly db: DatabaseSync;
   readonly identity: string;
@@ -97,7 +98,12 @@ export class V2NativeDb {
       "," +
       (this.columns.has("idle_outcome")
         ? "s.idle_outcome"
-        : "NULL AS idle_outcome");
+        : "NULL AS idle_outcome") +
+      "," +
+      (this.messageClocks
+        ? "coalesce((SELECT json_extract(m.data,'$.time.completed') FROM session_message m WHERE m.session_id=s.id AND m.type='shell' AND json_valid(m.data) AND json_extract(m.data,'$.time.completed')>0 ORDER BY m.seq DESC LIMIT 1),0)"
+        : "0") +
+      " AS terminal";
   }
   /** Optional saved topology, paged in this worker's already source-proven DB. */
   worktrees(
@@ -145,11 +151,11 @@ export class V2NativeDb {
       status: "idle",
       activityAuthority: "unknown",
       activity: {
-        terminal: ["succeeded", "failed", "interrupted"].includes(
-            String(row.idle_outcome),
-          ) && Number(row.time_idle) > 0
-          ? Number(row.time_idle)
-          : undefined,
+        terminal: terminalEvidence(
+          row.time_idle,
+          row.idle_outcome,
+          Number(row.terminal),
+        ),
       },
       attention: {
         permissions: 0,
@@ -168,6 +174,15 @@ export class V2NativeDb {
         this.#metadata(row)
       );
   }
+  /** Only proven finishes are startup supervision demand, never an idle catalog. */
+  terminals(after: string, limit: number): SessionMetadata[] {
+    this.observe?.("supervision-terminals");
+    return this.db.prepare(
+      `SELECT * FROM (SELECT ${this.#projection()} FROM session_v2 s WHERE s.id>?) WHERE (time_idle>0 AND idle_outcome IN ('succeeded','failed','interrupted')) OR terminal>0 ORDER BY id LIMIT ?`,
+    ).all(after ? ids.decode(after) : "", limit).map((row) =>
+      this.#metadata(row)
+    );
+  }
   facts(keys: readonly string[]): SessionFacts[] {
     this.observe?.("session-facts");
     const optional = ["time_busy", "time_idle", "idle_outcome"].map((name) =>
@@ -180,6 +195,7 @@ export class V2NativeDb {
         id: String(row.id),
         projectID: String(row.project_id),
         activity: Number(row.activity_time),
+        ...(Number(row.terminal) > 0 ? { terminal: Number(row.terminal) } : {}),
         location: { directory: String(row.directory) },
         ...(typeof row.path === "string" ? { subpath: row.path } : {}),
         ...(row.title == null ? {} : { title: String(row.title) }),

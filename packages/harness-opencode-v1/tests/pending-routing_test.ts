@@ -51,6 +51,7 @@ for (const unavailable of [false, true]) {
         return Promise.resolve();
       },
       read: ((kind) => {
+        if (kind === "supervision.terminals") return Promise.resolve([]);
         // The first question list establishes its directory inventory authority.
         assertEquals(kind, "catalog.questions");
         return Promise.resolve([{

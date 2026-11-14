@@ -568,6 +568,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     errors = this.#errors.snapshot(entry.id),
   ): void {
     if (!this.#sink) return;
+    const terminal = Math.max(
+      entry.activity?.terminal ?? 0,
+      this.#finished.get(entry.id) ?? 0,
+    );
+    if (terminal > 0) this.#finished.set(entry.id, terminal);
     const pending = pendingAttention(
       entry.id,
       [...this.#pending.values()].filter((row) => row.sessionID !== "global")
@@ -577,10 +582,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     entry = {
       ...entry,
       activity: {
-        terminal: Math.max(
-          entry.activity?.terminal ?? 0,
-          this.#finished.get(entry.id) ?? 0,
-        ),
+        terminal,
         work: {
           keys: [
             ...(this.#running.has(ids.decode(entry.id))
@@ -680,7 +682,18 @@ export class OpencodeV2ServerAdapter implements Harness {
   }
   #merge(row: SessionMetadata): void {
     const current = this.#index.getMetadata(row.id);
-    if (current && current.timeUpdated > row.timeUpdated) row = { ...current };
+    if (current && current.timeUpdated > row.timeUpdated) {
+      row = {
+        ...current,
+        activity: {
+          ...current.activity,
+          terminal: Math.max(
+            current.activity?.terminal ?? 0,
+            row.activity?.terminal ?? 0,
+          ),
+        },
+      };
+    }
     const native = ids.decode(row.id);
     this.#upsert({
       ...row,
@@ -847,6 +860,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       (api) => api.session.active({ signal }),
       signal,
     );
+    const historical: SessionMetadata[][] = [];
     await this.digest?.projects?.(generation, signal);
     const locations = await client.read(
       (api) => api.debug.location.list({ signal }),
@@ -929,6 +943,33 @@ export class OpencodeV2ServerAdapter implements Harness {
         }
       }
     }
+    // Subscribe first, then acquire live owners before durable endpoints. A shell
+    // that ends before its owner snapshot is covered by this later history read;
+    // one ending after that snapshot has an owned identity for buffered replay.
+    if (reconnect && this.digest) {
+      let after = "";
+      for (;;) {
+        let rows: SessionMetadata[];
+        try {
+          rows = await this.digest.read("supervision.terminals", { after }, {
+            owner: `supervision:${generation}`,
+            priority: "attention",
+            signal,
+          });
+        } catch (error) {
+          signal.throwIfAborted();
+          this.diagnostic(error);
+          break;
+        }
+        signal.throwIfAborted();
+        if (!rows.length) break;
+        historical.push(rows);
+        for (const row of rows) {
+          if (row.parentID) owners.add(ids.decode(row.parentID));
+        }
+        after = rows.at(-1)!.id;
+      }
+    }
     const sessions: SessionFacts[] = [];
     const hydrated = new Set<string>();
     if (this.digest) {
@@ -995,14 +1036,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             millis(raw.time.idle) > previous
           ? millis(raw.time.idle)
           : undefined;
-        // An old outcome cannot certify a lost newer execution's success.
-        if (
-          previous !== undefined && !active[raw.id] &&
-          millis(raw.time.idle) <= previous
-        ) {
-          entry.attention.error =
-            "Execution continuity was interrupted; its outcome is unknown.";
-        }
+        // Lost ownership with no newer terminal is just absence of evidence.
         this.#execution(entry, ended);
       }
       for (const sid of [...this.#running.keys()]) {
@@ -1015,13 +1049,13 @@ export class OpencodeV2ServerAdapter implements Harness {
             ...previous,
             status: "idle",
             activityAuthority: "current",
-            attention: {
-              ...previous.attention,
-              error:
-                "Execution continuity was interrupted; its outcome is unknown.",
-            },
           });
         }
+      }
+      for (const rows of historical) {
+        signal.throwIfAborted();
+        for (const row of rows) this.#merge(row);
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     };
   }
@@ -1167,33 +1201,30 @@ export class OpencodeV2ServerAdapter implements Harness {
     const raw = await readSessionActivity(client, sid, signal);
     signal.throwIfAborted();
     if (generation !== this.#generation) return;
-    // Retain the prior run as a mandatory resync key until metadata I/O settles.
-    if (
-      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
-    ) this.#running.delete(sid);
-    // An API snapshot may already cover a buffered execution edge. Native busy
-    // and idle clocks prevent an older frame from reopening a completed run or
-    // settling a newer one. Session.outcome alone is never continuity proof.
-    const busy = millis(raw.time.busy), idle = millis(raw.time.idle);
-    let ended: number | undefined;
-    if (
-      event.type === "session.execution.started" &&
-      idle > (event.created ?? busy)
-    ) {
-      if (idle > 0) ended = idle;
-      if (busy > idle) this.#running.set(sid, busy);
-      else this.#running.delete(sid);
+    // Buffered events and metadata clocks are not process ownership. Read the
+    // same native owner used at bootstrap, so a delayed edge cannot revive a
+    // dead run or retire a newer run. Keep its resync identity until I/O settles.
+    if (/^session\.execution\./.test(event.type)) {
+      const active = await client.read(
+        (api) => api.session.active({ signal }),
+        signal,
+      );
+      signal.throwIfAborted();
+      if (generation !== this.#generation) return;
+      const terminalEvent =
+        /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type);
+      const newer = millis(raw.time.busy) >
+        Math.max(event.created ?? 0, millis(raw.time.idle));
+      if (active[sid] && (!terminalEvent || newer)) {
+        this.#running.set(
+          sid,
+          millis(raw.time.busy) || previousRun || event.created || Date.now(),
+        );
+      } else this.#running.delete(sid);
     }
-    if (
-      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
-    ) {
-      ended = event.created ??
-        (previousRun !== undefined && idle > previousRun ? idle : undefined);
-    }
-    if (
-      event.type !== "session.execution.started" &&
-      busy > (event.created ?? 0) && busy > idle
-    ) this.#running.set(sid, busy);
+    // Native shutdown deliberately does not advance idle. Its interrupted event
+    // is continuity loss, not a finish; only the durable outcome/idle pair counts.
+    const ended = metadata(raw).activity?.terminal;
     const entry = this.#metadata(raw, this.#running.has(sid));
     if (
       event.type === "session.execution.started" ||
@@ -1221,7 +1252,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       }, event.id);
     }
     if (
-      event.type === "session.execution.interrupted" && !this.#running.has(sid)
+      event.type === "session.execution.interrupted" &&
+      event.data.reason !== "shutdown" && !this.#running.has(sid)
     ) {
       this.#errors.native(ids.encode(sid), {
         message: "Execution interrupted.",

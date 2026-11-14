@@ -3,7 +3,12 @@ import { DatabaseSync } from "node:sqlite";
 import type { SessionMetadata } from "@otk/protocol";
 import type { SessionIdentity } from "@otk/harness";
 import { opencodeV1SessionID as ids } from "./ids.ts";
-import { runningDirectories } from "./db-hints.ts";
+import {
+  nativeMetadata as metadata,
+  runningDirectories,
+  terminalProjection,
+  terminalSessions,
+} from "./db-hints.ts";
 
 /** Allowlisted message header projection. Native identities stay native here. */
 export interface DigestHeader {
@@ -48,33 +53,6 @@ const projection = [
 ).join(",") +
   ",CASE WHEN json_valid(m.data) AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown'))) THEN 1 ELSE 0 END AS terminal" +
   ",(SELECT json_group_array(json_object('type',json_extract(p.data,'$.type'),'name',json_extract(p.data,'$.tool'),'start',CASE WHEN json_extract(p.data,'$.type')='tool' THEN json_extract(p.data,'$.state.time.start') ELSE json_extract(p.data,'$.time.start') END,'end',CASE WHEN json_extract(p.data,'$.type')='tool' THEN json_extract(p.data,'$.state.time.end') ELSE json_extract(p.data,'$.time.end') END)) FROM part p WHERE p.session_id=m.session_id AND p.message_id=m.id AND json_valid(p.data) AND json_extract(p.data,'$.type') IN ('text','reasoning','tool','retry')) AS timing_json";
-const terminalProjection = (session = "session") =>
-  `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) WHEN json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown') THEN json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
-
-function metadata(row: Record<string, unknown>): SessionMetadata {
-  return {
-    id: ids.encode(String(row.id)),
-    ...(row.parent_id == null
-      ? {}
-      : { parentID: ids.encode(String(row.parent_id)) }),
-    directory: String(row.directory),
-    projectID: String(row.project_id),
-    title: String(row.title),
-    timeCreated: Number(row.time_created),
-    timeUpdated: Number(row.time_updated),
-    archived: row.time_archived != null,
-    status: "idle",
-    activity: {
-      terminal: Number(row.terminal) > 0 ? Number(row.terminal) : undefined,
-    },
-    attention: {
-      permissions: 0,
-      questions: 0,
-      childPermissions: 0,
-      childQuestions: 0,
-    },
-  };
-}
 
 /** Read-only native connection. No full JSON or transcript parts escape its SQL. */
 export class DigestNativeDb {
@@ -127,6 +105,10 @@ export class DigestNativeDb {
   hints(sessions: readonly string[]): string[] {
     this.observe?.("hints");
     return runningDirectories(this.db, 0, sessions.map(ids.decode));
+  }
+  terminals(after: string, limit: number): SessionMetadata[] {
+    this.observe?.("supervision-terminals");
+    return terminalSessions(this.db, after, limit);
   }
   catalog(after: string, limit: number): SessionMetadata[] {
     this.observe?.("catalog");

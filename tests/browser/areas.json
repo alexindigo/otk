@@ -27,6 +27,7 @@
       "passive-safety_test.ts"
     ],
     "sessions": [
+      "supervision-native_test.ts",
       "children_test.ts",
       "inbox_test.ts",
       "local-session-effects_test.ts",
@@ -37,6 +38,7 @@
     ],
     "revert": ["session_actions_test.ts", "history_test.ts"],
     "attention": [
+      "supervision-native_test.ts",
       "permissions_test.ts",
       "questions_test.ts",
       "session_auto_test.ts",

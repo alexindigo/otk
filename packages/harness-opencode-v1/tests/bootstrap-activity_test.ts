@@ -337,7 +337,7 @@ for (
 }
 
 for (const failed of ["/session/status", "/permission", "/question"]) {
-  test(`bounded directory inventories retain failed ${failed} activity across resync`, async () => {
+  test(`per-kind directory inventories retain only failed ${failed} facts across resync`, async () => {
     const settings = cfg(), root = await fixture();
     settings.harness.db = join(root, "native.db");
     const seeds = Array.from({ length: 8 }, (_, i) => ({
@@ -478,14 +478,35 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
         "busy",
         "Failed inventory erased known work",
       );
-      assertEquals(index.get("opcv1-s0")?.attention.permissions, 1);
-      assertEquals(index.get("opcv1-s0")?.attention.questions, 1);
+      // Decision 6: each inventory owns its freshness and its own absence only.
+      assertEquals(
+        index.get("opcv1-s0")?.attention.permissions,
+        failed === "/permission" ? 1 : 0,
+      );
+      assertEquals(
+        index.get("opcv1-s0")?.attention.questions,
+        failed === "/question" ? 1 : 0,
+      );
+      assertEquals(
+        index.get("opcv1-s0")?.activity?.work?.fresh,
+        failed !== "/session/status",
+      );
+      assertEquals(
+        index.get("opcv1-s0")?.activity?.permissions?.fresh,
+        failed !== "/permission",
+      );
+      assertEquals(
+        index.get("opcv1-s0")?.activity?.inputs?.fresh,
+        failed !== "/question",
+      );
+      assertEquals(index.get("opcv1-s0")?.activity?.permissions?.keys, []);
+      assertEquals(index.get("opcv1-s0")?.activity?.inputs?.keys, []);
       assertEquals(
         (await requireCapability(adapter.capabilities, "permissions")
           .listPermissions("opcv1-s0")).map((
             request,
           ) => request.id),
-        ["permission"],
+        failed === "/permission" ? ["permission"] : [],
       );
       assertEquals(
         index.get("opcv1-s1")?.status,
