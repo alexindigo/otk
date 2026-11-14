@@ -37,7 +37,7 @@ export default function ThemePicker(props: {
     id: "theme.preview",
     title: "Preview theme",
     category: "Display",
-    hidden: true,
+    arguments: { type: "string" },
     run: (_ctx, id: string) => {
       if (pending()) return;
       preview?.select(id);
@@ -52,14 +52,12 @@ export default function ThemePicker(props: {
     id: "theme.cancel",
     title: "Cancel theme preview",
     category: "Display",
-    hidden: true,
     run: cancel,
   });
   const save = ownedCommand(ports, {
     id: "theme.save",
     title: "Save theme",
     category: "Display",
-    hidden: true,
     run: async () => {
       if (pending() || !props.ready) return;
       setPending(true);

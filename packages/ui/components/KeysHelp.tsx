@@ -49,7 +49,10 @@ export default function KeysHelp(props: {
     id: "keymap.rebind",
     title: "Rebind key",
     category: "Keys",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: { id: { type: "string" }, key: { type: "string" } },
+    },
     run: async (_ctx, input: { id: string; key: string }) => {
       const result = props.keymap.propose(input.id, input.key);
       if (result.conflict || result.error) {
@@ -63,7 +66,7 @@ export default function KeysHelp(props: {
     id: "keymap.reset",
     title: "Reset key",
     category: "Keys",
-    hidden: true,
+    arguments: { type: "string" },
     run: async (_ctx, id: string) => {
       const row = rows().find((row) => row.id === id);
       if (!row) return;
@@ -81,14 +84,13 @@ export default function KeysHelp(props: {
     id: "keymap.reset.all",
     title: "Reset all keys",
     category: "Keys",
-    hidden: true,
     run: () => save({}),
   });
   const capture = ownedCommand(ports, {
     id: "keymap.capture",
     title: "Capture shortcut",
     category: "Keys",
-    hidden: true,
+    arguments: { type: "string" },
     run: (_ctx, id: string) => {
       setError("");
       setEditing(id);
@@ -98,7 +100,6 @@ export default function KeysHelp(props: {
     id: "keymap.capture.cancel",
     title: "Cancel shortcut capture",
     category: "Keys",
-    hidden: true,
     run: () => setEditing(""),
   });
   onSettled(() =>

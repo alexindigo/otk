@@ -53,6 +53,7 @@ export default function Form(
   const send = ownedAction(
     "form.submit",
     (data: FormData) => props.onSubmit(data),
+    { arguments: { type: "local" } },
   );
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();

@@ -197,7 +197,6 @@ export default function Popover(props: {
     id: closeId,
     title: `Close ${props.label}`,
     category: "Controls",
-    hidden: true,
     run: () => dismiss(),
   });
   onSettled(() =>

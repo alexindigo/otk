@@ -226,19 +226,25 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
     },
   };
 }
-Deno.test("built-in slash discovery omits unavailable commands and reflects current availability", async () => {
+Deno.test("registry retains unavailable commands while slash rendering waits for CM3", async () => {
   const consumer = catalogConsumer(() => Promise.resolve([]));
   let available = false;
   const release = consumer.commands.register({
     id: "consumer.available",
     title: "Available action",
     category: "Consumer",
-    slash: ["available"],
+    name: "available",
     enabled: () => available,
     run: () => {},
   });
   const token = { start: 0, end: 1, query: "available" };
   try {
+    assertEquals(
+      consumer.commands.list().some((row) =>
+        row.cmd.id === "consumer.available" && !row.availability.available
+      ),
+      true,
+    );
     assertEquals(await consumer.source.options(token), []);
     available = true;
     assertEquals(

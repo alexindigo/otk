@@ -15,7 +15,11 @@ export function registerPreferenceCommands(commands: CommandHub, actions: {
     id: "prefs.set",
     title: "Set preference",
     category: "Display",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: { key: { type: "string" }, value: { type: "unknown" } },
+    },
+    enabled: actions.ready,
     run: (
       _ctx,
       input: { key: PreferenceKey; value: Preferences[PreferenceKey] },

@@ -9,7 +9,6 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         id: "prompt.shell.enter",
         title: "Enter shell mode",
         category: "Prompt",
-        hidden: true,
         run: () => {
           ctx.change((current) => ({ ...current, mode: "shell" }));
         },
@@ -18,7 +17,6 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         id: "prompt.shell.exit",
         title: "Exit shell mode",
         category: "Prompt",
-        hidden: true,
         run: () => {
           ctx.change((current) => ({ ...current, mode: "normal" }));
         },

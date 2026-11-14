@@ -32,6 +32,7 @@ import { createSession } from "./session.ts";
 import { createSidecars } from "./sidecars.ts";
 
 export interface ShellState {
+  confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   resources: ServerResources;
   session: ClientSession;
@@ -175,6 +176,7 @@ export function createShellState(o: { api: URL }): ShellState {
     if (value) resources.syncTabs(value.p, value.input, value.selected);
   });
   return {
+    confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
     resources,

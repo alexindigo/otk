@@ -139,7 +139,6 @@ function Request(
     id: "question.close",
     title: "Close question layer",
     category: "Attention",
-    hidden: true,
     run: () => {
       if (document.activeElement instanceof HTMLTextAreaElement) {
         focusCurrent(true);

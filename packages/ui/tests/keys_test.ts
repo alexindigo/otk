@@ -235,14 +235,13 @@ Deno.test("keys: reset does not silently introduce a conflict", () => {
   assertEquals(km.resetKey("a"), { conflict: "b" });
   assertEquals(km.list()[0].key, "x");
 });
-Deno.test("hidden commands retain owner titles in key rows while staying out of discovery", () => {
+Deno.test("unavailable commands retain owner titles in key rows and registry discovery", () => {
   const hub = new CommandHub();
   let calls = 0;
   hub.register({
     id: "external.hidden",
     title: "Insert newline",
     category: "Prompt",
-    hidden: true,
     enabled: () => false,
     run: () => {
       calls++;
@@ -257,7 +256,7 @@ Deno.test("hidden commands retain owner titles in key rows while staying out of 
     key: "Enter",
     inPrompt: true,
   });
-  assertEquals(hub.list(), []);
+  assertEquals(hub.list().map((row) => row.cmd.id), ["external.hidden"]);
   assertEquals(keyboard.keymap.list()[0].desc, "Insert newline");
   assertEquals(calls, 0);
   assertEquals(keyboard.keymap.dispatch(ev("Enter")), false);
@@ -268,6 +267,7 @@ Deno.test("keyboard availability and invocation both receive the binding's data 
   let observed = "";
   hub.register({
     id: "external.args",
+    arguments: { type: "object", properties: { value: { type: "string" } } },
     title: "Arguments",
     category: "External",
     enabled: (_ctx, args?: { value: string }) => args?.value === "bound",

@@ -2,11 +2,17 @@
 import {
   createContext,
   createSignal,
+  createUniqueId,
   type Element,
   onSettled,
   useContext,
 } from "solid-js";
-import { type Command, CommandHub } from "@otk/client";
+import {
+  type Command,
+  type CommandArguments,
+  type CommandDefinition,
+  CommandHub,
+} from "@otk/client";
 import type { Keyboard } from "./dispatcher.ts";
 export interface CommandPorts {
   commands: CommandHub;
@@ -34,7 +40,7 @@ export function CommandProvider(
 export function useCommandPorts(): CommandPorts {
   return useContext(Context) ?? { commands: new CommandHub() };
 }
-/** Current shortcut presentation, including bindings for hidden commands. */
+/** Current shortcut presentation from the same command descriptors as menus. */
 export function commandHints(ports: CommandPorts): {
   keys(id: string): string;
   title(id: string, label: string): string;
@@ -72,11 +78,11 @@ export function commandHints(ports: CommandPorts): {
 /** Owner registers closures, exposes only ID invocation, releases on unmount. */
 export function ownedCommand<A = void, R = void>(
   ports: CommandPorts,
-  command: Command<A, R>,
+  command: CommandDefinition<A, R>,
 ): (args: A) => Promise<R> {
   let mounted = false;
   onSettled(() => {
-    const release = ports.commands.register(command);
+    const release = ports.commands.register<A, R>(command);
     mounted = true;
     return () => {
       mounted = false;
@@ -92,14 +98,31 @@ export function ownedCommand<A = void, R = void>(
 export function ownedAction<A = void, R = void>(
   name: string,
   run: (args: A) => R | Promise<R>,
-  options: Pick<Command<A, R>, "context" | "enabled"> = {},
+  ...configuration: [NoInfer<A>] extends [void] ? [
+      options?: Pick<
+        Command<NoInfer<A>, R>,
+        "context" | "enabled" | "availability" | "arguments" | "scope"
+      >,
+    ]
+    : [
+      options:
+        & Pick<
+          Command<NoInfer<A>, R>,
+          "context" | "enabled" | "availability" | "arguments" | "scope"
+        >
+        & { arguments: CommandArguments },
+    ]
 ): (args: A) => Promise<R> {
-  return ownedCommand(useCommandPorts(), {
-    id: `${name}:${crypto.randomUUID()}`,
+  const options = configuration[0] ?? {};
+  const instance = createUniqueId();
+  return ownedCommand<A, R>(useCommandPorts(), {
+    id: `${name}@${instance}`,
+    name,
+    instance,
+    scope: "control",
     title: name,
     category: "Controls",
-    hidden: true,
     ...options,
     run: (_ctx, args: A) => run(args),
-  });
+  } as CommandDefinition<A, R>);
 }

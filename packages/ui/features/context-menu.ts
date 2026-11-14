@@ -72,7 +72,7 @@ export function registerBrowserContextCommands(
     id: "context.selection.copy",
     title: "Copy",
     category: "Editing",
-    hidden: true,
+    arguments: { type: "object", properties: { text: { type: "string" } } },
     context: { kind: "selection" },
     enabled: (_ctx, target?: TextTarget) => !!target?.text,
     run: (_ctx, target: TextTarget) => copy(target),
@@ -81,7 +81,7 @@ export function registerBrowserContextCommands(
     id: "context.link.open",
     title: "Open link in new tab",
     category: "Browser",
-    hidden: true,
+    arguments: { type: "object", properties: { text: { type: "string" } } },
     context: { kind: "link" },
     run: (_ctx, target: TextTarget) => {
       globalThis.open(target.text, "_blank", "noopener,noreferrer");
@@ -91,7 +91,10 @@ export function registerBrowserContextCommands(
     id: "context.image.open",
     title: "Open image",
     category: "Browser",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: { text: { type: "string" }, name: { type: "string" } },
+    },
     context: { kind: "image" },
     enabled: () => commands.enabled("dialog.open", undefined, { id: "image" }),
     run: (_ctx, target: ImageTarget) =>
@@ -110,7 +113,7 @@ export function registerBrowserContextCommands(
       id: `context.${kind}.copy`,
       title: copyTitle,
       category: "Browser",
-      hidden: true,
+      arguments: { type: "object", properties: { text: { type: "string" } } },
       context: { kind },
       run: (_ctx, target: TextTarget) => copy(target),
     }));

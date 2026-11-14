@@ -90,6 +90,7 @@ function fixture() {
   let current = first, editor!: Editor, emptyAllowed = true, navigations = 0;
   commands.register({
     id: "dialog.open",
+    arguments: { type: "object" },
     title: "Open dialog",
     category: "Dialogs",
     run: (_ctx, input: Editor) => {

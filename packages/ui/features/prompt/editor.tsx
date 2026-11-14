@@ -27,7 +27,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         title: "Edit prompt",
         category: "Prompt",
         context: { kind: "composer", order: 20 },
-        slash: ["editor"],
+        name: "editor",
         enabled: () => !ctx.props.suspended,
         run: () => {
           ctx.change((current) => ({
@@ -40,7 +40,6 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         id: "prompt.editor.save",
         title: "Save editor",
         category: "Prompt",
-        hidden: true,
         run: () => {
           ctx.change(editorSave);
           dialog?.close();
@@ -51,7 +50,6 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         id: "prompt.editor.cancel",
         title: "Cancel editor",
         category: "Prompt",
-        hidden: true,
         run: () => {
           ctx.change((current) => ({ ...current, editor: undefined }));
           dialog?.close();

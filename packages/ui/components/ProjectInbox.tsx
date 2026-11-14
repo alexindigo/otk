@@ -95,12 +95,28 @@ export default function ProjectInbox(props: {
     fail: (error) => setError(failureText(error)),
   });
   const width = resize.width;
-  const open = ownedAction("project.open", props.onOpen);
+  const open = ownedAction("project.open", props.onOpen, {
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        directory: { type: "string" },
+      },
+    },
+  });
   ownedAction(
     "project.inactive",
     (input: { sidecarId: string; directory: string; value: boolean }) =>
       props.onInactive(input, input.value),
     {
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          directory: { type: "string" },
+          value: { type: "boolean" },
+        },
+      },
       context: {
         kind: "project",
         title: (input) => input.value ? "Mark inactive" : "Mark active",

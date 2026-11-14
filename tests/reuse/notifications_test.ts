@@ -11,6 +11,7 @@ Deno.test("plain Deno notification consumer routes actionable jobs through publi
   const commands = new CommandHub();
   commands.register({
     id: "job.accept",
+    arguments: { type: "string" },
     title: "Accept job",
     category: "Jobs",
     run: (_ctx, id: string) => jobs.set(id, "accepted"),

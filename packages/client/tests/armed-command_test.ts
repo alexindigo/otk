@@ -8,6 +8,7 @@ Deno.test("confirmation is projected as data from captured command args", async 
     id: "delete",
     title: "Delete",
     category: "Session",
+    arguments: { type: "object", properties: { id: { type: "string" } } },
     context: {
       kind: "session",
       confirm: (data: { id: string }) => `Press again to delete ${data.id}`,

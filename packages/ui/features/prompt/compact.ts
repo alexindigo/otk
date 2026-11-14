@@ -11,6 +11,9 @@ export function registerCompactCommand(ctx: PromptContext): () => void {
     !ctx.entry(ctx.sessionID())?.parentID && !!ctx.nextSelection().input.model;
   return ctx.commands.register({
     id: "session.compact",
+    name: "compact",
+    scope: "session",
+    arguments: { type: "object", optional: true },
     title: "Compact",
     category: "Session",
     context: { kind: "session", order: 35 },

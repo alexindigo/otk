@@ -28,6 +28,7 @@ export default function Settings(props: {
   const remove = ownedAction(
     "sidecar.remove",
     (id: string) => props.onRemove(id),
+    { arguments: { type: "string" } },
   );
   return (
     <section class="otk-settings" aria-label="Settings">

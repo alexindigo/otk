@@ -33,7 +33,14 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "prompt.revert",
     title: "Revert to here",
     category: "Transcript",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+        messageID: { type: "string" },
+      },
+    },
     context: { kind: "prompt", order: 5 },
     enabled: (_ctx, target?: ContentTarget) =>
       !!target?.sidecarId && !!target.sessionID && !!target.messageID &&
@@ -58,7 +65,14 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "prompt.revertCode",
     title: "Revert code changes",
     category: "Transcript",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+        messageID: { type: "string" },
+      },
+    },
     context: { kind: "prompt", order: 6 },
     enabled: (_ctx, target?: ContentTarget) =>
       !!target?.sidecarId && !!target.sessionID && !!target.messageID &&
@@ -79,7 +93,13 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
       id: archived ? "session.archive" : "session.unarchive",
       title: archived ? "Archive" : "Unarchive",
       category: "Session",
-      hidden: true,
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          sessionID: { type: "string" },
+        },
+      },
       context: { kind: "session", order: 35 },
       enabled: (_ctx, target?: SessionContextTarget) => {
         if (
@@ -96,7 +116,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "session.undo",
     title: "Undo previous prompt",
     category: "Session",
-    slash: ["undo"],
+    name: "undo",
     enabled: () => {
       const target = ports.current();
       return !!target && !!ports.revert?.hasPrompt() &&
@@ -108,7 +128,8 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "session.redo",
     title: "Redo",
     category: "Session",
-    slash: ["redo"],
+    name: "redo",
+    arguments: { type: "object", optional: true },
     enabled: (_ctx, input?: SessionContextTarget) => canRestore(input),
     run: () => ports.revert!.redo(),
   });
@@ -116,13 +137,14 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "session.restore",
     title: "Restore",
     category: "Session",
-    hidden: true,
+    arguments: { type: "object", optional: true },
     context: { kind: "session", order: 25 },
     enabled: (_ctx, input?: SessionContextTarget) => canRestore(input),
     run: () => ports.revert!.restore(),
   });
   const fork = commands.register({
     id: "session.fork",
+    arguments: { type: "object", optional: true },
     title: "Fork session",
     category: "Session",
     context: { kind: "session", order: 30 },
@@ -137,7 +159,14 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "reply.fork",
     title: "Fork from here",
     category: "Transcript",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+        lastID: { type: "string" },
+      },
+    },
     context: { kind: "reply", order: 5 },
     enabled: (_ctx, target?: ContentTarget) =>
       !!target?.sidecarId && !!target.sessionID && !!target.lastID &&
@@ -156,7 +185,13 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "session.rename",
     title: "Rename",
     category: "Session",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+      },
+    },
     context: { kind: "session", order: 20 },
     enabled: (_ctx, target?: SessionContextTarget) =>
       !!target && ports.available(target),
@@ -167,7 +202,13 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     id: "session.delete",
     title: "Delete",
     category: "Session",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+      },
+    },
     context: {
       kind: "session",
       destructive: true,

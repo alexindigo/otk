@@ -181,7 +181,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.send",
     title: "Send prompt",
     category: "Prompt",
-    hidden: true,
+    arguments: {
+      type: "object",
+      properties: {
+        parts: { type: "array" },
+        mode: { type: "string", enum: ["normal", "shell"] },
+        selection: { type: "object" },
+      },
+    },
     enabled: canSubmit,
     run: (
       _ctx,
@@ -196,7 +203,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
-    hidden: true,
     enabled: canSubmit,
     run: () => intent.submit(submit, performSend),
   });
@@ -204,7 +210,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.newline",
     title: "Insert newline",
     category: "Prompt",
-    hidden: true,
     run: () => {
       const { start, end } = ctx.selection();
       change((current) =>
@@ -216,6 +221,11 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   });
   ownedCommand(ports, {
     id: "session.interrupt",
+    arguments: {
+      type: "object",
+      optional: true,
+      properties: { confirm: { type: "boolean", optional: true } },
+    },
     title: "Interrupt session",
     category: "Session",
     enabled: () =>
@@ -246,7 +256,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "session.escape.reset",
     title: "Reset interrupt sequence",
     category: "Session",
-    hidden: true,
     run: () => {
       deadline = 0;
       clearTimeout(timer);
