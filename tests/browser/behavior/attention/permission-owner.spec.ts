@@ -123,9 +123,18 @@ for (
       hasComposer ? 1 : 0,
     );
     if (view === "direct") {
-      await expect(page.locator(".otk-shell-progress")).toContainText(
-        "No progress for 12 days",
-      );
+      // Permission age must not depend on unfinished session indexing.
+      await expect.poll(() => {
+        const progress = frames.received.filter((f) =>
+          f.t === "digest.progress"
+        )
+          .at(-1);
+        return (progress?.values as
+          | { directory?: string; phase: string }[]
+          | undefined)?.some((p) => !p.directory && p.phase === "ready") ??
+          false;
+      }).toBe(true);
+      await expect(page.locator(".otk-shell-progress")).toHaveText("");
       await expect(page.locator(".otk-permission-dock .otk-request-age"))
         .toHaveText("Session idle 12 days");
       await expect(
