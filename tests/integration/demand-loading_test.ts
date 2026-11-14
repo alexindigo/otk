@@ -802,6 +802,50 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
   const app = await start(native.settings);
   const url = `http://127.0.0.1:${app.server.addr.port}`;
   const client = new WsClient(url);
+  let producing = false, producer: Promise<void> | undefined;
+  const responses: Promise<unknown>[] = [];
+  const stopIngress = async () => {
+    producing = false;
+    const results = await Promise.allSettled([producer, ...responses]);
+    const errors = results.filter((result) => result.status === "rejected")
+      .map((result) => result.reason);
+    if (errors.length) {
+      throw new AggregateError(errors, "Client ingress failed");
+    }
+  };
+  const startIngress = (
+    actions: (() => unknown)[],
+    minimumRounds: number,
+    expectedReads: number,
+    message: string,
+  ) => {
+    const rounds = Promise.withResolvers<void>();
+    producing = true;
+    // Ingress is the workload. Slow response settlement must not turn its
+    // producer into an idle client while the assertion still calls it frequent.
+    producer = (async () => {
+      for (let i = 0; producing; i++) {
+        for (const action of actions) {
+          if (!producing) break;
+          const started = performance.now();
+          const response = Promise.resolve(action());
+          responses.push(response);
+          void response.catch(() => {}); // stopIngress joins every outcome.
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          assertEquals(
+            native.reads(),
+            expectedReads,
+            `${message} (round ${i}, action ${
+              actions.indexOf(action)
+            }, elapsed ${performance.now() - started}ms)`,
+          );
+        }
+        if (i + 1 === minimumRounds) rounds.resolve();
+      }
+    })();
+    void producer.catch(rounds.reject);
+    return rounds.promise;
+  };
   try {
     // Q1 removes startup admission; demand one unfinished entry to retain this proof's single-chunk fence.
     await app.backend.core.listSessions({ directory: "/idle", limit: 1 });
@@ -813,7 +857,13 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
     );
     await client.connect();
     const actions = [
-      () => client.rpc("prefs.get", {}),
+      async () => {
+        await client.rpc("prefs.get", {});
+        // A late response observer must not suspend the ingress workload.
+        await new Promise((resolve) =>
+          setTimeout(resolve, native.settings.digest.idlems + 50)
+        );
+      },
       () => client.rpc("layout.patch", {}),
       async () => {
         client.lease({ directory: "/idle", crumbs: [], rows: [] });
@@ -834,20 +884,12 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
         await response.text();
       },
     ];
-    for (let i = 0; i < 3; i++) {
-      for (const action of actions) {
-        const started = performance.now();
-        await action();
-        await new Promise((resolve) => setTimeout(resolve, 40));
-        assertEquals(
-          native.reads(),
-          0,
-          `requests more frequent than idlems must admit no idle batch (round ${i}, action ${
-            actions.indexOf(action)
-          }, elapsed ${performance.now() - started}ms)`,
-        );
-      }
-    }
+    await startIngress(
+      actions,
+      3,
+      0,
+      "requests more frequent than idlems must admit no idle batch",
+    );
     native.emit("session.status", {
       sessionID: "ses_idle0",
       status: { type: "busy" },
@@ -866,34 +908,42 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
       client.send({ t: "request.received", refs: [] });
     }, 30);
     try {
+      // Install passive acknowledgements before ending active ingress. Pending
+      // response delivery can now take time without extending active ingress.
+      await stopIngress();
       await waitFor(native.reads, (n) => n === 1);
     } finally {
       clearInterval(passive);
     }
     await client.rpc("prefs.get", {});
+    const parked = startIngress(
+      [async () => {
+        await client.rpc("layout.patch", {});
+        await new Promise((resolve) =>
+          setTimeout(resolve, native.settings.digest.idlems + 50)
+        );
+      }],
+      4,
+      1,
+      "admitted chunk drains; its successor waits for idle",
+    );
     native.release();
-    for (let i = 0; i < 4; i++) {
-      await client.rpc("layout.patch", {});
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      assertEquals(
-        native.reads(),
-        1,
-        "admitted chunk drains; its successor waits for idle",
-      );
-    }
+    await parked;
+    await stopIngress();
     await waitFor(
       () => [...app.index.values()].every((e) => e.digest.state === "ready"),
       Boolean,
     );
     assert(native.reads() > 1);
     console.info("Q2 IDLE PROOF", {
-      activeRequests: actions.length * 3 + 5,
+      activeRequests: responses.length + 1,
       optionalDuringRequests: 0,
       firstChunkReads: 1,
       finalReads: native.reads(),
       parallel: native.settings.digest.parallel,
     });
   } finally {
+    await resources().observe("client ingress producer", stopIngress);
     native.release();
     await client.close();
     await app.stop();

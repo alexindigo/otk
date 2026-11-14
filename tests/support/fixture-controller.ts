@@ -1270,6 +1270,8 @@ try {
       remote?.fake.releaseAll();
       lifecycle?.stop();
       fixture?.fake.releaseAll();
+      // Byte relays must close admission before their upstream endpoint retires.
+      if (transport && "stop" in transport) await transport.stop();
       // Independent peer lifetimes must not spend their shutdown grace serially.
       // Their scopes remain owned until every join completes below.
       await Promise.all([client?.close(), remote?.stop(), fixture?.stop()]);

@@ -7,6 +7,7 @@ import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { serve } from "../support/http.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import { nativeBehavior } from "../support/native-testing.ts";
+import { attentionScenario } from "../support/attention-scenario.ts";
 import { nativeKind } from "../support/native.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
 import { v1NativeTests } from "../support/native-contract.ts";
@@ -22,6 +23,19 @@ const v1Test = v1NativeTests(
 async function closed(url: string) {
   await assertRejects(() => fetch(url, { signal: AbortSignal.timeout(1000) }));
 }
+
+test("attention stop retains upstream until the enclosing scope retires its native relays", async () => {
+  const scene = await attentionScenario("contract-attention-native");
+  const url = `http://127.0.0.1:${scene.info.ports![4]}/global/health`;
+  const before = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  await before.text();
+  await scene.dispatch({ v: 1, id: "shutdown", command: "stop", params: {} });
+  // An admitted relay request can reconnect during shutdown. The relay must
+  // retire before its upstream, not remain aimed at a dead endpoint.
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  await response.text();
+  assertEquals(response.status, before.status);
+});
 
 test("native endpoint cancellation joins pending admission without opening an upstream socket", async () => {
   const native = Deno.listen({ hostname: "127.0.0.1", port: 0 });
