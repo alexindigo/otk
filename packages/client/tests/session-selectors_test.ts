@@ -244,6 +244,84 @@ Deno.test("selecting a task reads only the selected transcript and its visible p
   }
 });
 
+Deno.test("partition progress includes retained summaries throughout refresh lifetimes", () => {
+  const index = createIndex();
+  const entry = (id: string, directory = "/p") => ({
+    ...shellEntry(id, directory),
+    digest: {
+      state: "ready" as const,
+      refreshing: true,
+      revision: 1,
+      turns: {},
+    },
+  });
+  const busy = { busy: true, announcement: "" };
+  const ready = { busy: false, announcement: "Session summaries updated." };
+  index.receive("s", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [entry("a"), entry("b")],
+  });
+  assertEquals(index.progress("s", "/p"), busy);
+  index.receive("s", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: {
+        ...entry("a"),
+        digest: { ...entry("a").digest, state: "digesting" },
+      },
+    }],
+  });
+  index.receive("s", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{
+      op: "digest",
+      id: "a",
+      revision: 2,
+      summary: { state: "ready", refreshing: false, revision: 2 },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    }],
+  });
+  assertEquals(index.progress("s", "/p"), busy);
+  index.receive("s", {
+    t: "index.patch",
+    rev: 3,
+    ops: [{ op: "upsert", entry: entry("b", "/q") }],
+  });
+  assertEquals(index.progress("s", "/p"), ready);
+  assertEquals(index.progress("s", "/q"), busy);
+  index.receive("s", {
+    t: "index.snapshot",
+    rev: 4,
+    entries: [entry("a")],
+  });
+  assertEquals(index.progress("s", "/p"), busy);
+  assertEquals(index.progress("s", "/q"), { busy: false, announcement: "" });
+  index.receive("s", {
+    t: "index.patch",
+    rev: 5,
+    ops: [{
+      op: "digest",
+      id: "a",
+      revision: 3,
+      summary: { state: "unavailable", refreshing: false, revision: 3 },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    }],
+  });
+  assertEquals(index.progress("s", "/p"), ready);
+  index.receive("s", {
+    t: "index.patch",
+    rev: 6,
+    ops: [{ op: "remove", id: "a" }],
+  });
+  assertEquals(index.progress("s", "/p"), { busy: false, announcement: "" });
+});
+
 Deno.test("partition caching and incremental progress follow digest transitions, moves, removals and reordered snapshots", () => {
   const index = createIndex();
   index.receive("s", {
