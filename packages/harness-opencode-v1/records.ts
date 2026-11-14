@@ -18,10 +18,12 @@ export function isPromptPart(
 export function isPrompt(info: Info, parts: readonly RawPart[]): boolean {
   return info.role === "user" && parts.some(isPromptPart);
 }
-/** Scalar-only SQL equivalent of isPromptPart, shared by native metadata readers. */
+/** Scalar-only SQL equivalent of isPromptPart, shared by native metadata readers.
+ * The unary `+` keeps the session check out of index selection, so each probe
+ * searches one message's parts rather than every part of the session. */
 export function promptEvidenceSQL(message = "m"): string {
   const types = promptTypes.map((type) => `'${type}'`).join(",");
-  return `EXISTS (SELECT 1 FROM part prompt_part WHERE prompt_part.message_id=${message}.id AND prompt_part.session_id=${message}.session_id AND json_valid(prompt_part.data) AND json_extract(prompt_part.data,'$.type') IN (${types}) AND (json_extract(prompt_part.data,'$.type')!='text' OR coalesce(json_extract(prompt_part.data,'$.synthetic'),0)!=1))`;
+  return `EXISTS (SELECT 1 FROM part prompt_part WHERE prompt_part.message_id=${message}.id AND +prompt_part.session_id=${message}.session_id AND json_valid(prompt_part.data) AND json_extract(prompt_part.data,'$.type') IN (${types}) AND (json_extract(prompt_part.data,'$.type')!='text' OR coalesce(json_extract(prompt_part.data,'$.synthetic'),0)!=1))`;
 }
 export function nativeSource(
   kind: string,
