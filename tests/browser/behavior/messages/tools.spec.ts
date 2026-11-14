@@ -58,8 +58,14 @@ test.describe("actual tool forms", () => {
         fullPage: true,
       });
     }
-    const record = page.locator("[data-native-record=step] .otk-tool-toggle")
-      .first();
+    // V1 owns qualified step records (NT4); V2 steps are the neutral step part.
+    // A record's own disclosure is its header toggle, not its nested Source fold.
+    const steps = state.controller.info!.version.startsWith("2.")
+      ? "[data-native-record=step]"
+      : '[data-native-record^="opencode-v1/step-"]';
+    const record = page.locator(
+      `${steps} > .otk-tool-state > .otk-tool-toggle`,
+    ).first();
     await expect(record).toHaveAttribute("aria-expanded", "false");
     await state.product("prefs.set", { key: "expandRecords", value: true });
     await expect(record).toHaveAttribute("aria-expanded", "true");

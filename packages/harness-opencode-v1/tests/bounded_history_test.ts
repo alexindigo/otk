@@ -46,7 +46,13 @@ for (const mode of ["SQL", "API"] as const) {
             time: { start: 1, end: i + 1 },
           },
         } as RawPart]
-        : [],
+        : [{
+          id: `prompt_${i}`,
+          messageID: `msg_${String(i).padStart(6, "0")}`,
+          sessionID: "parent",
+          type: "text",
+          text: `Real prompt ${i}`,
+        } as RawPart],
     }));
     const task: RawPart = {
       id: "task",
@@ -99,6 +105,21 @@ for (const mode of ["SQL", "API"] as const) {
           JSON.stringify(item.info),
         );
         for (const raw of item.parts) {
+          if (item.info.role === "user") {
+            const parentPart = {
+              ...raw,
+              id: `parent_${raw.id}`,
+              sessionID: "parent",
+            };
+            part.run(
+              parentPart.id,
+              item.info.id,
+              "parent",
+              1,
+              1,
+              JSON.stringify(parentPart),
+            );
+          }
           part.run(raw.id, childID, "child", 1, 1, JSON.stringify(raw));
         }
       }

@@ -1,0 +1,9 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-native-source.is-open > .otk-tool-toggle .otk-tool-icon svg {
+  transform: rotate(90deg);
+}
+.otk-native-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
+}

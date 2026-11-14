@@ -40,6 +40,7 @@ import type { Info, RawPart, Session } from "./types.ts";
 import { type DigestHeader, DigestNativeDb } from "./digest-db.ts";
 import type { HelperToolRow } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import { isPrompt } from "./records.ts";
 import { reportedNumber } from "./usage-values.ts";
 import { NativeReadiness } from "./readiness.ts";
 import { SessionLists } from "./session-lists.ts";
@@ -507,14 +508,14 @@ export class OpencodeV1DigestSink implements DigestSink {
         undefined,
         signal,
       );
-      const infos = page.items.map(({ info }) => info).sort((a, b) =>
-        newest(a.time.created, a.id, b.time.created, b.id)
+      const records = page.items.sort((a, b) =>
+        newest(a.info.time.created, a.info.id, b.info.time.created, b.info.id)
       );
-      for (const info of infos) {
+      for (const { info, parts } of records) {
         if (info.id === cutoff) cutoffCreated = info.time.created;
         if (cutoff && info.id >= cutoff) continue;
         if (
-          info.role === "user" &&
+          isPrompt(info, parts) &&
           (info.time.created > created ||
             (info.time.created === created && info.id > (prompt?.id ?? "")))
         ) {

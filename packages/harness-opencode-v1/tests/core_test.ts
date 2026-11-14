@@ -82,7 +82,7 @@ Deno.test("SSE assembles a large UTF-8 event from chunks without losing delimite
   }]);
   assertEquals(count, Math.ceil(encoded.length / 16_381));
 });
-Deno.test("mapping strips harness metadata, handles all part kinds and interrupted errors", () => {
+Deno.test("mapping retains native source, handles all part kinds and interrupted errors", () => {
   const base = {
     id: "part",
     messageID: "message",
@@ -115,10 +115,10 @@ Deno.test("mapping strips harness metadata, handles all part kinds and interrupt
     "reasoning",
     "file",
     "agent",
-    "step",
-    "step",
-    "compaction",
-    "meta",
+    "external",
+    "external",
+    "external",
+    "external",
   ]);
   const message = mapMessage({
     id: "message",
@@ -131,7 +131,11 @@ Deno.test("mapping strips harness metadata, handles all part kinds and interrupt
     error: { name: "MessageAbortedError", data: { message: "Interrupted" } },
   });
   assert(message.role === "assistant" && message.interrupted);
-  assert(!JSON.stringify(parts).includes("private"));
+  assert(
+    parts.every((part) =>
+      "source" in part && part.source?.preview.includes('"private":"secret"')
+    ),
+  );
   const bash = mapPart({
     ...base,
     type: "tool",
@@ -171,7 +175,7 @@ Deno.test("unrecognized part kinds retain their external name and bounded payloa
     metadata: { title: "😀".repeat(40000) },
   });
   assert(part.kind === "external");
-  assertEquals(part.name, "plugin.card");
+  assertEquals(part.name, "opencode-v1/plugin.card");
   assertEquals(part.id, "part");
   assert(part.data!.includes('"title"'));
   assert(new TextEncoder().encode(part.data).length <= 65536);
