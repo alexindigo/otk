@@ -125,6 +125,38 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
     "components/ProjectInbox.css:.otk-inbox-resizer",
     "components/Toasts.css:.otk-toasts",
   ]);
+  // VirtualList's samples measure CSS roles without entering visible flow.
+  // Neither the class name nor aria-hidden alone authorizes positioned content.
+  const measurementLayer = (path: string, selector: string) => {
+    if (
+      path.replace(/^packages\/ui\//, "") !== "components/VirtualList.css" ||
+      selector !== ".otk-virtual-measure"
+    ) return false;
+    const source = graph.sources.get(path.replace(/\.css$/, ".tsx"));
+    if (!source) return false;
+    const targets = source.all.filter((node) =>
+      node.type === "JSXOpeningElement" &&
+      source.string(source.attr(node, "class"))?.split(/\s+/)
+        .includes("otk-virtual-measure")
+    );
+    if (
+      targets.length !== 1 ||
+      targets.some((node) =>
+        node.type !== "JSXOpeningElement" ||
+        source.string(source.attr(node, "aria-hidden")) !== "true"
+      )
+    ) return false;
+    const matching = rules(files.get(path)!).filter((rule) =>
+      rule.selector === selector
+    );
+    if (matching.some((rule) => rule.condition !== "")) return false;
+    const declarations = new Map(
+      matching.flatMap((rule) => [...rule.declarations]),
+    );
+    return declarations.get("position") === "absolute" &&
+      declarations.get("visibility") === "hidden" &&
+      declarations.get("pointer-events") === "none";
+  };
   for (const [path, text] of files) {
     if (!path.endsWith(".css")) continue;
     const name = path.replace(/^packages\/ui\//, "");
@@ -163,7 +195,8 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
       if (
         (overlay.has(path.replace(/\.css$/, ".tsx")) ||
           /(?:^|\/)components\/surface\/\w+\.css$/.test(path)) &&
-        !positions.has(`${name}:${rule.selector}`) && outOfFlow(effective)
+        !positions.has(`${name}:${rule.selector}`) && outOfFlow(effective) &&
+        !measurementLayer(path, rule.selector)
       ) errors.push(`${path}: overlay content must stay in flow`);
     }
   }

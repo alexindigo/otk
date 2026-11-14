@@ -190,7 +190,7 @@ test.describe("native picker choices", () => {
     );
     await openPicker(page, "model");
     await expect(
-      page.locator(".otk-model-picker section").first().locator("h3"),
+      page.locator(".otk-model-picker h3").first(),
     ).toHaveText("Favourites");
     await expect(
       page.getByRole("button", {

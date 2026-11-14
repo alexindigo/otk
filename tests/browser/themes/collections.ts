@@ -584,12 +584,12 @@ export async function collections456(input: Inputs) {
           ).toBe(true);
           if (kind === "model") {
             expect(
-              await page.locator(".otk-model-picker section").evaluateAll((
+              await page.locator(".otk-model-picker [role=group]").evaluateAll((
                 sections,
               ) =>
                 sections.filter((section) =>
                   !["Favourites", "Recent"].includes(
-                    section.querySelector("h3")?.textContent ?? "",
+                    section.getAttribute("aria-label") ?? "",
                   )
                 )
                   .flatMap((section) =>
