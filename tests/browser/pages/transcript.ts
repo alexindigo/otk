@@ -463,6 +463,7 @@ export function compactionBoundary(state: TestState) {
     ? {
       selector: ".otk-compaction-divider",
       title: ".otk-compaction-divider",
+      queued: ".otk-compaction-divider",
       running: "Compacting\u2026",
       completed: "Session compacted",
     }
@@ -470,6 +471,8 @@ export function compactionBoundary(state: TestState) {
       selector: '[data-native-record="opencode-v1/compaction-summary"]',
       title:
         '[data-native-record="opencode-v1/compaction-summary"] .otk-tool-verb',
+      // Before its summary exists, a queued compaction is its marker record.
+      queued: '[data-native-record="opencode-v1/compaction"] .otk-tool-verb',
       running: "Session compaction",
       completed: "Session compacted",
     };

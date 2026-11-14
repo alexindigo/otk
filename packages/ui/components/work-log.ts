@@ -130,3 +130,10 @@ export const timingExplanation = (timing: TurnTiming | undefined) =>
   timing?.state === "unknown"
     ? timing.explanation ?? "The recorded timing evidence is incomplete."
     : undefined;
+/** A plugin-reported running record: neutral facts, never a native state name. */
+export function hasActiveRecord(message: Message): boolean {
+  return message.role === "context" &&
+    message.parts.some((part) =>
+      part.kind === "external" && part.activity?.state?.facts.active === true
+    );
+}

@@ -100,6 +100,17 @@ Deno.test("V1 summary and interruption remain source-linked context boundaries",
   assertEquals(boundary.activity?.title, "Session compacted");
   assert(boundary.activity?.body?.length);
   assert(boundary.activity?.parameters?.some((p) => p.value === "marker"));
+  // A finished summary is terminal; a running one is active work.
+  assertEquals(boundary.activity?.state?.facts, {
+    active: false,
+    terminal: true,
+  });
+  const running = mapMessage({ ...assistant, time: { created: 2 } }, [
+    text(false),
+  ]).parts.find((part) => part.kind === "external");
+  assert(running?.kind === "external");
+  assertEquals(running.activity?.state?.key, "running");
+  assertEquals(running.activity?.state?.facts.active, true);
   const aborted = mapMessage({
     ...assistant,
     summary: false,

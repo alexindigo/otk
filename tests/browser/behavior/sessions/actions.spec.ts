@@ -88,6 +88,8 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     "data-status",
     "busy",
   );
+  // A running compaction is active work with the one in-flow progress.
+  await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   await expect(page.locator(".otk-response-progress")).toBeVisible();
   expect(
     await page.locator(compaction.selector).evaluate((e) =>
@@ -126,10 +128,12 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     (await state.observe<{ requests: unknown[] }>()).requests.length;
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
   await expect(
-    page.locator(compaction.title).filter({
+    page.locator(compaction.queued).filter({
       hasText: new RegExp(`^${compaction.running}$`),
     }),
   ).toBeVisible();
+  // One progress per active turn, even with the next compaction queued.
+  await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   const history = await state.native<Message[]>(`/session/${s.id}/message`);
   const v2 = state.controller.info!.version.startsWith("2.");
   const queued = v2
