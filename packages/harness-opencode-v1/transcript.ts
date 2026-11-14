@@ -8,7 +8,9 @@ import {
 import {
   type ContentOp,
   type ContentSession,
+  type ContextMessage,
   isAssistantTerminal,
+  isRealPrompt,
   type LatestPrompt,
   MAX_MESSAGE_CURSOR_LENGTH,
   type Message,
@@ -21,6 +23,7 @@ import type { StreamBuffers } from "@otk/content";
 import type { Messages, NativeMessage } from "./messages.ts";
 import type { Session } from "./types.ts";
 import { assistantSettled, mapMessage, mapPart } from "./map.ts";
+import { isPrompt } from "./records.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import {
   MessagePrefetchCache,
@@ -34,6 +37,8 @@ interface Cursor {
   epoch: string;
   cutoff: string | null;
   native: string;
+  retained?: { created: number; id: string };
+  reuse?: boolean;
 }
 interface Baseline {
   raw: Session;
@@ -47,6 +52,9 @@ function encode(value: Cursor): string {
   return btoa(JSON.stringify(value)).replaceAll("+", "-").replaceAll("/", "_")
     .replace(/=+$/, "");
 }
+/** Match retained key encoding, never locale-dependent identifier collation. */
+const compareID = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 function decode(token: string): Cursor {
   try {
     if (
@@ -57,10 +65,16 @@ function decode(token: string): Cursor {
       atob(token.replaceAll("-", "+").replaceAll("_", "/")),
     );
     if (
-      Object.keys(value).sort().join() !== "cutoff,epoch,native,session,v" ||
+      Object.keys(value).some((key) =>
+        !["v", "session", "epoch", "cutoff", "native", "retained", "reuse"]
+          .includes(key)
+      ) ||
       value.v !== 1 || typeof value.session !== "string" ||
       typeof value.epoch !== "string" || typeof value.native !== "string" ||
-      !value.native ||
+      (!value.native && !value.retained) ||
+      (value.retained !== undefined &&
+        (!Number.isFinite(value.retained.created) ||
+          typeof value.retained.id !== "string")) ||
       (value.cutoff !== null && typeof value.cutoff !== "string")
     ) throw new Error();
     return value;
@@ -72,7 +86,7 @@ function decode(token: string): Cursor {
   }
 }
 function prompt(message: Message | undefined): LatestPrompt | undefined {
-  if (message?.role !== "user") return;
+  if (!message || !isRealPrompt(message)) return;
   return {
     id: message.id,
     agent: message.agent,
@@ -136,6 +150,11 @@ export class Transcript {
         string,
         import("@otk/protocol").Derived<import("@otk/protocol").UsageSummary>
       >;
+      retained?(
+        id: string,
+        before: { created: number; id: string } | undefined,
+        limit: number,
+      ): ContextMessage[];
     },
   ) {
     if (options.policy) this.#cache = new MessagePrefetchCache(options.policy);
@@ -384,7 +403,8 @@ export class Transcript {
       const owner = baseline;
       signal = AbortSignal.any([signal, owner.controller.signal]);
       const cutoff = owner.raw.revert?.messageID;
-      let native = token?.native;
+      let native = token?.native || undefined;
+      let upper = token?.retained;
       let metadata: TranscriptMetadata | undefined;
       if (!token && cutoff) {
         metadata = await this.options.metadata?.(id, [], signal, cutoff);
@@ -392,6 +412,7 @@ export class Transcript {
           (await reader.get(id, cutoff, signal, owner.raw.directory)).info.time
             .created;
         native = reader.cursor(cutoff, created);
+        upper = { created, id: cutoff };
       }
       const cached = native
         ? this.#cache?.get(this.#key(id, owner, native))
@@ -459,6 +480,41 @@ export class Transcript {
           },
         ),
       );
+      const nativePrompt = items.findLast(isRealPrompt);
+      const retention =
+        this.options.retained?.(id, upper, MESSAGE_PAGE_SIZE + 1) ?? [];
+      const compareEdge = (
+        message: Message,
+        edge: { created: number; id: string },
+      ) =>
+        message.time.created - edge.created ||
+        compareID(message.id, edge.id);
+      const lower = page.items.length && page.next
+        ? page.items.reduce((a, b) =>
+          (a.info.time.created - b.info.time.created ||
+              compareID(a.info.id, b.info.id)) < 0
+            ? a
+            : b
+        ).info
+        : undefined;
+      const candidates = [
+        ...items.filter((message) =>
+          !token?.reuse || !upper || compareEdge(message, upper) < 0
+        ),
+        ...retention.filter((
+          message,
+        ) => (!lower ||
+          compareEdge(message, { created: lower.time.created, id: lower.id }) >=
+            0)
+        ),
+      ]
+        .sort((a, b) =>
+          a.time.created - b.time.created || compareID(a.id, b.id)
+        );
+      const hasRetainedContinuation = candidates.length > MESSAGE_PAGE_SIZE;
+      const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
+      const selectedIDs = new Set(selected.map((message) => message.id));
+      items = selected;
       const turns = [
         ...new Set(
           items.filter((m) => m.role === "assistant").map((m) =>
@@ -491,7 +547,7 @@ export class Transcript {
         } else if (token && owner.promptReady) {
           metadata = { boundaries: [], prompt: owner.prompt };
         } else {
-          const latest = items.findLast((m) => m.role === "user");
+          const latest = nativePrompt;
           metadata = { boundaries: [], prompt: prompt(latest) };
           // A standalone adapter has no worker: bounded native pages retain only
           // the latest user's scalar header, never another transcript collection.
@@ -504,11 +560,11 @@ export class Transcript {
               owner.raw.directory,
               signal,
             );
-            const row = scan.items.findLast(({ info }) =>
-              info.role === "user" && (!cutoff || info.id < cutoff)
+            const row = scan.items.findLast(({ info, parts }) =>
+              isPrompt(info, parts) && (!cutoff || info.id < cutoff)
             );
             if (row) {
-              metadata.prompt = prompt(mapMessage(row.info, []));
+              metadata.prompt = prompt(mapMessage(row.info, row.parts));
               break;
             }
             continuation = scan.next;
@@ -609,7 +665,7 @@ export class Transcript {
       owner.prompt = metadata?.prompt;
       // Catchup-created messages are not historical collection items. Their
       // complete operations travel separately and are installed atomically.
-      const covered = new Set(page.items.map((m) => m.info.id));
+      const covered = selectedIDs;
       items = items.filter((m) => covered.has(m.id));
       const helpers: MessagePage["helpers"] = {};
       for (const m of items) {
@@ -634,13 +690,26 @@ export class Transcript {
         clock: sealed.clock,
         session,
         items,
-        older: page.next
+        older: hasRetainedContinuation
+          ? encode({
+            v: 1,
+            session: id,
+            epoch: owner.epoch,
+            cutoff: cutoff ?? null,
+            native: native ?? "",
+            reuse: true,
+            retained: { created: selected[0].time.created, id: selected[0].id },
+          })
+          : page.next
           ? encode({
             v: 1,
             session: id,
             epoch: owner.epoch,
             cutoff: cutoff ?? null,
             native: page.next,
+            ...(lower
+              ? { retained: { created: lower.time.created, id: lower.id } }
+              : {}),
           })
           : null,
         prompt: metadata?.prompt,
@@ -706,7 +775,7 @@ function overlay(items: Message[], event: ContentOp): Message[] {
         : previous?.parts ?? [],
     };
     return [...items.filter((m) => m.id !== value.id), value].sort((a, b) =>
-      a.time.created - b.time.created || a.id.localeCompare(b.id)
+      a.time.created - b.time.created || compareID(a.id, b.id)
     );
   }
   if (event.op === "task.progress") {

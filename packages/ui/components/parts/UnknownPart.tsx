@@ -8,6 +8,7 @@ import { retainedDisclosure } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
 import { unknownPartPresentation, unknownPartPreview } from "./unknown-part.ts";
+import NativeSource from "./NativeSource.tsx";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
   const activity = () =>
@@ -84,7 +85,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       </header>
       <Show when={expanded() && details()}>
         <div class="otk-tool-body">
-          <Show when={activity()?.state}>
+          <Show
+            when={activity()?.state && activity()?.state?.label !== label()}
+          >
             <p>{activity()!.state!.label}</p>
           </Show>
           <Show when={activity()?.parameters?.length}>
@@ -113,15 +116,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             {(body) => <Blocks blocks={body()} conceal={props.prefs.conceal} />}
           </Show>
           <Show when={preview()}>
-            {(value) => (
-              <>
-                <small class="otk-muted">
-                  {value().bytes}{" "}
-                  bytes{value().truncated ? " - Preview truncated" : ""}
-                </small>
-                <pre class="otk-native-preview">{value().text}</pre>
-              </>
-            )}
+            {(value) => <NativeSource preview={value()} prefs={props.prefs} />}
           </Show>
         </div>
       </Show>

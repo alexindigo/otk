@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ToolResult } from "@otk/protocol";
 import type { RawPart } from "./types.ts";
+import { markdown } from "@otk/content";
 import { fileLanguage } from "./language.ts";
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -121,6 +122,23 @@ function grepResult(output: string): ToolResult | undefined {
   return { kind: "matches", matches, truncated };
 }
 
+/** Exact V1 task producer envelope, shared by tool results and synthetic deliveries. */
+export function taskEnvelope(
+  output: string,
+):
+  | { sessionID: string; state: string; summary?: string; text: string }
+  | undefined {
+  const match =
+    /^<task id="([^"\n]+)" state="(running|completed|error)">\n(?:<summary>([^\n]*)<\/summary>\n)?<(task_result|task_error)>\n([\s\S]*)\n<\/\4>\n<\/task>$/
+      .exec(output);
+  if (!match || (match[2] === "error") !== (match[4] === "task_error")) return;
+  return {
+    sessionID: match[1],
+    state: match[2],
+    summary: match[3],
+    text: match[5],
+  };
+}
 /** Stock 1.18.34 output formats. Unrecognized output is deliberately not decoded. */
 export function toolResult(part: RawPart): ToolResult | undefined {
   const output = part.state?.output;
@@ -146,10 +164,10 @@ export function toolResult(part: RawPart): ToolResult | undefined {
     return { kind: "paths", paths, truncated: note !== undefined };
   }
   if (part.tool === "task") {
-    const match =
-      /^<task id="[^"\n]+" state="(?:running|completed|error)">\n(?:<summary>[^\n]*<\/summary>\n)?<(task_result|task_error)>\n([\s\S]*)\n<\/\1>\n<\/task>$/
-        .exec(output);
-    return match ? { kind: "text", text: match[2] } : undefined;
+    const result = taskEnvelope(output);
+    return result
+      ? { kind: "blocks", blocks: markdown(result.text) }
+      : undefined;
   }
   if (part.tool === "skill") {
     const match =

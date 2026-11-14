@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { mapTool } from "../map-tools.ts";
 import type { RawPart } from "../types.ts";
+import { markdown } from "@otk/content";
 
 Deno.test("recorded native tool envelopes become user results, with complete raw fallback", async () => {
   const parts: RawPart[] = JSON.parse(
@@ -69,7 +70,10 @@ Deno.test("recorded native tool envelopes become user results, with complete raw
   const task = tasks.parent.flatMap((m) => m.parts).find((p) =>
     p.tool === "task"
   )!;
-  assertEquals(result(task), { kind: "text", text: "First child completed." });
+  assertEquals(result(task), {
+    kind: "blocks",
+    blocks: markdown("First child completed."),
+  });
 });
 Deno.test("read preserves literal markup and blank lines, native numbering, empty files and capped ranges", () => {
   const read = (body: string, note: string) =>

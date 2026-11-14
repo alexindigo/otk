@@ -4,6 +4,7 @@ import {
   type ContextMessage,
   DEFAULT_PREFS,
   type ExternalPart,
+  type Part,
 } from "@otk/protocol";
 import { PartRegistry } from "../registries/renderers.ts";
 import { messageFrames } from "../components/work-log.ts";
@@ -65,7 +66,7 @@ Deno.test("fallback contributes generic activity presentation without a kind reg
   assertEquals(result.frames[0].transcript, true);
 });
 
-Deno.test("fallback source is exact payload and explicit registrations keep their own framing", () => {
+Deno.test("declared fallback content copies its exact payload and explicit registrations keep their own framing", () => {
   const parts = new PartRegistry();
   parts.fallback(() => "generic", unknownPartPresentation);
   const source = {
@@ -75,9 +76,17 @@ Deno.test("fallback source is exact payload and explicit registrations keep thei
     truncated: true,
     payload: "  <flux>**raw**</flux>\n",
   };
-  const presentation = parts.presentation({ ...part, source }, DEFAULT_PREFS);
+  // Copy is the producer-declared content, exactly as sent; undeclared source
+  // remains inspection-only.
+  const presentation = parts.presentation(
+    { ...part, source, content: true },
+    DEFAULT_PREFS,
+  );
   assertEquals(presentation.copyable, true);
   assertEquals(presentation.text, source.payload);
+  const inspected = parts.presentation({ ...part, source }, DEFAULT_PREFS);
+  assertEquals(inspected.copyable, false);
+  assertEquals(inspected.text, undefined);
   parts.register(part.name, () => "custom");
   assertEquals(parts.presentation(part, DEFAULT_PREFS), {});
   const other = new PartRegistry();
@@ -132,4 +141,80 @@ Deno.test("unknown parts show bounded data and preserve the producer's truncatio
     }),
     { text: "prefix", bytes: 99, truncated: true },
   );
+});
+Deno.test("reply copy carries only producer-declared content; row records join the reply's work, never its copy", () => {
+  const parts = new PartRegistry();
+  parts.fallback(() => "generic", unknownPartPresentation);
+  parts.registerTyped("text", () => "text", () => ({
+    copyable: true,
+    text: "Reply text",
+  }));
+  const source = (payload: string) => ({
+    kind: "acme/source",
+    preview: payload,
+    bytes: payload.length,
+    truncated: false,
+    payload,
+  });
+  const record = (id: string, layout: "row" | "boundary"): ExternalPart => ({
+    kind: "external",
+    id,
+    name: "acme/step",
+    source: source(`{"type":"${id}"}`),
+    activity: {
+      kindLabel: "Step",
+      layout,
+      category: "record",
+      title: id,
+      tone: "normal",
+    },
+  });
+  const declared: ExternalPart = {
+    ...record("context", "row"),
+    source: source("Exact sent text"),
+    content: true,
+  };
+  const present = (part: Part) => parts.presentation(part, DEFAULT_PREFS);
+  // Bookkeeping stays inspectable through source but is never copy content.
+  assertEquals(present(record("start", "row")).copyable, false);
+  assertEquals(present(record("start", "row")).text, undefined);
+  assertEquals(present(declared).text, "Exact sent text");
+  assertEquals(present(declared).copyable, true);
+  const replyParts: Part[] = [
+    record("start", "row"),
+    { kind: "text", id: "text", blocks: [], synthetic: false },
+    record("finish", "row"),
+    record("interrupted", "boundary"),
+  ];
+  // Copy composes presentation text: only the reply's own content remains.
+  assertEquals(
+    replyParts.map((part) => present(part).text).filter(Boolean),
+    ["Reply text"],
+  );
+  // Inside a reply a row record is work in the reply's own flow; a boundary
+  // still stands in the transcript.
+  const reply = createMessageLayout().update(
+    "reply",
+    "assistant",
+    [{ messageID: "reply", parts: replyParts }],
+    "",
+    (part) => parts.presentation(part, DEFAULT_PREFS),
+  );
+  assertEquals(reply.frames.map((frame) => frame.transcript), [false, true]);
+  assertEquals(
+    reply.frames[0].groups.map((group) => group.work),
+    [true, false, true],
+  );
+  assertEquals(reply.copyable, true);
+  // Outside replies, records keep their transcript frame and no work log.
+  const context = createMessageLayout().update(
+    "context",
+    "context",
+    [{ messageID: "context", parts: [declared] }],
+    "",
+    (part) => parts.presentation(part, DEFAULT_PREFS),
+  );
+  assertEquals(context.frames.map((frame) => frame.transcript), [true]);
+  assertEquals(context.frames[0].groups[0].work, false);
+  assertEquals(context.copyable, true);
 });

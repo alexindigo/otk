@@ -5,12 +5,11 @@ import type {
   Message,
   Part,
   PermissionRequest,
-  Tokens,
 } from "@otk/protocol";
 import type { SessionMetadata } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
-import { preview } from "./previews.ts";
+import { isPrompt, nativeSource, recordPart } from "./records.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type {
   Info,
@@ -54,15 +53,6 @@ export function mapIndex(session: Session): SessionMetadata {
   };
 }
 import { reportedNumber, reportedTokens } from "./usage-values.ts";
-const tokens = (value?: Tokens): Tokens =>
-  value
-    ? {
-      input: value.input,
-      output: value.output,
-      reasoning: value.reasoning,
-      cache: { read: value.cache.read, write: value.cache.write },
-    }
-    : { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
 /** Native termination evidence is separate from endpoint availability. */
 export function assistantSettled(
   info: Pick<Info, "time" | "error" | "finish">,
@@ -75,13 +65,33 @@ export function mapMessage(
   parts: RawPart[] = [],
   observed?: number,
   partMapper: (part: RawPart) => Part = mapPart,
+  evidence: readonly RawPart[] = parts,
 ): Message {
+  const mappedParts = parts.map((part) => partMapper(part));
   const common = {
     id: info.id,
     sessionID: ids.encode(info.sessionID),
-    parts: parts.map((part) => partMapper(part)),
+    parts: mappedParts,
+    source: nativeSource(
+      "message",
+      info,
+      mappedParts.flatMap((part) => {
+        const source = "source" in part ? part.source : undefined;
+        return source?.payload !== undefined &&
+            ["opencode-v1/text", "opencode-v1/reasoning"].includes(source.kind)
+          ? [source.payload]
+          : [];
+      }).join("\n"),
+    ),
   };
   if (info.role === "user") {
+    if (!isPrompt(info, evidence)) {
+      return {
+        ...common,
+        role: "context",
+        time: { created: info.time.created },
+      };
+    }
     return {
       ...common,
       role: "user",
@@ -92,6 +102,62 @@ export function mapMessage(
         : undefined,
       variant: info.model?.variant ?? undefined,
     };
+  }
+  if (info.summary === true) {
+    const summaryParts = parts.some((part) => part.type === "text")
+      ? parts
+      : [...parts, {
+        id: `${info.id}:summary`,
+        sessionID: info.sessionID,
+        messageID: info.id,
+        type: "text",
+        text: info.error?.data.message ?? "",
+      }];
+    common.parts = summaryParts.map((part) => {
+      if (part.type !== "text") return partMapper(part);
+      const row = recordPart(part);
+      row.activity = {
+        kindLabel: "compaction",
+        layout: "boundary",
+        category: "compaction",
+        title: info.error
+          ? "Session compaction failed"
+          : info.time.completed === undefined
+          ? "Session compaction"
+          : "Session compacted",
+        tone: info.error ? "error" : "normal",
+        body: markdown(part.text ?? ""),
+        parameters: [
+          { key: "summary", label: "Summary message", value: info.id },
+          ...(info.parentID
+            ? [{
+              key: "marker",
+              label: "Compaction message",
+              value: info.parentID,
+            }]
+            : []),
+        ],
+      };
+      row.name = "opencode-v1/compaction-summary";
+      return row;
+    });
+    return { ...common, role: "context", time: { created: info.time.created } };
+  }
+  if (info.error?.name === "MessageAbortedError") {
+    common.parts.push({
+      kind: "external",
+      id: `${info.id}:interrupted`,
+      name: "opencode-v1/interrupted",
+      source: nativeSource("interrupted", info),
+      activity: {
+        kindLabel: "interruption",
+        layout: "boundary",
+        category: "record",
+        title: "Interrupted",
+        tone: "error",
+        body: markdown(info.error.data.message ?? info.error.name),
+      },
+    });
   }
   const ends = parts.flatMap((part) =>
     part.type === "text" || part.type === "reasoning"
@@ -131,9 +197,35 @@ export function mapMessage(
   };
 }
 export function mapPart(part: RawPart): Part {
+  part = { ...part };
+  // Non-image uploads retain their existing on-intent attachment reference,
+  // not a second embedded byte copy in transcript metadata.
+  const raw = part.type === "file" && !part.mime?.startsWith("image/") &&
+      part.url?.startsWith("data:")
+    ? {
+      ...part,
+      url: undefined,
+      attachment: {
+        sessionID: ids.encode(part.sessionID),
+        messageID: part.messageID,
+        partID: part.id,
+      },
+    }
+    : part;
+  return Object.assign(mapTypedPart(part), {
+    source: nativeSource(
+      part.type,
+      raw,
+      part.type === "text" || part.type === "reasoning" ? part.text : undefined,
+    ),
+  });
+}
+function mapTypedPart(part: RawPart): Part {
   const id = part.id;
   switch (part.type) {
     case "text":
+      if (part.synthetic === true) return recordPart(part);
+      return { ...mapStreamingShell(part), blocks: markdown(part.text || "") };
     case "reasoning":
       return {
         ...mapStreamingShell(part),
@@ -159,27 +251,12 @@ export function mapPart(part: RawPart): Part {
     case "agent":
       return { kind: "agent", id, name: part.name! };
     case "compaction":
-      return { kind: "compaction", id };
     case "snapshot":
     case "patch":
-      return { kind: "meta", id };
     case "step-start":
-      return { kind: "step", id, phase: "start" };
     case "step-finish":
-      return {
-        kind: "step",
-        id,
-        phase: "finish",
-        cost: part.cost,
-        tokens: tokens(part.tokens),
-      };
     default:
-      return {
-        kind: "external",
-        id,
-        name: part.type,
-        data: preview(part).text,
-      };
+      return recordPart(part);
   }
 }
 /** Identity/time metadata only; the stream producer owns text parsing. */

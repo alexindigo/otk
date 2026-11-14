@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 /** Stock opencode 1.x harness, native projections and mapping utilities. */
 export { OpencodeV1Adapter } from "./adapter.ts";
+export { eventRecord } from "./records.ts";
 export {
   harnessDb,
   type OpencodeV1AdapterConfig,

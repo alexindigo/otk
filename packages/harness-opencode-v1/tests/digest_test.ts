@@ -491,7 +491,15 @@ async function fixture(
               id: row.id,
               sessionID: "ses_one",
             },
-            parts: [],
+            parts: JSON.parse(String(row.data)).role === "user"
+              ? [{
+                id: `p${row.id}`,
+                sessionID: "ses_one",
+                messageID: row.id,
+                type: "text",
+                text: "Real prompt",
+              }]
+              : [],
           })),
           {
             headers: offset + limit < all.length

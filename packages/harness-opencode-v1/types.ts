@@ -16,6 +16,8 @@ interface MessageInfo {
   sessionID: string;
   time: { created: number; completed?: number };
   parentID?: string | null;
+  summary?: boolean;
+  variant?: string;
   model?:
     | { providerID: string; modelID: string; variant?: string | null }
     | null;
@@ -45,6 +47,13 @@ export interface RawPart {
   type: string;
   text?: string;
   synthetic?: boolean;
+  snapshot?: string;
+  hash?: string;
+  files?: string[];
+  attempt?: number;
+  reason?: string;
+  description?: string;
+  prompt?: string;
   time?: { start: number; end?: number };
   filename?: string;
   mime?: string;

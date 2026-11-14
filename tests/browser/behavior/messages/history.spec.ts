@@ -80,8 +80,16 @@ test(
     });
     await expect(transcript).toContainText("File: fixture.txt");
     await expect(transcript).toContainText("Agent: general");
-    await expect(transcript.locator(".otk-compaction-divider")).toBeVisible();
-    await expect(transcript.locator(".otk-user-bubble .otk-compaction-divider"))
+    // V1 owns its compaction marker as a boundary record (NT4); V2 keeps the
+    // typed divider. Either way it is visible and never inside the prompt bubble.
+    const compaction = v2
+      ? ".otk-compaction-divider"
+      : '[data-native-record="opencode-v1/compaction"]';
+    await expect(transcript.locator(compaction)).toBeVisible();
+    await expect(transcript.locator(compaction)).toContainText(
+      v2 ? /compact/i : "Session compaction",
+    );
+    await expect(transcript.locator(`.otk-user-bubble ${compaction}`))
       .toHaveCount(0);
     // Native PATCH part IDs are random. A marker may split this one message into
     // several bubbles; select the owner of the original bytes, never the first.

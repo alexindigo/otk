@@ -9,6 +9,7 @@ import {
   terminalProjection,
   terminalSessions,
 } from "./db-hints.ts";
+import { promptEvidenceSQL } from "./records.ts";
 
 /** Allowlisted message header projection. Native identities stay native here. */
 export interface DigestHeader {
@@ -316,7 +317,7 @@ export class DigestNativeDb {
     this.observe?.("transcript");
     const session = ids.decode(sessionID);
     const prompt = this.db.prepare(
-      "SELECT id,json_extract(data,'$.agent') AS agent,json_extract(data,'$.model.providerID') AS provider,json_extract(data,'$.model.modelID') AS model,json_extract(data,'$.model.variant') AS variant FROM message WHERE session_id=? AND (? IS NULL OR id<?) AND json_valid(data) AND json_extract(data,'$.role')='user' ORDER BY json_extract(data,'$.time.created') DESC,id DESC LIMIT 1",
+      `SELECT m.id,json_extract(m.data,'$.agent') AS agent,json_extract(m.data,'$.model.providerID') AS provider,json_extract(m.data,'$.model.modelID') AS model,json_extract(m.data,'$.model.variant') AS variant FROM message m WHERE m.session_id=? AND (? IS NULL OR m.id<?) AND json_valid(m.data) AND json_extract(m.data,'$.role')='user' AND ${promptEvidenceSQL()} ORDER BY json_extract(m.data,'$.time.created') DESC,m.id DESC LIMIT 1`,
     ).get(session, cutoff ?? null, cutoff ?? null);
     const rows = this.db.prepare(
       "WITH headers AS (SELECT m.id,coalesce(json_extract(m.data,'$.parentID'),m.id) AS turn,json_extract(m.data,'$.time.created') AS created,json_extract(m.data,'$.time.completed') AS completed FROM message m JOIN json_each(?) wanted ON wanted.value=coalesce(json_extract(m.data,'$.parentID'),m.id) WHERE m.session_id=? AND (? IS NULL OR m.id<?) AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant'), ranked AS (SELECT *,row_number() OVER(PARTITION BY turn ORDER BY created,id) AS first_rank,row_number() OVER(PARTITION BY turn ORDER BY created DESC,id DESC) AS last_rank FROM headers) SELECT turn,max(CASE WHEN first_rank=1 THEN id END) AS first_id,max(CASE WHEN last_rank=1 THEN id END) AS last_id,min(completed IS NOT NULL) AS complete FROM ranked GROUP BY turn",
