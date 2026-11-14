@@ -149,7 +149,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   let applying = false;
   let anchors: { id: string; anchor: WindowAnchor }[] = [];
   let releaseAnchor: (() => void) | undefined;
-  let geometryPending = true;
+  let geometryPending = true, capturePending = false;
   let navigation: {
     target: () => ViewportTarget | undefined;
     align: "center" | "nearest" | "start";
@@ -192,12 +192,16 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   };
   const capture = () => {
     if (mode === "follow") {
+      capturePending = false;
       anchors = [];
       releaseAnchor?.();
       releaseAnchor = undefined;
       return;
     }
-    if (leases || changing) return;
+    if (leases || changing) {
+      capturePending = true;
+      return;
+    }
     const candidates = [...geometries.values()].flatMap((geometry) => {
       const anchor = geometry.anchor();
       if (!anchor) return [];
@@ -213,6 +217,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     // Crossing estimated space keeps the adjacent measured attachment. Mounting
     // a guessed predecessor can never retire the source the reader just saw.
     if (!source) return;
+    capturePending = false;
     attach(source.geometry.id, source.anchor);
   };
   const cancelNavigation = (reason = "Viewport intent superseded") => {
@@ -235,6 +240,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (gesture) gestureMoved = true;
     position = top;
     if ((gesture || dragging) && mode === "anchored") {
+      capturePending = true;
       const delta = top - expected;
       anchors = anchors.map(({ id, anchor }) => ({
         id,
@@ -321,7 +327,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }
       if (!leases && appliedRevision === revision) {
         geometryPending = false;
-        if (!anchors.length) capture();
+        if (capturePending || !anchors.length) capture();
       } else schedule();
     } finally {
       applying = false;
@@ -554,6 +560,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }
       cancelNavigation();
       mode = "anchored";
+      capturePending = false;
       gesture = undefined;
       dragging = false;
       return new Promise<void>((resolve, reject) => {

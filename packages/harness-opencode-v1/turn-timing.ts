@@ -46,7 +46,11 @@ export function timingEvidence(
   if (modelEnd !== undefined) busy.push({ start, end: modelEnd });
   // V1 persists retry observations but not the resumed provider-request clock.
   const retry = parts.some((p) => p.type === "retry");
-  let incomplete = retry;
+  let incomplete = retry ||
+    parts.some((part) =>
+      ["text", "reasoning"].includes(part.type) &&
+      part.start != null && part.end == null
+    );
   for (const tool of tools) {
     if (tool.start == null || tool.end == null) {
       incomplete = true;
