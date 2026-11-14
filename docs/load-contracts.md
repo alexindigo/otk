@@ -63,6 +63,23 @@ ceilings. Unrelated-session RPCs, including batched scope identities, and
 discovered-directory native reads are zero. Index entries contain only the
 leased session; every project has one keyed summary.
 
+Acknowledgements follow causes, not timing. Opening acknowledges the finish
+known at that moment (0 if none yet); a finish learned after opening is a
+second, distinct cause, acknowledged once while focused. Each population must
+show exactly those causes, OTK's stored seen token must equal the published
+finish, and every other browser method count must be identical across
+populations. The socket is observed passively: holding a subset of frames would
+reorder inbox epochs against RPC results and fabricate recoveries.
+
+Each acknowledgement validates its session identity first. In V1 that identity
+read is gated by one native `GET /global/health` probe, so the probe count
+equals an exact population-independent remainder plus the acknowledgements. The
+contract subtracts the acknowledgements and compares the remainder exactly.
+
+A terminal inventory refreshes its native source/project proof once, at its
+first page; continuation pages reuse that proof, so `/info` and `/project` reads
+do not grow with the population.
+
 The native catalog ceiling is independent of observed counts: seven shipped
 catalog codecs (`packages/protocol/catalogs/codecs.ts`) x five owner acquisition
 or refresh sources = 35 per endpoint at either population. Those sources are

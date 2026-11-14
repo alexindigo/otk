@@ -97,13 +97,24 @@ Deno.test("V2 SQL reads reuse proven registration generations and reprove replac
     db.exec("UPDATE session_v2 SET time_updated=2");
     await transcript({ sessionID: "opcv2-ses_one", messages: [] }, signal);
     assertEquals(gets, 2);
+    // A terminal inventory refreshes its source proof once, at its first page;
+    // continuation pages never repeat discovery or the project list.
+    const terminals = sink.readers["supervision.terminals"]!;
+    const before = projects;
+    await terminals({ after: "" }, signal);
+    assertEquals(projects, before + 1);
+    const refreshed = [infos, projects];
+    for (const after of ["opcv2-ses_a", "opcv2-ses_b", "opcv2-ses_c"]) {
+      await terminals({ after }, signal);
+    }
+    assertEquals([infos, projects], refreshed);
     pid++;
     await register();
     await sink.identities(["opcv2-ses_one"], signal);
-    assertEquals(projects, baseline[1] + 1);
+    assertEquals(projects, refreshed[1] + 1);
     sink.connection(1);
     await sink.identities(["opcv2-ses_one"], signal);
-    assertEquals(projects, baseline[1] + 2);
+    assertEquals(projects, refreshed[1] + 2);
     await Deno.writeTextFile(file, "{");
     await assertRejects(() => sink.identities(["opcv2-ses_one"], signal));
   } finally {
