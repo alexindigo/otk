@@ -2,6 +2,7 @@
 import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import { DatabaseSync } from "node:sqlite";
 import { start } from "../../../main.ts";
 import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
@@ -227,6 +228,9 @@ test("real-version scale summaries match independent totals with bounded serving
     probe.samples.reduce((maximum, sample) => Math.max(maximum, sample.ms), 0),
   );
   probe.assert();
+  const digestDb = new DatabaseSync(join(config.state.path, "digest.db"), {
+    readOnly: true,
+  });
   for (
     const row of fixture.manifest.sessions.filter((s) =>
       s.directory === fixture.directory
@@ -265,17 +269,37 @@ test("real-version scale summaries match independent totals with bounded serving
       row.expected.tokens,
       row.id,
     );
+    // Only the leased session's turn detail is resident in the global index;
+    // every other session's exact turns are proven at their SQLite owner.
+    const turns = row.id === requested[0].id
+      ? Object.fromEntries(
+        Object.entries(entry.digest.turns).map(([id, value]) => [id, {
+          calls: derivedValue(value)!.calls,
+          cost: derivedValue(value)!.cost,
+        }]),
+      )
+      : Object.fromEntries(
+        digestDb.prepare(
+          "SELECT turn_id,call_count,cost FROM digest_turns WHERE session_id=?",
+        ).all(row.id).map((turn) => [String(turn.turn_id), {
+          calls: Number(turn.call_count),
+          cost: turn.cost === null ? null : Number(turn.cost),
+        }]),
+      );
+    if (row.id !== requested[0].id) {
+      assertEquals(Object.keys(entry.digest.turns).length, 0, row.id);
+    }
     assertEquals(
-      Object.keys(entry.digest.turns).length,
+      Object.keys(turns).length,
       Object.keys(row.expected.turns).length,
       row.id,
     );
     for (const [id, expected] of Object.entries(row.expected.turns)) {
-      const actual = derivedValue(entry.digest.turns[id])!;
-      assertEquals(actual.calls, expected.calls);
-      assertEquals(actual.cost, expected.cost);
+      assertEquals(turns[id].calls, expected.calls);
+      assertEquals(turns[id].cost, expected.cost);
     }
   }
+  digestDb.close();
   await client.close();
   await app.stop();
 });

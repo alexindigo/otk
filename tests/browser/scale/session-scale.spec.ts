@@ -18,7 +18,9 @@ interface Observation {
   counts: unknown;
   expectedCounts: unknown;
   ready: string[];
+  readyCount: number;
   entries: { id: string; status: string; attention: { permissions: number } }[];
+  entry: { status: string; attention: { permissions: number } } | null;
   taskMembers: string[];
   expectedCosts: Record<string, string>;
   requests: unknown[];
@@ -112,7 +114,7 @@ test(
   })()`);
     const status = (id: string, value: string) =>
       expect.poll(async () =>
-        (await state.observe<Observation>()).entries.find((e) => e.id === id)
+        (await state.observe<Pick<Observation, "entry">>({ entry: id })).entry
           ?.status
       ).toBe(value);
     const calls = () =>
@@ -218,16 +220,19 @@ test(
       expect(cold.snapshot.ready).toBe(false);
       observations.cold = cold;
       const taskMembers = new Set(
-        (await state.observe<Observation>()).taskMembers,
+        (await state.observe<Pick<Observation, "taskMembers">>({
+          fields: ["taskMembers"],
+        })).taskMembers,
       );
       expect(calls().filter((f) => f.method === "usage.get")).toEqual([]);
       scoped(calls(), selected.id, taskMembers);
       await expect.poll(
         async () =>
-          (await state.observe<{ frames: { t: string; state?: string }[] }>())
-            .frames.some((frame) =>
-              frame.t === "harness" && frame.state === "connected"
-            ),
+          (await state.observe<{ frames: { t: string; state?: string }[] }>({
+            fields: ["frames"],
+          })).frames.some((frame) =>
+            frame.t === "harness" && frame.state === "connected"
+          ),
         { timeout: 120_000 },
       ).toBe(true);
       await expect(page.locator("[data-connection=local]")).toHaveAttribute(
@@ -338,7 +343,9 @@ test(
         });
       const providerRequests = (text: string) =>
         expect.poll(async () =>
-          (await state.observe<Observation>()).requests.filter((r) => {
+          (await state.observe<Pick<Observation, "requests">>({
+            fields: ["requests"],
+          })).requests.filter((r) => {
             const body = JSON.stringify(r);
             return body.includes(text) &&
               !body.includes("Generate a title for this conversation:");
@@ -369,9 +376,9 @@ test(
       const finishHold = await state.queue(["Background completed"], "held");
       await begin(finished, "Background needs input");
       await expect.poll(async () =>
-        (await state.observe<Observation>()).entries.find((e) =>
-          e.id === finished.id
-        )?.attention.permissions ?? 0
+        (await state.observe<Pick<Observation, "entry">>({
+          entry: finished.id,
+        })).entry?.attention.permissions ?? 0
       ).toBeGreaterThan(0);
       await light(page, `${project} .otk-status-light[data-state=blocked]`);
       const permissions = await state.product("permission.list", {
@@ -404,9 +411,9 @@ test(
       });
       await begin(blocked, "Keep background input visible");
       await expect.poll(async () =>
-        (await state.observe<Observation>()).entries.find((e) =>
-          e.id === blocked.id
-        )?.attention.permissions ?? 0
+        (await state.observe<Pick<Observation, "entry">>({
+          entry: blocked.id,
+        })).entry?.attention.permissions ?? 0
       ).toBeGreaterThan(0);
       await state.product("layout.location", {
         sidecarId: "local",
@@ -455,15 +462,17 @@ test(
       await page.goto(`${state.url}/#/local/${selected.id}`);
       await page.locator(search).fill("");
       const readinessStart = performance.now(), progress: unknown[] = [];
-      let ready = (await state.observe<Observation>()).ready.length;
+      const readyCount = async () =>
+        (await state.observe<Pick<Observation, "readyCount">>({
+          fields: ["readyCount"],
+        })).readyCount;
+      let ready = await readyCount();
       const target = 4619;
       while (ready < target) {
         const previous = ready;
-        await expect.poll(
-          async () => (await state.observe<Observation>()).ready.length,
-          { timeout: 30_000 },
-        ).toBeGreaterThan(previous);
-        ready = (await state.observe<Observation>()).ready.length;
+        await expect.poll(readyCount, { timeout: 30_000 })
+          .toBeGreaterThan(previous);
+        ready = await readyCount();
         progress.push({ elapsed: performance.now() - readinessStart, ready });
       }
       expect(ready).toBe(target);

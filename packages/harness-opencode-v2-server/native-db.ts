@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
+import { cachedStatements } from "@otk/harness";
 import type { ProjectSeed, SessionIdentity } from "@otk/harness";
 import type { SessionListInput, SessionMetadata } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
@@ -33,7 +34,9 @@ export class V2NativeDb {
     ) => void,
   ) {
     this.identity = this.fileIdentity();
-    const db = this.db = new DatabaseSync(file, { readOnly: true });
+    const db = this.db = cachedStatements(
+      new DatabaseSync(file, { readOnly: true }),
+    );
     try {
       for (const [table, names] of Object.entries(required)) {
         const columns = new Set(

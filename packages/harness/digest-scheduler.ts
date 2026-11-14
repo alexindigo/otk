@@ -42,6 +42,46 @@ interface Lifetime {
   optional: boolean;
   preempt?: Pick<AbortController, "abort">;
 }
+/** Decayed least-squares fit of step work = fixed + rows x per-row cost.
+ * Only per-row cost limits the quota; a fixed proof/commit/publication cost is
+ * paid once per step, so shrinking rows would only repeat it more often. */
+export class DigestRowCost {
+  #n = 0;
+  #x = 0;
+  #y = 0;
+  #xx = 0;
+  #xy = 0;
+  constructor(readonly decay = 0.8) {}
+  observe(rows: number, workms: number): void {
+    if (!Number.isFinite(workms) || workms < 0 || rows < 0) return;
+    this.#n = this.#n * this.decay + 1;
+    this.#x = this.#x * this.decay + rows;
+    this.#y = this.#y * this.decay + workms;
+    this.#xx = this.#xx * this.decay + rows * rows;
+    this.#xy = this.#xy * this.decay + rows * workms;
+  }
+  /** Milliseconds per examined row, or undefined before rows vary. */
+  get perRow(): number | undefined {
+    if (!this.#n) return undefined;
+    const x = this.#x / this.#n, y = this.#y / this.#n;
+    const variance = this.#xx / this.#n - x * x;
+    if (variance < 1) return x >= 1 ? y / x : undefined;
+    return Math.max(0, (this.#xy / this.#n - x * y) / variance);
+  }
+  get fixed(): number | undefined {
+    const perRow = this.perRow;
+    if (perRow === undefined) return undefined;
+    return Math.max(0, (this.#y - perRow * this.#x) / this.#n);
+  }
+  quota(policy: Pick<DigestPolicy, "batch" | "slicems">): number {
+    const perRow = this.perRow;
+    if (!perRow) return policy.batch;
+    return Math.min(
+      policy.batch,
+      Math.max(digestRowFloor(policy), Math.floor(policy.slicems / perRow)),
+    );
+  }
+}
 /** One cooperative executor. Waiting lifetimes have no executing turn. */
 export class DigestScheduler {
   #sinks = new Map<string, DigestSink>();
@@ -85,7 +125,7 @@ export class DigestScheduler {
                 a.job.updated === b.job.updated && a.order < b.order)))
   );
   #viewers = true;
-  #rows?: number;
+  #cost = new DigestRowCost();
   #lifetimes = new Set<Lifetime>();
   #errors: unknown[] = [];
   #backoffs = new Set<Promise<void>>();
@@ -505,7 +545,7 @@ export class DigestScheduler {
       started = false;
     let turn: Turn | undefined,
       released: PromiseWithResolvers<void> | undefined;
-    let at = 0, workms = 0;
+    let at = 0, workms = 0, rows: number | undefined;
     const release = (next: typeof phase) => {
       if (phase === "running") {
         const elapsed = Math.max(0, this.#now() - at);
@@ -600,6 +640,15 @@ export class DigestScheduler {
       },
       get workms() {
         return workms;
+      },
+      get examined() {
+        return rows;
+      },
+      rows: (count) => {
+        if (!Number.isSafeInteger(count) || count < 0) {
+          throw new TypeError("Invalid digest row count");
+        }
+        rows = (rows ?? 0) + count;
       },
       wait: (value, kind = "readiness") => suspend(value, kind),
       join: (value) => suspend(value, "io", true),
@@ -718,25 +767,15 @@ export class DigestScheduler {
       pending.changed = false;
       void this.#job(
         async (signal, execution) => {
+          const quota = this.#cost.quota(this.policy);
           const cursor = await this.#sinks.get(pending.job.provider)!.step(
             structuredClone(pending.job),
-            {
-              rows: this.#rows ?? this.policy.batch,
-              until: this.#now() + this.policy.slicems,
-            },
+            { rows: quota, until: this.#now() + this.policy.slicems },
             signal,
             execution,
           );
           // Adapt the next row quota to observed executing work, not I/O waits.
-          if (execution.workms > this.policy.slicems) {
-            this.#rows = Math.max(
-              digestRowFloor(this.policy),
-              Math.floor(
-                (this.#rows ?? this.policy.batch) * this.policy.slicems /
-                  execution.workms,
-              ),
-            );
-          }
+          this.#cost.observe(execution.examined ?? quota, execution.workms);
           signal.throwIfAborted();
           if (pending.changed || cursor !== undefined) {
             if (cursor) pending.job.cursor = cursor;

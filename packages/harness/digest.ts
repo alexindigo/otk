@@ -136,6 +136,9 @@ export interface DigestExecution {
   join<T>(readiness: PromiseLike<T>): Promise<T>;
   /** Account bounded CPU work performed off-thread, excluding readiness waits. */
   charge(elapsedMs: number): void;
+  /** Rows this step examined. Separates per-row work from fixed step cost. */
+  rows?(count: number): void;
+  readonly examined?: number;
 }
 export interface DigestSink {
   identity: string;

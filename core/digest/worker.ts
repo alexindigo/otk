@@ -207,74 +207,95 @@ async function publishRead<K extends keyof ProviderReadKinds>(
     current = next;
   }
 }
-async function publish(value: DigestPublication): Promise<void> {
-  progress?.update(
-    value.sessionID,
-    value.delta.summary.state === "ready",
-    value.delta.summary.messageCount ?? 0,
-    value.metadata?.directory,
-  );
+function publish(value: DigestPublication): Promise<void> {
+  return publishAll([value]);
+}
+/** The worker owns commit/publication batching: one credited catalog chunk per
+ * bounded set, with digest parts appended to the existing publication batch. */
+async function publishAll(
+  values: readonly DigestPublication[],
+): Promise<void> {
+  for (const value of values) {
+    progress?.update(
+      value.sessionID,
+      value.delta.summary.state === "ready",
+      value.delta.summary.messageCount ?? 0,
+      value.metadata?.directory,
+    );
+  }
   const context = execution.getStore();
   if (context?.catalogPublications) {
-    if (!context.catalogPublications.has(value.sessionID)) {
-      context.catalogPublications.set(
-        value.sessionID,
-        publicationOrder.reserve(value.sessionID),
-      );
+    for (const value of values) {
+      if (!context.catalogPublications.has(value.sessionID)) {
+        context.catalogPublications.set(
+          value.sessionID,
+          publicationOrder.reserve(value.sessionID),
+        );
+      }
     }
     return;
   }
+  if (!values.length) return;
   const signal = context?.signal ?? lifetime.signal;
-  await publicationOrder.reserve(
-    value.sessionID,
+  await publicationOrder.reserveAll(
+    values.map((value) => value.sessionID),
     context?.turn.priority ?? "attention",
   ).run(signal, async () => {
-    if (value.revision < (publishedRevisions.get(value.sessionID) ?? -1)) {
-      return;
-    }
-    if (value.metadata) {
+    const current = values.filter((value) =>
+      value.revision >= (publishedRevisions.get(value.sessionID) ?? -1)
+    );
+    const entries = current.flatMap((value) =>
+      value.metadata ? [value.metadata] : []
+    );
+    for (
+      let offset = 0;
+      offset < entries.length;
+      offset += policy.publishrows
+    ) {
       await send({
         t: "catalog",
         run: run!,
         id: 0,
         connection,
-        entries: [value.metadata],
+        entries: entries.slice(offset, offset + policy.publishrows),
         part: 0,
         last: true,
         authoritative: false,
-      }, context?.signal ?? lifetime.signal);
+      }, signal);
     }
-    const turns = Object.entries(value.delta.turns.upsert),
-      remove = value.delta.turns.remove;
-    const count = Math.max(
-      1,
-      Math.ceil((turns.length + remove.length) / policy.publishrows),
-    );
-    for (let part = 0; part < count; part++) {
-      const from = part * policy.publishrows, to = from + policy.publishrows;
-      const delta: DigestDelta = {
-        ...value.delta,
-        summary: value.delta.summary,
-        turns: {
-          upsert: Object.fromEntries(turns.slice(from, to)),
-          remove: remove.slice(
-            Math.max(0, from - turns.length),
-            Math.max(0, to - turns.length),
-          ),
-        },
-      };
-      await send({
-        t: "digest",
-        run: run!,
-        id: 0,
-        sessionID: value.sessionID,
-        revision: value.revision,
-        part,
-        last: part === count - 1,
-        delta,
-      }, context?.signal ?? lifetime.signal);
+    for (const value of current) {
+      const turns = Object.entries(value.delta.turns.upsert),
+        remove = value.delta.turns.remove;
+      const count = Math.max(
+        1,
+        Math.ceil((turns.length + remove.length) / policy.publishrows),
+      );
+      for (let part = 0; part < count; part++) {
+        const from = part * policy.publishrows, to = from + policy.publishrows;
+        const delta: DigestDelta = {
+          ...value.delta,
+          summary: value.delta.summary,
+          turns: {
+            upsert: Object.fromEntries(turns.slice(from, to)),
+            remove: remove.slice(
+              Math.max(0, from - turns.length),
+              Math.max(0, to - turns.length),
+            ),
+          },
+        };
+        await send({
+          t: "digest",
+          run: run!,
+          id: 0,
+          sessionID: value.sessionID,
+          revision: value.revision,
+          part,
+          last: part === count - 1,
+          delta,
+        }, signal);
+      }
+      publishedRevisions.set(value.sessionID, value.revision);
     }
-    publishedRevisions.set(value.sessionID, value.revision);
   });
 }
 /** A temporary scalar snapshot, captured in bounded reads before credit waits.
@@ -541,6 +562,7 @@ async function start(
           write: (metadata, delta, checkpoint) =>
             write(store!, message.provider, metadata, delta, checkpoint),
           publish,
+          publishAll,
           diagnostic: (sessionID, error) =>
             post({
               t: "error",
