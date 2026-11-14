@@ -138,6 +138,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     pressed = false;
   let gesture: "toward" | "away" | undefined,
     gestureMoved = false,
+    compensated = false,
     startX = 0,
     startY = 0;
   let position = viewport.scrollTop,
@@ -166,8 +167,17 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const atTail = () =>
     tail &&
     viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24;
+  let publishing = false;
+  // Transactions can commit many times in one task. Windows observe one
+  // position publication per microtask checkpoint, still before paint.
   const notify = () => {
-    for (const change of listeners) change();
+    if (publishing) return;
+    publishing = true;
+    queueMicrotask(() => {
+      publishing = false;
+      if (disposed) return;
+      for (const change of listeners) change();
+    });
   };
   const attach = (id: string, anchor: WindowAnchor) => {
     if (anchors[0]?.id === id && anchors[0]?.anchor.key === anchor.key) {
@@ -217,7 +227,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   };
   function applyPosition(top: number) {
     const value = clamp(top);
-    if (viewport.scrollTop !== value) viewport.scrollTop = value;
+    if (viewport.scrollTop !== value) {
+      viewport.scrollTop = value;
+      if (gesture) compensated = true;
+    }
     position = viewport.scrollTop;
     notify();
   }
@@ -348,6 +361,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const beginGesture = (direction: "away" | "toward") => {
     gesture = direction;
     gestureMoved = false;
+    compensated = false;
     if (gesture === "away") away();
     else if (atTail()) mode = "follow";
     // An input intent at a native boundary cannot produce a scrollend event.
@@ -410,7 +424,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     // its intent still owns the anchors; an unrelated ending cannot retire it.
     if (userGesture) externalPosition();
     if (gesture && !gestureMoved) return;
-    gesture = undefined;
+    // Compensating during animated input can make the browser end its scroll
+    // sequence while the input's native displacement continues. That ending is
+    // the owner's write, not the reader's; the next uncompensated one ends it.
+    if (gesture && compensated) compensated = false;
+    else gesture = undefined;
     if (userGesture && !geometryPending) capture();
     if (geometryPending) schedule();
   };
