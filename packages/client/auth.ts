@@ -17,6 +17,7 @@ export interface AuthStatus {
   authType: string;
   principal: string;
   requests: { window: RequestWindow; policy: ClientRequestPolicy };
+  defaults?: import("./public-defaults.ts").PublicDefaults;
 }
 export async function request<T>(
   base: URL,

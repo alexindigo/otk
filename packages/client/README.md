@@ -207,6 +207,10 @@ Framework-free OTK networking, RPC and state. Production code depends only on
 
 ## Public API
 
+`publicDefaultsFrom` reads the allowlisted `{ defaultPort }` session-bootstrap
+projection. Connections publish it through `ConnectionSink.defaults` into each
+sidecar's state. Older peers leave it absent, without a competing fallback port.
+
 Import only `@otk/client` (the `mod.ts` entry).
 
 | #  | API                                                                                        | Purpose                                                                                                              |
