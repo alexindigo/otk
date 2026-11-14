@@ -40,6 +40,13 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       method: "POST",
       body: { parts: [{ type: "text", text }] },
     });
+  const observedPermission = (sessionID: string, requestID: string) =>
+    waitFor(
+      () => client!.rpc<PermissionRequest[]>("permission.list", { sessionID }),
+      (rows) =>
+        rows.some((row) => row.sessionID === sessionID && row.id === requestID),
+      60_000,
+    );
   const bash = (name: string) => ({
     tool: {
       name: "bash",
@@ -123,6 +130,9 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       (value) => !value[root.nativeID],
       60_000,
     );
+    // Native pending state can precede OTK's event-fed inventory. Hold that
+    // boundary deliberately; native readiness is not permission-reply readiness.
+    proxy.freeze();
     fake.queue(bash("unrelated-waits"), { chunks: ["Unrelated rejected"] });
     await prompt(other.id, "This unrelated request must wait");
     const unrelated = await waitFor(
@@ -139,6 +149,12 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     );
     client = await connect();
     const request = unrelated.find((row) => row.sessionID === other.nativeID)!;
+    assertEquals(
+      await client.rpc("permission.list", { sessionID: other.id }),
+      [],
+    );
+    proxy.thaw();
+    await observedPermission(other.id, request.id);
     await client.rpc("permission.reply", {
       sessionID: other.id,
       requestID: request.id,
@@ -253,6 +269,10 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       false,
     );
     client = await connect();
+    await observedPermission(
+      root.id,
+      waiting.find((row) => row.sessionID === root.nativeID)!.id,
+    );
     await client.rpc("permission.reply", {
       sessionID: root.id,
       requestID: waiting.find((row) => row.sessionID === root.nativeID)!.id,
