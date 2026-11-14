@@ -167,6 +167,11 @@ non-sortable IDs; synthetic/system/skill/shell/compaction rows never become
 real-prompt anchors. Text and reasoning identities count their own ordinals;
 tools use call IDs.
 
+`tool-interpretation.ts` owns current and migrated tool aliases, argument and
+result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
+progress share it; `sourceName` stays native. SQL requests only its declared,
+bounded scalar fields and never tool input/output bodies for helper summaries.
+
 Pages contain ten native rows, chronological visible items, session metadata,
 real-prompt/reply context and an event-aligned replay clock. Cursor
 continuations omit native `order` and bind to session, epoch, cutoff and source

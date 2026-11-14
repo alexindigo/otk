@@ -29,13 +29,13 @@ import {
 import {
   completeTokens,
   mapMessage,
-  mapTool,
   type MessageContext,
   millis,
   partID,
   record,
   text,
 } from "./map.ts";
+import { mapTool } from "./tool-interpretation.ts";
 import {
   type PrefetchInput,
   type PrefetchPage,

@@ -18,11 +18,14 @@ import {
   partID,
   record,
   reported,
-  sharedToolName,
   text,
   tokens,
-  toolTitle,
 } from "./map.ts";
+import {
+  interpretTool,
+  toolProgress,
+  toolScalarSQL,
+} from "./tool-interpretation.ts";
 import { type Messages, type NativeMessage, SCAN_ROWS } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 
@@ -283,9 +286,7 @@ export class TranscriptReads {
         ) {
           accept(
             row.toolCount,
-            row.current
-              ? { ...row.current, name: sharedToolName(row.current.name) }
-              : undefined,
+            row.current,
           );
         }
         before = headers.at(-1)?.seq;
@@ -310,9 +311,12 @@ export class TranscriptReads {
               1,
               active
                 ? {
-                  name: sharedToolName(part.name),
-                  title: text(metadata.title) ?? text(metadata.description),
-                  startedAt: millis(part.time.created),
+                  ...toolProgress(
+                    part.name,
+                    part.state.input,
+                    metadata,
+                    part.time.created,
+                  ),
                 }
                 : undefined,
             );
@@ -621,13 +625,13 @@ export class TranscriptReads {
       SELECT message_id,ordinal,0 AS source,
         json_extract(data,'$.name') AS name,
         json_extract(data,'$.state.status') AS status,
-        coalesce(json_extract(data,'$.state.metadata.title'),json_extract(data,'$.state.metadata.description')) AS title,
+        ${toolScalarSQL("data")} AS scalar,
         json_extract(data,'$.time.created') AS created
       FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data)
       UNION ALL
       SELECT m.id,p.key,1,
         json_extract(p.value,'$.name'),json_extract(p.value,'$.state.status'),
-        coalesce(json_extract(p.value,'$.state.metadata.title'),json_extract(p.value,'$.state.metadata.description')),
+        ${toolScalarSQL("p.value")},
         json_extract(p.value,'$.time.created')
       FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p
       WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND m.type='assistant' AND json_extract(p.value,'$.type')='tool'
@@ -635,7 +639,7 @@ export class TranscriptReads {
       SELECT *,row_number() OVER (PARTITION BY message_id ORDER BY CASE WHEN status IN ('running','streaming') THEN 0 ELSE 1 END,created DESC,source DESC,ordinal DESC) AS rank FROM calls
     ) SELECT message_id,count(*) AS tool_count,
       max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN name END) AS current_name,
-      max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN title END) AS current_title,
+      max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN scalar END) AS current_scalar,
       max(CASE WHEN rank=1 AND status IN ('running','streaming') THEN created END) AS current_created
       FROM ranked GROUP BY message_id ORDER BY message_id`).all(
       ids.decode(sessionID),
@@ -648,11 +652,16 @@ export class TranscriptReads {
       toolCount: Number(row.tool_count),
       ...(typeof row.current_name === "string"
         ? {
-          current: {
-            name: row.current_name,
-            title: text(row.current_title),
-            startedAt: millis(row.current_created),
-          },
+          current: (() => {
+            const p = record(JSON.parse(String(row.current_scalar))),
+              state = record(p.state);
+            return toolProgress(
+              row.current_name,
+              state.input,
+              state.metadata,
+              row.current_created,
+            );
+          })(),
         }
         : {}),
     }));
@@ -681,14 +690,15 @@ export class TranscriptReads {
         p.type !== "tool" || typeof p.id !== "string" ||
         typeof p.name !== "string"
       ) return [];
+      const interpreted = interpretTool(p.name, state.input, meta);
       return [{
         messageID,
         tool: {
           id: partID(messageID, "tool", p.id),
-          name: p.name,
-          summary: toolTitle(p.name, record(state.input), meta),
+          name: interpreted.sourceName,
+          summary: interpreted.title,
         },
-        child: text(meta.sessionID),
+        child: interpreted.child,
         status: text(state.status) ?? "running",
         created: millis(time.created),
         completed: time.completed == null ? undefined : millis(time.completed),
@@ -696,13 +706,17 @@ export class TranscriptReads {
       }];
     };
     const rows = sql.prepare(
-      `SELECT message_id,ordinal,json_object('type',type,'id',call_id,'name',json_extract(data,'$.name'),'state',json_object('status',json_extract(data,'$.state.status'),'input',json_object('command',substr(json_extract(data,'$.state.input.command'),1,200)),'metadata',json_object('title',json_extract(data,'$.state.metadata.title'),'description',json_extract(data,'$.state.metadata.description'),'sessionID',json_extract(data,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(data,'$.time.created'),'completed',json_extract(data,'$.time.completed'))) AS scalar FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data) ORDER BY message_id,ordinal`,
+      `SELECT message_id,ordinal,${
+        toolScalarSQL("data")
+      } AS scalar FROM session_part WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?)) AND type='tool' AND json_valid(data) ORDER BY message_id,ordinal`,
     ).all(ids.decode(sessionID), JSON.stringify(messageIDs));
     const result = rows.flatMap((r) =>
       extract(String(r.scalar), Number(r.ordinal), String(r.message_id))
     );
     const inline = sql.prepare(
-      `SELECT m.id,p.key,json_object('type',json_extract(p.value,'$.type'),'id',json_extract(p.value,'$.id'),'name',json_extract(p.value,'$.name'),'state',json_object('status',json_extract(p.value,'$.state.status'),'input',json_object('command',substr(json_extract(p.value,'$.state.input.command'),1,200)),'metadata',json_object('title',json_extract(p.value,'$.state.metadata.title'),'description',json_extract(p.value,'$.state.metadata.description'),'sessionID',json_extract(p.value,'$.state.metadata.sessionID'))),'time',json_object('created',json_extract(p.value,'$.time.created'),'completed',json_extract(p.value,'$.time.completed'))) AS scalar FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND json_extract(p.value,'$.type')='tool' ORDER BY m.seq,p.key`,
+      `SELECT m.id,p.key,${
+        toolScalarSQL("p.value")
+      } AS scalar FROM session_message m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p WHERE m.session_id=? AND m.id IN (SELECT value FROM json_each(?)) AND json_extract(p.value,'$.type')='tool' ORDER BY m.seq,p.key`,
     ).all(ids.decode(sessionID), JSON.stringify(messageIDs));
     result.push(
       ...inline.flatMap((r) =>

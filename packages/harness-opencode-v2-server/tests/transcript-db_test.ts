@@ -199,7 +199,7 @@ Deno.test("V2 helper summaries aggregate split and inline calls without acquirin
     assertEquals(rows, [{
       messageID: "msg_owner",
       toolCount: 301,
-      current: { name: "subagent", title: "Inspect", startedAt: 500 },
+      current: { name: "task", title: "Inspect", startedAt: 500 },
     }]);
     assertEquals(observed, ["helpers"]);
     assert(!JSON.stringify(rows).includes("private"));
