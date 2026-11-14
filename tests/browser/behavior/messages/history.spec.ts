@@ -83,7 +83,7 @@ test(
     // V1 owns its compaction marker as a boundary record (NT4); V2 keeps the
     // typed divider. Either way it is visible and never inside the prompt bubble.
     const compaction = v2
-      ? ".otk-compaction-divider"
+      ? '[data-native-record="opencode-v2/compaction"]'
       : '[data-native-record="opencode-v1/compaction"]';
     await expect(transcript.locator(compaction)).toBeVisible();
     await expect(transcript.locator(compaction)).toContainText(

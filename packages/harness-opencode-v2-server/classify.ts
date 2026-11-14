@@ -202,6 +202,39 @@ export function mapMessage(
           : {}),
       });
     }
+    if (raw.retry) {
+      parts.push({
+        kind: "external",
+        id: `${raw.id}:retry`,
+        name: "opencode-v2/active-retry",
+        source: nativeSource("active-retry", raw.retry),
+        activity: retryActivity(raw.retry, true),
+      });
+    }
+    const interrupted = /abort|interrupt/i.test(
+      text(record(raw.error).type) ?? "",
+    );
+    if (interrupted) {
+      parts.push({
+        kind: "external",
+        id: `${raw.id}:interrupted`,
+        name: "opencode-v2/interrupted",
+        source: nativeSource("interrupted", raw.error),
+        activity: {
+          kindLabel: "Interruption",
+          title: "Interrupted",
+          layout: "boundary",
+          category: "record",
+          tone: "normal",
+          body: markdown(errorText(raw.error)),
+          state: {
+            key: "interrupted",
+            label: "Interrupted",
+            facts: { active: false, terminal: true },
+          },
+        },
+      });
+    }
     const outputs = raw.content.flatMap((p) =>
       "time" in p && p.time?.completed !== undefined
         ? [millis(p.time.completed)]
@@ -229,7 +262,7 @@ export function mapMessage(
       replyTo: context.replyTo,
       cost: reported(raw.cost),
       tokens: tokens(raw.tokens),
-      interrupted: record(raw.error).type === "aborted",
+      interrupted,
       error: raw.error
         ? {
           kind: text(record(raw.error).type) ?? "native",
@@ -305,21 +338,135 @@ export function mapMessage(
     };
   }
   if (raw.type === "compaction") {
-    const summary = raw.status === "failed"
-      ? errorText(raw.error)
-      : raw.summary;
+    const failed = raw.status === "failed",
+      running = raw.status === "running",
+      error = failed ? record(raw.error) : {},
+      outcome = error.type === "aborted"
+        ? "cancelled"
+        : error.type === "compaction.interrupted"
+        ? "interrupted"
+        : failed
+        ? "failed"
+        : running
+        ? "running"
+        : "completed",
+      summary = failed ? errorText(raw.error) : raw.summary,
+      title = running
+        ? "Session compaction started"
+        : outcome === "cancelled"
+        ? "Session compaction cancelled"
+        : outcome === "interrupted"
+        ? "Session compaction interrupted"
+        : failed
+        ? "Session compaction failed"
+        : record(Reflect.get(raw, "native")).messages
+        ? "Session compacted by provider"
+        : "Session compacted",
+      t = !running ? record(Reflect.get(raw, "tokens")) : {},
+      cache = record(t.cache),
+      input = Number(t.input ?? 0) + Number(cache.read ?? 0) +
+        Number(cache.write ?? 0),
+      output = Number(t.output ?? 0) + Number(t.reasoning ?? 0),
+      count = new Intl.NumberFormat("en-US", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      });
+    const part = activityPart(raw, {
+      kindLabel: "Compaction",
+      layout: "boundary",
+      category: "compaction",
+      title: input + output > 0
+        ? `${title} - ${count.format(input)} in - ${count.format(output)} out`
+        : title,
+      tone: outcome === "failed" ? "error" : "normal",
+      // A failure's cause stays on the row; cancellation and interruption
+      // have no error card natively.
+      ...(outcome === "failed" && summary ? { detail: summary } : {}),
+      state: {
+        key: outcome,
+        label: outcome,
+        facts: { active: running, terminal: !running },
+      },
+      parameters: parameters({
+        status: raw.status,
+        reason: raw.reason,
+        model: Reflect.get(raw, "model"),
+        error: failed ? raw.error : undefined,
+        cost: Reflect.get(raw, "cost"),
+        tokens: Reflect.get(raw, "tokens"),
+      }),
+      ...(summary ? { body: markdown(summary) } : {}),
+    });
+    // A summary is message content; lifecycle/error bookkeeping is not.
+    if (!failed) {
+      part.content = true;
+      part.source = nativeSource("compaction", raw, raw.summary);
+    }
     return {
       ...common,
       role: "context",
-      parts: [
-        {
-          kind: "compaction",
-          id: `${raw.id}:compaction`,
-          status: raw.status,
-          source: common.source,
+      parts: [part],
+    };
+  }
+  if (
+    raw.type === "agent-switched" || raw.type === "model-switched" ||
+    raw.type === "location-switched"
+  ) {
+    const model = raw.type === "model-switched" ? raw.model : undefined,
+      previous = raw.type === "model-switched" ? raw.previous : undefined,
+      variantOnly = model && previous?.providerID === model.providerID &&
+        previous?.id === model.id;
+    return {
+      ...common,
+      role: "context",
+      parts: [activityPart(raw, {
+        kindLabel: "Switch",
+        layout: "boundary",
+        category: "record",
+        tone: "normal",
+        title: raw.type === "agent-switched"
+          ? `Switched agent to ${raw.agent}`
+          : raw.type === "location-switched"
+          ? `Moved to ${raw.location.directory}`
+          : variantOnly
+          ? `Switched variant to ${model?.variant || "Default"}`
+          : `Switched to ${model?.id}${
+            model?.variant ? ` - ${model.variant}` : ""
+          }`,
+        parameters: parameters({
+          previous: raw.previous,
+          ...(raw.type === "model-switched"
+            ? { model: raw.model }
+            : raw.type === "agent-switched"
+            ? { agent: raw.agent }
+            : {
+              location: raw.location,
+              projectID: raw.projectID,
+              subpath: raw.subpath,
+            }),
+        }),
+      })],
+    };
+  }
+  if (raw.type === "idle") {
+    return {
+      ...common,
+      role: "context",
+      parts: [activityPart(raw, {
+        kindLabel: "Execution",
+        title: `Execution ${raw.outcome}`,
+        detail: raw.error ? errorText(raw.error) : undefined,
+        layout: "row",
+        category: "record",
+        tone: raw.outcome === "failed" ? "error" : "normal",
+        state: {
+          key: raw.outcome,
+          label: raw.outcome,
+          facts: { active: false, terminal: true },
         },
-        ...(summary ? [prose(summary)] : []),
-      ],
+        parameters: parameters({ outcome: raw.outcome }),
+        ...(raw.error ? { body: markdown(errorText(raw.error)) } : {}),
+      })],
     };
   }
   if (raw.type === "system") {
@@ -434,18 +581,17 @@ export function mapMessage(
       })],
     };
   }
-  // Lifecycle wording belongs to NT3. Preserve every persisted record now,
-  // including future tags, through the neutral visible fallback.
+  // Future native tags stay visible through the same plugin-owned fallback.
   return {
     ...common,
     role: "context",
     parts: [activityPart(raw, {
-      kindLabel: raw.type,
-      title: raw.type,
+      kindLabel: text(record(raw).type) ?? "Native record",
+      title: text(record(raw).type) ?? "Native record",
       layout: "row",
       category: "record",
       tone: "normal",
-      parameters: parameters(record(raw)),
+      parameters: parameters({ type: record(raw).type }),
     })],
   };
 }
@@ -502,12 +648,15 @@ export function deriveInboxMessage(
     text(payload.text),
   );
   message.parts = message.parts.map((part) => {
-    if (part.kind === "compaction") return { ...part, status: "queued" };
     if (part.kind !== "external" || !part.activity) return part;
     return {
       ...part,
+      ...(type === "compaction" ? { content: undefined } : {}),
       activity: {
         ...part.activity,
+        ...(type === "compaction"
+          ? { title: "Session compaction queued" }
+          : {}),
         ...(type === "move"
           ? {
             title: `Move to ${
@@ -539,6 +688,59 @@ function parameters(value: Record<string, unknown>): ActivityParameter[] {
       value: typeof value === "string" ? value : JSON.stringify(value),
     }]
   );
+}
+function retryActivity(
+  retry: Record<string, unknown>,
+  active: boolean,
+): Activity {
+  return {
+    kindLabel: "Retry",
+    title: `${
+      active ? "Retrying" : "Retry scheduled"
+    } - attempt ${retry.attempt}`,
+    detail: errorText(retry.error),
+    layout: "row",
+    category: "record",
+    tone: "error",
+    state: {
+      key: active ? "retrying" : "scheduled",
+      label: active ? "Retrying" : "Scheduled",
+      facts: { active, terminal: !active },
+    },
+    parameters: parameters({
+      attempt: retry.attempt,
+      at: retry.at,
+      error: retry.error,
+    }),
+    body: markdown(errorText(retry.error)),
+  };
+}
+/** Events native does not retain as messages are owned and stored by this plugin. */
+export function lifecycleRecord(event: V2Event, sessionID: string): Message {
+  const id = `record:${event.id}`,
+    retry = event.type === "session.retry.scheduled",
+    source = nativeSource(event.type, event);
+  return {
+    id,
+    sessionID,
+    role: "context",
+    time: { created: event.created ?? Date.now() },
+    source,
+    parts: [{
+      kind: "external",
+      id: `${id}:record`,
+      name: retry ? "opencode-v2/retry" : `opencode-v2/${event.type}`,
+      source,
+      activity: retry ? retryActivity(event.data, false) : {
+        kindLabel: event.type,
+        title: event.type,
+        layout: "row",
+        category: "record",
+        tone: "normal",
+        parameters: parameters({ event: event.type }),
+      },
+    }],
+  };
 }
 function resultState(key: string): ActivityState {
   const terminal = [

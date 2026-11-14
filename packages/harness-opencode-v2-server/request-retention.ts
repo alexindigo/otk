@@ -4,7 +4,7 @@ import type { Message } from "@otk/protocol";
 
 /**
  * Plugin position of an ephemeral native observation (form/permission
- * settlement). Native durable messages are ordered by their session
+ * settlement, retry or future lifecycle event). Native durable messages are ordered by their session
  * aggregate's `seq`; ephemeral events have none. `after` is the last durable
  * sequence of the session aggregate delivered before the observation, so the
  * observation sits strictly between native `after` and `after + 1`, ordered by

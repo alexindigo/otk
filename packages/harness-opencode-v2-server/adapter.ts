@@ -31,6 +31,7 @@ import { V2SessionLists } from "./session-lists.ts";
 import { V2Catalogs } from "./catalogs.ts";
 import { mapAgents } from "./catalog-readers.ts";
 import { Transcript } from "./transcript.ts";
+import { errorText } from "./classify.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
 import { readSessionActivity } from "./recency.ts";
 import { pendingAttention } from "./attention.ts";
@@ -1255,7 +1256,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     ) {
       entry.retry = {
         attempt: Number(event.data.attempt),
-        message: "Retrying execution.",
+        message: errorText(event.data.error),
         next: event.data.at,
       };
     }

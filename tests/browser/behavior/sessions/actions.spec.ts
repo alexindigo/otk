@@ -129,7 +129,7 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
   await expect(
     page.locator(compaction.queued).filter({
-      hasText: new RegExp(`^${compaction.running}$`),
+      hasText: new RegExp(`^${compaction.queuedLabel}$`),
     }),
   ).toBeVisible();
   // One progress per active turn, even with the next compaction queued.
@@ -161,9 +161,11 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
             : "Compacting…",
       ),
   ).toEqual(["Session compacted", "Compacting…"]);
+  // Every native record counts, including V2 lifecycle records the
+  // V1-shaped fixture facade omits.
   await expect(page.locator(".otk-message-flow")).toHaveAttribute(
     "data-message-count",
-    String(history.length + queued.length),
+    String((await nativeHistoryCount(state, s.id)) + queued.length),
   );
   expect((await state.observe<{ requests: unknown[] }>()).requests.length).toBe(
     requests,
@@ -182,9 +184,12 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
       (es, completed) =>
         es.length > 0 &&
         es.every((e) =>
-          e.textContent === completed && !e.closest(".otk-user-bubble")
+          new RegExp(completed).test(e.textContent ?? "") &&
+          !e.closest(".otk-user-bubble")
         ),
-      compaction.completed,
+      typeof compaction.completed === "string"
+        ? `^${compaction.completed}$`
+        : compaction.completed.source,
     )
   ).toBe(true);
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
@@ -289,7 +294,7 @@ test(
     expect(texts(originalHistory)).toEqual(["First prompt", "Second prompt"]);
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",
-      String(originalHistory.length),
+      String(await nativeHistoryCount(state, original.id)),
     );
     await page.locator("textarea[name=prompt]").fill("Keep original draft");
     await sessionContext(

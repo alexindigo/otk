@@ -13,7 +13,7 @@ test.use({ profile: "revert-native" });
 test(
   "sessions.native-compaction-lifecycle-survives-prompt-independent-context",
   {
-    tag: ["@sessions", "@composer"],
+    tag: ["@sessions", "@composer", "@messages"],
   },
   async ({ isolatedState: state, page }, info) => {
     test.setTimeout(120_000);
@@ -80,13 +80,17 @@ test(
         `[data-session="${session.id}"]`,
         "session.compact",
       );
-      await expect(divider.last()).toHaveText("Compaction failed");
+      await expect(divider.last()).toHaveText(
+        /^Session compaction failed(?: - .* in - .* out)?$/,
+      );
       await expect(page.locator(".otk-messages")).toContainText(
         "Compaction summary did not match the required template",
       );
       await capture("failed");
       await page.reload();
-      await expect(divider.last()).toHaveText("Compaction failed");
+      await expect(divider.last()).toHaveText(
+        /^Session compaction failed(?: - .* in - .* out)?$/,
+      );
     }
   },
 );

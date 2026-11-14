@@ -112,6 +112,57 @@ export async function noticesScenario() {
       text: "Goal continuation",
       time: { created: 2700 },
     },
+    {
+      id: "msg_idle",
+      type: "idle",
+      outcome: "failed",
+      error: { type: "provider.quota", message: limit },
+      time: { created: 2750 },
+    },
+    {
+      id: "msg_model",
+      type: "model-switched",
+      model: { providerID: "fake", id: "scripted", variant: "high" },
+      previous: { providerID: "fake", id: "scripted" },
+      time: { created: 2760 },
+    },
+    {
+      id: "msg_move",
+      type: "location-switched",
+      location: { directory: "/project/destination" },
+      previous: { location: { directory: "/project" } },
+      time: { created: 2770 },
+    },
+    {
+      id: "msg_compaction",
+      type: "compaction",
+      status: "completed",
+      reason: "manual",
+      summary: "**Compaction summary**",
+      tokens: {
+        input: 400000,
+        output: 2800,
+        reasoning: 100,
+        cache: { read: 39000, write: 700 },
+      },
+      time: { created: 2780 },
+    },
+    {
+      id: "msg_retry",
+      type: "assistant",
+      agent: "build",
+      model: { providerID: "fake", id: "scripted" },
+      content: [],
+      retry: {
+        attempt: 2,
+        at: Date.now() + 30000,
+        error: {
+          type: "provider",
+          message: "Provider temporarily unavailable",
+        },
+      },
+      time: { created: 2790 },
+    },
   ];
   const messages = raw.map((m, order) =>
     mapMessage(m, sessionID, { order: order + 1 })
@@ -146,6 +197,18 @@ export async function noticesScenario() {
     type: "form.cancelled",
     created: 2800,
     data: { id: "frm_fixture", sessionID: "ses_fixture" },
+  });
+  await transcript.event({
+    type: "session.retry.scheduled",
+    id: "evt_retry",
+    created: 2790,
+    data: {
+      sessionID: "ses_fixture",
+      assistantMessageID: "msg_retry",
+      attempt: 2,
+      at: 30000,
+      error: { type: "provider", message: "Provider temporarily unavailable" },
+    },
   });
   await transcript.stop();
   const f = await inboxBrowserFixture(root, [], {
