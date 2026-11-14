@@ -2559,15 +2559,15 @@ export class OpencodeV1Adapter implements Harness {
       }
       case "message.part.delta": {
         const id = String(p.partID);
-        const raw = this.#records.delta(
+        const changed = this.#records.delta(
           ids.decode(sessionID),
           String(p.messageID),
           id,
           String(p.field),
           String(p.delta),
         );
-        if (raw) {
-          const record = this.#records.get(raw.sessionID, raw.messageID)!;
+        if (changed) {
+          const { message: record, part: raw } = changed;
           if (record.info.role === "user" || record.info.summary) {
             content({
               op: "message.upsert",
