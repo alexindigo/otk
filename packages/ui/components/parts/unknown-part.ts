@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
 import type { PartPresentation } from "../../registries/renderers.ts";
+import { sourcePreview } from "./native-source-preview.ts";
 
 /** Copy carries only producer-declared content; source stays inspection-only.
  * Row records flow with a reply's work; boundaries, outgoing context and
@@ -24,20 +25,20 @@ export function unknownPartPresentation(part: Part): PartPresentation {
   };
 }
 
-/** Inspection is bounded independently of whether an older producer bounded data. */
-const PREVIEW_BYTES = 16 * 1024;
+/** A producer that predates source references still shows its bounded data. */
 export function unknownPartPreview(part: Part) {
   const source = "source" in part ? part.source : undefined;
+  if (source?.ref !== undefined) return;
   const text = source?.preview ??
     (part.kind === "external" ? part.data : undefined);
   if (text === undefined) return;
-  const encoded = new TextEncoder().encode(text);
-  let end = Math.min(encoded.length, PREVIEW_BYTES);
-  // Never turn a sliced UTF-8 codepoint into a replacement character.
-  while (end < encoded.length && (encoded[end] & 0xc0) === 0x80) end--;
-  return {
-    text: new TextDecoder().decode(encoded.subarray(0, end)),
-    bytes: source?.bytes ?? encoded.length,
-    truncated: !!source?.truncated || end < encoded.length,
-  };
+  return sourcePreview({
+    preview: text,
+    bytes: source?.bytes ?? new TextEncoder().encode(text).length,
+    truncated: !!source?.truncated,
+  });
+}
+/** The plugin-owned reference a Source fold reads when it opens. */
+export function unknownPartSource(part: Part): string | undefined {
+  return "source" in part ? part.source?.ref : undefined;
 }

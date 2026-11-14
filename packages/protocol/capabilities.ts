@@ -26,6 +26,7 @@ import {
 import type { ModelsCapabilities } from "./capabilities/models.ts";
 import type { SessionActionsCapabilities } from "./capabilities/session-actions.ts";
 import type { UsageCapabilities } from "./capabilities/usage.ts";
+import type { SourceCapabilities } from "./capabilities/source.ts";
 import type { RestoreCapabilities } from "./capabilities/restore.ts";
 import type { DigestsCapabilities } from "./capabilities/digests.ts";
 import type { CatalogsCapabilities } from "./catalogs.ts";
@@ -59,6 +60,7 @@ export interface CapabilityContracts
     ModelsCapabilities,
     SessionActionsCapabilities,
     UsageCapabilities,
+    SourceCapabilities,
     ResourcesCapabilities,
     PermissionsCapabilities,
     QuestionsCapabilities,
@@ -107,6 +109,7 @@ export type { AgentsCapability } from "./capabilities/agents.ts";
 export type { ModelsCapability } from "./capabilities/models.ts";
 export type { DigestsCapability, DigestScope } from "./capabilities/digests.ts";
 export type { UsageCapability } from "./capabilities/usage.ts";
+export type { SourceCapability } from "./capabilities/source.ts";
 export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";
 export type { QuestionsCapability } from "./capabilities/questions.ts";

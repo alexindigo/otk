@@ -484,7 +484,7 @@ Deno.test("catalog demand: published kind failure remains the readiness authorit
     assertEquals(failure, undefined);
     assertEquals(
       (lease.view("agents").state.error || undefined)?.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
     assertEquals(lease.view("agents").state.value?.[0].name, "kept");
   } finally {

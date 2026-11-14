@@ -11,7 +11,7 @@ Deno.test("failure presenter derives the complete contract and optional enrichme
   };
   assertEquals(
     presenter.present(failure).failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   assertEquals(
     new RequestFailure(failure).message,

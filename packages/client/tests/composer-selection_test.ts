@@ -241,7 +241,7 @@ Deno.test("composer owns initial readiness, refresh coalescing, errors and last 
   await failed;
   assertEquals(
     f.owner.state.models.error && f.owner.state.models.error.failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   assertEquals(f.owner.state.models.value, catalog);
   await f.owner.ready();

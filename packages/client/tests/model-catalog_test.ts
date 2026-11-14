@@ -58,7 +58,7 @@ Deno.test("shared model catalog coalesces consumers, follows connection identity
     await failed;
     assertEquals(
       owner.state.error && owner.state.error.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
     assertStrictEquals(owner.state.value, catalog);
     await owner.ready();

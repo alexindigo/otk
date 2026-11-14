@@ -3,6 +3,9 @@ import { assert, assertEquals } from "@std/assert";
 import { Backoff, Watchdog } from "../mod.ts";
 import { consumeEvents } from "../mod.ts";
 import { mapDiffs, mapMessage, mapPart, mapPermission } from "../mod.ts";
+import { derivePart } from "../map.ts";
+import type { RawPart } from "../types.ts";
+import { reachable } from "./source-support.ts";
 
 Deno.test("watchdog detects silence and backoff resets on connected", async () => {
   let fired = 0;
@@ -89,7 +92,7 @@ Deno.test("mapping retains native source, handles all part kinds and interrupted
     sessionID: "ses_root",
     metadata: { private: "secret" },
   };
-  const parts = [
+  const raws = [
     "text",
     "reasoning",
     "file",
@@ -98,18 +101,17 @@ Deno.test("mapping retains native source, handles all part kinds and interrupted
     "step-finish",
     "compaction",
     "snapshot",
-  ].map((type) =>
-    mapPart({
-      ...base,
-      type,
-      text: "# Content",
-      time: { start: 1 },
-      mime: "text/plain",
-      name: "agent",
-      filename: "fixture",
-      cost: 1,
-    })
-  );
+  ].map((type): RawPart => ({
+    ...base,
+    type,
+    text: "# Content",
+    time: { start: 1 },
+    mime: "text/plain",
+    name: "agent",
+    filename: "fixture",
+    cost: 1,
+  }));
+  const parts = raws.map(mapPart);
   assertEquals(parts.map((p) => p.kind), [
     "text",
     "reasoning",
@@ -132,8 +134,10 @@ Deno.test("mapping retains native source, handles all part kinds and interrupted
   });
   assert(message.role === "assistant" && message.interrupted);
   assert(
-    parts.every((part) =>
-      "source" in part && part.source?.preview.includes('"private":"secret"')
+    parts.every((part, i) =>
+      reachable(part, derivePart(raws[i])).preview.includes(
+        '"private":"secret"',
+      )
     ),
   );
   const bash = mapPart({

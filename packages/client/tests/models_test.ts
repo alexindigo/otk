@@ -291,7 +291,7 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     assertEquals(session.models?.state.value, old);
     assertEquals(
       session.models?.state.error && session.models.state.error.failure?.reason,
-      "No publishable failure reason is available",
+      "OTK has no further details",
     );
     await settle();
     assertEquals(session.state.error, undefined);

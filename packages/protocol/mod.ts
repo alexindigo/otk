@@ -9,6 +9,7 @@ export * from "./turn-timing.ts";
 export * from "./capabilities.ts";
 export * from "./approvals.ts";
 export * from "./content.ts";
+export * from "./native-source.ts";
 export * from "./errors.ts";
 export * from "./frecency.ts";
 export * from "./history.ts";

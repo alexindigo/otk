@@ -27,7 +27,7 @@ Deno.test("rename owns cancellation, unchanged titles, retry and stale completio
   await owner.commit(" New ");
   assertEquals(
     owner.state.error && owner.state.error.failure?.reason,
-    "No publishable failure reason is available",
+    "OTK has no further details",
   );
   assertEquals(
     owner.state.error && owner.state.error.failure?.target.label,

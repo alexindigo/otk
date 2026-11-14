@@ -9,6 +9,7 @@ import { resources } from "../support/resources.ts";
 import {
   isRealPrompt,
   type MessagePage,
+  type NativeSourceView,
   type PermissionRequest,
   type QuestionRequest,
 } from "@otk/protocol";
@@ -506,8 +507,14 @@ test("OC1R4 stock V1 retry action remains historical after interruption and OTK 
       sessionID: target.id,
     });
     assertEquals(after.items.find((row) => row.id === record.id), record);
+    // The loaded record keeps only its reference; the Source read is exact.
+    assertEquals(record.source?.preview, undefined);
+    const exact = await client.rpc<NativeSourceView>("source.get", {
+      sessionID: target.id,
+      ref: record.source!.ref!,
+    });
     assertEquals(
-      JSON.parse(record.source!.payload!).data.action,
+      JSON.parse(exact.preview).data.action,
       status[target.nativeID].action,
     );
     assert(
@@ -572,8 +579,12 @@ test("OC1R5 request metadata first observed in the native inventory survives set
       (page) => page.items.some((row) => row.id === recordID),
     );
     const record = before.items.find((row) => row.id === recordID)!;
+    const exact = await client.rpc<NativeSourceView>("source.get", {
+      sessionID: target.id,
+      ref: record.source!.ref!,
+    });
     assert(
-      record.source!.payload!.includes(question),
+      exact.preview.includes(question),
       "startup request facts must remain with their independent outcome",
     );
     await client.close();

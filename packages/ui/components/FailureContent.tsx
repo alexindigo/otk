@@ -23,6 +23,11 @@ export default function FailureContent(
       <Show when={props.failure.count > 1}>
         <span>{props.failure.count} identical failures</span>
       </Show>
+      <Show when={props.failure.generic}>
+        <span class="otk-failure-details">
+          Details: diagnostic ID {props.failure.value.diagnosticID}
+        </span>
+      </Show>
     </span>
   );
 }

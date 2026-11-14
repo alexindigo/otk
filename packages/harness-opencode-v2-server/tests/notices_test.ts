@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { referenced } from "../native-source.ts";
 import { assert, assertEquals } from "@std/assert";
 import {
   type ContentOp,
@@ -143,8 +144,8 @@ Deno.test("V2 System, skill, outgoing continuations and unknown records are visi
     time: { created: 1 },
   });
   assertEquals(skill.activity?.title, "Skill Review");
-  assert(skill.source?.preview.includes("review-id"));
-  assert(skill.source?.preview.includes("retained"));
+  assert(skill.source?.preview?.includes("review-id"));
+  assert(skill.source?.preview?.includes("retained"));
   for (
     const text of [
       "",
@@ -174,7 +175,7 @@ Deno.test("V2 System, skill, outgoing continuations and unknown records are visi
     { order: 1 },
   );
   assert(unknown?.parts[0].kind === "external");
-  assert(unknown.parts[0].source?.preview.includes('"extra":true'));
+  assert(unknown.parts[0].source?.preview?.includes('"extra":true'));
 });
 Deno.test("V2 shell rows keep process failure distinct from native completion", () => {
   for (
@@ -296,10 +297,13 @@ for (
       assert(upsert?.op === "message.upsert");
       assertEquals(
         upsert.message,
-        mapMessage(
-          { ...raw, id: "msg_notice", time: { created: 1 } } as NativeMessage,
-          sid,
-          { order: 1 },
+        referenced(
+          mapMessage(
+            { ...raw, id: "msg_notice", time: { created: 1 } } as NativeMessage,
+            sid,
+            { order: 1 },
+          ),
+          "msg_notice",
         ),
       );
     } finally {
@@ -479,10 +483,10 @@ Deno.test("V2 assistant and typed-part source retains finish, clocks, retry, var
   };
   const message = mapMessage(raw, sid, { order: 1 });
   assertEquals(message.source?.payload, "**Exact answer**\n");
-  assertEquals(JSON.parse(message.source!.preview), raw);
+  assertEquals(JSON.parse(message.source!.preview!), raw);
   const part = message.parts.find((p) => p.kind === "reasoning");
   assert(part?.source);
-  assertEquals(JSON.parse(part.source.preview), raw.content[1]);
+  assertEquals(JSON.parse(part.source.preview!), raw.content[1]);
   assertEquals(part.source.payload, "Reason");
 });
 Deno.test("V2 completed result failure is independent of lifecycle and nested calls stay ordered", () => {

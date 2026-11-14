@@ -198,6 +198,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "models",
       "resources",
       "usage",
+      "source",
       "permissions",
       "questions",
       "forms",
@@ -237,6 +238,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       Core.registerAgents,
       Core.registerModels,
       Core.registerUsage,
+      Core.registerSource,
       Core.registerResources,
       Core.registerPermissions,
       Core.registerQuestions,
@@ -288,6 +290,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "resources.list",
     "find.files",
     "usage.get",
+    "source.get",
     "history.list",
     "history.attachments",
     "catalogs.watch",
@@ -334,7 +337,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 27, // Project defaults share one cancellable read; catalogs retain their demand lane.
+      read: 28, // Project defaults share one cancellable read; catalogs retain their demand lane.
       native: 19,
       local: 10,
       "prepared-local": 6,
