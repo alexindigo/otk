@@ -685,6 +685,7 @@ async function start(
           () =>
             sqliteRetry(
               async () => {
+                const admittedConnection = connection;
                 try {
                   // Accepted deletion retires queued work as well as source
                   // metadata. A tombstone cannot require native I/O or retry.
@@ -698,15 +699,18 @@ async function start(
                       [job.sessionID],
                       signal,
                     );
+                    if (connection !== admittedConnection) return "reconcile";
                     await admitCatalog(entries, signal, {
                       invalidate: false,
                       helpers: false,
                     });
+                    if (connection !== admittedConnection) return "reconcile";
                     inventoryComplete = Math.max(inventoryComplete, admitted);
                   }
                   const start = performance.now();
                   const work = turn.workms;
                   const cursor = await sink!.step(job, budget, signal, turn);
+                  if (connection !== admittedConnection) return "reconcile";
                   nativeUnavailable = (job.projection === "helper"
                     ? store!.helpers([job.sessionID])[0]?.state
                     : store!.summary([job.sessionID])[0]?.state) ===
@@ -732,6 +736,7 @@ async function start(
                   return cursor;
                 } catch (error) {
                   signal.throwIfAborted();
+                  if (connection !== admittedConnection) return "reconcile";
                   if (sqliteBusy(error)) throw error;
                   const row = store!.summary([job.sessionID])[0];
                   // Deletion may commit while this job is waiting for native I/O.

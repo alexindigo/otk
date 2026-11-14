@@ -1247,19 +1247,22 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     signal: AbortSignal,
     execution?: DigestExecution,
   ): Promise<string | undefined> {
+    const connection = this.#connection;
     if (job.projection === "helper") {
       return await this.#helperStep(job, budget, signal, execution);
     }
     const raw = await this.#ensure(job.sessionID, signal),
       entry = metadata(raw),
       source = this.#source;
+    if (connection !== this.#connection) return "reconcile";
     // The durable scan is the fence; scan creation/reset joins the step's one
     // transaction instead of committing before native reads.
     const stored = this.#scan(job.sessionID);
     let scan: Scan | undefined = stored, persist = false;
     // Fine keys belong to the admitted job, not durable authority. Coalescing or
     // restart can retire them; an exhausted cursor cannot then certify refresh.
-    if (scan?.targeted && !job.messages?.length) {
+    // Selected replacement requires SQL, never an unrelated opaque API page.
+    if (scan?.targeted && (!job.messages?.length || !this.#native)) {
       this.#sessionProofs.delete(job.sessionID);
       scan = { ...scan, revision: scan.revision + 1, source: null };
     }
@@ -1315,6 +1318,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     const outcome = this.storage.transaction(() => {
       const current = this.#scan(job.sessionID);
       if (
+        connection !== this.#connection ||
         source !== this.#source ||
         (["generation", "revision", "complete", "exhausted", "source"] as const)
           .some((key) => current?.[key] !== stored?.[key]) ||
@@ -1368,15 +1372,26 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       : !!scan.exhausted ||
         (native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
     const turns = new Set<string>();
+    const boundaryTurn = (seq: number) => {
+      const row = this.storage.sql.prepare(
+        "SELECT coalesce(turn_id,message_id) AS turn FROM opcv2_transcript_header WHERE session_id=? AND seq<? AND (turn_id IS NOT NULL OR type='user') ORDER BY seq DESC LIMIT 1",
+      ).get(job.sessionID, seq);
+      if (row?.turn) turns.add(String(row.turn));
+    };
     const put = this.storage.sql.prepare(
       "INSERT INTO opcv2_transcript_header(session_id,message_id,seq,type,turn_id,scalar,generation) VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET seq=excluded.seq,type=excluded.type,turn_id=excluded.turn_id,scalar=excluded.scalar,generation=excluded.generation",
     );
     if (selected) {
       for (
         const old of this.storage.sql.prepare(
-          "SELECT turn_id FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+          "SELECT turn_id,type,seq FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
         ).all(job.sessionID, JSON.stringify(selected))
-      ) if (old.turn_id) turns.add(String(old.turn_id));
+      ) {
+        if (old.turn_id) turns.add(String(old.turn_id));
+        if (old.type === "idle" || old.type === "user") {
+          boundaryTurn(Number(old.seq));
+        }
+      }
       this.storage.sql.prepare(
         "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
       ).run(job.sessionID, JSON.stringify(selected));
@@ -1392,6 +1407,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         JSON.stringify(row),
         admitted.generation,
       );
+    }
+    if (selected) {
+      for (const row of rows) {
+        if (row.type === "idle" || row.type === "user") boundaryTurn(row.seq);
+      }
     }
     if (!native) {
       for (const row of rows) {
@@ -1769,8 +1789,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     signal: AbortSignal,
     execution?: DigestExecution,
   ): Promise<string | undefined> {
+    const connection = this.#connection;
     const raw = await this.#ensure(job.sessionID, signal, false),
       source = this.#source;
+    if (connection !== this.#connection) return "reconcile";
     let scan = this.#helpers.get(job.sessionID);
     if (!scan || scan.source !== source) {
       const previous = Number(

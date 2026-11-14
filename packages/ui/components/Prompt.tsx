@@ -187,12 +187,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
+  const submitInput = () => {
+    if (primary.permitted()) return intent.submit(submit, performSend);
+  };
   const primary = createPrimaryAction({
     label: () => "Send",
     unavailable,
     pending,
     pendingReason: "Sending",
-    run: () => intent.submit(submit, performSend),
+    run: submitInput,
   });
   const primaryState = bindPrimaryAction(primary);
   const send = ownedCommand(ports, {
@@ -217,14 +220,16 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       },
     ) => props.onSubmit(args.parts, args.mode, args.selection),
   });
-  const submitCommand = ownedCommand(ports, {
+  ownedCommand(ports, {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
     // While the composer can send, Enter stays the Send key: the primary owner
     // refuses an empty, blocked or pending draft instead of the key editing it.
     enabled: composerReady,
-    run: () => primary.invoke(),
+    // Input commands can prepare while a captured send is still settling.
+    // The submission intent, not this input route, admits the next effect.
+    run: submitInput,
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -348,7 +353,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        void submitCommand().catch(ctx.fail);
+        void primary.invoke().catch(ctx.fail);
       }}
     >
       <Show when={!session?.feedback && (pending() || feedback())}>
@@ -434,7 +439,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             state={primaryState()}
             class="otk-primary otk-send-button"
             title={submitTitle()}
-            onInvoke={() => void submitCommand().catch(ctx.fail)}
+            onInvoke={() => void primary.invoke().catch(ctx.fail)}
           >
             <SendIcon />
           </PrimaryAction>
