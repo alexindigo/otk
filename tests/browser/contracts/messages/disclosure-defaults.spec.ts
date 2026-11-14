@@ -84,7 +84,7 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`messages.disclosure-settings-theme-${theme}`, {
     tag: ["@messages", "@menus", "@contracts"],
-  }, async ({ isolatedState: state, page }) => {
+  }, async ({ isolatedState: state, page }, info) => {
     await state.product("prefs.set", { key: "theme", value: theme });
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto(state.url);
@@ -118,24 +118,27 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     }
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
     await page.evaluate(() => document.fonts.ready);
-    const { mkdir } = await import("node:fs/promises");
-    const out = "/home/tester/otk/.test-state/artifacts/ux1-after";
-    await mkdir(out, { recursive: true });
     // A top-of-scroll capture matches the unchanged baseline's recipe. The
     // reader-focused captures below deliberately reveal the new controls.
-    await page.screenshot({ path: `${out}/${theme}-top.png`, fullPage: true });
+    await page.screenshot({
+      path: info.outputPath(`${theme}-top.png`),
+      fullPage: true,
+    });
     const compaction = settings.locator("input[name=expandCompaction]");
     await compaction.focus();
     await expect(compaction).not.toBeChecked();
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({
-      path: `${out}/${theme}-defaults.png`,
+      path: info.outputPath(`${theme}-defaults.png`),
       fullPage: true,
     });
     await compaction.click();
     await expect(compaction).toBeChecked();
     await settings.locator("input[name=expandWork]").hover();
-    await page.screenshot({ path: `${out}/${theme}-on.png`, fullPage: true });
+    await page.screenshot({
+      path: info.outputPath(`${theme}-on.png`),
+      fullPage: true,
+    });
     await page.setViewportSize({ width: 600, height: 800 });
     await settings.scrollIntoViewIfNeeded();
     await expect.poll(() =>

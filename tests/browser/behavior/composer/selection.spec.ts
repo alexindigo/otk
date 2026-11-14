@@ -41,6 +41,50 @@ const requests = async (state: TestState) =>
 
 test.describe("native picker choices", () => {
   test.use({ profile: "composer-pickers" });
+  test("composer.picker-focused-option-enter-follows-candidate", {
+    tag: ["@composer", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Picker candidate keyboard ownership",
+    });
+    const frames = await wire(page);
+    await openSession(state, page, session.id);
+    await expect(page.locator(".otk-composer-model-name")).toHaveText(
+      "scripted",
+    );
+    await pick(page, "model", JSON.stringify(["fake2", "scripted"]));
+    await openPicker(page, "variant");
+    const first = page.locator(
+      '.otk-variant-picker [data-picker-key=""] .otk-picker-option',
+    );
+    await first.focus();
+    await first.press("ArrowDown");
+    await expect(first).toBeFocused();
+    await expect(page.locator('.otk-variant-picker [data-picker-key="low"]'))
+      .toHaveClass(/is-highlighted/);
+    await first.press("Enter");
+    await expect(page.locator(".otk-variant-picker > button > span"))
+      .toHaveText("Low");
+    await expect(prompt(page)).toBeFocused();
+    await queue(state, "Candidate selected.");
+    await prompt(page).fill("Use the highlighted variant");
+    await prompt(page).press("Enter");
+    await reply(state, page, session.id, "Candidate selected.");
+    const sent = frames.sent.filter(({ frame }) =>
+      frame.method === "session.prompt"
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0].frame.params?.variant).toBe("low");
+    expect(
+      (await messages(state, session.id)).find((row) =>
+        row.info.role === "user"
+      )?.info.model,
+    ).toMatchObject({
+      providerID: "fake2",
+      modelID: "scripted",
+      variant: "low",
+    });
+  });
   test("composer.pickers-native-selection-favourites-keys-slash-shell", {
     tag: ["@composer", "@isolated"],
   }, async ({ isolatedState: state, page }) => {

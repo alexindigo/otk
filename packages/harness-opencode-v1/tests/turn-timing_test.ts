@@ -145,3 +145,27 @@ Deno.test("V1 retry without a resumed request clock does not count the retry pau
     reason: "incomplete-evidence",
   });
 });
+
+for (const type of ["text", "reasoning"]) {
+  Deno.test(`V1 open ${type} cannot establish complete terminal working time`, () => {
+    for (const terminal of [true, false]) {
+      const owner = new TurnTimingAccumulator();
+      owner.add(timingEvidence({
+        time: { created: 1000, ...(terminal ? { completed: 3000 } : {}) },
+        ...(terminal ? { finish: "stop" } : {}),
+      }, [{ type: "text", start: 1000, end: 1200 }, { type, start: 1300 }]));
+      assertEquals(
+        owner.result(),
+        terminal
+          ? {
+            state: "unknown",
+            start: 1000,
+            end: 3000,
+            terminal: true,
+            reason: "incomplete-evidence",
+          }
+          : { state: "active", start: 1000, workingMs: 200 },
+      );
+    }
+  });
+}
