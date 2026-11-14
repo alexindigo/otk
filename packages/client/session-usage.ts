@@ -186,14 +186,19 @@ export function createSessionUsage(
       ...resource.value,
       clock: resource.clock ?? resource.value.clock,
       calls,
-      summary: resource.ledger.summary(resource.target.turnID) ??
-        new UsageLedger(
-          resource.target.sessionID,
-          [],
-          resource.value.aggregation,
-        ).detail(
-          resource.target.turnID,
-        ).summary,
+      summary: {
+        ...(resource.ledger.summary(resource.target.turnID) ??
+          new UsageLedger(
+            resource.target.sessionID,
+            [],
+            resource.value.aggregation,
+          ).detail(
+            resource.target.turnID,
+          ).summary),
+        ...(resource.value.summary.timing
+          ? { timing: resource.value.summary.timing }
+          : {}),
+      },
     };
   };
   const remove = (key: string) => {

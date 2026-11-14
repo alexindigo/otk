@@ -177,7 +177,7 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   expect(await foot.evaluate((row) => row.children[7].textContent)).toBe(
     "$1.02",
   );
-  await expect(page.locator(".otk-turn-time")).toHaveText("102.0s");
+  await expect(page.locator(".otk-turn-time")).toHaveText("Worked for 102.0s");
   await page.locator(".otk-usage-scroll").hover();
   await page.mouse.wheel(0, 5000);
   await expect.poll(() =>

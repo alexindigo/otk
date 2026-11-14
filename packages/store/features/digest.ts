@@ -11,5 +11,8 @@ export const digestMigrations: FeatureMigrations = {
   }, {
     version: 3,
     sql: new URL("./migrations/digest/003.sql", import.meta.url),
+  }, {
+    version: 4,
+    sql: new URL("./migrations/digest/004.sql", import.meta.url),
   }],
 };

@@ -155,6 +155,55 @@ async function fixture(disk = false) {
   };
 }
 
+Deno.test("V2 covered turn and opened detail use one working-time result across resumed gaps", async () => {
+  const f = await fixture();
+  try {
+    const later = 1000 + 10 * 86400000;
+    f.seed("u", 1, "user");
+    f.seed("a1", 1000, "assistant", {
+      tokens: zero,
+      time: { created: 1000, streamed: 1500, completed: 1500 },
+    });
+    f.seed("a2", later, "assistant", {
+      tokens: zero,
+      time: { created: later, streamed: later + 500, completed: later + 500 },
+    });
+    f.seed("idle", later + 1000, "idle");
+    await f.scan();
+    const timing = derivedValue(f.turns.u)?.timing;
+    assertEquals(timing, {
+      state: "known",
+      start: 1000,
+      end: later + 500,
+      workingMs: 1000,
+    });
+    const detail = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(detail.summary.timing, timing);
+    assertEquals(
+      detail.calls.map((call) =>
+        call.timing?.state === "known" ? call.timing.workingMs : null
+      ),
+      [500, 500],
+    );
+    f.seed("a1", 1000, "assistant", {
+      tokens: zero,
+      time: { created: 1000, streamed: 1500 },
+    });
+    f.sink.invalidate(id, 1);
+    await f.scan();
+    assertEquals(derivedValue(f.turns.u)?.timing, {
+      state: "unknown",
+      start: 1000,
+      terminal: true,
+      reason: "missing-end",
+    });
+    const lost = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(lost.calls[0].timing?.state, "unknown");
+  } finally {
+    await f.close();
+  }
+});
+
 Deno.test("V2 retains covered results while rebuilding and retires removed turns after the sweep", async () => {
   const f = await fixture();
   try {

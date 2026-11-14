@@ -749,8 +749,9 @@ they introduce no operator flag or public debug RPC.
 
 The worker composes neutral/native digest feature v2 for helper progress. Helper
 jobs share scheduling, connection ownership, row budgets and publication credits
-with header jobs, while ordinary header backfill still reads no parts. Optional
-helper API slices are cancellable at essential-read admission and retain their
-reconciliation intent. Only scalar helper identities cross invalidation ports;
-tools, labels, scan generations and helper summaries commit on the worker's one
-derived connection. Catalog/restart publications carry cached helper metadata.
+with header jobs, while ordinary header backfill reads scalar timing projections
+but no part bodies. Optional helper API slices are cancellable at essential-read
+admission and retain their reconciliation intent. Only scalar helper identities
+cross invalidation ports; tools, labels, scan generations and helper summaries
+commit on the worker's one derived connection. Catalog/restart publications
+carry cached helper metadata.

@@ -69,11 +69,24 @@ export interface ReportedTokens {
   reasoning: number | null;
   cache: { read: number | null; write: number | null };
 }
+/** Execution state is independent of whether a trustworthy endpoint survived. */
+export type TurnTiming =
+  | { state: "known"; start: number; end: number; workingMs: number }
+  | { state: "active"; start: number; workingMs: number }
+  | {
+    state: "unknown";
+    start: number;
+    end?: number;
+    terminal: boolean;
+    reason: "migration" | "missing-end" | "incomplete-evidence";
+    explanation?: string;
+  };
 export interface UsageSummary {
   calls: number;
   cost: number | null;
   tokens: ReportedTokens;
   time?: { start: number; end?: number };
+  timing?: TurnTiming;
   contextPeak: number | null;
 }
 export interface SessionDigest {

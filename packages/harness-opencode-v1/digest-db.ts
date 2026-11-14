@@ -7,6 +7,7 @@ import { runningDirectories } from "./db-hints.ts";
 
 /** Allowlisted message header projection. Native identities stay native here. */
 export interface DigestHeader {
+  timing_json?: string | null;
   variant?: string | null;
   session_id: string;
   message_id: string;
@@ -45,7 +46,8 @@ const projection = [
     ? "m.time_created AS time_created"
     : `CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.${path}') END AS ${alias}`
 ).join(",") +
-  ",CASE WHEN json_valid(m.data) AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown'))) THEN 1 ELSE 0 END AS terminal";
+  ",CASE WHEN json_valid(m.data) AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown'))) THEN 1 ELSE 0 END AS terminal" +
+  ",(SELECT json_group_array(json_object('type',json_extract(p.data,'$.type'),'name',json_extract(p.data,'$.tool'),'start',CASE WHEN json_extract(p.data,'$.type')='tool' THEN json_extract(p.data,'$.state.time.start') ELSE json_extract(p.data,'$.time.start') END,'end',CASE WHEN json_extract(p.data,'$.type')='tool' THEN json_extract(p.data,'$.state.time.end') ELSE json_extract(p.data,'$.time.end') END)) FROM part p WHERE p.session_id=m.session_id AND p.message_id=m.id AND json_valid(p.data) AND json_extract(p.data,'$.type') IN ('text','reasoning','tool','retry')) AS timing_json";
 const terminalProjection = (session = "session") =>
   `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) WHEN json_extract(m.data,'$.finish') IS NOT NULL AND json_extract(m.data,'$.finish') NOT IN ('tool-calls','unknown') THEN json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
 

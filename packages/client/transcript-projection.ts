@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ContentOp, Message, Part, ReplyBoundary } from "@otk/protocol";
-import { compareMessages, isRealPrompt } from "@otk/protocol";
+import {
+  compareMessages,
+  isAssistantTerminal,
+  isRealPrompt,
+} from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
 
@@ -143,9 +147,9 @@ export function createTranscriptProjection(): TranscriptProjection {
       : undefined;
     const newTurn = next?.role === "assistant" ? next.replyTo : undefined;
     const oldUnfinished = previous?.role === "assistant" &&
-      previous.time.completed === undefined;
+      !isAssistantTerminal(previous);
     const newUnfinished = next?.role === "assistant" &&
-      next.time.completed === undefined;
+      !isAssistantTerminal(next);
     if (
       previous?.role === next?.role &&
       previous?.time.created === next?.time.created &&
@@ -245,7 +249,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       ...last,
       id: first.id,
       sourceOrder: first.sourceOrder,
-      time: { ...last.time, created: first.time.created },
+      time: { ...last.time },
       get parts() {
         return partsForReply();
       },
@@ -257,7 +261,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         ? previous.message.error
         : undefined;
       if (message.replyTo !== undefined) {
-        const pending = message.time.completed === undefined;
+        const pending = !isAssistantTerminal(message);
         if (pendingTurns.has(message.replyTo) !== pending) {
           if (pending) pendingTurns.add(message.replyTo);
           else pendingTurns.delete(message.replyTo);
@@ -286,7 +290,12 @@ export function createTranscriptProjection(): TranscriptProjection {
       let low = 0, high = keys.length;
       while (low < high) {
         const mid = (low + high) >>> 1;
-        if (compare(state.repliesByID[keys[mid]].message, message) < 0) {
+        if (
+          compare(
+            read(state.repliesByID[keys[mid]].messageIDs[0]),
+            read(ids[0]),
+          ) < 0
+        ) {
           low = mid + 1;
         } else high = mid;
       }

@@ -29,13 +29,14 @@ import type {
   DigestPublication,
   DigestSink,
 } from "@otk/harness";
-import { digestRowFloor } from "@otk/harness";
+import { digestRowFloor, TurnTimingAccumulator } from "@otk/harness";
+import { partClocks, timingEvidence } from "./turn-timing.ts";
 import type { OpencodeV1Config } from "./config.ts";
 import { harnessDb } from "./config.ts";
 import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { Messages } from "./messages.ts";
 import { mapIndex } from "./map.ts";
-import type { Info, Session } from "./types.ts";
+import type { Info, RawPart, Session } from "./types.ts";
 import { type DigestHeader, DigestNativeDb } from "./digest-db.ts";
 import type { HelperToolRow } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
@@ -158,8 +159,9 @@ function header(raw: DigestHeader): DigestHeader {
   }
   return result;
 }
-function fromInfo(info: Info): DigestHeader {
+function fromInfo(info: Info, parts: readonly RawPart[] = []): DigestHeader {
   return header({
+    timing_json: JSON.stringify(partClocks(parts)),
     session_id: info.sessionID,
     message_id: info.id,
     role: info.role,
@@ -1539,6 +1541,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         "time_created",
         "time_completed",
         "terminal",
+        "timing_json",
         "agent",
         "provider_id",
         "model_id",
@@ -1554,6 +1557,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       );
       for (const key of this.#adjust(id, value, 1)) turns.add(key);
     }
+  }
+  #turnTerminal(id: string, turn: string): boolean {
+    return !!this.storage.sql.prepare(
+      "SELECT terminal FROM opcv1_messages WHERE session_id=? AND role='assistant' AND coalesce(turn_id,message_id)=? ORDER BY time_created DESC,message_id DESC LIMIT 1",
+    ).get(id, turn)?.terminal;
   }
   #summary(
     id: string,
@@ -1622,6 +1630,28 @@ export class OpencodeV1DigestSink implements DigestSink {
           peak = Math.max(peak, footprint(value!) ?? 0);
         }
       }}
+    const timing = new TurnTimingAccumulator();
+    const settled = !!turn && this.#turnTerminal(id, turn);
+    if (turn) {
+      for (
+        const row of this.storage.sql.prepare(
+          "SELECT time_created,time_completed,timing_json,terminal FROM opcv1_messages WHERE session_id=? AND role='assistant' AND coalesce(turn_id,message_id)=? ORDER BY time_created,message_id",
+        ).iterate(id, turn)
+      ) {
+        timing.add(timingEvidence(
+          {
+            time: {
+              created: Number(row.time_created),
+              completed: row.time_completed == null
+                ? undefined
+                : Number(row.time_completed),
+            },
+          },
+          row.timing_json ? JSON.parse(String(row.timing_json)) : [],
+          settled || !!row.terminal || row.time_completed != null,
+        ));
+      }
+    }
     return {
       calls,
       cost: category("cost"),
@@ -1633,6 +1663,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       },
       contextPeak: unknownPeak ? null : peak,
       ...(clock ? { time: clock } : {}),
+      ...(turn ? { timing: timing.result() } : {}),
     };
   }
   async step(
@@ -1773,9 +1804,10 @@ export class OpencodeV1DigestSink implements DigestSink {
           snapshot.metadata.directory,
           signal,
         );
-        raw = page.items.map((message) => fromInfo(message.info)).sort((a, b) =>
-          newest(a.time_created, a.message_id, b.time_created, b.message_id)
-        );
+        raw = page.items.map((message) => fromInfo(message.info, message.parts))
+          .sort((a, b) =>
+            newest(a.time_created, a.message_id, b.time_created, b.message_id)
+          );
         next = page.next;
       }
     } catch (error) {
@@ -2008,14 +2040,12 @@ export class OpencodeV1DigestSink implements DigestSink {
             ready || covered.has(turn),
           );
           if (summary.calls) {
-            const last = this.storage.sql.prepare(
-              "SELECT terminal FROM opcv1_messages WHERE session_id=? AND role='assistant' AND coalesce(turn_id,message_id)=? ORDER BY time_created DESC,message_id DESC LIMIT 1",
-            ).get(id, turn);
+            const terminal = this.#turnTerminal(id, turn);
             upsert[turn] = knownDerived(
               summary,
               `${id}/${turn}@${source}`,
               revision,
-              (ready || covered.has(turn)) && !!last?.terminal,
+              (ready || covered.has(turn)) && terminal,
               this.storage.turn(id, turn),
             );
           } else remove.push(turn);
@@ -2512,6 +2542,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
     }
     const metadata = saved.metadata;
+    const settled = this.#turnTerminal(id, turnID);
     const ledger = new UsageLedger(id);
     const consume = (row: DigestHeader): UsageMessage | undefined => {
       row = header(row);
@@ -2521,6 +2552,19 @@ export class OpencodeV1DigestSink implements DigestSink {
       if (!row.provider_id || !row.model_id) {
         throw new Error("Detailed usage model is unavailable");
       }
+      const timing = new TurnTimingAccumulator();
+      timing.add(
+        timingEvidence(
+          {
+            time: {
+              created: row.time_created,
+              completed: row.time_completed ?? undefined,
+            },
+          },
+          row.timing_json ? JSON.parse(row.timing_json) : [],
+          settled || !!row.terminal || row.time_completed !== null,
+        ),
+      );
       return {
         id: row.message_id,
         turnID: row.turn_id ?? row.message_id,
@@ -2532,7 +2576,8 @@ export class OpencodeV1DigestSink implements DigestSink {
           cache: { read: row.cache_read, write: row.cache_write },
         },
         cost: row.cost,
-        completed: row.time_completed !== null,
+        completed: row.time_completed !== null || !!row.terminal || settled,
+        timing: timing.result(),
         time: {
           start: row.time_created,
           ...(row.time_completed === null ? {} : { end: row.time_completed }),
@@ -2582,7 +2627,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     } else {for await (
         const message of this.#messages.scan(id, metadata.directory, signal)
       ) {
-        const usage = consume(fromInfo(message.info));
+        const usage = consume(fromInfo(message.info, message.parts));
         if (usage) ledger.upsert(usage);
         // Only existing tool labels leave the fallback page; bodies are released.
         for (const part of usage ? message.parts : []) {
@@ -2595,7 +2640,9 @@ export class OpencodeV1DigestSink implements DigestSink {
           }
         }
       }}
-    return ledger.detail(turnID, saved.summary.revision);
+    const detail = ledger.detail(turnID, saved.summary.revision);
+    detail.summary.timing = derivedValue(this.storage.turn(id, turnID))?.timing;
+    return detail;
   }
   close(): void {
     if (!this.#closed) {

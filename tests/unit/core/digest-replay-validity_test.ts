@@ -43,7 +43,18 @@ const tokens = {
   cache: { read: 4, write: 1 },
 };
 const usage = knownDerived(
-  { calls: 1, cost: 0, tokens, contextPeak: 25 },
+  {
+    calls: 1,
+    cost: 0,
+    tokens,
+    contextPeak: 25,
+    timing: {
+      state: "unknown" as const,
+      start: 1000,
+      terminal: true,
+      reason: "migration" as const,
+    },
+  },
   "native/call",
   7,
   true,

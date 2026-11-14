@@ -4,6 +4,7 @@ import type { DigestPort } from "@otk/harness";
 import { StreamBuffers } from "@otk/content";
 import {
   compareMessages,
+  isAssistantTerminal,
   isRealPrompt,
   knownDerived,
   MAX_MESSAGE_CURSOR_LENGTH,
@@ -28,6 +29,7 @@ import {
   SCAN_ROWS,
 } from "./messages.ts";
 import {
+  assistantSettled,
   completeTokens,
   mapMessage,
   type MessageContext,
@@ -164,7 +166,7 @@ export class Transcript {
     string,
     { shells: Map<string, string>; compaction?: string }
   >();
-  #finished = new Map<string, Map<string, number>>();
+  #finished = new Map<string, Map<string, { start?: number; at?: number }>>();
   #boundaries = new Map<string, string>();
   #tasks = new Set<Promise<unknown>>();
   #backfills = new Map<string, AbortController>();
@@ -265,9 +267,6 @@ export class Transcript {
       wanted: (id) => this.#subscriptions.has(id),
       read: (id, message, signal) => this.reader.get(id, message, signal),
       emit: async (id, raw, _parts, _generation, terminal, signal) => {
-        if (terminal && raw.type === "assistant" && !raw.time.completed) {
-          throw new Error("Native response checkpoint is not settled yet");
-        }
         const baseline = await this.#baseline(id, signal),
           facts = await this.#facts({
             sessionID: id,
@@ -277,6 +276,12 @@ export class Transcript {
         signal.throwIfAborted();
         const context = facts.contexts[raw.id];
         if (!context) return;
+        if (
+          terminal && raw.type === "assistant" && !assistantSettled(raw) &&
+          !context.terminal && !this.#finished.get(id)?.has(raw.id)
+        ) {
+          throw new Error("Native response checkpoint is not settled yet");
+        }
         const mapped = this.#map(raw, id, context, terminal, true);
         if (mapped) {
           this.#publish(id, { op: "message.upsert", message: mapped });
@@ -654,9 +659,12 @@ export class Transcript {
               .values(),
           ],
         };
+        context = current.context;
       }
     }
-    if (raw.type === "assistant" && !raw.time.completed) {
+    const settled = raw.type === "assistant" &&
+      (terminal || context.terminal === true || assistantSettled(raw));
+    if (raw.type === "assistant" && !settled) {
       const current = this.#live.get(raw.id);
       if (current) {
         raw = {
@@ -699,18 +707,28 @@ export class Transcript {
       }
     }
     if (raw.type !== "assistant") return mapped;
-    if (!raw.time.completed && !this.#finished.get(id)?.has(raw.id)) {
+    if (!settled && !this.#finished.get(id)?.has(raw.id)) {
       this.#live.set(raw.id, {
         session: id,
         raw: structuredClone(raw),
         context,
       });
     }
-    if (raw.time.completed || terminal) {
+    if (settled) {
+      if (mapped.role === "assistant" && !isAssistantTerminal(mapped)) {
+        mapped = { ...mapped, terminal: true };
+      }
       this.#live.delete(raw.id);
       let finished = this.#finished.get(id);
       if (!finished) this.#finished.set(id, finished = new Map());
-      finished.set(raw.id, millis(raw.time.completed));
+      // This is a replay/restart barrier, never an invented completion clock.
+      const at = raw.time.completed == null
+        ? finished.get(raw.id)?.at
+        : millis(raw.time.completed);
+      finished.set(raw.id, {
+        start: millis(raw.time.created),
+        ...(at === undefined ? {} : { at }),
+      });
       this.buffers.removeMessage(raw.id, id);
       if (!fromRecovery) this.recovery.message(raw.id, id);
       return mapped;
@@ -853,7 +871,7 @@ export class Transcript {
       });
       if (this.recovery.scoped(id)) {
         for (const m of items) {
-          if (m.role === "assistant" && m.time.completed === undefined) {
+          if (m.role === "assistant" && !isAssistantTerminal(m)) {
             for (const part of m.parts) {
               if (
                 (part.kind === "text" || part.kind === "reasoning") &&
@@ -1369,8 +1387,14 @@ export class Transcript {
       ? this.#finished.get(id)?.get(messageID)
       : undefined;
     if (finished !== undefined) {
+      const started = typeof d.started === "number" ? d.started : event.created;
+      const clock = finished.at === undefined
+        ? started
+        : event.created ?? started;
+      const boundary = finished.at ?? finished.start;
       if (
-        event.type === "session.step.started" && (event.created ?? 0) > finished
+        event.type === "session.step.started" &&
+        (boundary === undefined || clock !== undefined && clock > boundary)
       ) this.#finished.get(id)!.delete(messageID!);
       else return;
     }
@@ -1401,14 +1425,17 @@ export class Transcript {
         },
       };
       const baseline = this.#baselines.get(id),
-        context = existing?.context ?? baseline?.contexts.get(messageID) ?? {
-          order: baseline?.source?.startsWith("api")
-            ? Math.max(
-              0,
-              ...[...baseline.contexts.values()].map((c) => c.order),
-            ) + 1
-            : event.durable?.seq ?? ++this.#revisions,
-          replyTo: baseline?.prompt?.id,
+        context = {
+          ...(existing?.context ?? baseline?.contexts.get(messageID) ?? {
+            order: baseline?.source?.startsWith("api")
+              ? Math.max(
+                0,
+                ...[...baseline.contexts.values()].map((c) => c.order),
+              ) + 1
+              : event.durable?.seq ?? ++this.#revisions,
+            replyTo: baseline?.prompt?.id,
+          }),
+          terminal: undefined,
         };
       baseline?.contexts.set(messageID, context);
       this.#live.set(messageID, { session: id, raw, context });
@@ -1518,6 +1545,12 @@ export class Transcript {
         event.type === "session.step.failed"
       ) {
         if (!live) {
+          let finished = this.#finished.get(id);
+          if (!finished) this.#finished.set(id, finished = new Map());
+          finished.set(
+            messageID,
+            event.created === undefined ? {} : { at: event.created },
+          );
           this.recovery.touch(id, messageID, `${messageID}:finish`);
           this.recovery.terminal(id, messageID);
           return;
@@ -1527,13 +1560,22 @@ export class Transcript {
           ...(d.cost !== undefined ? { cost: d.cost } : {}),
           ...(d.tokens !== undefined ? { tokens: d.tokens } : {}),
           ...(d.error ? { error: d.error } : {}),
-          time: { ...live.raw.time, completed: event.created ?? Date.now() },
+          ...(typeof d.finish === "string" ? { finish: d.finish } : {}),
+          time: {
+            ...live.raw.time,
+            ...(event.created === undefined
+              ? {}
+              : { completed: event.created }),
+          },
         } as typeof live.raw;
         this.buffers.complete(
           messageID,
           (session, op) => this.#publish(session, op),
         );
         const header = mapMessage(raw, id, live.context)!;
+        if (header.role === "assistant" && event.created === undefined) {
+          header.terminal = true;
+        }
         header.parts = [];
         this.#publish(id, { op: "message.upsert", message: header });
         this.#publish(id, {
@@ -1553,7 +1595,10 @@ export class Transcript {
         this.#live.delete(messageID);
         let finished = this.#finished.get(id);
         if (!finished) this.#finished.set(id, finished = new Map());
-        finished.set(messageID, event.created ?? Date.now());
+        finished.set(messageID, {
+          start: millis(live.raw.time.created),
+          ...(event.created === undefined ? {} : { at: event.created }),
+        });
         this.changed(id);
         return;
       }
@@ -1991,9 +2036,9 @@ function overlay(items: Message[], op: ContentOp): Message[] {
   if (op.op === "message.upsert") {
     const old = items.find((m) => m.id === op.message.id);
     if (
-      old?.role === "assistant" && old.time.completed !== undefined &&
+      old?.role === "assistant" && isAssistantTerminal(old) &&
       op.message.role === "assistant" &&
-      op.message.time.completed === undefined && !op.restart
+      !isAssistantTerminal(op.message) && !op.restart
     ) return items;
     return [...items.filter((m) => m.id !== op.message.id), {
       ...op.message,

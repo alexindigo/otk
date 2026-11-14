@@ -366,6 +366,8 @@ export interface UserMessage {
   parts: Part[];
 }
 export interface AssistantMessage {
+  /** Native settlement is a fact even when its exact clock was lost. */
+  terminal?: boolean;
   id: string;
   sessionID: string;
   role: "assistant";
@@ -398,6 +400,11 @@ export interface ContextMessage {
   revert?: RevertBoundary;
 }
 export type Message = UserMessage | AssistantMessage | ContextMessage;
+/** Settlement is independent of whether its exact native clock survived. */
+export function isAssistantTerminal(message: Message): boolean {
+  return message.role === "assistant" &&
+    (message.terminal === true || message.time.completed !== undefined);
+}
 export function isRealPrompt(message: Message): message is UserMessage {
   return message.role === "user" && message.origin === undefined;
 }

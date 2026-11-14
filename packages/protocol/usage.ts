@@ -4,7 +4,8 @@ export const usageRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "usage.get": { kind: "read", pending: "Loading usage" },
 };
 import type { AssistantMessage, ModelRef, Part } from "./content.ts";
-import type { ReportedTokens, UsageSummary } from "./digest.ts";
+import { isAssistantTerminal } from "./content.ts";
+import type { ReportedTokens, TurnTiming, UsageSummary } from "./digest.ts";
 import type { ContentClock, TranscriptVersion } from "./transcript.ts";
 
 /** Existing tool labels only, never inputs, output or transcript parts. */
@@ -20,6 +21,7 @@ export interface UsageTime {
 
 /** Usage headers only. Exact baselines make snapshot/live replacement idempotent. */
 export interface UsageMessage {
+  timing?: TurnTiming;
   id: string;
   sourceOrder?: number;
   turnID: string;
@@ -82,7 +84,7 @@ export function usageHeader(message: AssistantMessage): UsageMessage {
     model: message.model,
     tokens: message.tokens,
     cost: message.cost,
-    completed: message.time.completed !== undefined,
+    completed: isAssistantTerminal(message),
     time: { start: message.time.created, end: message.time.completed },
     ...(message.parts.length
       ? {
@@ -230,6 +232,8 @@ export class UsageLedger {
       previous && previous.turnID === message.turnID &&
       previous.sourceOrder === message.sourceOrder &&
       previous.completed === message.completed &&
+      JSON.stringify(previous.timing) ===
+        JSON.stringify(message.timing ?? previous.timing) &&
       previous.model.provider === message.model.provider &&
       previous.model.model === message.model.model &&
       values(previous).every((value, i) => value === nextValues[i]) &&
@@ -254,6 +258,9 @@ export class UsageLedger {
       cost: message.cost,
       completed: message.completed,
       time: message.time ? { ...message.time } : previous?.time,
+      ...((message.timing ?? previous?.timing)
+        ? { timing: message.timing ?? previous?.timing }
+        : {}),
       tools: (message.tools ?? previous?.tools ?? []).map((tool) => ({
         ...tool,
       })),

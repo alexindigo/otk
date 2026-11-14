@@ -87,6 +87,7 @@ export function usage(row: DigestUsageRecord): Derived<UsageSummary> {
         cache: { read: row.cache_read, write: row.cache_write },
       },
       contextPeak: row.context_peak,
+      ...(row.timing_meta ? { timing: JSON.parse(row.timing_meta) } : {}),
       ...(row.time_start === null ? {} : {
         time: {
           start: row.time_start,
@@ -105,6 +106,7 @@ function usageRecord(
   const total = derivedValue(result);
   return {
     result_meta: meta(result),
+    timing_meta: total?.timing ? JSON.stringify(total.timing) : null,
     call_count: total?.calls ?? null,
     cost: total?.cost ?? null,
     input: total?.tokens.input ?? null,
