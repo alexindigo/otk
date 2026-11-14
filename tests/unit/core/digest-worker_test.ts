@@ -344,6 +344,178 @@ test("worker startup failure closes acquired state and stop still acknowledges",
   await bridge.stop();
 });
 
+for (const projection of ["header", "helper"] as const) {
+  test(`retired worker step failure cannot publish unavailable into a new connection: ${projection}`, async () => {
+    const statePath = await tempDir("digest-retired-error-");
+    const entered = Promise.withResolvers<void>(),
+      refreshed = Promise.withResolvers<void>();
+    const server = Deno.serve(
+      { hostname: "127.0.0.1", port: 0, onListen() {} },
+      (request) => {
+        const path = new URL(request.url).pathname;
+        if (path === "/global/health") return Response.json({ healthy: true });
+        if (path === "/experimental/session") {
+          const parent = {
+            id: "ses_parent",
+            projectID: "p",
+            directory: "/p",
+            title: "Parent",
+            time: { created: 1, updated: 2 },
+          };
+          return Response.json([parent, {
+            id: "ses_one",
+            parentID: "ses_parent",
+            projectID: "p",
+            directory: "/p",
+            title: "One",
+            time: { created: 1, updated: 2 },
+          }]);
+        }
+        return Response.json([]);
+      },
+    );
+    resources().defer("retired error HTTP", () => server.shutdown());
+    // Replace only the provider outcome in this test worker. The production
+    // worker, scheduler, storage and publication path remain the real modules.
+    const provider = new URL(
+      "../../../packages/harness-opencode-v1/digest.ts",
+      import.meta.url,
+    )
+      .href;
+    const worker =
+      new URL("../../../core/digest/worker.ts", import.meta.url).href;
+    const entry = URL.createObjectURL(
+      new Blob(
+        [`
+    import { OpencodeV1DigestSink } from ${JSON.stringify(provider)};
+    const step = OpencodeV1DigestSink.prototype.step;
+    let first = true, armed = false;
+    const release = Promise.withResolvers();
+    addEventListener("message", event => {
+      if (event.data.t === "fixture.release") release.resolve();
+      if (event.data.t === "fixture.arm") armed = true;
+    });
+    OpencodeV1DigestSink.prototype.step = async function (...args) {
+      if (first && armed && args[0].sessionID === "opcv1-ses_one" &&
+          (args[0].projection === "helper") === ${projection === "helper"}) {
+        first = false;
+        postMessage({t: "fixture.held"});
+        await args[3].wait(release.promise);
+        throw new Error("Retired step fixture outcome");
+      }
+      const value = await step.apply(this, args);
+      if (armed && !first && args[0].sessionID === "opcv1-ses_one" &&
+          (args[0].projection === "helper") === ${projection === "helper"}) {
+        postMessage({t: "fixture.fresh"});
+      }
+      return value;
+    };
+    await import(${JSON.stringify(worker)});
+    postMessage({t: "fixture.ready"});
+  `],
+        { type: "application/javascript" },
+      ),
+    );
+    const OriginalWorker = globalThis.Worker;
+    let running: Worker | undefined;
+    globalThis.Worker = class extends OriginalWorker {
+      #ready = false;
+      #queued: unknown[] = [];
+      constructor(_url: string | URL, options?: WorkerOptions) {
+        super(entry, options);
+        running = this;
+        this.addEventListener("message", (event) => {
+          if (event.data.t === "fixture.held") entered.resolve();
+          if (event.data.t === "fixture.fresh") refreshed.resolve();
+          if (event.data.t === "fixture.ready") {
+            this.#ready = true;
+            for (const value of this.#queued) super.postMessage(value);
+            this.#queued = [];
+          }
+        });
+      }
+      override postMessage(value: unknown): void {
+        if (this.#ready) super.postMessage(value);
+        else this.#queued.push(value);
+      }
+    };
+    const states: string[] = [],
+      helperStates: string[] = [],
+      errors: Error[] = [];
+    const bridge = new DigestBridge({
+      statePath,
+      provider: "opencode-v1",
+      native: {
+        harness: {
+          ...cfg().harness,
+          url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
+          db: statePath + "/missing.db",
+        },
+        index: cfg().index,
+        attachments: cfg().attachments,
+      },
+      policy: {
+        ...cfg().digest,
+        batch: 2,
+        cpu: 1,
+        memoryreserve: 1,
+        idlems: 1,
+        retryms: 10,
+      },
+      publish: (value) => {
+        if (value.sessionID !== "opcv1-ses_one") return;
+        states.push(value.delta.summary.state);
+        if (value.delta.helper) helperStates.push(value.delta.helper.state);
+      },
+      diagnostic: (error) => {
+        errors.push(error);
+      },
+    });
+    try {
+      bridge.scope("viewer", { sessions: ["opcv1-ses_one"] });
+      await bridge.catalog(1, new AbortController().signal);
+      await waitFor(() => states.at(-1), (value) => value === "ready");
+      await waitFor(() => helperStates.at(-1), (value) => value === "ready");
+      running!.postMessage({ t: "fixture.arm" });
+      bridge.observe(1, [{
+        sessionID: "opcv1-ses_one",
+        revision: 1,
+        reason: projection === "helper" ? "helper" : "messages",
+      }]);
+      await bounded("old provider step", entered.promise);
+      const next = bridge.catalog(2, new AbortController().signal);
+      next.catch(() => {});
+      await waitFor(
+        () =>
+          bridge.progress().some((value) => /:2:\d+$/.test(value.generation)),
+        (value) => value,
+      );
+      const stateStart = states.length, helperStart = helperStates.length;
+      running!.postMessage({ t: "fixture.release" });
+      await next;
+      await bounded("fresh provider continuation", refreshed.promise);
+      assertEquals(states.slice(stateStart).includes("unavailable"), false);
+      assertEquals(
+        helperStates.slice(helperStart).includes("unavailable"),
+        false,
+      );
+      assertEquals(helperStates.at(-1), "ready");
+      assertEquals(
+        errors.some((error) => error.message.includes("Retired step fixture")),
+        false,
+      );
+    } finally {
+      running?.postMessage({ t: "fixture.release" });
+      try {
+        await bridge.stop();
+      } finally {
+        globalThis.Worker = OriginalWorker;
+        URL.revokeObjectURL(entry);
+      }
+    }
+  });
+}
+
 test("a malformed aggregate is scoped to its session and cannot starve another digest", async () => {
   const statePath = await tempDir("digest-scoped-error-");
   const server = Deno.serve(
