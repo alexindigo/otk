@@ -48,6 +48,10 @@ export function createAttentionGrace(o: {
     id: string;
     due: number;
     ready: boolean;
+    /** Read by a presentation; its deadline then outlives inventory absence. */
+    presented: boolean;
+    /** A fresh native inventory no longer lists it; content removal settles it. */
+    absent: boolean;
   }>();
   const inputs = new Map<string, { server: string; session: string }>();
   const previous = new Map<string, { server: string; state: InboxStatus }>();
@@ -80,6 +84,8 @@ export function createAttentionGrace(o: {
         id,
         due: clock.now() + ATTENTION_GRACE_MS,
         ready: false,
+        presented: false,
+        absent: false,
       };
       pending.set(k, p);
       schedule();
@@ -92,12 +98,16 @@ export function createAttentionGrace(o: {
       if (stopped) return;
       const ids = new Set(evidence?.permissions?.keys ?? []);
       // A stale inventory owns neither new arrivals nor absence/settlement.
+      // Absence can precede the content removal; a presented request keeps its
+      // one deadline instead of arriving again with a new one.
       for (const [k, p] of pending) {
         if (
           evidence?.permissions?.fresh && p.server === server &&
-          p.session === session && !ids.has(p.id)
+          p.session === session
         ) {
-          pending.delete(k);
+          if (ids.has(p.id)) p.absent = false;
+          else if (p.presented) p.absent = true;
+          else pending.delete(k);
         }
       }
       if (evidence?.permissions?.fresh) {
@@ -112,7 +122,10 @@ export function createAttentionGrace(o: {
     },
     permission(server: string, session: string, id: string): boolean {
       void store.state.revision;
-      return arrive(server, session, id)?.ready ?? false;
+      const p = arrive(server, session, id);
+      if (!p) return false;
+      p.presented = true;
+      return p.ready;
     },
     settled(server: string, id: string) {
       if (stopped || !pending.delete(key(server, id))) return;
@@ -139,7 +152,7 @@ export function createAttentionGrace(o: {
         return state;
       }
       const requests = [...pending.values()].filter((p) =>
-        p.server === server && contains(p.session) &&
+        !p.absent && p.server === server && contains(p.session) &&
         (permissionWaiting?.(p.session) ?? true)
       );
       if (!requests.length || requests.some((p) => p.ready)) return state;

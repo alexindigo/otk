@@ -49,13 +49,33 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
     presentation: "bookkeeping",
   },
   "permission.list": { kind: "read", pending: "Loading requests" },
-  "permission.reply": { kind: "mutation", pending: "Sending response" },
+  "permission.reply": {
+    kind: "mutation",
+    pending: "Sending response",
+    settles: "permission",
+  },
   "question.list": { kind: "read", pending: "Loading requests" },
-  "question.reply": { kind: "mutation", pending: "Sending answer" },
-  "question.reject": { kind: "mutation", pending: "Skipping question" },
+  "question.reply": {
+    kind: "mutation",
+    pending: "Sending answer",
+    settles: "input",
+  },
+  "question.reject": {
+    kind: "mutation",
+    pending: "Skipping question",
+    settles: "input",
+  },
   "form.list": { kind: "read", pending: "Loading forms" },
-  "form.reply": { kind: "mutation", pending: "Sending answers" },
-  "form.cancel": { kind: "mutation", pending: "Cancelling form" },
+  "form.reply": {
+    kind: "mutation",
+    pending: "Sending answers",
+    settles: "input",
+  },
+  "form.cancel": {
+    kind: "mutation",
+    pending: "Cancelling form",
+    settles: "input",
+  },
   "prefs.get": { kind: "read", pending: "Loading settings" },
   "prefs.set": { kind: "mutation", pending: "Saving" },
 };
