@@ -988,6 +988,11 @@ a phantom's own session. Consumers do not reconstruct it from raw ancestry.
 signal settles only its own wait as false; the shared model and other waiters
 remain available.
 
+`selectedTitle()` borrows the selected task/phantom name from the same keyed
+task/session maps, without constructing or searching the tab population. Header
+presentation can share that scalar calculation across its rendered rows instead
+of repeating a population lookup per row during reconnect and settlement.
+
 An optional third `sources` argument supplies `input()` (owner-current tab
 inputs) and `session(sessionID)` (authoritative identity/title/directory
 lookup). Tab commands read current inputs before validation, so a deferred

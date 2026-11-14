@@ -258,20 +258,15 @@ export default function ProjectTabs(props: {
     () => props.onCreateSession(active()),
   );
   const tabs = createMemo(() => props.model.tabs());
-  const openTitle = () => {
-    const id = props.model.state.sessionID;
-    return id
-      ? (props.session?.id === id ? props.session.title : entry(id)?.title)
+  const separateTitle = createMemo(() => {
+    const model = props.model, id = model.state.sessionID;
+    const current = id
+      ? (props.session?.id === id
+        ? props.session.title
+        : model.entry(id)?.title)
       : undefined;
-  };
-  const separateTitle = () => {
-    const current = openTitle();
-    return current &&
-        tabs().find((tab) => tab.id === props.model.state.selected?.id)
-            ?.title !== current
-      ? current
-      : undefined;
-  };
+    return current && model.selectedTitle() !== current ? current : undefined;
+  });
   const crumbs = createMemo(() => {
     tabs();
     return props.model.crumbs();
