@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import type { Selection } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
 
@@ -10,7 +10,7 @@ export interface RenameTarget extends Selection {
 export interface SessionRenameState {
   editing?: RenameTarget & { origin: RenameOrigin };
   pending: boolean;
-  error?: string;
+  error?: FailureValue;
 }
 export interface SessionRename {
   readonly state: SessionRenameState;
@@ -90,7 +90,10 @@ export function createSessionRename(options: {
         pending = false;
         store.update((state) => {
           state.pending = false;
-          state.error = failureText(error);
+          state.error = failureValue(error, {
+            action: "session.rename",
+            target: { ...target, label: target.title },
+          });
         });
       }
     },

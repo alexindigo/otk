@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure, RevertInfo } from "@otk/protocol";
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import { RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
@@ -19,7 +19,7 @@ export interface RevertStrip {
 type RevertIntent = "revert" | "code" | "restore" | "undo" | "redo";
 export interface SessionRevertState {
   pending?: RevertIntent;
-  error?: string;
+  error?: FailureValue;
   key?: string;
   failure?: PublicFailure;
 }
@@ -201,7 +201,7 @@ export function createSessionRevert(options: {
       observe();
       if (alive && generation === current) {
         store.update((state) => {
-          state.error = failureText(error);
+          state.error = failureValue(error);
           state.failure = error instanceof RequestFailure
             ? error.failure
             : undefined;

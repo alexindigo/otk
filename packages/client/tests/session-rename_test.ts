@@ -25,7 +25,14 @@ Deno.test("rename owns cancellation, unchanged titles, retry and stale completio
   owner.start(target, "chip");
   fail = true;
   await owner.commit(" New ");
-  assertEquals(owner.state.error, "Could not finish this action. Try again");
+  assertEquals(
+    owner.state.error && owner.state.error.failure?.reason,
+    "No publishable failure reason is available",
+  );
+  assertEquals(
+    owner.state.error && owner.state.error.failure?.target.label,
+    "Original",
+  );
   assertEquals(owner.state.editing?.origin, "chip");
   fail = false;
   const commit = owner.commit(" New ");

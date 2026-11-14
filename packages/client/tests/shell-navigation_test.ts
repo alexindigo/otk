@@ -335,7 +335,7 @@ Deno.test("legacy session links show the compatibility notice without requesting
   const f = fixture("#/local/ses_legacy");
   try {
     assertEquals(
-      f.navigation.state.error,
+      f.navigation.state.error && f.navigation.state.error.failure?.reason,
       "This session link is from an older version. Open Sessions to choose a session.",
     );
     assertEquals(f.session.state.selection, undefined);
@@ -410,15 +410,15 @@ Deno.test("shell navigation owns route state, unknown-server errors, project vis
   ]]);
   f.external("#/unknown/tstv1-session");
   assertEquals(
-    f.navigation.state.error,
+    f.navigation.state.error && f.navigation.state.error.failure?.reason,
     "The URL refers to an unknown server. Add it in Settings.",
   );
   assertEquals(f.navigation.state.project, undefined);
   assertEquals(f.session.state.selection, undefined);
   f.navigation.fail(new Error("plain failure"));
   assertEquals(
-    f.navigation.state.error,
-    "Could not finish this action. Try again",
+    f.navigation.state.error && f.navigation.state.error.failure?.reason,
+    "No publishable failure reason is available",
   );
   f.navigation.clearError();
   assertEquals(f.navigation.state.error, "");

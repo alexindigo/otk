@@ -69,6 +69,7 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
     );
     const terminal = finished.supervision![target.id].terminal;
     assert(terminal > 0);
+    assertEquals(finished.supervision![target.id].outcome, "succeeded");
     assertEquals(finished.summaries?.[native.directory]?.status, "finished");
     if (native instanceof OpencodeV2Test) {
       const raw = await native.api.session.get({ sessionID: target.nativeID });
@@ -86,6 +87,7 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
       assertEquals(after.supervision?.[target.id], {
         state: "finishedUnseen",
         terminal,
+        outcome: "succeeded",
       });
     }
   }));
@@ -131,6 +133,7 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
     for (const id of [parent.id, child.id]) {
       assert(value.supervision![id].terminal > 0);
       assertEquals(value.supervision![id].state, "finishedUnseen");
+      assertEquals(value.supervision![id].outcome, "failed");
     }
     assertEquals(value.summaries?.[native.directory]?.status, "finished");
   }));

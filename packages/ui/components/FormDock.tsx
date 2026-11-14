@@ -10,7 +10,9 @@ import {
 import {
   createForm,
   createPrimaryAction,
-  failureText,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
   forgetForm,
 } from "@otk/client";
 import PrimaryAction from "./PrimaryAction.tsx";
@@ -55,6 +57,15 @@ export function registerGlobalForms(
                     connected={server().status === "connected" &&
                       server().harness === "connected"}
                     request={request()}
+                    failureTarget={{
+                      sidecarId: server().id,
+                      ...(request().owner.kind === "location"
+                        ? {
+                          directory: (request().owner as { directory: string })
+                            .directory,
+                        }
+                        : {}),
+                    }}
                     onReply={(answer) =>
                       shell.connection(server().id).rpc.call("form.reply", {
                         requestID: request().id,
@@ -89,21 +100,43 @@ export function registerFormTakeover(
           each={session.forms?.().slice(0, 1) ?? []}
           keyed={(r) => r.id}
         >
-          {(request) => (
-            <FormDock
-              connected={session.connected?.() ?? true}
-              request={request()}
-              onDirty={(value, text) => session.dirty("forms", value, text)}
-              onReply={(answer) =>
-                session.rpc("form.reply", { requestID: request().id, answer })
-                  .then(() => {})}
-              onCancel={(message) =>
-                session.rpc("form.cancel", {
-                  requestID: request().id,
-                  ...(message !== undefined ? { message } : {}),
-                }).then(() => {})}
-            />
-          )}
+          {(request) => {
+            const target = () => {
+              const owner = request().owner;
+              const id = owner.kind === "session"
+                ? owner.sessionID
+                : session.sessionID();
+              const entry = session.entry(id);
+              return {
+                ...session.failureTarget?.(),
+                sessionID: id,
+                directory: entry?.directory,
+                label: entry?.title,
+              };
+            };
+            return (
+              <FormDock
+                connected={session.connected?.() ?? true}
+                request={request()}
+                failureTarget={target()}
+                onDirty={(value, text) => session.dirty("forms", value, text)}
+                onReply={(answer) =>
+                  session.rpc(
+                    "form.reply",
+                    { requestID: request().id, answer },
+                    {
+                      facts: { target: target() },
+                    },
+                  )
+                    .then(() => {})}
+                onCancel={(message) =>
+                  session.rpc("form.cancel", {
+                    requestID: request().id,
+                    ...(message !== undefined ? { message } : {}),
+                  }, { facts: { target: target() } }).then(() => {})}
+              />
+            );
+          }}
         </For>
       );
     },
@@ -113,6 +146,7 @@ export default function FormDock(
   props: {
     request: FormRequest;
     connected?: boolean;
+    failureTarget?: import("@otk/protocol").FailureTarget;
     onReply(answer: FormAnswer): Promise<void>;
     onCancel(message?: string): Promise<void>;
     onDirty?(dirty: boolean, text?: string): void;
@@ -121,7 +155,7 @@ export default function FormDock(
   const form = createForm(props.request, solidState);
   const [collapsed, collapse] = createSignal(false),
     [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal(""),
+    [error, setError] = createSignal<FailureValue>(""),
     [attempted, attempt] = createSignal(false),
     [decline, setDecline] = createSignal(false),
     [message, setMessage] = createSignal("");
@@ -150,7 +184,14 @@ export default function FormDock(
       forgetForm(props.request.id);
       props.onDirty?.(false);
     } catch (cause) {
-      if (alive) setError(failureText(cause));
+      if (alive) {
+        setError(
+          failureValue(cause, {
+            action: "Sending form response",
+            target: props.failureTarget,
+          }),
+        );
+      }
     } finally {
       if (alive) setPending(false);
     }
@@ -300,10 +341,10 @@ export default function FormDock(
                         derived().issues[field().key]}
                     >
                       <FeedbackStatus
-                        feedback={{
-                          kind: "error",
-                          text: derived().issues[field().key],
-                        }}
+                        feedback={errorFeedback(derived().issues[field().key], {
+                          action: "Sending form response",
+                          target: props.failureTarget,
+                        })}
                       />
                     </Show>
                   </div>
@@ -351,7 +392,7 @@ export default function FormDock(
           </Show>
         </Show>
         <Show when={error()}>
-          <FeedbackStatus feedback={{ kind: "error", text: error() }} />
+          <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>
       </Takeover>
     </section>

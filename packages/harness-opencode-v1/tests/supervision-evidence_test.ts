@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { nativeMetadata, terminalToken } from "../db-hints.ts";
+import { nativeMetadata, terminalFacts, terminalToken } from "../db-hints.ts";
 import { terminalSessions } from "../db-hints.ts";
 import { DatabaseSync } from "node:sqlite";
 
@@ -15,6 +15,21 @@ Deno.test("V1 intermediate calls and scalar candidates cannot publish a proven f
   assertEquals(terminalToken({ ...info, finish: "tool-calls" }), 0);
   assertEquals(terminalToken({ ...info, finish: "unknown" }), 0);
   assertEquals(terminalToken({ ...info, finish: "stop" }), 20);
+  assertEquals(terminalFacts({ ...info, finish: "stop" }), {
+    terminal: 20,
+    outcome: "succeeded",
+  });
+  assertEquals(
+    terminalFacts({ ...info, error: { name: "APIError", data: {} } }),
+    { terminal: 20, outcome: "failed" },
+  );
+  assertEquals(
+    terminalFacts({
+      ...info,
+      error: { name: "MessageAbortedError", data: {} },
+    }),
+    { terminal: 20, outcome: "interrupted" },
+  );
   assertEquals(
     terminalToken({
       ...info,
@@ -60,6 +75,23 @@ Deno.test("V1 later intermediate or unfinished calls cannot erase an earlier pro
       JSON.stringify({ role: "assistant", time: { created: 50 } }),
     );
     assertEquals(terminalSessions(db, "", 1)[0]?.activity?.terminal, 20);
+    assertEquals(
+      terminalSessions(db, "", 1)[0]?.activity?.outcome,
+      "succeeded",
+    );
+    insert.run(
+      "failed",
+      70,
+      JSON.stringify({
+        role: "assistant",
+        time: { created: 70 },
+        error: { name: "APIError", data: { message: "Limit" } },
+      }),
+    );
+    assertEquals(terminalSessions(db, "", 1)[0]?.activity, {
+      terminal: 70,
+      outcome: "failed",
+    });
   } finally {
     db.close();
   }

@@ -945,7 +945,7 @@ test(
               exact: true,
             }).fill("Retained editor");
             await page.keyboard.press("Enter");
-            await expect(page.locator(".otk-title-editor [role=alert]"))
+            await expect(page.locator(".otk-list-row-feedback [role=alert]"))
               .toBeVisible();
             await centers(
               page,

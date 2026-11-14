@@ -201,16 +201,17 @@ resources expose the same optional query across their connections.
 
 `requestAttention` decorates the existing project/task/session projections from
 tracked mutation state. Pending work retains working lights and mandatory
-phantoms; input-required/authentication/definite failure retains attention. This
-also covers a project-owned creation before it has a result ID. Read/lease work
-does not make a session busy, and native index facts are never overwritten. The
-existing inbox priority owner combines native and operation attention. Resources
-own one presentation invalidation subscription per server and release it on
-removal/stop; operation metadata and identities still belong to the tracker.
-Authoritative session tombstones retire operation-derived attention, including
-late failures and attention inherited from a task or child. Automatic
-bookkeeping never creates mandatory attention, even when it fails; its request
-outcome and diagnostic feedback remain available independently.
+phantoms; input-required/authentication retains attention. Definite failures are
+feedback, not pending input. This also covers a project-owned creation before it
+has a result ID. Read/lease work does not make a session busy, and native index
+facts are never overwritten. The existing inbox priority owner combines native
+and operation attention. Resources own one presentation invalidation
+subscription per server and release it on removal/stop; operation metadata and
+identities still belong to the tracker. Authoritative session tombstones retire
+operation-derived attention, including late failures and attention inherited
+from a task or child. Automatic bookkeeping never creates mandatory attention,
+even when it fails; its request outcome and diagnostic feedback remain available
+independently.
 
 `HttpRequests` supplies an HTTP event transport over the same tracker. It sends
 envelopes and private receipt headers, then consumes held NDJSON events. It owns
@@ -238,11 +239,20 @@ the editable next input separate from the captured attempt. Client-owned
 `FeedbackFailure` passes classified action/target/reason/recovery copy through
 the existing failure feedback path, never arbitrary transport exception prose.
 
-`FailurePresenter` is an empty feature-extensible registry for safe `Feedback`.
-Unknown failures use fixed copy. `RequestFailure` carries structured public
-facts and a fixed message; `localFailure` reports its original cause to an
-injected diagnostic port rather than rendering it. Views consume feedback
-data/callbacks, not raw exceptions or method names.
+`FailurePresenter` derives action, linked target, reason and recovery from
+public facts. Feature contributions enrich that common path; unknown codes need
+no registration. It owns the grouping key (currently per session) and counts
+unique diagnostic identities, never render calls or replay deliveries. Resources
+and views retain `Feedback` instead of passing its rendered text. Local
+exceptions remain diagnostic-only; feature-selected public reasons stay
+separate.
+
+Worker/catalog transport and existing terminal receipts preserve public facts
+and original diagnostic identity. Notification detail borrows that presentation
+without coupling the generic hub to a failure schema. Failure deliveries do not
+create input attention or badges, and paging does not dismiss evidence. This
+adds no history surface, raw Details view or new persistence lifetime; those
+decisions remain open.
 
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.

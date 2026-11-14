@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./MessageActions.css" with { type: "text" };
 import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 import { commandHints, useCommandPorts } from "../keyboard/context.tsx";
 import { CopyIcon, ForkIcon, RevertIcon } from "./ChromeIcons.tsx";
@@ -23,7 +24,7 @@ export default function MessageActions(props: {
   const ports = useCommandPorts(), hints = commandHints(ports);
   const [revision, setRevision] = createSignal(0);
   const [pending, setPending] = createSignal("");
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   let active = true;
   onCleanup(() => {
     active = false;
@@ -60,7 +61,14 @@ export default function MessageActions(props: {
       await ports.commands.run(id, props.target);
     } catch (error) {
       if (ports.failureOwned?.(error)) return;
-      if (active) setError(failureText(error));
+      if (active) {
+        setError(
+          failureValue(error, {
+            action: ports.commands.metadata(id)?.title ?? id,
+            target: props.target,
+          }),
+        );
+      }
     } finally {
       if (active) setPending("");
     }
@@ -103,7 +111,7 @@ export default function MessageActions(props: {
         </For>
       </span>
       <Show when={error()}>
-        <span class="otk-error" role="alert">{error()}</span>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
     </span>
   );

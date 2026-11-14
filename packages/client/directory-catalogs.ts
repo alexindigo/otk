@@ -12,6 +12,7 @@ import type {
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { CatalogOwner, CatalogState } from "./catalog-resource.ts";
+import { presentFailure } from "./failure-features.ts";
 export interface DirectoryCatalogState {
   catalog?: DirectoryCatalog;
 }
@@ -367,7 +368,14 @@ export function createDirectoryCatalogs(o: {
               available: !!current,
               loading: current?.state === "digesting",
               error: current?.failure
-                ? "Choices are unavailable. Try refreshing."
+                ? presentFailure({
+                  ...current.failure,
+                  facts: {
+                    action: `Loading ${kind}`,
+                    target: { directory: resource.directory },
+                    ...current.failure.facts,
+                  },
+                })
                 : "",
               value: current?.value === undefined
                 ? undefined

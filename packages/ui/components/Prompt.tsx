@@ -351,6 +351,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         void submitCommand().catch(ctx.fail);
       }}
     >
+      <Show when={!session?.feedback && (pending() || feedback())}>
+        <ComposerNotice>
+          <OperationFeedback
+            feedback={feedback() ??
+              { kind: "pending", text: "Sending prompt…" }}
+          />
+        </ComposerNotice>
+      </Show>
       <label for="otk-prompt-input">
         {features.find((feature) => feature.label)?.label?.() ?? "Prompt"}
       </label>
@@ -432,14 +440,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           </PrimaryAction>
         </div>
       </div>
-      <Show when={!session?.feedback && (pending() || feedback())}>
-        <ComposerNotice>
-          <OperationFeedback
-            feedback={feedback() ??
-              { kind: "pending", text: "Sending prompt…" }}
-          />
-        </ComposerNotice>
-      </Show>
       <For each={features}>{(feature) => feature.overlay?.()}</For>
     </form>
   );

@@ -5,6 +5,7 @@ import { ComposerNoticeRow } from "./ComposerNotice.tsx";
 import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
+import FailureContent from "./FailureContent.tsx";
 
 /** Content only: its consumer owns the one joined notice frame and target. */
 export default function OperationFeedback(
@@ -32,9 +33,13 @@ export default function OperationFeedback(
         </Show>
       }
     >
-      <span class="otk-control-label" title={props.feedback.text}>
-        {props.feedback.text}
-      </span>
+      {props.feedback.failure
+        ? <FailureContent failure={props.feedback.failure} />
+        : (
+          <span class="otk-control-label" title={props.feedback.text}>
+            {props.feedback.text}
+          </span>
+        )}
     </ComposerNoticeRow>
   );
 }

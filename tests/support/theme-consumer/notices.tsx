@@ -3,6 +3,7 @@ import { createSignal, For } from "solid-js";
 import {
   CommandHub,
   createDrafts,
+  errorFeedback,
   type SessionRevert,
   type SessionRevertState,
 } from "@otk/client";
@@ -54,7 +55,13 @@ export default function Notices(props: { prefs: Preferences }) {
     operation.update((state) => {
       state.pending = value === "pending" ? "revert" : undefined;
       state.error = value === "error"
-        ? "Could not finish this action. Try again"
+        ? errorFeedback("The requested rollback is no longer available", {
+          action: "Rolling back conversation",
+          target: {
+            sessionID: "tstv1-theme-notice",
+            label: "Public composer notice",
+          },
+        })
         : undefined;
     });
   };

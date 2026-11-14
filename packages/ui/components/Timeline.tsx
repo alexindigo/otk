@@ -8,7 +8,8 @@ import {
   Show,
 } from "solid-js";
 import type { Selection, TimelinePrompt } from "@otk/client";
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
 import MessageActions from "./MessageActions.tsx";
 import ListRow from "./ListRow.tsx";
@@ -78,7 +79,7 @@ export default function Timeline(props: {
   onReveal(messageID: string): Promise<void>;
 }): import("solid-js").Element {
   const [selected, setSelected] = createSignal("");
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   let operation = 0;
   onCleanup(() => {
     operation++;
@@ -99,7 +100,9 @@ export default function Timeline(props: {
       await action();
     } catch (error) {
       if (session === props.session && request === operation) {
-        setError(failureText(error));
+        setError(
+          failureValue(error, { action: "Revealing prompt in conversation" }),
+        );
       }
     }
   };
@@ -165,7 +168,7 @@ export default function Timeline(props: {
         />
       </Show>
       <Show when={error()}>
-        <p class="otk-error" role="alert">{error()}</p>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
     </section>
   );

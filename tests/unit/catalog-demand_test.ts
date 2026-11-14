@@ -483,8 +483,8 @@ Deno.test("catalog demand: published kind failure remains the readiness authorit
     await work;
     assertEquals(failure, undefined);
     assertEquals(
-      lease.view("agents").state.error,
-      "Choices are unavailable. Try refreshing.",
+      (lease.view("agents").state.error || undefined)?.failure?.reason,
+      "No publishable failure reason is available",
     );
     assertEquals(lease.view("agents").state.value?.[0].name, "kept");
   } finally {

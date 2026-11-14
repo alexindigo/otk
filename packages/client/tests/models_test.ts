@@ -290,8 +290,8 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
     assertEquals(
-      session.models?.state.error,
-      "Could not finish this action. Try again",
+      session.models?.state.error && session.models.state.error.failure?.reason,
+      "No publishable failure reason is available",
     );
     await settle();
     assertEquals(session.state.error, undefined);

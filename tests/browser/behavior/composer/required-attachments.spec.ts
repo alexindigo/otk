@@ -6,6 +6,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import {
   chips,
   messages,
+  pendingChips,
   prompt,
   reply,
   upload,
@@ -40,9 +41,7 @@ for (const mode of ["prompt", "command"] as const) {
           bytes: btoa("uploaded attachment bytes"),
         }]);
         await expect(chips(page)).toHaveCount(3);
-        await expect(chips(page).filter({ hasText: "reading…" })).toHaveCount(
-          0,
-        );
+        await expect(pendingChips(page)).toHaveCount(0);
         const readDraft = async () => ({
           input: await prompt(page).inputValue(),
           chips: await chips(page).allTextContents(),
@@ -54,7 +53,11 @@ for (const mode of ["prompt", "command"] as const) {
         try {
           await page.locator(".otk-prompt button[type=submit]").click();
           await expect(page.locator(".otk-composer-notice [role=alert]"))
-            .toContainText("An attachment cannot be read");
+            .toHaveCount(1);
+          await expect(page.locator(".otk-composer-notice [role=alert]"))
+            .toContainText(/Cannot read attachment "?selected\.txt"?/);
+          await expect(page.locator(".otk-composer-notice [role=alert]"))
+            .toContainText("Required attachments");
           expect(await readDraft()).toEqual(original);
           expect((await state.observe<{ requests: unknown[] }>()).requests)
             .toHaveLength(0);

@@ -6,8 +6,10 @@ import PreferenceControls, {
 } from "./PreferenceControls.tsx";
 import { SettingsIcon } from "./ChromeIcons.tsx";
 import Popover from "./surface/Popover.tsx";
+import { errorFeedback, type FailureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 export interface DisplayMenuProps extends PreferenceControlsProps {
-  error: string;
+  error: string | FailureValue;
 }
 export default function DisplayMenu(
   props: DisplayMenuProps,
@@ -33,7 +35,11 @@ export function DisplayPreferences(
     <div class="otk-display-preferences">
       <PreferenceControls {...props} />
       <Show when={props.error}>
-        <p class="otk-error" role="alert">{props.error}</p>
+        <FeedbackStatus
+          feedback={errorFeedback(props.error, {
+            action: "Saving display preferences",
+          })}
+        />
       </Show>
     </div>
   );

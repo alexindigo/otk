@@ -105,8 +105,12 @@ Deno.test("project picker owns server and welcome identity, current failures and
       connected: true,
       paths: [],
       loading: false,
-      error: "Could not finish this action. Try again",
+      error: f.owner.state.error,
     });
+    assertEquals(
+      f.owner.state.error && f.owner.state.error.failure?.reason,
+      "No publishable failure reason is available",
+    );
     await f.owner.ready();
     assertEquals(
       f.requests.length,

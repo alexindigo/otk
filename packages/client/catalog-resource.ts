@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import { createState, type StateFactory } from "./state.ts";
 
 export interface CatalogState<T> {
   value?: T;
   available: boolean;
   loading: boolean;
-  error: string;
+  error: FailureValue;
 }
 export interface CatalogConnection {
   key: unknown;
@@ -143,7 +143,7 @@ export function createCatalogResource<T>(options: {
       connect();
       if (alive && at === generation) {
         update((state) => {
-          state.error = failureText(error);
+          state.error = failureValue(error);
         });
       }
     }).finally(() => {

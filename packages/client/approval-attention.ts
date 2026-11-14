@@ -6,6 +6,8 @@ import {
   type PermissionRequest,
   sessionAncestors,
   type SessionLookup,
+  type TerminalEvidence,
+  type TerminalOutcome,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
@@ -14,6 +16,7 @@ export interface EntryChange {
   before?: IndexEntry;
   after?: IndexEntry;
   completedAt?: number;
+  completedOutcome?: TerminalOutcome;
 }
 export interface EntryChanges {
   generation: string;
@@ -25,7 +28,12 @@ export interface AttentionProjection {
   get(id: string): IndexEntry | undefined;
   configure(enabled: readonly string[], linked: boolean): void;
   update(ids: readonly string[], baseline?: boolean): void;
-  finished(id: string, time: number, baseline?: boolean): void;
+  finished(
+    id: string,
+    time: number,
+    baseline?: boolean,
+    outcome?: TerminalOutcome,
+  ): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
   reset(): void;
   stop(): void;
@@ -39,8 +47,8 @@ export function createAttentionProjection(o: {
   factory?: StateFactory;
 }): AttentionProjection {
   const values = new Map<string, IndexEntry>();
-  const finishClocks = new Map<string, number>();
-  const completed = new Map<string, number>();
+  const finishClocks = new Map<string, TerminalEvidence>();
+  const completed = new Map<string, TerminalEvidence>();
   const covered = new Set<string>();
   const boundaries = new Map<string, { count: number; ancestors: string[] }>();
   const subtracted = new Map<string, number>();
@@ -74,6 +82,7 @@ export function createAttentionProjection(o: {
       entry.archived,
       entry.deleted,
       entry.attention,
+      entry.activity,
     ]);
   const update = (
     ids: readonly string[],
@@ -156,7 +165,12 @@ export function createAttentionProjection(o: {
           id,
           before,
           after,
-          ...(o.completions ? { completedAt: completed.get(id) ?? 0 } : {}),
+          ...(o.completions
+            ? {
+              completedAt: completed.get(id)?.terminal ?? 0,
+              completedOutcome: completed.get(id)?.outcome,
+            }
+            : {}),
         });
       }
     }
@@ -193,12 +207,18 @@ export function createAttentionProjection(o: {
       else update(dirty, false, true);
     },
     update,
-    finished(id, time, baseline = false) {
+    finished(id, time, baseline = false, outcome) {
       const previous = finishClocks.get(id);
-      if (stopped || previous !== undefined && time <= previous) return;
-      finishClocks.set(id, time);
+      if (
+        stopped || previous !== undefined &&
+          (time < (previous.terminal ?? 0) ||
+            time === previous.terminal &&
+              (!outcome || outcome === previous.outcome))
+      ) return;
+      const value = { terminal: time, ...(outcome ? { outcome } : {}) };
+      finishClocks.set(id, value);
       if (baseline && previous === undefined) return;
-      completed.set(id, time);
+      completed.set(id, value);
       update([id], false, false, true);
     },
     subscribe(listener) {

@@ -18,6 +18,7 @@ export default function ListRow(props: {
   activate?(): void;
   leading?: Element;
   trailing?: Element;
+  feedback?: Element;
   attributes?: Record<string, unknown>;
   ref?: ((element: HTMLElement) => void) | ((element: HTMLElement) => void)[];
   children: Element;
@@ -65,6 +66,14 @@ export default function ListRow(props: {
         </Label>
         <span class="otk-list-row-trailing">{props.trailing}</span>
       </SelectionContent>
+      {props.editing && props.feedback && (
+        <div
+          class="otk-list-row-feedback"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {props.feedback}
+        </div>
+      )}
     </Control>
   );
 }

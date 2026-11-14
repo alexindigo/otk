@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { notificationFailure } from "./failure-features.ts";
 import { belongsToSession, type Preferences } from "@otk/protocol";
 import type { Note, NotificationPolicy } from "./notifications.ts";
 export interface NotificationContext {
@@ -47,7 +48,10 @@ export function notificationPolicy(
     if (os) channels.push("os");
     else if (!dismissed && prefs["notify.toast"]) channels.push("toast");
     if (!dismissed && fresh && prefs["notify.sound"]) channels.push("sound");
-    if (prefs["notify.badge"]) channels.push("badge");
+    if (
+      prefs["notify.badge"] && note.kind !== "error" &&
+      !notificationFailure(note)
+    ) channels.push("badge");
     return {
       channels,
       fallback: prefs["notify.toast"] ? { from: "os", to: "toast" } : undefined,

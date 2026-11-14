@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { type FailureValue, failureValue } from "@otk/client";
 import { createStore } from "solid-js";
 import {
   DEFAULT_PREFS,
@@ -9,7 +9,7 @@ import {
 import type { ServerFrame } from "@otk/protocol";
 /** Preferences follow the serving core's ordered broadcast, not optimistic writes. */
 export interface Toggles {
-  state: { prefs: Preferences; ready: boolean; error: string };
+  state: { prefs: Preferences; ready: boolean; error: FailureValue };
   receive(frame: ServerFrame): void;
   set(key: PreferenceKey, value: Preferences[PreferenceKey]): Promise<void>;
 }
@@ -19,7 +19,7 @@ export function createToggles(
     value: Preferences[PreferenceKey],
   ) => Promise<unknown>,
 ): Toggles {
-  const [state, setState] = createStore({
+  const [state, setState] = createStore<Toggles["state"]>({
     prefs: { ...DEFAULT_PREFS },
     ready: false,
     error: "",
@@ -43,7 +43,7 @@ export function createToggles(
         await save(key, value);
       } catch (error) {
         setState((draft) => {
-          draft.error = errorMessage(error);
+          draft.error = failureValue(error, { action: "prefs.set" });
         });
       }
     },

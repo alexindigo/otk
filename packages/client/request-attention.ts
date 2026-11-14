@@ -50,7 +50,8 @@ export function requestAttention(
     const state = operation.state, owner = state.owner;
     if (
       !owner || metadata.get(state.method)?.kind !== "mutation" ||
-      state.phase === "succeeded" || state.phase === "released"
+      state.phase === "succeeded" || state.phase === "released" ||
+      state.phase === "failed" || state.error
     ) continue;
     // Automatic bookkeeping has diagnostics, but never work for the user to
     // supervise. Its failure must not promote a session/project into attention.
@@ -59,11 +60,10 @@ export function requestAttention(
     // Authoritative lifetime facts outrank every retained operation receipt,
     // regardless of whether the operation settles before or after deletion.
     if (session?.deleted) continue;
-    const status =
-      state.error || state.connection === "authentication-required" ||
+    const status = state.connection === "authentication-required" ||
         state.progress?.code === "input-required"
-        ? "blocked"
-        : "working";
+      ? "blocked"
+      : "working";
     add(projectStates, session?.directory ?? task?.directory ?? owner, status);
     if (task) {
       taskStates[task.id] = attentionStatus(taskStates[task.id], status);

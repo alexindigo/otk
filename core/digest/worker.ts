@@ -19,6 +19,7 @@ import {
   errorMessage,
   isCancellation,
   OperationFailure,
+  preserveFailure,
   type SessionMetadata,
 } from "@otk/protocol";
 import type { FromWorker, ToWorker } from "./protocol.ts";
@@ -1253,7 +1254,7 @@ function handle(message: ToWorker): void {
                         error.outcome === "rejected"
                       ? "rejected"
                       : "unavailable",
-                    failure: {
+                    failure: preserveFailure(error, {
                       code: error instanceof OperationFailure &&
                           error.outcome !== "unknown"
                         ? error.code
@@ -1263,7 +1264,7 @@ function handle(message: ToWorker): void {
                         ? "new-intent"
                         : "same-intent",
                       diagnosticID: crypto.randomUUID(),
-                    },
+                    }),
                   });
                   if (!isCancellation(error)) {
                     post({

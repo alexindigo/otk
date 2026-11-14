@@ -471,7 +471,13 @@ export function createServerResources(o: {
       for (
         const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
       ) {
-        owner.finished(session, time, true);
+        const supervision = inbox(id).state.inbox.supervision?.[session];
+        owner.finished(
+          session,
+          time,
+          true,
+          supervision?.terminal === time ? supervision.outcome : undefined,
+        );
       }
     }
     const model = approvals(id);
@@ -621,7 +627,14 @@ export function createServerResources(o: {
             : changes.sessions
         ) {
           if (changes.baseline || finishes[session] !== undefined) {
-            owner.finished(session, finishes[session] ?? 0, changes.baseline);
+            const time = finishes[session] ?? 0;
+            const supervision = current.state.inbox.supervision?.[session];
+            owner.finished(
+              session,
+              time,
+              changes.baseline,
+              supervision?.terminal === time ? supervision.outcome : undefined,
+            );
           }
         }
       });

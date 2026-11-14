@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentSession, SessionMetadata } from "@otk/protocol";
+import {
+  type ContentSession,
+  latestTerminal,
+  type SessionMetadata,
+  type TerminalEvidence,
+  type TerminalOutcome,
+} from "@otk/protocol";
 import type { OpenCodeClient } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { sessionRecency } from "./recency.ts";
@@ -59,6 +65,17 @@ export function session(raw: SessionFacts): ContentSession {
     archived: !!raw.time.archived,
   };
 }
+export function terminalFacts(
+  idle: unknown,
+  outcome: unknown,
+  shell?: number,
+): TerminalEvidence {
+  const end = terminalEvidence(idle, outcome);
+  return latestTerminal(
+    end ? { terminal: end, outcome: outcome as TerminalOutcome } : undefined,
+    shell ? { terminal: shell } : undefined,
+  );
+}
 /** Scalar acquisition cannot certify activity or erase live attention. */
 export function metadata(raw: SessionFacts): SessionMetadata {
   const mapped = session(raw);
@@ -77,7 +94,7 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     status: "idle",
     activityAuthority: "unknown",
     activity: {
-      terminal: terminalEvidence(raw.time.idle, raw.outcome, raw.terminal),
+      ...terminalFacts(raw.time.idle, raw.outcome, raw.terminal),
     },
     attention: {
       permissions: 0,

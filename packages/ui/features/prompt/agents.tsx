@@ -15,6 +15,7 @@ import ListPicker, {
 } from "../../components/ListPicker.tsx";
 import { StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
+import FeedbackStatus from "../../components/FeedbackStatus.tsx";
 import {
   ModelLabel,
   PromptSetting,
@@ -130,9 +131,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             <p class="otk-picker-status" role="status">Loading…</p>
           </Show>
           <Show when={catalog.error}>
-            <div class="otk-picker-status" role="alert">
-              <span>{catalog.error}</span>
-              <button type="button" onClick={() => void retry()}>Retry</button>
+            <div class="otk-picker-status">
+              <FeedbackStatus
+                feedback={catalog.error
+                  ? {
+                    ...catalog.error,
+                    action: { label: "Retry", run: () => void retry() },
+                  }
+                  : undefined}
+              />
             </div>
           </Show>
           <Show when={!catalog.loading && !catalog.error}>

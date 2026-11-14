@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OpencodeV1Config } from "./config.ts";
 import { HarnessError } from "@otk/harness";
-import { errorMessage } from "@otk/protocol";
+import {
+  errorMessage,
+  type FailureCause,
+  publicFailureReason,
+} from "@otk/protocol";
 import { finiteResponse } from "./finite-response.ts";
 import { NativeReadiness } from "./readiness.ts";
 import {
@@ -25,7 +29,12 @@ export class NativeRequestFailure extends OperationFailure {
     readonly original: unknown,
     code: string,
   ) {
-    super(outcome, code, original);
+    super(
+      outcome,
+      code,
+      original,
+      original instanceof HttpFailure ? original.facts : undefined,
+    );
     this.failure = {
       code,
       retry: outcome === "unknown"
@@ -33,7 +42,8 @@ export class NativeRequestFailure extends OperationFailure {
         : outcome === "unavailable"
         ? "same-intent"
         : "new-intent",
-      diagnosticID: crypto.randomUUID(),
+      diagnosticID: this.diagnosticID,
+      facts: this.facts,
     };
   }
 }
@@ -105,12 +115,18 @@ function displayMessage(
   return fallback;
 }
 export class HttpFailure extends HarnessError {
+  override readonly facts: FailureCause["facts"];
   constructor(
     readonly status: number,
     readonly detail: { message: string; kind?: string; ref?: string },
     original?: unknown,
+    publicReason?: string,
   ) {
     super(`harness_${status}`, detail.message.slice(0, 1024));
+    this.facts = {
+      reason: publicFailureReason(publicReason ?? detail.message),
+      status,
+    };
     this.cause = original;
   }
 }
@@ -212,6 +228,7 @@ export class Client {
       const text = await this.wait(response.text());
       const fallback = `Request failed (HTTP ${response.status}).`;
       let message = text.trim() || fallback;
+      let publicReason: string | undefined;
       let kind: string | undefined, ref: string | undefined;
       const identities: string[] = [];
       try {
@@ -240,11 +257,16 @@ export class Client {
           if (
             data && typeof data === "object" && "message" in data &&
             typeof data.message === "string" && data.message.trim()
-          ) message = errorMessage(data);
-          else if (
+          ) {
+            message = errorMessage(data);
+            publicReason = message;
+          } else if (
             "message" in value && typeof value.message === "string" &&
             value.message.trim()
-          ) message = errorMessage(value);
+          ) {
+            message = errorMessage(value);
+            publicReason = message;
+          }
           if (
             data && typeof data === "object" && "ref" in data &&
             typeof data.ref === "string"
@@ -254,11 +276,22 @@ export class Client {
           }
         }
       } catch { /* Non-JSON errors retain the existing HTTP text. */ }
-      throw new HttpFailure(response.status, {
-        message: displayMessage(kind, message, fallback, identities),
-        ...(kind ? { kind } : {}),
-        ...(ref ? { ref } : {}),
-      }, text);
+      throw new HttpFailure(
+        response.status,
+        {
+          message: displayMessage(kind, message, fallback, identities),
+          ...(kind ? { kind } : {}),
+          ...(ref ? { ref } : {}),
+        },
+        text,
+        publicReason === undefined
+          ? undefined
+          : publicFailureReason(publicReason, [
+            this.cfg.password,
+            headers.get("Authorization") ?? "",
+            (headers.get("Authorization") ?? "").replace(/^\S+\s+/, ""),
+          ]),
+      );
     }
     return response;
   }

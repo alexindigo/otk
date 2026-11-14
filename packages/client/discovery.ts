@@ -4,6 +4,7 @@ import type { AuthStatus } from "./auth.ts";
 import { type Feedback, FeedbackFailure, RequestFailure } from "./failures.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { HttpReadFailure } from "./http-requests.ts";
+import { errorFeedback } from "./failure-features.ts";
 
 export type DiscoveryStepKey = "connecting" | "identity" | "sign-in";
 export interface DiscoveryStep {
@@ -32,10 +33,13 @@ export function discoveryFailure(
   reason: string,
   next: string,
 ): FeedbackFailure {
-  return new FeedbackFailure({
-    kind: "error",
-    text: `Could not check OTK at ${target}: ${reason}. ${next}`,
-  });
+  return new FeedbackFailure(
+    errorFeedback(reason, {
+      action: "Checking OTK",
+      target: { label: target },
+      recovery: next,
+    })!,
+  );
 }
 export function authStatus(value: unknown, target: string): AuthStatus {
   const invalid = () =>

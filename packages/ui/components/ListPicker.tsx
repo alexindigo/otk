@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ListPicker.css" with { type: "text" };
 import {
   createEffect,
@@ -50,7 +51,7 @@ export default function ListPicker<T = string>(props: {
   search?: string;
   status?: Element;
   loading?: boolean;
-  error?: string;
+  error?: import("./FeedbackStatus.tsx").FeedbackInput;
   header?: Element;
   class?: string;
   onPick(value: T): void;
@@ -124,7 +125,7 @@ export default function ListPicker<T = string>(props: {
       busy={props.loading}
       description={props.loading
         ? `Loading ${props.label.toLowerCase()}…`
-        : props.error}
+        : undefined}
       applied={props.applied}
       triggerColor={props.triggerColor}
       trigger={props.trigger === undefined
@@ -349,6 +350,11 @@ export default function ListPicker<T = string>(props: {
             <p class="otk-picker-empty">
               {query() ? "No matches." : "No options available."}
             </p>
+          </Show>
+          <Show
+            when={props.error && !props.loading && props.status === undefined}
+          >
+            <FeedbackStatus error={props.error} />
           </Show>
         </div>
       </Show>

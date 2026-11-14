@@ -11,7 +11,7 @@ export interface Chip {
   end?: number;
   part: PromptPart;
   pending?: boolean;
-  error?: string;
+  error?: import("./failure-features.ts").FailureValue;
 }
 export interface Draft {
   input: string;

@@ -134,7 +134,7 @@ test(
       page.getByRole("dialog", { name: "Theme", exact: true }).getByRole(
         "alert",
       ),
-    ).toContainText("Could not finish this action");
+    ).toContainText("failed for");
     await expect(page.getByRole("button", { name: "Save theme", exact: true }))
       .toBeEnabled();
     await expect(page.locator('.otk-toast[data-kind="error"]')).toHaveCount(0);

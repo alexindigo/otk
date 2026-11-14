@@ -68,7 +68,10 @@ Deno.test("revert owner serializes intents without optimistic content and retire
   assertEquals(f.owner.state.error, undefined);
   f.result(Promise.reject(new Error("Restore refused")));
   await f.owner.restore();
-  assertEquals(f.owner.state.error, "Could not finish this action. Try again");
+  assertEquals(
+    f.owner.state.error && f.owner.state.error.failure?.reason,
+    "No publishable failure reason is available",
+  );
   f.result(Promise.resolve({ id: "b" } as ContentSession));
   await f.owner.restore();
   assertEquals(f.owner.state.error, undefined);

@@ -636,6 +636,8 @@ export class DigestBridge implements DigestPort {
               message.outcome,
               message.failure.code,
               message.failure,
+              message.failure.facts,
+              message.failure.diagnosticID,
             );
           }
           if (message.t !== "read.result") return;

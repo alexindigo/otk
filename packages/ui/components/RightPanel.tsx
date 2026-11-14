@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -29,7 +30,7 @@ export default function RightPanel(props: {
   const active = createMemo(() =>
     views().find((v) => v.id === props.layout.rightView) ?? views()[0]
   );
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   const bounds = SHELL_WIDTHS.right;
   const resize = createResize({
     width: () => props.layout.rightWidth ?? bounds.default,
@@ -40,7 +41,8 @@ export default function RightPanel(props: {
       await props.onLayout({ rightWidth });
       setError("");
     },
-    fail: (error) => setError(failureText(error)),
+    fail: (error) =>
+      setError(failureValue(error, { action: "Saving panel layout" })),
   });
   const width = resize.width;
   const native = nativeAttributes(() => resize.handlers);
@@ -49,7 +51,7 @@ export default function RightPanel(props: {
       await props.onLayout(patch);
       setError("");
     } catch (error) {
-      setError(failureText(error));
+      setError(failureValue(error, { action: "Saving panel layout" }));
     }
   };
   function Views(input: { rail: boolean }) {
@@ -110,7 +112,7 @@ export default function RightPanel(props: {
         >
           <Views rail />
           <Show when={error()}>
-            <p role="alert" class="otk-error">{error()}</p>
+            <FeedbackStatus feedback={errorFeedback(error())} />
           </Show>
         </SidebarRail>
       </Show>
@@ -128,7 +130,7 @@ export default function RightPanel(props: {
         <Views rail={false} />
         <div class="otk-panel-body">
           <Show when={error()}>
-            <p role="alert" class="otk-error">{error()}</p>
+            <FeedbackStatus feedback={errorFeedback(error())} />
           </Show>
           <Show
             when={!props.layout.rightCollapsed && active()}

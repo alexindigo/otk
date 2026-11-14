@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { ProjectSelection } from "./project-navigation.ts";
 import type { Selection } from "./session.ts";
@@ -13,7 +13,7 @@ export interface ProjectPickerState {
   connected: boolean;
   paths: string[];
   loading: boolean;
-  error: string;
+  error: FailureValue;
 }
 export interface ProjectPickerOwner {
   readonly state: ProjectPickerState;
@@ -76,7 +76,10 @@ export function createProjectPicker(options: {
       connect();
       if (alive && at === generation) {
         update({
-          error: failureText(error),
+          error: failureValue(error, {
+            action: "projects.scan",
+            target: { sidecarId },
+          }),
         });
       }
     }).finally(() => {

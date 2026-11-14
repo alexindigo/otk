@@ -52,3 +52,25 @@
   align-self: flex-end;
   background: var(--overlay-bg);
 }
+.otk-toasts {
+  max-height: calc(100dvh - 2 * var(--overlay-gutter));
+}
+.otk-toasts > .otk-toast {
+  display: flex;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+.otk-toasts > .otk-toast > .otk-surface {
+  flex: 1;
+  min-height: 0;
+}
+.otk-toasts-more {
+  flex: none;
+}
+.otk-toast .otk-surface-body > * {
+  flex-shrink: 0;
+}
+.otk-toast-message .otk-failure-content,
+.otk-toast-message .otk-failure-content span {
+  color: inherit;
+}

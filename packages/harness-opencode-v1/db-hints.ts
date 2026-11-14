@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DatabaseSync } from "node:sqlite";
-import type { SessionMetadata } from "@otk/protocol";
+import type { SessionMetadata, TerminalEvidence } from "@otk/protocol";
 import type { Info } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 
@@ -13,6 +13,19 @@ export function terminalToken(info: Info): number {
 }
 export const terminalProjection = (session = "session") =>
   `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) ELSE json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown'))) ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
+export function terminalFacts(info: Info): TerminalEvidence {
+  const terminal = terminalToken(info);
+  return terminal
+    ? {
+      terminal,
+      outcome: info.error
+        ? info.error.name === "MessageAbortedError" ? "interrupted" : "failed"
+        : "succeeded",
+    }
+    : {};
+}
+const outcomeProjection = (session: string) =>
+  `(SELECT CASE WHEN json_extract(m.data,'$.error.name')='MessageAbortedError' THEN 'interrupted' WHEN json_extract(m.data,'$.error') IS NOT NULL THEN 'failed' ELSE 'succeeded' END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown'))) ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal_outcome`;
 
 export function nativeMetadata(row: Record<string, unknown>): SessionMetadata {
   return {
@@ -44,11 +57,14 @@ export function terminalSessions(
 ): SessionMetadata[] {
   return db.prepare(
     `SELECT * FROM (SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${
-      terminalProjection("s")
+      terminalProjection("s") + "," + outcomeProjection("s")
     } FROM session s WHERE s.id>?) WHERE terminal>0 ORDER BY id LIMIT ?`,
   ).all(after ? ids.decode(after) : "", limit).map((row) => ({
     ...nativeMetadata(row),
-    activity: { terminal: Number(row.terminal) },
+    activity: {
+      terminal: Number(row.terminal),
+      outcome: row.terminal_outcome as import("@otk/protocol").TerminalOutcome,
+    },
   }));
 }
 /** One native metadata projection, shared by standalone bootstrap and the worker. */

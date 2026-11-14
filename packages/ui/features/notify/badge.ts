@@ -46,7 +46,7 @@ export function registerBadgeChannel(hub: NotificationHub): () => void {
     id: "badge",
     available: () => true,
     deliver(note) {
-      if (note.sessionRef) {
+      if (note.sessionRef && note.kind !== "error") {
         ids.add(note.id);
         paint();
       }

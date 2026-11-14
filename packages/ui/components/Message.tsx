@@ -102,6 +102,7 @@ export interface MessageControl {
 export default function Message(
   props: {
     sidecarId?: string;
+    sessionTitle?: string;
     ownerID?: string;
     message: OtkMessage;
     segments?: import("@otk/client").TranscriptReply["segments"];
@@ -113,7 +114,7 @@ export default function Message(
     usage?: Usage;
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
-    usageError?(): string | undefined;
+    usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
@@ -148,6 +149,7 @@ export default function Message(
     ownerID: props.ownerID,
     sidecarId: props.sidecarId,
     sessionID: props.message.sessionID,
+    label: props.sessionTitle,
     messageID: props.message.id,
     directory: props.directory,
   });

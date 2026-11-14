@@ -99,8 +99,15 @@ export class RequestCoordinator {
   #now(): number {
     return (this.options.clock ?? Date.now)();
   }
-  #failure(cause: unknown): PublicFailure {
-    return publicFailure(cause, this.options.diagnostic ?? (() => {}));
+  #failure(
+    cause: unknown,
+    method?: string,
+    scope?: { sessionID?: string; directory?: string },
+  ): PublicFailure {
+    return publicFailure(cause, this.options.diagnostic ?? (() => {}), {
+      ...(method ? { action: method } : {}),
+      ...(scope ? { target: scope } : {}),
+    });
   }
   window(): RequestWindow {
     const value = this.options.receipts.window(
@@ -244,6 +251,13 @@ export class RequestCoordinator {
               retry: record.error_retry!,
               diagnosticID: record.diagnostic_id!,
               ...(record.error_field ? { field: record.error_field } : {}),
+              facts: record.error_facts ? JSON.parse(record.error_facts) : {
+                action: record.method,
+                target: {
+                  sessionID: record.scope_session ?? undefined,
+                  directory: record.scope_directory ?? undefined,
+                },
+              },
             },
           },
         });
@@ -433,6 +447,7 @@ export class RequestCoordinator {
         error_retry: null,
         error_field: null,
         diagnostic_id: null,
+        error_facts: null,
       });
       const entry = this.#entry(admitted.record, ref, prepared.execution);
       if (
@@ -462,7 +477,7 @@ export class RequestCoordinator {
       recipient.send({
         t: "request.rejected",
         ref,
-        error: this.#failure(cause),
+        error: this.#failure(cause, control.method),
       });
     } finally {
       admission?.release();
@@ -747,13 +762,17 @@ export class RequestCoordinator {
               code: "checking-outcome",
             });
           } else {
-            const failure = this.#failure(cause);
+            const failure = this.#failure(cause, entry.record.method, {
+              sessionID: entry.record.scope_session ?? undefined,
+              directory: entry.record.scope_directory ?? undefined,
+            });
             this.#transition(entry, {
               state: "failed",
               error_code: failure.code,
               error_retry: failure.retry,
               error_field: failure.field ?? null,
               diagnostic_id: failure.diagnosticID,
+              error_facts: JSON.stringify(failure.facts),
             });
             this.#emit(entry, {
               t: "request.result",

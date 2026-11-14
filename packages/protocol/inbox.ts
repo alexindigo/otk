@@ -107,6 +107,7 @@ export interface InboxSnapshot {
   /** Server-side template discovery; index discovery is projected from the index. */
   discovered?: string[];
   discoveryError?: string;
+  discoveryFailure?: PublicFailure;
   /** Additive server-owned scalar projection; no session data is needed by rows. */
   summaries?: Record<string, ProjectSummary>;
 }

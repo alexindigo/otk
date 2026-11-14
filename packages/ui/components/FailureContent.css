@@ -1,0 +1,6 @@
+.otk-failure-content {
+  display: grid;
+  gap: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
