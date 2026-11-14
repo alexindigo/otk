@@ -24,7 +24,8 @@ function prefixUpper(prefix: string): string | undefined {
   for (let i = chars.length - 1; i >= 0; i--) {
     const point = chars[i].codePointAt(0)!;
     if (point < 0x10ffff) {
-      return chars.slice(0, i).join("") + String.fromCodePoint(point + 1);
+      const next = point === 0xd7ff ? 0xe000 : point + 1;
+      return chars.slice(0, i).join("") + String.fromCodePoint(next);
     }
   }
 }
