@@ -55,12 +55,14 @@ async function recording(
   delayed = false,
   recoverypending?: number,
   diagnostic = diagnosticsLog("info"),
+  replaybytes?: number,
 ) {
   const settings = cfg();
   if (recoverypending !== undefined) {
     settings.messages.recoverypending = recoverypending;
   }
   settings.harness.db = join(await fixture(), "missing.db");
+  if (replaybytes !== undefined) settings.messages.replaybytes = replaybytes;
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   let release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
@@ -577,6 +579,111 @@ test("attention request replay is idempotent and moving owners updates only thei
       assertEquals(entry.attention.questions, 0);
       assertEquals(entry.attention.childQuestions, 0);
     }
+  } finally {
+    await record.adapter.core.stop();
+  }
+});
+
+test("oversize record deltas publish their coherent snapshot and recover the next missing delta", async () => {
+  let reads = 0;
+  const full = "Known" + "x".repeat(1024);
+  const part = {
+    id: "context",
+    messageID: "msg_live",
+    sessionID: "root",
+    type: "text",
+    text: "Known",
+    synthetic: true,
+  };
+  const header = { ...info(), role: "user" };
+  const record = await recording(
+    (url) => {
+      if (!url.pathname.includes("/message/")) return;
+      reads++;
+      return Promise.resolve(
+        Response.json({ info: header, parts: [{ ...part, text: full + "!" }] }),
+      );
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    512,
+  );
+  try {
+    record.send("message.updated", { info: header });
+    record.send("message.part.updated", { part });
+    await record.drain();
+    record.send("message.part.delta", {
+      sessionID: "root",
+      messageID: "msg_live",
+      partID: "context",
+      field: "text",
+      delta: "x".repeat(1024),
+    });
+    await record.drain();
+    const emitted = (text: string) =>
+      record.ops.some(({ op }) =>
+        op.op === "message.upsert" && op.message.id === header.id &&
+        op.message.parts.some((value) =>
+          value.kind === "external" && value.id === part.id &&
+          value.source?.payload === text
+        )
+      );
+    assert(emitted(full));
+    assertEquals(reads, 0);
+    record.send("message.part.delta", {
+      sessionID: "root",
+      messageID: "msg_live",
+      partID: "context",
+      field: "text",
+      delta: "!",
+    });
+    await record.drain();
+    await wait(() => emitted(full + "!"));
+    assertEquals(reads, 1);
+  } finally {
+    await record.adapter.core.stop();
+  }
+});
+
+test("unseeded record deltas acquire one authoritative replacement instead of dropping the update", async () => {
+  let reads = 0;
+  const complete = {
+    id: "context",
+    messageID: "msg_live",
+    sessionID: "root",
+    type: "text",
+    text: "Full native context after delta",
+    synthetic: true,
+  };
+  const record = await recording((url) => {
+    if (!url.pathname.includes("/message/")) return;
+    reads++;
+    return Promise.resolve(
+      Response.json({ info: { ...info(), role: "user" }, parts: [complete] }),
+    );
+  });
+  try {
+    record.send("message.part.updated", {
+      part: { ...complete, text: "Full native" },
+    });
+    await record.drain();
+    record.send("message.part.delta", {
+      sessionID: "root",
+      messageID: "msg_live",
+      partID: "context",
+      field: "text",
+      delta: " context after delta",
+    });
+    await record.drain();
+    await wait(() =>
+      record.ops.some(({ op }) =>
+        op.op === "message.upsert" && op.message.role === "context" &&
+        JSON.stringify(op.message).includes(complete.text)
+      )
+    );
+    assertEquals(reads, 1);
   } finally {
     await record.adapter.core.stop();
   }

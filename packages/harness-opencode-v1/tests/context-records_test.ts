@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { isRealPrompt } from "@otk/protocol";
+import { isRealPrompt, sourceAt } from "@otk/protocol";
 import { deriveMessage, derivePart, mapMessage, mapPart } from "../map.ts";
 import { reachable } from "./source-support.ts";
 import type { Info, RawPart } from "../types.ts";
@@ -11,7 +11,7 @@ import { Client } from "../client.ts";
 import { Messages, type NativeMessage } from "../messages.ts";
 import { cfg } from "../../../tests/support/config.ts";
 import { V1RecordRetention } from "../record-retention.ts";
-import { eventRecord } from "../records.ts";
+import { eventRecord, parseSourceRef } from "../records.ts";
 import { RecordProjection } from "../records.ts";
 const info: Info = {
   id: "m",
@@ -208,6 +208,91 @@ Deno.test("V1 failed task result and independent assistant failure retain both e
   assertEquals(failure.error?.message, error);
 });
 
+Deno.test("V1 malformed task envelopes preserve complete outgoing context without breaking record mapping", () => {
+  for (
+    const child of ["child/path", "child name", "opcv1-child", "child.example"]
+  ) {
+    const envelope =
+      `<task id="${child}" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+    const parts = [{ ...text(true), text: envelope }];
+    const message = mapMessage(info, parts),
+      derived = deriveMessage(info, parts);
+    assertEquals(message.role, "context");
+    assertEquals(parseSourceRef(message.source!.ref!), {
+      origin: "message",
+      id: info.id,
+      path: "",
+    });
+    assertEquals(JSON.parse(reachable(message, derived).preview), info);
+    assertEquals(derived.source?.payload, envelope);
+    const part = message.parts[0];
+    assert(part.kind === "external");
+    assertEquals(part.activity?.child, undefined);
+    assertEquals(part.activity?.direction, "outgoing");
+    assertEquals(part.source?.payload, envelope);
+  }
+});
+
+Deno.test("V1 malformed optional child metadata preserves task and unknown tool results without a link", () => {
+  for (
+    const child of ["child/path", "child name", "opcv1-child", "child.example"]
+  ) {
+    const envelope =
+      `<task id="${child}" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+    for (const tool of ["task", "future-tool"]) {
+      const raw: RawPart = {
+        ...text(false),
+        type: "tool",
+        tool,
+        callID: "call",
+        state: {
+          status: "completed",
+          input: {},
+          output: envelope,
+          metadata: { sessionId: child },
+        },
+      };
+      const mapped = mapPart(raw);
+      assert(mapped.kind === "tool");
+      assertEquals(
+        "childSessionID" in mapped.call
+          ? mapped.call.childSessionID
+          : undefined,
+        undefined,
+      );
+      assertEquals(mapped.call.output, envelope);
+      const derived = derivePart(raw);
+      assert(derived.kind === "tool");
+      const ref = parseSourceRef(mapped.call.source!.ref!);
+      assertEquals(ref, {
+        origin: "message",
+        id: raw.messageID,
+        path: `p:${raw.id}/c`,
+      });
+      const view = sourceAt(derived, ref.path);
+      assert(view);
+      assertEquals(JSON.parse(view.preview).state.output, envelope);
+      assertEquals(derived.call.source?.payload, envelope);
+      assertEquals(mapped.call.outputContent, undefined);
+    }
+  }
+});
+
+Deno.test("V1 malformed task output is not accepted as a decoded task envelope", () => {
+  const envelope =
+    `<task id="child/path" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+  const mapped = mapPart({
+    ...text(false),
+    type: "tool",
+    tool: "task",
+    callID: "call",
+    state: { status: "completed", input: {}, output: envelope },
+  });
+  assert(mapped.kind === "tool");
+  assertEquals(mapped.call.outputContent, undefined);
+  assertEquals(mapped.call.output, envelope);
+});
+
 Deno.test("V1 retained outcomes compose with native history in ten-row pages without omission or duplication", async () => {
   const settings = cfg(), retained = new V1RecordRetention();
   for (let i = 13; i <= 32; i++) {
@@ -329,7 +414,12 @@ Deno.test("V1 record projection classifies header-before-parts and retains non-t
     "description",
     " records",
   )!;
-  assertEquals(changed.description, "Inspect records");
+  assertEquals(changed.part.description, "Inspect records");
+  assertEquals(changed.message.info, info);
+  assertEquals(
+    changed.message.parts.find((part) => part.id === "subtask"),
+    changed.part,
+  );
   assertEquals(
     projection.delta("s", "m", "subtask", "unknown", "x"),
     undefined,
