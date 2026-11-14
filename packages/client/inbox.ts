@@ -31,10 +31,13 @@ export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
 export interface OperationAttention {
   operationStatus?: InboxStatus;
 }
+/** Retained finish marks are unread only while their session is live. */
 export function unread(
-  sessionID: string,
+  session: Pick<IndexMetadata, "id" | "deleted">,
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): boolean {
+  if (session.deleted) return false;
+  const sessionID = session.id;
   return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
 }
 export function inboxStatus(
@@ -233,7 +236,7 @@ export function inboxProjects(
         inactive,
         status,
         unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
-          sessions.some((s) => unread(s.id, inbox)),
+          sessions.some((s) => unread(s, inbox)),
         visitText: visitTime(project.lastVisit, clock),
         ageing: ageing(project.lastVisit, clock, thresholds),
       };
@@ -276,7 +279,7 @@ export function inboxProjects(
       lastVisit: 0,
       status: statusFor(directory, sessions),
       unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
-        sessions.some((s) => unread(s.id, inbox)),
+        sessions.some((s) => unread(s, inbox)),
       visitText: "",
       ageing: 0,
     };

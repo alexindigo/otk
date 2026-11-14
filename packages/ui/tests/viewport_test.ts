@@ -36,6 +36,73 @@ Deno.test("large native input keeps its displacement when no new measured source
   });
 });
 
+for (const input of ["wheel", "keydown"]) {
+  Deno.test(`${input} transfers the retained source after the final measurement lease`, () => {
+    viewportFixture(({ pane, height, flush }) => {
+      const lease = acquireViewport(pane), retained = new Set<string>();
+      let second = 400;
+      const release = lease.owner.register({
+        id: "rows",
+        depth: 1,
+        anchor: () =>
+          pane.scrollTop < second
+            ? { key: "a", offset: pane.scrollTop }
+            : { key: "b", offset: pane.scrollTop - second },
+        resolve: (anchor) => (anchor.key === "b" ? second : 0) + anchor.offset,
+        retain: (anchor) => {
+          retained.add(anchor.key);
+          return () => retained.delete(anchor.key);
+        },
+      });
+      const move = (top: number) => {
+        const event = new Event(input);
+        Object.defineProperty(event, input === "wheel" ? "deltaY" : "key", {
+          value: input === "wheel" ? top - pane.scrollTop : "PageDown",
+        });
+        pane.dispatchEvent(event);
+        pane.scrollTop = top;
+        pane.dispatchEvent(new Event("scroll"));
+        pane.dispatchEvent(new Event("scrollend"));
+      };
+      try {
+        for (let n = 0; n < 4; n++) flush();
+        move(100);
+        const first = lease.owner.hold(), last = lease.owner.hold();
+        move(500);
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals([...retained], ["a"]);
+        first();
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals(
+          [...retained],
+          ["a"],
+          "another measurement still owns the barrier",
+        );
+        last();
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals(
+          [...retained],
+          ["b"],
+          "the visible measured source replaces the old pin without another input",
+        );
+        lease.owner.transaction(() => {
+          second += 120;
+          height(1120);
+        });
+        assertEquals(
+          pane.scrollTop,
+          620,
+          "growth between the old and visible sources preserves the reader's position",
+        );
+      } finally {
+        release();
+        lease.release();
+      }
+      assertEquals([...retained], []);
+    }, { tail: false });
+  });
+}
+
 for (const name of ["Sessions", "Timeline", "Transcript"]) {
   Deno.test(`${name} commits prepend compensation with its geometry revision`, () => {
     viewportFixture(({ pane, height, flush }) => {
@@ -389,6 +456,36 @@ function viewportFixture(
   }
   cleanup();
 }
+
+Deno.test("viewport position publications coalesce and retirement suppresses pending delivery", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      for (let i = 0; i < 4; i++) flush();
+      await Promise.resolve();
+      let publications = 0;
+      lease.owner.subscribe(() => publications++);
+      for (let i = 0; i < 3; i++) lease.owner.transaction(() => {});
+      assertEquals(
+        publications,
+        0,
+        "transactions do not synchronously reenter subscribers",
+      );
+      await Promise.resolve();
+      assertEquals(publications, 1, "same-turn transactions publish once");
+      for (let i = 0; i < 2; i++) lease.owner.transaction(() => {});
+      lease.release();
+      await Promise.resolve();
+      assertEquals(
+        publications,
+        1,
+        "retirement cancels the pending publication",
+      );
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
 
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
   for (const notify of [false, true]) {

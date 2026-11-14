@@ -83,14 +83,7 @@ export class IndexView {
   }
   #wanted(): Set<string> {
     const view = this.view();
-    const directory = view.directory ??
-      (view.selected
-        ? this.index.getMetadata(view.selected)?.directory
-        : undefined);
-    const rows = view.rows.filter((id) =>
-      !!directory && this.index.getMetadata(id)?.directory === directory
-    );
-    const ids = new Set([...view.crumbs, ...rows, ...this.keys(view)]);
+    const ids = new Set([...view.crumbs, ...view.rows, ...this.keys(view)]);
     if (view.selected) ids.add(view.selected);
     for (const id of [...ids]) {
       for (const parent of this.index.ancestors(id)) ids.add(parent);

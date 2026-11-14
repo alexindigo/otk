@@ -254,6 +254,91 @@ test("revert.restore-settles-origin-draft-after-leaving-during-native-clear", {
   await expect(page.locator(".otk-messages")).toContainText("Restored reply.");
 });
 
+test("revert.restore-settles-origin-draft-after-cancelled-reconciliation", {
+  tag: ["@revert", "@isolated", "@transport"],
+}, async ({ isolatedState: state, page }, info) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Reconciliation cancellation",
+  });
+  const other = await state.native<{ id: string }>("/session", "POST", {
+    title: "Other composer",
+  });
+  let restoreID: string | undefined, restoreKey: string | undefined;
+  const frames = await wire(page, (frame) => {
+    if (frame.t === "request" && frame.method === "session.restore") {
+      restoreID = frame.params?.sessionID;
+      restoreKey = frame.ref?.key;
+    }
+    return frame;
+  });
+  await openSession(state, page, source.id);
+  await reply(
+    state,
+    page,
+    source.id,
+    "Restore after reconciliation cancellation",
+    "Native conversation restored.",
+  );
+  const input = page.locator("textarea[name=prompt]");
+  await expect(input).toHaveValue("");
+  await palette(page, "session.undo");
+  await expect(input).toHaveValue("Restore after reconciliation cancellation");
+  frames.hold((frame, request) => {
+    if (!restoreID) return false;
+    if (frame.t === "content") return frame.sessionID === restoreID;
+    if (frame.t === "transcript.invalidated") {
+      return !frame.sessionID || frame.sessionID === restoreID;
+    }
+    return frame.t === "request.result" &&
+      request?.method === "session.messages" &&
+      request.params?.sessionID === restoreID;
+  });
+  try {
+    await page.getByRole("button", {
+      name: "Restore conversation",
+      exact: true,
+    }).click();
+    await expect.poll(() =>
+      !!restoreKey && frames.received.some((frame) =>
+        frame.t === "request.result" && frame.ref?.key === restoreKey &&
+        (frame.outcome as { ok?: boolean } | undefined)?.ok === true
+      ) && frames.sent.some(({ frame }) =>
+        frame.t === "request.received" && Array.isArray(frame.refs) &&
+        frame.refs.some((value) =>
+          value.ref?.key === restoreKey
+        )
+      )
+    ).toBe(true);
+    await expect.poll(() => frames.held.length).toBeGreaterThan(0);
+    await expect(
+      page.getByRole("complementary", { name: "Rolled-back prompts" })
+        .getByRole("status"),
+    ).toContainText("Restoring");
+    await info.attach("confirmed-clear-before-view-cancellation", {
+      body: JSON.stringify({
+        restoreID,
+        restoreKey,
+        sent: frames.sent,
+        received: frames.received,
+        held: frames.held,
+      }),
+      contentType: "application/json",
+    });
+    await openSession(state, page, other.id);
+    await input.fill("Other draft stays");
+    frames.release();
+    await expect(input).toHaveValue("Other draft stays");
+    await openSession(state, page, source.id);
+    await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+    await expect(input).toHaveValue("");
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Native conversation restored.",
+    );
+  } finally {
+    frames.release();
+  }
+});
+
 test("revert.files-conversation-copy-reload-restore-and-commit", {
   tag: ["@revert", "@isolated"],
 }, async ({ isolatedState: state, page, context }) => {
