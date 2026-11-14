@@ -7,6 +7,8 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import type { PublicFailure } from "@otk/protocol";
 import { pick, rightClick } from "../../pages/menus.ts";
 import {
+  expectNoConversation,
+  expectRestoredPrompts,
   prompt,
   revealAcquired,
   runNativeTool,
@@ -371,7 +373,8 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
     "2 prompts rolled back",
   );
-  await expect(page.locator("[data-message]")).toHaveCount(0);
+  // Decisions 1/20: native controls before the first prompt stay visible.
+  await expectNoConversation(state, page);
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "before\n",
   );
@@ -400,7 +403,7 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
   await page.locator(".otk-rollback-disclosure").click();
   await page.locator(".otk-rollback-footer button").click();
   await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
-  await expect(page.locator("[data-role=user]")).toHaveCount(2);
+  await expectRestoredPrompts(state, page, s.id, 2);
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "after\n",
   );
@@ -508,7 +511,10 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
   await action(state, "release");
   await expect(input).toHaveValue("");
   await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
-  await expect(page.locator("[data-role=user]")).toHaveCount(2);
+  // Redo restores both prompts. Visible native idle records (decision 1, plus
+  // the one native adds on unrevert) can move the first out of the mounted
+  // window, so prove both from acquired messages and reveal each bubble.
+  await expectRestoredPrompts(state, page, s.id, 2);
   await input.fill("Keep this edited draft");
   await palette(page, "session.undo");
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(

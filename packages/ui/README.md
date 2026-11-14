@@ -233,9 +233,13 @@ they align to the same column edge and baseline.
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its
 lifetime, so continued backend steps share one indicator and terminal replies
-have none. OS reduced motion and the persisted Animations off preference replace
-the shimmer with quiet “response in progress” text between flowing rules. The
-same named status remains available to assistive technology in either mode.
+have none. A native record its plugin reports as running (`state.facts.active`,
+e.g. a compaction summary still being written) ends with the same indicator. The
+transcript keeps one per active turn: an unfinished reply owns it, otherwise the
+turn's newest active record does. OS reduced motion and the persisted Animations
+off preference replace the shimmer with quiet “response in progress” text
+between flowing rules. The same named status remains available to assistive
+technology in either mode.
 
 Missing-seed recovery is separate plain in-flow text beside the logical reply:
 “Refreshing response…” while source is unaligned, or an unavailable message and

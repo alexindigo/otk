@@ -7,6 +7,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
+import { openRecord } from "../../pages/transcript.ts";
 import {
   composerError,
   rejectedComposerInput,
@@ -48,12 +49,21 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await page.locator(".otk-skills-picker .otk-picker-option").filter({
     hasText: "canary",
   }).click();
-  // NT1 keeps injected skill context visible without a user bubble.
-  await expect(
-    page.locator(".otk-messages .otk-text").filter({
-      hasText: "SKILL-FIXTURE content",
-    }),
-  ).toBeVisible();
+  // NT1 keeps injected skill context visible without a user bubble. NT2: a V2
+  // skill is a plugin record whose content sits in its closed body.
+  if (state.controller.info!.version.startsWith("2.")) {
+    const skill = '[data-native-record="opencode-v2/skill"]';
+    await openRecord(page, skill);
+    await expect(page.locator(`${skill} .otk-tool-body`)).toContainText(
+      "SKILL-FIXTURE content",
+    );
+  } else {
+    await expect(
+      page.locator(".otk-messages .otk-text").filter({
+        hasText: "SKILL-FIXTURE content",
+      }),
+    ).toBeVisible();
+  }
   await reply(state, page, session.id, "Skill command received.");
   const catalog = await state.product("commands.list", {
     sessionID: session.id,

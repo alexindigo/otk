@@ -3,6 +3,11 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/composer.ts";
+import {
+  compactionBoundary,
+  expectCompactionSummary,
+  openRecord,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "composer-commands" });
 test(
@@ -128,6 +133,8 @@ test("composer.skills-picker-retains-native-identities-and-name-conflicts", {
   const search = page.getByRole("combobox", { name: "Search skills" });
   await search.fill(v2 ? "probe" : "canary");
   await search.press("Enter");
+  // NT2: a V2 skill is a plugin record whose content sits in its closed body.
+  if (v2) await openRecord(page, '[data-native-record="opencode-v2/skill"]');
   await expect(page.locator(".otk-messages")).toContainText(
     v2 ? "COLLIDING-SKILL content" : "SKILL-FIXTURE content",
   );
@@ -191,10 +198,14 @@ test(
     await state.queue(["## Objective\n\nA registry command summary."]);
     await prompt(page).fill("/compact");
     await prompt(page).press("Enter");
-    await expect(page.locator(".otk-compaction-divider")).toHaveText(
-      "Session compacted",
+    // NT4: V1 compaction is a plugin boundary record; V2 keeps the divider.
+    const compaction = compactionBoundary(state);
+    await expect(page.locator(compaction.title)).toHaveText(
+      compaction.completed,
     );
-    await expect(page.locator(".otk-messages")).toContainText(
+    await expectCompactionSummary(
+      state,
+      page,
       "A registry command summary.",
     );
     const compact = frames.sent.filter(({ frame }) =>

@@ -502,7 +502,9 @@ export class OpencodeV1DigestSink implements DigestSink {
     const wanted = new Set(turns);
     let prompt: import("@otk/protocol").LatestPrompt | undefined,
       created = -Infinity,
-      cutoffCreated: number | undefined;
+      cutoffCreated: number | undefined,
+      // Native selection authority: the newest user-role message of any kind.
+      selection: Info | undefined;
     let before: string | undefined;
     let satisfied = false;
     do {
@@ -519,6 +521,12 @@ export class OpencodeV1DigestSink implements DigestSink {
       for (const { info, parts } of records) {
         if (info.id === cutoff) cutoffCreated = info.time.created;
         if (cutoff && info.id >= cutoff) continue;
+        if (
+          info.role === "user" &&
+          (!selection || info.time.created > selection.time.created ||
+            (info.time.created === selection.time.created &&
+              info.id > selection.id))
+        ) selection = info;
         if (
           isPrompt(info, parts) &&
           (info.time.created > created ||
@@ -565,6 +573,26 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
       before = page.next;
     } while (before && !satisfied);
+    if (prompt && selection) {
+      const { id } = prompt;
+      prompt = {
+        id,
+        ...(typeof selection.agent === "string"
+          ? { agent: selection.agent }
+          : {}),
+        ...(selection.model
+          ? {
+            model: {
+              provider: selection.model.providerID,
+              model: selection.model.modelID,
+            },
+            ...(typeof selection.model.variant === "string"
+              ? { variant: selection.model.variant }
+              : {}),
+          }
+          : {}),
+      };
+    }
     return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
   }
   covered(

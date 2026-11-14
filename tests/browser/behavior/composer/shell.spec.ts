@@ -7,7 +7,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
-import { revealTool } from "../../pages/transcript.ts";
+import { revealTool, shellRun } from "../../pages/transcript.ts";
 import {
   composerError,
   rejectedComposerInput,
@@ -54,17 +54,17 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Home");
   await prompt(page).press("!");
   await prompt(page).press("Enter");
-  await revealTool(page, "[data-tool=bash][data-tool-status=completed]");
-  await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
+  // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
+  await revealTool(page, shellRun(state, "completed"));
+  await expect(page.locator(shellRun(state, "completed")))
     .toContainText("otk");
   await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await prompt(page).press("!");
   await prompt(page).pressSequentially("sleep 31; echo long-shell-finished");
   await prompt(page).press("Enter");
-  await revealTool(page, "[data-tool=bash][data-tool-status=running]");
-  await expect(page.locator("[data-tool=bash][data-tool-status=running]"))
-    .toBeVisible();
+  await revealTool(page, shellRun(state, "running"));
+  await expect(page.locator(shellRun(state, "running"))).toBeVisible();
   await expect(prompt(page)).toHaveValue("sleep 31; echo long-shell-finished");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
     .toContainText("Running command");
@@ -74,7 +74,7 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   // The running command holds the one send intent; Send says so.
   await expectPrimaryBlocked(composerSend(page), "Sending");
   await expect(
-    page.locator("[data-tool=bash][data-tool-status=completed]").filter({
+    page.locator(shellRun(state, "completed")).filter({
       hasText: "long-shell-finished",
     }),
   ).toBeVisible({ timeout: 60_000 });
