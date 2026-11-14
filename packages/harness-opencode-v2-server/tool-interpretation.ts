@@ -185,6 +185,7 @@ export function mapTool(tool: Tool): ToolCall {
     time: {
       start: millis(tool.time.ran ?? tool.time.created),
       ...(tool.time.completed ? { end: millis(tool.time.completed) } : {}),
+      ...(name === "question" ? { waitsForUser: true } : {}),
     },
     error: "error" in state
       ? text(error.message) ?? text(error._tag) ?? "Native operation failed"
