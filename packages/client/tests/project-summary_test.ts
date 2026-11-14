@@ -1,9 +1,83 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createInbox } from "../inbox.ts";
+import { createInbox, inboxProjects } from "../inbox.ts";
 import { createProjectProjection } from "../project-projection.ts";
-import type { ProjectSummary } from "@otk/protocol";
+import type { InboxSnapshot, ProjectSummary } from "@otk/protocol";
 import type { MergedMetadata } from "../index.ts";
+import { shellEntry } from "./shell-fixture.ts";
+
+Deno.test("deleted family members cannot keep project unread contributions", () => {
+  for (const tracked of [false, true]) {
+    for (const hasSummary of [false, true]) {
+      const parent = { ...shellEntry("parent"), sidecarId: "s" };
+      let child: MergedMetadata = {
+        ...shellEntry("child", "/p", parent.id),
+        sidecarId: "s",
+      };
+      const summary: ProjectSummary = {
+        directory: "/p",
+        status: "none",
+        sessionCount: 1,
+        unseenCount: 0,
+        lastActivity: 1,
+        authority: "current",
+      };
+      const inbox: InboxSnapshot = {
+        projects: tracked
+          ? [{
+            directory: "/p",
+            order: 0,
+            added: true,
+            inactive: false,
+            lastVisit: 0,
+          }]
+          : [],
+        tasks: [],
+        seen: {},
+        finishes: { [child.id]: 10 },
+        pathTemplates: [],
+        ...(hasSummary ? { summaries: { "/p": summary } } : {}),
+      };
+      const rows = createProjectProjection({
+        entry: (id) => id === parent.id ? parent : child,
+      });
+      rows.inbox(inbox);
+      rows.update([parent.id, child.id]);
+      const check = (expected: boolean) => {
+        assertEquals(rows.row("/p", 0)?.unread, expected);
+        assertEquals(
+          inboxProjects([parent, child], inbox, 0)[0].unread,
+          expected,
+        );
+      };
+      check(true);
+      child = { ...child, deleted: { at: 11, how: "provider" } };
+      rows.update([child.id]);
+      check(false);
+      inbox.finishes[child.id] = 12;
+      rows.inbox(inbox, {
+        baseline: false,
+        projects: [],
+        sessions: [child.id],
+        tasks: false,
+        discovery: false,
+      });
+      check(false);
+      child = { ...child, deleted: undefined };
+      rows.update([child.id]);
+      check(true);
+      inbox.seen[child.id] = 12;
+      rows.inbox(inbox, {
+        baseline: false,
+        projects: [],
+        sessions: [child.id],
+        tasks: false,
+        discovery: false,
+      });
+      check(false);
+    }
+  }
+});
 
 Deno.test("project rows consume server summaries without any session entries", () => {
   const inbox = createInbox({

@@ -292,7 +292,7 @@ function viewportFixture(
     resize(): void;
     flush(): void;
     writes(): number;
-  }) => void,
+  }) => void | Promise<void>,
   { tail = true } = {},
 ) {
   const names = [
@@ -363,10 +363,17 @@ function viewportFixture(
     frames.clear();
     for (const callback of pending) callback(0);
   };
+  const cleanup = () => {
+    owner?.dispose();
+    names.forEach((name, i) => {
+      if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!);
+      else Reflect.deleteProperty(globalThis, name);
+    });
+  };
   try {
     flush();
     assertEquals(pane.scrollTop, tail ? 900 : 0);
-    run({
+    const result = run({
       pane,
       height: (value) => {
         (pane as unknown as Pane).scrollHeight = value;
@@ -375,14 +382,43 @@ function viewportFixture(
       flush,
       writes: () => (pane as unknown as Pane).writes,
     });
-  } finally {
-    owner?.dispose();
-    names.forEach((name, i) => {
-      if (saved[i]) Object.defineProperty(globalThis, name, saved[i]!);
-      else Reflect.deleteProperty(globalThis, name);
-    });
+    if (result) return result.finally(cleanup);
+  } catch (error) {
+    cleanup();
+    throw error;
   }
+  cleanup();
 }
+
+Deno.test("viewport position publications coalesce and retirement suppresses pending delivery", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      for (let i = 0; i < 4; i++) flush();
+      await Promise.resolve();
+      let publications = 0;
+      lease.owner.subscribe(() => publications++);
+      for (let i = 0; i < 3; i++) lease.owner.transaction(() => {});
+      assertEquals(
+        publications,
+        0,
+        "transactions do not synchronously reenter subscribers",
+      );
+      await Promise.resolve();
+      assertEquals(publications, 1, "same-turn transactions publish once");
+      for (let i = 0; i < 2; i++) lease.owner.transaction(() => {});
+      lease.release();
+      await Promise.resolve();
+      assertEquals(
+        publications,
+        1,
+        "retirement cancels the pending publication",
+      );
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
 
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
   for (const notify of [false, true]) {

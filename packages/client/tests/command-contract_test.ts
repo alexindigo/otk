@@ -58,6 +58,34 @@ Deno.test("structured and schema-parsed text invocations share validation, targe
   );
 });
 
+Deno.test("structured array validation visits missing entries just like text validation", async () => {
+  const hub = new CommandHub(), received: number[][] = [];
+  hub.register({
+    id: "numbers",
+    title: "Numbers",
+    category: "Fixture",
+    arguments: { type: "array", items: { type: "number" } },
+    run: (_context, input: number[]) => {
+      received.push(input);
+    },
+  });
+  const sparse = Array<number>(3);
+  sparse[0] = 1;
+  sparse[2] = 3;
+  await assertRejects(
+    () => hub.run("numbers", sparse),
+    Error,
+    "arguments[1]",
+  );
+  assertThrows(
+    () => hub.parse("numbers", JSON.stringify(sparse)),
+    Error,
+    "arguments[1]",
+  );
+  await hub.run("numbers", [1, 2, 3]);
+  assertEquals(received, [[1, 2, 3]]);
+});
+
 Deno.test("name conflicts have one display/execution resolution independent of availability and order", () => {
   for (const order of [["one", "two"], ["two", "one"]]) {
     const hub = new CommandHub();

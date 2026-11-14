@@ -151,7 +151,7 @@ export function createProjectProjection(o: {
       const before = sessions.get(id), entry = o.entry(id);
       const directory = entry && resolve(entry.directory, entry.projectID);
       const status = entry && inboxStatus(entry, inbox);
-      const unseen = !!entry && unread(id, inbox);
+      const unseen = !!entry && unread(entry, inbox);
       if (
         before?.entry === entry && before?.status === status &&
         before?.unread === unseen && before?.directory === directory

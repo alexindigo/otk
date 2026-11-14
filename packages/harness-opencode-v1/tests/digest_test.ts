@@ -45,6 +45,32 @@ test("identity reads require fresh provider reachability after a verified catalo
     f.close();
   }
 });
+test("terminal inventory accepts native session identity verification without project authority", async () => {
+  const f = await fixture();
+  try {
+    f.seed("answer", .25, 10);
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    assertEquals(await f.sink.identities(["opcv1-ses_one"], signal), [{
+      id: "opcv1-ses_one",
+      directory: "/p",
+    }]);
+    const rows = await f.sink.readers["supervision.terminals"]!(
+      { after: "" },
+      signal,
+    );
+    assertEquals(
+      rows.map((row) => ({
+        id: row.id,
+        terminal: row.activity?.terminal,
+      })),
+      [{ id: "opcv1-ses_one", terminal: 20 }],
+    );
+    assertEquals(f.queries.scans, 0);
+  } finally {
+    f.close();
+  }
+});
 test("requested metadata coverage is descending, inclusive and extensible without sweeping old baselines", async () => {
   const f = await fixture();
   try {
