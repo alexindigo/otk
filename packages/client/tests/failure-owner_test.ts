@@ -136,6 +136,7 @@ Deno.test("unknown and unavailable outcomes remain nonterminal in every failure 
     const shown = owner.present(value);
     assertEquals(shown.kind, "pending");
     assert(!shown.text.includes(" failed"));
-    assert(shown.text.includes("will not repeat"));
+    assertEquals(shown.failure?.recovery, undefined);
+    assert(!shown.text.includes("will not repeat"));
   }
 });

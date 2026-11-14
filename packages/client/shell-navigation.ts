@@ -176,7 +176,7 @@ export function createShellNavigation(o: {
         store.update((draft) => {
           draft.error = errorFeedback(
             "This session link is from an older version. Open Sessions to choose a session.",
-            { action: "Opening session link" },
+            { actionLabel: "Opening session link" },
           )!;
         });
         session.open();
@@ -185,7 +185,7 @@ export function createShellNavigation(o: {
         store.update((draft) => {
           draft.error = errorFeedback(
             "The URL refers to an unknown server. Add it in Settings.",
-            { action: "Opening session link" },
+            { actionLabel: "Opening session link" },
           )!;
         });
         session.open();

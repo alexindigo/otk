@@ -84,5 +84,6 @@ Deno.test("form feedback is structured and safe, and definite failure retains th
     owner.state.feedback?.failure?.reason,
     "Check your username and password",
   );
-  assert(owner.state.feedback?.failure?.recovery);
+  // The credential reason is already actionable; no owner supplied another step.
+  assertEquals(owner.state.feedback?.failure?.recovery, undefined);
 });

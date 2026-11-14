@@ -239,13 +239,25 @@ the editable next input separate from the captured attempt. Client-owned
 `FeedbackFailure` passes classified action/target/reason/recovery copy through
 the existing failure feedback path, never arbitrary transport exception prose.
 
-`FailurePresenter` derives action, linked target, reason and recovery from
-public facts. Feature contributions enrich that common path; unknown codes need
-no registration. It owns the grouping key (currently per session) and counts
-unique diagnostic identities, never render calls or replay deliveries. Resources
-and views retain `Feedback` instead of passing its rendered text. Local
-exceptions remain diagnostic-only; feature-selected public reasons stay
-separate.
+`FailurePresenter` derives action, linked target, reason and optional recovery
+from public facts. Opaque `facts.action` keys resolve through the selected core
+and bootstrap descriptions; they are never fallback display copy.
+Feature-authored wording uses `facts.actionLabel`; unresolved keys use The
+requested action while remaining distinct diagnostic/grouping identities.
+Bootstrap classification and presentation borrow one metadata contribution,
+including Signing in. Connection composition captures each server's label for
+server-scoped failures without replacing session titles or project targets.
+Feature contributions enrich that common path; unknown codes need no
+registration. It owns the grouping key (currently per session) and counts unique
+diagnostic identities, never render calls or replay deliveries. Resources and
+views retain `Feedback` instead of passing its rendered text. Local exceptions
+remain diagnostic-only; feature-selected public reasons stay separate.
+
+Recovery is a specific next step supplied in `FailureFacts.recovery` by the
+plugin, auth, command or other action/cause owner. The presenter never guesses
+advice from retry policy or outcome. Missing/blank recovery creates no line in
+structured, accessible or notification text; an actionable reason needs no
+redundant recovery. Explicit source/discovery/request recovery remains intact.
 
 Worker/catalog transport and existing terminal receipts preserve public facts
 and original diagnostic identity. Notification detail borrows that presentation

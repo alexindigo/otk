@@ -71,9 +71,14 @@ test(
     await page.locator("input[name=username]").fill("tester");
     await page.locator("input[name=password]").fill("wrong");
     await page.locator(".otk-auth-view button[type=submit]").click();
-    await expect(page.locator(".otk-auth-view [role=alert]")).toHaveText(
+    // The auth owner already gives the next step in the credential reason.
+    const failure = page.locator(".otk-auth-view [role=alert]");
+    await expect(failure).toContainText("Signing in failed for This server");
+    await expect(failure).toContainText(
       "Check your username and password",
     );
+    await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
+    await expect(failure).not.toContainText("bootstrap.login");
     await expect(page.locator("input[name=password]")).toHaveAttribute(
       "aria-invalid",
       "true",
@@ -125,6 +130,31 @@ test(
       "[data-settings-sidecar]:not([data-settings-sidecar=local])",
     );
     await card.locator("input[name=username]").fill("tester");
+    await card.locator("input[name=password]").fill("wrong");
+    await card.locator("button[type=submit]").click();
+    const failure = card.getByRole("alert");
+    await expect(failure).toHaveCount(1);
+    await expect(failure).toContainText("Signing in failed for Remote agent");
+    await expect(failure).toContainText("Check your username and password");
+    await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
+    await expect(failure).not.toContainText("bootstrap.login");
+    await expect(card.locator("input[name=password]")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await card.scrollIntoViewIfNeeded();
+      await info.attach(`fx17-sign-in-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
     await card.locator("input[name=password]").fill("secret");
     await card.locator("button[type=submit]").click();
     await expect(page.locator(".otk-sidecar-card [data-connection]"))

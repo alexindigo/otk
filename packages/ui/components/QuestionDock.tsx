@@ -130,7 +130,7 @@ function Request(
       if (feedback) feedback.fail(failure);
       else if (alive) {
         setError(
-          failureValue(failure, { action: "Sending question response" }),
+          failureValue(failure, { actionLabel: "Sending question response" }),
         );
       }
     } finally {

@@ -56,7 +56,7 @@ export default function Notices(props: { prefs: Preferences }) {
       state.pending = value === "pending" ? "revert" : undefined;
       state.error = value === "error"
         ? errorFeedback("The requested rollback is no longer available", {
-          action: "Rolling back conversation",
+          actionLabel: "Rolling back conversation",
           target: {
             sessionID: "tstv1-theme-notice",
             label: "Public composer notice",

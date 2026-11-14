@@ -41,7 +41,9 @@ export default function KeysHelp(props: {
       if (active) setEditing("");
     } catch (error) {
       if (active) {
-        setError(failureValue(error, { action: "Saving keyboard shortcuts" }));
+        setError(
+          failureValue(error, { actionLabel: "Saving keyboard shortcuts" }),
+        );
       }
     } finally {
       if (active) setPending(false);
@@ -194,7 +196,7 @@ export default function KeysHelp(props: {
       <FieldFeedback
         action
         feedback={errorFeedback(error(), {
-          action: "Saving keyboard shortcuts",
+          actionLabel: "Saving keyboard shortcuts",
         })}
       />
     </>

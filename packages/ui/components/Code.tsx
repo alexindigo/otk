@@ -379,7 +379,7 @@ export default function Code(
       ) {
         setError(
           failureValue(error, {
-            action: "Highlighting source",
+            actionLabel: "Highlighting source",
             target: identity,
           }),
         );
@@ -402,7 +402,7 @@ export default function Code(
           ) {
             setError(
               failureValue(error, {
-                action: "Preparing syntax highlighting",
+                actionLabel: "Preparing syntax highlighting",
                 target: identity,
               }),
             );

@@ -68,7 +68,8 @@ test(
       expect(geometry.width).toBeLessThan(1);
       expect(geometry.left).toBeLessThan(1);
       await expect(entry).toContainText(/not found|no longer available/);
-      await expect(entry).toContainText("Review the target");
+      // A missing session has no owner-supplied recovery; do not invent advice.
+      await expect(entry.locator(".otk-failure-recovery")).toHaveCount(0);
       for (
         const surface of [
           page.locator(".otk-operation-feedback"),

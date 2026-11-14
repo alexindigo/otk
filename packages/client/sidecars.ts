@@ -195,6 +195,7 @@ export function createSidecars(
           requests: {
             ...options.connection?.requests,
             sidecarId: spec.id,
+            serverLabel: spec.label,
             sessionTitle: (id) => options.sessionTitle?.(spec.id, id),
           },
         }
@@ -202,6 +203,7 @@ export function createSidecars(
           afterRender: options.connection?.afterRender,
           requests: {
             sidecarId: spec.id,
+            serverLabel: spec.label,
             sessionTitle: (id) => options.sessionTitle?.(spec.id, id),
           },
         },

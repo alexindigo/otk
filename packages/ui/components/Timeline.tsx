@@ -101,7 +101,9 @@ export default function Timeline(props: {
     } catch (error) {
       if (session === props.session && request === operation) {
         setError(
-          failureValue(error, { action: "Revealing prompt in conversation" }),
+          failureValue(error, {
+            actionLabel: "Revealing prompt in conversation",
+          }),
         );
       }
     }

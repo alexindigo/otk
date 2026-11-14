@@ -99,7 +99,7 @@ export default function ProjectInbox(props: {
       setError("");
     },
     fail: (error) =>
-      setError(failureValue(error, { action: "Saving project layout" })),
+      setError(failureValue(error, { actionLabel: "Saving project layout" })),
   });
   const width = resize.width;
   const open = ownedAction("project.open", props.onOpen, {
@@ -298,7 +298,7 @@ export default function ProjectInbox(props: {
             title="Add project"
             onClick={() =>
               void add().catch((error) =>
-                setError(failureValue(error, { action: "Adding project" }))
+                setError(failureValue(error, { actionLabel: "Adding project" }))
               )}
           >
             <PlusIcon />
@@ -404,7 +404,9 @@ export default function ProjectInbox(props: {
           aria-expanded={discoveredOpen() ? "true" : "false"}
           onClick={() =>
             void toggleDiscovered().catch((error) =>
-              setError(failureValue(error, { action: "Saving project layout" }))
+              setError(
+                failureValue(error, { actionLabel: "Saving project layout" }),
+              )
             )}
         >
           <ControlIcon>
@@ -438,7 +440,9 @@ export default function ProjectInbox(props: {
           onClick={() =>
             void inactive().catch((error) =>
               setError(
-                failureValue(error, { action: "Changing inactive projects" }),
+                failureValue(error, {
+                  actionLabel: "Changing inactive projects",
+                }),
               )
             )}
         >

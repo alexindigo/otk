@@ -37,7 +37,7 @@ export function DisplayPreferences(
       <Show when={props.error}>
         <FeedbackStatus
           feedback={errorFeedback(props.error, {
-            action: "Saving display preferences",
+            actionLabel: "Saving display preferences",
           })}
         />
       </Show>

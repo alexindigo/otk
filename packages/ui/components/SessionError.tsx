@@ -22,7 +22,7 @@ export default function SessionError(
       observation.requestID === props.operationKey;
     if (sameFailure || sameRequest) return;
     const failure = sessionFailure(observation, props.error, {
-      action: "Running session",
+      actionLabel: "Running session",
       target: props.target,
     });
     return failure ? presentFailure(failure) : undefined;

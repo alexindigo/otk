@@ -39,7 +39,7 @@ Deno.test("a new failure code presents its facts without code registration", () 
     retry: "none" as const,
     diagnosticID: "fixture-diagnostic",
     facts: {
-      action: "Renaming session",
+      actionLabel: "Renaming session",
       target: { sessionID: "tstv1-fixture", label: "Fixture session" },
       reason: "The requested title is unavailable",
       recovery: "Choose another title",

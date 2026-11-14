@@ -214,7 +214,7 @@ export class NotificationTriggers {
           : [undefined]
       ) {
         const failure = sessionFailure(observation, entry.error, {
-          action: "Running session",
+          actionLabel: "Running session",
           target: {
             sidecarId: sidecar,
             sessionID: session,

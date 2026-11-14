@@ -18,7 +18,7 @@ Deno.test("session observation projection keeps routing and withholds credential
     },
     undefined,
     {
-      action: "Running session",
+      actionLabel: "Running session",
       target: {
         sidecarId: "remote",
         sessionID: "tstv1-session",
@@ -37,7 +37,7 @@ Deno.test("remounting a legacy session error cannot invent a new occurrence", ()
   const owner = createFailurePresenter();
   for (let n = 0; n < 3; n++) {
     const value = sessionFailure(undefined, "Native failure", {
-      action: "Running session",
+      actionLabel: "Running session",
       target: { sidecarId: "remote", sessionID: "tstv1-session" },
     })!;
     assertEquals(owner.present(value).failure?.count, 1);

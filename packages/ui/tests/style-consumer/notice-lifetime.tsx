@@ -38,7 +38,7 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
       ? errorFeedback(
         "The requested change was refused. Your input is kept. Review the target and try again when it is available. END OF REASON",
         {
-          action: "Sending prompt",
+          actionLabel: "Sending prompt",
           target: {
             sidecarId: "local",
             sessionID: "tstv1-notice",
@@ -64,7 +64,7 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
       state.error = errorFeedback(
         "The requested change was refused. Your input is kept. Review the target and try again when it is available. END OF REASON",
         {
-          action: "Restoring prompts",
+          actionLabel: "Restoring prompts",
           target: { label: "Retained conversation" },
         },
       );
