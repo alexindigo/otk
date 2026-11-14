@@ -3,7 +3,7 @@ import { parseDiff } from "@otk/content";
 import type { FileDiff, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { NativeMessage } from "./messages.ts";
-import { opencodeV2SessionID as ids } from "./ids.ts";
+import { optionalSessionID } from "./ids.ts";
 import { fileLanguage } from "./language.ts";
 import { toolContent } from "./tool-results.ts";
 import { nativeSource } from "./native-source.ts";
@@ -128,6 +128,7 @@ export function mapTool(tool: Tool): ToolCall {
     state.input,
     "metadata" in state ? state.metadata : undefined,
   );
+  const childSessionID = optionalSessionID(child);
   const output = "content" in state
     ? state.content?.flatMap((c) => c.type === "text" ? [c.text] : []).join(
       "\n",
@@ -211,7 +212,7 @@ export function mapTool(tool: Tool): ToolCall {
       input,
       meta,
     ),
-    ...(child ? { childSessionID: ids.encode(child) } : {}),
+    ...(childSessionID ? { childSessionID } : {}),
   };
   const path = text(input.path) ?? "";
   switch (name) {
