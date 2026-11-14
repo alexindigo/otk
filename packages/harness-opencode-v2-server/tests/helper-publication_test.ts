@@ -50,7 +50,9 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
           metadata,
           summary: delta.summary,
           deleted: delta.deleted,
-          helper: delta.helper ?? undefined,
+          helper: delta.helper === undefined
+            ? saved?.helper
+            : delta.helper ?? undefined,
         };
         publications.push(delta);
       },
@@ -66,7 +68,13 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
       check: (signal) => signal.throwIfAborted(),
     },
   );
-  sink.transcript.sqlHeaders = () => available ? [] : undefined;
+  let pages = 0;
+  sink.transcript.sqlHeaders = () =>
+    available
+      ? pages-- > 0
+        ? [{ id: "msg_helper", type: "assistant", seq: pages, created: 1 }]
+        : []
+      : undefined;
   sink.transcript.helperAggregates = () =>
     available
       ? [{
@@ -79,17 +87,21 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
       : undefined;
   const scan = async () => {
     sink.invalidateHelper("opcv2-ses_helper");
-    await sink.step(
-      {
-        sessionID: "opcv2-ses_helper",
-        provider: sink.identity,
-        updated: 2,
-        revision: 0,
-        projection: "helper",
-      },
-      { rows: 20, until: performance.now() + 1000 },
-      new AbortController().signal,
-    );
+    let cursor: string | undefined;
+    do {
+      cursor = await sink.step(
+        {
+          sessionID: "opcv2-ses_helper",
+          provider: sink.identity,
+          updated: 2,
+          revision: 0,
+          projection: "helper",
+          cursor,
+        },
+        { rows: 1, until: performance.now() + 1000 },
+        new AbortController().signal,
+      );
+    } while (cursor);
   };
   try {
     await scan();
@@ -98,6 +110,15 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     await scan();
     assertEquals(publications.length, 1);
     assertEquals(sink.requestHelper("opcv2-ses_helper", false), false);
+    pages = 3;
+    const beforeRepeat = structuredClone(saved);
+    await scan();
+    assertEquals(
+      publications.length,
+      1,
+      "unchanged multi-chunk helper passes publish nothing",
+    );
+    assertEquals(saved, beforeRepeat);
     count = 1;
     await scan();
     assertEquals(saved?.helper?.revision, 2);
@@ -149,6 +170,11 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     assertEquals(saved?.metadata.title, title);
     assertEquals(saved?.helper?.revision, 7);
     assertEquals(publications.length, 8);
+    assertEquals(
+      publications.at(-1)?.helper,
+      undefined,
+      "metadata-only changes omit the unchanged helper key",
+    );
     await scan();
     assertEquals(publications.length, 8);
     const sourceRetained = structuredClone(saved?.helper?.progress);
@@ -166,6 +192,7 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     );
     assertEquals(saved?.helper?.progress, sourceRetained);
     for (const publication of publications) {
+      if (!publication.helper) continue;
       assertEquals(
         publication.helper,
         JSON.parse(JSON.stringify(publication.helper)),

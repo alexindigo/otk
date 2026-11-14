@@ -2386,6 +2386,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
       this.storage.diagnostic(id, error);
       const saved = this.storage.read(id)!;
+      if (saved.helper?.state === "unavailable") return;
       const revision = saved.summary.revision + 1;
       const delta: DigestDelta = {
         summary: { ...saved.summary, revision },
@@ -2417,7 +2418,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       (checkpoint?.api_cursor ?? null) !== predecessor.api ||
       (checkpoint?.source_generation ?? null) !== predecessor.source
     ) return "reconcile";
-    let delta!: DigestDelta;
+    let delta: DigestDelta | undefined;
     this.storage.transaction(() => {
       if (restart) {
         this.storage.sql.prepare(
@@ -2499,44 +2500,49 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.storage.sql.prepare(
         "UPDATE opcv1_helper_scan SET time_start=?,time_end=?,unfinished=? WHERE session_id=?",
       ).run(time.start, time.end, Number(!!time.unfinished), id);
+      // Coverage/cursors are private. A refresh cannot replace coherent progress
+      // or manufacture public revisions merely because another chunk finished.
+      if (!ready) return;
       const helper: HelperSummary = {
-        state: ready ? "ready" : "digesting",
+        state: "ready",
         revision,
-        progress: ready
-          ? knownDerived(
-            {
-              toolCount: ready ? count : null,
-              ...(ready && current
-                ? {
-                  current: {
-                    name: String(current.name),
-                    ...(current.title === null
-                      ? {}
-                      : { title: String(current.title) }),
-                    ...(current.time_start === null
-                      ? {}
-                      : { startedAt: Number(current.time_start) }),
-                  },
-                }
-                : {}),
-              ...(time.start === null ? {} : {
-                time: {
-                  start: Number(time.start),
-                  ...(time.end === null || time.unfinished
+        progress: knownDerived(
+          {
+            toolCount: count,
+            ...(current
+              ? {
+                current: {
+                  name: String(current.name),
+                  ...(current.title === null
                     ? {}
-                    : { end: Number(time.end) }),
+                    : { title: String(current.title) }),
+                  ...(current.time_start === null
+                    ? {}
+                    : { startedAt: Number(current.time_start) }),
                 },
-              }),
-            },
-            `${id}@${source}`,
-            revision,
-            false,
-            saved.helper?.progress,
-          )
-          : saved.helper?.progress.state === "known"
-          ? saved.helper.progress
-          : { state: "pending" },
+              }
+              : {}),
+            ...(time.start === null ? {} : {
+              time: {
+                start: Number(time.start),
+                ...(time.end === null || time.unfinished
+                  ? {}
+                  : { end: Number(time.end) }),
+              },
+            }),
+          },
+          `${id}@${source}`,
+          revision,
+          false,
+          saved.helper?.progress,
+        ),
       };
+      // knownDerived retains the complete prior result (including its witness)
+      // only when value, source and finality agree. State recovery still publishes.
+      if (
+        saved.helper?.state === helper.state &&
+        saved.helper.progress === helper.progress
+      ) return;
       delta = {
         summary: { ...saved.summary, revision },
         turns: { upsert: {}, remove: [] },
@@ -2545,11 +2551,13 @@ export class OpencodeV1DigestSink implements DigestSink {
       };
       this.storage.write(saved.metadata, delta);
     });
-    await this.storage.publish({
-      sessionID: id,
-      revision: delta.summary.revision,
-      delta,
-    });
+    if (delta) {
+      await this.storage.publish({
+        sessionID: id,
+        revision: delta.summary.revision,
+        delta,
+      });
+    }
     return targeted && next && next !== "reconcile"
       ? `target-tools:${next}`
       : next;

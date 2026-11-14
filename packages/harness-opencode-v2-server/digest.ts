@@ -1216,27 +1216,29 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         ...(saved?.summary ?? { state: "digesting" }),
         revision: (saved?.summary.revision ?? 0) + 1,
       },
-      helper: {
-        state: helper.state,
-        progress: helper.state === "ready"
-          ? knownDerived(
-            {
-              toolCount: helper.toolCount,
-              ...(helper.current ? { current: helper.current } : {}),
-              ...(helper.time ? { time: helper.time } : {}),
+      ...(same ? {} : {
+        helper: {
+          state: helper.state,
+          progress: helper.state === "ready"
+            ? knownDerived(
+              {
+                toolCount: helper.toolCount,
+                ...(helper.current ? { current: helper.current } : {}),
+                ...(helper.time ? { time: helper.time } : {}),
+              },
+              `${entry.id}@${this.#source}`,
+              (previous?.revision ?? 0) + 1,
+              helper.time?.end !== undefined,
+              previous?.progress,
+            )
+            : previous?.progress.state === "known"
+            ? previous.progress
+            : {
+              state: helper.state === "unavailable" ? "unavailable" : "pending",
             },
-            `${entry.id}@${this.#source}`,
-            (previous?.revision ?? 0) + (same ? 0 : 1),
-            helper.time?.end !== undefined,
-            previous?.progress,
-          )
-          : previous?.progress.state === "known"
-          ? previous.progress
-          : {
-            state: helper.state === "unavailable" ? "unavailable" : "pending",
-          },
-        revision: (previous?.revision ?? 0) + (same ? 0 : 1),
-      },
+          revision: (previous?.revision ?? 0) + 1,
+        },
+      }),
       turns: { upsert: {}, remove: [] },
       deleted: null,
     });

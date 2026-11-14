@@ -265,7 +265,7 @@ Deno.test("V2 retains covered results while rebuilding and retires removed turns
 Deno.test("V2 fully indexed idle population schedules no digest work or SQLite writes", async () => {
   const f = await fixture(true), keys: string[] = [];
   const policy = { ...cfg().digest, cpu: 1, background: true, idlems: 1 };
-  let steps = 0;
+  let steps = 0, helperSteps = 0;
   const scheduler = new DigestScheduler(policy, {
     freeMemory: () => Number.MAX_SAFE_INTEGER,
     sleep: (ms, signal) =>
@@ -284,6 +284,7 @@ Deno.test("V2 fully indexed idle population schedules no digest work or SQLite w
     close() {},
     step: (...args) => {
       steps++;
+      if (args[0].projection === "helper") helperSteps++;
       return f.sink.step(...args);
     },
   });
@@ -321,18 +322,34 @@ Deno.test("V2 fully indexed idle population schedules no digest work or SQLite w
         { provider: f.sink.identity, sessionID, updated: 1 },
         "background",
       );
+      if (f.sink.requestHelper(sessionID, false)) {
+        scheduler.enqueue(
+          {
+            provider: f.sink.identity,
+            sessionID,
+            updated: 1,
+            projection: "helper",
+          },
+          "background",
+        );
+      }
     }
     while (scheduler.queued || scheduler.executing) {
       if (!await scheduler.tick()) await new Promise((r) => setTimeout(r, 0));
     }
     assertEquals(f.records.size, keys.length);
     for (const key of keys) assertEquals(f.sink.pending(key), false);
+    assertEquals(helperSteps, keys.length);
     const before = {
       steps,
+      helperSteps,
       publications: f.publications.length,
       changes: f.sql.prepare("SELECT total_changes() AS n").get()!.n,
     };
     for (let turn = 0; turn < 100; turn++) {
+      for (const key of keys) {
+        assertEquals(f.sink.requestHelper(key, false), false);
+      }
       scheduler.setScope("viewer", {
         directory: "/repo",
         sessions: keys.slice(0, 20),
@@ -341,11 +358,12 @@ Deno.test("V2 fully indexed idle population schedules no digest work or SQLite w
     }
     assertEquals({
       steps,
+      helperSteps,
       publications: f.publications.length,
       changes: f.sql.prepare("SELECT total_changes() AS n").get()!.n,
     }, before);
     console.info(
-      `idle population=${keys.length}: additional digest steps=0, publications=0, SQLite writes=0`,
+      `idle population=${keys.length}: additional digest/helper steps=0, publications=0, SQLite writes=0`,
     );
   } finally {
     await scheduler.stop();

@@ -20,6 +20,76 @@ const policy: DigestPolicy = {
   retryms: 10,
   busyms: 100,
 };
+test("helper requests during a running pass coalesce into one follow-up without overlapping", async () => {
+  const scheduler = new DigestScheduler(
+    { ...policy, cpu: 1, maxpending: 128 },
+    {
+      now: () => 100,
+      freeMemory: () => 1000,
+      sleep: () => Promise.resolve(),
+    },
+  );
+  const release = Promise.withResolvers<void>();
+  const seen: { revision: number; messages?: string[] }[] = [];
+  let active = 0, peak = 0;
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("unused")),
+    close() {},
+    async step(job, _budget, _signal, execution) {
+      active++;
+      peak = Math.max(peak, active);
+      seen.push({ revision: job.revision, messages: job.messages });
+      try {
+        if (seen.length === 1) await execution.wait(release.promise, "io");
+      } finally {
+        active--;
+      }
+      return undefined;
+    },
+  });
+  const identity = {
+    provider: "test-v1",
+    sessionID: "child",
+    updated: 1,
+    projection: "helper" as const,
+  };
+  try {
+    scheduler.enqueue(identity, "background", {
+      sessionID: "child",
+      reason: "helper",
+      revision: 1,
+      messages: ["m0"],
+    });
+    await scheduler.tick();
+    assertEquals(seen.length, 1);
+    for (let n = 1; n <= 20; n++) {
+      scheduler.enqueue(identity, "visible", {
+        sessionID: "child",
+        reason: "helper",
+        revision: n + 1,
+        messages: [`m${n}`],
+      });
+    }
+    assertEquals(scheduler.queued, 1);
+    assertEquals(await scheduler.tick(), false);
+    assertEquals(seen.length, 1);
+    release.resolve();
+    while (scheduler.queued || scheduler.executing) {
+      if (!await scheduler.tick()) await Promise.resolve();
+    }
+    assertEquals(peak, 1);
+    assertEquals(seen, [
+      { revision: 1, messages: ["m0"] },
+      { revision: 21, messages: Array.from({ length: 21 }, (_, n) => `m${n}`) },
+    ]);
+    for (let n = 0; n < 100; n++) assertEquals(await scheduler.tick(), false);
+  } finally {
+    release.resolve();
+    await scheduler.stop();
+  }
+});
 test("requested visible reads precede optional attention batches after idle opens", async () => {
   const seen: string[] = [];
   const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
