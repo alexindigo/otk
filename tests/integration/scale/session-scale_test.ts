@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { derivedValue } from "@otk/protocol";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, equal } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { start } from "../../../main.ts";
@@ -218,7 +218,27 @@ test("real-version scale summaries match independent totals with bounded serving
     frame.t === "index.snapshot"
   );
   assert(snapshot?.t === "index.snapshot");
-  const wire = new Map(snapshot.entries.map((entry) => [entry.id, entry]));
+  const scoped = (id: string) => {
+    const entry = app.index.get(id)!;
+    return id === requested[0].id
+      ? entry.digest
+      : { ...entry.digest, turns: {} };
+  };
+  // Digest work may publish a newer revision after the snapshot frame. The
+  // wire's claim is about what the client holds: snapshot plus later patches.
+  const stale = snapshot.entries.filter((entry) =>
+    entry.directory === fixture.directory &&
+    !equal(entry.digest, scoped(entry.id))
+  ).map((entry) => entry.id);
+  console.info("Scale rows revised after the wire snapshot", stale);
+  await waitFor(
+    () =>
+      requested.filter((row) =>
+        !equal(client.entry(row.id)?.digest, scoped(row.id))
+      ).map((row) => row.id),
+    (behind) => behind.length === 0,
+    30_000,
+  );
   await Deno.writeTextFile(
     join(root, "serving-samples.json"),
     JSON.stringify({ counts: SCALE, samples: probe.samples }, null, 2),
@@ -238,11 +258,9 @@ test("real-version scale summaries match independent totals with bounded serving
   ) {
     const entry = app.index.get(row.id)!;
     assertEquals(
-      wire.get(row.id)?.digest,
-      row.id === requested[0].id
-        ? entry.digest
-        : { ...entry.digest, turns: {} },
-      "The scoped wire snapshot must carry every explicitly requested scalar summary",
+      client.entry(row.id)?.digest,
+      scoped(row.id),
+      "The scoped wire must carry every explicitly requested scalar summary",
     );
     assertEquals(entry.digest.messageCount, row.expected.messages, row.id);
     assertEquals(

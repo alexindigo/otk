@@ -239,6 +239,15 @@ export class OpencodeV1Adapter implements Harness {
           }
         }
       },
+      // Startup inventory, a demand-driven inventory read and live asks all
+      // admit through this owner, so a later outcome keeps the request facts.
+      (request) =>
+        this.#retention.observe(
+          request.sessionID,
+          `question:${request.id}`,
+          { ...request },
+          Date.now(),
+        ),
     );
     const catalogReads = digest ??
       (this.#catalogExecutor = new CatalogExecutor(
@@ -1614,9 +1623,6 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (questions) {
         await each(questions, (request) => {
-          this.#retention.observe(request.sessionID, `question:${request.id}`, {
-            ...request,
-          }, Date.now());
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
             entries.set(
