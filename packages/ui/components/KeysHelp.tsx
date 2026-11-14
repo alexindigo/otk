@@ -171,12 +171,6 @@ export default function KeysHelp(props: {
           )}
         </For>
       </div>
-      <FieldFeedback
-        action
-        feedback={errorFeedback(error(), {
-          action: "Saving keyboard shortcuts",
-        })}
-      />
       <ActionSlot
         class="otk-key-actions"
         pending={pending()}
@@ -197,6 +191,12 @@ export default function KeysHelp(props: {
           Reset all shortcuts
         </button>
       </ActionSlot>
+      <FieldFeedback
+        action
+        feedback={errorFeedback(error(), {
+          action: "Saving keyboard shortcuts",
+        })}
+      />
     </>
   );
 }

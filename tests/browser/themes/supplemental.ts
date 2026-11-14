@@ -145,10 +145,10 @@ export async function supplemental(
     await expect(page.locator("dialog[open] [role=alert]")).toHaveCount(1);
     for (const theme of themes) {
       await paint(theme);
-      // Complete failure prose expands a centered dialog. Controls keep their
-      // horizontal geometry and dimensions, not obsolete absolute Y positions.
+      // Growing failure facts follow the action region. Every control axis
+      // stays fixed; the dialog must not re-center around the larger tail.
       (await boxes()).forEach((v, i) =>
-        i % 4 !== 1 && expect(Math.abs(v - idle[i])).toBeLessThanOrEqual(1)
+        expect(Math.abs(v - idle[i])).toBeLessThanOrEqual(1)
       );
       await expect(page.locator("dialog[open] input[name=taskName]"))
         .toHaveValue("Retained task name");
@@ -161,10 +161,7 @@ export async function supplemental(
         ].map((el) => el.getBoundingClientRect());
         const failure = dialog.querySelector(".otk-failure-content")!;
         return {
-          centered: [
-            Math.abs((box.left + box.right - innerWidth) / 2),
-            Math.abs((box.top + box.bottom - innerHeight) / 2),
-          ],
+          centered: Math.abs((box.left + box.right - innerWidth) / 2),
           controlsInside: controls.every((r) =>
             r.left >= box.left - 1 && r.right <= box.right + 1 &&
             r.top >= box.top - 1 && r.bottom <= box.bottom + 1
@@ -181,9 +178,7 @@ export async function supplemental(
           }),
         };
       });
-      geometry.centered.forEach((delta) =>
-        expect(delta).toBeLessThanOrEqual(1)
-      );
+      expect(geometry.centered).toBeLessThanOrEqual(1);
       expect(geometry.controlsInside).toBe(true);
       expect(geometry.ordered).toBe(true);
       expect(geometry.failureInside).toBe(true);

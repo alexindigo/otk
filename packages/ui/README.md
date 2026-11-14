@@ -94,9 +94,17 @@ usage counts and elapsed clocks delegate to the shared client formatters.
 data and callbacks only. OperationFeedback supplies a row inside the caller's
 single joined ComposerNotice. FieldFeedback preserves its empty one-line field
 track or two-line action track in normal flow; callers associate its ID with
-their actual field. PaneState occupies a shared transcript grid cell and centres
-its content without viewport offsets. Their error paint uses semantic `danger`,
-separate from focus/action paint; Dark uses `#ff8080` and Linen/Stone `#b5141a`.
+their actual field. Form owns one feedback region after its actions, including
+field failures; native fields borrow that region's ID and retain field-specific
+invalid semantics. Structured facts grow there without pushing another field or
+action. Theme and keyboard dialog feedback follows their actions too. Dialogs
+and authentication forms have a stable top origin rather than re-centering when
+failure content grows. Bottom-anchored composer and rollback owners instead put
+failure content before their controls, keeping those controls at their existing
+bottom edge. Inline rename feedback keeps its separate post-control row track.
+PaneState occupies a shared transcript grid cell and centres its content without
+viewport offsets. Their error paint uses semantic `danger`, separate from
+focus/action paint; Dark uses `#ff8080` and Linen/Stone `#b5141a`.
 
 `feedbackState({feedback,class})` binds status/alert semantics, empty-track
 accessibility and pending/error/reconnecting classes together. `FeedbackStatus`

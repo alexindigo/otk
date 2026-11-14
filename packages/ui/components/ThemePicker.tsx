@@ -149,10 +149,6 @@ export default function ThemePicker(props: {
           </For>
         </FormSelect>
       </label>
-      <FieldFeedback
-        action
-        feedback={errorFeedback(error())}
-      />
       <footer class="otk-theme-actions">
         <button type="button" onClick={() => void close()}>Cancel</button>
         <ActionSlot
@@ -181,6 +177,7 @@ export default function ThemePicker(props: {
           </button>
         </ActionSlot>
       </footer>
+      <FieldFeedback action feedback={errorFeedback(error())} />
     </>
   );
 }

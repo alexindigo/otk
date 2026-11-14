@@ -55,6 +55,12 @@ export function RolledBackContent(
       aria-label="Rolled-back prompts"
       aria-busy={props.state.pending ? "true" : undefined}
     >
+      <Show when={props.state.error || feedback()}>
+        <OperationFeedback
+          icon={<RevertIcon />}
+          feedback={errorFeedback(props.state.error || feedback())!}
+        />
+      </Show>
       <Show when={props.state.pending}>
         <ComposerNoticeRow
           class="otk-rollback-status"
@@ -159,12 +165,6 @@ export function RolledBackContent(
             </Show>
           </>
         )}
-      </Show>
-      <Show when={props.state.error || feedback()}>
-        <OperationFeedback
-          icon={<RevertIcon />}
-          feedback={errorFeedback(props.state.error || feedback())!}
-        />
       </Show>
     </aside>
   );

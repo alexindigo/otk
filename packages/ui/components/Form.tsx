@@ -22,7 +22,8 @@ import ActionSlot from "./ActionSlot.tsx";
 import Select from "./Select.tsx";
 import { scrollRegion } from "./ScrollRegion.tsx";
 const FormContext = createContext<
-  { pending(): boolean; feedback(): Feedback | undefined } | null
+  | { pending(): boolean; feedback(): Feedback | undefined; feedbackID: string }
+  | null
 >(null);
 export default function Form(
   props: {
@@ -60,6 +61,7 @@ export default function Form(
   const context = {
     pending: () => pending() && !props.editableWhilePending,
     feedback,
+    feedbackID: createUniqueId(),
   };
   let status: { focus(): void } | undefined, button!: HTMLButtonElement;
   const send = ownedAction(
@@ -90,10 +92,6 @@ export default function Form(
         <fieldset aria-label={props.title}>
           {props.children}
         </fieldset>
-        <FieldFeedback
-          action
-          feedback={feedback()?.field ? undefined : feedback()}
-        />
         <ActionSlot
           class="otk-form-action"
           align="end"
@@ -119,6 +117,7 @@ export default function Form(
             Cancel
           </button>
         </Show>
+        <FieldFeedback id={context.feedbackID} action feedback={feedback()} />
       </form>
     </FormContext>
   );
@@ -128,7 +127,8 @@ function formField(
   name: () => unknown,
   described: () => unknown,
 ) {
-  const form = useContext(FormContext), id = createUniqueId();
+  const form = useContext(FormContext),
+    id = form?.feedbackID ?? createUniqueId();
   const feedback = () =>
     typeof name() === "string" && form?.feedback()?.field === name()
       ? form?.feedback()
@@ -159,7 +159,9 @@ export function FormInput(props: ComponentProps<"input">): Element {
         aria-describedby={field.description}
         aria-invalid={field.invalid}
       />
-      <FieldFeedback id={field.id} feedback={field.feedback()} />
+      <Show when={!field.form}>
+        <FieldFeedback id={field.id} feedback={field.feedback()} />
+      </Show>
     </>
   );
 }
@@ -176,7 +178,9 @@ export function FormTextarea(props: ComponentProps<"textarea">): Element {
         aria-describedby={field.description}
         aria-invalid={field.invalid}
       />
-      <FieldFeedback id={field.id} feedback={field.feedback()} />
+      <Show when={!field.form}>
+        <FieldFeedback id={field.id} feedback={field.feedback()} />
+      </Show>
     </>
   );
 }
@@ -212,7 +216,9 @@ export function FormSelect(
           aria-describedby={field.description}
         />
       </span>
-      <FieldFeedback id={field.id} feedback={field.feedback()} />
+      <Show when={!field.form}>
+        <FieldFeedback id={field.id} feedback={field.feedback()} />
+      </Show>
     </>
   );
 }

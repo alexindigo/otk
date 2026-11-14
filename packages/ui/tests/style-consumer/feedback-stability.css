@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.feedback-stability-inline {
+  max-inline-size: 46rem;
+  margin-inline: auto;
+}
+.feedback-stability-bottom {
+  display: flex;
+  flex-direction: column;
+  block-size: 520px;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+}
+.feedback-stability-transcript {
+  flex: 1;
+  min-block-size: 0;
+}

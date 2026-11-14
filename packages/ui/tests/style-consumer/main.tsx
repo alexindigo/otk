@@ -51,6 +51,7 @@ const driver = {
   resetNotice: () => {},
   settleNotice: () => {},
   refreshNotice: () => {},
+  failRollback: () => {},
 };
 declare global {
   var styleTest: typeof driver;
@@ -69,6 +70,7 @@ const scenes = {
   "notice-lifetime": () => import("./notice-lifetime.tsx"),
   failures: () => import("./failures.tsx"),
   "settlement-conflicts": () => import("./settlement-conflicts.tsx"),
+  "feedback-stability": () => import("./feedback-stability.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",
