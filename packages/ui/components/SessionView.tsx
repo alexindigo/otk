@@ -116,14 +116,15 @@ export default function SessionView(props: {
   const highlightLease = createMemo(() =>
     props.transcript ? transcriptHighlightLease(props.transcript) : undefined
   );
+  // The selected facade can release its resource before this view and its
+  // commands unmount. Keep the compatibility projection valid independently.
   const fallback = createMemo(() => {
-    if (props.transcript) return;
     const projection = createTranscriptProjection();
     projection.replace(props.messages ?? []);
     projection.busy(props.busy);
     return projection.state;
   });
-  const projection = () => props.transcript?.state ?? fallback()!;
+  const projection = () => props.transcript?.state ?? fallback();
   const count = () => projection().messageIDs.length;
   const transcriptBusy = () =>
     props.loading || props.paging ||
