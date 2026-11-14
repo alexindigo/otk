@@ -7,6 +7,68 @@ import { SessionLists } from "../session-lists.ts";
 import { cfg } from "../../../tests/support/config.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 
+test("children API fallback filters titles before paging across checkout boundaries", async () => {
+  const rows = [
+    {
+      id: "unrelated",
+      parentID: "parent",
+      title: "Other",
+      directory: "/p",
+      updated: 40,
+    },
+    {
+      id: "new",
+      parentID: "parent",
+      title: "MiXeD newest",
+      directory: "/moved",
+      updated: 30,
+    },
+    {
+      id: "wrong-parent",
+      parentID: "another",
+      title: "mixed sibling",
+      directory: "/p",
+      updated: 25,
+    },
+    {
+      id: "old",
+      parentID: "parent",
+      title: "Older mixed",
+      directory: "/p",
+      updated: 20,
+    },
+  ];
+  const client = new Client(
+    cfg().harness,
+    ((input: RequestInfo | URL) => {
+      assertEquals(new URL(String(input)).pathname, "/session/parent/children");
+      return Promise.resolve(Response.json(rows.map(({ updated, ...row }) => ({
+        ...row,
+        projectID: "project",
+        time: { created: 1, updated },
+      }))));
+    }) as typeof fetch,
+  );
+  const lists = new SessionLists(client, () => Promise.resolve(undefined));
+  const signal = new AbortController().signal;
+  const input = {
+    directory: "/p",
+    parentID: "opcv1-parent",
+    query: "mIxEd",
+    limit: 1,
+  };
+  const first = await lists.read(input, signal);
+  assertEquals(first.items.map((row) => row.id), ["opcv1-new"]);
+  assert(first.older);
+  const second = await lists.read({ ...input, before: first.older }, signal);
+  assertEquals(second.items.map((row) => row.id), ["opcv1-old"]);
+  assertEquals(second.older, null);
+  assertEquals(
+    (await lists.read({ ...input, query: "absent" }, signal)).items,
+    [],
+  );
+});
+
 test("@load @sessions SQL list boundary reads exactly 20 without cataloging, orders equal clocks by ID and isolates unrelated growth", async () => {
   const path = join(await tempDir("list-source-"), "native.db"),
     db = new DatabaseSync(path);
