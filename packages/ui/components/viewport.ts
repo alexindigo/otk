@@ -65,6 +65,8 @@ export interface ViewportGeometry {
   distance?(): number;
   anchor(): WindowAnchor | undefined;
   resolve(anchor: WindowAnchor): number | undefined;
+  /** Retain the source and every enclosing window row until anchor transfer. */
+  retain?(anchor: WindowAnchor): () => void;
 }
 export interface ViewportTarget {
   start: number;
@@ -77,6 +79,10 @@ export interface ViewportPosition {
   follow(): void;
   keepAnchor(): void;
   layout(): void;
+  /** One revision includes prefix changes, DOM materialization and compensation. */
+  transaction(change: () => void): void;
+  /** A descendant must record its actual size before releasing this barrier. */
+  hold(): () => void;
   register(geometry: ViewportGeometry): () => void;
   remap(
     id: string,
@@ -137,17 +143,17 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   let position = viewport.scrollTop,
     frame: number | undefined,
     revision = 0,
-    quiet = 0,
-    appliedRevision = -1;
+    leases = 0,
+    changing = 0;
+  let applying = false;
   let anchors: { id: string; anchor: WindowAnchor }[] = [];
-  let geometryPending = true;
+  let releaseAnchor: (() => void) | undefined;
+  let geometryPending = true, capturePending = false;
   let navigation: {
     target: () => ViewportTarget | undefined;
     align: "center" | "nearest" | "start";
     resolve(): void;
     reject(error: Error): void;
-    signature?: string;
-    stable: number;
   } | undefined;
   const clamp = (top: number) =>
     Math.max(
@@ -163,22 +169,46 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const notify = () => {
     for (const change of listeners) change();
   };
-  const capture = () => {
-    if (mode === "follow") {
-      anchors = [];
+  const attach = (id: string, anchor: WindowAnchor) => {
+    if (anchors[0]?.id === id && anchors[0]?.anchor.key === anchor.key) {
+      anchors[0].anchor = { ...anchor };
       return;
     }
-    anchors = [...geometries.values()].sort((a, b) =>
-      (a.distance?.() ?? 0) - (b.distance?.() ?? 0) || b.depth - a.depth
-    ).flatMap((geometry) => {
+    const release = geometries.get(id)?.retain?.(anchor);
+    const previous = releaseAnchor;
+    anchors = [{ id, anchor: { ...anchor } }];
+    releaseAnchor = release;
+    previous?.();
+  };
+  const capture = () => {
+    if (mode === "follow") {
+      capturePending = false;
+      anchors = [];
+      releaseAnchor?.();
+      releaseAnchor = undefined;
+      return;
+    }
+    if (leases || changing) {
+      capturePending = true;
+      return;
+    }
+    const candidates = [...geometries.values()].flatMap((geometry) => {
       const anchor = geometry.anchor();
-      return anchor
-        ? [{
-          id: geometry.id,
-          anchor: { key: anchor.key, offset: anchor.offset },
-        }]
-        : [];
-    });
+      if (!anchor) return [];
+      const prefix = `${geometry.id}/${encodeURIComponent(anchor.key)}/`;
+      // A container covering estimated descendant spacers is not a source.
+      if ([...geometries.keys()].some((id) => id.startsWith(prefix))) return [];
+      return [{ geometry, anchor }];
+    }).sort((a, b) =>
+      (a.geometry.distance?.() ?? 0) - (b.geometry.distance?.() ?? 0) ||
+      b.geometry.depth - a.geometry.depth
+    );
+    const source = candidates[0];
+    // Crossing estimated space keeps the adjacent measured attachment. Mounting
+    // a guessed predecessor can never retire the source the reader just saw.
+    if (!source) return;
+    capturePending = false;
+    attach(source.geometry.id, source.anchor);
   };
   const cancelNavigation = (reason = "Viewport intent superseded") => {
     const old = navigation;
@@ -197,14 +227,15 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (gesture) gestureMoved = true;
     position = top;
     if ((gesture || dragging) && mode === "anchored") {
+      capturePending = true;
+      const delta = top - expected;
+      anchors = anchors.map(({ id, anchor }) => ({
+        id,
+        anchor: { key: anchor.key, offset: anchor.offset + delta },
+      }));
       if (geometryPending) {
         // Reader motion is a displacement of the saved identities, even when
         // their DOM offsets have already changed in this layout transaction.
-        const delta = top - expected;
-        anchors = anchors.map(({ id, anchor }) => ({
-          id,
-          anchor: { key: anchor.key, offset: anchor.offset + delta },
-        }));
         schedule();
       } else capture();
       return false;
@@ -226,75 +257,67 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (!disposed && frame === undefined) frame = requestAnimationFrame(apply);
   };
   function apply() {
+    if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
-    if (disposed) return;
-    if (externalPosition()) return;
-    const request = navigation;
-    if (request) {
-      try {
-        const target = request.target();
-        if (!target) {
-          schedule();
-          return;
-        }
-        const wanted = request.align === "center"
-          ? (target.start + target.end - viewport.clientHeight) / 2
-          : request.align === "start"
-          ? target.start
-          : target.start < viewport.scrollTop
-          ? target.start
-          : target.end > viewport.scrollTop + viewport.clientHeight
-          ? target.end - viewport.clientHeight
-          : viewport.scrollTop;
-        applyPosition(wanted);
-        const signature = JSON.stringify([
-          target.end - target.start,
-          target.start - position,
-          target.end - position,
-        ]);
-        request.stable = target.measured && signature === request.signature
-          ? request.stable + 1
-          : 0;
-        request.signature = signature;
-        if (request.stable >= 2) {
-          navigation = undefined;
-          geometryPending = false;
-          if (target.anchor) {
-            anchors = [{
-              id: target.anchor.id,
-              anchor: {
+    if (disposed || applying || changing) return;
+    applying = true;
+    try {
+      if (externalPosition()) return;
+      const appliedRevision = revision;
+      const request = navigation;
+      if (request) {
+        try {
+          const target = request.target();
+          if (!target) {
+            schedule();
+            return;
+          }
+          const wanted = request.align === "center"
+            ? (target.start + target.end - viewport.clientHeight) / 2
+            : request.align === "start"
+            ? target.start
+            : target.start < viewport.scrollTop
+            ? target.start
+            : target.end > viewport.scrollTop + viewport.clientHeight
+            ? target.end - viewport.clientHeight
+            : viewport.scrollTop;
+          applyPosition(wanted);
+          if (!leases && target.measured && appliedRevision === revision) {
+            navigation = undefined;
+            geometryPending = false;
+            if (target.anchor) {
+              attach(target.anchor.id, {
                 key: target.anchor.key,
                 offset: position - target.anchor.start,
-              },
-            }];
-          } else capture();
-          request.resolve();
-        } else schedule();
-      } catch (error) {
-        navigation = undefined;
-        request.reject(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
-      return;
-    }
-    if (mode === "follow") applyPosition(viewport.scrollHeight);
-    else {
-      for (const saved of anchors) {
-        const top = geometries.get(saved.id)?.resolve(saved.anchor);
-        if (top !== undefined) {
-          applyPosition(top);
-          break;
+              });
+            } else capture();
+            request.resolve();
+          } else schedule();
+        } catch (error) {
+          navigation = undefined;
+          request.reject(
+            error instanceof Error ? error : new Error(String(error)),
+          );
         }
+        return;
       }
-      notify();
-    }
-    quiet = appliedRevision === revision ? quiet + 1 : 0;
-    appliedRevision = revision;
-    if (quiet < 2) schedule();
-    else {
-      geometryPending = false;
-      if (!anchors.length) capture();
+      if (mode === "follow") applyPosition(viewport.scrollHeight);
+      else {
+        for (const saved of anchors) {
+          const top = geometries.get(saved.id)?.resolve(saved.anchor);
+          if (top !== undefined) {
+            applyPosition(top);
+            break;
+          }
+        }
+        notify();
+      }
+      if (!leases && appliedRevision === revision) {
+        geometryPending = false;
+        if (capturePending || !anchors.length) capture();
+      } else schedule();
+    } finally {
+      applying = false;
     }
   }
   const layout = () => {
@@ -434,6 +457,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       cancelNavigation();
       tail = true;
       mode = "follow";
+      capture();
       gesture = undefined;
       dragging = false;
       layout();
@@ -444,6 +468,35 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       layout();
     },
     layout,
+    transaction(change) {
+      externalPosition();
+      changing++;
+      geometryPending = true;
+      revision++;
+      try {
+        change();
+      } finally {
+        changing--;
+        if (!changing) {
+          layout();
+          // Measured reconciliation and its compensation commit before paint.
+          // The legacy layout intent remains queued, preserving pending native
+          // notifications that predate that reconciliation.
+          apply();
+        }
+      }
+    },
+    hold() {
+      leases++;
+      geometryPending = true;
+      let live = true;
+      return () => {
+        if (!live) return;
+        live = false;
+        leases--;
+        layout();
+      };
+    },
     register(geometry) {
       if (geometries.has(geometry.id)) {
         throw new Error(`Duplicate viewport geometry: ${geometry.id}`);
@@ -454,15 +507,26 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       return () => {
         if (geometries.get(geometry.id) === geometry) {
           geometries.delete(geometry.id);
+          if (anchors.some((saved) => saved.id === geometry.id)) {
+            anchors = [];
+            const release = releaseAnchor;
+            releaseAnchor = undefined;
+            release?.();
+            layout();
+          }
         }
       };
     },
     remap(id, change) {
-      anchors = anchors.flatMap((saved) => {
-        if (saved.id !== id) return [saved];
-        const anchor = change(saved.anchor);
-        return anchor ? [{ id, anchor }] : [];
-      });
+      const saved = anchors.find((saved) => saved.id === id);
+      if (!saved) return;
+      const anchor = change(saved.anchor);
+      if (anchor) attach(id, anchor);
+      else {
+        anchors = [];
+        releaseAnchor?.();
+        releaseAnchor = undefined;
+      }
     },
     subscribe(change) {
       listeners.add(change);
@@ -478,10 +542,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }
       cancelNavigation();
       mode = "anchored";
+      capturePending = false;
       gesture = undefined;
       dragging = false;
       return new Promise<void>((resolve, reject) => {
-        navigation = { target, align, resolve, reject, stable: 0 };
+        navigation = { target, align, resolve, reject };
         layout();
       });
     },
@@ -507,6 +572,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       listeners.clear();
       flows.clear();
       anchors = [];
+      releaseAnchor?.();
+      releaseAnchor = undefined;
       viewport.removeEventListener("scroll", scroll);
       viewport.removeEventListener("scrollend", end);
       viewport.removeEventListener("wheel", wheel);

@@ -593,6 +593,15 @@ rows use `createWindow`'s retained measurements/role estimates. A reveal settles
 on measured viewport-relative bounds even while preceding content grows, then
 retains that requested identity as its anchor.
 
+The root's revisioned geometry transaction joins keyed reconciliation, nested
+materialization, recorded sizes and position compensation before paint. Pending
+descendant measurement leases prevent settlement and source transfer; quiet
+frames do not establish readiness. An anchor is an intersecting measured leaf
+row, retained together with its enclosing row chain. Estimated spacers locate
+mounting work but never become anchors; entering one retains the adjacent
+measured source until the new content is measured. Solid's flush/settled
+boundary joins its deferred DOM reconciliation to the same geometry commit.
+
 Native selections pin the complete intersecting logical range before recycling,
 including interior child windows and reverse selections. Select all in a focused
 transcript materializes the acquired range before establishing its native Range.

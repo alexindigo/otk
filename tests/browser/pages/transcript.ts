@@ -355,7 +355,8 @@ export async function revealAcquired(page: Page, selector: string) {
     }, selector);
   let state = await probe();
   if (state.delta === undefined) {
-    await wheelTranscript(page, -state.end);
+    // Estimated extents can grow while nested sources materialize.
+    await scrollTranscript(page, false);
     state = await probe();
   }
   while (state.delta === undefined) {

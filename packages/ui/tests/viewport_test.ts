@@ -2,6 +2,193 @@
 import { assertEquals } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
 
+Deno.test("large native input keeps its displacement when no new measured source is mounted yet", () => {
+  viewportFixture(({ pane, height, flush }) => {
+    const lease = acquireViewport(pane);
+    let prefix = 800, visible = true;
+    const release = lease.owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () =>
+        visible
+          ? { key: "source", offset: pane.scrollTop - prefix }
+          : undefined,
+      resolve: (anchor) => prefix + anchor.offset,
+    });
+    try {
+      lease.owner.keepAnchor();
+      for (let i = 0; i < 4; i++) flush();
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: -900 });
+      pane.dispatchEvent(wheel);
+      visible = false;
+      pane.scrollTop = 0;
+      pane.dispatchEvent(new Event("scroll"));
+      lease.owner.transaction(() => {
+        prefix += 100;
+        height(1100);
+      });
+      assertEquals(pane.scrollTop, 100);
+    } finally {
+      release();
+      lease.release();
+    }
+  });
+});
+
+for (const input of ["wheel", "keydown"]) {
+  Deno.test(`${input} transfers the retained source after the final measurement lease`, () => {
+    viewportFixture(({ pane, height, flush }) => {
+      const lease = acquireViewport(pane), retained = new Set<string>();
+      let second = 400;
+      const release = lease.owner.register({
+        id: "rows",
+        depth: 1,
+        anchor: () =>
+          pane.scrollTop < second
+            ? { key: "a", offset: pane.scrollTop }
+            : { key: "b", offset: pane.scrollTop - second },
+        resolve: (anchor) => (anchor.key === "b" ? second : 0) + anchor.offset,
+        retain: (anchor) => {
+          retained.add(anchor.key);
+          return () => retained.delete(anchor.key);
+        },
+      });
+      const move = (top: number) => {
+        const event = new Event(input);
+        Object.defineProperty(event, input === "wheel" ? "deltaY" : "key", {
+          value: input === "wheel" ? top - pane.scrollTop : "PageDown",
+        });
+        pane.dispatchEvent(event);
+        pane.scrollTop = top;
+        pane.dispatchEvent(new Event("scroll"));
+        pane.dispatchEvent(new Event("scrollend"));
+      };
+      try {
+        for (let n = 0; n < 4; n++) flush();
+        move(100);
+        const first = lease.owner.hold(), last = lease.owner.hold();
+        move(500);
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals([...retained], ["a"]);
+        first();
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals(
+          [...retained],
+          ["a"],
+          "another measurement still owns the barrier",
+        );
+        last();
+        for (let n = 0; n < 4; n++) flush();
+        assertEquals(
+          [...retained],
+          ["b"],
+          "the visible measured source replaces the old pin without another input",
+        );
+        lease.owner.transaction(() => {
+          second += 120;
+          height(1120);
+        });
+        assertEquals(
+          pane.scrollTop,
+          620,
+          "growth between the old and visible sources preserves the reader's position",
+        );
+      } finally {
+        release();
+        lease.release();
+      }
+      assertEquals([...retained], []);
+    }, { tail: false });
+  });
+}
+
+for (const name of ["Sessions", "Timeline", "Transcript"]) {
+  Deno.test(`${name} commits prepend compensation with its geometry revision`, () => {
+    viewportFixture(({ pane, height, flush }) => {
+      const lease = acquireViewport(pane);
+      let prefix = 300, retained = 0;
+      const release = lease.owner.register({
+        id: "rows",
+        depth: 1,
+        anchor: () => ({ key: "source", offset: pane.scrollTop - prefix }),
+        resolve: (anchor) => prefix + anchor.offset,
+        retain: () => {
+          retained++;
+          return () => {
+            retained--;
+          };
+        },
+      });
+      try {
+        for (let i = 0; i < 4; i++) flush();
+        pane.scrollTop = 600;
+        pane.dispatchEvent(new Event("scroll"));
+        lease.owner.keepAnchor();
+        for (let i = 0; i < 4; i++) flush();
+        lease.owner.transaction(() => {
+          prefix += 1000;
+          height(2400);
+        });
+        assertEquals(
+          pane.scrollTop,
+          1600,
+          "compensation precedes the next frame",
+        );
+        assertEquals(
+          retained,
+          1,
+          "only the current source attachment is pinned",
+        );
+      } finally {
+        release();
+        lease.release();
+      }
+      assertEquals(retained, 0);
+    }, { tail: false });
+  });
+}
+
+Deno.test("descendant measurement leases prevent a guessed predecessor replacing the measured source", () => {
+  viewportFixture(({ pane, height, flush }) => {
+    const lease = acquireViewport(pane);
+    let prefix = 300, pending = false;
+    const release = lease.owner.register({
+      id: "source",
+      depth: 3,
+      anchor: () =>
+        pending
+          ? { key: "predecessor", offset: 42 }
+          : { key: "visible", offset: pane.scrollTop - prefix },
+      resolve: (anchor) =>
+        anchor.key === "visible" ? prefix + anchor.offset : anchor.offset,
+    });
+    try {
+      lease.owner.keepAnchor();
+      for (let i = 0; i < 4; i++) flush();
+      const measured = lease.owner.hold();
+      pending = true;
+      for (let i = 0; i < 10; i++) flush();
+      // Quiet frames cannot certify an outstanding child measurement.
+      const wheel = new Event("wheel");
+      Object.defineProperty(wheel, "deltaY", { value: -48 });
+      pane.dispatchEvent(wheel);
+      pane.scrollTop -= 48;
+      pane.dispatchEvent(new Event("scroll"));
+      lease.owner.transaction(() => {
+        prefix += 1000;
+        height(2400);
+      });
+      assertEquals(pane.scrollTop, 1852);
+      measured();
+      assertEquals(pane.scrollTop, 1852);
+    } finally {
+      release();
+      lease.release();
+    }
+  });
+});
+
 Deno.test("settled geometry does not repeatedly assign an already-applied position", () => {
   viewportFixture(({ writes, flush }) => {
     const before = writes();
