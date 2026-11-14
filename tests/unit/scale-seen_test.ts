@@ -7,27 +7,43 @@ import { fixture } from "../support/config.ts";
 import { test } from "../support/resources.ts";
 import { seedScaleSeen } from "../support/scale-seen.ts";
 
+function v1Schema(native: DatabaseSync, sessions: readonly string[]) {
+  native.exec(`CREATE TABLE session(id TEXT, parent_id TEXT, directory TEXT,
+    project_id TEXT, title TEXT, time_created INTEGER, time_updated INTEGER,
+    time_archived INTEGER);
+    CREATE TABLE message(id TEXT, session_id TEXT, time_created INTEGER, data TEXT);`);
+  const insert = native.prepare(
+    "INSERT INTO session VALUES(?,NULL,'/fixture','project',?,1,100,NULL)",
+  );
+  for (const id of sessions) insert.run(id, id);
+}
+
 for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
   test(`scale viewed-history fixture acknowledges exact ${kind} seed terminals only`, async () => {
     const root = await fixture(),
       path = join(root, "native.db"),
       native = new DatabaseSync(path);
     if (kind === "opencode-v1") {
-      native.exec("CREATE TABLE message(session_id TEXT, data TEXT)");
-      const insert = native.prepare("INSERT INTO message VALUES(?,?)");
+      v1Schema(native, ["seed", "other", "empty"]);
+      const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
       for (
         const [id, terminal] of [["seed", 10], ["seed", 20], ["other", 99]]
       ) {
         insert.run(
+          `${id}-${terminal}`,
           id,
+          terminal,
           JSON.stringify({
             role: "assistant",
+            finish: "stop",
             time: { completed: terminal },
           }),
         );
       }
       insert.run(
+        "empty-user",
         "empty",
+        30,
         JSON.stringify({ role: "user", time: { created: 30 } }),
       );
     } else {
@@ -61,3 +77,116 @@ for (const kind of ["opencode-v1", "opencode-v2-server"] as const) {
     }
   });
 }
+
+test("scale viewed-history fixture follows the native V1 terminal inventory", async () => {
+  const root = await fixture(),
+    path = join(root, "native.db"),
+    native = new DatabaseSync(path);
+  const sessions = [
+    "error",
+    "error-completed",
+    "tool-calls",
+    "unknown",
+    "completion-only",
+    "same-clock",
+  ];
+  v1Schema(native, sessions);
+  const insert = native.prepare("INSERT INTO message VALUES(?,?,?,?)");
+  for (const id of sessions) {
+    insert.run(
+      "old",
+      id,
+      10,
+      JSON.stringify({
+        role: "assistant",
+        finish: "stop",
+        time: { completed: 20 },
+      }),
+    );
+  }
+  const latest = [
+    ["error", { error: { name: "APIError" } }],
+    ["error-completed", {
+      error: { name: "APIError" },
+      time: { completed: 31 },
+    }],
+    ["tool-calls", { finish: "tool-calls", time: { completed: 40 } }],
+    ["unknown", { finish: "unknown", time: { completed: 40 } }],
+    ["completion-only", { time: { completed: 40 } }],
+    ["same-clock", { finish: "stop", time: { completed: 40 } }],
+  ] as const;
+  for (const [id, fields] of latest) {
+    insert.run(
+      "new-a",
+      id,
+      30,
+      JSON.stringify({ role: "assistant", ...fields }),
+    );
+  }
+  insert.run(
+    "new-b",
+    "same-clock",
+    30,
+    JSON.stringify({ role: "assistant", error: { name: "APIError" } }),
+  );
+  insert.run(
+    "new-user",
+    "error",
+    50,
+    JSON.stringify({ role: "user", time: { completed: 99 } }),
+  );
+  native.close();
+  const store = new OtkDb(join(root, "state"), [seenMigrations], {
+    busyms: 5000,
+  });
+  try {
+    seedScaleSeen(
+      store,
+      path,
+      "opencode-v1",
+      sessions.map((id) => ({ id, nativeID: id })),
+    );
+    const tokens = new Map(
+      new Seen(store).tokens().map((row) => [
+        row.session,
+        row.time,
+      ]),
+    );
+    assertEquals(
+      tokens,
+      new Map([
+        ["error", 30],
+        ["error-completed", 31],
+        ["same-clock", 30],
+        ["tool-calls", 20],
+        ["unknown", 20],
+        ["completion-only", 40],
+      ]),
+    );
+    const changed = new DatabaseSync(path);
+    changed.prepare("INSERT INTO message VALUES(?,?,?,?)").run(
+      "new-invalid",
+      "error",
+      60,
+      "not JSON",
+    );
+    changed.close();
+    seedScaleSeen(
+      store,
+      path,
+      "opencode-v1",
+      sessions.map((id) => ({ id, nativeID: id })),
+    );
+    assertEquals(
+      new Map(
+        new Seen(store).tokens().map((row) => [
+          row.session,
+          row.time,
+        ]),
+      ),
+      tokens,
+    );
+  } finally {
+    store.close();
+  }
+});
