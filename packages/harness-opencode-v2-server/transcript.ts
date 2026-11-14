@@ -5,6 +5,7 @@ import { StreamBuffers } from "@otk/content";
 import {
   compareMessages,
   isRealPrompt,
+  knownDerived,
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
   sessionErrorMessage,
@@ -1914,20 +1915,49 @@ export class Transcript {
               .helperProgress(child, signal);
           signal.throwIfAborted();
           if (this.#helperReads.get(child) !== work) return;
+          if (work.dirty) continue;
+          const previous = this.#helperSummary(child);
           const revision = Math.max(
             this.#helperProgress.get(child)?.revision ?? 0,
             ...[...this.#helperLinks.values()].filter((l) => l.child === child)
               .map((l) => l.revision),
           ) + 1;
-          const value = { ...summary, revision };
+          const value = {
+            ...summary,
+            revision,
+            progress: summary.progress.state === "known"
+              ? knownDerived(
+                summary.progress.value,
+                summary.progress.witness.source,
+                revision,
+                summary.progress.final,
+                previous.progress,
+              )
+              : previous.progress.state === "known"
+              ? previous.progress
+              : summary.progress,
+          };
           this.#helperProgress.set(child, value);
           this.#publishHelper(child, value);
         } while (work.dirty);
       })().catch((error) => {
-        if (!signal.aborted) this.options.diagnostic(error);
+        if (!signal.aborted) {
+          this.options.diagnostic(error);
+          const previous = this.#helperSummary(child);
+          if (previous.progress.state === "known") {
+            const summary = {
+              ...previous,
+              state: "unavailable" as const,
+              revision: previous.revision + 1,
+            };
+            this.#helperProgress.set(child, summary);
+            this.#publishHelper(child, summary);
+          }
+        }
       }).finally(() => {
         if (this.#helperReads.get(child) === work) {
           this.#helperReads.delete(child);
+          if (work.dirty && !signal.aborted) this.#requestHelper(child, true);
         }
       }),
     );

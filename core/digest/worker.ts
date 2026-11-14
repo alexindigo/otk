@@ -716,12 +716,29 @@ async function start(
                   nativeUnavailable = true;
                   if (row) {
                     const saved = snapshot(row);
+                    const helperRow = job.projection === "helper"
+                      ? store!.helpers([job.sessionID])[0]
+                      : undefined;
+                    const retainedHelper = helperRow && helper(helperRow);
                     const delta: DigestDelta = {
                       summary: {
                         ...saved.summary,
                         state: "unavailable",
+                        stale: true,
+                        refreshing: false,
+                        error: errorMessage(error),
                         revision: saved.summary.revision + 1,
                       },
+                      ...(job.projection === "helper"
+                        ? {
+                          helper: {
+                            state: "unavailable" as const,
+                            revision: (retainedHelper?.revision ?? 0) + 1,
+                            progress: retainedHelper?.progress ??
+                              { state: "unavailable" as const },
+                          },
+                        }
+                        : {}),
                       turns: { upsert: {}, remove: [] },
                       deleted: saved.deleted,
                     };
@@ -950,7 +967,11 @@ function handle(message: ToWorker): void {
                   ) {
                     inventoryRevision++;
                   }
-                  sink!.invalidate(dirty.sessionID, dirty.revision);
+                  sink!.invalidate(
+                    dirty.sessionID,
+                    dirty.revision,
+                    dirty.messages,
+                  );
                   scheduler!.enqueue(
                     {
                       provider: sink!.identity,

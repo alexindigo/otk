@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { derivedValue, type HelperProgress } from "@otk/protocol";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import type { DigestDelta, SessionMetadata } from "@otk/protocol";
 import {
@@ -113,15 +113,30 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     }, new AbortController().signal);
     assertEquals(derivedValue(viewed.progress)?.time, { start: 1, end: 5 });
     assertEquals(
+      viewed.progress.state === "known" && viewed.progress.final,
+      true,
+    );
+    assertEquals(
+      viewed.progress.state === "known" &&
+        viewed.progress.witness.source.endsWith("connection:0"),
+      true,
+    );
+    assertEquals(
       "time" in viewed,
       false,
       "Helper time belongs inside the result, not beside it",
     );
     await scan();
     assertEquals(publications.length, 5);
+    const retained = structuredClone(saved?.helper?.progress);
     available = false;
     await scan();
     assertEquals(saved?.helper?.state, "unavailable");
+    assertEquals(
+      saved?.helper?.progress,
+      retained,
+      "source outage retains the coherent count/current/time result",
+    );
     await scan();
     assertEquals(publications.length, 6);
     available = true;
@@ -135,6 +150,20 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
     assertEquals(publications.length, 8);
     await scan();
     assertEquals(publications.length, 8);
+    const sourceRetained = structuredClone(saved?.helper?.progress);
+    sink.transcript.helperProgress = () => {
+      sink.connection(1);
+      return Promise.resolve(saved!.helper!);
+    };
+    await assertRejects(
+      () =>
+        sink.readers["opcv2.helper.progress"]!({
+          sessionID: "opcv2-ses_helper",
+        }, new AbortController().signal),
+      Error,
+      "V2 helper source changed",
+    );
+    assertEquals(saved?.helper?.progress, sourceRetained);
   } finally {
     await sink.close();
     db.close();
