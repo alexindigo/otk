@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { observation } from "./observation.ts";
 import { join, relative, resolve } from "@std/path";
 import { start } from "../../main.ts";
 import { OtkDb } from "@otk/store";
@@ -254,39 +255,52 @@ export async function populationScaleScenario(profile: Profile) {
             baseline: {},
           };
           return lease;
-        case "observe":
-          return {
-            readiness,
-            manifest: native.manifest,
-            counts: native.manifest.counts,
-            expectedCounts: SCALE,
-            files: files.length,
-            ready: [...ready],
-            entries: Array.from(app.index.values()),
-            taskMembers: native.manifest.sessions.filter((row) =>
-              sessionFamily(row.id, (id) => app.index.get(id)).some((id) =>
-                id === native.manifest.sessions[0].id ||
-                id === native.manifest.sessions[4].id
-              )
-            ).map((row) => row.id),
-            expectedCosts: Object.fromEntries(
-              [0, 2, 3, 250].map(
-                (i) => [
-                  native.manifest.sessions[i].id,
-                  usageCost(native.manifest.sessions[i].expected.cost!),
-                ],
+        case "observe": {
+          // Polling predicates select scalar/narrow fields; the full evidence
+          // export (no selection) is taken once at the boundary that needs it.
+          const fields: Record<string, () => unknown> = {
+            readiness: () => readiness,
+            manifest: () => native.manifest,
+            counts: () => native.manifest.counts,
+            expectedCounts: () => SCALE,
+            files: () => files.length,
+            ready: () => [...ready],
+            readyCount: () => ready.size,
+            entries: () => Array.from(app.index.values()),
+            taskMembers: () =>
+              native.manifest.sessions.filter((row) =>
+                sessionFamily(row.id, (id) => app.index.get(id)).some((id) =>
+                  id === native.manifest.sessions[0].id ||
+                  id === native.manifest.sessions[4].id
+                )
+              ).map((row) => row.id),
+            expectedCosts: () =>
+              Object.fromEntries(
+                [0, 2, 3, 250].map(
+                  (i) => [
+                    native.manifest.sessions[i].id,
+                    usageCost(native.manifest.sessions[i].expected.cost!),
+                  ],
+                ),
               ),
-            ),
-            nativeEvents,
-            frames: client.frames,
-            requests: fake.requests,
-            watches: watches.records,
-            phases,
-            sections,
-            nativeReads,
-            serving: serving.samples,
-            pressure,
+            nativeEvents: () => nativeEvents,
+            frames: () => client.frames,
+            requests: () => fake.requests,
+            watches: () => watches.records,
+            phases: () => phases,
+            sections: () => sections,
+            nativeReads: () => nativeReads,
+            serving: () => serving.samples,
+            pressure: () => pressure,
           };
+          return observation(
+            fields,
+            (frame.params as { select?: { fields?: string[]; entry?: string } })
+              .select,
+            (id) => app.index.getMetadata(id),
+            ["readyCount"],
+          );
+        }
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
         case "nativeRequest":

@@ -68,8 +68,11 @@ export class TestState {
       gate,
     });
   }
-  observe<T>(): Promise<T> {
-    return this.controller.call("observe", { lease: this.lease.lease });
+  observe<T>(select?: { fields?: string[]; entry?: string }): Promise<T> {
+    return this.controller.call("observe", {
+      lease: this.lease.lease,
+      ...(select ? { select } : {}),
+    });
   }
 }
 export async function finishState(
