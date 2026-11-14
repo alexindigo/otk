@@ -68,9 +68,13 @@ export function validateCommandArguments(
       throw new Error(`Invalid ${path}: expected array`);
     }
     if (schema.items) {
-      value.forEach((item, index) =>
-        validateCommandArguments(schema.items!, item, `${path}[${index}]`)
-      );
+      for (let index = 0; index < value.length; index++) {
+        validateCommandArguments(
+          schema.items,
+          value[index],
+          `${path}[${index}]`,
+        );
+      }
     }
     return;
   }

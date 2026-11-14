@@ -90,3 +90,39 @@ Deno.test("an active call counts only recorded busy intervals, never observation
   });
   assertEquals(timing.result(), { state: "active", start: 0, workingMs: 500 });
 });
+
+Deno.test("every closed constituent needs an end even while another call remains active", () => {
+  for (const missing of [true, false]) {
+    for (const reverse of [false, true]) {
+      const timing = new TurnTimingAccumulator();
+      const records = [{
+        start: 1000,
+        ...(missing ? {} : { end: 1100 }),
+        terminal: true,
+        source: "fixture/closed",
+        busy: [{ start: 1000, end: 1100 }],
+        waits: [],
+      }, {
+        start: 1300,
+        terminal: false,
+        source: "fixture/active",
+        busy: [{ start: 1300, end: 1350 }],
+        waits: [],
+      }];
+      for (const record of reverse ? records.reverse() : records) {
+        timing.add(record);
+      }
+      assertEquals(
+        timing.result(),
+        missing
+          ? {
+            state: "unknown",
+            start: 1000,
+            terminal: false,
+            reason: "missing-end",
+          }
+          : { state: "active", start: 1000, workingMs: 150 },
+      );
+    }
+  }
+});
