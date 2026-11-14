@@ -569,6 +569,10 @@ session publication revision, preserving the helper's existing ordering domain.
 Requests arriving during a pass share the scheduler's one coalesced successor,
 not concurrent scans.
 
+An unchanged content hash retains its scalar contribution, but not an obsolete
+source witness. Every bounded source-rebuild batch renews affected turn
+witnesses; ordinary equal-source rescans do not republish those turns.
+
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never
 full message/part JSON. Turn timing adds scalar text/reasoning/tool clock
