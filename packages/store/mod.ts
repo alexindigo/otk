@@ -2,6 +2,10 @@
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb, type StoreWrite } from "./db.ts";
 export {
+  pluginStorageMigrations,
+  PluginStore,
+} from "./features/plugin-storage.ts";
+export {
   type KeyPolicy,
   MAX_METADATA_KEY,
   validateKey,

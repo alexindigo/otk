@@ -106,6 +106,8 @@ export interface HarnessCore {
   ): Promise<ContentSession>;
 }
 export interface Harness {
+  /** Composition injects this plugin's isolated, semantics-free storage before start. */
+  storage?(storage: import("./plugin-storage.ts").PluginStorage): void;
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
 }
