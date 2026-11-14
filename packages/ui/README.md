@@ -359,11 +359,14 @@ unsupported and attachment-blocked drafts. It is disabled with its actual reason
 in its tooltip and accessible description. This primary-action exception does
 not change secondary actions' hide-when-unavailable policy. Prompt and active
 question, permission and form takeovers render the same `PrimaryAction` control
-from the framework-free client owner. Pointer and Enter intents recheck that
-owner before submission; while the composer can send, Enter stays the Send key
-and never edits an empty, blocked or pending draft. Native request replies are
-additionally admitted once per request by the connection, whatever the view
-lifetime. Running turns keep Send and today's native delivery.
+from the framework-free client owner. Native Send invokes that owner; Enter
+prepares input through the existing submission intent. Both paths share live
+primary readiness checks and the same preparation/effect callback. Local input
+commands can run while a captured send settles; the intent still refuses another
+send. While the composer can send, Enter never inserts a newline into an empty,
+blocked or pending draft. Native request replies are additionally admitted once
+per request by the connection, whatever the view lifetime. Running turns keep
+Send and today's native delivery.
 
 Image uploads contribute independent chips: one contained thumbnail beside the
 label and explicit remove button, without inserting a textarea token. Shared
