@@ -19,6 +19,7 @@ import {
   DisplayMenu,
   Docks,
   emptyDraft,
+  LIGHT_STATES,
   type LightState,
   Message,
   paintVisualPreferences,
@@ -233,9 +234,7 @@ function Consumer(): Element {
             gap: "16px",
           }}
         >
-          <For
-            each={["blocked", "working", "finished", "idle"] as LightState[]}
-          >
+          <For each={Object.keys(LIGHT_STATES) as LightState[]}>
             {(state) => <StatusLight state={state} event={lightEvent()} />}
           </For>
           <StatusLight state="working" small event={lightEvent()} />

@@ -11,6 +11,35 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
     title: "Message timestamps",
   });
   await openSession(state, page, session.id);
+  const readSchema = () => {
+    const port = new URL(state.url).port,
+      db = new DatabaseSync(
+        state.controller.info!.root + `/otk-${port}/otk.db`,
+        {
+          readOnly: true,
+        },
+      );
+    try {
+      expect(
+        db.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='output_times'",
+        ).all(),
+      ).toEqual([]);
+      return {
+        tables: db.prepare(
+          "SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name",
+        ).all(),
+        migrations: db.prepare(
+          "SELECT feature,version FROM otk_migrations ORDER BY feature,version",
+        ).all(),
+      };
+    } finally {
+      db.close();
+    }
+  };
+  // Timestamp rendering must not add storage. Unrelated feature migrations
+  // belong to application composition, not a copied inventory in this test.
+  const schema = readSchema();
   await state.controller.call("queueScript", {
     lease: state.lease.lease,
     chunks: ["first output", " then more", " and more", " final output"],
@@ -180,36 +209,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
       rows.every((e) => getComputedStyle(e).visibility === "visible")
     )
   ).toBe(true);
-  const port = new URL(state.url).port,
-    db = new DatabaseSync(state.controller.info!.root + `/otk-${port}/otk.db`, {
-      readOnly: true,
-    });
-  try {
-    expect(
-      db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='output_times'",
-      ).all(),
-    ).toEqual([]);
-    expect(
-      db.prepare("SELECT feature,version FROM otk_migrations ORDER BY feature")
-        .all(),
-    ).toEqual([
-      { feature: "finishes", version: 1 },
-      { feature: "frecency", version: 1 },
-      { feature: "permissions", version: 1 },
-      { feature: "prefs", version: 1 },
-      { feature: "project-templates", version: 1 },
-      { feature: "project-templates", version: 2 },
-      { feature: "projects", version: 1 },
-      { feature: "requests", version: 1 },
-      { feature: "seen", version: 1 },
-      { feature: "session-reference-upgrade", version: 1 },
-      { feature: "tasks", version: 1 },
-      { feature: "tasks", version: 2 },
-    ]);
-  } finally {
-    db.close();
-  }
+  expect(readSchema()).toEqual(schema);
   await state.controller.call("restart", {
     lease: state.lease.lease,
     target: "sidecar",
@@ -217,4 +217,5 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await expect(page.locator(".otk-server-status[data-connection=local]"))
     .toHaveAttribute("title", /: connected;/, { timeout: 60000 });
   await expect(time).toHaveAttribute("datetime", completed!);
+  expect(readSchema()).toEqual(schema);
 });
