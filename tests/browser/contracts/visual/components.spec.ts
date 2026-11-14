@@ -31,6 +31,9 @@ test(
     const strip = page.locator(".otk-rolled-back-strip"),
       original = await strip.elementHandle();
     const disclosure = page.locator(".otk-rollback-disclosure");
+    await page.evaluate("styleTest.settleNotice()");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".otk-rollback-footer button")).toBeVisible();
     if (
       await disclosure.getAttribute("aria-expanded") !== "true"
     ) await disclosure.click();

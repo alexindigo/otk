@@ -1064,16 +1064,17 @@ Revert to here uses the same prompt context/hover command and selected-session
 client revert owner. Root idle sessions advertise it only with `revert`; queued
 prompts and read-only helpers omit it. `RolledBackStrip` replaces the transcript
 banner using exactly the same joined `ComposerNotice` frame as ForkNote. Its
-local disclosure shows bounded prompt previews, times, Copy and file counts, the
-permanence note and an available neutral Restore action. Pending and errors
-remain in that composer area; rollback takes precedence over the fork note.
-Restore requires the separately advertised `restore` capability. No confirmation
-is added to the native file/conversation rollback. An independently advertised
-`revertCode` capability adds Revert code changes to the same prompt context
-menu. It uses the existing selected-session revert owner and remains hidden on
-backends without that capability. Session targets similarly offer Archive or
-Unarchive only with `sessionArchive`, using authoritative state and the shared
-CommandMenu. No overlay, style or local archive store is added.
+local disclosure shows bounded prompt previews, times, Copy and file counts and
+the permanence note. Restore conversation is visible outside that disclosure and
+uses the same registered action as `/restore` and the palette. Pending and
+errors remain in that composer area; rollback takes precedence over the fork
+note. Restore requires the separately advertised `restore` capability. No
+confirmation is added to the native file/conversation rollback. An independently
+advertised `revertCode` capability adds Revert code changes to the same prompt
+context menu. It uses the existing selected-session revert owner and remains
+hidden on backends without that capability. Session targets similarly offer
+Archive or Unarchive only with `sessionArchive`, using authoritative state and
+the shared CommandMenu. No overlay, style or local archive store is added.
 
 Primary notice content shares `ComposerNoticeRow`: disclosure, error and fork
 facts use one control-height row with the same leading icon slot and
@@ -1087,7 +1088,8 @@ when the prompt capability is available; the owner waits for idle before
 rollback. Helpers omit both actions. Built-in slash discovery, like the Palette,
 projects the hub's current availability for every command rather than listing
 actions that cannot run. Redo pending state uses the same Restoring presentation
-as Restore; only owner-written draft content is cleared.
+as Restore; the client draft transaction restores the exact untouched pre-revert
+draft rather than clearing a selected-view pointer.
 
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,

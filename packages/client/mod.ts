@@ -45,6 +45,11 @@ export * from "./attention-grace.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
+export type {
+  DraftRevertCapture,
+  DraftReverts,
+  RevertDraft,
+} from "./draft-revert.ts";
 export * from "./draft-content.ts";
 export * from "./prompt-history.ts";
 export * from "./prompt-selection.ts";

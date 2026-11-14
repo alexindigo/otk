@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RolledBackStrip.css" with { type: "text" };
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, onSettled, Show } from "solid-js";
 import type { RevertStrip, SessionRevert } from "@otk/client";
 import { countLabel } from "@otk/client";
 import ComposerNotice, { ComposerNoticeRow } from "./ComposerNotice.tsx";
@@ -25,7 +25,19 @@ export function RolledBackContent(
   const { commands } = useCommandPorts();
   const [expanded, setExpanded] = createSignal(false);
   const [feedback, setFeedback] = createSignal("");
-  const restore = () => commands.enabled("session.restore");
+  const [revision, setRevision] = createSignal(0);
+  onSettled(() => {
+    const invalidate = () => setRevision((value) => value + 1);
+    const release = commands.subscribe(invalidate);
+    invalidate();
+    return release;
+  });
+  const restore = () => {
+    revision();
+    return commands.enabled("session.restore")
+      ? commands.metadata("session.restore")
+      : undefined;
+  };
   const perform = async (action: () => Promise<void>) => {
     setFeedback("");
     try {
@@ -127,19 +139,19 @@ export function RolledBackContent(
                     </div>
                   )}
                 </For>
-                <div class="otk-rollback-footer otk-control-row">
-                  <span>Your next prompt makes this permanent.</span>
-                  <Show when={restore()}>
-                    <button
-                      type="button"
-                      class="otk-pill"
-                      onClick={() =>
-                        void perform(() => commands.run("session.restore"))}
-                    >
-                      Restore
-                    </button>
-                  </Show>
-                </div>
+                <span>Your next prompt makes this permanent.</span>
+              </div>
+            </Show>
+            <Show when={restore()}>
+              <div class="otk-rollback-footer otk-control-row">
+                <button
+                  type="button"
+                  class="otk-pill"
+                  onClick={() =>
+                    void perform(() => commands.run("session.restore"))}
+                >
+                  {restore()?.title}
+                </button>
               </div>
             </Show>
           </>
