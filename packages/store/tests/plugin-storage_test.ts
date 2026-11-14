@@ -53,6 +53,35 @@ test("plugin storage survives restart and adversarial identical names never coll
   }
 });
 
+test("plugin prefix ranges stay inside valid Unicode scalar boundaries", async () => {
+  const root = await tempDir("plugin-storage-unicode-");
+  const db = new OtkDb(root, [pluginStorageMigrations], { busyms: 1000 });
+  try {
+    const store = new PluginStore(db);
+    for (const prefix of ["x/\ud7fe", "x/\ud7ff", "x/\ud7ff\u{10ffff}"]) {
+      const scope = store.scope(prefix);
+      const keys = [`${prefix}/a`, `${prefix}/b`];
+      for (const key of [...keys, "x/\ue000/unrelated", "x/\ufffd/unrelated"]) {
+        scope.set(key, key);
+      }
+      assertEquals(
+        scope.scan({ prefix, limit: 10 }).map((row) => row.key),
+        keys,
+      );
+      assertEquals(scope.scan({ prefix, limit: 1 }).map((row) => row.key), [
+        keys[0],
+      ]);
+      assertEquals(
+        scope.scan({ prefix, after: keys[0], limit: 10 }).map((row) => row.key),
+        [keys[1]],
+      );
+      assertEquals(scope.scan({ prefix, after: keys[1], limit: 10 }), []);
+    }
+  } finally {
+    db.close();
+  }
+});
+
 test("plugin scans seek an indexed namespace and prefix range with bounded continuation rows", async () => {
   const root = await tempDir("plugin-storage-range-");
   const db = new OtkDb(root, [pluginStorageMigrations], { busyms: 1000 });
