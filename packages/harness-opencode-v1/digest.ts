@@ -1522,11 +1522,22 @@ export class OpencodeV1DigestSink implements DigestSink {
     messageID: string,
     turns: Set<string>,
     changes: Replacement[],
+    source?: string,
   ): void {
     const previous = this.storage.sql.prepare(
       "SELECT * FROM opcv1_messages WHERE session_id=? AND message_id=?",
     ).get(id, messageID) as unknown as Baseline | undefined;
     if (previous && value && previous.hash === value.hash) {
+      if (source !== undefined && previous.role === "assistant") {
+        const turn = previous.turn_id ?? previous.message_id;
+        const retained = this.storage.turn(id, turn);
+        if (
+          retained?.state !== "known" ||
+          retained.witness.source !== `${id}/${turn}@${source}`
+        ) {
+          turns.add(turn);
+        }
+      }
       this.storage.sql.prepare(
         "UPDATE opcv1_messages SET scan_generation=? WHERE session_id=? AND message_id=?",
       ).run(value.scan_generation, id, messageID);
@@ -1982,7 +1993,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       const affected = new Set<string>();
       const changes: Replacement[] = [];
       for (const row of rows) {
-        this.#replace(id, row, row.message_id, affected, changes);
+        this.#replace(id, row, row.message_id, affected, changes, source);
       }
       if (targeted) {
         for (const messageID of targets) {
