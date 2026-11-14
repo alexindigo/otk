@@ -220,6 +220,10 @@ export default function CommandMenu(props: {
                           type="button"
                           role="menuitem"
                           data-context-command={action().id}
+                          data-context-command-name={commands.metadata(
+                            action().id,
+                          )
+                            ?.name}
                           aria-describedby={error()?.key === action().key
                             ? props.feedbackID ??
                               (props.onError ? undefined : errorId)

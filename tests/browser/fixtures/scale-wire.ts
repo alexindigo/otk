@@ -8,7 +8,13 @@ export interface ScaleFrame {
   frame: {
     t: string;
     method: string;
-    params?: { directory?: string; sessionID?: string; before?: string };
+    params?: {
+      directory?: string;
+      sessionID?: string;
+      before?: string;
+      kinds?: string[];
+      intent?: string;
+    };
   };
 }
 /** Socket identity is owned by Playwright, not inferred from application globals. */
@@ -39,7 +45,12 @@ export function scaleGenerations(frames: ScaleFrame[]) {
     {
       hellos: number;
       welcomes: number;
-      requests: { method: string; directory: unknown }[];
+      requests: {
+        method: string;
+        directory: unknown;
+        kinds?: string[];
+        intent?: string;
+      }[];
     }
   >();
   for (const event of frames) {
@@ -61,6 +72,8 @@ export function scaleGenerations(frames: ScaleFrame[]) {
       generation.requests.push({
         method: frame.method,
         directory: frame.params?.directory,
+        kinds: frame.params?.kinds,
+        intent: frame.params?.intent,
       });
     }
   }

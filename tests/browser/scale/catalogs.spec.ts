@@ -144,10 +144,34 @@ test(
           expect(g.requests).toEqual([]);
           continue;
         }
-        expect(g.requests.map((r) => r.method).sort()).toEqual([
+        const allowed = new Set([
           "catalogs.watch",
+          "catalogs.demand",
           "frecency.list",
         ]);
+        expect(g.requests.every((r) => allowed.has(r.method))).toBe(true);
+        for (const method of ["catalogs.watch", "frecency.list"]) {
+          expect(g.requests.filter((r) => r.method === method)).toHaveLength(1);
+        }
+        // Decision 34: four warm kinds, at most one consumer promotion each,
+        // plus files/resources on mention. This ceiling is population-independent.
+        const warm = ["models", "agents", "commands", "skills"],
+          consumers = [...warm, "files", "resources"],
+          demands = g.requests.filter((r) => r.method === "catalogs.demand");
+        expect(g.requests.length).toBeLessThanOrEqual(
+          2 + warm.length + consumers.length,
+        );
+        const intents = new Set<string>();
+        for (const r of demands) {
+          expect(["warm", "consumer"]).toContain(r.intent);
+          expect(r.kinds?.length).toBeGreaterThan(0);
+          for (const kind of r.kinds ?? []) {
+            expect(r.intent === "warm" ? warm : consumers).toContain(kind);
+            const key = `${r.intent}/${kind}`;
+            expect(intents.has(key), key).toBe(false);
+            intents.add(key);
+          }
+        }
         expect(g.requests.every((r) => r.directory === state.directory)).toBe(
           true,
         );

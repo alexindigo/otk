@@ -13,6 +13,7 @@ Deno.test("independent plain consumer borrows keyed attention deltas without a n
     entry: (id) => index.get("external", id),
     ids: () => index.ids("external"),
     children: (id) => index.children("external", id),
+    completions: true,
   });
   const trigger = new NotificationTriggers(
     (note) => notes.push(note.body!),
@@ -27,6 +28,7 @@ Deno.test("independent plain consumer borrows keyed attention deltas without a n
     projectID: "external",
     title: "External job",
     status: "busy",
+    activity: { work: { keys: ["external-run"], fresh: true } },
     archived: false,
     timeCreated: 1,
     timeUpdated: 1,
@@ -44,9 +46,27 @@ Deno.test("independent plain consumer borrows keyed attention deltas without a n
   index.receive("external", {
     t: "index.patch",
     rev: 1,
-    ops: [{ op: "upsert", entry: { ...entry, status: "idle" } }],
+    ops: [{
+      op: "upsert",
+      entry: { ...entry, status: "idle", activity: undefined },
+    }],
   });
   owner.update(index.changes("external")!.ids);
+  // A status transition is not terminal evidence (decision 6).
+  assertEquals(notes, []);
+  index.receive("external", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{
+      op: "upsert",
+      entry: { ...entry, status: "idle", activity: { terminal: 2 } },
+    }],
+  });
+  owner.update(index.changes("external")!.ids);
+  owner.finished(
+    entry.id,
+    index.get("external", entry.id)!.activity!.terminal!,
+  );
   assertEquals(notes, ["External job"]);
   release();
   trigger.reset("external");

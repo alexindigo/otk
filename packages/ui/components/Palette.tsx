@@ -66,6 +66,7 @@ export default function Palette(
               <button
                 type="button"
                 data-command={row().cmd.id}
+                data-command-name={row().cmd.name}
                 data-otk-selection="vertical"
                 {...selection({
                   kind: "candidate",

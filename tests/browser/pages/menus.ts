@@ -2,6 +2,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 export const contextMenu = (page: Page) =>
   page.locator(':popover-open [role="menu"][aria-label="Context menu"]');
+/** Registry names are public identities; mounted command IDs are opaque. */
+export const contextCommand = (menu: Locator, name: string) =>
+  menu.locator(`[data-context-command-name=${JSON.stringify(name)}]`);
+export const paletteCommand = (page: Page, name: string) =>
+  page.locator(`[data-command-name=${JSON.stringify(name)}]`);
 export const appActions = [
   "New session",
   "Open command palette",
