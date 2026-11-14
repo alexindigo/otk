@@ -293,10 +293,11 @@ export default function SessionView(props: {
               role="region"
               aria-label="Transcript"
               aria-busy={transcriptBusy() ? "true" : "false"}
-              class={[scrollRegion(), "otk-messages", {
-                "otk-scrollbar-hidden": !props.prefs.scrollbar,
-                "is-empty": !count(),
-              }]}
+              class={[
+                scrollRegion("both", props.prefs.scrollbar ? "thin" : "hidden"),
+                "otk-messages",
+                { "is-empty": !count() },
+              ]}
               ref={[
                 (element) => {
                   list = element;

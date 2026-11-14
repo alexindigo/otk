@@ -13,6 +13,7 @@ export { default as ContentSlot } from "./components/ContentSlot.tsx";
 export {
   default as ScrollRegion,
   type ScrollAxis,
+  type ScrollbarPaint,
   scrollRegion,
 } from "./components/ScrollRegion.tsx";
 export { feedbackState } from "./components/feedback-state.ts";
