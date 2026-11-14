@@ -361,6 +361,10 @@ export default function ProjectSessions(props: {
                             </Show>
                             <StatusLight
                               small
+                              attention={{
+                                server: props.project!.sidecarId,
+                                session: row().session.id,
+                              }}
                               state={inboxStatus(
                                 row().session,
                                 props.inbox(props.project!.sidecarId),

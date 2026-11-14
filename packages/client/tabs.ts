@@ -63,6 +63,8 @@ export interface ClientTabs {
   crumbs(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
+  /** The same session membership used by this tab's supervision lamp. */
+  belongsToTab(tabID: string, sessionID: string): boolean;
   sessionFor(taskID: string): string | undefined;
   update(input: TabInput): void;
   /** Join canonical publication; false if the owner or this borrower retires. */
@@ -318,6 +320,13 @@ export function createTabs(
       return lookup(id);
     },
     taskFor,
+    belongsToTab(tabID, sessionID) {
+      void store.state.revision;
+      prepare();
+      return taskByID.has(tabID)
+        ? ownership.get(sessionID)?.id === tabID
+        : sessionID === tabID && byID.has(tabID) && !ownership.get(tabID);
+    },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
       const key = `${id}/${store.state.sessionID}`;

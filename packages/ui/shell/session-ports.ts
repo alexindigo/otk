@@ -6,7 +6,11 @@ import {
   type ServerResources,
   type SessionActions,
 } from "@otk/client";
-import { belongsToSession, type Preferences } from "@otk/protocol";
+import {
+  belongsToSession,
+  type PermissionRequest,
+  type Preferences,
+} from "@otk/protocol";
 import type { SessionPorts } from "../registries/session.tsx";
 
 /** Plain binding: capture identity once, delegate every live read and intent. */
@@ -17,6 +21,7 @@ export function sessionPorts(o: {
   session: ClientSession;
   guard: { mark(owner: string, dirty: boolean, input?: string): void };
   prefs(): Preferences;
+  permissionVisible?(sidecar: string, request: PermissionRequest): boolean;
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
@@ -39,6 +44,9 @@ export function sessionPorts(o: {
     entry: (id) => resources.entry(target.sidecarId, id),
     location: (id) => actions.location(target, id),
     permissions: () => session.state.content.permissions,
+    permissionVisible: o.permissionVisible
+      ? (request) => o.permissionVisible!(target.sidecarId, request)
+      : undefined,
     questions: () => session.state.content.questions,
     forms: () =>
       resources.forms(target.sidecarId).filter((f) =>

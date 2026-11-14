@@ -70,6 +70,11 @@ export {
 export * from "./shell/context.tsx";
 export { default as Sidebar } from "./components/Sidebar.tsx";
 export { default as StatusLight } from "./components/StatusLight.tsx";
+export {
+  type AttentionLampScope,
+  type AttentionPresentation,
+  AttentionProvider,
+} from "./registries/attention.tsx";
 export { default as ConnectionLight } from "./components/ConnectionLight.tsx";
 export { default as ActivityIndicator } from "./components/ActivityIndicator.tsx";
 export {
