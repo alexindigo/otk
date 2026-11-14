@@ -163,6 +163,14 @@ Deno.test("only VirtualList's hidden measurement layer may leave overlay flow", 
       ),
     ]
   ) assert(surfaceErrors(invalid).length, JSON.stringify([...invalid]));
+  for (const condition of ["@media print", "@supports (display: grid)"]) {
+    const conditional = fixture(
+      undefined,
+      `.otk-virtual-measure { position: absolute; visibility: visible; pointer-events: none; }
+      ${condition} { .otk-virtual-measure { visibility: hidden; } }`,
+    );
+    assert(surfaceErrors(conditional).length, condition);
+  }
 });
 
 Deno.test("A12 surface analysis accepts native nested flow, sticky offsets and decorative lamps", () => {
