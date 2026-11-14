@@ -6,7 +6,15 @@ import {
   type ServerFrame,
   welcomeCapabilities,
 } from "@otk/protocol";
-import { apiBase, normalizeBase, request } from "./auth.ts";
+import { apiBase, bootstrapRequestMetadata, normalizeBase } from "./auth.ts";
+import {
+  createDiscovery,
+  type Discovery,
+  discoveryFailure,
+  type DiscoveryState,
+} from "./discovery.ts";
+import { FeedbackFailure } from "./failures.ts";
+import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import type { PublicDefaults } from "./public-defaults.ts";
 import {
@@ -75,9 +83,11 @@ export interface SidecarsOptions {
   storage?: Pick<Storage, "getItem" | "setItem">;
   connection?: ConnectionOptions;
   diagnostic?: (error: unknown) => void;
+  discoveryFetch?: typeof fetch;
 }
 export interface SidecarsState {
   list: SidecarState[];
+  discovery?: DiscoveryState;
 }
 export interface ClientSidecars {
   state: SidecarsState;
@@ -86,6 +96,7 @@ export interface ClientSidecars {
   start(): void;
   stop(): void;
   add(value: string, label: string): Promise<string>;
+  cancelAdd?(): Promise<void>;
   remove(id: string): void;
 }
 export function createSidecars(
@@ -107,9 +118,26 @@ export function createSidecars(
   const specs = new Map(initial.map((spec) => [spec.id, spec]));
   const additions = new Map<
     string,
-    { controller: AbortController; work: Promise<string> }
+    { owner: Discovery; work: Promise<string> }
   >();
+  let currentDiscovery: Discovery | undefined;
   let stopped = false;
+  const rejected = (target: string, reason: string, next: string) => {
+    const failure = discoveryFailure(target, reason, next);
+    setState((draft) => {
+      draft.discovery = {
+        target,
+        pending: false,
+        steps: [{
+          key: "connecting",
+          label: "Connecting",
+          elapsedMs: 0,
+          result: { kind: "error", text: failure.feedback.text },
+        }],
+      };
+    });
+    return Promise.reject(failure);
+  };
   const persist = () =>
     storage.setItem(
       "otk.sidecars",
@@ -181,36 +209,67 @@ export function createSidecars(
     },
     stop(): void {
       stopped = true;
-      for (const addition of additions.values()) addition.controller.abort();
-      additions.clear();
+      for (const addition of additions.values()) void addition.owner.cancel();
       for (const connection of connections.values()) connection.stop();
     },
     add(value: string, label: string): Promise<string> {
       if (stopped) {
-        return Promise.reject(new Error("Sidecar collection is stopped"));
+        return rejected(
+          "the entered address",
+          "the server collection has stopped",
+          "Reload OTK before adding a server",
+        );
       }
       let baseUrl: string;
       try {
         baseUrl = normalizeBase(value);
-      } catch (error) {
-        return Promise.reject(error);
+      } catch {
+        return rejected(
+          "the entered address",
+          "it is not an HTTP(S) base URL without credentials, query or fragment",
+          "Enter the other computer's OTK base URL",
+        );
       }
       if ([...specs.values()].some((item) => item.baseUrl === baseUrl)) {
-        return Promise.reject(new Error("Sidecar already added"));
+        return rejected(
+          baseUrl,
+          "this server is already added",
+          "Use its existing server card",
+        );
       }
       const pending = additions.get(baseUrl);
       if (pending) return pending.work;
-      const controller = new AbortController();
-      const work = Promise.resolve().then(async () => {
-        const health = await request<{ ok: boolean }>(
-          apiBase(baseUrl),
-          "health",
-          undefined,
-          controller.signal,
-        );
-        controller.signal.throwIfAborted();
+      const base = apiBase(baseUrl);
+      const http = new HttpRequests({
+        base,
+        fetcher: options.discoveryFetch,
+        kind: (method) => bootstrapRequestMetadata[method]?.kind ?? "mutation",
+      });
+      const owner = createDiscovery({
+        base,
+        fetcher: options.discoveryFetch,
+        signIn: (signal) => http.read("session", { signal }),
+      });
+      currentDiscovery = owner;
+      const publish = () => {
+        if (currentDiscovery === owner) {
+          setState((draft) => {
+            draft.discovery = {
+              ...owner.state,
+              steps: owner.state.steps.map((step) => ({ ...step })),
+            };
+          });
+        }
+      };
+      const release = owner.subscribe(publish);
+      const deferred = Promise.withResolvers<string>();
+      // Reserve the URL and cancellation owner before publishing any step.
+      additions.set(baseUrl, { owner, work: deferred.promise });
+      const work = owner.start().then(async (result) => {
+        if ("feedback" in result) {
+          throw new FeedbackFailure(result.feedback);
+        }
         if (stopped) throw new Error("Sidecar collection is stopped");
-        if (!health.ok) throw new Error("This URL is not an OTK sidecar");
         const spec = {
           id: crypto.randomUUID(),
           baseUrl,
@@ -227,16 +286,25 @@ export function createSidecars(
           });
         });
         queueMicrotask(persist);
-        await connections.get(spec.id)?.connect();
-        controller.signal.throwIfAborted();
+        await connections.get(spec.id)?.connect(result.auth);
         return spec.id;
-      }).finally(() => {
-        if (additions.get(baseUrl)?.controller === controller) {
+      }).finally(async () => {
+        release();
+        await http.stop();
+        if (additions.get(baseUrl)?.owner === owner) {
           additions.delete(baseUrl);
         }
       });
-      additions.set(baseUrl, { controller, work });
-      return work;
+      void work.then(deferred.resolve, deferred.reject);
+      return deferred.promise;
+    },
+    async cancelAdd() {
+      const owner = currentDiscovery;
+      const addition = [...additions.values()].find((entry) =>
+        entry.owner === owner
+      );
+      await owner?.cancel();
+      await addition?.work.catch(() => {});
     },
     remove(id: string): void {
       if (id === LOCAL_SIDECAR) return;

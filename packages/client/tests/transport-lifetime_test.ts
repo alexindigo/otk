@@ -3,6 +3,7 @@ import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SidecarConnection } from "../connection.ts";
 import { createSidecars } from "../sidecars.ts";
+import { FeedbackFailure } from "../failures.ts";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import {
   bootstrapFetch,
@@ -191,7 +192,7 @@ Deno.test("invalid sidecar additions reject through their asynchronous API bound
       undefined,
       "Invalid add escaped its Promise boundary",
     );
-    await assertRejects(() => work!, TypeError);
+    await assertRejects(() => work!, FeedbackFailure, "HTTP(S) base URL");
   } finally {
     collection.stop();
   }

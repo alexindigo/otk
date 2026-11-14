@@ -26,6 +26,12 @@ export class RequestReleased extends Error {
     this.name = "RequestReleased";
   }
 }
+/** Feedback classified by a client feature owner, not arbitrary exception prose. */
+export class FeedbackFailure extends Error {
+  constructor(readonly feedback: Feedback) {
+    super(feedback.text);
+  }
+}
 export class FailurePresenter {
   #contributions = new Map<string, (failure: PublicFailure) => Feedback>();
   register(code: string, present: (failure: PublicFailure) => Feedback): void {
@@ -81,6 +87,7 @@ export function failureFeedback(
   diagnostic: (id: string, cause: unknown) => void = () => {},
 ): Feedback | undefined {
   if (cause instanceof RequestReleased) return undefined;
+  if (cause instanceof FeedbackFailure) return cause.feedback;
   return presenter.present(
     cause instanceof RequestFailure
       ? cause.failure

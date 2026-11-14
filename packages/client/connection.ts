@@ -18,9 +18,11 @@ import type {
 import { apiBase, type AuthStatus, bootstrapRequestMetadata } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
-import { HttpRequests } from "./http-requests.ts";
-import { RequestReleased } from "./failures.ts";
+import { HttpReadFailure, HttpRequests } from "./http-requests.ts";
+import { FeedbackFailure, RequestReleased } from "./failures.ts";
 import { type PublicDefaults, publicDefaultsFrom } from "./public-defaults.ts";
+import { authStatus, discoveryFailure } from "./discovery.ts";
+import { actionFeedback } from "./failure-features.ts";
 
 export type ConnectionState =
   | "connecting"
@@ -75,6 +77,7 @@ export class SidecarConnection {
   #capabilities = new Set<CapabilityName>();
   #messages?: MessagePolicy;
   #attachments?: import("@otk/protocol").AttachmentPolicy;
+  #auth?: AuthStatus;
   #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
   #selectionGeneration = 0;
   #pageSettled = false;
@@ -202,7 +205,7 @@ export class SidecarConnection {
       this.send({ t: enabled ? "subscribe" : "unsubscribe", sessionID });
     }
   }
-  async connect(): Promise<void> {
+  async connect(discovered?: AuthStatus): Promise<void> {
     if (this.#stopped) return;
     this.#retire();
     const controller = this.#controller = new AbortController();
@@ -211,11 +214,15 @@ export class SidecarConnection {
       !this.#stopped;
     this.sink.status(this.#attempt === 0 ? "connecting" : "reconnecting");
     try {
-      const auth = await this.http.start<AuthStatus>("session", undefined, {
-        signal: controller.signal,
-        owner: "connection",
-      }).result;
+      const auth = authStatus(
+        discovered ?? await this.http.read<AuthStatus>("session", {
+          signal: controller.signal,
+          owner: "connection",
+        }),
+        this.base.href,
+      );
       if (!current()) return;
+      this.#auth = auth;
       const defaults = publicDefaultsFrom(auth.defaults);
       if (defaults) this.sink.defaults?.(defaults);
       this.#policy = clientRequestPolicyFrom(auth.requests.policy);
@@ -317,6 +324,18 @@ export class SidecarConnection {
       if (current() && !(cause instanceof RequestReleased)) {
         this.#retire();
         this.#schedule();
+        this.sink.status(
+          "reconnecting",
+          actionFeedback(
+            cause instanceof FeedbackFailure ? cause : discoveryFailure(
+              this.base.href,
+              cause instanceof HttpReadFailure
+                ? cause.reason
+                : "the browser could not open the OTK connection",
+              "Check that OTK is running and reachable, then reload this page",
+            ),
+          )?.text,
+        );
       }
     }
   }
@@ -361,6 +380,20 @@ export class SidecarConnection {
   async login(input: { username: string; password: string }): Promise<void> {
     await this.http.start("login", input, { owner: "login" }).result;
     await this.connect();
+    if (this.#auth && !this.#auth.authenticated && !this.#auth.setupRequired) {
+      const failure = discoveryFailure(
+        this.base.href,
+        "OTK accepted sign-in, but this page is still not authenticated",
+        "Open that server's OTK page and check browser cookie settings before signing in again",
+      );
+      // A reconnect remounts the login form. The connection owns this result.
+      this.sink.status(
+        "login required",
+        actionFeedback(failure)?.text,
+        this.#auth.authType,
+      );
+      throw failure;
+    }
   }
   async setup(
     input: { type: string; username: string; password: string },
