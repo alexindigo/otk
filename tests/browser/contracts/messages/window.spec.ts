@@ -199,6 +199,104 @@ test.describe("prepend anchor", () => {
       });
     }
   });
+  test("messages.prepend-keeps-visible-rows-mounted", {
+    tag: ["@messages", "@contracts"],
+  }, async ({ isolatedState: state, page }) => {
+    // A prefix update moves every model offset before the owner compensates.
+    // The rows in view must stay the mounted window throughout, not only the
+    // focused source: a retired row remounts with unmeasured nested windows.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await state.product("layout.patch", {
+      rightCollapsed: false,
+      rightView: "sessions",
+    });
+    await page.goto(state.url + "/#/local/tstv1-otk");
+    await expect(page.locator("textarea[name=prompt]")).toBeAttached();
+    await page.locator("[data-panel-view=timeline]").click();
+    await page.locator(
+      '[data-timeline-prompt="anchor-95"] .otk-timeline-reveal',
+    ).click();
+    await expect.poll(() =>
+      state.observe<{ pending: number }>().then((x) => x.pending)
+    ).toBeGreaterThan(0);
+    await page.evaluate(() =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    );
+    const visible = await page.locator(".otk-messages").evaluate((pane) => {
+      const bounds = pane.getBoundingClientRect();
+      const rows = Array.from(
+        pane.querySelectorAll<HTMLElement>(
+          '[aria-label="Transcript messages"] > .otk-virtual-item',
+        ),
+      ).filter((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.bottom > bounds.top && rect.top < bounds.bottom;
+      });
+      const retired: string[] = [], mounted = new Set<HTMLElement>();
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of Array.from(record.addedNodes)) {
+            if (
+              node instanceof HTMLElement &&
+              node.matches(
+                '[aria-label="Transcript messages"] > .otk-virtual-item',
+              )
+            ) mounted.add(node);
+          }
+          for (const node of Array.from(record.removedNodes)) {
+            for (const row of rows) {
+              if (node.contains(row)) retired.push(row.dataset.virtualKey!);
+            }
+          }
+        }
+      }).observe(pane, { childList: true, subtree: true });
+      Object.assign(globalThis, {
+        prependRows: rows.map((row) => ({
+          row,
+          top: row.getBoundingClientRect().top - bounds.top,
+        })),
+        prependRetired: retired,
+        prependMounted: mounted,
+      });
+      return rows.map((row) => row.dataset.virtualKey);
+    });
+    expect(visible.length).toBeGreaterThan(5);
+    const count = () =>
+      page.locator(".otk-message-flow").getAttribute("data-message-count")
+        .then(Number);
+    const before = await count();
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "release",
+    });
+    await expect.poll(count).toBeGreaterThan(before);
+    await page.evaluate(() =>
+      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    );
+    const result = await page.locator(".otk-messages").evaluate((pane) => {
+      const g = globalThis as unknown as {
+        prependRows: { row: HTMLElement; top: number }[];
+        prependRetired: string[];
+        prependMounted: Set<HTMLElement>;
+      };
+      const bounds = pane.getBoundingClientRect();
+      return {
+        retired: g.prependRetired,
+        // Rows the reader never sees must not be materialized and retired by
+        // a range computed between the prefix update and its compensation.
+        churned: [...g.prependMounted].filter((row) => {
+          const rect = row.getBoundingClientRect();
+          return !row.isConnected || rect.bottom <= bounds.top ||
+            rect.top >= bounds.bottom;
+        }).map((row) => row.dataset.virtualKey),
+        moved: g.prependRows.filter(({ row, top }) =>
+          !row.isConnected ||
+          Math.abs(row.getBoundingClientRect().top - bounds.top - top) > 1
+        ).map(({ row }) => row.dataset.virtualKey),
+      };
+    });
+    expect(result).toEqual({ retired: [], churned: [], moved: [] });
+  });
 });
 
 test.describe("diff window", () => {

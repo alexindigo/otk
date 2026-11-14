@@ -326,9 +326,35 @@ export default function VirtualList(props: {
       anchor: logicalAnchor(),
     });
   };
+  // A window places its range in its own model revision. Raw scroll position is
+  // a DOM coordinate: it lags a prefix update until the owner compensates and
+  // drifts from model offsets while unmeasured rows sit above the viewport. A
+  // visible mounted row whose extent equals its measurement ties both to one
+  // identity, so demand loading never retires the rows in view.
+  const rangePosition = () => {
+    const root = viewport(), bounds = root.getBoundingClientRect();
+    const edge = bounds.top + root.clientTop;
+    let local: number | undefined, nearest = Infinity;
+    for (const [key, element] of elements) {
+      const start = model.offset(key);
+      if (start === undefined || !model.measured(key) || !element.isConnected) {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (
+        !rect.height || rect.bottom <= edge ||
+        rect.top >= edge + root.clientHeight ||
+        Math.abs(rect.height - model.size(key)) > .01 ||
+        Math.abs(rect.top - edge) >= nearest
+      ) continue;
+      nearest = Math.abs(rect.top - edge);
+      local = start + edge - rect.top;
+    }
+    return local ?? position();
+  };
   const sync = () => {
     if (disposed || !container) return;
-    const local = position(), root = viewport();
+    const local = rangePosition(), root = viewport();
     const available = root.clientHeight + Math.min(0, local);
     const remaining = model.total() - Math.max(0, local);
     setTop(Math.max(0, local));
