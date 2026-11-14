@@ -6,13 +6,7 @@ import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import type { ContentState } from "./reduce.ts";
 import { createState, type StateFactory } from "./state.ts";
-import {
-  clearDraft,
-  type Draft,
-  type Drafts,
-  replaceDraftContent,
-} from "./drafts.ts";
-import { hasDraftContent } from "./draft-content.ts";
+import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
 
 export interface RevertStrip {
@@ -59,12 +53,11 @@ export function createSessionRevert(options: {
     return t ? `${t.sidecarId}/${t.sessionID}` : "";
   };
   let key = identity(), generation = 0, pending = false, alive = true;
-  let written: Draft | undefined, operation: AbortController | undefined;
+  let operation: AbortController | undefined;
   const reset = () => {
     generation++;
     operation?.abort();
     operation = undefined;
-    written = undefined;
     pending = false;
     store.update((state) => {
       state.pending = undefined;
@@ -129,10 +122,16 @@ export function createSessionRevert(options: {
       observe();
       return alive && generation === current;
     };
-    const write = kind === "undo" || kind === "redo"
-      ? options.drafts.writer(key)
+    const draftKey = key;
+    const transaction = kind === "undo" || kind === "revert" || kind === "code"
+      ? options.drafts.reverts.capture(draftKey, previousBoundary)
       : undefined;
+    const restoreDraft = options.drafts.reverts.restorer(
+      draftKey,
+      previousBoundary,
+    );
     const controller = operation = new AbortController();
+    let nativeCleared = false;
     pending = true;
     store.update((state) => {
       state.pending = kind;
@@ -162,6 +161,8 @@ export function createSessionRevert(options: {
           kind === "code",
         )
         : await options.actions.restore(captured, change);
+      if (result.revert) transaction?.staged(result.revert.messageID);
+      nativeCleared = (kind === "restore" || kind === "redo") && !result.revert;
       if (!active()) return;
       // RPC completion admits the mutation. The selected transcript remains
       // authoritative, including a resync that is still reading its messages.
@@ -187,16 +188,7 @@ export function createSessionRevert(options: {
       if (!active()) return;
       const entry = result.revert?.prompt;
       if (kind === "undo" && entry) {
-        write!((draft) => {
-          if (draft === written || (!hasDraftContent(draft) && !draft.editor)) {
-            written = replaceDraftContent(draft, historyDraft(entry));
-            return written;
-          }
-          return draft;
-        });
-      } else if (kind === "redo") {
-        write!((draft) => draft === written ? clearDraft(draft) : draft);
-        written = undefined;
+        transaction!.recall(historyDraft(entry));
       }
     } catch (error) {
       observe();
@@ -209,6 +201,9 @@ export function createSessionRevert(options: {
         });
       }
     } finally {
+      // Confirmed mutation settlement outlives the selected view's publication
+      // wait. The captured restorer fences newer edits and replacement revisions.
+      if (nativeCleared) restoreDraft();
       observe();
       if (alive && generation === current) {
         pending = false;

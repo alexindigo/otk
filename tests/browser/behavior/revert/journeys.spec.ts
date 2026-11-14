@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openSession } from "../../fixtures/wire.ts";
+import { openSession, wire } from "../../fixtures/wire.ts";
 import { pick, rightClick } from "../../pages/menus.ts";
 import {
   prompt,
@@ -11,6 +11,7 @@ import {
   runNativeTool,
 } from "../../pages/transcript.ts";
 import type { TestState } from "../../fixtures/test-state.ts";
+import { chips, messages, upload } from "../../pages/composer.ts";
 
 test.use({ profile: "revert-native" });
 async function palette(page: Page, command: string) {
@@ -64,6 +65,121 @@ async function revertFiles(state: TestState, page: Page, bubble: string) {
   }
 }
 
+test("revert.restore-visible-with-full-draft-and-exact-transcript", {
+  tag: ["@revert", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Restore conversation",
+  });
+  await state.product("prefs.set", { key: "animationsOff", value: true });
+  await openSession(state, page, source.id);
+  await reply(state, page, source.id, "Original prompt", "Original reply.");
+  const before = await messages(state, source.id);
+  const transcript = await page.locator(".otk-messages .otk-text")
+    .allTextContents();
+  const input = page.locator("textarea[name=prompt]");
+  await input.pressSequentially("@READ");
+  await expect(page.locator(".otk-autocomplete")).toContainText("README.md");
+  await input.press("Enter");
+  await input.pressSequentially(" Unsent draft");
+  await upload(page, [{
+    name: "draft.txt",
+    bytes: btoa("Exact unsent bytes"),
+  }]);
+  await expect(chips(page)).toHaveCount(2);
+  await expect(chips(page)).not.toContainText([
+    "reading\u2026",
+    "reading\u2026",
+  ]);
+  const draft = await input.inputValue();
+  const attachments = await chips(page).allTextContents();
+  await page.locator(".otk-user-bubble").focus();
+  await page.locator('[data-message-command="prompt.revert"]').click();
+  const strip = page.locator(".otk-rolled-back-strip");
+  const restore = strip.getByRole("button", {
+    name: "Restore conversation",
+    exact: true,
+  });
+  await expect(restore).toBeVisible();
+  await expect(page.locator(".otk-rollback-disclosure")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.locator(".otk-rollback-details")).toHaveCount(0);
+  await expect(input).toHaveValue(draft);
+  for (
+    const [name, id] of [["dark", "otk-dark"], ["linen", "otk-light"], [
+      "stone",
+      "otk-light-stone",
+    ]]
+  ) {
+    await state.product("prefs.set", { key: "theme", value: id });
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", id);
+    await expect(restore).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath(`rv1-restore-${name}.png`),
+      fullPage: true,
+    });
+  }
+  await restore.click();
+  await expect(strip).toHaveCount(0);
+  await expect(input).toHaveValue(draft);
+  expect(await chips(page).allTextContents()).toEqual(attachments);
+  await expect.poll(() =>
+    page.locator(".otk-messages .otk-text").allTextContents()
+  ).toEqual(transcript);
+  const originalIDs = new Set(before.map((row) => row.info.id));
+  expect(
+    (await messages(state, source.id)).filter((row) =>
+      originalIDs.has(row.info.id)
+    ),
+  ).toEqual(before);
+});
+
+test("revert.undo-restore-after-navigation-and-command-surfaces", {
+  tag: ["@revert", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Accidental undo",
+  });
+  const other = await state.native<{ id: string }>("/session", "POST", {
+    title: "Other session",
+  });
+  await openSession(state, page, source.id);
+  await reply(
+    state,
+    page,
+    source.id,
+    "Undo this prompt",
+    "Bring back this reply.",
+  );
+  await palette(page, "session.undo");
+  const input = page.locator("textarea[name=prompt]");
+  await expect(input).toHaveValue("Undo this prompt");
+  await openSession(state, page, other.id);
+  await openSession(state, page, source.id);
+  await page.getByRole("button", { name: "Restore conversation", exact: true })
+    .click();
+  await expect(input).toHaveValue("");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Bring back this reply.",
+  );
+  await palette(page, "session.undo");
+  await page.keyboard.press("Control+k");
+  await expect(page.locator('[data-command="session.restore"]')).toContainText(
+    "Restore conversation",
+  );
+  await page.keyboard.press("Escape");
+  await input.fill("/rest");
+  await expect(page.locator(".otk-autocomplete")).toContainText("restore");
+  await input.press("Enter");
+  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Bring back this reply.",
+  );
+});
+
 test("revert.shared-directory-native-rollback-restore-other-edit", {
   tag: ["@revert", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
@@ -107,6 +223,122 @@ test("revert.shared-directory-native-rollback-restore-other-edit", {
   expect(await readFile(path, "utf8")).toBe("B\n");
   expect(await state.native(`/session/${b.id}/message`)).toEqual(transcript);
   expect(dialogs).toEqual([]);
+});
+
+test("revert.restore-settles-origin-draft-after-leaving-during-native-clear", {
+  tag: ["@revert", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Background restore",
+  });
+  const other = await state.native<{ id: string }>("/session", "POST", {
+    title: "Other composer",
+  });
+  await openSession(state, page, source.id);
+  await reply(state, page, source.id, "Undo then navigate", "Restored reply.");
+  await palette(page, "session.undo");
+  const input = page.locator("textarea[name=prompt]");
+  await expect(input).toHaveValue("Undo then navigate");
+  await action(state, "hold", "unrevert");
+  await page.getByRole("button", { name: "Restore conversation", exact: true })
+    .click();
+  await expect(page.locator(".otk-composer-notice [role=status]"))
+    .toContainText("Restoring");
+  await openSession(state, page, other.id);
+  await input.fill("Other draft stays");
+  await action(state, "release");
+  await expect.poll(async () =>
+    (await state.product("session.get", { sessionID: source.id })).revert
+  ).toBeFalsy();
+  await expect(input).toHaveValue("Other draft stays");
+  await openSession(state, page, source.id);
+  await expect(input).toHaveValue("");
+  await expect(page.locator(".otk-messages")).toContainText("Restored reply.");
+});
+
+test("revert.restore-settles-origin-draft-after-cancelled-reconciliation", {
+  tag: ["@revert", "@isolated", "@transport"],
+}, async ({ isolatedState: state, page }, info) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Reconciliation cancellation",
+  });
+  const other = await state.native<{ id: string }>("/session", "POST", {
+    title: "Other composer",
+  });
+  let restoreID: string | undefined, restoreKey: string | undefined;
+  const frames = await wire(page, (frame) => {
+    if (frame.t === "request" && frame.method === "session.restore") {
+      restoreID = frame.params?.sessionID;
+      restoreKey = frame.ref?.key;
+    }
+    return frame;
+  });
+  await openSession(state, page, source.id);
+  await reply(
+    state,
+    page,
+    source.id,
+    "Restore after reconciliation cancellation",
+    "Native conversation restored.",
+  );
+  const input = page.locator("textarea[name=prompt]");
+  await expect(input).toHaveValue("");
+  await palette(page, "session.undo");
+  await expect(input).toHaveValue("Restore after reconciliation cancellation");
+  frames.hold((frame, request) => {
+    if (!restoreID) return false;
+    if (frame.t === "content") return frame.sessionID === restoreID;
+    if (frame.t === "transcript.invalidated") {
+      return !frame.sessionID || frame.sessionID === restoreID;
+    }
+    return frame.t === "request.result" &&
+      request?.method === "session.messages" &&
+      request.params?.sessionID === restoreID;
+  });
+  try {
+    await page.getByRole("button", {
+      name: "Restore conversation",
+      exact: true,
+    }).click();
+    await expect.poll(() =>
+      !!restoreKey && frames.received.some((frame) =>
+        frame.t === "request.result" && frame.ref?.key === restoreKey &&
+        (frame.outcome as { ok?: boolean } | undefined)?.ok === true
+      ) && frames.sent.some(({ frame }) =>
+        frame.t === "request.received" && Array.isArray(frame.refs) &&
+        frame.refs.some((value) =>
+          value.ref?.key === restoreKey
+        )
+      )
+    ).toBe(true);
+    await expect.poll(() => frames.held.length).toBeGreaterThan(0);
+    await expect(
+      page.getByRole("complementary", { name: "Rolled-back prompts" })
+        .getByRole("status"),
+    ).toContainText("Restoring");
+    await info.attach("confirmed-clear-before-view-cancellation", {
+      body: JSON.stringify({
+        restoreID,
+        restoreKey,
+        sent: frames.sent,
+        received: frames.received,
+        held: frames.held,
+      }),
+      contentType: "application/json",
+    });
+    await openSession(state, page, other.id);
+    await input.fill("Other draft stays");
+    frames.release();
+    await expect(input).toHaveValue("Other draft stays");
+    await openSession(state, page, source.id);
+    await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+    await expect(input).toHaveValue("");
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Native conversation restored.",
+    );
+  } finally {
+    frames.release();
+  }
 });
 
 test("revert.files-conversation-copy-reload-restore-and-commit", {

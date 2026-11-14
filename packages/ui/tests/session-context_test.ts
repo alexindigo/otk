@@ -79,6 +79,62 @@ Deno.test("code revert and archive contributions require independent capabilitie
   release();
 });
 
+Deno.test("pending Restore has one descriptive registry action for palette, slash and context", async () => {
+  const commands = new CommandHub(),
+    target = {
+      sidecarId: "one",
+      sessionID: "a",
+      title: "Source",
+      directory: "/p",
+    };
+  let pending = true, restores = 0;
+  const release = registerSessionActionCommands(commands, {
+    available: () => true,
+    current: () => target,
+    rename: createSessionRename({ rename: () => Promise.resolve() }),
+    working: () => false,
+    helpers: () => 0,
+    remove: () => Promise.resolve(true),
+    fork: () => Promise.resolve(),
+    rolledBack: () => pending,
+    revertAvailable: () => true,
+    revert: {
+      state: {},
+      matches: () => true,
+      revertTo: () => Promise.resolve(),
+      undo: () => Promise.resolve(),
+      redo: () => Promise.resolve(),
+      restore: () => {
+        restores++;
+        return Promise.resolve();
+      },
+      hasPrompt: () => true,
+      strip: () => undefined,
+      dispose() {},
+    },
+  });
+  try {
+    assertEquals(commands.resolveSlash("restore"), "session.restore");
+    const row = commands.list().find((row) =>
+      row.cmd.id === "session.restore"
+    )!;
+    assertEquals(row.cmd.title, "Restore conversation");
+    assertEquals(row.enabled, true);
+    const invocation = commands.parse("restore", "")!;
+    await commands.run(invocation.id, invocation.args);
+    assertEquals(restores, 1);
+    assertEquals(
+      commands.contextActions({ kind: "session", data: target })
+        .find((action) => action.id === "session.restore")?.title,
+      "Restore conversation",
+    );
+    pending = false;
+    assertEquals(commands.enabled("session.restore"), false);
+  } finally {
+    release();
+  }
+});
+
 for (
   const [working, helpers, expected] of [
     [false, 0, "Press again to delete"],
