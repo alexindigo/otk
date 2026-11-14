@@ -49,3 +49,11 @@
   align-self: center;
   width: 100%;
 }
+.otk-transcript-viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

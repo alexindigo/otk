@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-jump-slot {
+  --jump-bottom-inset: 8px;
+  position: absolute;
+  inset-inline: 0;
+  bottom: var(--jump-bottom-inset);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.otk-jump-slot > .otk-icon-button {
+  pointer-events: auto;
+  background: var(--overlay-bg);
+  color: var(--otk-fg);
+  border: 1px solid var(--overlay-border);
+  box-shadow: var(--overlay-shadow);
+}
+.otk-jump-slot:not(.is-visible) > button {
+  visibility: hidden;
+}

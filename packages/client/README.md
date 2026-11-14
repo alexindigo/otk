@@ -367,6 +367,13 @@ changes, so returning to a session cannot restore an already answered approval
 target. Cooling aborts reads and releases subscriptions, replay and message
 maps.
 
+`latest(signal?)` joins that same owner's initial/reconnect newest-page and
+live-tail authority. A current live tail resolves without another read; a
+missing baseline uses existing recovery. It never exhausts an older cursor.
+Cancellation releases only the caller's wait, not canonical recovery or other
+consumers. Readiness also requires the serving transport's current `connected`
+fact and a linked native source; retained bodies do not certify either link.
+
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its
 canonical content. Model catalogs and usage leases retain their existing

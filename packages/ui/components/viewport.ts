@@ -74,8 +74,25 @@ export interface ViewportTarget {
   measured: boolean;
   anchor?: { id: string; key: string; start: number };
 }
+export interface ViewportHistory {
+  readonly first?: string;
+  readonly last?: string;
+  readonly exhausted: boolean;
+}
+export interface ViewportSnapshot {
+  readonly revision: number;
+  readonly distanceFromBottom: number;
+  readonly viewportHeight: number;
+  readonly following: boolean;
+  readonly history: ViewportHistory;
+}
 export interface ViewportPosition {
   following(): boolean;
+  snapshot(): ViewportSnapshot;
+  subscribeSnapshot(change: (snapshot: ViewportSnapshot) => void): () => void;
+  history(value: ViewportHistory): void;
+  /** Acquire the authoritative live tail, then follow measured root geometry. */
+  latest(ready: (signal: AbortSignal) => Promise<void>): Promise<void>;
   follow(): void;
   keepAnchor(): void;
   layout(): void;
@@ -149,7 +166,28 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   let applying = false;
   let anchors: { id: string; anchor: WindowAnchor }[] = [];
   let releaseAnchor: (() => void) | undefined;
-  let geometryPending = true, capturePending = false;
+  let geometryPending = true;
+  let readerCapturePending = false;
+  let history: ViewportHistory = Object.freeze({ exhausted: false });
+  let snapshot: ViewportSnapshot = Object.freeze({
+    revision: 0,
+    distanceFromBottom: Math.max(
+      0,
+      viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+    ),
+    viewportHeight: viewport.clientHeight,
+    following: false,
+    history,
+  });
+  let publishedGeometry = -1;
+  const snapshotListeners = new Set<(snapshot: ViewportSnapshot) => void>();
+  let latest: {
+    abort: AbortController;
+    promise: Promise<void>;
+    ready: boolean;
+    resolve(): void;
+    reject(reason: unknown): void;
+  } | undefined;
   let navigation: {
     target: () => ViewportTarget | undefined;
     align: "center" | "nearest" | "start";
@@ -177,6 +215,40 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       publishing = false;
       if (disposed) return;
       for (const change of listeners) change();
+      // Windows can materialize descendants while observing position. Publish
+      // consumer geometry only after that revision's compensation has committed.
+      if (geometryPending || changing || leases) return;
+      const distanceFromBottom = Math.max(
+        0,
+        viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+      );
+      const viewportHeight = viewport.clientHeight,
+        following = mode === "follow";
+      if (
+        publishedGeometry === revision &&
+        snapshot.distanceFromBottom === distanceFromBottom &&
+        snapshot.viewportHeight === viewportHeight &&
+        snapshot.following === following && snapshot.history === history
+      ) return;
+      publishedGeometry = revision;
+      snapshot = Object.freeze({
+        revision: snapshot.revision + 1,
+        distanceFromBottom,
+        viewportHeight,
+        following,
+        history,
+      });
+      for (const change of snapshotListeners) change(snapshot);
+      // Window publication may materialize descendants and acquire leases. The
+      // command settles at this same committed consumer boundary, not before it.
+      if (
+        latest?.ready && mode === "follow" && !geometryPending && !leases &&
+        publishedGeometry === revision && distanceFromBottom <= 1
+      ) {
+        const completed = latest;
+        latest = undefined;
+        completed.resolve();
+      }
     });
   };
   const attach = (id: string, anchor: WindowAnchor) => {
@@ -192,16 +264,13 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   };
   const capture = () => {
     if (mode === "follow") {
-      capturePending = false;
+      readerCapturePending = false;
       anchors = [];
       releaseAnchor?.();
       releaseAnchor = undefined;
       return;
     }
-    if (leases || changing) {
-      capturePending = true;
-      return;
-    }
+    if (leases || changing) return;
     const candidates = [...geometries.values()].flatMap((geometry) => {
       const anchor = geometry.anchor();
       if (!anchor) return [];
@@ -217,13 +286,27 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     // Crossing estimated space keeps the adjacent measured attachment. Mounting
     // a guessed predecessor can never retire the source the reader just saw.
     if (!source) return;
-    capturePending = false;
     attach(source.geometry.id, source.anchor);
+    readerCapturePending = false;
+  };
+  const setMode = (next: "follow" | "anchored") => {
+    mode = next;
+    // Every route into follow (including native movement at the tail) retires
+    // anchored source retention, even while descendant geometry is pending.
+    if (next === "follow") capture();
   };
   const cancelNavigation = (reason = "Viewport intent superseded") => {
     const old = navigation;
     navigation = undefined;
     old?.reject(new DOMException(reason, "AbortError"));
+  };
+  const cancelLatest = (reason = "Viewport intent superseded") => {
+    const previous = latest;
+    latest = undefined;
+    if (!previous) return;
+    const error = new DOMException(reason, "AbortError");
+    previous.abort.abort(error);
+    previous.reject(error);
   };
   function applyPosition(top: number) {
     const value = clamp(top);
@@ -240,13 +323,13 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (gesture) gestureMoved = true;
     position = top;
     if ((gesture || dragging) && mode === "anchored") {
-      capturePending = true;
       const delta = top - expected;
       anchors = anchors.map(({ id, anchor }) => ({
         id,
         anchor: { key: anchor.key, offset: anchor.offset + delta },
       }));
       if (geometryPending) {
+        readerCapturePending = true;
         // Reader motion is a displacement of the saved identities, even when
         // their DOM offsets have already changed in this layout transaction.
         schedule();
@@ -327,7 +410,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }
       if (!leases && appliedRevision === revision) {
         geometryPending = false;
-        if (capturePending || !anchors.length) capture();
+        // Input consumed during descendant measurement must transfer to the
+        // newly visible measured source once compensation commits. Otherwise
+        // its adjacent old source remains pinned forever after the last gesture.
+        if (readerCapturePending || !anchors.length) capture();
       } else schedule();
     } finally {
       applying = false;
@@ -342,9 +428,9 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     const changed = externalPosition();
     position = viewport.scrollTop;
     if (gesture || dragging) {
-      if (dragging) mode = atTail() ? "follow" : "anchored";
+      if (dragging) setMode(atTail() ? "follow" : "anchored");
       else if (gesture === "toward" && (mode === "follow" || atTail())) {
-        mode = "follow";
+        setMode("follow");
       }
       if (!geometryPending) capture();
       else schedule();
@@ -354,8 +440,9 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   };
   const away = () => {
     cancelNavigation();
+    cancelLatest();
     const captureNow = mode !== "anchored" || !geometryPending;
-    mode = "anchored";
+    setMode("anchored");
     if (captureNow) capture();
   };
   const beginGesture = (direction: "away" | "toward") => {
@@ -363,7 +450,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     gestureMoved = false;
     compensated = false;
     if (gesture === "away") away();
-    else if (atTail()) mode = "follow";
+    else if (atTail()) setMode("follow");
     // An input intent at a native boundary cannot produce a scrollend event.
     // Settle that intent here rather than indefinitely blocking geometry work.
     if (
@@ -412,7 +499,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     pressed = false;
     if (dragging) {
       dragging = false;
-      mode = atTail() ? "follow" : "anchored";
+      setMode(atTail() ? "follow" : "anchored");
       if (!geometryPending) capture();
       schedule();
     }
@@ -471,11 +558,63 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   document.addEventListener("touchcancel", up);
   return {
     following: () => mode === "follow",
+    snapshot: () => snapshot,
+    subscribeSnapshot(change) {
+      snapshotListeners.add(change);
+      return () => {
+        snapshotListeners.delete(change);
+      };
+    },
+    history(value) {
+      if (
+        history.first === value.first && history.last === value.last &&
+        history.exhausted === value.exhausted
+      ) return;
+      history = Object.freeze({ ...value });
+      layout();
+    },
+    latest(ready) {
+      if (latest) return latest.promise;
+      if (disposed) {
+        return Promise.reject(
+          new DOMException("Viewport retired", "AbortError"),
+        );
+      }
+      cancelNavigation();
+      const pending = {
+        ...Promise.withResolvers<void>(),
+        abort: new AbortController(),
+        ready: false,
+      };
+      latest = pending;
+      // Keep the source anchor while acquiring authority. Only this intent's
+      // successful readiness can release it and enter the existing follow path.
+      let acquired: Promise<void>;
+      try {
+        acquired = ready(pending.abort.signal);
+      } catch (error) {
+        acquired = Promise.reject(error);
+      }
+      void acquired.then(() => {
+        if (latest !== pending || pending.abort.signal.aborted) return;
+        pending.ready = true;
+        tail = true;
+        setMode("follow");
+        gesture = undefined;
+        dragging = false;
+        layout();
+      }).catch((error) => {
+        if (latest !== pending) return;
+        latest = undefined;
+        pending.reject(error);
+      });
+      return pending.promise;
+    },
     follow() {
       cancelNavigation();
+      cancelLatest();
       tail = true;
-      mode = "follow";
-      capture();
+      setMode("follow");
       gesture = undefined;
       dragging = false;
       layout();
@@ -559,8 +698,9 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         );
       }
       cancelNavigation();
-      mode = "anchored";
-      capturePending = false;
+      cancelLatest();
+      setMode("anchored");
+      readerCapturePending = false;
       gesture = undefined;
       dragging = false;
       return new Promise<void>((resolve, reject) => {
@@ -584,10 +724,12 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     dispose() {
       disposed = true;
       cancelNavigation("Viewport retired");
+      cancelLatest("Viewport retired");
       if (frame !== undefined) cancelAnimationFrame(frame);
       observer.disconnect();
       geometries.clear();
       listeners.clear();
+      snapshotListeners.clear();
       flows.clear();
       anchors = [];
       releaseAnchor?.();
@@ -621,6 +763,10 @@ export function followViewport(
   owner.follow();
   return {
     following: owner.following,
+    snapshot: owner.snapshot,
+    subscribeSnapshot: owner.subscribeSnapshot,
+    history: owner.history,
+    latest: owner.latest,
     pause: owner.keepAnchor,
     reset: owner.follow,
     update(_paging: boolean) {
