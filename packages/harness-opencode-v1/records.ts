@@ -355,15 +355,17 @@ export class RecordProjection {
     id: string,
     field: string,
     delta: string,
-  ): RawPart | undefined {
+  ): { message: NativeMessage; part: RawPart } | undefined {
     const raw = this.#records.get(this.#key(session, message))?.parts.get(id);
     if (
       !raw || !Object.hasOwn(raw, field) ||
       typeof Reflect.get(raw, field) !== "string"
     ) return;
     const part = { ...raw, [field]: String(Reflect.get(raw, field)) + delta };
-    this.#store(session, message, undefined, part);
-    return part;
+    const updated = this.#store(session, message, undefined, part);
+    // The coherent result owns its header/parts even if retention evicts it.
+    // Without a header, the caller must use the existing recovery owner.
+    return updated ? { message: updated, part } : undefined;
   }
   get(session: string, message: string): NativeMessage | undefined {
     const row = this.#records.get(this.#key(session, message));
