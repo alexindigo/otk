@@ -15,6 +15,25 @@ const publicPaths = new Set([
   "/api/request-events",
 ]);
 const middleware: Middleware = async (request, { app }) => {
+  // Discovery is public metadata, never a credential-bearing bootstrap call.
+  // Keep its CORS separate so even a refused Origin can read the diagnosis.
+  if (
+    request.path === "/api/discovery" &&
+    (request.method === "GET" || request.method === "OPTIONS")
+  ) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+        },
+      });
+    }
+    return (response) => {
+      response.headers.set("Access-Control-Allow-Origin", "*");
+    };
+  }
   if (
     !allowedOrigin(request._raw, app.cfg) &&
     (request.method !== "GET" || request.path === "/api/ws")
