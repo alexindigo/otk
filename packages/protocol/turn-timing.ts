@@ -77,7 +77,7 @@ export class TurnTimingAccumulator {
     const end = complete
       ? this.#values.reduce((max, v) => Math.max(max, v.end!), 0)
       : undefined;
-    if (reason || terminal && !complete) {
+    if (reason || this.#values.some((v) => v.terminal && v.end === undefined)) {
       return {
         state: "unknown",
         start,
