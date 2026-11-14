@@ -127,6 +127,20 @@ export function createShellState(o: { api: URL }): ShellState {
       session.state.view === "deleted" || !!actions.selectedEntry()?.deleted,
     confirm: (message) => globalThis.confirm(message),
   });
+  // One presence owner: navigation reads it to gate finish acknowledgement,
+  // and the view effect below tracks it, so regaining presence re-observes
+  // the visible session and acknowledges a finish learned while away.
+  const [visible, setVisible] = createSignal(
+    document.visibilityState === "visible",
+  );
+  const [focused, setFocused] = createSignal(document.hasFocus());
+  const observePresence = () => {
+    setVisible(document.visibilityState === "visible");
+    setFocused(document.hasFocus());
+  };
+  document.addEventListener("visibilitychange", observePresence);
+  globalThis.addEventListener("focus", observePresence);
+  globalThis.addEventListener("blur", observePresence);
   const navigation = createShellNavigation({
     resources,
     actions,
@@ -135,20 +149,14 @@ export function createShellState(o: { api: URL }): ShellState {
     forkNotes,
     session,
     factory: solidState,
-    presence: () => ({
-      focused: document.hasFocus(),
-      visible: document.visibilityState === "visible",
-    }),
+    presence: () => ({ focused: focused(), visible: visible() }),
     confirm: (message) => globalThis.confirm(message),
   });
   const transcriptScopes = createTranscriptScopes({ resources, session });
-  const [visible, setVisible] = createSignal(
-    document.visibilityState === "visible",
-  );
-  const visibility = () => setVisible(document.visibilityState === "visible");
-  document.addEventListener("visibilitychange", visibility);
   onCleanup(() => {
-    document.removeEventListener("visibilitychange", visibility);
+    document.removeEventListener("visibilitychange", observePresence);
+    globalThis.removeEventListener("focus", observePresence);
+    globalThis.removeEventListener("blur", observePresence);
     transcriptScopes.stop();
   });
   createEffect(() => ({
@@ -157,6 +165,8 @@ export function createShellState(o: { api: URL }): ShellState {
     screen: visible() && !navigation.state.settings,
   }), (value) => transcriptScopes.update(value));
   createEffect(() => {
+    focused();
+    visible();
     const selected = session.state.selection, data = actions.info();
     const project = selected ? undefined : navigation.state.project;
     const sidecar = selected?.sidecarId ?? project?.sidecarId;
