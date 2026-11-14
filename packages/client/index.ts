@@ -173,7 +173,9 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       const p = partitionKey(value.sidecarId, value.directory);
       const partition = partitions.get(p)!;
       partition.digesting = (partition.digesting ?? 0) +
-        (value.digest.state === "digesting" ? (value === next ? 1 : -1) : 0);
+        (value.digest.state === "digesting" || value.digest.refreshing
+          ? (value === next ? 1 : -1)
+          : 0);
     }
   };
   const members = (server: string, directory?: string) => {

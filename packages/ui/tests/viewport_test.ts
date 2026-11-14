@@ -390,6 +390,36 @@ function viewportFixture(
   cleanup();
 }
 
+Deno.test("viewport position publications coalesce and retirement suppresses pending delivery", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      for (let i = 0; i < 4; i++) flush();
+      await Promise.resolve();
+      let publications = 0;
+      lease.owner.subscribe(() => publications++);
+      for (let i = 0; i < 3; i++) lease.owner.transaction(() => {});
+      assertEquals(
+        publications,
+        0,
+        "transactions do not synchronously reenter subscribers",
+      );
+      await Promise.resolve();
+      assertEquals(publications, 1, "same-turn transactions publish once");
+      for (let i = 0; i < 2; i++) lease.owner.transaction(() => {});
+      lease.release();
+      await Promise.resolve();
+      assertEquals(
+        publications,
+        1,
+        "retirement cancels the pending publication",
+      );
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
+
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
   for (const notify of [false, true]) {
     viewportFixture(({ pane, height, resize, flush }) => {
