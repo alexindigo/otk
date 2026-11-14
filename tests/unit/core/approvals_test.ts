@@ -2,19 +2,31 @@
 import { fixturePage } from "../../support/message-pages.ts";
 import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
+import {
+  OtkDb,
+  permissionMigrations,
+  PermissionStore,
+  Requests,
+  requestsMigrations,
+} from "@otk/store";
 import type { Harness } from "@otk/harness";
 import {
   belongsToSession,
   type IndexEntry,
   type PermissionRequest,
   type PermissionsCapability,
+  type RequestEvent,
 } from "@otk/protocol";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
-import { IndexStore, RpcRegistry } from "../../../core/mod.ts";
+import {
+  IndexStore,
+  RequestCoordinator,
+  RpcRegistry,
+} from "../../../core/mod.ts";
 import { register as registerPermissions } from "../../../core/features/permissions.ts";
 import { fixture } from "../../support/config.ts";
 import { waitFor } from "../../support/opencode.ts";
+import { cfg } from "./support.ts";
 const backend = (permissions: PermissionsCapability): Harness => ({
   core: {
     kind: "test",
@@ -96,6 +108,118 @@ const deferred = <T>() => {
   });
   return { promise, resolve };
 };
+
+test("permission owner returns terminal rejection for replies it did not dispatch", async () => {
+  const db = new OtkDb(await fixture(), [
+    permissionMigrations,
+    requestsMigrations,
+  ], { busyms: 5000 });
+  const store = new PermissionStore(db), index = new IndexStore();
+  let pending: PermissionRequest[] = [], calls = 0;
+  const ack = deferred<void>();
+  const capability: PermissionsCapability = {
+    listPermissions: () => Promise.resolve(pending),
+    replyPermission: () => {
+      calls++;
+      return ack.promise;
+    },
+  };
+  const feature = new PermissionFeature(store, index, capability);
+  const harness = backend(capability), rpc = new RpcRegistry(harness, db);
+  registerPermissions(
+    rpc,
+    harness,
+    (input, operation) => feature.reply(input, operation),
+  );
+  const coordinator = new RequestCoordinator({
+    registry: rpc,
+    receipts: new Requests(db),
+    policy: cfg().requests,
+  });
+  await coordinator.start();
+  const issue = async (requestID: string, principal = "local") => {
+    const events: RequestEvent[] = [];
+    await coordinator.accept(principal, {
+      t: "request",
+      ref: {
+        id: crypto.randomUUID(),
+        clientID: crypto.randomUUID(),
+        key: crypto.randomUUID(),
+        window: coordinator.window().id,
+      },
+      method: "permission.reply",
+      params: { sessionID: "tstv1-child", requestID, reply: "once" },
+    }, {
+      send: (event) => events.push(event),
+      lease: {
+        id: crypto.randomUUID(),
+        signal: new AbortController().signal,
+        defer() {},
+      },
+    });
+    return events;
+  };
+  const rejected = (events: RequestEvent[]) => {
+    const result = events.at(-1);
+    assert(result?.t === "request.result", JSON.stringify(events));
+    assert(!result.outcome.ok);
+    assertEquals(result.outcome.error.code, "permission");
+  };
+  try {
+    const absent = await issue("not-observed");
+    await coordinator.idle();
+    rejected(absent);
+    assertEquals(calls, 0);
+    assertEquals(store.list(["tstv1-child"], undefined, 101), []);
+
+    pending = [request("one")];
+    const first = await issue("one");
+    await waitFor(() => calls, (count) => count === 1);
+    // A different principal has an independent coordinator ordering lane, but
+    // the permission owner's request reservation still prevents a second reply.
+    const duplicate = await issue("one", "another");
+    await waitFor(
+      () => duplicate.at(-1)?.t,
+      (type) => type === "request.result",
+    );
+    rejected(duplicate);
+    ack.resolve();
+    await coordinator.idle();
+    const completed = first.at(-1);
+    assert(completed?.t === "request.result" && completed.outcome.ok);
+
+    const confirmed = await issue("one");
+    await coordinator.idle();
+    rejected(confirmed);
+    assertEquals(calls, 1, "duplicate replies never reach the native backend");
+
+    pending = [request("uncertain")];
+    store.start({
+      session: "tstv1-child",
+      requestID: "uncertain",
+      request: JSON.stringify(pending[0]),
+      reply: "once",
+      source: "manual",
+    }, []);
+    const uncertain = await issue("uncertain");
+    await coordinator.idle();
+    const reconciling = uncertain.at(-1);
+    assert(reconciling?.t === "request.progress");
+    assertEquals(reconciling.progress.phase, "reconciling");
+    assertEquals(calls, 1, "an unconfirmed prior dispatch is never retried");
+
+    feature.close();
+    const stopped = await issue("uncertain");
+    await coordinator.idle();
+    rejected(stopped);
+    assertEquals(calls, 1);
+  } finally {
+    ack.resolve();
+    feature.close();
+    await coordinator.stop();
+    db.close();
+  }
+});
 
 test("server-owned auto-approve can be turned off and its activity read while the backend is offline", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations], {

@@ -9,6 +9,9 @@ test(
   },
   async ({ state, page }, info) => {
     const frames = await wire(page);
+    frames.hold((frame, request) =>
+      request?.method === "sessions.seen" && frame.t === "request.result"
+    );
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Jump to latest",
     });
@@ -33,6 +36,21 @@ test(
     }
     await openSession(state, page, session.id);
     await page.evaluate(() => document.fonts.ready);
+    await expect.poll(() =>
+      frames.held.some(({ frame, request }) =>
+        request?.method === "sessions.seen" && frame.t === "request.result"
+      )
+    ).toBe(true);
+    await expect(page.locator(".otk-composer-notice")).toContainText(
+      "Saving viewed conversation",
+    );
+    // Opening a session also saves its viewed terminal. A held receipt keeps
+    // that real notice in the composer even after transcript readiness. Compare
+    // jump visibility only after that operation and the composer have settled.
+    frames.release();
+    await expect(page.locator(".otk-composer-notice")).toBeHidden();
+    await expect(page.getByRole("form", { name: "Composer", exact: true }))
+      .toHaveAttribute("aria-busy", "false");
     const pane = page.getByRole("region", { name: "Transcript", exact: true });
     const jump = page.locator(".otk-jump-slot").getByRole("button", {
       name: "Jump to latest",

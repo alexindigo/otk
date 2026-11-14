@@ -524,6 +524,13 @@ Manual and automatic replies share request serialization and journal intent,
 confirmation and failure; shutdown leaves unacknowledged intent unconfirmed. The
 existing permissions registration accepts this injected reply owner.
 
+The reply owner reports its own pre-dispatch refusals (missing, already answered
+or stopping) as definite rejection to the request coordinator, even after the
+generic native fence. They produce terminal failures without a native call or
+new journal entry. An unconfirmed previous dispatch remains uncertain and cannot
+be retried. Native inventory observation, not native-server connectivity alone,
+establishes that a request can be answered through OTK.
+
 The reply journal captures family membership at dispatch; historical activity
 does not depend on the current live index window. Pending helpers also schedule
 their enabled ancestor when that ancestor's own index entry is absent. The
