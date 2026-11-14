@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -336,7 +337,7 @@ Deno.test("SQL split/inline labels and helper progress share owner-declared boun
       new AbortController().signal,
     );
     assertEquals(
-      progress.current,
+      derivedValue(progress.progress)?.current,
       reads.helperAggregates("opcv2-ses_fixture", ["msg"])![0].current,
     );
   } finally {

@@ -131,7 +131,10 @@ export class Transcript {
       summaries(
         id: string,
         turns: readonly string[],
-      ): Record<string, import("@otk/protocol").UsageSummary>;
+      ): Record<
+        string,
+        import("@otk/protocol").Derived<import("@otk/protocol").UsageSummary>
+      >;
     },
   ) {
     if (options.policy) this.#cache = new MessagePrefetchCache(options.policy);
@@ -617,7 +620,7 @@ export class Transcript {
                 : {
                   state: "digesting",
                   revision: 0,
-                  toolCount: null,
+                  progress: { state: "pending" },
                 };
           }
         }

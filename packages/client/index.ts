@@ -172,7 +172,9 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       const p = partitionKey(value.sidecarId, value.directory);
       const partition = partitions.get(p)!;
       partition.digesting = (partition.digesting ?? 0) +
-        (value.digest.state === "digesting" ? (value === next ? 1 : -1) : 0);
+        (value.digest.state === "digesting" || value.digest.refreshing
+          ? (value === next ? 1 : -1)
+          : 0);
     }
   };
   const members = (server: string, directory?: string) => {
@@ -373,6 +375,20 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
               digest: {
                 ...entry.digest,
                 ...structuredClone(op.summary),
+                ...(entry.digest.refreshing === undefined &&
+                    op.summary.refreshing === undefined
+                  ? {}
+                  : {
+                    refreshing: op.summary.refreshing ??
+                      op.summary.state === "digesting",
+                  }),
+                ...(entry.digest.stale === undefined &&
+                    op.summary.stale === undefined
+                  ? {}
+                  : { stale: op.summary.stale ?? false }),
+                ...(entry.digest.error === undefined
+                  ? {}
+                  : { error: op.summary.error }),
                 revision: op.revision,
                 turns,
               },

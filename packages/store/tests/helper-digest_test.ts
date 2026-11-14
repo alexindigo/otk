@@ -15,6 +15,7 @@ test("helper feature v2 upgrades, rolls back atomically, reopens and removes onl
   let db = new DigestDb(root, [digestMigrations], { busyms: 100 });
   let store = new DigestStore(db);
   const row = {
+    result_meta: null,
     session_id: "opcv1-child",
     state: "ready" as const,
     revision: 1,

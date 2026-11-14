@@ -2,6 +2,7 @@
 import "./TaskTool.css" with { type: "text" };
 import { Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
+import { derivedValue } from "@otk/protocol";
 import { duration } from "@otk/client";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
@@ -27,9 +28,13 @@ export default function TaskTool(
     if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
   });
   const progress = () => {
-    const value = props.call.progress;
-    if (!value || value.state === "unavailable") return "Progress unavailable";
-    if (value.state === "digesting") return "Preparing progress…";
+    const result = props.call.progress?.progress;
+    const value = derivedValue(result);
+    if (!value) {
+      return result?.state === "pending"
+        ? "Preparing progress\u2026"
+        : "Progress unavailable";
+    }
     if (props.call.status === "running" && value.current) {
       return `↳ ${value.current.name} ${value.current.title ?? ""}`.trim();
     }

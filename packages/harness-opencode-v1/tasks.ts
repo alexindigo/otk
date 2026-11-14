@@ -32,7 +32,7 @@ export class TaskProgress {
     const progress = this.options.peek(child) ?? {
       state: this.options.request ? "digesting" : "unavailable",
       revision: 0,
-      toolCount: null,
+      progress: { state: this.options.request ? "pending" : "unavailable" },
     } as HelperSummary;
     if (this.options.subscribed(parent)) {
       this.#links.set(JSON.stringify([parent, raw.messageID, raw.id]), {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionSummary } from "@otk/client";
 import { failureText } from "@otk/client";
 import "./ProjectSessions.css" with { type: "text" };
 import ListRow from "./ListRow.tsx";
@@ -129,8 +130,8 @@ export default function ProjectSessions(props: {
   const cost = (id: string) => {
     if (props.cost) return props.cost(id);
     const entry = merged(id);
-    return props.showCost && entry?.digest.state === "ready"
-      ? entry.digest.total?.cost ?? undefined
+    return props.showCost
+      ? sessionSummary(entry)?.cost ?? undefined
       : undefined;
   };
   const costLabel = (id: string) => {
@@ -414,8 +415,8 @@ export default function ProjectSessions(props: {
                               </span>
                             </Show>
                             <Show
-                              when={row().session.digest.state !==
-                                  "ready" ||
+                              when={row().session.digest.total?.state !==
+                                  "known" ||
                                 (props.showCost &&
                                   costLabel(row().session.id) ===
                                     undefined)}

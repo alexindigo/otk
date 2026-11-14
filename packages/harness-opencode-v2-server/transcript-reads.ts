@@ -6,11 +6,13 @@ import type {
   TranscriptMetadata,
 } from "@otk/harness";
 import "./read-kinds.ts";
-import type {
-  HelperSummary,
-  LatestPrompt,
-  UsageMessage,
-  UsageTool,
+import {
+  type HelperProgress,
+  type HelperSummary,
+  knownDerived,
+  type LatestPrompt,
+  type UsageMessage,
+  type UsageTool,
 } from "@otk/protocol";
 import {
   type MessageContext,
@@ -267,8 +269,8 @@ export class TranscriptReads {
     signal: AbortSignal,
   ): Promise<HelperSummary> {
     let before: number | undefined, cursor: string | undefined, toolCount = 0;
-    let current: HelperSummary["current"];
-    const accept = (count: number, value: HelperSummary["current"]) => {
+    let current: HelperProgress["current"];
+    const accept = (count: number, value: HelperProgress["current"]) => {
       toolCount += count;
       if (
         value && (!current || (value.startedAt ?? 0) > (current.startedAt ?? 0))
@@ -335,8 +337,11 @@ export class TranscriptReads {
     return {
       state: "ready",
       revision: 0,
-      toolCount,
-      ...(current ? { current } : {}),
+      progress: knownDerived(
+        { toolCount, ...(current ? { current } : {}) },
+        sessionID,
+        0,
+      ),
     };
   }
   sqlHeaders(

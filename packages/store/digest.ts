@@ -13,6 +13,7 @@ export class DigestDb extends SqliteDb {
   }
 }
 export interface DigestUsageRecord {
+  result_meta?: string | null;
   call_count: number | null;
   cost: number | null;
   input: number | null;
@@ -26,6 +27,8 @@ export interface DigestUsageRecord {
   revision: number;
 }
 export interface DigestSessionRecord extends DigestUsageRecord {
+  last_result_meta?: string | null;
+  last_call_id?: string | null;
   id: string;
   provider: string;
   parent_id: string | null;
@@ -96,6 +99,9 @@ export interface DigestPersistence {
   transaction<T>(run: () => T): T;
 }
 const sessionColumns = [
+  "result_meta",
+  "last_result_meta",
+  "last_call_id",
   "id",
   "provider",
   "parent_id",
@@ -132,6 +138,7 @@ const sessionColumns = [
   "deleted_how",
 ] as const;
 export interface DigestHelperRecord {
+  result_meta?: string | null;
   session_id: string;
   state: "digesting" | "ready" | "unavailable";
   revision: number;
@@ -143,6 +150,7 @@ export interface DigestHelperRecord {
   time_end: number | null;
 }
 const helperColumns = [
+  "result_meta",
   "session_id",
   "state",
   "revision",
@@ -154,6 +162,7 @@ const helperColumns = [
   "time_end",
 ] as const;
 const turnColumns = [
+  "result_meta",
   "session_id",
   "turn_id",
   "call_count",
@@ -266,7 +275,9 @@ export class DigestStore implements DigestPersistence {
         );
         for (const row of rows) {
           validate(row);
-          query.run(...columns.map((c) => row[c] as string | number | null));
+          query.run(
+            ...columns.map((c) => (row[c] ?? null) as string | number | null),
+          );
         }
       };
       upsert("digest_sessions", sessionColumns, ["id"], batch.sessions);

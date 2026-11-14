@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { knownDerived } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import {
   type Part,
@@ -152,12 +153,21 @@ Deno.test("open detail refreshes only for a newer digest revision, never a statu
         }],
       });
     entry.digest.revision = 8;
-    entry.digest.turns.user = new UsageLedger("s", [header(3, true)]).summary(
+    entry.digest.turns.user = knownDerived(
+      new UsageLedger("s", [header(3, true)]).summary(
+        "user",
+      )!,
       "user",
-    )!;
+      8,
+    );
     patch(8, 2);
     await owner.load(target);
     assertEquals(reads, 2);
+    const result = entry.digest.turns.user;
+    if (result.state === "known") {
+      result.witness.revision++;
+      result.final = true;
+    }
     patch(8, 3);
     patch(7, 4);
     await owner.load(target);

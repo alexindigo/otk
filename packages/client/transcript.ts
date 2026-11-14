@@ -274,7 +274,7 @@ export function createTranscript(
       ? {
         state: "unavailable",
         revision: known.digest.revision,
-        toolCount: null,
+        progress: { state: "unavailable" },
       }
       : known?.digest.helper;
   };

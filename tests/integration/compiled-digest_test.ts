@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { preparedBinary } from "../support/prepared-binaries.ts";
@@ -129,7 +130,8 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     await waitFor(
       first.entry,
       (entry) =>
-        entry?.digest.state === "ready" && (entry.digest.total?.calls ?? 0) > 0,
+        entry?.digest.state === "ready" &&
+        (derivedValue(entry.digest.total)?.calls ?? 0) > 0,
     );
     assertEquals(Object.keys(first.entry()!.digest.turns).length > 0, true);
     const firstTurn = Object.keys(first.entry()!.digest.turns)[0];
@@ -140,7 +142,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
         first.entry,
         (entry) =>
           entry?.digest.state === "ready" &&
-          entry.digest.turns[turnID]?.time?.end !== undefined,
+          derivedValue(entry.digest.turns[turnID])?.time?.end !== undefined,
       );
       const detail = await first.client.rpc<TurnUsageDetail>("usage.get", {
         sessionID: session.id,
@@ -157,7 +159,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     const initialDetail = await terminalDetail(firstTurn);
     assertEquals(initialDetail.calls.length, 1);
     assertEquals(initialDetail.turnID, firstTurn);
-    const initialCalls = first.entry()!.digest.total!.calls;
+    const initialCalls = derivedValue(first.entry()!.digest.total)!.calls;
     for (let rank = 0; rank < 15; rank++) {
       await oc.request(`/session/${session.id}/message`, {
         method: "POST",
@@ -179,7 +181,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
       first.entry,
       (entry) =>
         entry?.digest.state === "ready" &&
-        entry.digest.total?.calls === initialCalls + 1,
+        derivedValue(entry.digest.total)?.calls === initialCalls + 1,
     );
     const native = await oc.request<{ info: { id: string } }[]>(
       `/session/${session.id}/message`,
@@ -219,12 +221,19 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
       () => first.entry(helper.child.id),
       (entry) => entry?.digest.helper?.state === "ready",
     );
-    assertEquals(first.entry(helper.child.id)!.digest.helper!.toolCount, 1);
+    assertEquals(
+      derivedValue(first.entry(helper.child.id)!.digest.helper!.progress)!
+        .toolCount,
+      1,
+    );
     const helperPage = await first.client.rpc<MessagePage>("session.messages", {
       sessionID: helper.parent.id,
     });
     assertEquals(helperPage.items.length, 10);
-    assertEquals(helperPage.helpers[helper.child.id].toolCount, 1);
+    assertEquals(
+      derivedValue(helperPage.helpers[helper.child.id].progress)!.toolCount,
+      1,
+    );
     const lost = await oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Provider loss metadata" },
@@ -241,7 +250,8 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     await waitFor(
       () => first.entry(lostID),
       (entry) =>
-        entry?.digest.state === "ready" && (entry.digest.total?.calls ?? 0) > 0,
+        entry?.digest.state === "ready" &&
+        (derivedValue(entry.digest.total)?.calls ?? 0) > 0,
     );
     const body = await first.client.rpc("session.messages", {
       sessionID: lostID,
@@ -271,12 +281,15 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
   const second = await run(true);
   try {
     await waitFor(second.entry, (entry) => entry?.deleted?.how === "otk");
-    assertEquals(second.entry()!.digest.total!.calls > 0, true);
+    assertEquals(derivedValue(second.entry()!.digest.total)!.calls > 0, true);
     await waitFor(
       () => second.entry(lostID),
       (entry) => entry?.deleted?.how === "provider",
     );
-    assertEquals(second.entry(lostID)!.digest.total!.calls > 0, true);
+    assertEquals(
+      derivedValue(second.entry(lostID)!.digest.total)!.calls > 0,
+      true,
+    );
     assertEquals(JSON.stringify(second.entry(lostID)).includes(marker), false);
     await assertRejects(() =>
       second.client.rpc("session.messages", { sessionID: lostID })

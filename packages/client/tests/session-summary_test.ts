@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue, knownDerived } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import type {
   AssistantMessage,
@@ -26,7 +27,12 @@ const total: UsageSummary = {
 };
 Deno.test("turn summaries come from the keyed index, never the loaded reply's partial usage", () => {
   const entry = shellEntry("tstv1-one");
-  entry.digest = { state: "ready", revision: 2, turns: { turn: total }, total };
+  entry.digest = {
+    state: "ready",
+    revision: 2,
+    turns: { turn: knownDerived(total, "turn", 2) },
+    total: knownDerived(total, "session", 2),
+  };
   const reply: AssistantMessage = {
     id: "reply",
     sessionID: entry.id,
@@ -53,16 +59,21 @@ Deno.test("the meter uses the latest reported context and model, with no invente
     state: "ready",
     revision: 2,
     turns: {},
-    total,
-    last: {
-      model: { provider: "p", model: "m" },
-      context: {
-        input: 20,
-        output: 3,
-        reasoning: 2,
-        cache: { read: 4, write: 1 },
+    total: knownDerived(total, "session", 2),
+    last: knownDerived(
+      {
+        callID: "call",
+        model: { provider: "p", model: "m" },
+        context: {
+          input: 20,
+          output: 3,
+          reasoning: 2,
+          cache: { read: 4, write: 1 },
+        },
       },
-    },
+      "call",
+      2,
+    ),
   };
   const catalog: ModelCatalog = {
     defaultState: "unknown",
@@ -85,7 +96,11 @@ Deno.test("the meter uses the latest reported context and model, with no invente
     fraction: .3,
   });
   entry.digest.state = "digesting";
-  assertEquals(summaryMeter(entry, catalog), {});
+  assertEquals(summaryMeter(entry, catalog), {
+    tokens: 30,
+    limit: 100,
+    fraction: .3,
+  });
 });
 
 Deno.test("deleted facts share display money and exact accessibility, and cost off removes both", () => {
@@ -94,7 +109,7 @@ Deno.test("deleted facts share display money and exact accessibility, and cost o
     state: "ready",
     revision: 2,
     turns: {},
-    total: structuredClone(total),
+    total: knownDerived(structuredClone(total), "session", 2),
   };
   for (
     const [amount, display, exact] of [[0, "$0.00", "$0"], [
@@ -103,7 +118,7 @@ Deno.test("deleted facts share display money and exact accessibility, and cost o
       "$0.00000005",
     ], [.125, "$0.13", "$0.125"]] as const
   ) {
-    entry.digest.total!.cost = amount;
+    derivedValue(entry.digest.total)!.cost = amount;
     const fact = deletedFacts(entry, true, String).find((fact) =>
       fact.label === "Reported cost"
     );

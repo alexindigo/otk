@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -149,8 +150,8 @@ Deno.test({
               sql ? "ready" : "unavailable",
             );
             assertEquals(
-              saved.get(target.id)?.helper?.toolCount,
-              sql ? 1 : null,
+              derivedValue(saved.get(target.id)?.helper?.progress)?.toolCount,
+              sql ? 1 : undefined,
             );
           }
           assertEquals(reads.filter((operation) => operation === "tools"), []);

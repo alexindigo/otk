@@ -172,7 +172,11 @@ export async function themeContent(directory: string) {
           tool: "task",
           description: "Inspect the result",
           childSessionID: "tstv1-child",
-          progress: { state: "unavailable", revision: 0, toolCount: null },
+          progress: {
+            state: "unavailable",
+            revision: 0,
+            progress: { state: "unavailable" },
+          },
         },
       },
       { id: "step", kind: "step", phase: "finish" },

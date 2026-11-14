@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { derivedValue } from "@otk/protocol";
 import { assert, assertEquals } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "@std/path";
@@ -194,13 +195,16 @@ for (const api of [false, true]) {
       await sink.catalog(signal);
       sink.invalidateHelper("opcv1-child");
       let helper = await scan();
-      assertEquals(helper.toolCount, 600);
-      assertEquals(helper.current, {
+      assertEquals(derivedValue(helper.progress)!.toolCount, 600);
+      assertEquals(derivedValue(helper.progress)!.current, {
         name: "bash",
         title: "Tool 1199",
         startedAt: 1199,
       });
-      assertEquals(helper.time, { start: 0, end: 1201 });
+      assertEquals(derivedValue(helper.progress)!.time, {
+        start: 0,
+        end: 1201,
+      });
       assertEquals(helper.state, "ready");
       assert(
         !JSON.stringify(
@@ -227,14 +231,14 @@ for (const api of [false, true]) {
         600,
       );
       helper = await scan();
-      assertEquals(helper.toolCount, 600);
+      assertEquals(derivedValue(helper.progress)!.toolCount, 600);
       native.prepare("DELETE FROM part WHERE id='p1199'").run();
       messages[1199].parts = [];
       sink.invalidateHelper("opcv1-child");
       const beforeRemoval = queries;
       helper = await scan(["m1199"]);
-      assertEquals(helper.toolCount, 599);
-      assertEquals(helper.current?.title, "Tool 1197");
+      assertEquals(derivedValue(helper.progress)!.toolCount, 599);
+      assertEquals(derivedValue(helper.progress)!.current?.title, "Tool 1197");
       if (!api) {
         assert(
           queries - beforeRemoval <= 2,
@@ -251,13 +255,13 @@ for (const api of [false, true]) {
       sink.invalidate("opcv1-child", 2);
       sink.invalidateHelper("opcv1-child");
       helper = await scan();
-      assertEquals(helper.time, { start: 0 });
+      assertEquals(derivedValue(helper.progress)!.time, { start: 0 });
       if (!api) {
         native.prepare("UPDATE part SET data='invalid' WHERE id='p0001'").run();
         sink.invalidateHelper("opcv1-child");
         helper = await scan();
         assertEquals(helper.state, "unavailable");
-        assertEquals(helper.toolCount, null);
+        assertEquals(helper.progress.state, "unavailable");
       }
     } finally {
       sink.close();
