@@ -2468,6 +2468,9 @@ export class OpencodeV1Adapter implements Harness {
         break;
       case "message.part.updated": {
         if (!raw) break;
+        // Every live part reaches the selection owner, including the synthetic
+        // approval part inside plan_exit's agent-bearing user record.
+        const intent = this.#selectionIntents.part(raw);
         if (record && (record.info.role === "user" || record.info.summary)) {
           content({
             op: "message.upsert",
@@ -2478,7 +2481,6 @@ export class OpencodeV1Adapter implements Harness {
         const part = finishedPart ||
           this.buffers.snapshot(raw.id, sessionID, raw.messageID)?.part ||
           mapPart(raw);
-        const intent = this.#selectionIntents.part(raw);
         if (part.kind === "tool" && intent) part.call.selectionIntent = intent;
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = this.#tasks.shape(raw);

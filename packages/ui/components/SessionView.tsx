@@ -2,7 +2,7 @@
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
-import { isCancellation } from "@otk/protocol";
+import { isAssistantTerminal, isCancellation } from "@otk/protocol";
 import {
   createEffect,
   createMemo,
@@ -21,6 +21,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
+import { hasActiveRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
@@ -128,6 +129,21 @@ export default function SessionView(props: {
   });
   const projection = () => props.transcript?.state ?? fallback();
   const count = () => projection().messageIDs.length;
+  // One in-flow progress per active turn: an unfinished reply owns it;
+  // otherwise the turn's newest active native record does.
+  const progressRecord = createMemo(() => {
+    const { messageIDs, messagesByID } = projection();
+    let record: string | undefined;
+    for (let i = messageIDs.length - 1; i >= 0; i--) {
+      const message = messagesByID[messageIDs[i]];
+      if (!message || message.role === "user") break;
+      if (message.role === "assistant" && !isAssistantTerminal(message)) {
+        return undefined;
+      }
+      if (!record && hasActiveRecord(message)) record = message.id;
+    }
+    return record;
+  });
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
@@ -590,6 +606,8 @@ export default function SessionView(props: {
                                       ? (id, text) =>
                                         props.transcript!.source(id, text)
                                       : undefined}
+                                    activeRecord={progressRecord() ===
+                                      message().id}
                                     copyIncomplete={message().role ===
                                         "assistant" &&
                                       !!props.transcript &&

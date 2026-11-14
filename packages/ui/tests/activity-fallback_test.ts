@@ -7,7 +7,7 @@ import {
   type Part,
 } from "@otk/protocol";
 import { PartRegistry } from "../registries/renderers.ts";
-import { messageFrames } from "../components/work-log.ts";
+import { hasActiveRecord, messageFrames } from "../components/work-log.ts";
 import { createMessageLayout } from "../components/message-layout.ts";
 import {
   unknownPartPresentation,
@@ -217,4 +217,27 @@ Deno.test("reply copy carries only producer-declared content; row records join t
   assertEquals(context.frames.map((frame) => frame.transcript), [true]);
   assertEquals(context.frames[0].groups[0].work, false);
   assertEquals(context.copyable, true);
+});
+Deno.test("only a plugin-reported running record is active work", () => {
+  const record = (active: boolean | null): ContextMessage => ({
+    id: "record",
+    sessionID: "acmv1-session",
+    role: "context",
+    time: { created: 1 },
+    parts: [{
+      ...part,
+      activity: {
+        ...part.activity!,
+        state: {
+          key: "beyond",
+          label: "Beyond",
+          facts: { active, terminal: null },
+        },
+      },
+    }],
+  });
+  assertEquals(hasActiveRecord(record(true)), true);
+  // Unknown is never treated as running.
+  assertEquals(hasActiveRecord(record(null)), false);
+  assertEquals(hasActiveRecord(record(false)), false);
 });

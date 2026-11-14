@@ -4,8 +4,15 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt, revealAcquired, toolScript } from "../../pages/transcript.ts";
+import {
+  compactionBoundary,
+  expectCompactionSummary,
+  prompt,
+  revealAcquired,
+  toolScript,
+} from "../../pages/transcript.ts";
 import { contextMenu, sessionContext } from "../../pages/sessions.ts";
+import { nativeHistoryCount } from "../../pages/history.ts";
 
 test.use({ profile: "revert-native" });
 interface Message {
@@ -73,30 +80,35 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     delay: 20_000,
   });
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
-  await expect(page.locator(".otk-compaction-divider")).toHaveText(
-    "Compacting…",
-  );
+  // NT4: V1 compaction is a plugin boundary record whose summary is in its
+  // closed body; V2 keeps the divider and summary in the flow.
+  const compaction = compactionBoundary(state);
+  await expect(page.locator(compaction.title)).toHaveText(compaction.running);
   await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
     "data-status",
     "busy",
   );
+  // A running compaction is active work with the one in-flow progress.
+  await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   await expect(page.locator(".otk-response-progress")).toBeVisible();
   expect(
-    await page.locator(".otk-compaction-divider").evaluate((e) =>
+    await page.locator(compaction.selector).evaluate((e) =>
       !e.closest(".otk-user-bubble") &&
       !e.closest("[data-message]")!.querySelector(".otk-user-bubble")
     ),
   ).toBe(true);
-  await expect(page.locator(".otk-messages")).toContainText(
+  await expectCompactionSummary(
+    state,
+    page,
     "Long compaction summary.",
-    { timeout: 30_000 },
+    30_000,
   );
   await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
     "data-status",
     "idle",
   );
-  await expect(page.locator(".otk-compaction-divider")).toHaveText(
-    "Session compacted",
+  await expect(page.locator(compaction.title)).toHaveText(
+    compaction.completed,
   );
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
   const first = await state.queue(["Busy reply finished."], "held"),
@@ -116,10 +128,12 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     (await state.observe<{ requests: unknown[] }>()).requests.length;
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
   await expect(
-    page.locator(".otk-compaction-divider").filter({
-      hasText: /^Compacting…$/,
+    page.locator(compaction.queued).filter({
+      hasText: new RegExp(`^${compaction.running}$`),
     }),
   ).toBeVisible();
+  // One progress per active turn, even with the next compaction queued.
+  await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   const history = await state.native<Message[]>(`/session/${s.id}/message`);
   const v2 = state.controller.info!.version.startsWith("2.");
   const queued = v2
@@ -155,9 +169,7 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     requests,
   );
   await state.release(first.gate);
-  await expect(page.locator(".otk-messages")).toContainText(
-    "Queued compaction summary.",
-  );
+  await expectCompactionSummary(state, page, "Queued compaction summary.");
   expect((await state.observe<{ requests: unknown[] }>()).requests.length)
     .toBeGreaterThan(requests);
   await state.release(summary.gate);
@@ -166,11 +178,13 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     "idle",
   );
   await expect.poll(() =>
-    page.locator(".otk-compaction-divider").evaluateAll((es) =>
-      es.length > 0 &&
-      es.every((e) =>
-        e.textContent === "Session compacted" && !e.closest(".otk-user-bubble")
-      )
+    page.locator(compaction.title).evaluateAll(
+      (es, completed) =>
+        es.length > 0 &&
+        es.every((e) =>
+          e.textContent === completed && !e.closest(".otk-user-bubble")
+        ),
+      compaction.completed,
     )
   ).toBe(true);
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
@@ -290,9 +304,11 @@ test(
       `/session/${fullFork}/message`,
     );
     expect(texts(history)).toEqual(["First prompt", "Second prompt"]);
+    // data-message-count is the native message count; V2 natives include
+    // selection/idle records that the V1-shaped fixture facade omits.
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",
-      String(history.length),
+      String(await nativeHistoryCount(state, fullFork)),
     );
     await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
     await page.getByRole("button", { name: "Dismiss fork note", exact: true })

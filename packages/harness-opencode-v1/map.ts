@@ -116,10 +116,24 @@ export function mapMessage(
     common.parts = summaryParts.map((part) => {
       if (part.type !== "text") return partMapper(part);
       const row = recordPart(part);
+      const state = info.error
+        ? "failed"
+        : info.time.completed === undefined
+        ? "running"
+        : "completed";
       row.activity = {
         kindLabel: "compaction",
         layout: "boundary",
         category: "compaction",
+        // The running summary is active work: it carries its own progress.
+        state: {
+          key: state,
+          label: state,
+          facts: {
+            active: state === "running",
+            terminal: state !== "running",
+          },
+        },
         title: info.error
           ? "Session compaction failed"
           : info.time.completed === undefined
@@ -128,6 +142,7 @@ export function mapMessage(
         tone: info.error ? "error" : "normal",
         body: markdown(part.text ?? ""),
         parameters: [
+          { key: "state", label: "State", value: state },
           { key: "summary", label: "Summary message", value: info.id },
           ...(info.parentID
             ? [{

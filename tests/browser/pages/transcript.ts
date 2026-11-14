@@ -426,3 +426,123 @@ export async function revealAcquired(page: Page, selector: string) {
   }
   if (Math.abs(state.delta) >= 1) await wheelTranscript(page, state.delta);
 }
+
+const v2 = (state: TestState) =>
+  state.controller.info!.version.startsWith("2.");
+
+/** A user shell run: V1 renders its bash tool call; V2 a plugin-owned shell
+ * record (NT2), whose header carries the command and native state. */
+export function shellRun(
+  state: TestState,
+  status: "running" | "completed",
+): string {
+  return v2(state)
+    ? `[data-native-record="opencode-v2/shell"][data-activity-state=${
+      status === "completed" ? "exited" : "running"
+    }]`
+    : `[data-tool=bash][data-tool-status=${status}]`;
+}
+
+/** Open a native record's own disclosure the user's way: reveal the record,
+ * then use its header toggle (never its nested Source fold). */
+export async function openRecord(page: Page, selector: string) {
+  await revealAcquired(page, selector);
+  const toggle = page.locator(
+    `${selector} > .otk-tool-state > .otk-tool-toggle`,
+  ).first();
+  if (await toggle.getAttribute("aria-expanded") !== "true") {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
+/** The compaction lifecycle row: V2's typed divider, or V1's plugin-owned
+ * summary boundary record (NT4), with each harness's lifecycle wording. */
+export function compactionBoundary(state: TestState) {
+  return v2(state)
+    ? {
+      selector: ".otk-compaction-divider",
+      title: ".otk-compaction-divider",
+      queued: ".otk-compaction-divider",
+      running: "Compacting\u2026",
+      completed: "Session compacted",
+    }
+    : {
+      selector: '[data-native-record="opencode-v1/compaction-summary"]',
+      title:
+        '[data-native-record="opencode-v1/compaction-summary"] .otk-tool-verb',
+      // Before its summary exists, a queued compaction is its marker record.
+      queued: '[data-native-record="opencode-v1/compaction"] .otk-tool-verb',
+      running: "Session compaction",
+      completed: "Session compacted",
+    };
+}
+
+/** After rolling back every prompt, no prompt or reply remains. Native
+ * controls before the first prompt (V2 agent/model selection records) stay
+ * visible per decisions 1/20. */
+export async function expectNoConversation(state: TestState, page: Page) {
+  await expect(
+    page.locator(
+      "[data-message][data-role=user], [data-message][data-role=assistant]",
+    ),
+  ).toHaveCount(0);
+  if (!v2(state)) {
+    await expect(page.locator("[data-message]")).toHaveCount(0);
+    return;
+  }
+  const records = page.locator("[data-message][data-role=context]");
+  for (const row of await records.all()) {
+    await expect(
+      row.locator(
+        '[data-native-record="opencode-v2/agent-switched"], [data-native-record="opencode-v2/model-switched"]',
+      ),
+    ).toHaveCount(1);
+  }
+}
+
+/** A compaction summary's content: V2 shows it in the flow; V1 keeps it in the
+ * summary boundary's closed body (NT4, UX1), opened the user's way. */
+export async function expectCompactionSummary(
+  state: TestState,
+  page: Page,
+  text: string,
+  timeout?: number,
+) {
+  if (v2(state)) {
+    await expect(page.locator(".otk-messages")).toContainText(text, {
+      timeout,
+    });
+    return;
+  }
+  const { selector } = compactionBoundary(state);
+  await expect.poll(async () => {
+    for (const row of await page.locator(selector).all()) {
+      const toggle = row.locator("> .otk-tool-state > .otk-tool-toggle");
+      if (await toggle.getAttribute("aria-expanded") !== "true") {
+        await toggle.click();
+      }
+    }
+    return await page.locator(selector).filter({ hasText: text }).count();
+  }, { timeout }).toBeGreaterThan(0);
+}
+
+/** Restored prompts by acquired-message authority, each revealed in the DOM. */
+export async function expectRestoredPrompts(
+  state: TestState,
+  page: Page,
+  sessionID: string,
+  count: number,
+) {
+  let ids: string[] = [];
+  await expect.poll(async () => {
+    const page = await state.product("session.messages", { sessionID }) as {
+      items: { id: string; role: string }[];
+    };
+    ids = page.items.filter((m) => m.role === "user").map((m) => m.id);
+    return ids.length;
+  }).toBe(count);
+  for (const id of ids) {
+    await revealAcquired(page, `[data-message="${id}"] .otk-user-bubble`);
+  }
+}

@@ -127,6 +127,8 @@ export default function Message(
       text: (part: Part) => string | undefined,
     ): Promise<string>;
     copyIncomplete?: boolean;
+    /** The transcript's one in-flow progress for an active native record. */
+    activeRecord?: boolean;
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
@@ -200,6 +202,7 @@ export default function Message(
       (props.message.role === "assistant" ? props.message : undefined);
   const streaming = () =>
     props.message.role === "assistant" && !isAssistantTerminal(props.message);
+  const progress = () => streaming() || !!props.activeRecord;
   // Only the adapter's shared accumulator supplies a whole-turn duration.
   const time = () => derivedValue(props.summary)?.timing;
   const error = () =>
@@ -290,7 +293,7 @@ export default function Message(
                   </Show>
                 )}
               />
-              <Show when={streaming() && frame().id === frames().at(-1)?.id}>
+              <Show when={progress() && frame().id === frames().at(-1)?.id}>
                 <ResponseProgress />
               </Show>
             </div>

@@ -86,6 +86,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
         "is-open": !!expanded(),
       }]}
       data-native-record={name()}
+      data-activity-state={activity()?.state?.key}
     >
       <header class="otk-tool-state otk-control-row">
         <Show
