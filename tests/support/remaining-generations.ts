@@ -36,8 +36,8 @@ export function observeCatalogWatches(backend: Harness) {
   assert(catalogs);
   const originalWatch = port.watch, originalAcquire = catalogs.acquire;
   let entering: CatalogWatchObservation | undefined;
-  catalogs.acquire = (directory) => {
-    const lease = originalAcquire.call(catalogs, directory),
+  catalogs.acquire = (directory, subscription) => {
+    const lease = originalAcquire.call(catalogs, directory, subscription),
       observation = entering;
     if (!observation) return lease;
     assertEquals(directory, observation.directory);
@@ -97,7 +97,12 @@ interface Generation {
   socket: string;
   hellos: number;
   welcomes: number;
-  requests: { method: string; directory: unknown }[];
+  requests: {
+    method: string;
+    directory: unknown;
+    kinds?: unknown;
+    intent?: unknown;
+  }[];
 }
 const discovery =
   /^(?:catalogs\.|agents\.list|models\.list|commands\.list|resources\.list|find\.files|frecency\.list)/;
@@ -140,6 +145,8 @@ export function catalogGenerations(
       generation.requests.push({
         method: frame.method,
         directory: frame.params?.directory,
+        kinds: frame.params?.kinds,
+        intent: frame.params?.intent,
       });
     }
   }
@@ -160,10 +167,16 @@ export function generationDemandReady(
       generation.requests.some((request) =>
         request.method === "catalogs.watch"
       ) &&
-      generation.requests.some((request) => request.method === "frecency.list")
+      generation.requests.some((request) =>
+        request.method === "frecency.list"
+      ) &&
+      generation.requests.some((request) =>
+        request.method === "catalogs.demand"
+      )
     );
 }
 
+/** Choice-only startup/reconnect proof, before any interactive catalog demand. */
 export function assertCatalogGenerations(
   events: readonly SocketEvent[],
   watches: readonly CatalogWatchObservation[],
@@ -181,9 +194,15 @@ export function assertCatalogGenerations(
       continue;
     }
     assertEquals(generation.requests.map((request) => request.method).sort(), [
+      "catalogs.demand",
       "catalogs.watch",
       "frecency.list",
     ]);
+    const demand = generation.requests.find((request) =>
+      request.method === "catalogs.demand"
+    )!;
+    assertEquals(demand.intent, "warm");
+    assertEquals(demand.kinds, ["models", "agents", "commands", "skills"]);
     assert(
       generation.requests.every((request) => request.directory === directory),
     );

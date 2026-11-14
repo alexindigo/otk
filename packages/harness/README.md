@@ -143,6 +143,13 @@ dispatch. `ReadAdmission` is the shared I/O-permission owner used by worker and
 standalone scheduling: waiting for permission does not occupy an executing turn,
 and cancellation joins the actual native exchange before permission is reused.
 
+Directory subscriptions retain a resource without acquiring its kinds. Per-kind
+warm intent uses background priority with no optional idle gate; consumer intent
+uses user priority. Promotion cancels and joins an unfinished acquisition before
+restarting it in the same kind lifetime. Complete last-good values, invalidation
+and native-generation fences remain owned by that resource. Refresh can select
+kinds; unused catalogs and unopened directories are not bootstrapped.
+
 `DigestPort` separates catalog/detail reads and their cancellation from metadata
 invalidations, visible-scope priority, deletion intents and lifecycle. Libraries
 receive `DigestPolicy`; they do not read application environment variables or

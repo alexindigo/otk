@@ -26,14 +26,17 @@ sweep.
 | 5 | `tests/integration/compiled-beta2_test.ts`                                | Tracked compilation recipe, off-source working directory and empty runtime caches; beta.1 upgrade, complete catalog refresh, keyed task result, real native prompt body, no body persistence and restart. The executable's advertised version must match the source's exported release constant, including after release preparation.                         |
 | 6 | `tests/reuse/remaining_test.ts`, `remaining-consumer.ts`                  | 251 session borrows share one directory lifetime;100 partial transfers cannot restore retired values.100 projects×10 visits retain getter-backed current inputs, selected identity and project-scoped metadata rather than per-tab detached index/mark maps.                                                                                                  |
 
-Catalog demand is scoped to each accepted connection generation, identified by
-its actual socket hello/welcome: exactly one `catalogs.watch` and one
-`frecency.list`, zero catalog refreshes and zero legacy per-key discovery calls.
-A real reconnect legitimately acquires that pair again. The fixture observes the
-real native watch lease and subscription, asserting every retired watch is
-released and detached, with no late publication; closing the final browser joins
-the final lease release too. The assertion's negative controls reject duplicate
-demand, missing loads, refreshes and leaked prior-generation leases.
+Initial choice demand is scoped to each accepted connection generation,
+identified by its socket hello/welcome: one passive `catalogs.watch`, one
+`catalogs.demand` warming models/agents/commands/skills and one `frecency.list`,
+with no refresh or legacy per-key discovery calls. The choice-only generation
+proof runs before interactive catalog use; file mentions and resource consumers
+add their own per-kind intents, and reconnect replays current intents. The
+fixture observes the real native watch lease and subscription, asserting every
+retired watch is released and detached, with no late publication; closing the
+final browser joins the final lease release too. The assertion's negative
+controls reject duplicate demand, missing loads, refreshes and leaked
+prior-generation leases.
 
 ## PA evidence
 

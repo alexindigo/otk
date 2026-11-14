@@ -108,8 +108,10 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
               ? { start: 0, end: caret, query: before.slice(1) }
               : undefined;
           },
-          options: (token) =>
-            Promise.resolve(commandOptions(options(), token.query)),
+          options: (token) => {
+            void ctx.directoryCatalog?.ready("commands").catch(ctx.fail);
+            return Promise.resolve(commandOptions(options(), token.query));
+          },
           select(token, option) {
             const command = option.command;
             if (!command) return;

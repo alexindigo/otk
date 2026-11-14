@@ -140,15 +140,21 @@ export function createSkillPicker(
               <button
                 type="button"
                 onClick={() =>
-                  void ctx.directoryCatalog?.refresh().catch(ctx.fail)}
+                  void ctx.directoryCatalog?.view("skills").refresh().catch(
+                    ctx.fail,
+                  )}
               >
                 Refresh
               </button>
             </div>
           </>
         }
-        onOpen={() =>
-          void ctx.directoryCatalog?.ready("skills").catch(ctx.fail)}
+        onOpen={() => {
+          void Promise.all([
+            ctx.directoryCatalog?.ready("skills"),
+            ctx.directoryCatalog?.ready("commands"),
+          ]).catch(ctx.fail);
+        }}
         control={(control) => {
           picker = control;
         }}

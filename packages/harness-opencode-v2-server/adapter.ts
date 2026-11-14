@@ -256,8 +256,10 @@ export class OpencodeV2ServerAdapter implements Harness {
         catalogs: {
           watch: (directory, listener, signal) =>
             this.catalogs!.watch(directory, listener, signal),
-          refresh: (directory, signal) =>
-            this.catalogs!.refresh(directory, signal),
+          demand: (directory, demand, signal) =>
+            this.catalogs!.demand(directory, demand, signal),
+          refresh: (directory, signal, kinds) =>
+            this.catalogs!.refresh(directory, signal, kinds),
         },
         ...(this.catalogs.history ? { history: this.catalogs.history } : {}),
         // Catalog metadata remains available. V2 cannot materialize MCP URI inputs.

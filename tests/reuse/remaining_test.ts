@@ -33,6 +33,7 @@ Deno.test("plain consumer shares 251 session borrows and retires one hundred par
     [];
   const owner = createDirectoryCatalogs({
     codecs: createCatalogCodecs(),
+    demand: () => Promise.resolve(),
     watch: () => {
       watches++;
       const result = Promise.withResolvers<DirectoryCatalog>();

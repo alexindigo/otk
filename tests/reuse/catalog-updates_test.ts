@@ -25,6 +25,7 @@ Deno.test("an independent feature contributes catalog values and chunks without 
   let released = 0;
   const owner = createDirectoryCatalogs({
     codecs: { ...createCatalogCodecs(), "example.choices": codec },
+    demand: () => Promise.resolve(),
     watch: () => ({
       result: Promise.resolve(initial),
       release() {

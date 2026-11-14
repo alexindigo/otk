@@ -493,9 +493,14 @@ An independent consumer can inject a `ProviderReadPort` into
 `DirectoryCatalogs`, plus feature-owned `contributions`; external kinds need no
 machinery edit. Application policy comes from the complete defaults. Catalog
 wire leases are exposed by
-`capabilities.catalogs.watch(directory,listener,signal)` and
-`refresh(directory,signal?)`. Watch cancellation releases the exact borrowed
-lease. Compatibility methods still borrow the same acquisition owner.
+`capabilities.catalogs.watch(directory,listener,signal)`,
+`demand(directory,{kinds,intent},signal?)` and
+`refresh(directory,signal?,kinds?)`. Watching is passive; per-kind warm and
+consumer intents use the same acquisition owner at background and user priority.
+File demand borrows the subscription lifetime; the last subscription releases
+its file tree/watch even if a standalone choice borrower remains. Pending user
+requests keep their independent attention authority. Compatibility methods still
+borrow the same acquisition owner.
 
 ### Reusable digest sink
 

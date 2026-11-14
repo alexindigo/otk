@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { dirname, isAbsolute, relative } from "@std/path";
 import type { CatalogFileListing } from "./catalog-reads.ts";
-import type { ProviderReadPort } from "./provider-reads.ts";
+import type {
+  ProviderReadOptions,
+  ProviderReadPort,
+} from "./provider-reads.ts";
 import type { CatalogFile } from "@otk/protocol";
 
 /** Directory-listing tree, owned only by the volatile catalog resource. */
@@ -42,7 +45,10 @@ export class CatalogFiles {
       }
     }
   }
-  async read(signal: AbortSignal): Promise<CatalogFile[]> {
+  async read(
+    signal: AbortSignal,
+    priority: ProviderReadOptions["priority"] = "user",
+  ): Promise<CatalogFile[]> {
     const staged = new Map(this.#listings);
     const dirty = this.#dirty.size ? [...this.#dirty] : staged.size ? [] : [""];
     const full = this.#full;
@@ -66,7 +72,7 @@ export class CatalogFiles {
         const listing = await this.reads.read("catalog.files", {
           directory: this.directory,
           path,
-        }, { owner: this.owner, priority: "visible", signal });
+        }, { owner: this.owner, priority, signal });
         signal.throwIfAborted();
         if (physical.has(listing.physical)) {
           staged.delete(path);

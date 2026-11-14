@@ -83,9 +83,22 @@ export interface DirectoryCatalog {
   paths: PathSemantics;
   values: CatalogValues;
 }
+/** Subscription retains values; only an explicit per-kind intent admits acquisition. */
+export type CatalogDemandIntent = "warm" | "consumer";
+export interface CatalogDemand {
+  kinds: (keyof DirectoryCatalogKinds)[];
+  intent: CatalogDemandIntent;
+}
 export interface CatalogRpcMethods {
   "catalogs.watch": { params: { directory: string }; result: DirectoryCatalog };
-  "catalogs.refresh": { params: { directory: string }; result: null };
+  "catalogs.demand": {
+    params: { directory: string } & CatalogDemand;
+    result: null;
+  };
+  "catalogs.refresh": {
+    params: { directory: string; kinds?: (keyof DirectoryCatalogKinds)[] };
+    result: null;
+  };
 }
 export interface CatalogsCapability {
   watch(
@@ -93,7 +106,16 @@ export interface CatalogsCapability {
     listener: (value: DirectoryCatalog) => void,
     signal: AbortSignal,
   ): Promise<DirectoryCatalog>;
-  refresh(directory: string, signal?: AbortSignal): Promise<void>;
+  demand(
+    directory: string,
+    demand: CatalogDemand,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  refresh(
+    directory: string,
+    signal?: AbortSignal,
+    kinds?: readonly (keyof DirectoryCatalogKinds)[],
+  ): Promise<void>;
 }
 export interface CatalogsCapabilities {
   catalogs: CatalogsCapability;
@@ -101,6 +123,7 @@ export interface CatalogsCapabilities {
 export const catalogRequestMetadata: Readonly<Record<string, RequestMetadata>> =
   {
     "catalogs.watch": { kind: "lease", pending: "Preparing project choices" },
+    "catalogs.demand": { kind: "read", pending: "Loading project choices" },
     "catalogs.refresh": { kind: "read", pending: "Refreshing project choices" },
   };
 /** Each selected feature contributes its own item contract and codec. */
