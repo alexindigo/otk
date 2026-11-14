@@ -30,15 +30,19 @@ import {
   actionFeedback,
   clearDraft,
   createFailurePresenter,
+  createPrimaryAction,
   createSubmissionIntent,
   effectiveSelection,
   type Feedback,
+  promptUnavailable,
 } from "@otk/client";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
+import PrimaryAction from "./PrimaryAction.tsx";
+import { bindPrimaryAction } from "../state/primary-action.ts";
 
 const INTERRUPT_WINDOW_MS = 5000;
 
@@ -134,26 +138,32 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       ctx.focus();
     }
   });
-  const canSubmit = () =>
-    !props.suspended && props.connected &&
-    (features.map((feature) => feature.enabled?.()).find((value) =>
-      value !== undefined
-    ) ?? ctx.supports("prompt"));
+  const facts = () => ({
+    active,
+    suspended: !!props.suspended,
+    connected: props.connected,
+    supported:
+      features.map((feature) => feature.enabled?.()).find((value) =>
+        value !== undefined
+      ) ?? ctx.supports("prompt"),
+    content: hasDraftContent(props.value),
+    chips: props.value.chips,
+  });
+  const unavailable = () => promptUnavailable(facts());
+  const composerReady = () =>
+    promptUnavailable({ ...facts(), content: true, chips: [] }) === undefined;
   const submit = async () => {
-    if (!canSubmit()) return;
+    if (!primary.permitted()) return;
     session?.feedback?.clear();
     setFeedback(undefined);
     input.focus();
     await ctx.ready();
-    if (!active || !canSubmit()) return;
+    if (!primary.permitted()) return;
     const draft = change((current) => current);
     for (const feature of features) {
       if (await feature.beforeSubmit?.(draft)) return;
     }
-    if (
-      !active || !hasDraftContent(draft) || !canSubmit() ||
-      draft.chips.some((chip) => chip.pending || chip.error)
-    ) return;
+    if (!primary.permitted()) return;
     return draft;
   };
   const performSend = async (draft: PromptProps["value"]) => {
@@ -177,6 +187,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
+  const primary = createPrimaryAction({
+    label: () => "Send",
+    unavailable,
+    pending,
+    pendingReason: "Sending",
+    run: () => intent.submit(submit, performSend),
+  });
+  const primaryState = bindPrimaryAction(primary);
   const send = ownedCommand(ports, {
     id: "prompt.send",
     title: "Send prompt",
@@ -189,7 +207,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         selection: { type: "object" },
       },
     },
-    enabled: canSubmit,
+    enabled: composerReady,
     run: (
       _ctx,
       args: {
@@ -203,8 +221,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
-    enabled: canSubmit,
-    run: () => intent.submit(submit, performSend),
+    // While the composer can send, Enter stays the Send key: the primary owner
+    // refuses an empty, blocked or pending draft instead of the key editing it.
+    enabled: composerReady,
+    run: () => primary.invoke(),
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -401,19 +421,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           </span>
         </Show>
         <div class="otk-prompt-send-slot">
-          <Show
-            when={!pending() && canSubmit() && hasDraftContent(props.value) &&
-              !props.value.chips.some((chip) => chip.pending || chip.error)}
+          <PrimaryAction
+            type="submit"
+            state={primaryState()}
+            class="otk-primary otk-send-button"
+            title={submitTitle()}
+            onInvoke={() => void submitCommand().catch(ctx.fail)}
           >
-            <button
-              type="submit"
-              class="otk-primary otk-send-button"
-              aria-label="Send"
-              title={submitTitle()}
-            >
-              <SendIcon />
-            </button>
-          </Show>
+            <SendIcon />
+          </PrimaryAction>
         </div>
       </div>
       <Show when={!session?.feedback && (pending() || feedback())}>

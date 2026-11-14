@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
-import { failureText } from "@otk/client";
+import { createPrimaryAction, failureText } from "@otk/client";
+import PrimaryAction from "./PrimaryAction.tsx";
+import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./QuestionDock.css" with { type: "text" };
 import Takeover from "./surface/Takeover.tsx";
 import Tabs from "./Tabs.tsx";
@@ -80,7 +82,8 @@ function Request(
   },
 ) {
   const form = createQuestionForm(props.request, solidState);
-  const feedback = useSessionPorts()?.feedback;
+  const session = useSessionPorts();
+  const feedback = session?.feedback;
   const operation = bindFeedback(() => feedback);
   const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
@@ -110,7 +113,7 @@ function Request(
     },
   );
   const reply = async (answers?: string[][]) => {
-    if (pending()) return;
+    if (pending() || !primary.permitted()) return;
     setPending(true);
     feedback?.clear();
     setError("");
@@ -125,7 +128,7 @@ function Request(
       if (alive) setPending(false);
     }
   };
-  const submit = () => reply(form.answers());
+  const submit = () => primary.invoke("submit");
   const ports = useCommandPorts();
   const reject = ownedCommand(ports, {
     id: "question.reject",
@@ -145,7 +148,27 @@ function Request(
       } else return reject();
     },
   });
-  const answer = () => (onReview() ? submit() : form.next());
+  const primary = createPrimaryAction<"answer" | "submit">({
+    label: () => "Answer",
+    unavailable: () =>
+      !alive
+        ? "Question is no longer active"
+        : session?.connected?.() === false
+        ? "Reconnect to answer"
+        : undefined,
+    pending,
+    pendingReason: "Sending answer",
+    run: (intent) =>
+      intent === "submit" || onReview() ? reply(form.answers()) : form.next(),
+  });
+  const primaryState = bindPrimaryAction(primary);
+  const answer = ownedCommand(ports, {
+    id: "question.answer",
+    title: "Answer question",
+    category: "Attention",
+    enabled: () => primaryState().available,
+    run: () => primary.invoke("answer"),
+  });
   const goTo = (target: number) => {
     form.goTo(target);
     setCollapsed(false);
@@ -282,49 +305,44 @@ function Request(
             onCollapse={setCollapsed}
           />
         }
-        actions={pending() && props.focusNotice && operation()
-          ? undefined
-          : (
-            <div class="otk-question-actions">
-              <Show when={pending() && !(props.focusNotice && operation())}>
-                <FeedbackStatus
-                  ref={(element) => pendingStatus = element}
-                  focusable
-                  feedback={{ kind: "pending", text: "Sending answer…" }}
-                />
-              </Show>
-              <button
-                type="button"
-                class="otk-primary otk-pill"
-                ref={(element) => {
-                  advance = element;
-                }}
-                hidden={pending()}
-                onClick={() => void answer()}
-                title={onReview() ? "Send the answers" : "Next step"}
-              >
-                Answer
-              </button>
-              <button
-                type="button"
-                class="otk-pill"
-                hidden={pending()}
-                onClick={() => void reject()}
-                title="Skip question (Esc with question controls focused)"
-              >
-                Skip question
-              </button>
-              <button
-                type="button"
-                class="otk-pill otk-question-submit"
-                hidden={pending()}
-                onClick={() => void submit()}
-                title="Send the answers given so far"
-              >
-                Submit
-              </button>
-            </div>
-          )}
+        actions={() => (
+          <div class="otk-question-actions">
+            <PrimaryAction
+              state={primaryState()}
+              class="otk-primary otk-pill"
+              ref={(element) => {
+                advance = element;
+              }}
+              onInvoke={() => void answer()}
+              title={onReview() ? "Send the answers" : "Next step"}
+            />
+            <Show when={pending() && !(props.focusNotice && operation())}>
+              <FeedbackStatus
+                ref={(element) => pendingStatus = element}
+                focusable
+                feedback={{ kind: "pending", text: "Sending answer..." }}
+              />
+            </Show>
+            <button
+              type="button"
+              class="otk-pill"
+              hidden={pending()}
+              onClick={() => void reject()}
+              title="Skip question (Esc with question controls focused)"
+            >
+              Skip question
+            </button>
+            <button
+              type="button"
+              class="otk-pill otk-question-submit"
+              hidden={pending()}
+              onClick={() => void submit()}
+              title="Send the answers given so far"
+            >
+              Submit
+            </button>
+          </div>
+        )}
       >
         <Show
           when={!pending()}

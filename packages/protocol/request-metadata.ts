@@ -4,6 +4,9 @@ export interface RequestMetadata {
   readonly pending: string;
   /** Secondary persistence must not replace the user's still-pending action. */
   readonly presentation?: "bookkeeping";
+  /** Native request class this mutation settles, identified by `requestID`.
+   * One connection admits one settlement per request, from any caller. */
+  readonly settles?: "permission" | "input";
 }
 /** Feature-owned descriptions, never execution dispatch or displayable method names. */
 export class RequestMetadataRegistry {

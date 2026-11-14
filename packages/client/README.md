@@ -120,6 +120,13 @@ there is no recall-specific failure timer.
 
 ## Request event consumers
 
+`createPrimaryAction` owns the composer's persistent primary affordance, live
+availability/reason, synchronous pending admission and invocation. Its inputs
+borrow current draft, connection and request state; it retains no second draft
+or RPC lifetime. `promptUnavailable` projects ordinary Send's draft facts. Every
+invocation rechecks the same contract, including after asynchronous preparation,
+while the existing submission intent retains captured send settlement.
+
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
 values, synchronous pending reservation, joined submission promise and safe
 feedback. `capture` is injected so native form APIs stay at the UI boundary.
@@ -178,6 +185,14 @@ independent of later visit bookkeeping. `Rpc.feedback(owner)` borrows request
 state and retains classified local feedback by target across view replacement;
 it never renders method names or exception prose. `RequestTracker.subscribe`
 observes these state transitions without a second pending map.
+
+Request metadata `settles` names the native request a mutation answers
+(`permission`, or `input` for questions and forms, which share V2 form
+identities). Rpc admits one settlement per `requestID` on its connection: a
+repeated identical call from any caller, remounted view or notification joins
+the same operation, a different answer for the same request fails as a conflict,
+and a success stays admitted while the removal event is in transit. Only a
+failure, or a release before submission, frees the request for a new attempt.
 
 `Rpc.ownsFailure(cause)` identifies a structured failure only when that exact
 diagnostic belongs to an installed target feedback sink. Transient command
@@ -1151,9 +1166,12 @@ registration identity, including after an item was armed.
 sidecar/permission identity and one shared scheduler. Accepted evidence/content
 arrivals and settlements feed it independently of mounted views. Composer
 eligibility and reduced-motion lamp paint borrow that same deadline; late
-mounts, duplicates and preference changes never start another grace. Questions
-remain immediate. Supervision, mandatory visibility, notification routing,
-badges and sound do not consume this presentation delay.
+mounts, duplicates and preference changes never start another grace. A fresh
+inventory that no longer lists a presented request retires it from lamp grace
+but keeps its one deadline until the content removal settles it, so a reply's
+index update cannot hide and re-present the takeover. Questions remain
+immediate. Supervision, mandatory visibility, notification routing, badges and
+sound do not consume this presentation delay.
 
 `createApprovals(rpc, lookup, factory?)` is a per-sidecar authoritative policy
 and activity resource. Welcome invalidates older operations; `approvals` frames

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
@@ -15,8 +16,9 @@ test.describe("core capabilities", () => {
     );
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Keep my draft");
-    await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(
-      0,
+    await expectPrimaryBlocked(
+      page.locator(".otk-prompt button[type=submit]"),
+      "Sending is not supported here",
     );
     await input.press("Enter");
     await input.press("Escape");
@@ -151,9 +153,12 @@ test.describe("initial capabilities", () => {
       );
       await expect(page.locator(".otk-question-dock")).toBeVisible();
       await expect(page.locator(".otk-prompt")).toBeHidden();
-      await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(
-        0,
-      );
+      // The takeover's own primary replaces the hidden composer's Send.
+      await expect(page.locator(".otk-prompt button[type=submit]"))
+        .toBeHidden();
+      await expect(
+        page.locator(".otk-question-dock [data-primary-action]"),
+      ).toBeVisible();
       await expect(page.locator("textarea[name=prompt]")).toHaveValue(
         "Keep initial draft",
       );

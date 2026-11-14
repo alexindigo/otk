@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  send as composerSend,
+} from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
@@ -125,11 +129,10 @@ test.describe("native shell", () => {
       frames.sent.some(({ frame }) => frame.t === "request.resume")
     ).toBe(true);
     await expect(input).toHaveValue("New draft survives the old receipt");
-    await expect(
-      page.locator(
-        ".otk-composer-dock [role=alert],.otk-prompt button[type=submit]",
-      ),
-    ).toHaveCount(0);
+    await expect(page.locator(".otk-composer-dock [role=alert]"))
+      .toHaveCount(0);
+    // The resumed receipt still owns the send; the new draft cannot add one.
+    await expectPrimaryBlocked(composerSend(page), "Sending");
     expect(
       (await state.observe<{ transport: { effects: number } }>()).transport
         .effects,

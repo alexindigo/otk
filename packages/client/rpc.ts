@@ -61,6 +61,11 @@ export class Rpc {
   readonly intents: IntentGroups = new IntentGroups(() => this.intent());
   readonly metadata: RequestMetadataRegistry = createRequestMetadata();
   #feedback = new Map<string, FeedbackOwner>();
+  /** Native request identity -> its one admitted settlement on this connection. */
+  #settlements = new Map<
+    string,
+    { method: string; canonical: string; operation: Operation<unknown> }
+  >();
   /** Only an installed target sink with this exact diagnostic owns presentation. */
   ownsFailure(cause: unknown): boolean {
     return cause instanceof RequestFailure &&
@@ -114,11 +119,10 @@ export class Rpc {
       this.#feedback.get(owner)?.clear();
     }
     const intent = options.intent ?? this.intent();
-    let captured: RpcParams<M>;
+    let captured: RpcParams<M>, canonical: string;
     try {
-      captured = JSON.parse(canonicalRequest(wireParams(params))) as RpcParams<
-        M
-      >;
+      canonical = canonicalRequest(wireParams(params));
+      captured = JSON.parse(canonical) as RpcParams<M>;
     } catch (cause) {
       const failure = new RequestFailure({
         code: "request.params",
@@ -150,7 +154,43 @@ export class Rpc {
       failure.cause = cause;
       throw failure;
     }
-    return this.requests.start(method, captured, { ...options, intent });
+    const settles = this.metadata.get(method)?.settles;
+    const subject = settles && typeof fields.requestID === "string"
+      ? JSON.stringify([settles, fields.requestID])
+      : undefined;
+    if (subject === undefined) {
+      return this.requests.start(method, captured, { ...options, intent });
+    }
+    // Any caller, view lifetime or remount joins the request's one settlement.
+    const prior = this.#settlements.get(subject);
+    if (prior) {
+      if (prior.method === method && prior.canonical === canonical) {
+        return prior.operation as Operation<RpcResult<M>>;
+      }
+      throw new RequestFailure({
+        code: "request.conflict",
+        retry: "none",
+        diagnosticID: crypto.randomUUID(),
+      });
+    }
+    const operation = this.requests.start(method, captured, {
+      ...options,
+      intent,
+    });
+    const record = { method, canonical, operation };
+    const retire = () => {
+      const phase = operation.state.phase;
+      if (phase === "succeeded") return stop();
+      if (phase !== "failed" && phase !== "released") return;
+      stop();
+      if (this.#settlements.get(subject) === record) {
+        this.#settlements.delete(subject);
+      }
+    };
+    const stop = operation.subscribe(retire);
+    this.#settlements.set(subject, record);
+    retire();
+    return operation;
   }
   call<M extends RpcMethod>(
     method: M,

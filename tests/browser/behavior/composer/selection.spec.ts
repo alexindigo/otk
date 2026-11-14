@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  send as composerSend,
+} from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { revealTool } from "../../pages/transcript.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -280,9 +284,7 @@ test.describe("applied choices", () => {
       "aria-label",
       "Variant: High (agent default)",
     );
-    await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(
-      0,
-    );
+    await expectPrimaryBlocked(composerSend(page), "Write a message");
     for (
       const [kind, label] of [["agent", "Reviewer (agent default)"], [
         "model",

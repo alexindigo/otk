@@ -111,6 +111,8 @@ it never cancels an operation or stores a second pending map.
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use
 the same slot, so a metadata refresh cannot reset an open rollback disclosure.
+Takeover action footers use that same factory lifetime, so pending state cannot
+replace the persistent primary control or duplicate its native event lifetime.
 
 `ActionSlot` supplies one shared grid cell for an action and its pending status,
 retaining intrinsic control geometry while unavailable controls are hidden. Its
@@ -125,8 +127,9 @@ uses the same reserved field track. Registered takeovers receive an optional
 focus the one joined notice rather than a hidden action or duplicate status.
 Independent takeovers without that port retain a local status cell. Takeovers
 size to their visible content: local failures mount in-flow status only while
-present, rather than reserving a field-feedback track. A question whose pending
-status lives in the joined notice supplies no empty action footer.
+present, rather than reserving a field-feedback track. The primary action
+remains in the question footer even when its pending status lives in the joined
+notice.
 
 CommandProvider can inject `failureOwned(cause)` from the client resource owner.
 Menus, palette and message actions then defer an exactly correlated failure to
@@ -340,8 +343,16 @@ internally with the caret; deleting text or clearing a sent draft shrinks it.
 The footer stays in flow beneath the input as the dock gives space back to the
 transcript above. Editor/history replacements use the same textarea value path,
 and automatic sizing has no manual resize grip or per-caller sizing logic. The
-Send slot retains its shared control geometry while an unavailable Send action
-is absent, so empty, pending and sendable drafts keep the same footer.
+Send control stays mounted in its shared geometry for empty, pending, offline,
+unsupported and attachment-blocked drafts. It is disabled with its actual reason
+in its tooltip and accessible description. This primary-action exception does
+not change secondary actions' hide-when-unavailable policy. Prompt and active
+question, permission and form takeovers render the same `PrimaryAction` control
+from the framework-free client owner. Pointer and Enter intents recheck that
+owner before submission; while the composer can send, Enter stays the Send key
+and never edits an empty, blocked or pending draft. Native request replies are
+additionally admitted once per request by the connection, whatever the view
+lifetime. Running turns keep Send and today's native delivery.
 
 Image uploads contribute independent chips: one contained thumbnail beside the
 label and explicit remove button, without inserting a textarea token. Shared

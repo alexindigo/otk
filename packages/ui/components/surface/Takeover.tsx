@@ -10,7 +10,7 @@ import ContentSlot from "../ContentSlot.tsx";
  */
 export default function Takeover(props: {
   title: Element;
-  actions?: Element;
+  actions?: () => Element;
   collapsed?: boolean;
   notice?: () => Element;
   children: Element;
@@ -29,7 +29,9 @@ export default function Takeover(props: {
       </Show>
       <Surface
         title={props.title}
-        actions={props.collapsed ? undefined : props.actions}
+        actions={props.collapsed || !props.actions
+          ? undefined
+          : <ContentSlot content={props.actions} />}
       >
         {props.children}
       </Surface>

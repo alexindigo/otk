@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  send as composerSend,
+} from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
@@ -209,9 +213,7 @@ test(
     await expect(chips(page).locator("img")).toHaveCount(1);
     await chips(page).getByRole("button", { name: /^Remove/ }).click();
     await expect(chips(page)).toHaveCount(0);
-    await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(
-      0,
-    );
+    await expectPrimaryBlocked(composerSend(page), "Write a message");
     await upload(page, [{ name: "notes.txt", bytes: btoa("plain bytes") }]);
     await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
     await state.queue(["File received."]);
@@ -273,7 +275,7 @@ test("composer.pending-image-session-owner-and-removal-fence", {
   await completeUpload(page, 1);
   await expect(chips(page)).toHaveCount(0);
   await expect(prompt(page)).toHaveValue("");
-  await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(0);
+  await expectPrimaryBlocked(composerSend(page), "Write a message");
   expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
     .toHaveLength(0);
 });

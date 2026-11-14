@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -17,7 +18,7 @@ test.describe("live hints", () => {
         "Send (Enter); Shift+Enter for newline; Esc twice to interrupt";
       const reboundTitle =
         "Send (Ctrl+Enter); Alt+Enter for newline; Ctrl+q twice to interrupt";
-      await expect(button).toHaveCount(0);
+      await expectPrimaryBlocked(button, "Write a message");
       await prompt(page).fill("Inspect current shortcut hints");
       await page.locator(".otk-keys-entry").click();
       await expect(page.locator('[data-binding="prompt.submit"] kbd'))
