@@ -1,44 +1,40 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { DatabaseSync } from "node:sqlite";
 import { type OtkDb, Seen } from "@otk/store";
 import { BootstrapDb, opencodeV1SessionID } from "@otk/harness-opencode-v1";
+import {
+  opencodeV2SessionID,
+  V2NativeDb,
+} from "@otk/harness-opencode-v2-server";
 
 function* terminals(
   path: string,
   kind: "opencode-v1" | "opencode-v2-server",
 ): Generator<{ id: unknown; terminal: unknown }> {
-  if (kind === "opencode-v1") {
-    // The adapter owns terminal qualification and historical retention. A
-    // fixture must not maintain a second, diverging native selection rule.
-    const native = new BootstrapDb(path, (_level, message, error) => {
+  // Native readers own terminal qualification and historical retention. This
+  // fixture only paginates their inventory and maps exact manifest identities.
+  const native = kind === "opencode-v1"
+    ? new BootstrapDb(path, (_level, message, error) => {
       throw error ?? new Error(message);
-    });
-    try {
-      let after = "";
-      for (;;) {
-        const rows = native.terminals(after, 200);
-        if (!rows.length) return;
-        for (const row of rows) {
-          yield {
-            id: opencodeV1SessionID.decode(row.id),
-            terminal: row.activity?.terminal,
-          };
-        }
-        after = rows.at(-1)!.id;
+    })
+    : new V2NativeDb(path);
+  const sessionIDs = kind === "opencode-v1"
+    ? opencodeV1SessionID
+    : opencodeV2SessionID;
+  try {
+    let after = "";
+    for (;;) {
+      const rows = native.terminals(after, 200);
+      if (!rows.length) return;
+      for (const row of rows) {
+        yield {
+          id: sessionIDs.decode(row.id),
+          terminal: row.activity?.terminal,
+        };
       }
-    } finally {
-      native.close();
+      after = rows.at(-1)!.id;
     }
-  } else {
-    const native = new DatabaseSync(path, { readOnly: true });
-    try {
-      yield* native.prepare(
-        `SELECT id, time_idle AS terminal FROM session_v2
-          WHERE idle_outcome IN ('succeeded', 'failed', 'interrupted')`,
-      ).all() as { id: unknown; terminal: unknown }[];
-    } finally {
-      native.close();
-    }
+  } finally {
+    native.close();
   }
 }
 
