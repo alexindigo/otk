@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import {
+  compactionBoundary,
+  expectCompactionSummary,
+  prompt,
+} from "../../pages/transcript.ts";
 import { acquireOlderHistory } from "../../pages/history.ts";
 
 test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
@@ -29,12 +33,11 @@ test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
   await state.queue(["## Objective\n\nTimeline compaction summary."]);
   await page.keyboard.press("Control+k");
   await page.locator('[data-command="session.compact"]').click();
-  await expect(page.locator(".otk-messages")).toContainText(
-    "Timeline compaction summary.",
-  );
-  await expect(page.locator(".otk-compaction-divider")).toHaveText(
-    "Session compacted",
-  );
+  // NT4: V1 compaction is a plugin boundary record whose summary is in its
+  // closed body; V2 keeps the divider and summary in the flow.
+  const compaction = compactionBoundary(state);
+  await expectCompactionSummary(state, page, "Timeline compaction summary.");
+  await expect(page.locator(compaction.title)).toHaveText(compaction.completed);
   await page.locator("[data-panel-view=timeline]").click();
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
   expect(await page.locator(".otk-timeline-preview").allTextContents()).toEqual(
@@ -80,10 +83,9 @@ test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
   await row.locator('[data-message-command="prompt.revert"]').click();
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(0);
   await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    // V1 stores compaction as a user prompt; V2 stores provider context.
-    state.controller.info!.version.startsWith("2.")
-      ? "3 prompts rolled back"
-      : "4 prompts rolled back",
+    // Content-proven prompts on both harnesses: V1's compaction marker user
+    // row is not a prompt (NT4, FX9), as V2 compaction is its own record.
+    "3 prompts rolled back",
   );
   await page.locator(".otk-rollback-disclosure").click();
   await page.locator(".otk-rollback-footer button").click();

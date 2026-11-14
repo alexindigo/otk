@@ -2,7 +2,11 @@
 import { expect } from "../fixtures/evidence.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { openSession } from "../fixtures/wire.ts";
-import { prompt } from "../pages/transcript.ts";
+import {
+  compactionBoundary,
+  expectCompactionSummary,
+  prompt,
+} from "../pages/transcript.ts";
 import { sessionContext } from "../pages/sessions.ts";
 
 test.use({ profile: "revert-native" });
@@ -18,7 +22,9 @@ test(
       messages: [{ parts: [{ type: "text", text: "Context to summarize" }] }],
     });
     await openSession(state, page, session.id);
-    const divider = page.locator(".otk-compaction-divider");
+    // NT4: V1 compaction is a plugin boundary record; V2 keeps the divider.
+    const compaction = compactionBoundary(state);
+    const divider = page.locator(compaction.title);
     const capture = async (phase: string) => {
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await state.product("prefs.set", { key: "theme", value: theme });
@@ -41,13 +47,11 @@ test(
       "session.compact",
     );
     await page.keyboard.press("Escape");
-    await expect(divider).toHaveText("Compacting\u2026");
+    await expect(divider).toHaveText(compaction.running);
     await capture("running");
     await state.release(gate.gate);
-    await expect(divider).toHaveText("Session compacted");
-    await expect(page.locator(".otk-messages")).toContainText(
-      "A native compaction summary.",
-    );
+    await expect(divider).toHaveText(compaction.completed);
+    await expectCompactionSummary(state, page, "A native compaction summary.");
     if (state.controller.info!.version.startsWith("2.")) {
       await expect(
         page.locator(".otk-user-bubble").filter({
@@ -59,7 +63,7 @@ test(
       .toHaveAttribute("data-status", "idle");
     await capture("completed");
     await page.reload();
-    await expect(divider).toHaveText("Session compacted");
+    await expect(divider).toHaveText(compaction.completed);
     // V2 reports a native failed compaction record; V1 accepts free-form summaries.
     if (state.controller.info!.version.startsWith("2.")) {
       await state.queue(["Fresh context before failure."]);

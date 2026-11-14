@@ -4,7 +4,7 @@ import {
   send as composerSend,
 } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
-import { revealTool } from "../../pages/transcript.ts";
+import { revealTool, shellRun } from "../../pages/transcript.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
@@ -216,8 +216,9 @@ test.describe("native picker choices", () => {
     ]);
     await prompt(page).pressSequentially("echo PICKER-SHELL");
     await prompt(page).press("Enter");
-    await revealTool(page, "[data-tool=bash][data-tool-status=completed]");
-    await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
+    // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
+    await revealTool(page, shellRun(state, "completed"));
+    await expect(page.locator(shellRun(state, "completed")))
       .toContainText("PICKER-SHELL");
     const shell = frames.sent.filter(({ frame }) =>
       frame.method === "session.shell"
