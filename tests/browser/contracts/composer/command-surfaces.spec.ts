@@ -137,6 +137,42 @@ test("composer.skills-picker-retains-native-identities-and-name-conflicts", {
   await expect(prompt(page)).toHaveValue("");
 });
 
+test("composer.skills-refresh-retains-native-button-keyboard-activation", {
+  tag: ["@composer", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const frames = await wire(page);
+  const session = await state.native<{ id: string }>("/session", "POST", {
+    title: "Skill refresh keyboard ownership",
+  });
+  await openSession(state, page, session.id);
+  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await prompt(page).fill("/skills");
+  await prompt(page).press("Enter");
+  const search = page.getByRole("combobox", { name: "Search skills" });
+  await expect(search).toBeFocused();
+  await search.fill("canary");
+  const refresh = page.locator(".otk-skills-picker").getByRole("button", {
+    name: "Refresh",
+    exact: true,
+  });
+  await refresh.focus();
+  const before = frames.sent.length;
+  await refresh.press("Enter");
+  await expect(search).toBeVisible();
+  await expect.poll(() =>
+    frames.sent.slice(before).filter(({ frame }) =>
+      frame.method === "catalogs.refresh"
+    ).length
+  ).toBe(1);
+  expect(
+    frames.sent.slice(before).filter(({ frame }) =>
+      ["session.prompt", "session.command", "session.shell"].includes(
+        frame.method ?? "",
+      )
+    ),
+  ).toHaveLength(0);
+});
+
 test(
   "composer.native-compact-runs-once-with-the-effective-model-and-unsupported-never-prompts",
   {
