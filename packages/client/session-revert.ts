@@ -131,6 +131,7 @@ export function createSessionRevert(options: {
       previousBoundary,
     );
     const controller = operation = new AbortController();
+    let nativeCleared = false;
     pending = true;
     store.update((state) => {
       state.pending = kind;
@@ -161,14 +162,8 @@ export function createSessionRevert(options: {
         )
         : await options.actions.restore(captured, change);
       if (result.revert) transaction?.staged(result.revert.messageID);
-      if (!active()) {
-        // The native clear settled for its captured session, not the new view.
-        // The draft owner fences both newer edits and replacement transactions.
-        if ((kind === "restore" || kind === "redo") && !result.revert) {
-          restoreDraft();
-        }
-        return;
-      }
+      nativeCleared = (kind === "restore" || kind === "redo") && !result.revert;
+      if (!active()) return;
       // RPC completion admits the mutation. The selected transcript remains
       // authoritative, including a resync that is still reading its messages.
       const boundary = result.revert?.messageID;
@@ -194,8 +189,6 @@ export function createSessionRevert(options: {
       const entry = result.revert?.prompt;
       if (kind === "undo" && entry) {
         transaction!.recall(historyDraft(entry));
-      } else if ((kind === "redo" || kind === "restore") && !boundary) {
-        restoreDraft();
       }
     } catch (error) {
       observe();
@@ -208,6 +201,9 @@ export function createSessionRevert(options: {
         });
       }
     } finally {
+      // Confirmed mutation settlement outlives the selected view's publication
+      // wait. The captured restorer fences newer edits and replacement revisions.
+      if (nativeCleared) restoreDraft();
       observe();
       if (alive && generation === current) {
         pending = false;

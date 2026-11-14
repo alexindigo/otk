@@ -6,7 +6,7 @@ import {
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt, reply } from "../../pages/composer.ts";
+import { messages, prompt, reply } from "../../pages/composer.ts";
 import { openRecord } from "../../pages/transcript.ts";
 import {
   composerError,
@@ -114,6 +114,96 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await expect(page).not.toHaveURL(new RegExp(session.id + "$"));
   await expect(prompt(page)).toHaveValue("");
 });
+for (const origin of ["keyboard", "button"] as const) {
+  test(`composer.pending-send-input-command-after-${origin}`, {
+    tag: ["@composer", "@isolated", "@transport"],
+  }, async ({ isolatedState: state, page }, info) => {
+    const target = await state.native<{ id: string }>("/session", "POST", {
+      title: `Pending input from ${origin}`,
+    });
+    const frames = await wire(page);
+    await openSession(state, page, target.id);
+    const input = prompt(page), send = composerSend(page);
+    const first = `First captured ${origin} prompt`;
+    const newer = `Newer ${origin} shell draft`;
+    await state.queue(["First captured effect finished."]);
+    frames.hold((frame, request) =>
+      frame.t === "request.result" && request?.method === "session.prompt" &&
+      request.params?.sessionID === target.id &&
+      (frame.outcome as { ok?: boolean } | undefined)?.ok === true
+    );
+    await input.fill(first);
+    await expect(send).toBeEnabled();
+    const original = await send.elementHandle();
+    try {
+      if (origin === "keyboard") await input.press("Enter");
+      else await send.click();
+      await expect.poll(() => frames.held.length).toBeGreaterThan(0);
+      await expectPrimaryBlocked(send, "Sending");
+      await expect(input).toHaveValue(first);
+      await info.attach("held-send-before-input-command", {
+        body: JSON.stringify({ origin, held: frames.held, sent: frames.sent }),
+        contentType: "application/json",
+      });
+
+      // A trailing space keeps autocomplete out of Enter's path. This must
+      // reach prompt.submit and its beforeSubmit hook, not a picker shortcut.
+      await input.fill("/prompt.shell.enter ");
+      await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
+      await input.press("Enter");
+      await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
+      await expect(input).toHaveValue("");
+      await expectPrimaryBlocked(send, "Sending");
+
+      await input.fill(newer);
+      await input.press("Enter");
+      await expect(input).toHaveValue(newer);
+      await expect(send).toHaveAttribute("aria-description", "Sending");
+      expect(
+        await send.evaluate((node, original) => node === original, original),
+      )
+        .toBe(true);
+      const effects = () =>
+        frames.sent.filter(({ frame }) =>
+          frame.params?.sessionID === target.id &&
+          ["session.prompt", "session.shell", "session.command"].includes(
+            frame.method ?? "",
+          )
+        );
+      expect(effects()).toHaveLength(1);
+      frames.release();
+      await expect(send).toBeEnabled();
+      await reply(state, page, target.id, "First captured effect finished.");
+      await expect(input).toHaveValue(newer);
+      await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
+      await expect.poll(async () =>
+        (await messages(state, target.id)).filter((row) =>
+          row.info.role === "user"
+        ).length
+      ).toBe(1);
+      const users = (await messages(state, target.id)).filter((row) =>
+        row.info.role === "user"
+      );
+      expect(
+        users[0].parts.some((part) =>
+          part.type === "text" && part.text === first
+        ),
+      ).toBe(true);
+      expect(effects()).toHaveLength(1);
+      expect(
+        await send.evaluate((node, original) => node === original, original),
+      )
+        .toBe(true);
+      await expect(page.locator(".otk-composer-dock [role=alert]")).toHaveCount(
+        0,
+      );
+    } finally {
+      frames.release();
+      await original?.dispose();
+    }
+  });
+}
+
 test.describe("long command", () => {
   test.use({ profile: "composer-long-command" });
   test(

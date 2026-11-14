@@ -290,7 +290,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         signal.throwIfAborted();
         const native = this.#native;
         if (
-          !native || !this.#projectVerified ||
+          !native || !(this.#nativeVerified || this.#projectVerified) ||
           native.fileIdentity() !== native.identity
         ) return Promise.resolve([]);
         return Promise.resolve(native.terminals(after, policy.publishrows));

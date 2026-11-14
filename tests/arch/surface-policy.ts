@@ -146,9 +146,12 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
         source.string(source.attr(node, "aria-hidden")) !== "true"
       )
     ) return false;
+    const matching = rules(files.get(path)!).filter((rule) =>
+      rule.selector === selector
+    );
+    if (matching.some((rule) => rule.condition !== "")) return false;
     const declarations = new Map(
-      rules(files.get(path)!).filter((rule) => rule.selector === selector)
-        .flatMap((rule) => [...rule.declarations]),
+      matching.flatMap((rule) => [...rule.declarations]),
     );
     return declarations.get("position") === "absolute" &&
       declarations.get("visibility") === "hidden" &&

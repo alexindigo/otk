@@ -186,6 +186,19 @@ export class DirectoryCatalogs {
         throw new DOMException("Catalog lease released", "AbortError");
       }
     };
+    const read = <K extends keyof DirectoryCatalogKinds>(
+      kind: K,
+      intent: CatalogDemandIntent = "consumer",
+    ): Promise<DirectoryCatalogKinds[K]> => {
+      check();
+      if (kind === "files" && !files) {
+        files = true;
+        if (value.fileRefs++ === 0) {
+          value.fileController = new AbortController();
+        }
+      }
+      return this.#get(value, kind, intent);
+    };
     return {
       snapshot: () => {
         check();
@@ -201,14 +214,7 @@ export class DirectoryCatalogs {
         };
       },
       get: async (kind, signal, intent = "consumer") => {
-        check();
-        if (kind === "files" && !files) {
-          files = true;
-          if (value.fileRefs++ === 0) {
-            value.fileController = new AbortController();
-          }
-        }
-        return await detached(this.#get(value, kind, intent), signal);
+        return await detached(read(kind, intent), signal);
       },
       refresh: async (signal, kinds) => {
         check();
@@ -217,7 +223,7 @@ export class DirectoryCatalogs {
         this.invalidate(directory, selected);
         await detached(
           Promise.all(
-            selected.map((kind) => this.#get(value, kind, "consumer")),
+            selected.map((kind) => read(kind, "consumer")),
           ),
           signal,
         );
