@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
+import { revealTool } from "../../pages/transcript.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
@@ -255,6 +256,7 @@ test.describe("native picker choices", () => {
     ]);
     await prompt(page).pressSequentially("echo PICKER-SHELL");
     await prompt(page).press("Enter");
+    await revealTool(page, "[data-tool=bash][data-tool-status=completed]");
     await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
       .toContainText("PICKER-SHELL");
     const shell = frames.sent.filter(({ frame }) =>

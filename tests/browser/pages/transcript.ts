@@ -100,6 +100,19 @@ export async function expandTool(
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
+/** Reveal a new tool at the tail, grouped or an ungrouped native shell. */
+export async function revealTool(page: Page, selector: string) {
+  const row = page.locator(selector);
+  const closed = page.locator('.otk-work-fold[aria-expanded="false"]');
+  await expect.poll(async () => {
+    await scrollTranscript(page, true);
+    if (await closed.count()) await openWorkLogs(page);
+    return await row.count();
+  }).toBeGreaterThan(0);
+  await revealAcquired(page, selector);
+  await expect(row).toBeVisible();
+}
+
 export async function showFileChanges(state: TestState, page: Page) {
   await page.locator(".otk-display-menu > button").click();
   const input = page.locator("input[name=collapseFileChanges]");

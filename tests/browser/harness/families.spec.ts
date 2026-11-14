@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../fixtures/evidence.ts";
 import { openSession } from "../fixtures/wire.ts";
+import { openWorkLogs } from "../pages/transcript.ts";
 
 test.describe("fixture family retirement", {
   tag: ["@fixture-acceptance", "@harness"],
@@ -33,6 +34,9 @@ test.describe("fixture family retirement", {
       const input = page.locator("textarea[name=prompt]");
       await input.fill(name);
       await input.press("Enter");
+      await expect(page.locator("[data-role=assistant] .otk-text").last())
+        .toHaveText(name + " parent completed.");
+      await openWorkLogs(page);
       await expect(
         page.locator("[data-tool=task][data-tool-status=completed]").filter({
           hasText: name,
