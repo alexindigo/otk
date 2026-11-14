@@ -41,6 +41,15 @@ const policyReceipt = metadataReceipt("approval-policy", (value) => {
   };
 });
 
+/** These owner checks prove this reply has not reached the native backend,
+ * even when the generic native registration has already set its fence. */
+function rejectedReply(message: string, operation?: OperationContext): Error {
+  const cause = new HarnessError("permission", message);
+  return operation
+    ? new OperationFailure("rejected", cause.code, cause)
+    : cause;
+}
+
 /** Server-owned approvals, independent of browser connections/subscriptions. */
 export class PermissionFeature implements FrameSource {
   #inView(id: string, view: ViewLease): boolean {
@@ -311,9 +320,9 @@ export class PermissionFeature implements FrameSource {
       request.id === input.requestID && request.sessionID === input.sessionID
     );
     if (!request) {
-      throw new HarnessError(
-        "permission",
+      throw rejectedReply(
         "Permission request is no longer pending in this session",
+        operation,
       );
     }
     await this.#answer(request, input, undefined, operation);
@@ -326,15 +335,15 @@ export class PermissionFeature implements FrameSource {
   ): Promise<void> {
     const key = JSON.stringify([request.sessionID, request.id]);
     if (this.#closed) {
-      throw new HarnessError("permission", "Server is stopping");
+      throw rejectedReply("Server is stopping", operation);
     }
     if (
       this.#flights.has(key) ||
       this.store.confirmed(request.sessionID, request.id)
     ) {
-      throw new HarnessError(
-        "permission",
+      throw rejectedReply(
         "Permission request is already being answered",
+        operation,
       );
     }
     if (this.store.unconfirmed(request.sessionID, request.id)) {
