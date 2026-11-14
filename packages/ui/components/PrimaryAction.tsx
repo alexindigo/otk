@@ -7,6 +7,8 @@ export default function PrimaryAction(props: {
   state: PrimaryActionState;
   class: string;
   type?: "button" | "submit";
+  /** A submit primary may belong to a form outside its footer. */
+  form?: string;
   title?: string;
   description?: string;
   children?: Element;
@@ -16,6 +18,7 @@ export default function PrimaryAction(props: {
   return (
     <button
       type={props.type ?? "button"}
+      form={props.form}
       ref={props.ref}
       class={props.class}
       data-primary-action="true"

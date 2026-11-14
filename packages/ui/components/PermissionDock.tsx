@@ -275,6 +275,12 @@ function RequestDock(
           <div class="otk-permission-actions">
             <PrimaryAction
               state={primaryState()}
+              // Rejection keeps its native form: the primary submits the
+              // rejection message form; the form's submit handler answers.
+              type={mode() === "reject" ? "submit" : "button"}
+              form={mode() === "reject"
+                ? `otk-reject-${props.request.id}`
+                : undefined}
               onInvoke={() =>
                 void answerCommand(
                   mode() === "always"
