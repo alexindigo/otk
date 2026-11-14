@@ -9,7 +9,7 @@ export const approvalsRequestMetadata: Readonly<
 };
 import type { PermissionReply } from "./rpc.ts";
 import type { PermissionRequest } from "./content.ts";
-import { sessionAncestors, type SessionLookup } from "./session-tree.ts";
+import type { SessionLookup } from "./session-tree.ts";
 
 /** Explicit session policies only; descendants inherit through the session index. */
 export interface ApprovalSnapshot {
@@ -55,8 +55,23 @@ export function autoApproveOwner(
   sessionID: string,
   enabled: readonly string[],
   lookup: SessionLookup,
+  cache?: Map<string, string | undefined>,
 ): string | undefined {
-  return [sessionID, ...sessionAncestors(sessionID, lookup)].find((id) =>
-    enabled.includes(id)
-  );
+  const path: string[] = [], seen = new Set<string>(), keys = new Set(enabled);
+  let id: string | undefined = sessionID, owner: string | undefined;
+  while (id && !seen.has(id)) {
+    if (keys.has(id)) {
+      owner = id;
+      break;
+    }
+    if (cache?.has(id)) {
+      owner = cache.get(id);
+      break;
+    }
+    seen.add(id);
+    path.push(id);
+    id = lookup(id)?.parentID;
+  }
+  for (const id of path) cache?.set(id, owner);
+  return owner;
 }

@@ -7,8 +7,10 @@ import type {
 } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
+import { SessionHierarchy } from "./session-hierarchy.ts";
 import type { SectionObserver } from "../diagnostics.ts";
 export class IndexStore extends SessionIndex {
+  readonly hierarchy = new SessionHierarchy();
   #catalogs = new Map<string, readonly IndexMetadata[]>();
   /** Project-local structural inputs; never copy digests or retained turns. */
   catalog(directory: string): readonly IndexMetadata[] {
@@ -103,6 +105,7 @@ export class IndexStore extends SessionIndex {
     const start = performance.now();
     this.#catalogs.clear();
     this.#pending = [];
+    this.hierarchy.reset(entries);
     const changes = entries.map((entry) => ({
       entry,
       previous: previous.get(entry.id),
@@ -124,6 +127,7 @@ export class IndexStore extends SessionIndex {
     delta?: DigestIndexDelta,
   ): void {
     const start = performance.now();
+    if (!delta) this.hierarchy.entry(entry);
     if (
       !delta ||
       JSON.stringify(entry.deleted) !== JSON.stringify(previous?.deleted)
@@ -140,6 +144,7 @@ export class IndexStore extends SessionIndex {
     this.diagnostics?.("index:observers", performance.now() - start);
   }
   protected override removed(id: string): void {
+    this.hierarchy.remove(id);
     this.#catalogs.clear();
     for (const listener of this.#removals) listener(id);
     this.#queue({ op: "remove", id });

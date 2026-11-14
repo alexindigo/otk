@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-export type SessionLookup = (id: string) => { parentID?: string } | undefined;
+export type SessionLookup = (id: string) => {
+  parentID?: string;
+  hierarchy?: import("./session-hierarchy.ts").SessionHierarchyNode;
+} | undefined;
 export function sessionAncestors(id: string, lookup: SessionLookup): string[] {
   const seen = new Set([id]), ancestors: string[] = [];
   let parent = lookup(id)?.parentID;

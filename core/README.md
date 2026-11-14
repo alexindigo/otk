@@ -16,6 +16,25 @@ Insufficient root evidence remains unresolved instead of merging a removed
 nested checkout into the canonical root. Grouped scalar reads remain bounded;
 identity does not require a session catalog or transcript scan.
 
+## Session hierarchy
+
+`IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only
+demanded structural identities, not digests or transcripts. Native family
+identity survives checkout moves; ancestry is explicitly complete, unresolved or
+cyclic. `ProjectIdentity` supplies checkout-local anchors. Nearest explicit task
+ownership is checkout-local unless the host-sidecar `tasksFollowParent`
+preference is on. The view carries that setting to every server, independently
+of execution paths.
+
+Index and bounded list pages publish the same neutral hierarchy nodes. Parent,
+task and topology changes reproject retained entries and demanded lists. Tabs,
+Sessions, family actions, approval coverage and project rollups use this
+contract; notification identity stays per session. Every ungrouped mandatory
+child keeps its own phantom and lamp; viewing a child selects its checkout-local
+display root or owning task. Foreign parents remain breadcrumb links. The open
+session's name is independent of the root/task label and lamp. Child pagination
+is parent-scoped, not checkout-scoped, on V1 and V2.
+
 ## Evidence-based session supervision
 
 `InboxFeature` composes one `SessionSupervision` beside the index. Adapters
@@ -51,8 +70,8 @@ approval metadata. All projects retain their server-owned row/lamp summaries.
 200), independently of catalog completeness. Cached rows publish through a
 request-correlated `load.chunk`; the ordinary result completes only that page's
 boundary under its source generation. Visible rows acquire entries through the
-same view, without preloading transcripts. Hierarchy and task grouping remain
-with the shared client owner. Remembered selection uses authoritative keyed
+same view, without preloading transcripts. Hierarchy and task grouping come from
+the shared server projection. Remembered selection uses authoritative keyed
 identity validation; fallback requests one newest root. Recall resolves the
 selected identity before reading its project, never discovered sources.
 

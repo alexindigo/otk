@@ -172,6 +172,16 @@ export function createServerResources(o: {
   const pendingForms = factory<
     { servers: Record<string, import("@otk/protocol").FormRequest[]> }
   >({ servers: {} });
+  const hierarchyClock = factory({ revision: 0 });
+  const tabContextClock = factory({ keys: {} as Record<string, number> });
+  const invalidateTabContext = (cache: { key: string; dirty: boolean }) => {
+    if (cache.dirty) return;
+    cache.dirty = true;
+    tabContextClock.update((state) => {
+      state.keys[cache.key] = (state.keys[cache.key] ?? 0) + 1;
+    });
+  };
+  let tasksFollowParent = false;
   const progressOwners = new Map<string, ReturnType<typeof createProgress>>();
   const progressOwner = (id: string) => {
     let owner = progressOwners.get(id);
@@ -378,6 +388,7 @@ export function createServerResources(o: {
           title: entry.title,
           parentID: entry.parentID,
           retained: !!entry.deleted,
+          hierarchy: entry.hierarchy,
         }]
         : [];
     });
@@ -401,6 +412,7 @@ export function createServerResources(o: {
         crumbs: active ? crumbs : [],
         rows: rows?.rows ?? [],
         query: rows?.query,
+        tasksFollowParent,
       });
     }
   };
@@ -580,6 +592,22 @@ export function createServerResources(o: {
       inboxes.set(id, model);
       const current = model;
       current.observeChanges((changes) => {
+        for (const cache of tabInputs.values()) {
+          if (cache.server !== id) continue;
+          if (changes.sessions.some((key) => cache.dependencies.has(key))) {
+            invalidateTabContext(cache);
+          }
+          if (
+            (changes.tasks || changes.baseline) && cache.followParent &&
+            cache.taskSignature !==
+              hierarchyTaskSignature(
+                current.state.inbox.tasks,
+                cache.dependencies,
+              )
+          ) {
+            invalidateTabContext(cache);
+          }
+        }
         const owner = projections.get(id);
         if (!owner) return;
         const finishes = current.state.inbox.finishes;
@@ -596,8 +624,85 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const tabInput = (p: ProjectSelection): TabInput =>
-    projectOwner(p.sidecarId).input(p.directory);
+  const hierarchyTaskSignature = (
+    tasks: readonly import("@otk/protocol").TaskRecord[],
+    keys: ReadonlySet<string>,
+  ) =>
+    JSON.stringify(
+      tasks.filter((task) => task.sessions.some((id) => keys.has(id))),
+    );
+  const tabInputs = new Map<string, {
+    key: string;
+    server: string;
+    base: TabInput;
+    dependencies: ReadonlySet<string>;
+    dirty: boolean;
+    taskSignature: string;
+    followParent: boolean;
+    value: TabInput;
+  }>();
+  const tabInput = (p: ProjectSelection): TabInput => {
+    const owner = projectOwner(p.sidecarId), base = owner.input(p.directory);
+    void hierarchyClock.state.revision;
+    const followParent = tasksFollowParent;
+    const key = JSON.stringify([p.sidecarId, base.directory]);
+    void tabContextClock.state.keys[key];
+    const previous = tabInputs.get(key);
+    if (
+      previous?.base === base && previous.followParent === followParent &&
+      !previous.dirty
+    ) {
+      return previous.value;
+    }
+    const context = new Map(base.entries.map((entry) => [entry.id, entry]));
+    const dependencies = new Set(context.keys());
+    const acquire = () => {
+      for (const id of dependencies) {
+        const entry = owner.entry(id);
+        if (!entry) continue;
+        context.set(id, entry);
+        if (entry.parentID) dependencies.add(entry.parentID);
+        if (entry.hierarchy?.rootID) dependencies.add(entry.hierarchy.rootID);
+      }
+    };
+    acquire();
+    for (const task of base.inbox.tasks) {
+      if (
+        (base.directories ?? [base.directory]).includes(task.directory) ||
+        followParent && task.sessions.some((id) => dependencies.has(id))
+      ) {
+        for (const id of task.sessions) dependencies.add(id);
+      }
+    }
+    acquire();
+    const value: TabInput = {
+      version: base.version,
+      directory: base.directory,
+      directories: base.directories,
+      context: [...context.values()],
+      followParent,
+      get entries() {
+        return base.entries;
+      },
+      get inbox() {
+        return base.inbox;
+      },
+      get taskActivity() {
+        return base.taskActivity;
+      },
+    };
+    tabInputs.set(key, {
+      key,
+      server: p.sidecarId,
+      base,
+      dependencies,
+      dirty: false,
+      taskSignature: hierarchyTaskSignature(base.inbox.tasks, dependencies),
+      followParent,
+      value,
+    });
+    return value;
+  };
   const tabs = (p: ProjectSelection): ClientTabs => {
     live();
     p = { ...p, directory: projectOwner(p.sidecarId).resolve(p.directory) };
@@ -618,6 +723,16 @@ export function createServerResources(o: {
   };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
+    if (
+      id === LOCAL_SIDECAR && frame.t === "prefs" &&
+      tasksFollowParent !== frame.prefs.tasksFollowParent
+    ) {
+      tasksFollowParent = frame.prefs.tasksFollowParent;
+      hierarchyClock.update((state) => {
+        state.revision++;
+      });
+      sendView();
+    }
     approvals(id).receive(frame);
     if (frame.t === "forms.pending") {
       pendingForms.update((s) => {
@@ -636,6 +751,16 @@ export function createServerResources(o: {
           frame.t === "index.snapshot",
         );
         projectOwners.get(id)?.update(o.index.changes(id)!.metadata);
+        for (const cache of tabInputs.values()) {
+          if (
+            cache.server === id &&
+            o.index.changes(id)!.metadata.some((key) =>
+              cache.dependencies.has(key)
+            )
+          ) {
+            invalidateTabContext(cache);
+          }
+        }
         if (o.index.changes(id)!.metadata.length) {
           refreshOperations(id, previous);
           if (
@@ -753,7 +878,8 @@ export function createServerResources(o: {
         if (
           identities.some((row) =>
             row.id === preferred &&
-            projectOwner(project.sidecarId).resolve(row.directory) ===
+            (row.hierarchy?.projectDirectory ??
+                projectOwner(project.sidecarId).resolve(row.directory)) ===
               projectOwner(project.sidecarId).resolve(project.directory)
           )
         ) return preferred;
@@ -963,6 +1089,9 @@ export function createServerResources(o: {
         nameMembership(directory, false);
       }
       projectOwners.delete(id);
+      for (const [key, cache] of tabInputs) {
+        if (cache.server === id) tabInputs.delete(key);
+      }
       operationCache.delete(id);
       catalogs.get(id)?.stop();
       catalogs.delete(id);
@@ -1021,6 +1150,7 @@ export function createServerResources(o: {
       }
       projectReleases.clear();
       projectOwners.clear();
+      tabInputs.clear();
       operationCache.clear();
       visibleCatalog?.stopReady?.();
       visibleCatalog?.directory.release();

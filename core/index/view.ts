@@ -17,6 +17,7 @@ export class IndexView {
   #flight?: { epoch: number; rev: number; keys: string[] };
   #selected?: string;
   #pending = new Map<string, DigestIndexDelta | undefined>();
+  #hierarchies = new Map<string, string>();
   #stops: (() => void)[];
   ids(): ReadonlySet<string> {
     return this.#ids;
@@ -43,7 +44,7 @@ export class IndexView {
           !scope.crumbs.includes(entry.id) && !scope.rows.includes(entry.id)
         ) return;
         if (delta && !this.#ids.has(entry.id)) return;
-        if (delta && this.project(entry, scope) !== entry) return;
+        if (delta && this.project(entry, scope).digest !== entry.digest) return;
         this.#pending.set(
           entry.id,
           this.#pending.has(entry.id) ? undefined : delta,
@@ -57,6 +58,7 @@ export class IndexView {
   close(): void {
     for (const stop of this.#stops) stop();
     this.#pending.clear();
+    this.#hierarchies.clear();
     this.#flight = undefined;
   }
   /** Only consumer acceptance advances credit; socket send is not delivery. */
@@ -69,14 +71,7 @@ export class IndexView {
   }
   #wanted(): Set<string> {
     const view = this.view();
-    const directory = view.directory ??
-      (view.selected
-        ? this.index.getMetadata(view.selected)?.directory
-        : undefined);
-    const rows = view.rows.filter((id) =>
-      !!directory && this.index.getMetadata(id)?.directory === directory
-    );
-    const ids = new Set([...view.crumbs, ...rows, ...this.keys(view)]);
+    const ids = new Set([...view.crumbs, ...view.rows, ...this.keys(view)]);
     if (view.selected) ids.add(view.selected);
     for (const id of [...ids]) {
       for (const parent of this.index.ancestors(id)) ids.add(parent);
@@ -87,6 +82,7 @@ export class IndexView {
     const entry = this.index.snapshotEntry(id);
     if (!entry) return;
     const value = this.project(entry, this.view());
+    this.#hierarchies.set(id, JSON.stringify(value.hierarchy));
     if (id === this.view().selected) return value;
     return { ...value, digest: { ...value.digest, turns: {} } };
   }
@@ -128,8 +124,23 @@ export class IndexView {
     }
     if (this.#flight) return;
     const wanted = this.#wanted(), ops = new Map<string, IndexOp>();
+    // Parent/task/topology changes can revise a retained child's hierarchy even
+    // without a new native row for that child. Compare only the bounded lease.
+    for (const id of wanted) {
+      const entry = this.index.snapshotEntry(id);
+      if (
+        entry && this.#ids.has(id) &&
+        this.#hierarchies.get(id) !==
+          JSON.stringify(this.project(entry, this.view()).hierarchy)
+      ) {
+        this.#pending.set(id, undefined);
+      }
+    }
     for (const id of this.#ids) {
-      if (!wanted.has(id)) ops.set(id, { op: "evict", id });
+      if (!wanted.has(id)) {
+        ops.set(id, { op: "evict", id });
+        this.#hierarchies.delete(id);
+      }
     }
     for (const [id, delta] of this.#pending) {
       if (!this.index.snapshotEntry(id)) {

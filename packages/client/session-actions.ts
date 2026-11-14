@@ -360,6 +360,7 @@ export function createSessionActions(o: {
     inTask(target) {
       const value = resources.entry(target.sidecarId, target.sessionID);
       if (!value) return false;
+      if (value.hierarchy) return !!value.hierarchy.taskID;
       return !!familyTask(
         resources.inbox(target.sidecarId).state.inbox.tasks,
         sessionFamily(

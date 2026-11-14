@@ -5,9 +5,13 @@ import type {
   IndexMetadata,
   TaskRecord,
 } from "@otk/protocol";
+import {
+  projectSessionHierarchy,
+  sessionAncestors,
+  type SessionHierarchyNode,
+} from "@otk/protocol";
 import { INBOX_STATUS_PRIORITY, type InboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { sessionFamily } from "./session-tree.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 import { attentionStatus, type OperationAttention } from "./inbox.ts";
@@ -30,6 +34,9 @@ export interface TabInput {
   /** Resolved checkout membership supplied by the shared project owner. */
   directories?: readonly string[];
   entries: readonly (IndexMetadata & OperationAttention)[];
+  /** Borrowed cross-project ancestor context, never another metadata store. */
+  context?: readonly (IndexMetadata & OperationAttention)[];
+  followParent?: boolean;
   taskActivity?: Readonly<Record<string, InboxStatus>>;
   inbox: InboxSnapshot;
 }
@@ -110,12 +117,10 @@ export function createTabs(
   };
   type Entry = IndexMetadata & OperationAttention;
   let byID = new Map<string, Entry>(), taskByID = new Map<string, TaskRecord>();
-  let explicit = new Map<string, TaskRecord>(),
-    ancestry = new Map<string, string[]>();
+  let explicit = new Map<string, TaskRecord>();
+  let nodes: ReadonlyMap<string, SessionHierarchyNode> = new Map();
   let ownership = new Map<string, TaskRecord | undefined>();
-  let familyKeys = new Map<string, string>();
-  let children = new Map<string, Entry[]>(),
-    families = new Map<string, Entry[]>();
+  let families = new Map<string, Entry[]>();
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
@@ -125,15 +130,42 @@ export function createTabs(
   const prepare = () => {
     if (derived === input) return;
     derived = input;
-    entries = input.entries.filter((e) => belongs(e.directory));
-    tasks = input.inbox.tasks.filter((t) => belongs(t.directory));
-    byID = new Map(entries.map((e) => [e.id, e]));
+    const context = input.context ?? input.entries;
+    const projected =
+      context.every((entry) =>
+          entry.hierarchy?.followParent === (input.followParent ?? false)
+        )
+        ? undefined
+        : projectSessionHierarchy(context, input.inbox.tasks, {
+          project: (directory) =>
+            belongs(directory) ? input.directory : directory,
+          followParent: input.followParent,
+        });
+    nodes = new Map(
+      context.map((
+        entry,
+      ) => [
+        entry.id,
+        entry.hierarchy?.followParent === (input.followParent ?? false)
+          ? entry.hierarchy
+          : projected!.get(entry.id)!,
+      ]),
+    );
+    entries = input.entries.filter((e) =>
+      belongs(e.directory) ||
+      nodes.get(e.id)?.projectDirectory === input.directory
+    );
+    const inherited = new Set(
+      entries.map((entry) => nodes.get(entry.id)?.taskID),
+    );
+    tasks = input.inbox.tasks.filter((t) =>
+      belongs(t.directory) ||
+      input.followParent && inherited.has(t.id)
+    );
+    byID = new Map(context.map((e) => [e.id, e]));
     taskByID = new Map(tasks.map((t) => [t.id, t]));
     explicit = new Map();
-    ancestry = new Map();
     ownership = new Map();
-    familyKeys = new Map();
-    children = new Map();
     families = new Map();
     for (const task of tasks) {
       for (const id of task.sessions) {
@@ -141,32 +173,10 @@ export function createTabs(
       }
     }
     for (const entry of entries) {
-      if (entry.parentID) {
-        const list = children.get(entry.parentID) ?? [];
-        list.push(entry);
-        children.set(entry.parentID, list);
-      }
-    }
-    const resolve = (start: string) => {
-      const path: string[] = [], seen = new Set<string>();
-      let id: string | undefined = start, task: TaskRecord | undefined;
-      while (id && !familyKeys.has(id) && !seen.has(id)) {
-        path.push(id);
-        seen.add(id);
-        task = explicit.get(id);
-        if (task) break;
-        id = byID.get(id)?.parentID;
-      }
-      task ??= id ? ownership.get(id) : undefined;
-      const key = task?.id ?? (id && familyKeys.get(id)) ?? path.at(-1)!;
-      for (const id of path) {
-        ownership.set(id, task);
-        familyKeys.set(id, key);
-      }
-      return key;
-    };
-    for (const entry of entries) {
-      const key = familyKeys.get(entry.id) ?? resolve(entry.id);
+      const node = nodes.get(entry.id)!;
+      const owner = taskByID.get(node.taskID ?? "");
+      ownership.set(entry.id, owner);
+      const key = owner?.id ?? node.familyID;
       const list = families.get(key) ?? [];
       list.push(entry);
       families.set(key, list);
@@ -184,11 +194,10 @@ export function createTabs(
     if (cachedTabs && selection === cachedSelection) return cachedTabs;
     cachedSelection = selection;
     const { inbox, taskActivity } = input;
-    const grouped = explicit;
     // Nearest explicit membership owns the whole inherited family. Helpers can
     // contribute work/attention, but cannot create a competing phantom tab.
     const activity = (id: string) =>
-      (families.get(id) ?? []).reduce(
+      byID.get(id)?.timeUpdated ?? (families.get(id) ?? []).reduce(
         (time, entry) => Math.max(time, entry.timeUpdated),
         0,
       );
@@ -206,17 +215,20 @@ export function createTabs(
         ),
       ),
     }));
-    for (const entry of entries) {
+    const candidates = new Map(entries.map((entry) => [entry.id, entry]));
+    const selected = store.state.selected;
+    if (selected?.kind === "session") {
+      const root = byID.get(selected.id);
+      if (root) candidates.set(root.id, root);
+    }
+    for (const entry of candidates.values()) {
+      if (ownership.get(entry.id) || explicit.has(entry.id)) continue;
+      // An ungrouped mandatory child has its own tab and its own lamp. A
+      // parent's aggregate lamp is not a substitute for that visibility.
+      const status = rollup([entry], inbox);
       if (
-        grouped.has(entry.id) || ownership.get(entry.id) ||
-        entry.parentID && byID.has(entry.parentID)
-      ) continue;
-      const status = rollup(
-        families.get(familyKeys.get(entry.id) ?? entry.id) ?? [entry],
-        inbox,
-      );
-      if (
-        status !== "none" || store.state.preview === entry.id ||
+        status !== "none" || nodes.get(entry.id)?.mandatory ||
+        store.state.preview === entry.id ||
         (store.state.selected?.kind === "session" &&
           store.state.selected.id === entry.id)
       ) {
@@ -242,9 +254,8 @@ export function createTabs(
   };
   const rootFor = (id: string) => {
     prepare();
-    let path = ancestry.get(id);
-    if (!path) ancestry.set(id, path = sessionFamily(id, (id) => byID.get(id)));
-    return path.at(-1)!;
+    const node = nodes.get(id);
+    return node?.anchorID ?? id;
   };
   const taskFor = (id: string) => {
     prepare();
@@ -309,16 +320,46 @@ export function createTabs(
     taskFor,
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      if (rows === crumbTabs && id === crumbID) return cachedCrumbs;
+      const key = `${id}/${store.state.sessionID}`;
+      if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
       crumbTabs = rows;
-      crumbID = id;
+      crumbID = key;
       const tab = rows.find((t) => t.id === id);
       const task = taskByID.get(id ?? "") ??
         (tab &&
           { id: tab.id, directory: input.directory, sessions: tab.sessions });
-      return cachedCrumbs = task
-        ? taskBreadcrumbs(task, entries, tasks, children, input.inbox)
+      const local = task
+        ? taskBreadcrumbs(
+          task,
+          [...new Map([
+            ...entries,
+            ...task.sessions.flatMap((id) => byID.get(id) ?? []),
+          ].map((entry) => [entry.id, entry])).values()],
+          tasks,
+          undefined,
+          input.inbox,
+          input.followParent,
+          nodes,
+        )
         : [];
+      const current = store.state.sessionID;
+      const external = current
+        ? sessionAncestors(current, (id) => byID.get(id))
+          .toReversed().filter((id) => {
+            const entry = byID.get(id);
+            return entry &&
+              nodes.get(id)?.projectDirectory !== input.directory &&
+              !belongs(entry.directory);
+          })
+        : [];
+      const foreign = new Set(external);
+      return cachedCrumbs = [
+        ...external.filter((id) => !local.some((crumb) => crumb.id === id))
+          .map((id) => ({ id, helper: false, depth: 0, external: true })),
+        ...local.map((crumb) =>
+          foreign.has(crumb.id) ? { ...crumb, external: true } : crumb
+        ),
+      ];
     },
     sessionFor,
     update(next: TabInput): void {
@@ -344,7 +385,8 @@ export function createTabs(
         if (
           draft.selected?.kind === "task" &&
           !input.inbox.tasks.some((t) =>
-            t.id === draft.selected!.id && belongs(t.directory)
+            t.id === draft.selected!.id &&
+            tasks.some((task) => task.id === t.id)
           )
         ) delete draft.selected;
         // Metadata arrival and user preview use the same current family owner.
@@ -366,15 +408,11 @@ export function createTabs(
         }
         if (
           draft.selected?.kind === "session" &&
-          !input.entries.some((e) =>
-            e.id === draft.selected!.id && belongs(e.directory)
-          )
+          !byID.has(draft.selected!.id)
         ) delete draft.selected;
         if (
           draft.preview &&
-          !input.entries.some((e) =>
-            e.id === draft.preview && belongs(e.directory)
-          )
+          !byID.has(draft.preview)
         ) delete draft.preview;
       });
       for (const [id, waiters] of taskWaiters) {
@@ -426,14 +464,17 @@ export function createTabs(
         selectedID &&
         (task
           ? !contains(task, selectedID)
-          : rootFor(selectedID) !== selection.id)
+          : selectedID !== selection.id && rootFor(selectedID) !== selection.id)
       ) {
         throw new Error("Unknown task session");
       }
       if (task && selectedID) remembered.set(task.id, selectedID);
       selectionRevision++;
       store.update((draft) => {
-        draft.selected = { ...selection };
+        draft.selected = selection.kind === "task" ? { ...selection } : {
+          kind: "session",
+          id: rootFor(selectedID ?? selection.id),
+        };
         draft.sessionID = selectedID;
         draft.closed = draft.closed?.filter((id) => id !== selectedID);
         delete draft.preview;

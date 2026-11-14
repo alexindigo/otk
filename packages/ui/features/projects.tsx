@@ -12,6 +12,7 @@ import Form, {
 } from "../components/Form.tsx";
 import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import PreferenceControls from "../components/PreferenceControls.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
@@ -135,9 +136,16 @@ function AddProject(props: DialogProps) {
 /** Server-scoped templates and host-owned ageing controls live with inbox UI. */
 export function ProjectSettings(): import("solid-js").Element {
   const shell = useShellPorts();
+  const { commands } = useCommandPorts();
   return (
     <section class="otk-project-settings" aria-label="Project settings">
       <h2>Projects</h2>
+      <PreferenceControls
+        group="projects"
+        prefs={shell.toggles.state.prefs}
+        ready={shell.toggles.state.ready}
+        onSet={(key, value) => commands.run("prefs.set", { key, value })}
+      />
       <h3>Ageing thresholds (hours)</h3>
       <Form
         title="Ageing thresholds (hours)"

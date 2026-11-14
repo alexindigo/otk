@@ -9,4 +9,6 @@ export interface ViewLease {
   crumbs: string[];
   rows: string[];
   query?: string;
+  /** Host-sidecar preference projected onto this connection's task view. */
+  tasksFollowParent?: boolean;
 }

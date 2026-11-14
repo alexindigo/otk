@@ -164,10 +164,16 @@ test.describe("native helper lifecycle", () => {
       parts: [{ type: "text", text: "Run the helper probe" }],
     });
     const parentTab = page.locator(`[data-tab="${parent.id}"]`);
-    await expect(parentTab.locator(".otk-status-light"))
+    const childTab = page.locator(`[data-tab="${child.id}"]`);
+    // AXIOM 1 and decision 35: ungrouped helpers have their own visible tab;
+    // a parent's own lamp cannot substitute for that child's activity.
+    await expect(childTab.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "blocked");
-    await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
-    await parentTab.click();
+    await expect(parentTab).toHaveCount(0);
+    await childTab.click();
+    await expect(parentTab).toHaveAttribute("aria-selected", "true");
+    await expect(parentTab.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "none");
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
@@ -184,6 +190,7 @@ test.describe("native helper lifecycle", () => {
       "blocked",
     );
     await expect(parentTab).toHaveCount(0);
+    await expect(childTab).toHaveCount(0);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",

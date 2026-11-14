@@ -58,7 +58,7 @@
   padding: 0;
   text-align: left;
 }
-.otk-tab[data-kind=phantom] .otk-tab-open {
+.otk-tab[data-kind=phantom] .otk-tab-open:not(.is-selected) {
   color: var(--otk-fg-3);
   font-style: italic;
 }
@@ -122,6 +122,16 @@
   font-size: var(--text-meta);
   margin-left: auto;
   gap: 12px;
+}
+.otk-open-session-title {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 30%;
+  height: var(--control-size);
+  padding: 0 var(--chrome-inset);
+  font-weight: 600;
 }
 .otk-context-bar {
   display: flex;
