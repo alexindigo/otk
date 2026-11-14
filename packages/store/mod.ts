@@ -24,6 +24,11 @@ export type {
   DigestUsageRecord,
 } from "./digest.ts";
 export { sessionReferenceMigrations } from "./features/session-references.ts";
+export {
+  type CheckoutRecord,
+  Checkouts,
+  checkoutsMigrations,
+} from "./features/checkouts.ts";
 export type { FeatureMigrations, Migration } from "./migrations.ts";
 export {
   type ProjectChange,

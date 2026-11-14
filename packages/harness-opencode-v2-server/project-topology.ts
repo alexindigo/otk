@@ -1,11 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProjectTopology } from "@otk/protocol";
+import type { ProjectIdentityFact } from "@otk/harness";
+
+/** Native NULL is unrecorded; empty path is positive exact-checkout evidence. */
+export function recordedCheckout(
+  directory: string,
+  subpath: string | null | undefined,
+): string | undefined {
+  if (subpath == null) return;
+  if (subpath === "") return directory;
+  if (
+    subpath.startsWith("/") ||
+    subpath.split("/").some((part) => !part || part === "." || part === "..")
+  ) return;
+  const suffix = "/" + subpath;
+  return directory.endsWith(suffix)
+    ? directory.slice(0, -suffix.length) || "/"
+    : undefined;
+}
 
 export interface NativeProjectTopology {
   id: string;
   canonical: string;
   /** Undefined means inventory failed, not a complete empty inventory. */
-  worktrees?: readonly { directory: string }[];
+  worktrees?: readonly { directory: string; strategy?: string }[];
 }
 
 /** Native project identity bounds path matching; exact session scopes stay intact. */
@@ -13,6 +31,28 @@ export class V2ProjectTopology {
   readonly #projects = new Map<string, NativeProjectTopology>();
   constructor(projects: readonly NativeProjectTopology[]) {
     for (const project of projects) this.#projects.set(project.id, project);
+  }
+  facts(
+    directory: string,
+    projectID: string,
+    source: string,
+    subpath?: string | null,
+  ): ProjectIdentityFact[] {
+    const project = this.#projects.get(projectID);
+    if (projectID === "global" || project?.canonical === "/") {
+      // A positive unscoped native owner is not an omitted/retired Git owner.
+      return [{ source, repoID: projectID, recordedRoot: null }];
+    }
+    return [{
+      source,
+      repoID: projectID,
+      canonicalRoot: project?.canonical,
+      recordedRoot: recordedCheckout(directory, subpath) ?? null,
+      inventory: project?.worktrees?.map((row) => ({
+        directory: row.directory,
+        kind: row.strategy === "git" ? "worktree" : "checkout",
+      })),
+    }];
   }
   roots(): string[] {
     return [

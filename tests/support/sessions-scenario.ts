@@ -203,7 +203,10 @@ export async function sessionsScenario(profile: Profile) {
       f.add({ ...base, id: `tstv1-chain-${i}`, title: `tstv1-chain-${i}` });
     }
   }
-  if (profile === "contract-sessions-worktrees") {
+  if (
+    profile === "contract-sessions-worktrees" ||
+    profile === "contract-sessions-removed"
+  ) {
     const one = join(root, "worktrees", "feature-one");
     const two = join(root, "worktrees", "feature-two");
     const archived = join(root, "worktrees", "archived-tree");
@@ -231,6 +234,19 @@ export async function sessionsScenario(profile: Profile) {
         sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
         lastActivity: 1,
         authority: "current" as const,
+        ...(profile === "contract-sessions-removed"
+          ? {
+            identities: [{
+              source: "worktree-fixture",
+              repoID: base.projectID,
+              canonicalRoot: base.directory,
+              recordedRoot: directory === nested ? one : directory,
+              inventory: [base.directory, one, two, archived].map((
+                directory,
+              ) => ({ directory, kind: "worktree" as const })),
+            }],
+          }
+          : {}),
         topology: {
           repoID: base.projectID,
           canonicalRoot: base.directory,
@@ -255,6 +271,27 @@ export async function sessionsScenario(profile: Profile) {
     });
     await c.rpc("projects.inactive", { directory: archived, inactive: true });
     f.update("tstv1-worktree-0", { status: "busy" });
+    if (profile === "contract-sessions-removed") {
+      f.app.index.projectSeeds(
+        [base.directory, one, two, archived, nested].map((directory) => ({
+          directory,
+          hasSessions: directory !== one,
+          sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
+          lastActivity: 1,
+          authority: "current" as const,
+          identities: [{
+            source: "worktree-fixture",
+            repoID: base.projectID,
+            canonicalRoot: base.directory,
+            recordedRoot: null,
+            inventory: [base.directory, archived].map((directory) => ({
+              directory,
+              kind: "checkout" as const,
+            })),
+          }],
+        })),
+      );
+    }
   }
   if (profile === "contract-sessions-catalog") {
     const projects = join(root, "projects"),

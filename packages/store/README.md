@@ -12,6 +12,12 @@ metadata. Uses `node:sqlite` and `@std/path`; depends on no other OTK package.
 Import only the public `@otk/store` entry. Applications supply their preference
 schema, defaults, validator and error construction.
 
+`Checkouts` / `checkoutsMigrations` retain learned native source, repository,
+exact scope and checkout boundary in `otk.db`. Availability is stored separately
+from membership; removing native inventory never deletes history or changes user
+inactivity policy. A source replacement cannot borrow another source's
+boundaries. This is durable identity metadata, not rebuildable digest data.
+
 ```ts
 import {
   Frecency,

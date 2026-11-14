@@ -73,6 +73,17 @@ export interface ProjectSummaryFacts {
 }
 export interface ProjectSummary extends ProjectSummaryFacts {
   topology?: ProjectTopology;
+  /** Availability is independent of durable affiliation and activity policy. */
+  availability?: "present" | "removed" | "unknown";
+  /** Exact native owners, including several repositories sharing one path. */
+  memberships?: readonly {
+    source: string;
+    repoID: string;
+    directory: string;
+    leafDirectory: string;
+    availability: "present" | "removed" | "unknown";
+    kind: "checkout" | "worktree" | "unknown";
+  }[];
   /** Exact native list/task scopes owned by this checkout, never rewritten paths. */
   scopes?: readonly string[];
   /** Canonical rows roll up the repo; direct retains only that checkout. */
