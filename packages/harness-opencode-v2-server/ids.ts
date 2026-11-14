@@ -25,3 +25,13 @@ export const opencodeV2SessionID: {
     return id.slice(6);
   },
 };
+
+/** Optional native relationships cannot invalidate the record that carries them. */
+export function optionalSessionID(native: unknown): string | undefined {
+  if (typeof native !== "string") return;
+  try {
+    return opencodeV2SessionID.encode(native);
+  } catch {
+    return;
+  }
+}
