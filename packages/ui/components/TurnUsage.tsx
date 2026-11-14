@@ -16,7 +16,7 @@ export default function TurnUsage(props: {
   summary?: Derived<UsageSummary>;
   showCost: boolean;
   detail(): Usage | undefined;
-  error?(): string | undefined;
+  error?(): import("@otk/client").FailureValue | undefined;
   open?(): () => void;
   control?(control: { open(): void }): void;
 }): import("solid-js").Element {

@@ -117,9 +117,10 @@ Deno.test("request activity keeps original project and phantom visible without c
       },
     },
   });
-  assertEquals(resources.projects(2)[0].status, "blocked");
+  assertEquals(resources.projects(2)[0].status, "none");
   tabs.update(resources.tabSnapshot(project));
-  assertEquals(tabs.tabs()[0].status, "blocked");
+  assertEquals(tabs.tabs(), []);
+  assertEquals(connection.rpc.feedback(entry.id).current()?.kind, "error");
   resources.stop();
 });
 

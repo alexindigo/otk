@@ -99,7 +99,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.otk-session-row.is-deleted .otk-row-title {
+.otk-session-row.is-deleted:not(.is-editing) .otk-row-title {
   color: var(--deleted-fg);
   text-decoration: line-through;
 }

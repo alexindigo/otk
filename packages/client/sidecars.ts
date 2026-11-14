@@ -80,6 +80,7 @@ export function readSidecars(
   return [implicit, ...remote];
 }
 export interface SidecarsOptions {
+  sessionTitle?(sidecarId: string, sessionID: string): string | undefined;
   storage?: Pick<Storage, "getItem" | "setItem">;
   connection?: ConnectionOptions;
   diagnostic?: (error: unknown) => void;
@@ -132,7 +133,7 @@ export function createSidecars(
           key: "connecting",
           label: "Connecting",
           elapsedMs: 0,
-          result: { kind: "error", text: failure.feedback.text },
+          result: { ...failure.feedback, kind: "error" },
         }],
       };
     });
@@ -189,8 +190,21 @@ export function createSidecars(
         },
       },
       spec.id === LOCAL_SIDECAR
-        ? options.connection
-        : { afterRender: options.connection?.afterRender },
+        ? {
+          ...options.connection,
+          requests: {
+            ...options.connection?.requests,
+            sidecarId: spec.id,
+            sessionTitle: (id) => options.sessionTitle?.(spec.id, id),
+          },
+        }
+        : {
+          afterRender: options.connection?.afterRender,
+          requests: {
+            sidecarId: spec.id,
+            sessionTitle: (id) => options.sessionTitle?.(spec.id, id),
+          },
+        },
     );
     connections.set(spec.id, connection);
   };

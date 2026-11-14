@@ -17,8 +17,10 @@ import type {
 } from "@otk/protocol";
 import {
   type ErrorObservation,
+  latestTerminal,
   OperationFailure,
   sessionErrorMessage,
+  type TerminalEvidence,
 } from "@otk/protocol";
 import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
@@ -74,7 +76,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
   #running = new Map<string, number>();
-  #finished = new Map<string, number>();
+  #finished = new Map<string, TerminalEvidence>();
   #version = "";
   #generation = 0;
   #lists = new V2SessionLists();
@@ -571,11 +573,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     errors = this.#errors.snapshot(entry.id),
   ): void {
     if (!this.#sink) return;
-    const terminal = Math.max(
-      entry.activity?.terminal ?? 0,
-      this.#finished.get(entry.id) ?? 0,
+    const terminal = latestTerminal(
+      this.#finished.get(entry.id),
+      entry.activity,
     );
-    if (terminal > 0) this.#finished.set(entry.id, terminal);
+    if (terminal.terminal) this.#finished.set(entry.id, terminal);
     const pending = pendingAttention(
       entry.id,
       [...this.#pending.values()].filter((row) => row.sessionID !== "global")
@@ -585,7 +587,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     entry = {
       ...entry,
       activity: {
-        terminal,
+        ...terminal,
         work: {
           keys: [
             ...(this.#running.has(ids.decode(entry.id))
@@ -690,10 +692,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         ...current,
         activity: {
           ...current.activity,
-          terminal: Math.max(
-            current.activity?.terminal ?? 0,
-            row.activity?.terminal ?? 0,
-          ),
+          ...latestTerminal(current.activity, row.activity),
         },
       };
     }
@@ -719,8 +718,15 @@ export class OpencodeV2ServerAdapter implements Harness {
     ended?: number,
     _alreadyObserved = false,
   ): void {
-    if (ended && ended > (this.#finished.get(entry.id) ?? 0)) {
-      this.#finished.set(entry.id, ended);
+    if (ended) {
+      this.#finished.set(
+        entry.id,
+        latestTerminal(
+          this.#finished.get(entry.id),
+          { terminal: ended },
+          entry.activity,
+        ),
+      );
     }
     this.#upsert(entry);
   }

@@ -10,6 +10,7 @@ import {
 import { labels } from "./labels.ts";
 import { fixedContent } from "./content.ts";
 import { readyMenuBox } from "../pages/menus.ts";
+import { expandedFailure } from "../pages/failure-geometry.ts";
 interface Inputs {
   state: TestState;
   page: Page;
@@ -95,9 +96,9 @@ export async function remainder(
       await shot(`public-form-pending-${theme.id}`);
       await page.evaluate("styleTest.feedback('error')");
       await expect(page.locator("[role=alert]")).toHaveText(
-        "Could not finish this action. Try again",
+        /No publishable failure reason is available/,
       );
-      expect(await bounds(page, ".otk-form")).toEqual(before);
+      await expandedFailure(page, ".otk-form", before);
       await expect(page.locator(".otk-form input").first()).toHaveJSProperty(
         "readOnly",
         false,
@@ -131,7 +132,7 @@ export async function remainder(
         });
         expect(description.errors).toBe(1);
         if (name === "notes") expect(description.ids).toContain("notes-help");
-        expect(await bounds(page, ".otk-form")).toEqual(before);
+        await expandedFailure(page, ".otk-form", before);
         await expect(page.locator("textarea[name=notes]")).toHaveValue(
           "Keep this text",
         );
@@ -155,7 +156,7 @@ export async function remainder(
         await shot(`public-${name}-pending-${theme.id}`);
         await page.evaluate("styleTest.settlePreference()");
         await expect(surface.locator("[role=alert]")).not.toBeEmpty();
-        expect(await bounds(page, selector)).toEqual(rect);
+        await expandedFailure(page, selector, rect);
         await shot(`public-${name}-error-${theme.id}`);
       }
       await scene("lists");
@@ -191,7 +192,7 @@ export async function remainder(
       await shot(`public-menu-pending-${theme.id}`);
       await page.evaluate("styleTest.settleMenu(true)");
       await expect(menu.locator("[role=alert]")).toHaveText(
-        "Could not finish this action. Try again",
+        /No publishable failure reason is available/,
       );
       const feedbackHeight = await menu.getByRole("alert").evaluate((el) =>
         el.getBoundingClientRect().height +

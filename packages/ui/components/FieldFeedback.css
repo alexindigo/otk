@@ -9,3 +9,7 @@
 .otk-field-feedback.is-action {
   block-size: calc(2 * var(--line-ui));
 }
+.otk-field-feedback.has-failure {
+  block-size: auto;
+  min-block-size: var(--line-ui);
+}

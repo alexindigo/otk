@@ -13,6 +13,7 @@ import Form, {
 import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import PreferenceControls from "../components/PreferenceControls.tsx";
+import FeedbackStatus from "../components/FeedbackStatus.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
@@ -106,7 +107,7 @@ function AddProject(props: DialogProps) {
           <p class="otk-muted">Scanning directories…</p>
         </Show>
         <Show when={picker.state.error}>
-          <p role="alert" class="otk-error">{picker.state.error}</p>
+          <FeedbackStatus feedback={picker.state.error || undefined} />
         </Show>
         <For each={picker.state.paths} keyed={false}>
           {(directory) => (

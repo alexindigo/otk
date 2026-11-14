@@ -26,6 +26,7 @@ export interface ContentIdentity {
   ownerID?: string;
   sidecarId?: string;
   sessionID?: string;
+  label?: string;
   messageID?: string;
   partID?: string;
   callID?: string;

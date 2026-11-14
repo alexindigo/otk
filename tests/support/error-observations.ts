@@ -6,12 +6,13 @@ import { OpencodeV1Adapter as Opencode1Adapter } from "@otk/harness-opencode-v1"
 import { StreamBuffers } from "@otk/content";
 import { requireCapability } from "@otk/harness";
 import type { SessionMetadata as IndexEntry } from "@otk/protocol";
-import type { ContentOp } from "@otk/protocol";
+import type { ContentOp, PublicFailure } from "@otk/protocol";
 import type { Session } from "@otk/harness-opencode-v1";
 import { resources, tempDir, test } from "./resources.ts";
 const safeHttp = "Request failed (HTTP 503).";
 
 export interface Observation {
+  failure?: PublicFailure;
   id: string;
   source: "http" | "event";
   message: string;
@@ -356,7 +357,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  test(`${method} HTTP-only failure retains actual provenance without exposing arbitrary native reason text`, async () => {
+  test(`${method} HTTP-only failure retains selected native facts and provenance without credentials`, async () => {
     const f = await observationFixture();
     try {
       const message = "HTTP-only diagnostic " + "detail ".repeat(180);
@@ -375,7 +376,7 @@ export function errorObservationCases(method: "shell" | "command") {
       const observation = state.observations[0];
       assertEquals(observation.source, "http");
       assertEquals(observation.message, safeHttp);
-      assert(!JSON.stringify(state).includes(message));
+      assertEquals(observation.failure?.facts?.reason, message);
       assertEquals(observation.kind, "UnknownError");
       assertEquals(observation.status, 503);
       assertEquals(observation.ref, "native-http-ref");
@@ -383,6 +384,17 @@ export function errorObservationCases(method: "shell" | "command") {
       assertEquals(observation.requestID, state.currentRequestID);
       assert(observation.requestID);
       assertEquals(observation.eventID, undefined);
+      const secret = "fixture-observation-private-value";
+      await f.submit(method);
+      f.fail(1, `Authorization: Bearer ${secret}`, "credential-ref");
+      await f.wait(() =>
+        f.ops.some((item) =>
+          (Reflect.get(item.event, "errorState") as ObservedState | undefined)
+            ?.observations.some((o) => o.ref === "credential-ref")
+        )
+      );
+      const privateState = (await f.coherent()).state;
+      assert(!JSON.stringify(privateState).includes(secret));
     } finally {
       await f.stop();
     }

@@ -159,6 +159,11 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
       "finishedUnseen",
       "a matching terminal cannot remain working during native cleanup",
     );
+    assertEquals(index.getMetadata(id)?.activity?.outcome, "failed");
+    assertEquals(
+      supervision.session(index.getMetadata(id)!, acknowledged).outcome,
+      "failed",
+    );
     acknowledged = 200;
     active = false;
     native.time.busy = 300;

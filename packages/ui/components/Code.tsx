@@ -23,6 +23,8 @@ import type { HighlightToken } from "../highlight/types.ts";
 import CodeGroup from "./CodeGroup.tsx";
 import { contextTarget } from "./context-target.ts";
 import { useContentIdentity } from "../features/transcript-context.tsx";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 interface SourcePiece {
   key: number;
   start: number;
@@ -157,7 +159,7 @@ export default function Code(
   const [styles, setStyles] = createStore<
     Record<number, { owner: number; tokens: HighlightToken[][] } | undefined>
   >({});
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   let currentInput:
     | Readonly<{ text: string; lang: string; streaming: boolean }>
     | undefined;
@@ -374,7 +376,14 @@ export default function Code(
       if (
         !disposed && id === generation && frame().model === owner &&
         !isCancellation(error)
-      ) setError(error.message || "Highlighting unavailable");
+      ) {
+        setError(
+          failureValue(error, {
+            action: "Highlighting source",
+            target: identity,
+          }),
+        );
+      }
     });
   };
   const schedule = () => {
@@ -390,7 +399,14 @@ export default function Code(
         void block.prepare(value.lang, value.text).catch((error) => {
           if (
             !disposed && frame().model === owner && !isCancellation(error)
-          ) setError(error.message);
+          ) {
+            setError(
+              failureValue(error, {
+                action: "Preparing syntax highlighting",
+                target: identity,
+              }),
+            );
+          }
         });
       }
       enqueue();
@@ -477,7 +493,7 @@ export default function Code(
       )}</For>
     </code></pre>
       <Show when={error()}>
-        <small class="otk-muted">{error()}</small>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
     </div>
   );

@@ -508,9 +508,7 @@ export function createInbox(
         break;
       case "discovery":
         draft.discovered = op.directories;
-        draft.discoveryError = op.failure
-          ? "Project discovery is unavailable. Try again."
-          : undefined;
+        draft.discoveryFailure = op.failure;
         break;
     }
   };

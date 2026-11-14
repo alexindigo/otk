@@ -61,8 +61,8 @@ Deno.test("form feedback is structured and safe, and definite failure retains th
   );
   assertEquals(owner.state.captured, { name: "kept" });
   assertEquals(
-    owner.state.feedback?.text,
-    "Could not finish this action. Try again",
+    owner.state.feedback?.failure?.reason,
+    "No publishable failure reason is available",
   );
   const key = owner.state.key;
   await assertRejects(() =>
@@ -80,5 +80,9 @@ Deno.test("form feedback is structured and safe, and definite failure retains th
   );
   assert(owner.state.key !== key);
   assertEquals(owner.state.feedback?.field, "password");
-  assertEquals(owner.state.feedback?.text, "Check your username and password");
+  assertEquals(
+    owner.state.feedback?.failure?.reason,
+    "Check your username and password",
+  );
+  assert(owner.state.feedback?.failure?.recovery);
 });

@@ -53,8 +53,8 @@ test.describe("unknown summary", () => {
     await expect(trigger).toContainText("Tokens unavailable");
     await expect(trigger).toContainText("Cost unavailable");
     await trigger.hover();
-    await expect(page.locator(".otk-turn-usage :popover-open [role=status]"))
-      .toHaveText("Could not finish this action. Try again");
+    await expect(page.locator(".otk-turn-usage :popover-open [role=alert]"))
+      .toHaveText(/No publishable failure reason is available/);
     await expect(page.locator(".otk-usage-breakdown")).toHaveCount(0);
     await expect(page.locator(".otk-message-footer")).not.toContainText(
       "$0.00",

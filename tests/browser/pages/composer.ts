@@ -5,6 +5,10 @@ import type { wire } from "../fixtures/wire.ts";
 
 export const prompt = (page: Page) => page.locator("textarea[name=prompt]");
 export const chips = (page: Page) => page.locator(".otk-prompt-chip");
+export const pendingChips = (page: Page) =>
+  chips(page).and(page.locator("[aria-busy=true]"));
+export const readyChips = (page: Page) =>
+  chips(page).and(page.locator("[aria-busy=false]"));
 /** Submission readiness is separate from chip paint and native turn idle. */
 export async function sendPrompt(page: Page) {
   await expect(page.locator(".otk-send-button:not(:disabled)")).toBeVisible();

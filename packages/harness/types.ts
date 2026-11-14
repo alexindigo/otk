@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { FailureCause, type FailureFacts } from "@otk/protocol";
 import type {
   Capabilities,
   ContentClock,
@@ -111,8 +112,13 @@ export interface Harness {
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
 }
-export class HarnessError extends Error {
-  constructor(readonly code: string, message: string) {
-    super(message);
+export class HarnessError extends FailureCause {
+  /** Feature-authored semantic reason; arbitrary/native causes remain separate. */
+  constructor(
+    readonly code: string,
+    message: string,
+    facts: FailureFacts = { reason: message },
+  ) {
+    super(message, facts);
   }
 }

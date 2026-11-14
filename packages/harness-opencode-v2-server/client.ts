@@ -1,31 +1,43 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { OpenCode, type OpenCodeClient } from "@opencode/client";
 import { HarnessError, NativeReadiness } from "@otk/harness";
-import { type OperationContext, OperationFailure } from "@otk/protocol";
+import {
+  FailureCause,
+  type FailureFacts,
+  type OperationContext,
+  OperationFailure,
+  publicFailureReason,
+} from "@otk/protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DiscoveredService } from "./discovery.ts";
 import { serviceHeaders } from "./discovery.ts";
 
 export class V2MissingSession extends HarnessError {
-  constructor() {
-    super("session", "That session is no longer available.");
+  constructor(facts?: FailureFacts) {
+    super(
+      "session",
+      "That session is no longer available.",
+      facts ?? { reason: "That session is no longer available.", status: 404 },
+    );
   }
 }
-export class V2HttpFailure extends Error {
+export class V2HttpFailure extends FailureCause {
   constructor(
     readonly status: number,
     readonly detail: { message: string; kind?: string; ref?: string },
     readonly _tag?: string,
     cause?: unknown,
   ) {
-    super(detail.message, { cause });
+    super(detail.message, { reason: detail.message, status }, cause);
   }
 }
 /** One endpoint generation. Re-discovery replaces this owner, never the service. */
 export class V2Client {
   readonly readiness: NativeReadiness;
   readonly #api: OpenCodeClient;
-  readonly #reads = new AsyncLocalStorage<AbortSignal>();
+  readonly #reads = new AsyncLocalStorage<
+    { signal: AbortSignal; failure?: V2HttpFailure }
+  >();
   readonly #pending = new Set<Promise<unknown>>();
   readonly #tails = new Map<string, Promise<unknown>>();
   /** One same-session sequence, including its prepared inputs and terminal read. */
@@ -95,7 +107,7 @@ export class V2Client {
           ...init,
           signal: AbortSignal.any([
             signal,
-            ...(this.#reads.getStore() ? [this.#reads.getStore()!] : []),
+            ...(this.#reads.getStore() ? [this.#reads.getStore()!.signal] : []),
             ...(init?.signal ? [init.signal] : []),
             ...(effect
               ? effect.operation ? [effect.operation.signal] : []
@@ -109,7 +121,7 @@ export class V2Client {
             "Opencode authentication failed (401).",
           );
         }
-        if (effect && !effect.observation && !response.ok) {
+        if (!response.ok && (!effect || !effect.observation)) {
           let body: Record<string, unknown> = {};
           try {
             const value = await response.clone().json();
@@ -120,13 +132,26 @@ export class V2Client {
           const data = body.data && typeof body.data === "object"
             ? body.data as Record<string, unknown>
             : body;
-          effect.failure = new V2HttpFailure(response.status, {
+          const failure = new V2HttpFailure(response.status, {
             message: typeof data.message === "string"
-              ? data.message
+              ? publicFailureReason(
+                data.message,
+                [
+                  ...(service.endpoint.auth?.type === "basic"
+                    ? [service.endpoint.auth.password]
+                    : []),
+                  ...Object.values(serviceHeaders(service.endpoint)).flatMap((
+                    value,
+                  ) => [value, value.replace(/^\S+\s+/, "")]),
+                ],
+              )
               : `Opencode request failed (${response.status}).`,
             ...(typeof body.name === "string" ? { kind: body.name } : {}),
             ...(typeof data.ref === "string" ? { ref: data.ref } : {}),
           }, typeof body._tag === "string" ? body._tag : undefined);
+          if (effect) effect.failure = failure;
+          const read = this.#reads.getStore();
+          if (read) read.failure = failure;
         }
         return response;
       },
@@ -213,10 +238,13 @@ export class V2Client {
   ): Promise<T> {
     this.signal.throwIfAborted();
     signal?.throwIfAborted();
+    const context: { signal: AbortSignal; failure?: V2HttpFailure } = {
+      signal: signal ?? this.signal,
+    };
     try {
       const value = await this.#own(this.readiness.run(
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
-        () => this.#reads.run(signal ?? this.signal, () => run(this.#api)),
+        () => this.#reads.run(context, () => run(this.#api)),
       ));
       this.signal.throwIfAborted();
       signal?.throwIfAborted();
@@ -227,7 +255,9 @@ export class V2Client {
       const known = nativeFailure(cause);
       if (known) throw known;
       const tag = errorTag(cause);
-      if (tag === "SessionNotFoundError") throw new V2MissingSession();
+      if (tag === "SessionNotFoundError") {
+        throw new V2MissingSession(context.failure?.facts);
+      }
       if (tag === "UnauthorizedError") {
         throw new HarnessError(
           "authentication",
@@ -235,11 +265,19 @@ export class V2Client {
         );
       }
       if (tag === "InvalidRequestError" || tag === "InvalidCursorError") {
-        throw new OperationFailure("rejected", "native.rejected", cause);
+        throw new OperationFailure(
+          "rejected",
+          "native.rejected",
+          context.failure ?? cause,
+        );
       }
       // Transport, timeout, incompatible bodies and unknown errors cannot prove
       // absence or input rejection. In particular, never return an empty read.
-      throw new OperationFailure("unavailable", "native.unavailable", cause);
+      throw new OperationFailure(
+        "unavailable",
+        "native.unavailable",
+        context.failure ?? cause,
+      );
     }
   }
 }

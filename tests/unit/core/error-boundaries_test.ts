@@ -149,12 +149,18 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
         () => ws.rpc("session.get", { sessionID: `tstv1-${index}` }),
         RequestFailure,
       );
-      assertEquals(failure.message, "Could not finish this action");
+      assertEquals(
+        failure.message,
+        index === 4 ? "typed failure" : "Request rejected",
+      );
       assertEquals(
         failure.failure.code,
         index === 4 ? "owned" : "action.rejected",
       );
-      assertEquals(JSON.stringify(failure.failure).includes(message), false);
+      assertEquals(
+        JSON.stringify(failure.failure).includes(message),
+        index === 4,
+      );
     }
   } finally {
     await ws.close();

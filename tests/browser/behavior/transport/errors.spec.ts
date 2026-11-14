@@ -4,6 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import type { TestState } from "../../fixtures/test-state.ts";
 import type { ContentSession } from "@otk/protocol";
+import { errorObservation } from "../../pages/composer-error.ts";
 import type { Page } from "@playwright/test";
 
 async function errorConsumer(
@@ -65,12 +66,13 @@ async function errorConsumer(
       expect(observation.requestID).toBeUndefined();
     }
   }
-  await expect(page.locator(".otk-session-error-message")).toHaveText(
-    current.observations.some((item) => item.source === "event")
-      ? "The agent reported a session failure. Review the conversation before continuing"
-      : current.observations[0].failure?.code === "native.unknown"
-      ? "Checking whether this finished"
-      : "Could not finish this action. Try again",
+  const observation = errorObservation(current)!;
+  await expect(page.locator(".otk-session-error-message")).toContainText(
+    observation.failure?.facts?.reason ?? observation.message,
+  );
+  await expect(page.locator(".otk-session-error-message a")).toHaveAttribute(
+    "href",
+    `#/local/${id}`,
   );
   return snapshot;
 }

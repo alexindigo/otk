@@ -38,7 +38,9 @@ import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
   createTranscriptProjection,
-  failureText,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
   sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -76,12 +78,12 @@ export default function SessionView(props: {
   usageOwner?: SessionUsageOwner;
   entry?: IndexEntry;
   openUsage?(turnID: string): () => void;
-  usageError?(turnID: string): string | undefined;
+  usageError?(turnID: string): FailureValue | undefined;
   loading: boolean;
   continuity?: "loading" | "ready" | "missing";
   paging: boolean;
   exhausted: boolean;
-  error?: string;
+  error?: string | FailureValue;
   sessionError?: string;
   errorState?: SessionErrorState;
   draft: Draft;
@@ -167,7 +169,7 @@ export default function SessionView(props: {
     </ComposerNotice>
   );
   const [now, setNow] = createSignal(Date.now());
-  const [revealError, setRevealError] = createSignal<string>();
+  const [revealError, setRevealError] = createSignal<FailureValue>();
   const older = ownedAction("session.page", () => props.onOlder());
   const retry = ownedAction("session.refetch", () => {
     setRevealError(undefined);
@@ -281,7 +283,16 @@ export default function SessionView(props: {
         await window?.restore(returnAnchor);
       }).catch((error) => {
         if (!isCancellation(error)) {
-          setRevealError(failureText(error));
+          setRevealError(
+            failureValue(error, {
+              action: "Revealing prompt",
+              target: {
+                sidecarId: props.sidecarId,
+                sessionID: props.info?.id,
+                label: props.info?.title,
+              },
+            }),
+          );
         }
       });
     }
@@ -362,8 +373,7 @@ export default function SessionView(props: {
                   <PaneState
                     feedback={props.error
                       ? {
-                        kind: "error",
-                        text: props.error,
+                        ...errorFeedback(props.error)!,
                         action: {
                           label: "Retry messages",
                           run: () => void retry(),
@@ -430,8 +440,7 @@ export default function SessionView(props: {
                   <Show when={props.error && !!count()}>
                     <PaneState
                       feedback={{
-                        kind: "error",
-                        text: props.error!,
+                        ...errorFeedback(props.error)!,
                         action: {
                           label: "Retry messages",
                           run: () => void retry(),
@@ -440,11 +449,16 @@ export default function SessionView(props: {
                     />
                   </Show>
                   <Show when={revealError()}>
-                    <p role="alert" class="otk-error">{revealError()}</p>
+                    <PaneState feedback={errorFeedback(revealError())} />
                   </Show>
                   <SessionError
                     state={props.errorState}
                     error={props.sessionError}
+                    target={{
+                      sidecarId: props.sidecarId,
+                      sessionID: props.info?.id,
+                      label: props.info?.title,
+                    }}
                     operationKey={feedback()?.identity}
                     diagnosticID={feedback()?.diagnosticID}
                   />
@@ -534,6 +548,8 @@ export default function SessionView(props: {
                                 return (
                                   <Message
                                     sidecarId={props.sidecarId}
+                                    sessionTitle={props.entry?.title ??
+                                      props.info?.title}
                                     ownerID={reply().key}
                                     segments={reply().segments}
                                     message={message()}
@@ -619,7 +635,14 @@ export default function SessionView(props: {
                 onJump={() => {
                   void latest().catch((error) => {
                     if (!isCancellation(error)) {
-                      setRevealError(failureText(error));
+                      setRevealError(failureValue(error, {
+                        action: "Revealing latest messages",
+                        target: {
+                          sidecarId: props.sidecarId,
+                          sessionID: props.info?.id,
+                          label: props.info?.title,
+                        },
+                      }));
                     }
                   });
                 }}

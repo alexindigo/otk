@@ -8,6 +8,9 @@ export const requestsMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/requests/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/requests/002.sql", import.meta.url),
   }],
 };
 export interface ReceiptKey {
@@ -46,6 +49,7 @@ export interface RequestRecord extends ReceiptKey {
   error_retry: "same-intent" | "new-intent" | "none" | null;
   error_field: string | null;
   diagnostic_id: string | null;
+  error_facts?: string | null;
 }
 const identity = ["principal", "client_id", "intent_key"] as const;
 const admission = [
@@ -75,6 +79,7 @@ const mutable = [
   "error_retry",
   "error_field",
   "diagnostic_id",
+  "error_facts",
 ] as const;
 const columns = [...admission, ...mutable];
 const predicate = "principal=? AND client_id=? AND intent_key=?";
@@ -200,6 +205,7 @@ export class Requests {
     tx?: StoreWrite,
   ): { inserted: boolean; record: RequestRecord } {
     return this.db.write(() => {
+      input = { ...input, error_facts: input.error_facts ?? null };
       validate(input);
       if (
         input.state !== "queued" || input.seq !== 1 ||
@@ -214,7 +220,7 @@ export class Requests {
         } FROM request_windows WHERE id=? AND created_at<=? AND expires_at>? AND expires_at<=?
         ON CONFLICT(principal,client_id,intent_key) DO NOTHING`,
       ).run(
-        ...columns.map((name) => input[name]),
+        ...columns.map((name) => input[name] ?? null),
         input.window_id,
         input.accepted_at,
         input.accepted_at,
@@ -278,7 +284,11 @@ export class Requests {
         `UPDATE request_receipts SET ${
           mutable.map((name) => `${name}=?`).join(",")
         } WHERE ${predicate} AND seq=?`,
-      ).run(...mutable.map((name) => next[name]), ...keys(input), expectedSeq);
+      ).run(
+        ...mutable.map((name) => next[name] ?? null),
+        ...keys(input),
+        expectedSeq,
+      );
       if (result.changes !== 1) throw new Error("Request sequence conflict");
       return this.get(input)!;
     }, tx);

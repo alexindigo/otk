@@ -48,13 +48,13 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
     pending: "Saving recent file",
     presentation: "bookkeeping",
   },
-  "permission.list": { kind: "read", pending: "Loading requests" },
+  "permission.list": { kind: "read", pending: "Loading permission requests" },
   "permission.reply": {
     kind: "mutation",
     pending: "Sending response",
     settles: "permission",
   },
-  "question.list": { kind: "read", pending: "Loading requests" },
+  "question.list": { kind: "read", pending: "Loading questions" },
   "question.reply": {
     kind: "mutation",
     pending: "Sending answer",

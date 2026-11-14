@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
-import { createPrimaryAction, failureText, requestIdle } from "@otk/client";
+import {
+  createPrimaryAction,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+  requestIdle,
+} from "@otk/client";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./PermissionDock.css" with { type: "text" };
@@ -125,7 +131,7 @@ function RequestDock(
   );
   const [message, setMessage] = createSignal(""),
     [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal("");
+    [error, setError] = createSignal<FailureValue>("");
   let active = true, card!: HTMLElement, pendingStatus!: HTMLDivElement;
   createEffect(
     () => ({ pending: pending(), feedback: operation() }),
@@ -163,7 +169,11 @@ function RequestDock(
       props.onDirty(false);
     } catch (error) {
       if (feedback) feedback.fail(error);
-      else if (active) setError(failureText(error));
+      else if (active) {
+        setError(
+          failureValue(error, { action: "Sending permission response" }),
+        );
+      }
     } finally {
       if (active) setPending(false);
     }
@@ -366,7 +376,7 @@ function RequestDock(
         </Show>
         <PermissionSummary request={props.request} />
         <Show when={error()}>
-          <FeedbackStatus feedback={{ kind: "error", text: error() }} />
+          <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>
         <Show when={mode() === "always"}>
           <div class="otk-permission-confirm">

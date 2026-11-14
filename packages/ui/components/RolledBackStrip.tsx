@@ -8,7 +8,8 @@ import { ChevronDownIcon, CopyIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { copyContent } from "../features/transcript-context.tsx";
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import OperationFeedback from "./OperationFeedback.tsx";
 /** View-local disclosure; operation state and projection belong to the client. */
 export default function RolledBackStrip(
   props: { strip?: RevertStrip; state: SessionRevert["state"] },
@@ -24,7 +25,7 @@ export function RolledBackContent(
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [expanded, setExpanded] = createSignal(false);
-  const [feedback, setFeedback] = createSignal("");
+  const [feedback, setFeedback] = createSignal<FailureValue>("");
   const [revision, setRevision] = createSignal(0);
   onSettled(() => {
     const invalidate = () => setRevision((value) => value + 1);
@@ -43,7 +44,9 @@ export function RolledBackContent(
     try {
       await action();
     } catch (error) {
-      setFeedback(failureText(error));
+      setFeedback(
+        failureValue(error, { action: "Restoring rolled-back prompts" }),
+      );
     }
   };
   return (
@@ -158,18 +161,10 @@ export function RolledBackContent(
         )}
       </Show>
       <Show when={props.state.error || feedback()}>
-        <ComposerNoticeRow
-          class="otk-error"
-          role="alert"
+        <OperationFeedback
           icon={<RevertIcon />}
-        >
-          <span
-            class="otk-control-label otk-control-grow"
-            title={props.state.error || feedback()}
-          >
-            {props.state.error || feedback()}
-          </span>
-        </ComposerNoticeRow>
+          feedback={errorFeedback(props.state.error || feedback())!}
+        />
       </Show>
     </aside>
   );

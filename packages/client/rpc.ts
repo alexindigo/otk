@@ -128,6 +128,7 @@ export class Rpc {
         code: "request.params",
         retry: "new-intent",
         diagnosticID: crypto.randomUUID(),
+        facts: this.requests.failureFacts(method, params, options),
       });
       failure.cause = cause;
       throw failure;
@@ -150,6 +151,7 @@ export class Rpc {
         code: "request.capacity",
         retry: "new-intent",
         diagnosticID: crypto.randomUUID(),
+        facts: this.requests.failureFacts(method, params, options),
       });
       failure.cause = cause;
       throw failure;
@@ -167,10 +169,20 @@ export class Rpc {
       if (prior.method === method && prior.canonical === canonical) {
         return prior.operation as Operation<RpcResult<M>>;
       }
+      const facts = this.requests.failureFacts(method, captured, options);
+      const admitted = prior.operation.state.facts?.target;
+      if (admitted?.sessionID || admitted?.directory) {
+        facts.target = { ...admitted };
+      }
       throw new RequestFailure({
         code: "request.conflict",
         retry: "none",
         diagnosticID: crypto.randomUUID(),
+        facts: {
+          ...facts,
+          reason: "A different response was already sent for this request",
+          recovery: "This one was not sent",
+        },
       });
     }
     const operation = this.requests.start(method, captured, {

@@ -66,7 +66,10 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   triggers.receive("s", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: entry("a", { activity: { terminal: 2 } }) }],
+    ops: [{
+      op: "upsert",
+      entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
+    }],
   });
   assertEquals(emitted.map((n) => [n.id, n.kind]), [["s/a", "done"]]);
   assertEquals(
@@ -109,7 +112,10 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   triggers.receive("other", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: entry("a", { activity: { terminal: 2 } }) }],
+    ops: [{
+      op: "upsert",
+      entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
+    }],
   });
   assertEquals(emitted.at(-1)?.id, "other/a");
 });

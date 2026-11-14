@@ -40,6 +40,10 @@ export function sessionPorts(o: {
     approvals: resources.approvals(target.sidecarId),
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
+    failureTarget: () => ({
+      ...target,
+      label: resources.entry(target.sidecarId, target.sessionID)?.title,
+    }),
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
     location: (id) => actions.location(target, id),

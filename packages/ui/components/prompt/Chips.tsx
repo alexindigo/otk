@@ -3,10 +3,13 @@ import "./Chips.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { Chip } from "./model.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
+import { errorFeedback } from "@otk/client";
+import FeedbackStatus from "../FeedbackStatus.tsx";
 function title(chip: Chip): string | undefined {
   const part = chip.part;
-  return chip.error ||
-    (part.kind === "file" && part.source !== "path" ? part.name : undefined);
+  return chip.error
+    ? chip.error.text
+    : (part.kind === "file" && part.source !== "path" ? part.name : undefined);
 }
 function thumbnail(chip: Chip): string | undefined {
   const part = chip.part;
@@ -34,7 +37,10 @@ export default function Chips(
     <div class="otk-prompt-chips">
       <For each={props.chips} keyed={(chip) => chip.id}>
         {(chip) => (
-          <span class="otk-prompt-chip">
+          <span
+            class="otk-prompt-chip"
+            aria-busy={chip().pending ? "true" : "false"}
+          >
             <button
               type="button"
               class="otk-control-grow"
@@ -50,13 +56,12 @@ export default function Chips(
               </Show>
               <span class="otk-control-label">
                 {chip().label}
-                {chip().pending
-                  ? " reading…"
-                  : chip().error
-                  ? ` ${chip().error}`
-                  : ""}
+                {chip().pending ? " reading..." : ""}
               </span>
             </button>
+            <Show when={chip().error}>
+              <FeedbackStatus feedback={errorFeedback(chip().error)} />
+            </Show>
             <button
               type="button"
               aria-label={`Remove ${chip().label}`}

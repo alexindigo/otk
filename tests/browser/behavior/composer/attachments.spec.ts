@@ -7,7 +7,9 @@ import {
   holdUploads,
   messages,
   pasteText,
+  pendingChips,
   prompt,
+  readyChips,
   reply,
   upload,
 } from "../../pages/composer.ts";
@@ -52,10 +54,10 @@ test(
     )
       .toBe(3);
     await completeUpload(page, 2);
-    await expect(chips(page).filter({ hasNotText: "reading…" })).toHaveCount(1);
+    await expect(readyChips(page)).toHaveCount(1);
     await completeUpload(page, 1);
     await expect(chips(page)).toHaveCount(2);
-    await expect(chips(page)).not.toContainText(["reading…", "reading…"]);
+    await expect(pendingChips(page)).toHaveCount(0);
     await state.queue(["All retained file bytes received."]);
     await page.locator(".otk-prompt button[type=submit]").click();
     await expect.poll(async () =>
@@ -86,7 +88,7 @@ test(
       )
     )
       .toBe(4);
-    await expect(chips(page)).toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(1);
     await openSession(state, page, other.id);
     await expect(chips(page)).toHaveCount(0);
     await prompt(page).fill("replacement draft");
@@ -95,7 +97,7 @@ test(
     await expect(chips(page)).toHaveCount(0);
     await openSession(state, page, session.id);
     await expect(chips(page)).toContainText("[File 1]");
-    await expect(chips(page)).not.toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(0);
     await state.queue(["Retained upload received."]);
     await page.locator(".otk-prompt button[type=submit]").click();
     await expect.poll(async () =>
@@ -122,7 +124,7 @@ test("composer.drop-paste-reference-and-exact-native-file", {
     bytes: btoa("dropped client bytes"),
   }]);
   await expect(chips(page)).toContainText("[File 1]");
-  await expect(chips(page)).not.toContainText("reading…");
+  await expect(pendingChips(page)).toHaveCount(0);
   await openSession(state, page, other.id);
   await expect(chips(page)).toHaveCount(0);
   await openSession(state, page, session.id);
@@ -146,8 +148,8 @@ test("composer.drop-paste-reference-and-exact-native-file", {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
   }], "paste");
   await expect(chips(page)).toHaveCount(2);
-  await expect(chips(page).filter({ hasText: "[Image 1]" })).not.toContainText(
-    "reading…",
+  await expect(readyChips(page).filter({ hasText: "[Image 1]" })).toHaveCount(
+    1,
   );
   await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
 });
@@ -172,7 +174,7 @@ test("composer.oversize-combined-files-retain-draft-without-send", {
     );
   });
   await expect(chips(page)).toHaveCount(3);
-  await expect(chips(page).filter({ hasText: "reading…" })).toHaveCount(0);
+  await expect(pendingChips(page)).toHaveCount(0);
   await page.locator(".otk-prompt button[type=submit]").click();
   await expect(page.locator(".otk-composer-notice [role=alert]")).toBeVisible();
   expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))

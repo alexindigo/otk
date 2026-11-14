@@ -19,3 +19,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.otk-feedback-status.has-failure .otk-feedback-text {
+  white-space: normal;
+  overflow: visible;
+}

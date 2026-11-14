@@ -37,6 +37,7 @@ export interface SessionPorts {
   approvals?: ApprovalModel;
   feedback?: FeedbackOwner;
   sessionID(): string;
+  failureTarget?(): import("@otk/protocol").FailureTarget;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { canonicalRequest, requestRef } from "@otk/protocol";
+import {
+  canonicalRequest,
+  isSessionID,
+  requestFailureFacts,
+  requestRef,
+} from "@otk/protocol";
 import type {
   IntentIdentity,
   PublicFailure,
@@ -25,11 +30,13 @@ export interface RequestOptions {
   signal?: AbortSignal;
   intent?: IntentIdentity;
   owner?: string;
+  facts?: import("@otk/protocol").FailureFacts;
 }
 export interface OperationState {
   ref: RequestRef;
   method: string;
   owner?: string;
+  facts?: import("@otk/protocol").FailureFacts;
   phase: "sending" | RequestPhase | "succeeded" | "failed" | "released";
   connection: "connected" | "reconnecting" | "authentication-required";
   seq: number;
@@ -61,6 +68,9 @@ export interface RequestTrackerOptions {
   available?(frame: RequestControl): boolean;
   clientID?: string;
   server?: string;
+  sidecarId?: string;
+  /** Borrow canonical keyed metadata at admission, never a mutable selected session. */
+  sessionTitle?(sessionID: string): string | undefined;
   /** Opaque authenticated identity supplied by the transport composition. */
   principal?: string;
   storage?: { load(): unknown; save(value: RememberedRequests): void };
@@ -295,6 +305,30 @@ export class RequestTracker {
     this.#pending.set(state.ref.key, item);
     return item;
   }
+  failureFacts(
+    method: string,
+    params: unknown,
+    options: Pick<RequestOptions, "owner" | "facts"> = {},
+  ): import("@otk/protocol").FailureFacts {
+    const routing = requestFailureFacts(method, params, this.options.sidecarId);
+    const facts = { ...routing, ...options.facts };
+    const target = {
+      ...routing.target,
+      ...options.facts?.target,
+    };
+    const owned = {
+      ...target,
+      ...(!target.sessionID && isSessionID(options.owner)
+        ? { sessionID: options.owner }
+        : {}),
+    };
+    return { ...facts, target: this.#target(owned) };
+  }
+  #target(target: import("@otk/protocol").FailureTarget | undefined) {
+    const label = target?.label ||
+      (target?.sessionID && this.options.sessionTitle?.(target.sessionID));
+    return label ? { ...target, label } : target;
+  }
   start<M extends RpcMethod>(
     method: M,
     params: RpcParams<M>,
@@ -330,6 +364,7 @@ export class RequestTracker {
         code: "request.conflict",
         retry: "none",
         diagnosticID: crypto.randomUUID(),
+        facts: this.failureFacts(method, params, options),
       };
       const result = Promise.reject(new RequestFailure(failure));
       void result.catch(() => {});
@@ -354,6 +389,7 @@ export class RequestTracker {
         ref,
         method,
         owner: options.owner,
+        facts: this.failureFacts(method, params, options),
         phase: "sending",
         connection: this.#connected ? "connected" : "reconnecting",
         seq: 0,
@@ -448,6 +484,17 @@ export class RequestTracker {
       item.state.ref.window !== event.ref.window ||
       item.state.phase === "released"
     ) return;
+    const contextual = (error: PublicFailure): PublicFailure => ({
+      ...error,
+      facts: {
+        ...item.state.facts,
+        ...error.facts,
+        target: this.#target({
+          ...item.state.facts?.target,
+          ...error.facts?.target,
+        }),
+      },
+    });
     this.#connected = true;
     item.state = { ...item.state, connection: "connected" };
     if (event.t === "request.accepted") {
@@ -490,9 +537,10 @@ export class RequestTracker {
         this.#publish(item);
         return;
       }
-      item.state = { ...item.state, phase: "failed", error: event.error };
+      const error = contextual(event.error);
+      item.state = { ...item.state, phase: "failed", error };
       item.settled = true;
-      item.reject(new RequestFailure(event.error));
+      item.reject(new RequestFailure(error));
       item.cleanup();
     } else {
       if (
@@ -525,12 +573,14 @@ export class RequestTracker {
         item.state = {
           ...item.state,
           phase: event.outcome.ok ? "succeeded" : "failed",
-          ...(event.outcome.ok ? {} : { error: event.outcome.error }),
+          ...(event.outcome.ok
+            ? {}
+            : { error: contextual(event.outcome.error) }),
         };
         if (!item.settled) {
           item.settled = true;
           if (event.outcome.ok) item.resolve(event.outcome.result);
-          else item.reject(new RequestFailure(event.outcome.error));
+          else item.reject(new RequestFailure(item.state.error!));
         }
         item.cleanup();
         item.params = undefined;

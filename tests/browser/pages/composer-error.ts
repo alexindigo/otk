@@ -2,8 +2,17 @@
 import { expect, type Page } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { wire } from "../fixtures/wire.ts";
-import type { ContentSession } from "@otk/protocol";
+import type { ContentSession, SessionErrorState } from "@otk/protocol";
 import { messages, prompt } from "./composer.ts";
+
+/** The test observes native-vs-current HTTP authority independently of the UI. */
+export function errorObservation(state: SessionErrorState) {
+  const active = state.observations.filter((item) => !item.cleared);
+  return active.find((item) => item.source === "event") ??
+    active.find((item) =>
+      item.source === "http" && item.requestID === state.currentRequestID
+    ) ?? active[0];
+}
 
 /** V2 validates these inputs before admitting a native execution. It must not
  * fabricate a durable session error or corrupt another client's current draft. */
@@ -19,7 +28,6 @@ export async function rejectedComposerInput(
   )
     .toMatchObject({
       settled: true,
-      error: "Error: Could not finish this action",
       failure: { code: error },
     });
   await expect(prompt(page)).toHaveValue("keep this draft");
@@ -60,10 +68,13 @@ export async function composerError(
     "data-error-revision",
     String(current.revision),
   );
-  await expect(page.locator(".otk-session-error-message")).toHaveText(
-    current.observations.some((o) => o.source === "event")
-      ? "The agent reported a session failure. Review the conversation before continuing"
-      : "Could not finish this action. Try again",
+  const observation = errorObservation(current)!;
+  await expect(page.locator(".otk-session-error-message")).toContainText(
+    observation.failure?.facts?.reason ?? observation.message,
+  );
+  await expect(page.locator(".otk-session-error-message a")).toHaveAttribute(
+    "href",
+    `#/local/${id}`,
   );
   await expect.poll(() =>
     frames.received.some((frame) => {

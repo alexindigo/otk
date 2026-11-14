@@ -307,7 +307,9 @@ Deno.test("essential transcript publishes independently of failed or held attent
     f.reply("question.list", []);
     f.reply("session.children", undefined, "siblings offline");
     await f.until(() =>
-      f.owner.state.error === "Could not finish this action. Try again"
+      !!f.owner.state.error &&
+      f.owner.state.error.failure?.reason ===
+        "No publishable failure reason is available"
     );
     assertEquals(
       f.owner.state.content.questions.map((question) => question.id),

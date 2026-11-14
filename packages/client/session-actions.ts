@@ -338,14 +338,30 @@ export function createSessionActions(o: {
     },
     async question(input) {
       const { selection: target, rpc } = current.context();
+      const asking =
+        session.state.content.questions.find((request) =>
+          request.id === input.requestID
+        )?.sessionID ?? target.sessionID;
+      const options = {
+        owner: target.sessionID,
+        facts: {
+          target: {
+            sidecarId: target.sidecarId,
+            sessionID: asking,
+            label: resources.entry(target.sidecarId, asking)?.title,
+          },
+        },
+      };
       await act(
         target,
         () =>
           input.answers
-            ? rpc.call("question.reply", { ...input, answers: input.answers }, {
-              owner: target.sessionID,
-            })
-            : rpc.call("question.reject", input, { owner: target.sessionID }),
+            ? rpc.call(
+              "question.reply",
+              { ...input, answers: input.answers },
+              options,
+            )
+            : rpc.call("question.reject", input, options),
       );
     },
     location(target, id) {

@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { readyMenuBox } from "../../pages/menus.ts";
+import { expandedFailure } from "../../pages/failure-geometry.ts";
 test.use({ profile: "contract-visual-styles" });
 const tags = { tag: ["@visual", "@isolated"] };
 async function scene(page: Page, url: string, name: string) {
@@ -133,9 +134,7 @@ test(
       await expect(surface.getByRole("status")).toBeFocused();
       await page.evaluate("styleTest.settlePreference()");
       await expect(surface.getByRole("alert")).not.toHaveText("");
-      expect(await bounds(page, `[data-preference-surface=${name}]`)).toEqual(
-        before,
-      );
+      await expandedFailure(page, `[data-preference-surface=${name}]`, before);
       await page.evaluate("styleTest.settlePreference()");
     }
   },
@@ -165,7 +164,7 @@ test(
     expect(await bounds(page, ".otk-form")).toEqual(before);
     await page.evaluate("styleTest.feedback('error')");
     await expect(page.getByRole("alert")).not.toHaveText("");
-    expect(await bounds(page, ".otk-form")).toEqual(before);
+    await expandedFailure(page, ".otk-form", before);
     await expect(page.locator("body")).not.toContainText("/secret/path");
     await expect(page.locator("input").first()).not.toHaveAttribute("readonly");
   },
@@ -202,9 +201,9 @@ test(
       expect(description.errors).toBe(1);
       if (name === "notes") expect(description.ids).toContain("notes-help");
       await expect(page.getByRole("alert")).toHaveText(
-        "Could not finish this action. Try again",
+        /No publishable failure reason is available/,
       );
-      expect(await bounds(page, ".otk-form")).toEqual(before);
+      await expandedFailure(page, ".otk-form", before);
       await expect(page.locator("textarea")).toHaveValue("Keep this text");
     }
   },
@@ -288,7 +287,7 @@ test(
     expect((await panel.boundingBox())!.height).toBe(before.height);
     await page.evaluate("styleTest.settleMenu(true)");
     await expect(panel.getByRole("alert")).toHaveText(
-      "Could not finish this action. Try again",
+      /No publishable failure reason is available/,
     );
     await expect(panel.getByRole("alert")).toHaveCount(1);
     await expect(action).toBeFocused();

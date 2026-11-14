@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { sessionSummary } from "@otk/client";
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectSessions.css" with { type: "text" };
 import ListRow from "./ListRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
-import { createMemo, createSignal, onCleanup, Show } from "solid-js";
+import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  onCleanup,
+  Show,
+} from "solid-js";
 import VirtualList from "./VirtualList.tsx";
-import TitleEditor from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import {
   createSessionTree,
@@ -57,7 +64,7 @@ export default function ProjectSessions(props: {
   onCreate(project: ProjectSelection): void | Promise<unknown>;
 }): import("solid-js").Element {
   const [query, setQuery] = createSignal(props.interaction?.query ?? "");
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   let visibleKeys: readonly string[] = [];
   onCleanup(() => props.onRows?.([], query()));
   let search!: HTMLInputElement;
@@ -97,7 +104,9 @@ export default function ProjectSessions(props: {
     },
   });
   const run = (promise: Promise<unknown>) =>
-    void promise.catch((e) => setError(failureText(e)));
+    void promise.catch((e) =>
+      setError(failureValue(e, { action: "Opening session" }))
+    );
   const hierarchy = createSessionTree();
   const rows = createMemo(() => {
     const project = props.project;
@@ -174,7 +183,7 @@ export default function ProjectSessions(props: {
         </span>
       </Show>
       <Show when={error()}>
-        <p class="otk-error" role="alert">{error()}</p>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
       <Show
         when={props.project}
@@ -281,6 +290,7 @@ export default function ProjectSessions(props: {
                     sidecarId: props.project!.sidecarId,
                     sessionID: row().session.id,
                   }, "row");
+                const feedbackID = createUniqueId();
                 return (
                   <Show
                     when={!!merged(key)}
@@ -298,6 +308,14 @@ export default function ProjectSessions(props: {
                     >
                       <ListRow
                         editing={editing()}
+                        feedback={
+                          <Show when={editing()}>
+                            <TitleFeedback
+                              owner={props.rename!}
+                              id={feedbackID}
+                            />
+                          </Show>
+                        }
                         ref={contextTarget(() => ({
                           kind: "session",
                           data: {
@@ -436,7 +454,10 @@ export default function ProjectSessions(props: {
                           when={editing()}
                           fallback={row().session.title}
                         >
-                          <TitleEditor owner={props.rename!} />
+                          <TitleEditor
+                            owner={props.rename!}
+                            feedbackID={feedbackID}
+                          />
                         </Show>
                       </ListRow>
                     </div>

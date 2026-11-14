@@ -13,6 +13,7 @@ export function feedbackState(input: { feedback?: Feedback; class?: string }): {
     class: [
       input.class,
       value ? "is-visible" : "",
+      value?.failure ? "has-failure" : "",
       value?.kind === "connection"
         ? "is-reconnecting"
         : value

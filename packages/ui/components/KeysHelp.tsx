@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, failureValue, type Feedback } from "@otk/client";
 import "./KeysHelp.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
@@ -15,7 +15,7 @@ export default function KeysHelp(props: {
 }): import("solid-js").Element {
   const [revision, setRevision] = createSignal(0),
     [editing, setEditing] = createSignal(""),
-    [error, setError] = createSignal(""),
+    [error, setError] = createSignal<string | Feedback>(""),
     [pending, setPending] = createSignal(false);
   let active = true;
   let status: { focus(): void } | undefined, resetButton!: HTMLButtonElement;
@@ -40,7 +40,9 @@ export default function KeysHelp(props: {
       await props.onSave(value);
       if (active) setEditing("");
     } catch (error) {
-      if (active) setError(failureText(error));
+      if (active) {
+        setError(failureValue(error, { action: "Saving keyboard shortcuts" }));
+      }
     } finally {
       if (active) setPending(false);
     }
@@ -171,7 +173,9 @@ export default function KeysHelp(props: {
       </div>
       <FieldFeedback
         action
-        feedback={error() ? { kind: "error", text: error() } : undefined}
+        feedback={errorFeedback(error(), {
+          action: "Saving keyboard shortcuts",
+        })}
       />
       <ActionSlot
         class="otk-key-actions"

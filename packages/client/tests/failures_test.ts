@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { FailurePresenter, RequestFailure } from "../mod.ts";
 
-Deno.test("failure presenter has safe fixed fallback and feature-owned contributions", () => {
+Deno.test("failure presenter derives the complete contract and optional enrichment", () => {
   const presenter = new FailurePresenter();
   const failure = {
     code: "<html>/private/db SQL session.prompt",
@@ -10,19 +10,19 @@ Deno.test("failure presenter has safe fixed fallback and feature-owned contribut
     diagnosticID: "opaque",
   };
   assertEquals(
-    presenter.present(failure).text,
-    "Could not finish this action. Try again",
+    presenter.present(failure).failure?.reason,
+    "No publishable failure reason is available",
   );
   assertEquals(
     new RequestFailure(failure).message,
-    "Could not finish this action",
+    "Request rejected",
   );
   presenter.register(
     "credentials",
     () => ({ kind: "error", text: "Check your username and password" }),
   );
   assertEquals(
-    presenter.present({ ...failure, code: "credentials" }).text,
+    presenter.present({ ...failure, code: "credentials" }).failure?.reason,
     "Check your username and password",
   );
 });

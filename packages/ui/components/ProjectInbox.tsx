@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText, projectGroup } from "@otk/client";
+import {
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+  projectGroup,
+} from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
@@ -54,7 +60,7 @@ export default function ProjectInbox(props: {
   onLayout(patch: Partial<ShellLayout>): Promise<void>;
 }): import("solid-js").Element {
   const [inactiveOpen, setInactiveOpen] = createSignal(false);
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   const ports = useCommandPorts(), { commands } = ports;
   const add = ownedCommand(ports, {
     id: "project.add",
@@ -92,7 +98,8 @@ export default function ProjectInbox(props: {
       await props.onLayout({ leftWidth });
       setError("");
     },
-    fail: (error) => setError(failureText(error)),
+    fail: (error) =>
+      setError(failureValue(error, { action: "Saving project layout" })),
   });
   const width = resize.width;
   const open = ownedAction("project.open", props.onOpen, {
@@ -138,7 +145,7 @@ export default function ProjectInbox(props: {
     await props.onLayout({ discoveredCollapsed: discoveredOpen() });
   });
   function Row(row: { project: ProjectRow }) {
-    const [rowError, setRowError] = createSignal("");
+    const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
     const project = () => row.project;
     const target = () => ({
@@ -260,9 +267,8 @@ export default function ProjectInbox(props: {
             <span
               id={rowErrorID}
               class="otk-error otk-project-error"
-              role="alert"
             >
-              {rowError()}
+              <FeedbackStatus feedback={errorFeedback(rowError())} />
             </span>
           </Show>
         </SelectionContent>
@@ -291,7 +297,9 @@ export default function ProjectInbox(props: {
             aria-label="Add project"
             title="Add project"
             onClick={() =>
-              void add().catch((error) => setError(failureText(error)))}
+              void add().catch((error) =>
+                setError(failureValue(error, { action: "Adding project" }))
+              )}
           >
             <PlusIcon />
           </button>
@@ -358,7 +366,7 @@ export default function ProjectInbox(props: {
             </For>
           </div>
           <Show when={error()}>
-            <p role="alert" class="otk-error">{error()}</p>
+            <FeedbackStatus feedback={errorFeedback(error())} />
           </Show>
         </footer>
       }
@@ -396,7 +404,7 @@ export default function ProjectInbox(props: {
           aria-expanded={discoveredOpen() ? "true" : "false"}
           onClick={() =>
             void toggleDiscovered().catch((error) =>
-              setError(failureText(error))
+              setError(failureValue(error, { action: "Saving project layout" }))
             )}
         >
           <ControlIcon>
@@ -428,7 +436,11 @@ export default function ProjectInbox(props: {
           class="otk-inactive-toggle"
           aria-expanded={inactiveOpen() ? "true" : "false"}
           onClick={() =>
-            void inactive().catch((error) => setError(failureText(error)))}
+            void inactive().catch((error) =>
+              setError(
+                failureValue(error, { action: "Changing inactive projects" }),
+              )
+            )}
         >
           <ControlIcon>
             <ChevronIcon class="otk-inactive-chevron" />

@@ -5,10 +5,12 @@ import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
 import { timingExplanation, workingTime } from "./work-log.ts";
 import UsageCost from "./UsageCost.tsx";
+import { errorFeedback, type FailureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 
 /** Presentation only; the usage owner supplies every call, price and clock. */
 export default function UsageDetail(
-  props: { usage?: Usage; error?: string; showCost: boolean },
+  props: { usage?: Usage; error?: string | FailureValue; showCost: boolean },
 ): import("solid-js").Element {
   const duration = (time: Usage["timing"]) =>
     workingTime(time)?.replace("Worked for ", "") ?? "Time unknown";
@@ -61,11 +63,9 @@ export default function UsageDetail(
       >
         <Show
           when={props.usage}
-          fallback={
-            <p role={props.error ? "status" : undefined}>
-              {props.error ?? "Loading usage breakdown..."}
-            </p>
-          }
+          fallback={props.error
+            ? <FeedbackStatus feedback={errorFeedback(props.error)} />
+            : <p>Loading usage breakdown...</p>}
         >
           {(usage) => (
             <table class="otk-usage-breakdown">

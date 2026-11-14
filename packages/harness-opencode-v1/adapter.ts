@@ -5,7 +5,9 @@ import {
   isAssistantTerminal,
   isAttentionOp,
   isCancellation,
+  latestTerminal,
   normalizeError,
+  type TerminalEvidence,
 } from "@otk/protocol";
 import type { ContentOp, Part, RevertInfo, Todo } from "@otk/protocol";
 import type { SessionMetadata as IndexEntry } from "@otk/protocol";
@@ -27,7 +29,7 @@ import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
 import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
-import { terminalToken } from "./db-hints.ts";
+import { terminalFacts, terminalToken } from "./db-hints.ts";
 import { History } from "./history.ts";
 import { consumeEvents } from "./events.ts";
 import {
@@ -800,9 +802,9 @@ export class OpencodeV1Adapter implements Harness {
       if (this.#idle.get(entry.id) === this.#connection && !signal.aborted) {
         this.#terminals.set(
           entry.id,
-          Math.max(
-            this.#terminals.get(entry.id) ?? 0,
-            this.#terminalCandidates.get(entry.id) ?? 0,
+          latestTerminal(
+            this.#terminals.get(entry.id),
+            this.#terminalCandidates.get(entry.id),
           ),
         );
       }
@@ -816,7 +818,7 @@ export class OpencodeV1Adapter implements Harness {
       return ({
         ...entry,
         activity: {
-          terminal: this.#terminals.get(entry.id) ?? 0,
+          ...this.#terminals.get(entry.id),
           work: {
             keys: this.#liveWork.has(entry.id)
               ? [this.#liveWork.get(entry.id)!.key]
@@ -850,8 +852,8 @@ export class OpencodeV1Adapter implements Harness {
     }, signal);
   }
   #liveWork = new Map<string, { key: string; generation: number }>();
-  #terminals = new Map<string, number>();
-  #terminalCandidates = new Map<string, number>();
+  #terminals = new Map<string, TerminalEvidence>();
+  #terminalCandidates = new Map<string, TerminalEvidence>();
   #idle = new Map<string, number>();
   #questionFresh = new Map<string, number>();
   #permissionInventories = new Map<string, number>();
@@ -1417,10 +1419,7 @@ export class OpencodeV1Adapter implements Harness {
         // Fresh work/input inventories and subscribed events remain independent.
         this.#terminals.set(
           row.id,
-          Math.max(
-            this.#terminals.get(row.id) ?? 0,
-            row.activity?.terminal ?? 0,
-          ),
+          latestTerminal(this.#terminals.get(row.id), row.activity),
         );
         entries.set(row.id, {
           ...row,
@@ -2286,9 +2285,9 @@ export class OpencodeV1Adapter implements Harness {
     ) {
       this.#terminalCandidates.set(
         sessionID,
-        Math.max(
-          this.#terminalCandidates.get(sessionID) ?? 0,
-          terminalToken(info),
+        latestTerminal(
+          this.#terminalCandidates.get(sessionID),
+          terminalFacts(info),
         ),
       );
       const current = this.#index.getMetadata(sessionID);

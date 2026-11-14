@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorFeedback } from "@otk/client";
+import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
@@ -158,7 +160,7 @@ export default function Shell(
     () => notifications.update(),
   );
   createEffect(() => error(), (text) => {
-    if (text) notifications.error(new Error(text));
+    if (text) notifications.error(text);
   });
   for (
     const command of [
@@ -545,7 +547,10 @@ export default function Shell(
             />
             <main class="otk-main">
               <Show when={error()}>
-                <p class="otk-error otk-global-error" role="alert">{error()}</p>
+                <FeedbackStatus
+                  class="otk-global-error"
+                  feedback={errorFeedback(error())}
+                />
               </Show>
               <Show
                 when={settings()}

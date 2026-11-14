@@ -145,9 +145,48 @@ export async function supplemental(
     await expect(page.locator("dialog[open] [role=alert]")).toHaveCount(1);
     for (const theme of themes) {
       await paint(theme);
+      // Complete failure prose expands a centered dialog. Controls keep their
+      // horizontal geometry and dimensions, not obsolete absolute Y positions.
       (await boxes()).forEach((v, i) =>
-        expect(Math.abs(v - idle[i])).toBeLessThanOrEqual(1)
+        i % 4 !== 1 && expect(Math.abs(v - idle[i])).toBeLessThanOrEqual(1)
       );
+      await expect(page.locator("dialog[open] input[name=taskName]"))
+        .toHaveValue("Retained task name");
+      const geometry = await page.locator("dialog[open]").evaluate((dialog) => {
+        const box = dialog.getBoundingClientRect();
+        const controls = [
+          dialog.querySelector("h2")!,
+          dialog.querySelector("input[name=taskName]")!,
+          dialog.querySelector(".otk-action-slot")!,
+        ].map((el) => el.getBoundingClientRect());
+        const failure = dialog.querySelector(".otk-failure-content")!;
+        return {
+          centered: [
+            Math.abs((box.left + box.right - innerWidth) / 2),
+            Math.abs((box.top + box.bottom - innerHeight) / 2),
+          ],
+          controlsInside: controls.every((r) =>
+            r.left >= box.left - 1 && r.right <= box.right + 1 &&
+            r.top >= box.top - 1 && r.bottom <= box.bottom + 1
+          ),
+          ordered: controls.every((r, i) =>
+            !i || r.top >= controls[i - 1].bottom
+          ),
+          failureInside: Array.from(failure.children).every((el) => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const r = range.getBoundingClientRect();
+            return r.left >= box.left - 1 && r.right <= box.right + 1 &&
+              r.top >= box.top - 1 && r.bottom <= box.bottom + 1;
+          }),
+        };
+      });
+      geometry.centered.forEach((delta) =>
+        expect(delta).toBeLessThanOrEqual(1)
+      );
+      expect(geometry.controlsInside).toBe(true);
+      expect(geometry.ordered).toBe(true);
+      expect(geometry.failureInside).toBe(true);
       expect(
         await page.locator("dialog[open] [role=alert]").evaluate((el) => {
           const probe = document.createElement("span");

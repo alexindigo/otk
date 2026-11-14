@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { OperationFailure, type PublicFailure } from "@otk/protocol";
+import {
+  type FailureFacts,
+  OperationFailure,
+  type PublicFailure,
+} from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 /** Explicit semantic failures only; arbitrary exceptions remain diagnostic causes. */
 export class ExecutionFailure extends Error {
@@ -10,8 +14,11 @@ export class ExecutionFailure extends Error {
 export function publicFailure(
   cause: unknown,
   report: (id: string, cause: unknown) => void,
+  context?: FailureFacts,
 ): PublicFailure {
-  const diagnosticID = crypto.randomUUID();
+  const diagnosticID = cause instanceof OperationFailure
+    ? cause.diagnosticID
+    : crypto.randomUUID();
   try {
     report(diagnosticID, cause);
   } catch { /* Diagnostics cannot change an outcome. */ }
@@ -36,5 +43,14 @@ export function publicFailure(
       }
       : { code: "action.rejected", retry: "new-intent" as const }),
     diagnosticID,
+    facts: {
+      ...context,
+      ...(cause instanceof ExecutionFailure
+        ? cause.failure.facts
+        : cause instanceof OperationFailure || cause instanceof HarnessError
+        ? cause.facts
+        : undefined),
+      ...(cause instanceof OperationFailure ? { outcome: cause.outcome } : {}),
+    },
   };
 }

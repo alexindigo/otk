@@ -67,6 +67,8 @@ const scenes = {
   "feedback-owners": () => import("./feedback-owners.tsx"),
   "preference-feedback": () => import("./preference-feedback.tsx"),
   "notice-lifetime": () => import("./notice-lifetime.tsx"),
+  failures: () => import("./failures.tsx"),
+  "settlement-conflicts": () => import("./settlement-conflicts.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

@@ -16,7 +16,7 @@ import {
   usageTool,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import type { SidecarConnection } from "./connection.ts";
 import { type ClientIndex, createIndex } from "./index.ts";
 import { createTurnPricing, type TurnUsage } from "./usage.ts";
@@ -51,7 +51,7 @@ function detailOp(event: ContentOp, turnID: string): DetailOp | undefined {
 export interface UsageState {
   entries: Record<
     string,
-    { value?: TurnUsageDetail; loading: boolean; error?: string }
+    { value?: TurnUsageDetail; loading: boolean; error?: FailureValue }
   >;
 }
 export interface SessionUsageOwner {
@@ -59,7 +59,7 @@ export interface SessionUsageOwner {
   subscribe(listener: (state: UsageState) => void): () => void;
   get(target: UsageTarget): TurnUsageDetail | undefined;
   priced(target: UsageTarget, catalog?: ModelCatalog): TurnUsage | undefined;
-  error(target: UsageTarget): string | undefined;
+  error(target: UsageTarget): FailureValue | undefined;
   load(target: UsageTarget, refresh?: boolean): Promise<void>;
   retain(target: UsageTarget): () => void;
   removeServer(sidecar: string): void;
@@ -107,7 +107,7 @@ export function createSessionUsage(
     key: string,
     resource: Resource,
     loading = false,
-    error?: string,
+    error?: FailureValue,
   ) => {
     state.entries[key] = { value: resource.value, loading, error };
     notify();
@@ -306,7 +306,7 @@ export function createSessionUsage(
             resource.again = true;
             return;
           }
-          publish(key, resource, false, failureText(error));
+          publish(key, resource, false, failureValue(error));
           schedule(resource);
         }
       } finally {

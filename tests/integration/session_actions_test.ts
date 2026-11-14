@@ -55,7 +55,8 @@ v1Test(
         Error,
       );
       assert(error instanceof RequestFailure);
-      assertEquals(error.message, "Could not finish this action");
+      assertEquals(error.failure.facts?.action, "session.revert");
+      assertEquals(error.failure.facts?.target?.sessionID, s.id);
       assertEquals(error.failure.code, "session.busy");
     } finally {
       held.release();

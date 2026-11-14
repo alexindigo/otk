@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./Palette.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
@@ -12,7 +13,7 @@ export default function Palette(
   const ports = useCommandPorts(), { commands } = ports;
   const [query, setQuery] = createSignal(""),
     [revision, setRevision] = createSignal(0),
-    [error, setError] = createSignal("");
+    [error, setError] = createSignal<FailureValue>("");
   let active = true;
   onSettled(() => {
     const release = commands.subscribe(() => setRevision((n) => n + 1));
@@ -39,7 +40,11 @@ export default function Palette(
         if (active) props.onClose();
         return;
       }
-      if (active) setError(failureText(error));
+      if (active) {
+        setError(
+          failureValue(error, { action: commands.metadata(id)?.title ?? id }),
+        );
+      }
     }
   };
   return (
@@ -92,7 +97,7 @@ export default function Palette(
         <p class="otk-muted">No matching commands.</p>
       </Show>
       <Show when={error()}>
-        <p role="alert">{error()}</p>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
     </>
   );
