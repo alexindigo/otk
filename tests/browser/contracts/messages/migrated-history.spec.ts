@@ -35,14 +35,33 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   );
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
   await expect(page.locator(".otk-work-fold").first()).toContainText(
-    "Time unknown",
+    "Work log",
   );
-  await expect(page.locator(".otk-turn-time").last()).toHaveText(
-    "Worked for 1.0s",
-  );
+  await expect(page.locator('[data-message="known-call-0"] .otk-turn-time'))
+    .toHaveText(
+      "Worked for 1.0s",
+    );
   await expect(page.locator('[data-message="missing-end-call"] .otk-turn-time'))
     .toHaveText("Time unknown");
   await expect(page.locator('[data-message="missing-end-call"]')).toContainText(
     "interrupted",
   );
+});
+test("messages.work-log-segments-have-own-times-and-footer-keeps-turn-total", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.setViewportSize({ width: 1280, height: 1600 });
+  await openSession(state, page, "tstv1-otk");
+  const reply = page.locator('[data-message="segment-call"]');
+  const headers = reply.locator(".otk-work-fold");
+  await expect(headers).toHaveCount(2);
+  await expect(headers.nth(0)).toHaveAttribute("aria-expanded", "false");
+  await expect(headers.nth(1)).toHaveAttribute("aria-expanded", "false");
+  await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
+  await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+  await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  await page.reload();
+  await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
+  await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+  await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
 });

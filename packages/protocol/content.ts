@@ -114,7 +114,7 @@ export interface ToolBase {
   failure?: { message: string };
   /** Ordered nested operations interpreted by the producing harness. */
   children?: ToolCall[];
-  time: { start?: number; end?: number };
+  time: import("./turn-timing.ts").SegmentTimingEvidence;
   childSessionID?: string;
   /** Native result text, when supplied; structural tools also retain their typed result. */
   output?: string;

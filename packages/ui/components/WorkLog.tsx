@@ -3,15 +3,14 @@ import "./WorkLog.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { timingExplanation, workingTime } from "./work-log.ts";
-import type { TurnTiming } from "@otk/protocol";
+import { workingTime } from "./work-log.ts";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import DividerLabel from "./DividerLabel.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
   props: {
-    time?: TurnTiming;
+    workingMs?: number;
     identity?: string;
     prefs?: Preferences;
     required?: boolean;
@@ -26,14 +25,13 @@ export default function WorkLog(
     () => !!props.required,
   );
   const toggle = ownedAction("work.toggle", () => setOpen(!open()));
-  const label = () => workingTime(props.time) ?? "Work log";
+  const label = () => workingTime(props.workingMs) ?? "Work log";
   return (
     <section class="otk-work-log">
       <button
         class="otk-work-fold"
         type="button"
         aria-expanded={open() ? "true" : "false"}
-        title={timingExplanation(props.time)}
         onClick={() => void toggle()}
       >
         <ChevronIcon class="otk-work-chevron" />

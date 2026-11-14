@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
 import type { PartPresentation } from "../registries/renderers.ts";
-import { partFrames, type PartGroup, partGroups } from "./work-log.ts";
+import {
+  partFrames,
+  type PartGroup,
+  partGroups,
+  segmentWorkingTime,
+} from "./work-log.ts";
 
 export interface MessageLayout {
   frames: { id: string; transcript: boolean; groups: PartGroup[] }[];
@@ -156,7 +161,11 @@ export function createMessageLayout() {
       for (const { before, after } of replacements) {
         copyable += Number(after.copyable) - Number(before.copyable);
         const slot = slots.get(after.part.id);
-        if (!slot || before.part === after.part) continue;
+        if (
+          !slot ||
+          before.part === after.part &&
+            before.value.timing === after.value.timing
+        ) continue;
         if (frames === state.frames) frames = [...frames];
         if (!changedFrames.has(slot.frame)) {
           frames[slot.frame] = {
@@ -172,6 +181,16 @@ export function createMessageLayout() {
           changedGroups.add(key);
         }
         frame.groups[slot.group].parts[slot.index] = after.part;
+      }
+      for (const key of changedGroups) {
+        const [f, g] = key.split(":").map(Number);
+        const group = frames[f].groups[g];
+        if (group.work) {
+          group.workingMs = segmentWorkingTime(
+            group.parts,
+            (part) => parts.get(part.id)!.value,
+          );
+        }
       }
       if (frames !== state.frames || state.copyable !== (copyable > 0)) {
         state = { ...state, frames, copyable: copyable > 0 };

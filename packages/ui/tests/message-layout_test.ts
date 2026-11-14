@@ -7,6 +7,49 @@ import {
   messageLayoutRole,
 } from "../components/work-log.ts";
 
+Deno.test("segment timing follows cached part evidence across clock updates and unknown endpoints", () => {
+  const owner = createMessageLayout();
+  let presented = 0;
+  const part = (id: string, end?: number): Part => ({
+    kind: "reasoning",
+    id,
+    blocks: [],
+    time: { start: 100, end },
+  });
+  const first = part("first", 500), text: Part = { kind: "meta", id: "text" };
+  const present = (p: Part) => {
+    presented++;
+    return p.kind === "reasoning" ? { work: p.time, timing: p.time } : {};
+  };
+  const update = (last: Part) =>
+    owner.update(
+      "reply",
+      "assistant",
+      [{
+        messageID: "source",
+        parts: [first, text, last],
+      }],
+      "prefs",
+      present,
+    );
+  assertEquals(
+    update(part("last", 1000)).frames[0].groups.map((g) => g.workingMs),
+    [400, undefined, 900],
+  );
+  assertEquals(presented, 3);
+  assertEquals(
+    update(part("last", 1300)).frames[0].groups.map((g) => g.workingMs),
+    [400, undefined, 1200],
+  );
+  assertEquals(presented, 4);
+  assertEquals(update(part("last")).frames[0].groups.map((g) => g.workingMs), [
+    400,
+    undefined,
+    undefined,
+  ]);
+  assertEquals(presented, 5);
+});
+
 Deno.test("provider context never shares user bubbles or actionable prompt identity", () => {
   const message: UserMessage = {
     id: "context",

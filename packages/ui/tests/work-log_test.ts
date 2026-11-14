@@ -12,7 +12,10 @@ Deno.test("work groups preserve ordering, external ownership, missing clocks and
   registry.register(
     "step",
     () => "step",
-    (part) => ({ work: JSON.parse(part.data!) }),
+    (part) => ({
+      work: JSON.parse(part.data!),
+      timing: JSON.parse(part.data!),
+    }),
   );
   const input: Part[] = [
     { id: "a", kind: "text", blocks: [], synthetic: false },
@@ -29,8 +32,14 @@ Deno.test("work groups preserve ordering, external ownership, missing clocks and
     groups.map((group) => [group.work, group.parts.map((part) => part.id)]),
     [[false, ["a"]], [true, ["b", "c"]], [false, ["d"]], [true, ["e"]]],
   );
-  // Grouping owns layout only. Turn clocks belong to the complete usage ledger,
-  // not to a competing span reconstructed from the currently loaded tool parts.
+  // The shared owner projects this segment's evidence, never a loaded-page turn
+  // span. Incomplete clocks cannot borrow a duration from another segment.
+  assertEquals(groups.map((group) => group.workingMs), [
+    undefined,
+    20,
+    undefined,
+    undefined,
+  ]);
   assertEquals(groups.map((group) => Object.hasOwn(group, "time")), [
     false,
     false,

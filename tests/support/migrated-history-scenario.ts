@@ -11,6 +11,7 @@ import { nativeBinary, nativeVersion } from "./native.ts";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
 import { TurnTimingAccumulator } from "@otk/harness";
 import { knownDerived, usageHeader, UsageLedger } from "@otk/protocol";
+import { segmentTimingFixture } from "./segment-timing-fixture.ts";
 
 export async function migratedHistoryScenario() {
   const fixtureData = JSON.parse(
@@ -129,6 +130,8 @@ export async function migratedHistoryScenario() {
         : []
     ),
   );
+  const segment = segmentTimingFixture(sessionID, nativeVersion, later + 10000);
+  messages.push(segment.message);
   const f = await inboxBrowserFixture(
     root,
     [],
@@ -139,6 +142,12 @@ export async function migratedHistoryScenario() {
         state: "ready",
         revision: 1,
         turns: {
+          "segment-turn": knownDerived(
+            segment.summary,
+            "recorded-segment-fixture",
+            1,
+            true,
+          ),
           prompt: knownDerived(
             { ...ledger.summary("prompt")!, timing: timing.result() },
             "native-migration-fixture",

@@ -267,7 +267,7 @@ export default function Message(
                     }
                   >
                     <WorkLog
-                      time={time()}
+                      workingMs={group().workingMs}
                       identity={group().id}
                       prefs={props.prefs}
                       required={group().required}
@@ -302,7 +302,10 @@ export default function Message(
             <Show
               when={props.recovery === "unavailable" && props.onRetryRecovery}
             >
-              <button type="button" onClick={() => props.onRetryRecovery?.()}>
+              <button
+                type="button"
+                onClick={() => props.onRetryRecovery?.()}
+              >
                 Retry response
               </button>
             </Show>

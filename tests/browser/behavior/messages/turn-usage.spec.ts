@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, Message } from "@otk/protocol";
+import * as timingProtocol from "@otk/protocol";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { hoverCompletedUsage, prompt } from "../../pages/transcript.ts";
+// Node loads the public barrel as CommonJS; Deno uses its named exports.
+const protocol = timingProtocol as typeof timingProtocol & {
+  default?: typeof timingProtocol;
+};
+const { TurnTimingAccumulator } = protocol.default ?? protocol;
 test.use({ profile: "messages-priced" });
 test("messages.priced-native-multistep-usage-display-persistence", {
   tag: ["@messages", "@contracts"],
@@ -158,9 +164,24 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,
   );
-  await expect(page.locator(".otk-work-fold span").first()).toHaveText(
-    `Worked for ${turnTime}`,
+  const parts = steps.flatMap((step) => step.parts);
+  const firstText = parts.findIndex((part) => part.kind === "text");
+  expect(firstText).toBeGreaterThan(0);
+  const segmentMs = TurnTimingAccumulator.segment(
+    parts.slice(0, firstText).flatMap((part) =>
+      part.kind === "tool"
+        ? [part.call.time]
+        : part.kind === "reasoning"
+        ? [part.time]
+        : []
+    ),
   );
+  expect(segmentMs).toBeDefined();
+  await expect(page.locator(".otk-work-fold span").first()).toHaveText(
+    `Worked for ${(segmentMs! / 1000).toFixed(1)}s`,
+  );
+  // Bookkeeping after the answer has no segment clock, even with a known turn.
+  await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");
   expect(
     await page.locator(".otk-turn-usage").evaluate((u) => {
       const a = u.getBoundingClientRect(),

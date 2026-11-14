@@ -52,7 +52,11 @@ export function mapTool(part: RawPart): ToolCall {
       : state.status,
     title: state.title,
     error: state.error ?? (task?.state === "error" ? task.text : undefined),
-    time: { start: state.time?.start, end: state.time?.end },
+    time: {
+      start: state.time?.start,
+      end: state.time?.end,
+      ...(part.tool === "question" ? { waitsForUser: true } : {}),
+    },
     output: state.output,
     outputContent: toolResult(part),
     source: nativeSource("tool", part, state.output),
