@@ -562,6 +562,13 @@ calls but accepts reported zero. Helper count/current/time stay together through
 refresh and source outage. Repeated unchanged project-policy input does not
 restart discovery or helper backfill.
 
+Helper checkpoints and partial tool sweeps remain private until coherent
+coverage finishes. An unchanged result or repeated outage publishes no helper or
+session revision. Changed state, value or source witness borrows the next
+session publication revision, preserving the helper's existing ordering domain.
+Requests arriving during a pass share the scheduler's one coalesced successor,
+not concurrent scans.
+
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never
 full message/part JSON. Turn timing adds scalar text/reasoning/tool clock

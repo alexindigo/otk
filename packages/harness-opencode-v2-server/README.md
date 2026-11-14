@@ -270,6 +270,14 @@ neutral `aggregation:"reported"` marker through worker chunks to the shared live
 ledger. Omitted markers preserve existing V1 complete-contributor accounting and
 empty-ledger behavior.
 
+Helper revalidation publishes only semantic changes, including source witness
+changes. Metadata-only publications omit the unchanged helper key. Requests
+during an active helper pass coalesce through the same scheduler identity;
+completed helper admission and idle ticks do not manufacture publications.
+Viewer-owned reads apply the same semantic comparison before advancing their
+client revision, retain progress through repeated outages, and coalesce refresh
+requests while fencing obsolete results and released parent links.
+
 Q6 prefetch reads only the next older page under the existing optional/idle
 admission. Its adapter-wide memory-only FIFO charges complete encoded keys and
 payloads, expires from insertion and rejects oversized entries. Hits skip native

@@ -178,7 +178,7 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
   const first = Promise.withResolvers<HelperSummary>(),
     failed = Promise.withResolvers<HelperSummary>(),
     recovered = Promise.withResolvers<HelperSummary>(),
-    unchanged = Promise.withResolvers<HelperSummary>(),
+    unchangedRead = Promise.withResolvers<void>(),
     coalesced = Promise.withResolvers<HelperSummary>(),
     secondEntered = Promise.withResolvers<void>(),
     secondHeld = Promise.withResolvers<
@@ -186,12 +186,16 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
     >(),
     entered = Promise.withResolvers<void>(),
     held = Promise.withResolvers<never>();
-  let reads = 0, errors = 0;
+  let reads = 0, errors = 0, offline = false;
   const client = {
     read: <T>(run: (api: unknown) => Promise<T>) =>
       run({
         message: {
           list: () => {
+            if (offline) {
+              reads++;
+              return Promise.reject(new Error("source offline"));
+            }
             if (++reads === 1) {
               return Promise.resolve({
                 data: [toolMessage("one")],
@@ -216,6 +220,7 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
                 cursor: {},
               });
             }
+            if (reads === 4) unchangedRead.resolve();
             return Promise.resolve({
               data: [toolMessage("one"), toolMessage("two")],
               cursor: {},
@@ -238,9 +243,6 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
         if (event.summary.state === "ready") first.resolve(event.summary);
         if (event.summary.state === "ready" && reads === 3) {
           recovered.resolve(event.summary);
-        }
-        if (event.summary.state === "ready" && reads === 4) {
-          unchanged.resolve(event.summary);
         }
         if (event.summary.state === "ready" && reads === 6) {
           coalesced.resolve(event.summary);
@@ -308,17 +310,22 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
         : -1) + 1,
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeUnchanged = events.filter((event) =>
+      event.op === "task.progress"
+    );
     transcript.helper("opcv2-ses_child", fresh);
+    await unchangedRead.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assertEquals(
-      (await unchanged.promise).progress,
-      fresh.progress,
-      "unchanged viewer refresh must retain its semantic witness",
+      events.filter((event) => event.op === "task.progress"),
+      beforeUnchanged,
+      "unchanged viewer refresh publishes nothing, including no new revision",
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     const start = events.length;
     transcript.helper("opcv2-ses_child", fresh);
     await secondEntered.promise;
-    transcript.helper("opcv2-ses_child", fresh);
+    for (let n = 0; n < 20; n++) transcript.helper("opcv2-ses_child", fresh);
     secondHeld.resolve({ data: [toolMessage("obsolete")], cursor: {} });
     const latest = await coalesced.promise;
     assertEquals(
@@ -334,6 +341,26 @@ Deno.test("V2 acquired helper progress stays coherent through held refresh and s
       ),
       [3],
       "a raced refresh cannot publish its incomplete replacement",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(
+      reads,
+      6,
+      "20 refreshes during a read coalesce into one follow-up",
+    );
+    assertEquals(latest.revision, fresh.revision + 1);
+    offline = true;
+    transcript.helper("opcv2-ses_child", latest);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeOutageRepeat = events.filter((event) =>
+      event.op === "task.progress"
+    );
+    assertEquals(beforeOutageRepeat.at(-1)?.summary.state, "unavailable");
+    transcript.helper("opcv2-ses_child", latest);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(
+      events.filter((event) => event.op === "task.progress"),
+      beforeOutageRepeat,
     );
   } finally {
     if (reads >= 2) held.reject(new Error("retired"));

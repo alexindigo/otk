@@ -2437,14 +2437,24 @@ export class Transcript {
               ? previous.progress
               : summary.progress,
           };
+          const same = value.state === previous.state &&
+            (value.progress === previous.progress ||
+              value.progress.state !== "known" &&
+                value.progress.state === previous.progress.state);
+          // Reader completion is not a progress change. Cache the result so
+          // passive decoration stays quiet without advancing the client clock.
+          if (same) value.revision = previous.revision;
           this.#helperProgress.set(child, value);
-          this.#publishHelper(child, value);
+          if (!same) this.#publishHelper(child, value);
         } while (work.dirty);
       })().catch((error) => {
         if (!signal.aborted) {
           this.options.diagnostic(error);
           const previous = this.#helperSummary(child);
-          if (previous.progress.state === "known") {
+          if (
+            previous.progress.state === "known" &&
+            previous.state !== "unavailable"
+          ) {
             const summary = {
               ...previous,
               state: "unavailable" as const,

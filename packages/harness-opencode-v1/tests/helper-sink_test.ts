@@ -13,6 +13,7 @@ import {
 } from "@otk/harness-opencode-v1";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 import { cfg } from "../../../tests/support/config.ts";
+import { DigestScheduler } from "@otk/harness";
 const policy = {
   batch: 50,
   slicems: 8,
@@ -84,7 +85,7 @@ for (const api of [false, true]) {
     }
     native.exec("COMMIT");
     const values = new Map<string, DigestSnapshot>();
-    let fail = false, queries = 0, apiReads = 0;
+    let fail = false, queries = 0, apiReads = 0, publications = 0;
     const sink = new OpencodeV1DigestSink(
       {
         harness: {
@@ -133,7 +134,9 @@ for (const api of [false, true]) {
               : delta.helper ?? undefined,
           });
         },
-        publish: () => {},
+        publish: () => {
+          publications++;
+        },
         diagnostic: () => {},
       },
       ((input: string | URL | Request) => {
@@ -215,7 +218,54 @@ for (const api of [false, true]) {
       if (api) {
         assertEquals(apiReads, Math.ceil(messages.length / policy.batch));
       } else assert(queries >= 12 && queries < 16);
+      const retained = structuredClone(helper), beforeRepeat = publications;
+      sink.invalidateHelper("opcv1-child");
+      await scan();
+      assertEquals(
+        publications,
+        beforeRepeat,
+        "unchanged multi-chunk helper passes publish nothing",
+      );
+      assertEquals(values.get("opcv1-child")!.helper, retained);
+      const scheduler = new DigestScheduler(policy, {
+        now: () => 100,
+        freeMemory: () => Number.MAX_SAFE_INTEGER,
+        sleep: () => Promise.resolve(),
+      });
+      scheduler.register({
+        identity: sink.identity,
+        catalog: sink.catalog.bind(sink),
+        detail: sink.detail.bind(sink),
+        step: sink.step.bind(sink),
+        close() {},
+      });
+      const changes = derived.prepare("SELECT total_changes() AS n").get()!.n;
+      try {
+        for (let tick = 0; tick < 100; tick++) {
+          assertEquals(sink.requestHelper("opcv1-child", false), false);
+          scheduler.setScope("viewer", { sessions: ["opcv1-child"] });
+          assertEquals(await scheduler.tick(), false);
+        }
+        assertEquals(publications, beforeRepeat);
+        assertEquals(
+          derived.prepare("SELECT total_changes() AS n").get()!.n,
+          changes,
+        );
+      } finally {
+        await scheduler.stop();
+      }
+      console.info(
+        `helper ${
+          api ? "API" : "SQL"
+        }: 100 idle ticks add zero publications or SQLite writes`,
+      );
       // Duplicate scans never double-count, and stale rows survive a rejected commit.
+      // Other digest producers may advance the session while helper progress is unchanged.
+      const beforeChange = values.get("opcv1-child")!.summary.revision += 100;
+      messages[1199].parts[0].state!.title = "Changed tool";
+      native.prepare("UPDATE part SET data=? WHERE id='p1199'").run(
+        JSON.stringify(messages[1199].parts[0]),
+      );
       sink.invalidateHelper("opcv1-child");
       fail = true;
       try {
@@ -232,6 +282,15 @@ for (const api of [false, true]) {
       );
       helper = await scan();
       assertEquals(derivedValue(helper.progress)!.toolCount, 600);
+      assertEquals(
+        derivedValue(helper.progress)!.current?.title,
+        "Changed tool",
+      );
+      assertEquals(
+        helper.revision,
+        beforeChange + 1,
+        "changed helpers retain the session publication ordering domain",
+      );
       native.prepare("DELETE FROM part WHERE id='p1199'").run();
       messages[1199].parts = [];
       sink.invalidateHelper("opcv1-child");
@@ -263,6 +322,22 @@ for (const api of [false, true]) {
         helper = await scan();
         assertEquals(helper.state, "unavailable");
         assertEquals(helper.progress, retained);
+        const beforeOutage = publications,
+          unavailable = structuredClone(helper);
+        await scan();
+        assertEquals(publications, beforeOutage);
+        assertEquals(values.get("opcv1-child")!.helper, unavailable);
+        native.prepare("UPDATE part SET data=? WHERE id='p0001'").run(
+          JSON.stringify(messages[1].parts[0]),
+        );
+        helper = await scan();
+        assertEquals(helper.state, "ready");
+        assertEquals(
+          helper.progress,
+          retained,
+          "outage recovery retains the semantic witness",
+        );
+        assertEquals(helper.revision, unavailable.revision + 1);
       }
     } finally {
       sink.close();
