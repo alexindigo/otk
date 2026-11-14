@@ -912,6 +912,8 @@ replication.
 the shared pure projections for column, rail and badges. Supply the connection's
 index entries, its metadata and an explicit current time. Ageing defaults to
 2h/8h/24h and accepts the validated `projectAgeing` preference (milliseconds).
+`unread` requires session metadata, not only an ID: retained finish marks never
+make a deleted session unread. Restored sessions use the same retained marks.
 Keep each server's inputs separate when merging the resulting project rows.
 `inboxProjects` shares the Active/Discovered/Inactive classification with the
 keyed project owner. Active means known sessions, Discovered means
