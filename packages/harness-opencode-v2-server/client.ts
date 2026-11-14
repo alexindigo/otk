@@ -50,7 +50,7 @@ export class V2Client {
     const task = this.#own((async () => {
       const ready = prior.catch(() => {});
       await (operation?.wait ? operation.wait(ready) : ready);
-      this.signal.throwIfAborted();
+      this.#checkConnection();
       operation?.signal.throwIfAborted();
       return await run();
     })());
@@ -90,6 +90,7 @@ export class V2Client {
     readonly wait: <T>(value: Promise<T>, join?: boolean) => Promise<T> = (
       value,
     ) => value,
+    readonly lifetime: AbortSignal = signal,
   ) {
     this.readiness = new NativeReadiness(wait, admission);
     this.#api = OpenCode.make({
@@ -101,6 +102,8 @@ export class V2Client {
         effect?.operation?.signal.throwIfAborted();
         if (effect && !effect.observation) {
           await effect.operation?.beforeEffect();
+          signal.throwIfAborted();
+          effect.operation?.signal.throwIfAborted();
           effect.dispatched = true;
         }
         const response = await fetcher(input, {
@@ -157,6 +160,20 @@ export class V2Client {
       },
     });
   }
+  #generationLost(): boolean {
+    return this.signal.aborted && !this.lifetime.aborted;
+  }
+  #checkConnection(): void {
+    this.lifetime.throwIfAborted();
+    if (this.#generationLost()) {
+      throw new OperationFailure(
+        "unavailable",
+        "native.unavailable",
+        this.signal.reason,
+      );
+    }
+    this.signal.throwIfAborted();
+  }
   /** Classified dispatch has lifecycle cancellation, never a mutation deadline. */
   effect<T>(
     run: (api: OpenCodeClient) => Promise<T>,
@@ -172,7 +189,7 @@ export class V2Client {
     operation?: OperationContext,
     settled: readonly string[] = [],
   ): Promise<T | undefined> {
-    this.signal.throwIfAborted();
+    this.#checkConnection();
     operation?.signal.throwIfAborted();
     const context: {
       operation?: OperationContext;
@@ -189,6 +206,16 @@ export class V2Client {
       operation?.signal.throwIfAborted();
       return result;
     } catch (cause) {
+      // A generation owns reads and effects, but only the effect boundary knows
+      // whether delivery was attempted. Never turn its lost result into a safe
+      // retry merely because a concurrent read reports the connection outage.
+      if (this.#generationLost()) {
+        throw new OperationFailure(
+          context.dispatched ? "unknown" : "unavailable",
+          context.dispatched ? "native.unknown" : "native.unavailable",
+          cause,
+        );
+      }
       const tag = errorTag(cause);
       if (tag && settled.includes(tag)) return undefined;
       const known = nativeFailure(cause);
@@ -236,7 +263,7 @@ export class V2Client {
     run: (api: OpenCodeClient) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
-    this.signal.throwIfAborted();
+    this.#checkConnection();
     signal?.throwIfAborted();
     const context: { signal: AbortSignal; failure?: V2HttpFailure } = {
       signal: signal ?? this.signal,
@@ -246,12 +273,12 @@ export class V2Client {
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
         () => this.#reads.run(context, () => run(this.#api)),
       ));
-      this.signal.throwIfAborted();
+      this.#checkConnection();
       signal?.throwIfAborted();
       return value;
     } catch (cause) {
-      this.signal.throwIfAborted();
       signal?.throwIfAborted();
+      this.#checkConnection();
       const known = nativeFailure(cause);
       if (known) throw known;
       const tag = errorTag(cause);

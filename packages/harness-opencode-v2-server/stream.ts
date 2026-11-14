@@ -130,6 +130,8 @@ export class V2Stream {
           current,
           this.fetcher,
           this.ports.admission ?? this.admission,
+          undefined,
+          signal,
         );
         await this.#consume(client, owner, current, generation, () => {
           this.#client = client;
