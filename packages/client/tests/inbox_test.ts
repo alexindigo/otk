@@ -144,15 +144,20 @@ Deno.test("tracked and discovered projects and task tabs share attention-first a
   assertEquals(tabs.tabs()[0].status, "working");
   tabs.stop();
 });
-Deno.test("unread is strictly finish greater than seen, independently of working status", () => {
+Deno.test("live-session unread compares finish and seen independently of working status", () => {
   const inbox = snapshot();
-  assertEquals(unread("s", inbox), false);
+  const session = entry("s");
+  assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 10;
-  assert(unread("s", inbox));
+  assert(unread(session, inbox));
   inbox.seen.s = 10;
-  assertEquals(unread("s", inbox), false);
+  assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 11;
-  assert(unread("s", inbox));
+  assert(unread(session, inbox));
+  assertEquals(
+    unread({ ...session, deleted: { at: 12, how: "provider" } }, inbox),
+    false,
+  );
   assertEquals(inboxStatus(entry("s", "busy"), inbox), "working");
 });
 Deno.test("visit labels and ageing use the injected clock at exact 2h, 8h, 24h boundaries and configured thresholds", () => {
