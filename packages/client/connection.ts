@@ -100,6 +100,10 @@ export class SidecarConnection {
   get viewEpoch(): number {
     return this.#view.epoch;
   }
+  /** Last-good resources do not imply a currently welcomed live transport. */
+  get connected(): boolean {
+    return this.#welcomed && this.#socket?.readyState === WebSocket.OPEN;
+  }
   /** Retain demand across reconnects, independently of request admission. */
   view(value: Omit<ViewLease, "epoch">): void {
     if (
