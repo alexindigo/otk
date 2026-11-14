@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelRef, PromptPart } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { createDraftReverts, type DraftReverts } from "./draft-revert.ts";
 
 export interface Chip {
   id: string;
@@ -51,6 +52,7 @@ export function clearDraft(draft: Draft): Draft {
 
 /** Browser-lifetime drafts, keyed by server and session, never session content. */
 export interface Drafts {
+  readonly reverts: DraftReverts;
   get(key: string): Draft;
   /** Invocation-current, non-creating read without framework publication tracking. */
   current(key: string): Draft;
@@ -70,7 +72,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
     store.update((state) => {
       state.revision++;
     });
-  const writer = (key: string) => {
+  const writer = (key: string, transaction = false) => {
     let owner = values.get(key);
     if (!owner) {
       owner = { draft: emptyDraft() };
@@ -82,15 +84,24 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
       const previous = captured.draft;
       const next = typeof change === "function" ? change(previous) : change;
       captured.draft = next;
-      if (next !== previous) changed();
+      if (next !== previous) {
+        if (!transaction) reverts.changed(key);
+        changed();
+      }
       return next;
     };
   };
+  const reverts = createDraftReverts({
+    current,
+    writer: (key) => writer(key, true),
+  });
   return {
+    reverts,
     get,
     current,
-    writer,
+    writer: (key) => writer(key),
     drop(key) {
+      reverts.drop(key);
       if (values.delete(key)) changed();
     },
     subscribe: store.subscribe,

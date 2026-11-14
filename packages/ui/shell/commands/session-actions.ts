@@ -135,7 +135,10 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   });
   const restore = commands.register({
     id: "session.restore",
-    title: "Restore",
+    title: "Restore conversation",
+    name: "restore",
+    description:
+      "Bring back rolled-back messages and the unchanged pre-revert draft",
     category: "Session",
     arguments: { type: "object", optional: true },
     context: { kind: "session", order: 25 },

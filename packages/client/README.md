@@ -790,13 +790,22 @@ optimistically mutates session content. `dispose` releases its subscription. No
 file-overlap confirmation is added.
 
 Undo targets the last visible prompt, interrupts a working captured session,
-then remains pending until authoritative idle before reverting. Its history
-refill preserves prompt choices and replaces only empty or identical
-owner-written content. Redo unreverts and clears only the identical
-owner-written draft; newer text, attachments and unsaved editors survive.
-Captured draft writers cannot resurrect a dropped lifetime, and
-selection/disposal retire pending waits and draft effects. `abort(target?)`
-accepts a captured target for that same owner.
+then remains pending until authoritative idle before reverting. `Drafts.reverts`
+owns one browser-lifetime transaction per server/session, capturing the complete
+pre-revert draft before asynchronous work, including attachment bytes, mention
+coordinates, choices, own-undefined Default and editor buffer. Repeated pending
+boundaries keep that first snapshot. Its history refill preserves prompt choices
+and replaces only empty or transaction-owned content, never edits made during
+the operation. Restore and Redo share exact pre-revert restoration when the
+draft is unchanged. Selection and operation-owner replacement do not retire
+completed provenance. Newer text, attachments, choices and editors remain
+untouched; `reverts.get(key)` retains the old/current pair as the decision-47
+seam, without choosing a conflict interaction. Storage remains in memory with
+Drafts, not across reloads (decision 48 remains open). Dropping a draft retires
+its transaction and captured writers. Selection/disposal retire pending waits
+and recall effects; a confirmed native clear still settles its captured draft
+through an identity-fenced restorer, never the replacement view or transaction.
+`abort(target?)` accepts a captured target for that same owner.
 
 Intent completion waits for authoritative transcript publication, including an
 in-flight resync. A rollback must remove its boundary prompt; restoring must
