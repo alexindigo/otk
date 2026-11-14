@@ -33,7 +33,9 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
     id: "composer-pickers",
     create(ctx) {
       const owner = bindComposerSelection(ctx), selection = owner.selection;
-      let agentPicker!: ListPickerControl, modelPicker!: ListPickerControl;
+      let agentPicker!: ListPickerControl,
+        modelPicker!: ListPickerControl,
+        variantPicker: ListPickerControl | undefined;
       const enabled = () => !ctx.props.suspended && ctx.props.connected;
       for (
         const [id, title, delta] of [["agent.cycle", "Next agent", 1], [
@@ -65,6 +67,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
         context: { kind: "composer", order: 10 },
         enabled: () => enabled() && owner.state.models.available,
         run: () => modelPicker.open(),
+      });
+      ownedCommand(ctx, {
+        id: "variant.choose",
+        title: "Choose variant",
+        category: "Prompt",
+        enabled: () =>
+          enabled() && selection().applies.variant &&
+          selection().model.variants.length > 0 && !!variantPicker,
+        run: () => variantPicker!.open(),
       });
       ownedCommand(ctx, {
         id: "variant.cycle",
@@ -314,6 +325,9 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     ],
                   }]}
                   selected={selection().variantChoice ?? ""}
+                  control={(control) => {
+                    variantPicker = control;
+                  }}
                   onPick={owner.chooseVariant}
                   focusAfterPick={ctx.focus}
                 />

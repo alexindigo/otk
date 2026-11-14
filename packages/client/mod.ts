@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export { fitOverflow, overflowPreference } from "./overflow.ts";
 export * from "./directory-catalogs.ts";
+export * from "./harness-commands.ts";
 export * from "./attachment-batches.ts";
 export * from "./frecency-catalogs.ts";
 export { registerPreferenceCommands } from "./preference-commands.ts";

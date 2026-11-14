@@ -23,6 +23,7 @@ export interface PickerItem<T = string> {
   search?: string;
   color?: string;
   tag?: string;
+  unavailable?: string;
   action?: { label: string; content: Element; run(): void };
 }
 export interface PickerGroup<T = string> {
@@ -31,7 +32,7 @@ export interface PickerGroup<T = string> {
   items: readonly PickerItem<T>[];
 }
 export interface ListPickerControl {
-  open(): void;
+  open: PopoverControl["open"];
 }
 
 /** Shared list interaction; data, persistence and pick consequences are injected. */
@@ -40,7 +41,7 @@ export default function ListPicker<T = string>(props: {
   triggerLabel?: string;
   applied?: string;
   triggerColor?: string;
-  trigger: Element;
+  trigger?: Element;
   triggerClass?: string;
   groups: readonly PickerGroup<T>[];
   selected?: string;
@@ -72,8 +73,9 @@ export default function ListPicker<T = string>(props: {
       ),
     })).filter((group) => group.items.length);
   const rows = () => groups().flatMap((group) => group.items);
+  const available = () => rows().filter((item) => !item.unavailable);
   const candidate = () => {
-    const items = rows();
+    const items = available();
     return items.find((item) => item.key === highlighted())?.key ??
       items.find((item) => item.key === props.selected)?.key ?? items[0]?.key;
   };
@@ -92,12 +94,12 @@ export default function ListPicker<T = string>(props: {
   });
   const pick = (key: string) => {
     const item = rows().find((item) => item.key === key);
-    if (!item) return;
+    if (!item || item.unavailable) return;
     props.onPick(item.value);
     popover.close(props.focusAfterPick);
   };
   const move = (key: string) => {
-    const items = rows();
+    const items = available();
     if (!items.length) return;
     const at = items.findIndex((item) => item.key === candidate());
     const next = key === "Home"
@@ -117,11 +119,13 @@ export default function ListPicker<T = string>(props: {
         : props.error}
       applied={props.applied}
       triggerColor={props.triggerColor}
-      trigger={
-        <ControlValue accessory={<ChevronDownIcon />}>
-          {props.trigger}
-        </ControlValue>
-      }
+      trigger={props.trigger === undefined
+        ? undefined
+        : (
+          <ControlValue accessory={<ChevronDownIcon />}>
+            {props.trigger}
+          </ControlValue>
+        )}
       triggerClass={`otk-control-trigger ${props.triggerClass ?? ""}`}
       class={`otk-list-picker ${props.class ?? ""}`}
       control={(control) => {
@@ -157,7 +161,9 @@ export default function ListPicker<T = string>(props: {
               move(event.key);
             } else if (
               event.key === "Enter" &&
-              !(event.target as HTMLElement).closest(".otk-picker-action")
+              !(event.target as HTMLElement).closest(
+                "button:not(.otk-picker-option), a[href]",
+              )
             ) {
               if (event.repeat) return;
               event.preventDefault();
@@ -216,22 +222,29 @@ export default function ListPicker<T = string>(props: {
                         role="option"
                         id={`${id}-${encodeURIComponent(item().key)}`}
                         data-picker-key={item().key}
+                        aria-disabled={item().unavailable ? "true" : undefined}
                         data-otk-selection="vertical"
                         {...selection({
                           kind: "selected",
                           selected: props.selected === item().key,
                           highlighted: candidate() === item().key,
-                          class: "otk-picker-row",
+                          class: `otk-picker-row${
+                            item().unavailable ? " is-unavailable" : ""
+                          }`,
                         })}
                         ref={(el) => {
                           buttons.set(item().key, el);
                         }}
-                        onPointerMove={() => setHighlighted(item().key)}
+                        onPointerMove={() => {
+                          if (!item().unavailable) setHighlighted(item().key);
+                        }}
                       >
                         <SelectionContent>
                           <button
                             type="button"
                             class="otk-picker-option"
+                            disabled={!!item().unavailable}
+                            aria-description={item().unavailable}
                             onFocus={() => setHighlighted(item().key)}
                             onClick={() => pick(item().key)}
                           >
@@ -253,6 +266,14 @@ export default function ListPicker<T = string>(props: {
                                   {item().description}
                                 </small>
                               </Show>
+                              <Show when={item().unavailable}>
+                                <small
+                                  class="otk-control-label"
+                                  title={item().unavailable}
+                                >
+                                  {item().unavailable}
+                                </small>
+                              </Show>
                             </span>
                             <Show when={item().tag}>
                               <small class="otk-picker-tag">{item().tag}</small>
@@ -263,6 +284,7 @@ export default function ListPicker<T = string>(props: {
                               <button
                                 type="button"
                                 class="otk-picker-action otk-icon-button"
+                                disabled={!!item().unavailable}
                                 aria-label={action().label}
                                 title={action().label}
                                 onClick={() => action().run()}

@@ -128,6 +128,8 @@ export function composerProfile(profile: Profile) {
   if (profile === "composer-commands") {
     files[".opencode/skills/canary/SKILL.md"] =
       "---\nname: canary\ndescription: Fixture slash skill\n---\nSKILL-FIXTURE content";
+    files[".opencode/skills/probe/SKILL.md"] =
+      "---\nname: probe\ndescription: Skill sharing a server command name\n---\nCOLLIDING-SKILL content";
   }
   if (profile === "composer-required") {
     Object.assign(files, {

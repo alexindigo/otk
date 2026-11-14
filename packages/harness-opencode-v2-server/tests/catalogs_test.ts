@@ -169,9 +169,14 @@ Deno.test("V2 command collisions retain native names and distinct skill identiti
     description: "native",
     aliases: [],
     source: "unknown",
+    priority: 20,
   });
-  assertEquals(merged[1].skillID, "other-id");
-  assertEquals(merged[1].name, "Other name");
-  assert(merged[1].source === "skill");
+  const retained = merged.filter((command) => command.source === "skill");
+  assertEquals(retained.map((skill) => skill.skillID), [
+    "skill-id",
+    "other-id",
+  ]);
+  assertEquals(retained.map((skill) => skill.name), ["same", "Other name"]);
+  assert(retained.every((skill) => skill.source === "skill"));
   assertFalse(JSON.stringify(skills).includes("do-not-expose"));
 });

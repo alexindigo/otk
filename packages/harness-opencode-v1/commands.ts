@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CommandsCapability } from "@otk/harness";
+import { type CommandsCapability, HarnessError } from "@otk/harness";
 import type { AttachmentPolicy, CommandOption } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -7,6 +7,7 @@ import type { Launch } from "./shell.ts";
 import { mapPromptParts } from "./prompt.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type { DirectoryCatalogs } from "./catalogs.ts";
+import { nativeCommands } from "./command-vocabulary.ts";
 export function commands(
   client: Client,
   directory: Directory,
@@ -34,33 +35,30 @@ export function commands(
           signal,
         }),
       ]);
-      const result = new Map<string, CommandOption>();
-      for (const command of commands) {
-        result.set(command.name, {
-          name: command.name,
-          description: command.description,
-          aliases: [],
-          source: command.source === "mcp"
-            ? "mcp"
-            : command.source === "skill"
-            ? "skill"
-            : "server",
-        });
-      }
-      for (const skill of skills) {
-        if (!result.has(skill.name)) {
-          result.set(skill.name, {
-            name: skill.name,
-            description: skill.description,
-            aliases: [],
-            source: "skill",
-          });
-        }
-      }
-      return [...result.values()];
+      return mergeCommands(mapCommands(commands), skills);
     },
     async command(input, operation) {
       const dir = await directory.resolve(input.sessionID);
+      if (input.skill) {
+        const native = await client.json<{ name: string; source?: string }[]>(
+          "/command",
+          {
+            query: { directory: dir },
+            signal: operation?.signal,
+          },
+        );
+        const command = native.find((command) =>
+          command.name === input.skill!.name
+        );
+        if (command?.source !== "skill") {
+          throw new HarnessError(
+            "command",
+            command
+              ? skillConflict(input.skill.name)
+              : "That skill is no longer available",
+          );
+        }
+      }
       const launched = launch(
         input.sessionID,
         "command",
@@ -71,7 +69,7 @@ export function commands(
           classification: "effect",
           ...(operation ? { operation } : {}),
           body: {
-            command: input.command,
+            command: input.skill?.name ?? input.command,
             arguments: input.arguments,
             agent: input.agent,
             variant: input.variant,
@@ -94,26 +92,34 @@ export function commands(
 export function mapCommands(
   commands: { name: string; description?: string; source?: string }[],
 ): CommandOption[] {
-  return commands.map((command) => ({
-    name: command.name,
-    description: command.description,
-    aliases: [],
-    source: command.source === "mcp"
-      ? "mcp"
-      : command.source === "skill"
-      ? "skill"
-      : "server",
-  }));
+  return [
+    ...commands.filter((command) => command.source !== "skill").map((
+      command,
+    ): CommandOption => ({
+      name: command.name,
+      description: command.description,
+      aliases: [],
+      source: command.source === "mcp" ? "mcp" : "server",
+      priority: 10,
+      skillConflict: skillConflict(command.name),
+    })),
+    ...nativeCommands(),
+  ];
+}
+function skillConflict(name: string): string {
+  return `Shadowed by the server command /${name} in opencode 1.x`;
 }
 export function mergeCommands(
   commands: CommandOption[],
   skills: { name: string; description?: string }[],
 ): CommandOption[] {
-  const result = new Map(commands.map((command) => [command.name, command]));
-  for (const skill of skills) {
-    if (!result.has(skill.name)) {
-      result.set(skill.name, { ...skill, aliases: [], source: "skill" });
-    }
-  }
-  return [...result.values()];
+  return [
+    ...commands,
+    ...skills.map((skill): CommandOption => ({
+      name: skill.name,
+      description: skill.description,
+      aliases: [],
+      source: "skill",
+    })),
+  ];
 }
