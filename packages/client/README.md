@@ -120,6 +120,13 @@ there is no recall-specific failure timer.
 
 ## Request event consumers
 
+`createPrimaryAction` owns the composer's persistent primary affordance, live
+availability/reason, synchronous pending admission and invocation. Its inputs
+borrow current draft, connection and request state; it retains no second draft
+or RPC lifetime. `promptUnavailable` projects ordinary Send's draft facts. Every
+invocation rechecks the same contract, including after asynchronous preparation,
+while the existing submission intent retains captured send settlement.
+
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
 values, synchronous pending reservation, joined submission promise and safe
 feedback. `capture` is injected so native form APIs stay at the UI boundary.

@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  send as composerSend,
+} from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -130,11 +134,10 @@ test.describe("long command", () => {
         .toContainText("Running command");
       await prompt(page).fill("keep the next draft");
       await expect(prompt(page)).toBeEditable();
-      await expect(
-        page.locator(
-          ".otk-prompt button[type=submit], .otk-composer-dock [role=alert]",
-        ),
-      ).toHaveCount(0);
+      await expect(page.locator(".otk-composer-dock [role=alert]"))
+        .toHaveCount(0);
+      // The running command holds the one send intent; Send says so.
+      await expectPrimaryBlocked(composerSend(page), "Sending");
       await state.release(held.gate);
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         "Long slash finished.",

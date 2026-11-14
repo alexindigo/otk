@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  send as composerSend,
+} from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { expectPublicSession } from "../../pages/auth.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
@@ -163,7 +167,7 @@ test("transport.interrupt-confirmation", {
   await expect(
     page.locator(".otk-prompt [data-interrupt-confirmation][role=status]"),
   ).toHaveText("Esc again to interrupt");
-  await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(0);
+  await expectPrimaryBlocked(composerSend(page), "Write a message");
   await page.keyboard.press("Escape");
   await expect(page.locator(".otk-message-footer")).toContainText(
     "interrupted",

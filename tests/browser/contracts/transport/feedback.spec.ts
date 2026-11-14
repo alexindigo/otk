@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  expectPrimaryBlocked,
+  expectRuleThree,
+} from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
@@ -32,13 +36,15 @@ for (const kind of ["permission", "question"] as const) {
       await expect(pending).toBeVisible();
       await expect(pending).toBeFocused();
       await expect(page.locator(".otk-composer-notice")).toHaveCount(1);
-      await expect(dock.locator("[disabled],[aria-disabled=true]")).toHaveCount(
-        0,
+      await expectRuleThree(dock);
+      await expectPrimaryBlocked(
+        dock.locator("[data-primary-action]"),
+        kind === "permission" ? "Sending response" : "Sending answer",
       );
       await expect(dock.locator(".otk-field-feedback")).toHaveCount(0);
       expect(
         await dock.locator(
-          ".otk-permission-actions button,.otk-question-actions button,.otk-question-options button,textarea",
+          ".otk-permission-actions button:not([data-primary-action]),.otk-question-actions button:not([data-primary-action]),.otk-question-options button,textarea",
         ).evaluateAll((elements) =>
           elements.filter((el) =>
             el.getClientRects().length &&

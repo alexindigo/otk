@@ -12,9 +12,10 @@ test(
     await openSession(state, page, "tstv1-forms");
     const dock = page.locator('[data-form="typed-session"]');
     await expect(dock).toBeVisible();
-    await dock.getByRole("button", { name: "Review answers" }).click();
-    await expect(dock.getByText("An answer is required.").first())
-      .toBeVisible();
+    await expect(dock.getByRole("button", { name: "Review answers" }))
+      .toBeDisabled();
+    await expect(dock.getByRole("button", { name: "Review answers" }))
+      .toHaveAttribute("aria-description", "An answer is required.");
     await dock.getByRole("textbox", { name: "Deployment name", exact: true })
       .fill("release");
     await dock.getByRole("textbox", { name: "Traffic fraction" }).fill("0.25");
@@ -67,9 +68,13 @@ test(
     const opened = page.waitForEvent("popup");
     await dock.getByRole("link", { name: "Open external step" }).click();
     await (await opened).close();
-    await dock.getByRole("button", { name: "Review answers" }).click();
-    await expect(dock.getByText("Confirm that the external step is complete."))
-      .toBeVisible();
+    await expect(dock.getByRole("button", { name: "Review answers" }))
+      .toBeDisabled();
+    await expect(dock.getByRole("button", { name: "Review answers" }))
+      .toHaveAttribute(
+        "aria-description",
+        "Confirm that the external step is complete.",
+      );
     await dock.getByRole("switch", {
       name: "I completed this step",
       exact: true,

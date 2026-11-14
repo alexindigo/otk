@@ -7,6 +7,10 @@ import { promptFooterControls } from "../../support/prompt-footer.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
 import { accessoryGeometry } from "../../support/control-geometry.ts";
+import {
+  expectPrimaryBlocked,
+  expectRuleThree,
+} from "../pages/primary-action.ts";
 
 interface Theme {
   id: string;
@@ -354,8 +358,11 @@ export async function collections456(input: Inputs) {
           await token(page, "--otk-action-focus"),
         );
         expect(empty.height).toBe(48);
-        await expect(page.locator(".otk-send-button")).toHaveCount(0);
-        await footer(page, 6);
+        await expectPrimaryBlocked(
+          page.locator(".otk-send-button"),
+          "Write a message",
+        );
+        await footer(page, 7);
         await shot(`composer-empty-${theme.id}-1280`);
         for (let n = 1; n <= 14; n++) {
           if (n > 1) await page.keyboard.press("Shift+Enter");
@@ -1023,9 +1030,14 @@ export async function collections456(input: Inputs) {
         expect(icon.text).toBe("");
         expect(Math.max(...icon.gaps) - Math.min(...icon.gaps))
           .toBeLessThanOrEqual(1);
-        if (kind === "question") {
-          await expect(dock.locator(".otk-surface-actions")).toHaveCount(0);
-        }
+        // The joined notice owns pending status; the footer keeps only the
+        // persistent primary, disabled with its reason (triage decision 5).
+        await expect(dock.locator(".otk-surface-actions button:visible"))
+          .toHaveCount(1);
+        await expectPrimaryBlocked(
+          dock.locator(".otk-surface-actions [data-primary-action]"),
+          kind === "question" ? "Sending answer" : "Sending response",
+        );
         await shot(`takeover-pending-${kind}-${theme.id}-1280`);
       }
       await state.controller.call("scenario", {
@@ -1084,8 +1096,7 @@ export async function collections456(input: Inputs) {
         expect(g.text).toBeLessThanOrEqual(.5);
         expect(g.iconOffset).toBe(0);
         expect(g.joined).toBe(true);
-        await expect(page.locator("[disabled],[aria-disabled=true]"))
-          .toHaveCount(0);
+        await expectRuleThree(page);
         if (mode === "pending") {
           await expect(page.locator(".otk-composer-notice [role=status]"))
             .toHaveCount(1);
@@ -1822,8 +1833,7 @@ export async function collections456(input: Inputs) {
                 ];
               });
               for (const delta of centres) expect(delta).toBeLessThan(1);
-              await expect(page.locator("[disabled],[aria-disabled=true]"))
-                .toHaveCount(0);
+              await expectRuleThree(page);
               if (status === "error") {
                 expect(await token(page, "--otk-danger")).not.toBe(
                   await token(page, "--otk-focus"),
