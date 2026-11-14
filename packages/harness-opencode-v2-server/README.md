@@ -181,7 +181,19 @@ Standalone context is never prompt prose. `eventMessage` mirrors the stock
 message updater before calling that classifier: instruction deltas reconstruct
 their description/metadata; synthetic and skill metadata survive. A textless
 initial instruction observation has no native message and creates none here. The
-V2 plugin owns all result-state wording and nullable settlement facts.
+V2 plugin owns all result-state wording and nullable settlement facts. Switch,
+move, idle and compaction records use the same classifier on native pages and
+live delivery. Compaction keeps one native identity through its
+queued/running/terminal lifecycle; terminal-only records invent no start.
+Request usage labels (input plus caches, output plus reasoning) belong here, not
+in shared UI. Summaries declare content for Copy; lifecycle bookkeeping does
+not. Active retry is an assistant-owned record distinct from the retained
+scheduled attempt; its cause also supplies the existing countdown surface.
+Delivered retry and future session lifecycle observations reuse the plugin's
+durable observation indexes, bounded page merge, revert and deletion lifetime.
+Their native source is loaded only through the plugin's opaque source reference.
+Native shutdown is continuity loss, never an invented idle success.
+
 Recognized subagent envelopes are removed only by exact metadata-derived
 prefix/suffix matching; malformed source remains inspectable. Foreground
 delegation renders Markdown blocks, while shell output remains literal.

@@ -6,12 +6,121 @@ import type { V2Event } from "./stream.ts";
 export type NativeMessage = Awaited<
   ReturnType<OpenCodeClient["message"]["list"]>
 >["data"][number];
+import type { NativeSession } from "./metadata.ts";
 export type { NativeSession } from "./metadata.ts";
+/** Exact stock inventory, not prefix suppression: future subtypes stay records. */
+const nativeSessionEvents = new Set([
+  "created",
+  "forked",
+  "renamed",
+  "moved",
+  "metadata.updated",
+  "archived",
+  "unarchived",
+  "deleted",
+  "viewed",
+  "permissions",
+  "usage.recorded",
+  "usage.updated",
+  "agent.selected",
+  "model.selected",
+  "message.content.updated",
+  "execution.started",
+  "execution.succeeded",
+  "execution.failed",
+  "execution.interrupted",
+  "retry.scheduled",
+  "inbox.enqueued",
+  "inbox.delivered",
+  "inbox.cancelled",
+  "inbox.delivery.changed",
+  "step.started",
+  "step.streamed",
+  "step.ended",
+  "step.failed",
+  "text.started",
+  "text.delta",
+  "text.ended",
+  "reasoning.started",
+  "reasoning.delta",
+  "reasoning.ended",
+  "tool.input.started",
+  "tool.input.delta",
+  "tool.input.ended",
+  "tool.called",
+  "tool.progress",
+  "tool.success",
+  "tool.failed",
+  "compaction.started",
+  "compaction.delta",
+  "compaction.ended",
+  "compaction.failed",
+  "synthetic",
+  "instructions.updated",
+  "skill.activated",
+  "shell.started",
+  "shell.ended",
+  "revert.staged",
+  "revert.cleared",
+  "revert.committed",
+].map((name) => `session.${name}`));
+export const knownSessionEvent = (type: string): boolean =>
+  nativeSessionEvents.has(type);
 /** Mirror stock message-updater, before the shared record classifier. A textless
  * instruction observation has no chronological native message to project. */
-export function eventMessage(event: V2Event): NativeMessage | undefined {
+export function eventMessage(
+  event: V2Event,
+  previous?: NativeSession,
+): NativeMessage | undefined {
   const d = event.data, id = event.id?.replace(/^evt_/, "msg_");
-  if (!id || typeof d.text !== "string") return;
+  if (!id) return;
+  const boundary = {
+    id,
+    metadata: event.metadata,
+    time: { created: event.created ?? Date.now() },
+  };
+  if (event.type === "session.agent.selected") {
+    return {
+      ...boundary,
+      type: "agent-switched",
+      agent: d.agent,
+      previous: d.previous ?? previous?.agent ?? undefined,
+    } as NativeMessage;
+  }
+  if (event.type === "session.model.selected") {
+    return {
+      ...boundary,
+      type: "model-switched",
+      model: d.model,
+      previous: d.previous ?? previous?.model ?? undefined,
+    } as NativeMessage;
+  }
+  if (event.type === "session.moved") {
+    return {
+      ...boundary,
+      type: "location-switched",
+      location: d.location,
+      projectID: d.projectID,
+      subpath: d.subpath,
+      previous: previous
+        ? {
+          location: previous.location,
+          projectID: previous.projectID,
+          subpath: previous.subpath,
+        }
+        : undefined,
+    } as NativeMessage;
+  }
+  if (/^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)) {
+    if (event.type.endsWith("interrupted") && d.reason === "shutdown") return;
+    return {
+      ...boundary,
+      type: "idle",
+      outcome: event.type.split(".").at(-1),
+      ...(d.error ? { error: d.error } : {}),
+    } as NativeMessage;
+  }
+  if (typeof d.text !== "string") return;
   const common = {
     id,
     text: d.text,

@@ -456,16 +456,16 @@ export async function openRecord(page: Page, selector: string) {
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
-/** The compaction lifecycle row: V2's typed divider, or V1's plugin-owned
- * summary boundary record (NT4), with each harness's lifecycle wording. */
+/** Plugin-owned compaction boundaries, with each harness's lifecycle wording. */
 export function compactionBoundary(state: TestState) {
   return v2(state)
     ? {
-      selector: ".otk-compaction-divider",
-      title: ".otk-compaction-divider",
-      queued: ".otk-compaction-divider",
-      running: "Compacting\u2026",
-      completed: "Session compacted",
+      selector: '[data-native-record="opencode-v2/compaction"]',
+      title: '[data-native-record="opencode-v2/compaction"] .otk-tool-verb',
+      queued: '[data-native-record="opencode-v2/compaction"] .otk-tool-verb',
+      queuedLabel: "Session compaction queued",
+      running: "Session compaction started",
+      completed: /^Session compacted(?: - .* in - .* out)?$/,
     }
     : {
       selector: '[data-native-record="opencode-v1/compaction-summary"]',
@@ -473,6 +473,7 @@ export function compactionBoundary(state: TestState) {
         '[data-native-record="opencode-v1/compaction-summary"] .otk-tool-verb',
       // Before its summary exists, a queued compaction is its marker record.
       queued: '[data-native-record="opencode-v1/compaction"] .otk-tool-verb',
+      queuedLabel: "Session compaction",
       running: "Session compaction",
       completed: "Session compacted",
     };
@@ -501,20 +502,13 @@ export async function expectNoConversation(state: TestState, page: Page) {
   }
 }
 
-/** A compaction summary's content: V2 shows it in the flow; V1 keeps it in the
- * summary boundary's closed body (NT4, UX1), opened the user's way. */
+/** Both plugins keep summary content in the boundary body, opened the user's way. */
 export async function expectCompactionSummary(
   state: TestState,
   page: Page,
   text: string,
   timeout?: number,
 ) {
-  if (v2(state)) {
-    await expect(page.locator(".otk-messages")).toContainText(text, {
-      timeout,
-    });
-    return;
-  }
   const { selector } = compactionBoundary(state);
   await expect.poll(async () => {
     for (const row of await page.locator(selector).all()) {

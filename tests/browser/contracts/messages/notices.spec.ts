@@ -128,6 +128,54 @@ test.describe("V1 records", () => {
 });
 test.describe("V2 records", () => {
   test.use({ profile: "contract-messages-notices" });
+  test("messages.v2-boundaries-idle-error-and-distinct-retry-records", {
+    tag: ["@messages", "@contracts"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1280, height: 1600 });
+    await openSession(state, page, "tstv1-otk");
+    const idle = page.locator('[data-native-record="opencode-v2/idle"]');
+    await expect(idle).toHaveClass(/is-error/);
+    await expect(idle).toContainText("The usage limit has been reached");
+    await expect(
+      page.locator('[data-native-record="opencode-v2/model-switched"]'),
+    ).toContainText("Switched variant to high");
+    await expect(
+      page.locator('[data-native-record="opencode-v2/location-switched"]'),
+    ).toContainText("Moved to /project/destination");
+    const compaction = page.locator(
+      '[data-native-record="opencode-v2/compaction"]',
+    );
+    await expect(compaction).toContainText(
+      "Session compacted - 439.7K in - 2.9K out",
+    );
+    await compaction.locator(".otk-tool-toggle").click();
+    await expect(compaction.locator("strong")).toHaveText("Compaction summary");
+    await expect(page.locator('[data-native-record="opencode-v2/retry"]'))
+      .toContainText("Retry scheduled - attempt 2");
+    const work = page.locator(".otk-work-fold");
+    for (const fold of await work.all()) {
+      if (await fold.getAttribute("aria-expanded") === "false") {
+        await fold.click();
+      }
+    }
+    await expect(
+      page.locator('[data-native-record="opencode-v2/active-retry"]'),
+    ).toContainText("Provider temporarily unavailable");
+    await expect(page.locator(".otk-response-progress")).toHaveCount(1);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`nt3-records-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
+    await page.reload();
+    await expect(idle).toContainText("The usage limit has been reached");
+  });
   test(
     "messages.v2-notices-preserve-separate-errors-rendered-results-and-request-outcomes",
     { tag: ["@messages", "@contracts"] },

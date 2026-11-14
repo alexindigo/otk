@@ -483,7 +483,7 @@ export default function SessionView(props: {
                     {(retry) => (
                       <div class="otk-retry-banner" role="status">
                         <strong>Retrying · attempt {retry().attempt}</strong>
-                        <p>Waiting for the agent to retry</p>
+                        <p>{retry().message}</p>
                         <span>
                           Next attempt in {Math.max(
                             0,

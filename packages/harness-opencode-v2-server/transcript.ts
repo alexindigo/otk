@@ -24,6 +24,7 @@ import type {
 import { errorTag, type V2Client, V2MissingSession } from "./client.ts";
 import {
   eventMessage,
+  knownSessionEvent,
   Messages,
   nativeCursor,
   nativeForwardCursor,
@@ -36,6 +37,7 @@ import {
   completeTokens,
   deriveInboxMessage,
   inboxMessage,
+  lifecycleRecord,
   mapMessage,
   type MessageContext,
   millis,
@@ -205,10 +207,15 @@ export class Transcript {
   #shells = new Map<string, LiveShell>();
   #projected = new Map<
     string,
-    { shells: Map<string, string>; compaction?: string }
+    {
+      shells: Map<string, string>;
+      compaction?: Extract<NativeMessage, { type: "compaction" }>;
+    }
   >();
   #finished = new Map<string, Map<string, { start?: number; at?: number }>>();
   #boundaries = new Map<string, string>();
+  /** Kinds of observed queued inbox items, by session and inbox ID. */
+  #queued = new Map<string, Map<string, string>>();
   #tasks = new Set<Promise<unknown>>();
   #backfills = new Map<string, AbortController>();
   #cancelBackfills(id?: string): void {
@@ -361,9 +368,9 @@ export class Transcript {
       throw sourceFailure("reference");
     }
     let derived: Message | undefined;
-    if (value.origin === "request") {
+    if (value.origin === "request" || value.origin === "record") {
       derived = (await this.requests.get(id, value.id))?.outcome;
-      if (!derived) throw sourceFailure("request");
+      if (!derived) throw sourceFailure(value.origin);
     } else {
       try {
         if (value.origin === "inbox") {
@@ -563,6 +570,8 @@ export class Transcript {
     }
     if (id === undefined) this.#projected.clear();
     else this.#projected.delete(id);
+    if (id === undefined) this.#queued.clear();
+    else this.#queued.delete(id);
     for (const [key, owner] of this.#opening) {
       if (id === undefined || key === id) {
         this.#opening.delete(key);
@@ -598,6 +607,8 @@ export class Transcript {
     }
     if (id === undefined) this.#projected.clear();
     else this.#projected.delete(id);
+    if (id === undefined) this.#queued.clear();
+    else this.#queued.delete(id);
     for (const [key, owner] of this.#opening) {
       if (id === undefined || key === id) {
         this.#opening.delete(key);
@@ -819,7 +830,7 @@ export class Transcript {
     if (raw.type === "shell" || raw.type === "compaction") {
       let known = this.#projected.get(id);
       if (!known) this.#projected.set(id, known = { shells: new Map() });
-      if (raw.type === "compaction") known.compaction = raw.id;
+      if (raw.type === "compaction") known.compaction = structuredClone(raw);
       else {
         known.shells.set(raw.shellID, raw.id);
         if (raw.status === "running") this.#watchShell(id, raw, context);
@@ -1052,15 +1063,16 @@ export class Transcript {
         const nextOrder = Math.max(0, ...items.map((m) => m.sourceOrder ?? 0));
         for (
           const message of [
-            ...queued.map((row, index) =>
-              inboxMessage(
+            ...queued.map((row, index) => {
+              this.#queue(id, row.id, row.type);
+              return inboxMessage(
                 row.id,
                 row as unknown as Record<string, unknown>,
                 millis(row.time.created),
                 id,
                 { order: nextOrder + index + 1 },
-              )
-            ),
+              );
+            }),
           ]
         ) {
           covered.add(message.id);
@@ -1502,6 +1514,48 @@ export class Transcript {
     if (/^session\.(tool\.|execution\.)/.test(event.type)) {
       this.#requestHelper(id, true);
     }
+    if (event.type === "session.retry.scheduled" && event.id) {
+      const outcome = lifecycleRecord(event, id);
+      await this.#observe(
+        id,
+        outcome.id,
+        outcome,
+        await this.requests.get(id, outcome.id),
+      );
+      const live = this.#live.get(text(d.assistantMessageID) ?? "");
+      if (live) {
+        live.raw.retry = {
+          attempt: Number(d.attempt),
+          at: millis(d.at),
+          error: d.error,
+        } as typeof live.raw.retry;
+        const mapped = mapMessage(live.raw, id, live.context);
+        const part = mapped.parts.find((p) => p.id === `${live.raw.id}:retry`);
+        if (part) {
+          this.#publish(id, {
+            op: "part.upsert",
+            messageID: live.raw.id,
+            part,
+          });
+        }
+      }
+      this.changed(id);
+      return;
+    }
+    if (
+      /^session\.step\.(started|ended|failed)$/.test(event.type) ||
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+    ) {
+      for (const live of this.#live.values()) {
+        if (live.session !== id || !live.raw.retry) continue;
+        delete live.raw.retry;
+        this.#publish(id, {
+          op: "part.remove",
+          messageID: live.raw.id,
+          partID: `${live.raw.id}:retry`,
+        });
+      }
+    }
     if (
       event.type.startsWith("session.") &&
       !event.type.startsWith("session.execution.")
@@ -1526,6 +1580,21 @@ export class Transcript {
       await this.deleted(id);
       return;
     }
+    // Retain delivered future records even without a viewer; known native-only
+    // metadata/control families remain outside transcript placement (plan 8.17).
+    if (
+      event.id && event.type.startsWith("session.") &&
+      !knownSessionEvent(event.type)
+    ) {
+      const outcome = lifecycleRecord(event, id);
+      await this.#observe(
+        id,
+        outcome.id,
+        outcome,
+        await this.requests.get(id, outcome.id),
+      );
+      return;
+    }
     const retained = typeof d.assistantMessageID === "string" &&
       this.#live.get(d.assistantMessageID)?.session === id;
     if (
@@ -1542,10 +1611,13 @@ export class Transcript {
       return;
     }
     const sourceID = event.id?.replace(/^evt_/, "msg_");
-    const contextFor = (messageID: string): MessageContext => {
+    const contextFor = (
+      messageID: string,
+      admitted = false,
+    ): MessageContext => {
       const baseline = this.#baselines.get(id);
       const existing = baseline?.contexts.get(messageID);
-      if (existing) return existing;
+      if (existing && !admitted) return existing;
       const context = {
         order: baseline?.source?.startsWith("api")
           ? Math.max(
@@ -1561,6 +1633,7 @@ export class Transcript {
     if (
       event.type === "session.inbox.cancelled" && typeof d.inboxID === "string"
     ) {
+      this.#queued.get(id)?.delete(d.inboxID);
       this.#publish(id, { op: "message.remove", messageID: d.inboxID });
       this.changed(id);
       return;
@@ -1568,6 +1641,7 @@ export class Transcript {
     if (
       event.type === "session.inbox.enqueued" && typeof d.inboxID === "string"
     ) {
+      this.#queue(id, d.inboxID, record(d.item).type);
       this.#publish(id, {
         op: "message.upsert",
         message: inboxMessage(
@@ -1662,50 +1736,55 @@ export class Transcript {
     if (event.type.startsWith("session.compaction.") && sourceID) {
       const known = this.#projected.get(id)?.compaction,
         nativeID = text(d.inputID) ??
-          (event.type.endsWith("started") ? sourceID : known ?? sourceID);
+          (event.type.endsWith("started")
+            ? sourceID
+            : known?.status === "running" || event.type.endsWith("failed")
+            ? known?.id ?? sourceID
+            : sourceID);
       const status = event.type.endsWith("started")
         ? "running"
         : event.type.endsWith("failed")
         ? "failed"
         : "completed";
-      const pid = partID(nativeID, "text", 0);
       if (event.type.endsWith("delta")) {
-        if (
-          !this.buffers.append(
-            pid,
-            text(d.text) ?? "",
-            (session, op) => this.#publish(session, op),
-          )
-        ) this.recovery.touch(id, nativeID, pid);
+        if (known?.status === "running") {
+          const raw = {
+            ...known,
+            summary: known.summary + (text(d.text) ?? ""),
+          };
+          this.#publish(id, {
+            op: "message.upsert",
+            message: this.#map(raw, id, contextFor(nativeID))!,
+          });
+        }
         return;
       }
       const raw = {
+        ...(known?.id === nativeID ? known : {}),
         id: nativeID,
         type: "compaction",
         status,
         reason: d.reason ?? "manual",
         summary: text(d.text) ?? "",
         ...(d.error ? { error: d.error } : {}),
-        time: { created: event.created ?? Date.now() },
+        ...(d.model ? { model: d.model } : {}),
+        ...(d.native ? { native: d.native } : {}),
+        ...(d.cost !== undefined ? { cost: d.cost } : {}),
+        ...(d.tokens ? { tokens: d.tokens } : {}),
+        metadata: {
+          ...(known?.id === nativeID ? known.metadata : {}),
+          ...event.metadata,
+        },
+        time: known?.id === nativeID
+          ? known.time
+          : { created: event.created ?? Date.now() },
       } as Extract<NativeMessage, { type: "compaction" }>;
-      const message = this.#map(raw, id, contextFor(nativeID));
+      const message = this.#map(
+        raw,
+        id,
+        contextFor(nativeID, status === "running" && known?.id !== nativeID),
+      );
       if (message) this.#publish(id, { op: "message.upsert", message });
-      if (status === "running") {
-        this.buffers.upsert(id, nativeID, {
-          kind: "text",
-          id: pid,
-          synthetic: false,
-          blocks: [],
-        }, "");
-        this.#publish(id, {
-          op: "part.upsert",
-          messageID: nativeID,
-          part: this.buffers.snapshot(pid)!.part,
-        });
-      } else {
-        this.buffers.remove(pid);
-        this.recovery.message(nativeID, id);
-      }
       this.changed(id);
       return;
     }
@@ -1714,6 +1793,18 @@ export class Transcript {
       event.type === "session.model.selected"
     ) {
       const baseline = this.#baselines.get(id);
+      const raw = eventMessage(event, baseline?.raw);
+      if (raw) {
+        this.#publish(id, {
+          op: "message.upsert",
+          message: this.#map(raw, id, contextFor(raw.id))!,
+        });
+      }
+      if (baseline) {
+        if (event.type === "session.agent.selected") {
+          baseline.raw.agent = d.agent as string;
+        } else baseline.raw.model = d.model as NativeSession["model"];
+      }
       if (baseline?.prompt) {
         if (
           event.type === "session.agent.selected" && typeof d.agent === "string"
@@ -1748,11 +1839,45 @@ export class Transcript {
       this.changed(id);
       return;
     }
+    if (event.type === "session.moved") {
+      const baseline = this.#baselines.get(id);
+      let raw = eventMessage(event, baseline?.raw);
+      // The durable record owns `previous`: native derives it from its own
+      // projection, which the session view does not reproduce exactly (an
+      // empty subpath). The event-derived record stands in only while absent.
+      if (raw) {
+        try {
+          raw = await this.reader.get(id, raw.id, this.#lifetime.signal);
+        } catch (error) {
+          this.#lifetime.signal.throwIfAborted();
+          if (errorTag(error) !== "MessageNotFoundError") throw error;
+        }
+      }
+      if (raw) {
+        this.#publish(id, {
+          op: "message.upsert",
+          message: this.#map(raw, id, contextFor(raw.id))!,
+        });
+      }
+      if (baseline) {
+        baseline.raw.location = d.location as NativeSession["location"];
+        baseline.raw.projectID = d.projectID as NativeSession["projectID"];
+        baseline.raw.subpath = d.subpath as NativeSession["subpath"];
+      }
+      return;
+    }
     if (
       event.type === "session.execution.succeeded" ||
       event.type === "session.execution.failed" ||
       event.type === "session.execution.interrupted"
     ) {
+      const raw = eventMessage(event);
+      if (raw) {
+        this.#publish(id, {
+          op: "message.upsert",
+          message: this.#map(raw, id, contextFor(raw.id))!,
+        });
+      }
       this.recovery.terminal(id);
       return;
     }
@@ -2015,8 +2140,14 @@ export class Transcript {
         if (header.role === "assistant" && event.created === undefined) {
           header.terminal = true;
         }
+        const boundaries = header.parts.filter((p) =>
+          p.kind === "external" && p.activity?.layout === "boundary"
+        );
         header.parts = [];
         this.#publish(id, { op: "message.upsert", message: header });
+        for (const part of boundaries) {
+          this.#publish(id, { op: "part.upsert", messageID, part });
+        }
         this.#publish(id, {
           op: "part.upsert",
           messageID,
@@ -2056,31 +2187,51 @@ export class Transcript {
       }
     }
     // Non-step projected messages are checkpointed once at their durable edge.
-    if (
-      /^(session\.inbox\.delivered)$/
-        .test(event.type)
-    ) {
+    if (event.type === "session.inbox.delivered") {
       this.changed(id);
-      const nativeID = event.type === "session.inbox.delivered"
-        ? text(d.inboxID)
-        : event.id?.replace(/^evt_/, "msg_");
-      if (nativeID) {
-        const raw = await this.reader.get(id, nativeID, this.#lifetime.signal),
-          baseline = await this.#baseline(id, this.#lifetime.signal),
-          facts = await this.#facts({
-            sessionID: id,
-            messages: [raw.id],
-            cutoff: baseline.raw.revert?.messageID,
-          }, baseline.controller.signal),
-          context = facts.contexts[raw.id];
-        if (context) {
-          this.#acceptFacts(baseline, facts);
-          baseline.prompt = facts.metadata.prompt;
-          const message = this.#map(raw, id, context);
-          if (message) this.#publish(id, { op: "message.upsert", message });
-        }
+      const nativeID = text(d.inboxID);
+      const kind = nativeID ? this.#queued.get(id)?.get(nativeID) : undefined;
+      if (nativeID) this.#queued.get(id)?.delete(nativeID);
+      // Native materializes a message under the inbox ID only for prompt
+      // items. A compaction start reuses the ID as its input; a move's record
+      // comes from its own session.moved event, so its queued item retires.
+      if (!nativeID || kind === "compaction") return;
+      if (kind === "move") {
+        this.#publish(id, { op: "message.remove", messageID: nativeID });
+        return;
       }
+      let raw: NativeMessage;
+      try {
+        raw = await this.reader.get(id, nativeID, this.#lifetime.signal);
+      } catch (error) {
+        this.#lifetime.signal.throwIfAborted();
+        // An unobserved queued item: absence proves only that delivery
+        // made no native message. Transport and other failures propagate.
+        if (errorTag(error) !== "MessageNotFoundError") throw error;
+        this.#publish(id, { op: "message.remove", messageID: nativeID });
+        return;
+      }
+      const baseline = await this.#baseline(id, this.#lifetime.signal),
+        facts = await this.#facts({
+          sessionID: id,
+          messages: [raw.id],
+          cutoff: baseline.raw.revert?.messageID,
+        }, baseline.controller.signal),
+        context = facts.contexts[raw.id];
+      if (context) {
+        this.#acceptFacts(baseline, facts);
+        baseline.prompt = facts.metadata.prompt;
+        const message = this.#map(raw, id, context);
+        if (message) this.#publish(id, { op: "message.upsert", message });
+      }
+      return;
     }
+  }
+  #queue(session: string, inboxID: string, kind: unknown): void {
+    if (typeof kind !== "string") return;
+    let known = this.#queued.get(session);
+    if (!known) this.#queued.set(session, known = new Map());
+    known.set(inboxID, kind);
   }
   #watchShell(
     id: string,

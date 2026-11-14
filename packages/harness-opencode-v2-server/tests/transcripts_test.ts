@@ -170,11 +170,10 @@ Deno.test("V2 compaction carries its own lifecycle without becoming a prompt", (
     } as NativeMessage;
     const message = mapMessage(raw, id, { order: 1 })!;
     assertEquals(message.role, "context");
-    const part = message.parts.find((part) => part.kind === "compaction")!;
-    assertEquals(Reflect.get(part, "status"), status);
-    assertEquals(JSON.parse(JSON.stringify(part)).status, status);
-    const summary = message.parts.find((part) => part.kind === "text");
-    assertEquals(summary?.kind === "text" && summary.synthetic === true, false);
+    const part = message.parts[0];
+    assert(part.kind === "external" && part.activity);
+    assertEquals(part.activity.state?.key, status);
+    const summary = part.activity.body;
     if (status === "failed") {
       assertEquals(JSON.stringify(summary).includes("Summary failed"), true);
     }
@@ -217,7 +216,8 @@ Deno.test("V2 queued compaction is provider context and keeps its inbox owner", 
     );
     assertEquals(
       event?.op === "message.upsert" &&
-        Reflect.get(event.message.parts[0], "status"),
+        event.message.parts[0].kind === "external" &&
+        event.message.parts[0].activity?.state?.key,
       "queued",
     );
   } finally {

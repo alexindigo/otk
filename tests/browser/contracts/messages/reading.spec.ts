@@ -240,8 +240,9 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await expect(page.locator(".otk-retry-banner strong")).toHaveText(
     "Retrying · attempt 2",
   );
+  // Addendum 2 row 3: an active retry shows its cause.
   await expect(page.locator(".otk-retry-banner p")).toHaveText(
-    "Waiting for the agent to retry",
+    "Provider is temporarily unavailable",
   );
   const before = await page.locator(".otk-retry-banner").textContent();
   await expect(page.locator(".otk-retry-banner")).not.toHaveText(before!);

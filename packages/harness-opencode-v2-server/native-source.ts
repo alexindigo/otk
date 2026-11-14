@@ -40,7 +40,7 @@ export function nativeSource(
 }
 /** V2 owns its source reference format: the derivation origin and location. */
 export interface V2SourceRef {
-  origin: "message" | "request" | "inbox";
+  origin: "message" | "request" | "inbox" | "record";
   id: string;
   path: string;
 }
@@ -55,7 +55,7 @@ export function parseSourceRef(ref: string): V2SourceRef {
       atob(ref.slice(3).replaceAll("-", "+").replaceAll("_", "/")),
     );
     if (
-      !["message", "request", "inbox"].includes(origin) ||
+      !["message", "request", "inbox", "record"].includes(origin) ||
       typeof id !== "string" || !id || typeof path !== "string"
     ) throw new Error();
     return { origin, id, path };
@@ -73,6 +73,8 @@ export function referenced<T extends Message | Part>(
     sourceRef(
       messageID.startsWith(REQUEST)
         ? { origin: "request", id: messageID.slice(REQUEST.length), path }
+        : messageID.startsWith("record:")
+        ? { origin: "record", id: messageID, path }
         : { origin: "message", id: messageID, path },
     ));
 }
@@ -83,6 +85,10 @@ const sourceFailures = {
   ],
   request: [
     "The retained request outcome no longer exists",
+    "This record's source is no longer available",
+  ],
+  record: [
+    "The retained lifecycle record no longer exists",
     "This record's source is no longer available",
   ],
   inbox: [
