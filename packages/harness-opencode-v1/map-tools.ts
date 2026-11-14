@@ -7,8 +7,15 @@ import { mapFileTool } from "./file-tools.ts";
 import { preview } from "./previews.ts";
 import { taskEnvelope, toolResult } from "./tool-results.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
-const childSession = (value: unknown): string | undefined =>
-  typeof value === "string" ? ids.encode(value) : undefined;
+const childSession = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return;
+  try {
+    return ids.encode(value);
+  } catch {
+    // Optional native metadata cannot invalidate the complete tool record.
+    return;
+  }
+};
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 const record = (value: unknown): Record<string, unknown> =>
