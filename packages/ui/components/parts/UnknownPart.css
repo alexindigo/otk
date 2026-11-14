@@ -5,12 +5,26 @@
 .otk-native-parameters {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
   gap: 4px 12px;
 }
 .otk-native-parameters dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.otk-native-record.is-open > .otk-tool-state .otk-tool-icon svg {
+/* One value primitive for plain and navigable values, so every value shares
+   the row's column edge and baseline. */
+.otk-native-value {
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  font: inherit;
+  text-align: start;
+}
+button.otk-native-value {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.otk-native-record.is-open > .otk-tool-state .otk-native-chevron svg {
   transform: rotate(90deg);
 }

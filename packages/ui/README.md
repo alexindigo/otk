@@ -215,7 +215,9 @@ Fallback source inspection has its own nested `NativeSource` disclosure. The
 existing client disclosure owner resolves the `source` category default and
 retains explicit per-part choices independently of the activity body. Size,
 truncation and bounded source text mount only while that nested fold is open. An
-expanded record does not repeat a state label identical to its heading.
+expanded record does not repeat a state label already shown by its heading or a
+parameter. Parameter values, plain or navigable, share one value primitive, so
+they align to the same column edge and baseline.
 
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its

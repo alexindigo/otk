@@ -5,7 +5,8 @@ import { stripVTControlCharacters } from "node:util";
 import type { NativeMessage } from "./messages.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { fileLanguage } from "./language.ts";
-import { toolResult } from "./tool-results.ts";
+import { toolContent } from "./tool-results.ts";
+import { nativeSource } from "./native-source.ts";
 
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v)
@@ -13,6 +14,10 @@ const record = (v: unknown): Record<string, unknown> =>
     : {};
 const text = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+const failureText = (...values: unknown[]): string | undefined =>
+  values.map(text).find((value) =>
+    value !== undefined && value.trim().length > 0
+  );
 const millis = (v: unknown): number =>
   typeof v === "number" ? v : typeof v === "string" ? Date.parse(v) || 0 : 0;
 const preview = (v: unknown): string =>
@@ -133,8 +138,57 @@ export function mapTool(tool: Tool): ToolCall {
     error.type === "aborted" &&
       (error.message === "The user dismissed this question" ||
         error.message === "The user declined this tool call");
+  const nested = name === "execute" && Array.isArray(meta.toolCalls)
+    ? meta.toolCalls
+    : [];
+  const children = nested.map((value, index): ToolCall => {
+    const child = record(value), failed = child.status === "error";
+    return {
+      tool: "external",
+      callID: `${tool.id}:nested:${index}`,
+      name: text(child.tool) ?? "Call",
+      summary: "",
+      status: failed
+        ? "error"
+        : child.status === "running"
+        ? "running"
+        : "completed",
+      ...(failed
+        ? {
+          failure: {
+            message: failureText(
+              child.error,
+              record(child.error).message,
+              meta.message,
+              output,
+            ) ?? "Nested call failed",
+          },
+        }
+        : {}),
+      input: preview(child.input),
+      source: nativeSource("nested-tool", child),
+      time: {},
+    };
+  });
+  const processFailure = name === "bash" ? shellFailure(meta) : undefined;
+  const executeFailed = name === "execute" &&
+    (meta.error === true || children.some((c) => c.failure));
+  const resultFailure = processFailure ??
+    (executeFailed
+      ? failureText(
+        meta.message,
+        record(meta.error).message,
+        children.find((c) => c.failure)?.failure?.message,
+        output,
+      ) ?? "Script failed"
+      : undefined);
   const base: ToolBase = {
     callID: tool.id,
+    source: nativeSource("tool", tool),
+    ...(resultFailure !== undefined
+      ? { failure: { message: resultFailure } }
+      : {}),
+    ...(children.length ? { children } : {}),
     sourceName: tool.name,
     status: state.status === "streaming"
       ? "pending"
@@ -150,10 +204,9 @@ export function mapTool(tool: Tool): ToolCall {
       ? text(error.message) ?? text(error._tag) ?? "Native operation failed"
       : undefined,
     output,
-    outputContent: toolResult(
+    outputContent: toolContent(
       name,
-      output,
-      meta.truncated === true,
+      "content" in state ? state.content : undefined,
       input,
       meta,
     ),
@@ -340,10 +393,22 @@ export function mapTool(tool: Tool): ToolCall {
         metadata: preview(meta),
         output: output === undefined ? undefined : preview(output),
         outputTruncated: (output?.length ?? 0) > 16384,
-        outputContent: output === undefined
-          ? undefined
-          : { kind: "text", text: preview(output) },
+        outputContent: base.outputContent,
       };
+  }
+}
+export function shellFailure(
+  meta: Record<string, unknown>,
+): string | undefined {
+  if (meta.timeout === true || meta.status === "timeout") {
+    return "Command timed out";
+  }
+  if (typeof meta.signal === "string") return `Killed by ${meta.signal}`;
+  if (meta.status === "killed" || meta.state === "cancelled") {
+    return "Command cancelled";
+  }
+  if (typeof meta.exit === "number" && meta.exit !== 0) {
+    return `Exited with code ${meta.exit}`;
   }
 }
 export function mapFileDiffs(value: unknown, patchText?: string): FileDiff[] {

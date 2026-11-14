@@ -6,6 +6,7 @@ import { messageCostScenario } from "./message-cost-scenario.ts";
 import { messageReadingScenario } from "./message-reading-scenario.ts";
 import { migratedHistoryScenario } from "./migrated-history-scenario.ts";
 import { v1NoticesScenario } from "./v1-notices-scenario.ts";
+import { noticesScenario } from "./notices-scenario.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
 import { recordedMessageScenario } from "./recorded-message-scenario.ts";
 import { coreBackendFixture } from "./core-backend.ts";
@@ -35,6 +36,7 @@ export async function messagesScenario(profile: Profile) {
   if (profile === "contract-messages-v1-notices") {
     return await v1NoticesScenario();
   }
+  if (profile === "contract-messages-notices") return await noticesScenario();
   if (profile === "contract-messages-migrated-history") {
     return await migratedHistoryScenario();
   }

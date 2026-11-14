@@ -1,11 +1,85 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ToolResult } from "@otk/protocol";
+import type { Block, ToolResult } from "@otk/protocol";
+import { markdown } from "@otk/content";
 import { fileLanguage } from "./language.ts";
 import { join } from "@std/path";
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+/** Strip only a known producer's exact outer envelope. Descriptions can contain
+ * quotes/newlines and the body can contain nested tag-like text. Metadata, never
+ * parsing arbitrary attributes, supplies identity and state. */
+export function subagentBody(
+  output: string,
+  sessionID: string | undefined,
+  state: string | undefined,
+  description?: string,
+): string | undefined {
+  if (sessionID === undefined || state === undefined) return;
+  const prefix = `<subagent sessionID="${sessionID}" state="${state}"${
+      description === undefined ? "" : ` description="${description}"`
+    }>\n`,
+    suffix = "\n</subagent>";
+  return output.startsWith(prefix) && output.endsWith(suffix)
+    ? output.slice(prefix.length, -suffix.length)
+    : undefined;
+}
+/** Preserve native item order and media beside text. Literal outputs remain
+ * literal; only delegation prose is Markdown. The full native call is in source. */
+export function toolContent(
+  name: string,
+  content: readonly unknown[] | undefined,
+  input: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+): ToolResult | undefined {
+  if (!content?.length) return;
+  if (content.length === 1 && record(content[0]).type === "text") {
+    return toolResult(
+      name,
+      String(record(content[0]).text),
+      metadata.truncated === true,
+      input,
+      metadata,
+    );
+  }
+  const blocks = content.flatMap((item): Block[] => {
+    const value = record(item);
+    if (value.type === "text" && typeof value.text === "string") {
+      const result = toolResult(
+        name,
+        value.text,
+        metadata.truncated === true,
+        input,
+        metadata,
+      );
+      return result?.kind === "blocks"
+        ? result.blocks
+        : [{ b: "code", text: value.text }];
+    }
+    if (value.type === "file" && typeof value.uri === "string") {
+      const name = typeof value.name === "string" ? value.name : "File",
+        mime = typeof value.mime === "string" ? value.mime : "unknown";
+      return [
+        {
+          b: "paragraph",
+          inline: [{ i: "text", text: `${name} (${mime}) ` }, {
+            i: "code",
+            text: value.uri,
+          }],
+        },
+        ...(mime.startsWith("image/")
+          ? [{
+            b: "paragraph" as const,
+            inline: [{ i: "image" as const, src: value.uri, alt: name }],
+          }]
+          : []),
+      ];
+    }
+    return [{ b: "code", text: JSON.stringify(item) }];
+  });
+  return { kind: "blocks", blocks };
+}
 /** Historical model envelopes retained verbatim by stock V1 -> V2 migration. */
 function legacyRead(
   output: string,
@@ -212,10 +286,17 @@ export function toolResult(
     }
   }
   if (name === "task") {
+    const body = subagentBody(
+      output,
+      typeof metadata.sessionID === "string" ? metadata.sessionID : undefined,
+      typeof metadata.status === "string" ? metadata.status : undefined,
+    );
+    if (body !== undefined) return { kind: "blocks", blocks: markdown(body) };
     const match =
       /^<task id="[^"\n]+" state="(?:running|completed|error)">\n(?:<summary>[^\n]*<\/summary>\n)?<(task_result|task_error)>\n([\s\S]*)\n<\/\1>\n<\/task>$/
         .exec(output);
-    if (match) return { kind: "text", text: match[2] };
+    if (match) return { kind: "blocks", blocks: markdown(match[2]) };
+    return { kind: "blocks", blocks: markdown(output) };
   }
   if (name === "skill") {
     const match =

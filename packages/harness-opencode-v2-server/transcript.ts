@@ -21,6 +21,7 @@ import type {
 } from "@otk/protocol";
 import type { V2Client } from "./client.ts";
 import {
+  eventMessage,
   Messages,
   nativeCursor,
   nativeForwardCursor,
@@ -31,14 +32,23 @@ import {
 import {
   assistantSettled,
   completeTokens,
+  inboxMessage,
   mapMessage,
   type MessageContext,
   millis,
   partID,
   record,
+  requestOutcome,
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
+import { nativeSource } from "./native-source.ts";
+import {
+  positionOrder,
+  type RequestPosition,
+  type RequestRetention,
+  V2RequestRetention,
+} from "./request-retention.ts";
 import {
   type PrefetchInput,
   type PrefetchPage,
@@ -68,6 +78,8 @@ interface Cursor {
   cutoff: string | null;
   native: string;
   source: string;
+  retained?: { created: number; id: string; order?: number };
+  reuse?: boolean;
 }
 interface LiveShell {
   session: string;
@@ -112,10 +124,27 @@ function decode(token: string): Cursor {
     ) throw new Error();
     const v = JSON.parse(atob(token.replaceAll("-", "+").replaceAll("_", "/")));
     if (
-      Object.keys(v).sort().join() !== "cutoff,epoch,native,session,source,v" ||
+      Object.keys(v).some((key) =>
+        ![
+          "v",
+          "session",
+          "epoch",
+          "cutoff",
+          "native",
+          "source",
+          "retained",
+          "reuse",
+        ].includes(key)
+      ) ||
       v.v !== 2 || typeof v.session !== "string" ||
       typeof v.epoch !== "string" || typeof v.native !== "string" ||
-      !v.native || typeof v.source !== "string" || !v.source ||
+      (!v.native && !v.retained) || typeof v.source !== "string" || !v.source ||
+      (v.reuse !== undefined && typeof v.reuse !== "boolean") ||
+      (v.retained !== undefined &&
+        (!Number.isFinite(v.retained.created) ||
+          typeof v.retained.id !== "string" ||
+          (v.retained.order !== undefined &&
+            !Number.isFinite(v.retained.order)))) ||
       v.source.length > 512 ||
       (v.cutoff !== null && typeof v.cutoff !== "string")
     ) throw new Error();
@@ -160,6 +189,10 @@ export class Transcript {
   >();
   #lifetime = new AbortController();
   #revisions = 0;
+  /** Last durable sequence per session aggregate delivered on this connection. */
+  #watermarks = new Map<string, number>();
+  /** Observations awaiting the next durable event of their session, in order. */
+  #anchors = new Map<string, string[]>();
   #client?: V2Client;
   #shells = new Map<string, LiveShell>();
   #projected = new Map<
@@ -204,11 +237,18 @@ export class Transcript {
   start(): void {
     if (this.#lifetime.signal.aborted) this.#lifetime = new AbortController();
   }
+  readonly requests: RequestRetention;
   constructor(
     readonly options: {
       client(): V2Client;
       policy: MessagePolicy;
       digest?: DigestPort;
+      requests?: RequestRetention;
+      /** Keyed native sequence probe: latest message, or one message's. */
+      sequence?(
+        input: { sessionID: string; messageID?: string },
+        signal: AbortSignal,
+      ): Promise<number | undefined>;
       facts?(
         input: TranscriptInput,
         signal: AbortSignal,
@@ -239,6 +279,7 @@ export class Transcript {
       ): Promise<readonly import("@otk/protocol").CatalogAgent[]>;
     },
   ) {
+    this.requests = options.requests ?? new V2RequestRetention();
     if (options.agents) {
       this.colors = new AgentColors(
         options.agents,
@@ -514,6 +555,10 @@ export class Transcript {
     }
   }
   disconnect(): void {
+    // Undelivered events are missed by contract; watermarks are per connection.
+    // Unresolved observations keep their probed (or clock) position.
+    this.#watermarks.clear();
+    this.#anchors.clear();
     this.colors?.reset();
     this.#cancelBackfills();
     this.#releaseHelpers();
@@ -795,8 +840,9 @@ export class Transcript {
       const cutoff = owner.raw.revert?.messageID,
         compatible =
           (this.#client ?? this.options.client()).service.version === "2.2.6",
-        native = token?.native ??
-          (cutoff && compatible ? nativeCursor(cutoff) : undefined);
+        native = token
+          ? token.native || undefined
+          : (cutoff && compatible ? nativeCursor(cutoff) : undefined);
       const cached = native
         ? this.#cache?.get(this.#key(id, owner, native))
         : undefined;
@@ -833,9 +879,120 @@ export class Transcript {
         const mapped = this.#map(raw, id, context);
         return mapped ? [mapped] : [];
       }).sort(compareMessages);
+      const sequence = facts.source.startsWith("sql");
+      const edge = (message: Message) => ({
+        created: message.time.created,
+        id: message.id,
+        ...(sequence ? { order: message.sourceOrder } : {}),
+      });
+      const compareEdge = (
+        message: Message,
+        boundary: { created: number; id: string; order?: number },
+      ) =>
+        (sequence && boundary.order !== undefined &&
+            message.sourceOrder !== undefined
+          ? message.sourceOrder - boundary.order
+          : message.time.created - boundary.created) ||
+        (message.id < boundary.id ? -1 : message.id > boundary.id ? 1 : 0);
+      let upper = token?.retained;
+      if (!token && cutoff) {
+        upper = {
+          created: facts.metadata.cutoffCreated ??
+            millis((await this.reader.get(id, cutoff, signal)).time.created),
+          id: cutoff,
+          ...(sequence ? { order: facts.cutoffOrder } : {}),
+        };
+      }
+      const lower = page.next && items.length
+        ? edge(items.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b))
+        : undefined;
+      // Sequence authority: observations anchored to native sequence, plus
+      // those without sequence evidence placed by their native clock.
+      const retained = sequence
+        ? [
+          ...await this.requests.page(
+            id,
+            upper,
+            MESSAGE_PAGE_SIZE + 1,
+            "sequence",
+          ),
+          ...await this.requests.page(
+            id,
+            upper,
+            MESSAGE_PAGE_SIZE + 1,
+            "unanchored",
+          ),
+        ]
+        : await this.requests.page(
+          id,
+          upper,
+          MESSAGE_PAGE_SIZE + 1,
+          "timeline",
+        );
+      if (sequence && facts.cutoffOrder !== undefined) {
+        this.requests.cutoff(id, facts.cutoffOrder);
+      }
+      signal.throwIfAborted();
+      const nativeItems = items;
+      const candidates = [
+        ...items.filter((m) =>
+          !token?.reuse || !upper || compareEdge(m, upper) < 0
+        ),
+        ...retained.filter((m) => !lower || compareEdge(m, lower) >= 0).map(
+          (m) => {
+            if (m.sourceOrder !== undefined) return m;
+            // Place plugin-owned records between native sequence positions without
+            // treating their clock as a native sequence number.
+            const preceding = nativeItems.filter((n) =>
+              compareEdge(n, edge(m)) <= 0
+            ).at(-1);
+            const following = nativeItems.find((n) =>
+              compareEdge(n, edge(m)) > 0
+            );
+            const elapsed = m.time.created -
+              (preceding?.time.created ?? m.time.created - 1);
+            const remaining = (following?.time.created ?? m.time.created + 1) -
+              m.time.created;
+            const fraction = (elapsed + 1) / (elapsed + remaining + 2);
+            const order = preceding?.sourceOrder ??
+              (following?.sourceOrder === undefined
+                ? undefined
+                : following.sourceOrder - 1);
+            return {
+              ...m,
+              sourceOrder: order === undefined ? undefined : order + fraction,
+            };
+          },
+        ),
+      ].sort((a, b) => compareEdge(a, edge(b)));
+      const overflow = candidates.length > MESSAGE_PAGE_SIZE;
+      const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
+      items = selected.sort(compareMessages);
       this.buffers.epoch(id, owner.epoch);
       this.buffers.checkpoint(id, (sid, op) => this.#publish(sid, op));
       items = items.map((m) => this.buffers.overlay(m));
+      const covered = new Set(items.map((m) => m.id));
+      if (!token) {
+        const queued = await this.reader.inbox(id, signal);
+        signal.throwIfAborted();
+        const nextOrder = Math.max(0, ...items.map((m) => m.sourceOrder ?? 0));
+        for (
+          const message of [
+            ...queued.map((row, index) =>
+              inboxMessage(
+                row.id,
+                row as unknown as Record<string, unknown>,
+                millis(row.time.created),
+                id,
+                { order: nextOrder + index + 1 },
+              )
+            ),
+          ]
+        ) {
+          covered.add(message.id);
+          items = overlay(items, { op: "message.upsert", message });
+        }
+      }
       signal.throwIfAborted();
       if (
         owner !== this.#baselines.get(id) ||
@@ -898,7 +1055,6 @@ export class Transcript {
           };
         }
       }
-      const covered = new Set(page.items.map((m) => m.id));
       items = items.filter((m) => covered.has(m.id));
       const turnIDs = [
         ...new Set(
@@ -914,7 +1070,20 @@ export class Transcript {
         clock: sealed.clock,
         session: owner.presentation,
         items,
-        older: page.next
+        older: overflow
+          ? encode({
+            v: 2,
+            session: id,
+            epoch: owner.epoch,
+            cutoff: cutoff ?? null,
+            native: native ?? "",
+            source: facts.source,
+            reuse: true,
+            retained: edge(
+              selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
+            ),
+          })
+          : page.next
           ? encode({
             v: 2,
             session: id,
@@ -922,6 +1091,7 @@ export class Transcript {
             cutoff: cutoff ?? null,
             native: page.next,
             source: facts.source,
+            ...(lower ? { retained: lower } : {}),
           })
           : null,
         prompt: facts.metadata.prompt,
@@ -1094,13 +1264,165 @@ export class Transcript {
       }
     };
   }
+  /** Durable delivery order is the native position authority for ephemeral
+   * observations: the first durable event of the session aggregate after an
+   * observation proves its exact predecessor sequence. */
+  async #advance(id: string, seq: number): Promise<void> {
+    this.#watermarks.delete(id);
+    this.#watermarks.set(id, seq);
+    if (this.#watermarks.size > 4096) {
+      this.#watermarks.delete(this.#watermarks.keys().next().value!);
+    }
+    const pending = this.#anchors.get(id);
+    if (!pending) return;
+    this.#anchors.delete(id);
+    const after = seq - 1;
+    for (const requestID of pending) {
+      const value = await this.requests.get(id, requestID);
+      if (!value?.outcome || !value.position) continue;
+      const position: RequestPosition = value.position.after === after
+        ? { ...value.position, basis: "stream" }
+        : { after, rank: this.requests.rank(id, after), basis: "stream" };
+      await this.requests.put({ ...value, position });
+      this.#announce(id, value.outcome, position);
+    }
+  }
+  async #observe(
+    id: string,
+    requestID: string,
+    outcome: Message,
+    previous: import("./request-retention.ts").RetainedRequest | undefined,
+  ): Promise<void> {
+    const value = { ...previous, id: requestID, sessionID: id, outcome };
+    const settled = previous?.outcome && previous.position &&
+      previous.position.basis !== "pending";
+    const known = this.#watermarks.get(id);
+    if (settled || known !== undefined) {
+      // A redelivered settlement keeps its first proven position.
+      const position = settled ? previous.position! : {
+        after: known!,
+        rank: this.requests.rank(id, known!),
+        basis: "stream" as const,
+      };
+      await this.requests.put({ ...value, position });
+      this.#announce(id, outcome, position);
+      return;
+    }
+    // Retained before any probe, so an interrupted resolution keeps the record.
+    await this.requests.put({
+      ...value,
+      position: { after: null, rank: 0, basis: "pending" },
+    });
+    let seq: number | undefined;
+    try {
+      seq = await this.#sequence(id);
+    } catch (error) {
+      this.#lifetime.signal.throwIfAborted();
+      this.options.diagnostic(error);
+    }
+    this.#lifetime.signal.throwIfAborted();
+    const position: RequestPosition = seq === undefined
+      ? { after: null, rank: 0, basis: "clock" }
+      : { after: seq, rank: this.requests.rank(id, seq), basis: "lookup" };
+    await this.requests.put({ ...value, position });
+    const pending = this.#anchors.get(id) ?? [];
+    this.#anchors.set(id, [...pending, requestID]);
+    this.#announce(id, outcome, position);
+  }
+  /** Native revert authority: observations after a committed boundary are
+   * discarded with the native messages and inbox rows at or after it. */
+  async #revertObservations(
+    id: string,
+    type: string,
+    messageID: string | undefined,
+  ): Promise<void> {
+    if (type === "session.revert.cleared") this.requests.cutoff(id, null);
+    if (type === "session.revert.staged" && messageID) {
+      let seq: number | undefined;
+      try {
+        seq = await this.#sequence(id, messageID);
+      } catch (error) {
+        this.#lifetime.signal.throwIfAborted();
+        this.options.diagnostic(error);
+      }
+      this.#lifetime.signal.throwIfAborted();
+      this.requests.cutoff(id, seq ?? null);
+    }
+    if (type === "session.revert.committed") {
+      const from = this.requests.cutoff(id);
+      if (from !== undefined) await this.requests.retire(id, from);
+      this.requests.cutoff(id, null);
+    }
+  }
+  async #sequence(id: string, messageID?: string): Promise<number | undefined> {
+    const input = { sessionID: id, ...(messageID ? { messageID } : {}) };
+    if (this.options.sequence) {
+      return await this.options.sequence(input, this.#lifetime.signal);
+    }
+    if (!this.options.digest) return;
+    return (await this.options.digest.read("opcv2.request.anchor", input, {
+      owner: `v2-request-anchor:${id}`,
+      priority: "attention",
+      signal: this.#lifetime.signal,
+    })).seq;
+  }
+  #announce(id: string, outcome: Message, position: RequestPosition): void {
+    if (!this.#subscriptions.has(id) || this.#lifetime.signal.aborted) return;
+    const baseline = this.#baselines.get(id);
+    // API pages order by native clocks; their live counters are page-local.
+    const order = baseline?.source?.startsWith("api")
+      ? Math.max(0, ...[...baseline.contexts.values()].map((c) => c.order)) +
+        0.5
+      : positionOrder(position);
+    this.#publish(id, {
+      op: "message.upsert",
+      message: order === undefined
+        ? outcome
+        : { ...outcome, sourceOrder: order },
+    });
+  }
+  async deleted(id: string): Promise<void> {
+    this.#anchors.delete(id);
+    this.#watermarks.delete(id);
+    await this.requests.remove(id);
+    this.release(id);
+  }
   async event(event: V2Event): Promise<void> {
     if (event.type === "agent.updated" || event.type === "config.updated") {
       this.colors?.reset(event.location?.directory);
     }
-    const d = event.data, sid = text(d.sessionID);
+    const d = event.data,
+      sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    if (
+      event.durable && event.durable.aggregateID === sid &&
+      Number.isSafeInteger(event.durable.seq)
+    ) await this.#advance(id, event.durable.seq);
+    if (/^(permission\.|form\.)/.test(event.type)) {
+      // Already-delivered native facts are retained even without a viewer. This
+      // never reads unviewed bodies or performs a population inventory scan.
+      const request = event.type === "form.created" ? record(d.form) : d,
+        requestID = text(d.requestID) ?? text(request.id);
+      if (!requestID) return;
+      const previous = await this.requests.get(id, requestID);
+      this.#lifetime.signal.throwIfAborted();
+      if (event.type === "permission.asked" || event.type === "form.created") {
+        await this.requests.put({ id: requestID, sessionID: id, request });
+      } else if (
+        ["permission.replied", "form.replied", "form.cancelled"].includes(
+          event.type,
+        )
+      ) {
+        await this.#observe(
+          id,
+          requestID,
+          requestOutcome(event, id, requestID, previous?.request),
+          previous,
+        );
+      }
+      return;
+    }
     if (/^session\.(tool\.|execution\.)/.test(event.type)) {
       this.#requestHelper(id, true);
     }
@@ -1112,6 +1434,11 @@ export class Transcript {
       const revert = event.type === "session.revert.staged"
         ? d.revert
         : undefined;
+      await this.#revertObservations(
+        id,
+        event.type,
+        text(record(revert).messageID),
+      );
       this.#boundary(
         id,
         revert,
@@ -1120,7 +1447,7 @@ export class Transcript {
       return;
     }
     if (event.type === "session.deleted") {
-      this.release(id);
+      await this.deleted(id);
       return;
     }
     const retained = typeof d.assistantMessageID === "string" &&
@@ -1165,37 +1492,16 @@ export class Transcript {
     if (
       event.type === "session.inbox.enqueued" && typeof d.inboxID === "string"
     ) {
-      const item = record(d.item), payload = record(item.payload);
-      if (item.type === "compaction") {
-        const raw: Extract<NativeMessage, { type: "compaction" }> = {
-          type: "compaction",
-          id: d.inboxID,
-          status: "running",
-          reason: "manual",
-          summary: "",
-          time: { created: event.created ?? Date.now() },
-        };
-        const message = mapMessage(raw, id, contextFor(raw.id))!;
-        message.parts = message.parts.map((part) =>
-          part.kind === "compaction" ? { ...part, status: "queued" } : part
-        );
-        this.#publish(id, { op: "message.upsert", message });
-      }
-      if (item.type === "user" && typeof payload.text === "string") {
-        const raw = {
-          type: "user",
-          id: d.inboxID,
-          text: payload.text,
-          files: payload.files,
-          agents: payload.agents,
-          skills: payload.skills,
-          time: { created: event.created ?? Date.now() },
-        } as Extract<NativeMessage, { type: "user" }>;
-        this.#publish(id, {
-          op: "message.upsert",
-          message: mapMessage(raw, id, contextFor(raw.id))!,
-        });
-      }
+      this.#publish(id, {
+        op: "message.upsert",
+        message: inboxMessage(
+          d.inboxID,
+          record(d.item),
+          event.created ?? Date.now(),
+          id,
+          contextFor(d.inboxID),
+        ),
+      });
       return;
     }
     if (
@@ -1204,20 +1510,8 @@ export class Transcript {
         event.type === "session.instructions.updated" ||
         event.type === "session.skill.activated")
     ) {
-      if (typeof d.text !== "string") return;
-      const raw = {
-        id: sourceID,
-        type: event.type === "session.synthetic"
-          ? "synthetic"
-          : event.type === "session.instructions.updated"
-          ? "system"
-          : "skill",
-        text: d.text,
-        ...(event.type === "session.skill.activated"
-          ? { skill: d.id, name: d.name }
-          : {}),
-        time: { created: event.created ?? Date.now() },
-      } as NativeMessage;
+      const raw = eventMessage(event);
+      if (!raw) return;
       this.#publish(id, {
         op: "message.upsert",
         message: mapMessage(raw, id, contextFor(raw.id))!,
@@ -1270,6 +1564,10 @@ export class Transcript {
         shellID: shell.id,
         command: shell.command,
         status: shell.status,
+        metadata: previous?.raw.metadata ??
+          (record(shell.metadata).background === true
+            ? { ...event.metadata, background: true }
+            : event.metadata),
         time: {
           created: previous?.raw.time.created ??
             millis(record(shell.time).started) ?? event.created ?? Date.now(),
@@ -1416,7 +1714,15 @@ export class Transcript {
         id: messageID,
         type: "assistant",
         agent: d.agent,
-        model: { id: model.id, providerID: model.providerID },
+        model: {
+          id: model.id,
+          providerID: model.providerID,
+          ...(typeof model.variant === "string"
+            ? { variant: model.variant }
+            : {}),
+        },
+        metadata: event.metadata,
+        ...(d.snapshot ? { snapshot: { start: d.snapshot as string } } : {}),
         content: existing?.raw.content ?? [],
         time: {
           created: typeof d.started === "number"
@@ -1474,7 +1780,10 @@ export class Transcript {
         if (!Number.isSafeInteger(ordinal) || Number(ordinal) < 0) return;
         const pid = partID(messageID, kind, Number(ordinal));
         const previous = this.buffers.snapshot(pid, id, messageID)?.part;
-        const shell = kind === "text"
+        const shell: Extract<
+          import("@otk/protocol").Part,
+          { kind: "text" | "reasoning" }
+        > = kind === "text"
           ? { kind: "text" as const, id: pid, synthetic: false, blocks: [] }
           : {
             kind: "reasoning" as const,
@@ -1509,6 +1818,18 @@ export class Transcript {
           if (
             live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
           ) return;
+          live?.raw.content.push(
+            kind === "text" ? { type: "text", text: "" } : {
+              type: "reasoning",
+              text: "",
+              ...(d.native === undefined ? {} : {
+                native: record(d.native) as NonNullable<
+                  NativeMessage["metadata"]
+                >,
+              }),
+              time: { created: event.created ?? Date.now() },
+            },
+          );
           this.buffers.upsert(id, messageID, shell, "");
           if (acquired) {
             this.#publish(id, {
@@ -1525,6 +1846,36 @@ export class Transcript {
             this.buffers.remove(pid);
             return;
           }
+          const nativePart = live?.raw.content.filter((p) =>
+            p.type === kind
+          )[Number(ordinal)];
+          if (nativePart?.type === "text" || nativePart?.type === "reasoning") {
+            nativePart.text = d.text;
+            if (d.native !== undefined) {
+              nativePart.native = record(d.native) as NonNullable<
+                NativeMessage["metadata"]
+              >;
+            }
+            if (nativePart.type === "reasoning") {
+              nativePart.time = {
+                created: nativePart.time?.created ??
+                  (shell.kind === "reasoning"
+                    ? shell.time.start
+                    : event.created ?? Date.now()),
+                completed: event.created ?? Date.now(),
+              };
+            }
+          }
+          shell.source = nativeSource(
+            kind,
+            nativePart ??
+              {
+                type: kind,
+                text: d.text,
+                ...(d.native === undefined ? {} : { native: d.native }),
+              },
+            d.text,
+          );
           const finished =
             this.buffers.finishPart(id, messageID, shell, d.text) ??
               { ...shell, blocks: importMarkdown(d.text) };
@@ -1560,7 +1911,19 @@ export class Transcript {
           ...(d.cost !== undefined ? { cost: d.cost } : {}),
           ...(d.tokens !== undefined ? { tokens: d.tokens } : {}),
           ...(d.error ? { error: d.error } : {}),
-          ...(typeof d.finish === "string" ? { finish: d.finish } : {}),
+          finish: d.finish ??
+            (event.type.endsWith("failed") ? "error" : undefined),
+          rawFinish: d.rawFinish,
+          native: d.native,
+          ...(d.snapshot || d.files
+            ? {
+              snapshot: {
+                ...live.raw.snapshot,
+                ...(d.snapshot ? { end: d.snapshot } : {}),
+                ...(d.files ? { files: d.files } : {}),
+              },
+            }
+            : {}),
           time: {
             ...live.raw.time,
             ...(event.created === undefined
@@ -1585,6 +1948,7 @@ export class Transcript {
             kind: "step",
             id: `${messageID}:finish`,
             phase: "finish",
+            source: nativeSource("assistant", raw),
             ...(typeof d.cost === "number" ? { cost: d.cost } : {}),
             ...(completeTokens(d.tokens)
               ? { tokens: completeTokens(d.tokens) }
@@ -1787,6 +2151,10 @@ export class Transcript {
       tool.state = { status: "streaming", input: text(d.text) ?? "" };
     }
     if (event.type === "session.tool.called") {
+      tool.executed = typeof d.executed === "boolean" ? d.executed : undefined;
+      tool.native = d.native === undefined
+        ? undefined
+        : record(d.native) as NonNullable<NativeMessage["metadata"]>;
       tool.state = {
         status: "running",
         input: record(d.input),
@@ -1806,6 +2174,13 @@ export class Transcript {
       event.type === "session.tool.success" ||
       event.type === "session.tool.failed"
     ) {
+      tool.executed = d.executed === true || tool.executed === true;
+      if (d.native !== undefined) {
+        tool.native = {
+          ...tool.native,
+          ...record(d.native) as NonNullable<NativeMessage["metadata"]>,
+        };
+      }
       const input = record(tool.state.input);
       tool.state = {
         status: event.type.endsWith("success") ? "completed" : "error",
@@ -1820,6 +2195,7 @@ export class Transcript {
       kind: "tool",
       id: partID(live.raw.id, "tool", callID),
       call: mapTool(tool),
+      source: nativeSource("tool", tool),
     });
     this.#pruneHelpers();
     if (part) {
@@ -1835,6 +2211,9 @@ export class Transcript {
   async stop(): Promise<void> {
     await this.colors?.stop();
     this.#lifetime.abort();
+    this.#watermarks.clear();
+    this.#anchors.clear();
+    await this.requests.close();
     this.#client = undefined;
     const owned = [...this.#tasks];
     const prefetch = [...this.#prefetch.values()].map((w) => w.task);

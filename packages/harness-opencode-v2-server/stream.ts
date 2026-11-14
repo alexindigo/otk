@@ -10,6 +10,7 @@ export interface V2Event {
   data: Record<string, unknown>;
   id?: string;
   created?: number;
+  metadata?: import("./messages.ts").NativeMessage["metadata"];
   location?: { directory: string; [key: string]: unknown };
   durable?: { seq: number; [key: string]: unknown };
 }

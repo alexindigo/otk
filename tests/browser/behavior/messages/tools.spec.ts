@@ -6,6 +6,7 @@ import {
   expandTool,
   openWorkLogs,
   prompt,
+  revealAcquired,
   runNativeTool,
   toolScript,
 } from "../../pages/transcript.ts";
@@ -58,20 +59,28 @@ test.describe("actual tool forms", () => {
         fullPage: true,
       });
     }
+    // Virtualization changes the first mounted row; explicit choice belongs to one stable record.
     // V1 owns qualified step records (NT4); V2 steps are the neutral step part.
-    // A record's own disclosure is its header toggle, not its nested Source fold.
     const steps = state.controller.info!.version.startsWith("2.")
       ? "[data-native-record=step]"
       : '[data-native-record^="opencode-v1/step-"]';
-    const record = page.locator(
-      `${steps} > .otk-tool-state > .otk-tool-toggle`,
-    ).first();
+    const key = await page.locator(steps).first()
+      .evaluate((row) =>
+        row.closest("[data-virtual-key]")!.getAttribute("data-virtual-key")
+      );
+    const selector = `[data-virtual-key=${
+      JSON.stringify(key)
+    }] ${steps} > .otk-tool-state > .otk-tool-toggle`;
+    const record = page.locator(selector);
     await expect(record).toHaveAttribute("aria-expanded", "false");
     await state.product("prefs.set", { key: "expandRecords", value: true });
+    await revealAcquired(page, selector);
     await expect(record).toHaveAttribute("aria-expanded", "true");
     await record.click();
+    await expect(record).toHaveAttribute("aria-expanded", "false");
     for (const value of [false, true]) {
       await state.product("prefs.set", { key: "expandRecords", value });
+      await revealAcquired(page, selector);
       await expect(record).toHaveAttribute("aria-expanded", "false");
     }
   });
@@ -120,11 +129,18 @@ test.describe("actual tool forms", () => {
     });
     await expandTool(page, "[data-tool=read]");
     if (state.controller.info!.version.startsWith("2.")) {
-      // V2 publishes discovered instructions as their own durable synthetic message.
-      await expect(page.locator(".otk-message-flow")).toContainText(
+      // Decisions 1/18 keep discovered instructions as a collapsed, inspectable record.
+      const instructions = page.locator(
+        '[data-native-record="opencode-v2/synthetic"]',
+      ).filter({ hasText: "Loaded src/AGENTS.md" });
+      await expect(instructions).toBeVisible();
+      const toggle = instructions.locator(".otk-tool-toggle");
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await toggle.click();
+      await expect(instructions.locator(".otk-tool-body")).toContainText(
         "Instructions from: " + state.directory + "/src/AGENTS.md",
       );
-      await expect(page.locator(".otk-message-flow")).toContainText(
+      await expect(instructions.locator(".otk-tool-body")).toContainText(
         "Read the fixture only.",
       );
     } else {await expect(page.locator("[data-tool=read]")).toContainText(

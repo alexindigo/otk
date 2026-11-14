@@ -2,7 +2,10 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { acquireOlderHistory } from "../../pages/history.ts";
+import {
+  acquireOlderHistory,
+  nativeHistoryCount,
+} from "../../pages/history.ts";
 import {
   expandTool,
   openWorkLogs,
@@ -79,7 +82,15 @@ test("messages.project-and-outside-tool-paths-reload", {
       }
       if (kind === "read" && !outside) {
         if (state.controller.info!.version.startsWith("2.")) {
-          await expect(page.locator(".otk-message-flow")).toContainText(
+          // Decisions 1/18 retain full instructions behind their native record disclosure.
+          const instructions = page.locator(
+            '[data-native-record="opencode-v2/synthetic"]',
+          ).filter({ hasText: "Loaded src/AGENTS.md" });
+          await expect(instructions).toBeVisible();
+          const toggle = instructions.locator(".otk-tool-toggle");
+          await expect(toggle).toHaveAttribute("aria-expanded", "false");
+          await toggle.click();
+          await expect(instructions.locator(".otk-tool-body")).toContainText(
             "Instructions from: " + state.directory + "/src/AGENTS.md",
           );
         } else {await expect(page.locator(selector + " .otk-muted .otk-path"))
@@ -115,8 +126,8 @@ test("messages.project-and-outside-tool-paths-reload", {
   );
   await expect(page.locator("[data-tool=bash] .otk-muted .otk-path"))
     .toHaveText("src");
-  const nativeCount =
-    (await state.native<unknown[]>(`/session/${session.id}/message`)).length;
+  // Decision 1 retains all native control rows, not only the legacy facade's projections.
+  const nativeCount = await nativeHistoryCount(state, session.id);
   await page.reload();
   await openSession(state, page, session.id);
   await acquireOlderHistory(page, nativeCount);

@@ -17,6 +17,11 @@ declare module "@otk/harness" {
       result: TranscriptFacts;
       chunk: string;
     };
+    "opcv2.request.anchor": {
+      input: { sessionID: string; messageID?: string };
+      result: { seq?: number };
+      chunk: string;
+    };
     "opcv2.message.prefetch": {
       input: PrefetchInput;
       result: PrefetchPage;

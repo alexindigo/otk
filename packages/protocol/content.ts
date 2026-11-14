@@ -112,6 +112,8 @@ export interface ToolBase {
   error?: string;
   /** Interpreted result failure, independent of the native lifecycle status. */
   failure?: { message: string };
+  /** Ordered nested operations interpreted by the producing harness. */
+  children?: ToolCall[];
   time: { start?: number; end?: number };
   childSessionID?: string;
   /** Native result text, when supplied; structural tools also retain their typed result. */
