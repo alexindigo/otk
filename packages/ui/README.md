@@ -193,10 +193,15 @@ part kinds. Part renderers receive the client projection's optional `pending`
 input; the summary reply retains its normal rendering.
 
 Shared message framing separates `userBubble` presentation from `prompt` action
-eligibility. Injected skill/system/synthetic context uses the same user bubble
-as ordinary user text, without becoming editable, recallable or a Timeline
-prompt. Compaction summaries and transcript markers remain outside bubbles;
-assistant content retains its reply presentation.
+eligibility. Only ordinary user prompts get bubbles. Neutral `context` records
+and legacy contextual origins never become bubbles, prompts or Timeline anchors.
+Part fallback registrations may contribute presentation alongside rendering;
+explicit registrations retain their own presentation. The shipped fallback shows
+an unregistered activity as a collapsed tool-style row with producer-supplied
+title, muted detail and error tone, plus lazy parameters/rendered blocks and
+independent child navigation. Unknown parts show their name and a byte-bounded
+data preview, with the original size and an explicit truncation fact. No native
+kind or state is interpreted by these shared consumers.
 
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its

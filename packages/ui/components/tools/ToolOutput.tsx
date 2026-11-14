@@ -4,6 +4,7 @@ import { createSignal, For, Match, Show, Switch } from "solid-js";
 import type { ToolResult } from "@otk/protocol";
 import { ownedAction } from "../../keyboard/context.tsx";
 import Code from "../Code.tsx";
+import Blocks from "../Blocks.tsx";
 import ToolPath from "./ToolPath.tsx";
 import { relativeTarget } from "./paths.ts";
 import { usePathSemantics } from "../PathProvider.tsx";
@@ -81,6 +82,9 @@ export default function ToolOutput(
         </>
       }
     >
+      <Match when={props.result?.kind === "blocks" ? props.result : undefined}>
+        {(result) => <Blocks blocks={result().blocks} />}
+      </Match>
       <Match when={file()}>
         {(result) => (
           <>

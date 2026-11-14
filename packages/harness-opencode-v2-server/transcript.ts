@@ -310,7 +310,7 @@ export class Transcript {
     const directory = this.#baselines.get(id)?.raw.location.directory;
     if (!directory || !this.#subscriptions.has(id)) return message;
     const colors = this.colors?.peek(id, directory);
-    return message.agent
+    return message.role !== "context" && message.agent
       ? { ...message, agentColor: colors?.[message.agent] }
       : message;
   }

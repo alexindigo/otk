@@ -382,6 +382,7 @@ test("optional agent failure cannot reject an otherwise valid transcript page", 
       {},
     );
     assertEquals(messages.map((message) => message.id), ["msg_live"]);
+    assert(messages[0].role !== "context");
     assertEquals(messages[0].agentColor, undefined);
   } finally {
     await record.adapter.core.stop();
@@ -451,15 +452,13 @@ test("held agent decoration never gates live headers and late colors invalidate 
       (state, { op }) => reduce(state, op),
       emptyContent(),
     );
-    assertEquals(
-      content.messages.find((message) => message.id === "msg_live")?.agentColor,
-      "#123456",
-    );
-    assertEquals(
-      (await record.adapter.core.listMessages("opcv1-root", {})).items[0]
-        .agentColor,
-      "#123456",
-    );
+    const live = content.messages.find((message) => message.id === "msg_live");
+    assert(live && live.role !== "context");
+    assertEquals(live.agentColor, "#123456");
+    const snapshot =
+      (await record.adapter.core.listMessages("opcv1-root", {})).items[0];
+    assert(snapshot.role !== "context");
+    assertEquals(snapshot.agentColor, "#123456");
   } finally {
     held.resolve(Response.json([]));
     await record.adapter.core.stop();
@@ -924,13 +923,16 @@ test("agent colours are shared per directory across sessions, pages, events and 
         );
       await wait(() =>
         rendered().messages.length === expected.length &&
-        rendered().messages.every((message) => message.agentColor === "#abcdef")
+        rendered().messages.every((message) =>
+          message.role !== "context" && message.agentColor === "#abcdef"
+        )
       );
       assertEquals(
         rendered().messages.map((message) => message.id).sort(),
         [...expected].sort(),
       );
       for (const message of rendered().messages) {
+        assert(message.role !== "context");
         assertEquals(message.agentColor, "#abcdef");
       }
     }

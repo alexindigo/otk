@@ -21,13 +21,11 @@ type FramedMessage = Pick<Message, "id" | "role" | "parts"> & {
 /** Provider context is visible content, never a user prompt or prompt action. */
 export function messageLayoutRole(
   message: Pick<FramedMessage, "role" | "origin">,
-): "user" | "assistant" | "context" | "injected" {
+): "user" | "assistant" | "context" {
   return message.role === "assistant"
     ? "assistant"
-    : message.origin === undefined
+    : message.role === "user" && message.origin === undefined
     ? "user"
-    : ["skill", "system", "synthetic"].includes(message.origin)
-    ? "injected"
     : "context";
 }
 /** Feature-owned framing is separate from work grouping; mixed messages keep
@@ -64,7 +62,7 @@ export function messageFrames(
     return value;
   });
   const role = messageLayoutRole(message);
-  const userBubble = (role === "user" || role === "injected") &&
+  const userBubble = role === "user" &&
     frames.some((frame) => !frame.transcript);
   return {
     copyable,
