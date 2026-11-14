@@ -12,6 +12,7 @@ export type {
   VersionProbe,
 } from "./discovery.ts";
 export { V2Client } from "./client.ts";
+export { V2NativeDb } from "./native-db.ts";
 export type { OpenCodeClient } from "./client.ts";
 export { opencodeV2SessionID } from "./ids.ts";
 export { decodeEvent, V2_SILENCE_MS, V2Stream } from "./stream.ts";
