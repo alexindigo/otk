@@ -537,6 +537,10 @@ calls but accepts reported zero. Helper count/current/time stay together through
 refresh and source outage. Repeated unchanged project-policy input does not
 restart discovery or helper backfill.
 
+An unchanged content hash retains its scalar contribution, but not an obsolete
+source witness. Every bounded source-rebuild batch renews affected turn
+witnesses; ordinary equal-source rescans do not republish those turns.
+
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never
 full message/part JSON. Summary scans do not query parts. Opened usage detail
