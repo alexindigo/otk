@@ -39,20 +39,43 @@ Deno.test({
         for (const migration of opencodeV2DigestMigrations.migrations) {
           db.exec(await Deno.readTextFile(migration.sql));
         }
+        let transactions = 0, pageWrites = 0, failWrite = false;
+        const published: string[][] = [];
         const storage: V2DigestStorage = {
           sql: db,
-          transaction: (run) => run(),
+          // One commit per bounded page; a failure rolls the whole page back.
+          transaction: (run) => {
+            transactions++;
+            pageWrites = 0;
+            const before = new Map(rows);
+            try {
+              return run();
+            } catch (error) {
+              rows.clear();
+              for (const [id, row] of before) rows.set(id, row);
+              throw error;
+            }
+          },
           read: (id) => rows.get(id),
           turn: () => undefined,
           known: () => rows.values(),
           write: (metadata, delta) => {
+            if (failWrite && ++pageWrites > 1) {
+              throw new Error("injected write");
+            }
             rows.set(metadata.id, {
               metadata,
               summary: delta.summary,
               deleted: delta.deleted,
             });
           },
-          publish() {},
+          publish() {
+            throw new Error("Pages publish through the bounded set owner");
+          },
+          publishAll(values) {
+            published.push(values.map((value) => value.sessionID));
+            return Promise.resolve();
+          },
           diagnostic() {},
         };
         const sink = new OpencodeV2DigestSink(
@@ -81,9 +104,45 @@ Deno.test({
             "Startup cannot retain the idle session population",
           );
           sink.discoveryProject(native.directory, true);
+          // A failed page commits and publishes nothing; the cursor does not
+          // advance, so the retry returns exact results.
+          failWrite = true;
+          let failed = false;
+          for (let step = 0; step < 10 && !failed; step++) {
+            try {
+              if (
+                (await sink.discover(new AbortController().signal)).complete
+              ) {
+                break;
+              }
+            } catch (error) {
+              assert(String(error).includes("injected write"));
+              failed = true;
+            }
+          }
+          assert(failed, "A two-row page must reach the injected failure");
+          assertEquals([...rows.keys()].sort(), published.flat().sort());
+          failWrite = false;
+          for (let step = 0; step < 10; step++) {
+            if ((await sink.discover(new AbortController().signal)).complete) {
+              break;
+            }
+          }
+          assertEquals(
+            [...rows.keys()].sort(),
+            targets.map((target) => target.id).sort(),
+          );
+          assertEquals(published.flat().sort(), [...rows.keys()].sort());
+          rows.clear();
+          published.length = 0;
+          sink.discoveryProject(native.directory, false);
+          sink.discoveryProject(native.directory, true);
+          transactions = 0;
           const acquired: string[] = [];
+          let pages = 0;
           for (let step = 0; step < 10; step++) {
             const page = await sink.discover(new AbortController().signal);
+            pages++;
             assert(page.entries.length <= 2);
             assert(
               page.entries.every((entry) =>
@@ -98,6 +157,11 @@ Deno.test({
             acquired.sort(),
             targets.map((target) => target.id).sort(),
           );
+          // Fixed commit/publication cost is paid per page, not per identity.
+          assertEquals(transactions, pages);
+          assertEquals(published.flat().sort(), acquired);
+          assert(published.length < acquired.length);
+          assert(published.every((set) => set.length <= 2));
           sink.discoveryProject(native.directory, false);
           sink.discoveryProject(other, true);
           const selected: string[] = [];

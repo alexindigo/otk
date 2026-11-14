@@ -24,6 +24,7 @@ import {
 } from "@otk/protocol";
 import type {
   DigestBudget,
+  DigestExecution,
   DigestJob,
   DigestPolicy,
   DigestPublication,
@@ -70,6 +71,8 @@ export interface OpencodeV1DigestStorage {
     checkpoint?: DigestCheckpoint,
   ): void;
   publish(value: DigestPublication): void | Promise<void>;
+  /** One credited publication for a bounded set committed together. */
+  publishAll?(values: readonly DigestPublication[]): Promise<void>;
   diagnostic(id: string | undefined, error: unknown): void;
 }
 export interface OpencodeV1DigestReadiness {
@@ -333,37 +336,39 @@ export class OpencodeV1DigestSink implements DigestSink {
           );
         }
         const result = await this.#lists.read(input, signal);
-        for (const metadata of result.items) {
-          signal.throwIfAborted();
-          const previous = this.storage.read(metadata.id);
-          if (previous?.deleted) continue;
-          const changed = previous &&
-            previous.metadata.timeUpdated !== metadata.timeUpdated;
-          if (!previous || changed) {
-            const delta = previous
-              ? {
-                ...emptyDelta(previous.summary.revision + 1),
-                summary: {
-                  ...previous.summary,
-                  state: "digesting" as const,
-                  revision: previous.summary.revision + 1,
-                },
-              }
-              : emptyDelta();
-            this.storage.transaction(() => {
+        signal.throwIfAborted();
+        const listed: DigestPublication[] = [];
+        this.storage.transaction(() => {
+          for (const metadata of result.items) {
+            const previous = this.storage.read(metadata.id);
+            if (previous?.deleted) continue;
+            const changed = previous &&
+              previous.metadata.timeUpdated !== metadata.timeUpdated;
+            if (!previous || changed) {
+              const delta = previous
+                ? {
+                  ...emptyDelta(previous.summary.revision + 1),
+                  summary: {
+                    ...previous.summary,
+                    state: "digesting" as const,
+                    revision: previous.summary.revision + 1,
+                  },
+                }
+                : emptyDelta();
               if (changed) {
                 this.#invalidateScan(metadata.id, delta.summary.revision);
               }
               this.storage.write(metadata, delta);
-            });
-            await this.storage.publish({
-              sessionID: metadata.id,
-              revision: delta.summary.revision,
-              delta,
-              metadata,
-            });
+              listed.push({
+                sessionID: metadata.id,
+                revision: delta.summary.revision,
+                delta,
+                metadata,
+              });
+            }
           }
-        }
+        });
+        await this.#publishAll(listed);
         await readiness.listed?.(result.items, signal);
         if (result.older) {
           const next = { ...input, before: result.older };
@@ -746,46 +751,49 @@ export class OpencodeV1DigestSink implements DigestSink {
           await this.deleted(connection, id, 0);
         }
       }
-      for (const metadata of rows) {
-        const previous = this.storage.read(metadata.id);
-        if (
-          previous?.deleted && (this.#observed.get(metadata.id) ?? 0) > admitted
-        ) continue;
-        const changed = previous &&
-          (previous.deleted ||
-            previous.metadata.timeUpdated !== metadata.timeUpdated);
-        const delta = previous
-          ? {
-            summary: {
-              ...previous.summary,
-              ...(changed
-                ? {
-                  state: "digesting" as const,
-                  revision: previous.summary.revision + 1,
-                }
-                : {}),
-            },
-            turns: { upsert: {}, remove: [] },
-            deleted: null,
-          }
-          : emptyDelta();
-        this.storage.transaction(() => {
+      const added: DigestPublication[] = [];
+      this.storage.transaction(() => {
+        for (const metadata of rows) {
+          const previous = this.storage.read(metadata.id);
+          if (
+            previous?.deleted &&
+            (this.#observed.get(metadata.id) ?? 0) > admitted
+          ) continue;
+          const changed = previous &&
+            (previous.deleted ||
+              previous.metadata.timeUpdated !== metadata.timeUpdated);
+          const delta = previous
+            ? {
+              summary: {
+                ...previous.summary,
+                ...(changed
+                  ? {
+                    state: "digesting" as const,
+                    revision: previous.summary.revision + 1,
+                  }
+                  : {}),
+              },
+              turns: { upsert: {}, remove: [] },
+              deleted: null,
+            }
+            : emptyDelta();
           if (changed) {
             this.#invalidateScan(metadata.id, delta.summary.revision);
           }
           this.storage.write(metadata, delta);
-        });
-        if (!previous) {
-          await this.storage.publish({
-            sessionID: metadata.id,
-            revision: delta.summary.revision,
-            metadata,
-            delta,
-          });
+          if (!previous) {
+            added.push({
+              sessionID: metadata.id,
+              revision: delta.summary.revision,
+              metadata,
+              delta,
+            });
+          }
+          entries.push(metadata);
+          this.#deletions.delete(metadata.id);
         }
-        entries.push(metadata);
-        this.#deletions.delete(metadata.id);
-      }
+      });
+      await this.#publishAll(added);
       await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
     }
     return entries;
@@ -899,6 +907,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       return { projects: [] };
     }
   }
+  async #publishAll(values: readonly DigestPublication[]): Promise<void> {
+    if (!values.length) return;
+    if (this.storage.publishAll) await this.storage.publishAll(values);
+    else for (const value of values) await this.storage.publish(value);
+  }
   /** Called only after requested high/normal work has drained. */
   async discover(
     signal: AbortSignal,
@@ -943,19 +956,21 @@ export class OpencodeV1DigestSink implements DigestSink {
         this.#discoveryAPIComplete = complete;
       }
     }
-    for (const metadata of rows) {
-      const saved = this.storage.read(metadata.id);
-      if (!saved) {
+    const discovered: DigestPublication[] = [];
+    this.storage.transaction(() => {
+      for (const metadata of rows) {
+        if (this.storage.read(metadata.id)) continue;
         const delta = emptyDelta();
-        this.storage.transaction(() => this.storage.write(metadata, delta));
-        await this.storage.publish({
+        this.storage.write(metadata, delta);
+        discovered.push({
           sessionID: metadata.id,
           revision: 0,
           delta,
           metadata,
         });
       }
-    }
+    });
+    await this.#publishAll(discovered);
     const last = rows.at(-1);
     if (last && revision === this.#discoveryRevision) {
       this.#discoveryPosition = {
@@ -1680,9 +1695,10 @@ export class OpencodeV1DigestSink implements DigestSink {
     job: DigestJob,
     budget: DigestBudget,
     signal: AbortSignal,
+    execution?: DigestExecution,
   ): Promise<string | undefined> {
     if (job.projection === "helper") {
-      return await this.#helperStep(job, budget, signal);
+      return await this.#helperStep(job, budget, signal, execution);
     }
     const id = job.sessionID;
     ids.decode(id);
@@ -1864,6 +1880,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       });
       return;
     }
+    execution?.rows?.(raw.length);
     let rows: Baseline[];
     let hitBoundary = false;
     try {
@@ -2221,6 +2238,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     job: DigestJob,
     budget: DigestBudget,
     signal: AbortSignal,
+    execution?: DigestExecution,
   ): Promise<string | undefined> {
     const id = job.sessionID, snapshot = this.storage.read(id);
     if (!snapshot || snapshot.deleted) return;
@@ -2358,6 +2376,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       return;
     }
     signal.throwIfAborted();
+    execution?.rows?.(rows.length);
     if (
       this.#connection !== admittedConnection || this.storage.read(id)?.deleted
     ) return;
