@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import "./PreferenceControls.css" with { type: "text" };
 import { createSignal, type Element, For, onCleanup, Show } from "solid-js";
 import {
@@ -24,7 +24,7 @@ export interface PreferenceControlsProps {
 export default function PreferenceControls(
   props: PreferenceControlsProps & { group?: string },
 ): Element {
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   let alive = true;
   onCleanup(() => {
     alive = false;
@@ -51,7 +51,7 @@ export default function PreferenceControls(
     setError("");
     void set({ key, value }).catch((failure: unknown) => {
       if (alive) {
-        setError(failureText(failure));
+        setError(failureValue(failure, { action: "Saving preferences" }));
       }
     }).finally(() => {
       if (alive) restore();
@@ -127,7 +127,7 @@ export default function PreferenceControls(
       </fieldset>
       <FieldFeedback
         action
-        feedback={error() ? { kind: "error", text: error() } : undefined}
+        feedback={errorFeedback(error())}
       />
     </div>
   );

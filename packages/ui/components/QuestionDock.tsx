@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
-import { createPrimaryAction, failureText } from "@otk/client";
+import {
+  createPrimaryAction,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "@otk/client";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./QuestionDock.css" with { type: "text" };
@@ -87,7 +92,7 @@ function Request(
   const operation = bindFeedback(() => feedback);
   const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal("");
+    [error, setError] = createSignal<FailureValue>("");
   let card!: HTMLElement,
     advance!: HTMLButtonElement,
     pendingStatus!: HTMLDivElement,
@@ -123,7 +128,11 @@ function Request(
       props.onDirty(false);
     } catch (failure) {
       if (feedback) feedback.fail(failure);
-      else if (alive) setError(failureText(failure));
+      else if (alive) {
+        setError(
+          failureValue(failure, { action: "Sending question response" }),
+        );
+      }
     } finally {
       if (alive) setPending(false);
     }
@@ -376,7 +385,7 @@ function Request(
           </Show>
         </Show>
         <Show when={error()}>
-          <FeedbackStatus feedback={{ kind: "error", text: error() }} />
+          <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>
       </Takeover>
     </section>

@@ -154,8 +154,8 @@ test("composer.definitive-recall-rejection-is-one-visible-failure", {
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
     1,
   );
-  await expect(page.locator(".otk-composer-notice [role=alert]")).not
-    .toContainText("fixture.history.unavailable");
+  await expect(page.locator(".otk-composer-notice [role=alert]"))
+    .toContainText("Unknown method: fixture.history.unavailable");
   await expect(prompt(page)).toHaveValue("");
   await expect(chips(page)).toHaveCount(0);
   expect(frames.sent.filter(({ frame }) => frame.method === "history.list"))

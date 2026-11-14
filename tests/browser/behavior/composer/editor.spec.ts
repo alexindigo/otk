@@ -7,6 +7,7 @@ import {
   holdUploads,
   messages,
   pasteText,
+  pendingChips,
   prompt,
   reply,
   upload,
@@ -101,7 +102,7 @@ test(
       name: "editor-owned.txt",
       bytes: btoa("editor-owned-bytes"),
     }]);
-    await expect(chips(page)).toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(1);
     await expect.poll(() =>
       page.evaluate(() =>
         (globalThis as unknown as Window).composerReads.length
@@ -113,7 +114,7 @@ test(
     const editor = page.locator("textarea[name=editor]");
     await editor.fill("editor before [File 1] editor after");
     await completeUpload(page, 0);
-    await expect(chips(page)).not.toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(0);
     await expect(editor).toHaveValue("editor before [File 1] editor after");
     await page.locator(".otk-editor footer button").last().click();
     await expect(prompt(page)).toHaveValue(

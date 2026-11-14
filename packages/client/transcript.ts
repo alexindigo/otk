@@ -14,7 +14,11 @@ import {
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
-import { failureText } from "./failure-features.ts";
+import {
+  type FailureValue,
+  failureValue,
+  feedbackError,
+} from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
 import {
@@ -82,7 +86,7 @@ export interface TranscriptState {
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   load?: LoadCoverage;
-  pageError?: string;
+  pageError?: FailureValue;
   session?: ContentSession;
   recovering: { messageID: string; partID: string; generation: number }[];
   view?: "content" | "deleted";
@@ -100,7 +104,7 @@ export interface TranscriptState {
   exhausted: boolean;
   /** Missing baselines retain live operations until a successful recovery. */
   continuity: "loading" | "ready" | "missing";
-  error?: string;
+  error?: FailureValue;
 }
 export type ToolPart = Extract<Part, { kind: "tool" }>;
 export type ToolCompletionSource = (
@@ -261,7 +265,7 @@ export function createTranscript(
       if (!pending.streamed) early.reject(error);
       else if (!signal.aborted && boundaryRead === pending) {
         setState((draft) => {
-          draft.pageError = failureText(error);
+          draft.pageError = failureValue(error);
         });
       }
     });
@@ -537,7 +541,7 @@ export function createTranscript(
       } catch (error) {
         if (valid()) {
           setState((draft) => {
-            draft.error = failureText(error);
+            draft.error = failureValue(error);
           });
         }
       } finally {
@@ -562,7 +566,7 @@ export function createTranscript(
       }).catch((error) => {
         if (valid()) {
           setState((draft) => {
-            draft.error = failureText(error);
+            draft.error = failureValue(error);
           });
         }
       });
@@ -605,7 +609,7 @@ export function createTranscript(
       const diagnostic = (error: unknown) => {
         if (current(id, request)) {
           setState((draft) => {
-            draft.error = failureText(error);
+            draft.error = failureValue(error);
           });
         }
       };
@@ -746,7 +750,7 @@ export function createTranscript(
       setState((draft) => {
         draft.loading = false;
         draft.continuity = "missing";
-        draft.error = failureText(error);
+        draft.error = failureValue(error);
         draft.pageError = draft.error;
       });
       if (resynced) {
@@ -923,7 +927,7 @@ export function createTranscript(
           if (message.replyTo && state.messagesByID[message.replyTo]) break;
           if (state.exhausted) break;
           await owner.older();
-          if (state.pageError) throw new Error(state.pageError);
+          if (state.pageError) throw feedbackError(state.pageError);
         }
         if (id !== generation || !selected) {
           throw new Error("Reply changed while loading source");
@@ -1037,7 +1041,7 @@ export function createTranscript(
         } else if (state.exhausted) {
           throw new Error("Message is no longer available");
         } else await owner.older();
-        if (state.pageError) throw new Error(state.pageError);
+        if (state.pageError) throw feedbackError(state.pageError);
       }
       if (!selected) {
         throw new DOMException("Transcript demand ended", "AbortError");
@@ -1068,7 +1072,7 @@ export function createTranscript(
           ) {
             finish();
           } else if (!fetching && state.error) {
-            finish(new Error(state.error));
+            finish(feedbackError(state.error));
           }
         };
         release = subscribe(inspect);
@@ -1494,7 +1498,7 @@ export function createTranscript(
           if (current(id, request)) {
             setState((draft) => {
               draft.paging = false;
-              draft.error = failureText(error);
+              draft.error = failureValue(error);
               draft.pageError = draft.error;
             });
           }

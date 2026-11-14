@@ -4,7 +4,7 @@ import { cachedStatements } from "@otk/harness";
 import type { ProjectSeed, SessionIdentity } from "@otk/harness";
 import type { SessionListInput, SessionMetadata } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
-import { type SessionFacts, terminalEvidence } from "./metadata.ts";
+import { type SessionFacts, terminalFacts } from "./metadata.ts";
 import { sessionRecencySql } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
 
@@ -153,7 +153,7 @@ export class V2NativeDb {
       status: "idle",
       activityAuthority: "unknown",
       activity: {
-        terminal: terminalEvidence(
+        ...terminalFacts(
           row.time_idle,
           row.idle_outcome,
           Number(row.terminal),

@@ -122,7 +122,8 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
           box.bottom <= innerHeight,
         scrollports:
           [...Array.from(stack.querySelectorAll("*")), stack].filter((e) =>
-            /auto|scroll/.test(getComputedStyle(e).overflowY)
+            /auto|scroll/.test(getComputedStyle(e).overflowY) &&
+            e.scrollHeight > e.clientHeight + 1
           ).length,
         cards: stack.querySelectorAll(".otk-toast").length,
         gaps: [
@@ -175,8 +176,29 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   );
   expect(pending).toHaveLength(8);
   await badge(page, 8);
+  const firstPage = await page.locator(".otk-toast").evaluateAll((cards) =>
+    cards.map((card) => card.getAttribute("data-note"))
+  );
   await page.getByRole("button", { name: "3 more need you", exact: true })
     .click();
+  await expect(page.locator(".otk-toast")).toHaveCount(3);
+  await expect.poll(() =>
+    page.locator(".otk-toast").evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute("data-note"))
+    )
+  ).not.toEqual(firstPage);
+  expect(replies()).toBe(before);
+  await badge(page, 8);
+  // Overflow pages retained evidence; only explicit dismissal retires a note.
+  for (let remaining = 6; remaining > 0; remaining--) {
+    await page.locator(".otk-toast").first().getByRole("button", {
+      name: "Dismiss",
+      exact: true,
+    }).click();
+    await expect(page.locator(".otk-toast")).toHaveCount(
+      Math.min(3, remaining - 1),
+    );
+  }
   await expect(page.locator(".otk-toast")).toHaveCount(0);
   for (const session of sessions) {
     await expect(

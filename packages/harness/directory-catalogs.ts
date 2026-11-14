@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProviderReadPort } from "./provider-reads.ts";
+import { preserveFailure } from "@otk/protocol";
 import type {
   CatalogDemand,
   CatalogDemandIntent,
@@ -428,11 +429,11 @@ export class DirectoryCatalogs {
             current.state = {
               ...current.state,
               state: "unavailable",
-              failure: {
+              failure: preserveFailure(error, {
                 code: "native.unavailable",
                 retry: "same-intent",
                 diagnosticID: crypto.randomUUID(),
-              },
+              }),
             };
             this.options.diagnostic?.(error);
             this.#publish(resource);
@@ -549,11 +550,11 @@ export class DirectoryCatalogs {
           item.state = {
             ...item.state,
             state: "unavailable",
-            failure: {
+            failure: preserveFailure(error, {
               code: "native.unavailable",
               retry: "same-intent",
               diagnosticID: crypto.randomUUID(),
-            },
+            }),
           };
         }
         this.options.diagnostic?.(error);

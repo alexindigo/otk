@@ -12,6 +12,9 @@
   color: var(--otk-fg);
   overflow: visible;
   z-index: var(--layer-dialog);
+  /* A feedback tail grows down from a stable control region, not around
+     a browser-recentered content box. Horizontal centering stays native. */
+  margin-block: var(--overlay-gutter) auto;
 }
 .otk-dialog::backdrop {
   background: var(--otk-overlay);

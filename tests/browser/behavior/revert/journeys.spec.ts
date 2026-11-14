@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openSession } from "../../fixtures/wire.ts";
+import { openSession, wire } from "../../fixtures/wire.ts";
+import type { PublicFailure } from "@otk/protocol";
 import { pick, rightClick } from "../../pages/menus.ts";
 import {
   prompt,
@@ -11,7 +12,7 @@ import {
   runNativeTool,
 } from "../../pages/transcript.ts";
 import type { TestState } from "../../fixtures/test-state.ts";
-import { chips, messages, upload } from "../../pages/composer.ts";
+import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
 
 test.use({ profile: "revert-native" });
 async function palette(page: Page, command: string) {
@@ -87,10 +88,7 @@ test("revert.restore-visible-with-full-draft-and-exact-transcript", {
     bytes: btoa("Exact unsent bytes"),
   }]);
   await expect(chips(page)).toHaveCount(2);
-  await expect(chips(page)).not.toContainText([
-    "reading\u2026",
-    "reading\u2026",
-  ]);
+  await expect(pendingChips(page)).toHaveCount(0);
   const draft = await input.inputValue();
   const attachments = await chips(page).allTextContents();
   await page.locator(".otk-user-bubble").focus();
@@ -339,6 +337,7 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
 test("revert.pending-error-owned-feedback-retry", {
   tag: ["@revert", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
+  const traffic = await wire(page);
   const s = await state.native<{ id: string }>("/session", "POST", {
     title: "Rollback feedback",
     messages: [{ parts: [{ type: "text", text: "A prompt to roll back" }] }],
@@ -354,9 +353,23 @@ test("revert.pending-error-owned-feedback-retry", {
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
     1,
   );
-  await expect(page.locator(".otk-composer-notice [role=alert]")).toContainText(
-    "This session is working",
-  );
+  const request = traffic.sent.filter((item) =>
+    item.frame.method === "session.revert"
+  ).at(-1)!.frame;
+  const result = traffic.received.filter((frame) =>
+    frame.t === "request.result" && frame.ref?.key === request.ref!.key
+  ).at(-1)!.outcome as { ok: boolean; error: PublicFailure };
+  expect(result.ok).toBe(false);
+  expect(result.error.facts?.reason).toBeTruthy();
+  expect(result.error.facts?.status).toBe(409);
+  const failure = page.locator(".otk-composer-notice [role=alert]");
+  // FP1 retains the producer's public reason instead of per-code fixed copy.
+  await expect(failure).toContainText(result.error.facts!.reason!);
+  await expect(failure).toContainText("HTTP 409");
+  await expect(
+    failure.getByRole("link", { name: "Rollback feedback", exact: true }),
+  )
+    .toHaveAttribute("href", `#/local/${s.id}`);
   await expect(page.locator(".otk-rollback-status")).toHaveCount(0);
   await expect(page.locator("[data-role=user]")).toHaveCount(1);
   await action(state, "thaw");

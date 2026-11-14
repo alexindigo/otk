@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "./failure-features.ts";
+import { type FailureValue, failureValue } from "./failure-features.ts";
 import {
   type ApprovalSnapshot,
   autoApproveOwner,
@@ -18,7 +18,7 @@ export interface ApprovalState {
   activity: PermissionActivityPage & {
     sessionID?: string;
     loading: boolean;
-    error?: string;
+    error?: FailureValue;
   };
 }
 export interface ApprovalModel {
@@ -217,7 +217,7 @@ export function createApprovals(
               activity: {
                 ...value.activity,
                 loading: false,
-                error: failureText(error),
+                error: failureValue(error),
               },
             });
           }

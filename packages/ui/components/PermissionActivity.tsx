@@ -8,6 +8,7 @@ import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import { errorFeedback, type FailureValue } from "@otk/client";
 
 const action = (entry: Activity) =>
   entry.reply === "reject"
@@ -16,7 +17,7 @@ const action = (entry: Activity) =>
     ? "Allow always"
     : "Allow once";
 export default function PermissionActivity(props: {
-  value: PermissionActivityPage & { loading: boolean; error?: string };
+  value: PermissionActivityPage & { loading: boolean; error?: FailureValue };
   title(sessionID: string): string;
   onMore(): Promise<void>;
   onRetry(): Promise<void>;
@@ -29,8 +30,7 @@ export default function PermissionActivity(props: {
       <FeedbackStatus
         feedback={props.value.error
           ? {
-            kind: "error",
-            text: props.value.error,
+            ...errorFeedback(props.value.error)!,
             action: {
               label: "Retry activity",
               run: () => void props.onRetry(),

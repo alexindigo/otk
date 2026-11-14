@@ -17,6 +17,8 @@ export interface Note {
   readonly dismissalKey?: string;
   /** Feature-owned, structured-cloneable detail; channels may ignore it. */
   readonly detail?: unknown;
+  /** Some deliveries remain until explicit dismissal, even while their target is viewed. */
+  readonly dismissOnView?: boolean;
   readonly actions: readonly NoteAction[];
 }
 /** A port belongs to this delivery, not just to a replaceable string key. */
@@ -57,7 +59,7 @@ export class NotificationHub {
   constructor(
     readonly policy: NotificationPolicy,
     readonly run: (command: string, args?: unknown) => Promise<unknown>,
-    readonly error: (error: unknown) => void,
+    readonly error: (error: unknown, note?: Note, action?: NoteAction) => void,
   ) {}
   registerChannel(channel: NotificationChannel): () => void {
     if (!channel.id || this.#channels.has(channel.id)) {
@@ -124,14 +126,19 @@ export class NotificationHub {
   viewed(sidecar: string, session: string): void {
     for (const active of this.#notes.values()) {
       const ref = active.note.sessionRef;
-      if (ref?.sidecar === sidecar && ref.session === session) {
+      if (
+        active.note.dismissOnView !== false && ref?.sidecar === sidecar &&
+        ref.session === session
+      ) {
         this.retract(active.note.id);
       }
     }
   }
-  removeSidecar(sidecar: string): void {
+  removeSidecar(sidecar: string, preserve?: (note: Note) => boolean): void {
     for (const active of this.#notes.values()) {
-      if (active.note.sessionRef?.sidecar === sidecar) {
+      if (
+        active.note.sessionRef?.sidecar === sidecar && !preserve?.(active.note)
+      ) {
         this.retract(active.note.id);
       }
     }
@@ -189,7 +196,7 @@ export class NotificationHub {
       try {
         await this.run(action.command, action.args);
       } catch (error) {
-        this.error(error);
+        this.error(error, active.note, action);
       }
       // Selection/resolution, not a click or a resolved promise, owns attention.
     };

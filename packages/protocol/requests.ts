@@ -5,6 +5,7 @@ import type { FrecencyRequestReceipts } from "./frecency.ts";
 import type { ApprovalRequestReceipts } from "./approvals.ts";
 import type { CoreRequestReceipts } from "./rpc.ts";
 import type { SessionActionsRequestReceipts } from "./capabilities/session-actions.ts";
+import { isSessionID } from "./session-id.ts";
 /** Additive request services. Wire composition selects these at activation. */
 export interface RequestWindow {
   id: string;
@@ -33,11 +34,49 @@ export interface RequestProgress {
   completed?: number;
   total?: number;
 }
+export interface FailureTarget {
+  sidecarId?: string;
+  sessionID?: string;
+  directory?: string;
+  label?: string;
+}
+/** Producer-selected public facts, never request bodies or raw exception data. */
+export interface FailureFacts {
+  action?: string;
+  target?: FailureTarget;
+  reason?: string;
+  status?: number;
+  recovery?: string;
+  outcome?: "unknown" | "unavailable" | "rejected";
+}
+/** Capture only routing facts, never the request input or an invalid identity. */
+export function requestFailureFacts(
+  action: string,
+  params: unknown,
+  sidecarId?: string,
+): FailureFacts {
+  const fields = params && typeof params === "object"
+    ? params as Record<string, unknown>
+    : {};
+  return {
+    action,
+    target: {
+      ...(sidecarId ? { sidecarId } : {}),
+      ...(typeof fields.sessionID === "string" && isSessionID(fields.sessionID)
+        ? { sessionID: fields.sessionID }
+        : {}),
+      ...(typeof fields.directory === "string"
+        ? { directory: fields.directory }
+        : {}),
+    },
+  };
+}
 export interface PublicFailure {
   code: string;
   retry: "same-intent" | "new-intent" | "none";
   field?: string;
   diagnosticID: string;
+  facts?: FailureFacts;
 }
 export type RequestEvent<R = unknown> =
   | {

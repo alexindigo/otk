@@ -3,7 +3,9 @@ import {
   type ApprovalModel,
   type CommandHub,
   type EntryChanges,
+  failureNote,
   type Note,
+  notificationFailure,
   NotificationHub,
   notificationPolicy,
   NotificationTriggers,
@@ -13,11 +15,11 @@ import {
   type Selection,
   type SidecarConnection,
 } from "@otk/client";
-import {
-  errorMessage,
-  type IndexEntry,
-  type Preferences,
-  type ServerFrame,
+import type {
+  FailureFacts,
+  IndexEntry,
+  Preferences,
+  ServerFrame,
 } from "@otk/protocol";
 import { registerBadgeChannel } from "../features/notify/badge.ts";
 import { registerOsChannel } from "../features/notify/os.ts";
@@ -50,17 +52,32 @@ export function applicationNotifications(input: {
     };
   };
   let sequence = 0;
-  const message = (kind: "error" | "info", title: string) =>
+  const message = (title: string) =>
     hub.publish({
-      id: kind === "info" ? "message/info" : `message/error/${++sequence}`,
-      kind,
+      id: `message/info/${++sequence}`,
+      kind: "info",
       title,
       actions: [],
     });
+  const fail = (error: unknown, facts?: FailureFacts) => {
+    const note = failureNote(error, facts);
+    if (note) hub.publish(note);
+  };
+  const target = (sidecarId: string, sessionID: string) => ({
+    sidecarId,
+    sessionID,
+    label: input.entry(sidecarId, sessionID)?.title,
+  });
   const hub = new NotificationHub(
     notificationPolicy(context),
     (id, args) => input.commands.run(id, args),
-    (error) => message("error", errorMessage(error)),
+    (error, note, action) =>
+      fail(error, {
+        action: action?.label ?? "Running notification action",
+        target: note?.sessionRef
+          ? target(note.sessionRef.sidecar, note.sessionRef.session)
+          : undefined,
+      }),
   );
   const toast = registerToastChannel(hub),
     os = registerOsChannel(hub),
@@ -120,7 +137,10 @@ export function applicationNotifications(input: {
         }, (error) => {
           if (candidates.get(incoming.id) !== incoming) return;
           publish(incoming);
-          message("error", errorMessage(error));
+          fail(error, {
+            action: "question.list",
+            target: target(ref.sidecar, ref.session),
+          });
         });
         return;
       }
@@ -177,7 +197,10 @@ export function applicationNotifications(input: {
       }, (error) => {
         if (candidates.get(incoming.id) !== incoming) return;
         publish(incoming);
-        message("error", errorMessage(error));
+        fail(error, {
+          action: "permission.list",
+          target: target(ref.sidecar, ref.session),
+        });
       });
     },
     retract,
@@ -205,8 +228,8 @@ export function applicationNotifications(input: {
     toast: toast.model,
     os,
     update,
-    info: (text: string) => message("info", text),
-    error: (error: unknown) => message("error", errorMessage(error)),
+    info: (text: string) => message(text),
+    error: fail,
     receive(sidecar: string, frame: ServerFrame) {
       if (!observed.has(sidecar)) {
         observed.set(
@@ -219,9 +242,15 @@ export function applicationNotifications(input: {
       }
       if (frame.t === "welcome") {
         triggers.reset(sidecar);
-        hub.removeSidecar(sidecar);
+        hub.removeSidecar(sidecar, (note) => !!notificationFailure(note));
       }
-      if (frame.t === "error") message("error", frame.message || frame.code);
+      if (frame.t === "error") {
+        fail(frame, {
+          action: "Receiving server update",
+          target: { sidecarId: sidecar },
+          reason: frame.message || frame.code,
+        });
+      }
     },
     remove(sidecar: string) {
       observed.get(sidecar)?.();

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import "./ThemePicker.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -22,7 +22,7 @@ export default function ThemePicker(props: {
       props.theme.snapshot().committed,
     ),
     [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal("");
+    [error, setError] = createSignal<FailureValue>("");
   let active = true, preview: ReturnType<ThemeEngine["preview"]> | undefined;
   let status: { focus(): void } | undefined, saveButton!: HTMLButtonElement;
   onSettled(() => {
@@ -67,7 +67,7 @@ export default function ThemePicker(props: {
         await props.onSave(selected());
         if (active) cancel();
       } catch (error) {
-        if (active) setError(failureText(error));
+        if (active) setError(failureValue(error, { action: "Saving theme" }));
       } finally {
         if (active) setPending(false);
       }
@@ -122,7 +122,11 @@ export default function ThemePicker(props: {
             try {
               await props.onSystemLightSave(id);
             } catch (error) {
-              if (active) setError(failureText(error));
+              if (active) {
+                setError(
+                  failureValue(error, { action: "Saving theme" }),
+                );
+              }
             } finally {
               if (active) {
                 select.value = props.systemLightTheme;
@@ -145,10 +149,6 @@ export default function ThemePicker(props: {
           </For>
         </FormSelect>
       </label>
-      <FieldFeedback
-        action
-        feedback={error() ? { kind: "error", text: error() } : undefined}
-      />
       <footer class="otk-theme-actions">
         <button type="button" onClick={() => void close()}>Cancel</button>
         <ActionSlot
@@ -177,6 +177,7 @@ export default function ThemePicker(props: {
           </button>
         </ActionSlot>
       </footer>
+      <FieldFeedback action feedback={errorFeedback(error())} />
     </>
   );
 }

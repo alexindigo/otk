@@ -33,8 +33,20 @@ function fixture(finishes: Record<string, number> = {}) {
         t: "inbox.patch",
         generation: "fixture",
         from: revision,
-        revision: ++revision,
-        ops: [{ op: "finish", sessionID: id, time }],
+        revision: revision += 2,
+        // A finish clock is not success evidence; borrow the paired supervision outcome.
+        ops: [
+          {
+            op: "supervision",
+            sessionID: id,
+            value: {
+              state: "finishedUnseen",
+              terminal: time,
+              outcome: "succeeded",
+            },
+          },
+          { op: "finish", sessionID: id, time },
+        ],
       });
     },
   };
@@ -123,6 +135,14 @@ Deno.test("a replacement view baseline preserves a finish newer than an already 
         tasks: [],
         seen: {},
         finishes: { root: 10, historical: 5 },
+        supervision: {
+          root: { state: "finishedUnseen", terminal: 10, outcome: "succeeded" },
+          historical: {
+            state: "finishedUnseen",
+            terminal: 5,
+            outcome: "succeeded",
+          },
+        },
         pathTemplates: [],
       },
     });

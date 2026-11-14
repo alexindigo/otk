@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { hashFor, sessionSummary } from "@otk/client";
-import { exactCount, failureText, overflowPreference } from "@otk/client";
+import {
+  errorFeedback,
+  exactCount,
+  type FailureValue,
+  failureValue,
+  overflowPreference,
+} from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -82,7 +89,7 @@ export default function ProjectTabs(props: {
   actions: TaskActions;
 }): import("solid-js").Element {
   const { commands } = useCommandPorts();
-  const [error, setError] = createSignal("");
+  const [error, setError] = createSignal<FailureValue>("");
   const crumbFeedbackID = createUniqueId();
   const tasks = () => props.model.tasks();
   const active = () =>
@@ -92,7 +99,7 @@ export default function ProjectTabs(props: {
     );
   const entry = (id: string) => props.model.entry(id);
   const fail = (error: unknown) => {
-    setError(failureText(error));
+    setError(failureValue(error, { action: "Changing session tabs" }));
   };
   const run = (action: Promise<unknown>) => {
     void action.catch(fail);
@@ -371,7 +378,7 @@ export default function ProjectTabs(props: {
       data-reserve-trailing={props.reserveTrailing ? "true" : undefined}
     >
       <Show when={error()}>
-        <p role="alert" class="otk-error">{error()}</p>
+        <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
       <div class="otk-task-strip">
         <span

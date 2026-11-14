@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import {
   createEffect,
   createMemo,
@@ -33,7 +33,7 @@ export default function CommandMenu(props: {
   control?(control: PopoverControl): void;
   beforeRun?(): void;
   onClose?(): void;
-  onError?(text: string): void;
+  onError?(value: FailureValue): void;
   /** Description owned by an injected error sink instead of the menu's track. */
   feedbackID?: string;
 }): Element {
@@ -42,7 +42,9 @@ export default function CommandMenu(props: {
   const [revision, setRevision] = createSignal(0);
   const [groups, setGroups] = createSignal<ContextAction[][]>([]);
   const rows = createMemo(() => groups().map(commandRows));
-  const [error, setError] = createSignal<{ key: string; text: string }>();
+  const [error, setError] = createSignal<
+    { key: string; value: FailureValue }
+  >();
   const [armed, setArmed] = createSignal<{
     key: string;
     title: string;
@@ -140,9 +142,9 @@ export default function CommandMenu(props: {
         menu.close();
         return;
       }
-      const text = failureText(cause);
-      setError({ key: action.key, text });
-      props.onError?.(text);
+      const value = failureValue(cause, { action: action.title });
+      setError({ key: action.key, value });
+      props.onError?.(value);
     } finally {
       if (current === generation) {
         setPending(undefined);
@@ -182,7 +184,7 @@ export default function CommandMenu(props: {
         <Show when={error() && !props.onError}>
           <FeedbackStatus
             id={errorId}
-            feedback={{ kind: "error", text: error()!.text }}
+            feedback={errorFeedback(error()!.value)}
           />
         </Show>
       }

@@ -240,8 +240,8 @@ Deno.test("composer owns initial readiness, refresh coalescing, errors and last 
   pending.reject(new Error("catalog offline"));
   await failed;
   assertEquals(
-    f.owner.state.models.error,
-    "Could not finish this action. Try again",
+    f.owner.state.models.error && f.owner.state.models.error.failure?.reason,
+    "No publishable failure reason is available",
   );
   assertEquals(f.owner.state.models.value, catalog);
   await f.owner.ready();

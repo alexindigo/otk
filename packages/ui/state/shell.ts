@@ -54,7 +54,11 @@ export function createShellState(o: { api: URL }): ShellState {
     factory: solidState,
     error: (error) => navigation.fail(error),
     sidecars: (receive) =>
-      createSidecars(receive, { connection: { api: o.api } }),
+      createSidecars(receive, {
+        connection: { api: o.api },
+        sessionTitle: (sidecarId, sessionID) =>
+          index.get(sidecarId, sessionID)?.title,
+      }),
   });
   const { sidecars, entry } = resources;
   const listScopes = createListScopes();

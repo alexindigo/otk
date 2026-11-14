@@ -8,6 +8,7 @@ import {
   Show,
 } from "solid-js";
 import type { SessionRename } from "@otk/client";
+import { errorFeedback } from "@otk/client";
 import { MAX_SESSION_TITLE } from "@otk/protocol";
 import FieldFeedback from "./FieldFeedback.tsx";
 
@@ -21,7 +22,7 @@ export function TitleFeedback(
       feedback={props.owner.state.pending
         ? { kind: "pending", text: "Renaming session…" }
         : props.owner.state.error
-        ? { kind: "error", text: props.owner.state.error }
+        ? errorFeedback(props.owner.state.error)
         : undefined}
     />
   );

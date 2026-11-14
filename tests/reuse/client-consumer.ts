@@ -75,7 +75,7 @@ export async function observeReply(
     connection.view({ directory, selected: created.id, crumbs: [], rows: [] });
     session.open({ sidecarId: "core", sessionID: created.id });
     await wait(() => !session.state.loading);
-    if (session.state.error) throw new Error(session.state.error);
+    if (session.state.error) throw new Error(session.state.error.text);
     await current.call("session.prompt", {
       mode: "normal",
       parts: [{ kind: "text", text }],

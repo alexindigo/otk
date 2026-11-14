@@ -2,6 +2,7 @@
 import { createSignal, onSettled } from "solid-js";
 import {
   createDrafts,
+  errorFeedback,
   type Feedback,
   type FeedbackOwner,
   type RevertStrip,
@@ -18,7 +19,7 @@ import { solidState } from "../../state/binding.ts";
 import { useCommandPorts } from "../../keyboard/context.tsx";
 import "./notice-lifetime.css" with { type: "text" };
 
-export default function NoticeLifetime() {
+export default function NoticeLifetime(props: { structured?: boolean } = {}) {
   let value: Feedback | undefined;
   const listeners = new Set<() => void>();
   const feedback: FeedbackOwner = {
@@ -33,16 +34,41 @@ export default function NoticeLifetime() {
     clear() {},
   };
   styleTest.feedback = (mode) => {
-    value = mode === "clear" ? undefined : {
-      kind: mode,
-      text: mode === "pending"
-        ? "Sending response"
-        : "Could not finish this action. Try again",
-    };
+    value = mode === "error" && props.structured
+      ? errorFeedback(
+        "The requested change was refused. Your input is kept. Review the target and try again when it is available. END OF REASON",
+        {
+          action: "Sending prompt",
+          target: {
+            sidecarId: "local",
+            sessionID: "tstv1-notice",
+            label: "Retained conversation",
+          },
+        },
+      )
+      : mode === "clear"
+      ? undefined
+      : {
+        kind: mode,
+        text: mode === "pending"
+          ? "Sending response"
+          : "Could not finish this action. Try again",
+      };
     listeners.forEach((listener) => listener());
   };
   const drafts = createDrafts(solidState), write = drafts.writer("notice");
   const operation = solidState<SessionRevertState>({ pending: "undo" });
+  styleTest.failRollback = () =>
+    operation.update((state) => {
+      state.pending = undefined;
+      state.error = errorFeedback(
+        "The requested change was refused. Your input is kept. Review the target and try again when it is available. END OF REASON",
+        {
+          action: "Restoring prompts",
+          target: { label: "Retained conversation" },
+        },
+      );
+    });
   const rollback: SessionRevert = {
     state: operation.state,
     matches: () => true,

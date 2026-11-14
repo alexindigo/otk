@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { chips, holdUploads, pasteText, upload } from "../../pages/composer.ts";
+import {
+  chips,
+  holdUploads,
+  pasteText,
+  pendingChips,
+  upload,
+} from "../../pages/composer.ts";
 
 test(
   "composer.editor-dialog-and-action-geometry",
@@ -13,7 +19,7 @@ test(
     await openSession(state, page, session.id);
     await holdUploads(page);
     await upload(page, [{ name: "geometry.txt", bytes: btoa("geometry") }]);
-    await expect(chips(page)).toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(1);
     const action = page.getByRole("button", {
       name: "Edit prompt",
       exact: true,

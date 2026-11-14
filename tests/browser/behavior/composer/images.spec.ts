@@ -10,6 +10,7 @@ import {
   completeUpload,
   holdUploads,
   messages,
+  pendingChips,
   prompt,
   reply,
   upload,
@@ -104,7 +105,7 @@ test(
     await prompt(page).fill("What is in this image?");
     await add("paste", "sample.png");
     await expect(chips(page)).toHaveCount(1);
-    await expect(chips(page)).not.toContainText("reading…");
+    await expect(pendingChips(page)).toHaveCount(0);
     await expect(prompt(page)).toHaveValue("What is in this image?");
     await expect.poll(() =>
       chips(page).locator("img").evaluate((img) =>
@@ -251,7 +252,7 @@ test("composer.pending-image-session-owner-and-removal-fence", {
     page.evaluate(() => (globalThis as unknown as Window).composerReads.length)
   )
     .toBe(1);
-  await expect(chips(page)).toContainText("reading…");
+  await expect(pendingChips(page)).toHaveCount(1);
   await expect(prompt(page)).toHaveValue("");
   await openSession(state, page, z.id);
   await prompt(page).fill("Keep this draft");

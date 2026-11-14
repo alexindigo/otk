@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "./failure-features.ts";
+import {
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "./failure-features.ts";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
@@ -26,7 +30,7 @@ import { LOCAL_SIDECAR } from "./sidecars.ts";
 export interface ShellNavigationState {
   project?: ProjectSelection;
   settings: boolean;
-  error: string;
+  error: FailureValue;
 }
 export interface ShellView {
   selected?: Selection;
@@ -87,7 +91,7 @@ export function createShellNavigation(o: {
   const fail = (error: unknown): void => {
     if (resources.ownsFailure?.(error)) return;
     store.update((draft) => {
-      draft.error = failureText(error);
+      draft.error = failureValue(error);
     });
   };
   const clearError = (): void =>
@@ -170,15 +174,19 @@ export function createShellNavigation(o: {
       const server = target?.sidecarId ?? projectTarget?.sidecarId;
       if (!target && !projectTarget && /^#\/[^/]+\//.test(hash)) {
         store.update((draft) => {
-          draft.error =
-            "This session link is from an older version. Open Sessions to choose a session.";
+          draft.error = errorFeedback(
+            "This session link is from an older version. Open Sessions to choose a session.",
+            { action: "Opening session link" },
+          )!;
         });
         session.open();
         project();
       } else if (server && !resources.server(server)) {
         store.update((draft) => {
-          draft.error =
-            "The URL refers to an unknown server. Add it in Settings.";
+          draft.error = errorFeedback(
+            "The URL refers to an unknown server. Add it in Settings.",
+            { action: "Opening session link" },
+          )!;
         });
         session.open();
         project();

@@ -42,8 +42,10 @@ test("composer.public-ui-sync-async-paste-drop-refusals-retain-input", {
             }),
         );
       }, kind);
-      await expect(page.locator(".otk-prompt [role=alert] .otk-control-label"))
-        .toHaveText("Could not finish this action. Try again");
+      await expect(
+        page.locator(".otk-prompt [role=alert] .otk-failure-content"),
+      )
+        .toHaveText(/No publishable failure reason is available/);
       await expect(page.locator(".otk-prompt textarea")).toHaveValue(
         "Retain this unsent input",
       );

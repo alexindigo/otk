@@ -119,9 +119,10 @@ for (
           await expect.poll(async () => (await observe()).calls).toBe(1);
           await scenario("fail");
         }
-        await expect(picker.locator("[role=alert] > span")).toHaveText(
-          "Could not finish this action. Try again",
-        );
+        await expect(picker.locator("[role=alert] .otk-failure-content"))
+          .toHaveText(
+            /No publishable failure reason is available/,
+          );
         await expect(picker).not.toContainText(
           kind === "missing"
             ? "Catalog temporarily unreachable"
@@ -164,9 +165,10 @@ for (
         if (kind === "missing") {
           await open();
           await picker.locator(".otk-picker-status > button").click();
-          await expect(picker.locator("[role=alert] > span")).toHaveText(
-            "Could not finish this action. Try again",
-          );
+          await expect(picker.locator("[role=alert] .otk-failure-content"))
+            .toHaveText(
+              /No publishable failure reason is available/,
+            );
           await expect(picker).not.toContainText("Refresh failed");
           await expect(picker.locator(".otk-picker-name > span").first())
             .toHaveText("Available model");

@@ -56,7 +56,10 @@ Deno.test("shared model catalog coalesces consumers, follows connection identity
     await Promise.resolve();
     requests[2].result.reject(new Error("catalog offline"));
     await failed;
-    assertEquals(owner.state.error, "Could not finish this action. Try again");
+    assertEquals(
+      owner.state.error && owner.state.error.failure?.reason,
+      "No publishable failure reason is available",
+    );
     assertStrictEquals(owner.state.value, catalog);
     await owner.ready();
     assertEquals(

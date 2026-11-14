@@ -1089,10 +1089,34 @@ export async function collections456(input: Inputs) {
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
-        expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
-          baseline,
-        );
-        expect(g.icon).toEqual([g.row, g.row]);
+        if (mode === "error") {
+          // Complete failure facts grow in flow; control-sized icons do not.
+          expect(g.row).toBeGreaterThanOrEqual(baseline.row);
+          expect(g.notice).toBeGreaterThanOrEqual(baseline.notice);
+          expect(g.icon).toEqual(baseline.icon);
+          expect(
+            await page.locator(".otk-failure-content").evaluate((el) => {
+              const row = el.closest(".otk-composer-notice-row")!
+                .getBoundingClientRect();
+              return Array.from(el.children).every((child) => {
+                const range = document.createRange();
+                range.selectNodeContents(child);
+                const text = range.getBoundingClientRect();
+                return text.left >= row.left - .5 &&
+                  text.right <= row.right + .5 &&
+                  text.top >= row.top - .5 && text.bottom <= row.bottom + .5;
+              });
+            }),
+          ).toBe(true);
+          await expect(page.locator(".otk-failure-content")).toContainText(
+            "The requested rollback is no longer available",
+          );
+        } else {
+          expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
+            baseline,
+          );
+          expect(g.icon).toEqual([g.row, g.row]);
+        }
         expect(g.text).toBeLessThanOrEqual(.5);
         expect(g.iconOffset).toBe(0);
         expect(g.joined).toBe(true);

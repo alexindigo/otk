@@ -19,7 +19,12 @@ export class SessionSupervision {
   ): Supervision {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
-    if (entry.deleted) return { state: "none", terminal };
+    const outcome = terminal === evidence?.terminal
+      ? evidence.outcome
+      : undefined;
+    if (entry.deleted) {
+      return { state: "none", terminal, ...(outcome ? { outcome } : {}) };
+    }
     const needsInput = this.#fresh &&
       (evidence?.inputs?.fresh && evidence.inputs.keys.length ||
         evidence?.permissions?.fresh && evidence.permissions.keys.length &&
@@ -31,7 +36,7 @@ export class SessionSupervision {
       : terminal > acknowledged
       ? "finishedUnseen"
       : "none";
-    return { state, terminal };
+    return { state, terminal, ...(outcome ? { outcome } : {}) };
   }
   status(value: Supervision): ProjectStatus {
     return value.state === "needsYou"

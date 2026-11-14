@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 /** OTK application core: backend-neutral services and feature adapters. */
-export { type DiagnosticSink, isCancellation } from "@otk/protocol";
+export {
+  type DiagnosticSink,
+  isCancellation,
+  latestTerminal,
+} from "@otk/protocol";
 export * from "./requests/coordinator.ts";
 export * from "./requests/types.ts";
 export * from "./requests/policies.ts";

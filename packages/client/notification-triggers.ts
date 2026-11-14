@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexEntry, ServerFrame } from "@otk/protocol";
+import type {
+  ErrorObservation,
+  IndexEntry,
+  ServerFrame,
+  TerminalEvidence,
+  TerminalOutcome,
+} from "@otk/protocol";
+import { latestTerminal } from "@otk/protocol";
+import { sessionTitle } from "./session-title.ts";
+import { failureNote, sessionFailure } from "./failure-features.ts";
+import { RequestFailure } from "./failures.ts";
 import {
   acceptsPatch,
   type ClientIndex,
@@ -16,7 +26,11 @@ interface Facts {
   questions: number;
   errorIdentity: string;
   error?: string;
+  observations?: ErrorObservation[];
+  directory?: string;
   title: string;
+  terminal?: number;
+  outcome?: TerminalOutcome;
 }
 const facts = (entry?: IndexEntry): Facts | undefined =>
   !entry || entry.deleted || entry.archived ? undefined : {
@@ -24,11 +38,17 @@ const facts = (entry?: IndexEntry): Facts | undefined =>
     permissions: entry.attention.permissions,
     questions: entry.attention.questions,
     error: entry.attention.error,
+    observations: entry.attention.errorState?.observations.filter((item) =>
+      !item.cleared
+    ),
+    directory: entry.directory,
     errorIdentity: JSON.stringify(
       entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
         entry.attention.error ?? "",
     ),
     title: entry.title,
+    terminal: entry.activity?.terminal,
+    outcome: entry.activity?.outcome,
   };
 /** Root comparison facts only; application delivery borrows accepted projected deltas. */
 export class NotificationTriggers {
@@ -38,7 +58,7 @@ export class NotificationTriggers {
       rev: number;
       generation?: string;
       roots: Map<string, Facts>;
-      finishes: Map<string, number>;
+      finishes: Map<string, TerminalEvidence>;
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
@@ -78,8 +98,15 @@ export class NotificationTriggers {
     state.rev = change.revision;
     for (const entry of change.changes) {
       const current = facts(entry.after);
+      if (current && entry.completedAt && entry.completedOutcome) {
+        current.terminal = entry.completedAt;
+        current.outcome = entry.completedOutcome;
+      }
       if (entry.after && !current && entry.completedAt) {
-        state.finishes.set(entry.id, entry.completedAt);
+        state.finishes.set(entry.id, {
+          terminal: entry.completedAt,
+          outcome: entry.completedOutcome,
+        });
       }
       this.#compare(
         sidecar,
@@ -163,55 +190,89 @@ export class NotificationTriggers {
       if (this.#kinds.delete(id)) this.retract(id);
       return;
     }
-    const finished = completedAt !== undefined &&
-      completedAt > (state.finishes.get(session) ?? 0);
+    const outcome = completedAt === entry.terminal ? entry.outcome : undefined;
+    const priorFinish = state.finishes.get(session);
+    const finished = completedAt !== undefined && completedAt > 0 &&
+      (completedAt > (priorFinish?.terminal ?? 0) ||
+        completedAt === priorFinish?.terminal && outcome !== undefined &&
+          outcome !== priorFinish.outcome);
     if (completedAt && (baseline || entry.status === "idle")) {
-      state.finishes.set(session, completedAt);
+      state.finishes.set(
+        session,
+        latestTerminal(priorFinish, { terminal: completedAt, outcome }),
+      );
     }
     if (
       baseline ||
-      !previous && !finished && !entry.permissions && !entry.questions
+      !previous && !finished && !entry.permissions && !entry.questions &&
+        !entry.error
     ) return;
+    if (entry.error && entry.errorIdentity !== old.errorIdentity) {
+      for (
+        const observation of entry.observations?.length
+          ? entry.observations
+          : [undefined]
+      ) {
+        const failure = sessionFailure(observation, entry.error, {
+          action: "Running session",
+          target: {
+            sidecarId: sidecar,
+            sessionID: session,
+            directory: entry.directory,
+            label: entry.title,
+          },
+        });
+        const note = failure && failureNote(new RequestFailure(failure));
+        if (note) this.emit(note);
+      }
+    }
     const pending = this.#kinds.get(id);
     const resolved = (pending === "permission" && !entry.permissions) ||
       (pending === "question" && !entry.questions) ||
-      (pending === "error" && !entry.error) ||
-      (pending === "done" && entry.status !== "idle");
+      (["done", "error", "info"].includes(pending ?? "") &&
+        entry.status !== "idle");
     const remaining = resolved
-      ? entry.error
-        ? "error"
-        : entry.permissions
+      ? entry.permissions
         ? "permission"
         : entry.questions
         ? "question"
         : undefined
       : undefined;
-    const kind: Note["kind"] | undefined =
-      entry.error && entry.errorIdentity !== old.errorIdentity
-        ? "error"
-        : entry.permissions > old.permissions
-        ? "permission"
-        : entry.questions > old.questions
-        ? "question"
-        : finished &&
-            entry.status === "idle" && !entry.error &&
-            !entry.permissions && !entry.questions
+    const kind: Note["kind"] | undefined = entry.permissions > old.permissions
+      ? "permission"
+      : entry.questions > old.questions
+      ? "question"
+      : finished &&
+          entry.status === "idle" &&
+          !entry.permissions && !entry.questions
+      ? outcome === "succeeded"
         ? "done"
-        : remaining;
+        : outcome === "failed"
+        ? "error"
+        : "info"
+      : remaining;
     if (kind) {
       this.#kinds.set(id, kind);
       this.emit({
         id,
         kind,
         sessionRef: { sidecar, session },
-        title: ({
-          done: "Session done",
-          permission: "Permission needed",
-          question: "Question needs input",
-          error: "Session error",
-          info: "Information",
-        })[kind],
-        body: kind === "error" ? `${entry.title}: ${entry.error}` : entry.title,
+        title: finished && !["permission", "question"].includes(kind)
+          ? outcome === "failed"
+            ? "Session failed"
+            : outcome === "interrupted"
+            ? "Session interrupted"
+            : outcome === "succeeded"
+            ? "Session done"
+            : "Session finished (outcome unknown)"
+          : ({
+            done: "Session done",
+            permission: "Permission needed",
+            question: "Question needs input",
+            error: "Session error",
+            info: "Information",
+          })[kind],
+        body: sessionTitle(session, entry.title),
         actions: [{
           label: "Open",
           command: "session.open",

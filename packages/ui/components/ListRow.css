@@ -53,3 +53,8 @@
 .otk-list-row.is-editing .otk-list-row-trailing {
   min-height: var(--list-row-height);
 }
+.otk-list-row-feedback {
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+}

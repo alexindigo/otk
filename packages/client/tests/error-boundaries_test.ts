@@ -17,12 +17,18 @@ Deno.test("catalog failure publication normalizes unknown values and keeps last-
     const pending = owner.refresh();
     failure.reject(null);
     await pending;
-    assertEquals(owner.state.error, "Could not finish this action. Try again");
+    assertEquals(
+      owner.state.error && owner.state.error.failure?.reason,
+      "No publishable failure reason is available",
+    );
     assertEquals(owner.state.value, { providers: [], defaultState: "unknown" });
     assertEquals(owner.state.loading, false);
     read = () => Promise.reject("catalog offline");
     await owner.refresh();
-    assertEquals(owner.state.error, "Could not finish this action. Try again");
+    assertEquals(
+      owner.state.error && owner.state.error.failure?.reason,
+      "No publishable failure reason is available",
+    );
   } finally {
     owner.dispose();
   }

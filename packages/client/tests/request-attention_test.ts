@@ -108,7 +108,7 @@ Deno.test("authoritative tombstones retire pending and failed operation attentio
     );
     assertEquals(
       project([session]).tabs[0]?.status,
-      failed ? "blocked" : "working",
+      failed ? undefined : "working",
     );
     session.deleted = { at: 2, how: "otk" };
     assertEquals(project([session]).tabs, []);
@@ -130,7 +130,7 @@ Deno.test("authoritative tombstones retire pending and failed operation attentio
   }
 });
 
-Deno.test("failed automatic bookkeeping never creates mandatory attention; live user failures still do", () => {
+Deno.test("neither bookkeeping nor user failures invent pending user input", () => {
   for (
     const method of [
       "sessions.seen",
@@ -160,9 +160,10 @@ Deno.test("failed automatic bookkeeping never creates mandatory attention; live 
     start("session.rename", { sessionID: live.id, title: "Renamed" }, live.id);
     assertEquals(
       project([session, live]).tabs.map((tab) => [tab.id, tab.status]),
-      [[live.id, "blocked"]],
+      [],
     );
-    assertEquals(project([session, live]).projects[0].status, "blocked");
+    assertEquals(project([session, live]).projects[0].status, "none");
+    assertEquals(rpc.feedback(live.id).current()?.kind, "error");
     rpc.requests.stop();
   }
 });
@@ -174,12 +175,17 @@ Deno.test("task and child operation attention cannot reanimate a deleted session
     deleted: { at: 2, how: "provider" as const },
   };
   const child = { ...entry("tstv1-child"), parentID: deleted.id };
-  start("session.rename", { sessionID: child.id, title: "Renamed" }, child.id);
+  start(
+    "session.rename",
+    { sessionID: child.id, title: "Renamed" },
+    child.id,
+    false,
+  );
   assertEquals(
     project([deleted, child]).entries.map((row) => row.operationStatus),
-    [undefined, "blocked"],
+    [undefined, "working"],
   );
-  start("tasks.rename", { id: "task", name: "Renamed" }, "task");
+  start("tasks.rename", { id: "task", name: "Renamed" }, "task", false);
   const result = project([deleted, child], [{
     id: "task",
     name: "Task",
@@ -189,11 +195,11 @@ Deno.test("task and child operation attention cannot reanimate a deleted session
   }]);
   assertEquals(result.entries.map((row) => row.operationStatus), [
     undefined,
-    "blocked",
+    "working",
   ]);
   assertEquals(result.tabs.map((tab) => [tab.id, tab.status]), [[
     "task",
-    "blocked",
+    "working",
   ]]);
   rpc.requests.stop();
 });

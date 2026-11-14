@@ -5,6 +5,7 @@ import {
   type CoreServer,
   type DiagnosticSink,
   isCancellation,
+  latestTerminal,
   type ServiceConfig,
 } from "./core/mod.ts";
 import { startApplication } from "./application.ts";
@@ -94,10 +95,7 @@ export async function start(
                 activity: {
                   ...entry.activity,
                   ...current.activity,
-                  terminal: Math.max(
-                    entry.activity?.terminal ?? 0,
-                    current.activity?.terminal ?? 0,
-                  ),
+                  ...latestTerminal(entry.activity, current.activity),
                 },
               }
               : entry,
@@ -209,10 +207,7 @@ export async function start(
               activity: {
                 ...entry.activity,
                 ...current.activity,
-                terminal: Math.max(
-                  entry.activity?.terminal ?? 0,
-                  current.activity?.terminal ?? 0,
-                ),
+                ...latestTerminal(entry.activity, current.activity),
               },
             }
             : entry,
