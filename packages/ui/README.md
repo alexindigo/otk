@@ -767,6 +767,12 @@ of looking up their old position in a changing parent collection; menu rows keep
 the exact hub-owned action reference for invocation. Replacement, shrink and
 reorder therefore cannot make row presentation dereference a different item.
 
+The shell keys each project subtree to its captured project identity.
+ProjectTabs supplies its control lifetime to the plain task handlers: retirement
+cancels publication waits and late navigation, while captured task mutations
+still finish in their original project. The shared client tabs model is not
+stopped by a view.
+
 Consumers bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all
 selection uses `--font-ui` / `--font-mono`. Interface text is 13/20, prose
 14/24, headings 16/24 600 and metadata 12px sans; mono is for code, paths,

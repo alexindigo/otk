@@ -11,6 +11,7 @@ import {
   createUniqueId,
   type Element,
   For,
+  onCleanup,
   onSettled,
   Show,
 } from "solid-js";
@@ -116,8 +117,25 @@ export default function ProjectTabs(props: {
       },
     },
   });
+  let controlOwner = props.model, controlLifetime = new AbortController();
+  const controlSignal = () => {
+    const owner = props.model;
+    if (owner !== controlOwner) {
+      controlLifetime.abort();
+      controlOwner = owner;
+      controlLifetime = new AbortController();
+    }
+    return controlLifetime.signal;
+  };
+  createEffect(() => props.model, () => {
+    controlSignal();
+  });
+  onCleanup(() => controlLifetime.abort());
   const controls = createTaskControls({
     commands,
+    get signal() {
+      return controlSignal();
+    },
     actions: () => props.actions,
     model: () => props.model,
     tasks,

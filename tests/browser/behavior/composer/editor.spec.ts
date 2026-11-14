@@ -49,6 +49,13 @@ test(
       )
     ).toBe(true);
     await reply(state, page, session.id, "Expanded paste received.");
+    // Friendly and exact registry spellings share the owner's verbatim text schema.
+    const verbatim = '"quoted"  first line\nsecond [Pasted ~201 lines]';
+    await prompt(page).fill(`/prompt.editor ${verbatim}`);
+    await prompt(page).press("Enter");
+    await expect(editor).toHaveValue(verbatim);
+    await page.keyboard.press("Escape");
+    await expect(prompt(page)).toHaveValue(verbatim);
     await prompt(page).fill("/editor surrounding [Pasted ~201 lines]");
     await prompt(page).press("Enter");
     await expect(editor).toHaveValue("surrounding [Pasted ~201 lines]");

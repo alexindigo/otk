@@ -58,8 +58,8 @@ export interface ClientTabs {
   taskFor(id: string): TaskRecord | undefined;
   sessionFor(taskID: string): string | undefined;
   update(input: TabInput): void;
-  /** Join canonical publication; false if this project owner is replaced/stopped. */
-  taskReady(id: string): Promise<boolean>;
+  /** Join canonical publication; false if the owner or this borrower retires. */
+  taskReady(id: string, signal?: AbortSignal): Promise<boolean>;
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   close(sessionID: string): void;
@@ -383,15 +383,28 @@ export function createTabs(
         for (const resolve of waiters) resolve(!changedProject);
       }
     },
-    taskReady(id) {
-      if (stopped) return Promise.resolve(false);
+    taskReady(id, signal) {
+      if (stopped || signal?.aborted) return Promise.resolve(false);
       refresh();
       prepare();
+      if (signal?.aborted) return Promise.resolve(false);
       if (taskByID.has(id)) return Promise.resolve(true);
       return new Promise((resolve) => {
         let waiters = taskWaiters.get(id);
         if (!waiters) taskWaiters.set(id, waiters = new Set());
-        waiters.add(resolve);
+        const owned = waiters;
+        const finish = (ready: boolean) => {
+          signal?.removeEventListener("abort", cancel);
+          owned.delete(finish);
+          if (!owned.size && taskWaiters.get(id) === owned) {
+            taskWaiters.delete(id);
+          }
+          resolve(ready);
+        };
+        const cancel = () => finish(false);
+        owned.add(finish);
+        signal?.addEventListener("abort", cancel, { once: true });
+        if (signal?.aborted) cancel();
       });
     },
     select(selection: TabSelection, sessionID?: string): void {

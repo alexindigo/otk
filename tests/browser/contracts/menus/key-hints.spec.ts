@@ -10,6 +10,8 @@ test.describe("live hints", () => {
     { tag: ["@menus", "@isolated"] },
     async ({ isolatedState: state, page }) => {
       await openSession(state, page, "tstv1-core");
+      const lamp = page.locator('[data-crumb="tstv1-core"] .otk-status-light');
+      await expect(lamp).toHaveAttribute("data-state", "none");
       const button = page.locator(".otk-prompt button[type=submit]");
       const defaultTitle =
         "Send (Enter); Shift+Enter for newline; Esc twice to interrupt";
@@ -62,8 +64,7 @@ test.describe("live hints", () => {
         lease: state.lease.lease,
         action: "hold",
       });
-      await expect(page.locator('[data-crumb="tstv1-core"] .otk-status-light'))
-        .toHaveAttribute("data-state", "working");
+      await expect(lamp).toHaveAttribute("data-state", "working");
       await page.keyboard.press("Control+q");
       await expect(page.locator("[data-interrupt-confirmation]")).toHaveText(
         "Ctrl+q again to interrupt",
@@ -76,6 +77,7 @@ test.describe("live hints", () => {
       await expect.poll(async () =>
         (await state.observe<{ aborts: number }>()).aborts
       ).toBe(1);
+      await expect(lamp).toHaveAttribute("data-state", "none");
       await prompt(page).fill("Inspect reset shortcut hints");
       await expect(button).toHaveAttribute("title", reboundTitle);
       await state.product("prefs.set", {

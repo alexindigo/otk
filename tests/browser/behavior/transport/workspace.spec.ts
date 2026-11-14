@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
+import { expectPublicSession } from "../../pages/auth.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { scrollTranscript, wheelTranscript } from "../../pages/transcript.ts";
@@ -262,7 +263,8 @@ isolatedTest("transport.setup-history", {
   });
   await page.goto(url);
   await page.locator("input[name=username]").fill("tester");
-  await page.locator("input[name=password]").fill("secret");
+  const password = "setup-history-private-password";
+  await page.locator("input[name=password]").fill(password);
   await page.locator(".otk-auth-view button[type=submit]").click();
   await expect(page.locator(".otk-auth-view")).toHaveCount(0);
   await expect(page.locator(".otk-corner-right")).toBeEnabled();
@@ -284,11 +286,12 @@ isolatedTest("transport.setup-history", {
   await expect(
     page.locator(".otk-session-crumb[aria-current] .otk-crumb-title"),
   ).toHaveText("History B");
-  expect(await (await page.request.get(url + "/api/session")).json()).toEqual({
+  // SD2 adds public defaults; this journey owns auth facts, not response inventory.
+  await expectPublicSession(page.request, url, {
     authenticated: true,
     setupRequired: false,
     authType: "password",
-  });
+  }, [password]);
 });
 
 test(

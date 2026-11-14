@@ -898,6 +898,10 @@ an idle/seen selected phantom remains until selection leaves. Inputs remain
 owned by their index/metadata models, and tabs never delete sessions. Concurrent
 pins share promotion; late completion cannot steal a newer selection.
 
+`taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
+signal settles only its own wait as false; the shared model and other waiters
+remain available.
+
 An optional third `sources` argument supplies `input()` (owner-current tab
 inputs) and `session(sessionID)` (authoritative identity/title/directory
 lookup). Tab commands read current inputs before validation, so a deferred
