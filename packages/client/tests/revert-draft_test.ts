@@ -266,3 +266,86 @@ Deno.test("draft capture fences empty newer edits, foreign boundaries, servers a
   assertEquals(drafts.current("one/a").input, "Replacement lifetime");
   assertEquals(drafts.reverts.get("one/a"), undefined);
 });
+
+for (const kind of ["restore", "redo"] as const) {
+  for (const ending of ["navigate", "dispose"] as const) {
+    for (const mutation of ["none", "edit", "capture"] as const) {
+      Deno.test(`confirmed ${kind} settles after reconciliation ${ending} (newer ${mutation})`, async () => {
+        const f = fixture();
+        const before = f.drafts.writer("local/a")((d) => ({
+          ...d,
+          agent: "build",
+          model: { provider: "fake", model: "scripted" },
+          variant: undefined,
+        }));
+        const held = Promise.withResolvers<ContentSession>();
+        try {
+          await f.run(() => f.owner.undo(), true);
+          assertEquals(
+            f.drafts.current("local/a").input,
+            "Recalled old prompt",
+          );
+          f.session.update((s) => {
+            s.loading = true;
+          });
+          f.holdRestore(held.promise);
+          const work = f.owner[kind]();
+          held.resolve(f.base);
+          // The operation registered its await first. Its continuation enters
+          // the transcript wait before this same result promise resumes us.
+          await held.promise;
+          assertEquals(f.owner.state.pending, kind);
+          let expected = before;
+          if (mutation === "edit") {
+            expected = f.drafts.writer("local/a")((d) => ({
+              ...d,
+              input: "New work",
+            }));
+          } else if (mutation === "capture") {
+            expected = f.drafts.current("local/a");
+            f.drafts.reverts.capture("local/a", "old-prompt").staged(
+              "old-prompt",
+            );
+          }
+          if (ending === "navigate") {
+            f.session.update((s) => {
+              s.selection = { sidecarId: "local", sessionID: "b" };
+            });
+          } else f.owner.dispose();
+          await work;
+          assertEquals(f.drafts.current("local/a"), expected);
+          assertEquals(
+            f.drafts.reverts.get("local/a") === undefined,
+            mutation === "none",
+          );
+          assertEquals(f.drafts.current("local/b").input, "");
+        } finally {
+          f.owner.dispose();
+        }
+      });
+    }
+    Deno.test(`rejected ${kind} never restores a draft after ${ending}`, async () => {
+      const f = fixture(), held = Promise.withResolvers<ContentSession>();
+      try {
+        await f.run(() => f.owner.undo(), true);
+        const recalled = f.drafts.current("local/a");
+        f.session.update((s) => {
+          s.loading = true;
+        });
+        f.holdRestore(held.promise);
+        const work = f.owner[kind]();
+        if (ending === "navigate") {
+          f.session.update((s) => {
+            s.selection = { sidecarId: "local", sessionID: "b" };
+          });
+        } else f.owner.dispose();
+        held.reject(new Error("Native clear refused"));
+        await work;
+        assertEquals(f.drafts.current("local/a"), recalled);
+        assertEquals(f.drafts.reverts.get("local/a") !== undefined, true);
+      } finally {
+        f.owner.dispose();
+      }
+    });
+  }
+}
