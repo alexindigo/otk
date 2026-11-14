@@ -19,6 +19,7 @@ export class IndexView {
   #pending = new Map<string, DigestIndexDelta | undefined>();
   #hierarchies = new Map<string, string>();
   #stops: (() => void)[];
+  #turnLease?: { id: string; release(): void };
   ids(): ReadonlySet<string> {
     return this.#ids;
   }
@@ -55,7 +56,18 @@ export class IndexView {
       }),
     ];
   }
+  /** The selected session's turn detail is leased; others stay at their owner. */
+  #leaseTurns(): void {
+    const id = this.view().selected;
+    if (this.#turnLease?.id === id) return;
+    this.#turnLease?.release();
+    this.#turnLease = id
+      ? { id, release: this.index.retainTurns(id) }
+      : undefined;
+  }
   close(): void {
+    this.#turnLease?.release();
+    this.#turnLease = undefined;
     for (const stop of this.#stops) stop();
     this.#pending.clear();
     this.#hierarchies.clear();
@@ -94,6 +106,7 @@ export class IndexView {
     return { ...value, digest: { ...value.digest, turns: {} } };
   }
   snapshot(): void {
+    this.#leaseTurns();
     this.index.flush();
     const entries = [...this.#wanted()].flatMap((id) => this.#entry(id) ?? []);
     this.#ids = new Set(entries.map((entry) => entry.id));
@@ -117,6 +130,7 @@ export class IndexView {
       this.snapshot();
       return;
     }
+    this.#leaseTurns();
     const epoch = this.view().epoch;
     if (epoch !== this.#epoch) {
       // The old chunk may have been applied or dropped. Replay its keys from

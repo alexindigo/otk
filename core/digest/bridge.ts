@@ -210,7 +210,10 @@ export class DigestBridge implements DigestPort {
         const data = value;
         if (data.t === "digest") {
           const previous = this.#sequences.get(data.sessionID);
-          const valid = !previous || data.revision > previous.revision
+          // A complete sequence may be replayed at its revision (a keyed
+          // lease reload); parts of one sequence still arrive in order.
+          const valid = !previous || data.revision > previous.revision ||
+              data.revision === previous.revision && previous.last
             ? data.part === 0
             : data.revision === previous.revision && !previous.last &&
               data.part === previous.part + 1;
