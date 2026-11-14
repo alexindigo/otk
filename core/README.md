@@ -72,8 +72,15 @@ request-correlated `load.chunk`; the ordinary result completes only that page's
 boundary under its source generation. Visible rows acquire entries through the
 same view, without preloading transcripts. Hierarchy and task grouping come from
 the shared server projection. Remembered selection uses authoritative keyed
-identity validation; fallback requests one newest root. Recall resolves the
-selected identity before reading its project, never discovered sources.
+identity validation through `NavigationDefault`. Project clicks and
+cold/reloaded project routes share this read: supervision attention in the
+existing priority order, exact remembered identity (including children), then
+the newest top-level session across checkout scopes. Attention borrows
+SessionHierarchy membership; the fallback reads at most one native root per
+exact scope and never scans a transcript or acquires the project population.
+Host-sidecar layout memory is passed as a candidate, never accepted by a
+client-side shortcut. Recall resolves the selected identity before reading its
+project, never discovered sources.
 
 Index publication has one outstanding bounded chunk per socket. `index.applied`
 returns credit only after client reduction. Updates coalesce by key while credit

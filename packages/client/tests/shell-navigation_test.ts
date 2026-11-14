@@ -11,7 +11,115 @@ import {
 
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
-function fixture(hash = "#/local/tstv1-selected") {
+
+Deno.test("project defaults use attention before exact remembered child on click, cold start and reload", async () => {
+  for (const cold of [false, true]) {
+    const f = fixture(cold ? "#project/local/%2Fp" : undefined);
+    try {
+      f.entries("local", [
+        shellEntry("tstv1-selected"),
+        shellEntry("tstv1-child", "/p", "tstv1-selected"),
+        shellEntry("tstv1-blocked", "/p", "tstv1-selected"),
+      ]);
+      f.resources.receive("local", {
+        t: "inbox.snapshot",
+        generation: "attention",
+        revision: 0,
+        summaryRevision: 0,
+        inbox: {
+          projects: [],
+          tasks: [],
+          seen: {},
+          finishes: {},
+          pathTemplates: [],
+          supervision: {
+            "tstv1-selected": { state: "working", terminal: 0 },
+            "tstv1-blocked": { state: "needsYou", terminal: 0 },
+          },
+        },
+      });
+      f.resources.receive("local", {
+        t: "prefs",
+        prefs: {
+          ...DEFAULT_PREFS,
+          shellLayout: {
+            ...DEFAULT_PREFS.shellLayout,
+            projectLocations: [{
+              sidecarId: "local",
+              directory: "/p",
+              sessionID: "tstv1-child",
+            }],
+          },
+        },
+      });
+      f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+      await settled();
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-blocked");
+      f.resources.receive("local", {
+        t: "inbox.patch",
+        generation: "attention",
+        from: 0,
+        revision: 2,
+        ops: ["tstv1-selected", "tstv1-blocked"].map((sessionID) => ({
+          op: "supervision" as const,
+          sessionID,
+          value: { state: "none" as const, terminal: 0 },
+        })),
+      });
+      f.external("#project/local/%2Fp");
+      await settled();
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-child");
+    } finally {
+      f.stop();
+    }
+  }
+});
+
+Deno.test("late default results and failures cannot supersede later navigation or settings", async () => {
+  const f = fixture(), held = Promise.withResolvers<string | undefined>();
+  try {
+    f.resources.projectSession = () => held.promise;
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    held.resolve("tstv1-selected");
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    const failed = Promise.withResolvers<string | undefined>();
+    f.resources.projectSession = () => failed.promise;
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    f.navigation.showSettings();
+    failed.reject(new Error("retired default"));
+    await settled();
+    assertEquals(f.navigation.state.error, "");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("default requests capture the clicked project before deferred UI state publishes it", async () => {
+  const f = fixture(
+    undefined,
+    (initial) => ({ ...client.createState(initial), update() {} }),
+  );
+  const targets: unknown[] = [];
+  f.resources.projectSession = (project) => {
+    targets.push({ ...project });
+    return Promise.resolve("tstv1-away");
+  };
+  try {
+    f.navigation.openProject({ sidecarId: "local", directory: "/away" });
+    await settled();
+    assertEquals(targets, [{ sidecarId: "local", directory: "/away" }]);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-away");
+  } finally {
+    f.stop();
+  }
+});
+
+function fixture(
+  hash = "#/local/tstv1-selected",
+  factory?: client.StateFactory,
+) {
   const f = shellFixture({
       selected: "tstv1-selected",
       created: "tstv1-created",
@@ -65,12 +173,14 @@ function fixture(hash = "#/local/tstv1-selected") {
     drafts,
     forkNotes,
     environment,
+    factory,
     presence: () => presence,
     confirm: (message) => {
       messages.push(message);
       return consent;
     },
   });
+  f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
   navigation.start();
   f.calls.length = 0;
   return {
@@ -119,7 +229,7 @@ Deno.test("removing a direct-route server detaches even while its project metada
   }
 });
 
-Deno.test("nested routes and immediate remembered leaf navigation keep exact persisted location directories", () => {
+Deno.test("nested routes and immediate remembered leaf navigation keep exact persisted location directories", async () => {
   const f = fixture(), saved: unknown[] = [];
   const pending = Promise.withResolvers<void>();
   f.resources.rememberLocation = (location) => {
@@ -177,6 +287,7 @@ Deno.test("nested routes and immediate remembered leaf navigation keep exact per
     }]);
     f.navigation.openProject({ sidecarId: "local", directory: "/other" });
     f.navigation.openProject({ sidecarId: "local", directory: "/tree" });
+    await settled();
     assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
     assertEquals(f.navigation.state.project?.directory, "/tree");
   } finally {
@@ -419,6 +530,11 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   assertEquals(f.navigation.projectHome(), true);
   assertEquals(f.location.hash, "#project/local/%2Fp");
   await settled();
+  assertEquals(
+    f.session.state.selection,
+    undefined,
+    "Home is an explicit project page, not another default intent",
+  );
   f.stop();
 });
 Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", async () => {
@@ -453,9 +569,11 @@ Deno.test("project memory restores helpers through guarded navigation and reject
     f.guard.mark("permissions", true);
     f.consent(false);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-away");
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
   } finally {
     f.stop();
@@ -484,6 +602,7 @@ Deno.test("pending location writes bridge fast switches without accepting older 
     f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
     f.navigation.openProject({ sidecarId: "local", directory: "/away" });
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-other");
     held.resolve(null);
     await settled();

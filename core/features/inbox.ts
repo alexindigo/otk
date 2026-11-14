@@ -311,6 +311,13 @@ export class InboxFeature implements FrameSource {
   #finishes = new Map<string, number>();
   #supervision = new Map<string, Supervision>();
   readonly supervision = new SessionSupervision();
+  /** Borrow the same per-user evidence projection as lamps and mandatory tabs. */
+  navigationStatus(id: string): import("@otk/protocol").ProjectStatus {
+    this.#identity();
+    return this.supervision.status(
+      this.#supervision.get(id) ?? { state: "none", terminal: 0 },
+    );
+  }
   #supervise(id: string): void {
     const entry = this.index.getMetadata(id);
     const value = entry &&

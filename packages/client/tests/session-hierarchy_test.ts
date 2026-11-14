@@ -54,7 +54,7 @@ for (const prefix of ["opcv1", "opcv2"]) {
     }
   });
 
-  Deno.test(`INV-D ${prefix}: project click restores saved child route`, () => {
+  Deno.test(`INV-D ${prefix}: project click restores saved child route`, async () => {
     const f = shellFixture();
     const root = shellEntry(`${prefix}-root`, "/repo");
     const child = shellEntry(`${prefix}-child`, "/repo", root.id);
@@ -102,6 +102,7 @@ for (const prefix of ["opcv1", "opcv2"]) {
       nav.start();
       f.resources.receive("local", { t: "prefs", prefs });
       nav.openProject({ sidecarId: "local", directory: "/repo" });
+      await new Promise((resolve) => setTimeout(resolve, 0));
       assertEquals(f.session.state.selection?.sessionID, child.id);
       assertEquals(location.hash, `#/local/${root.id}/${child.id}`);
     } finally {

@@ -51,6 +51,13 @@ export const PROJECT_STATUS_PRIORITY = [
   "none",
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
+/** One attention ordering shared by server navigation and client projections. */
+export function attentionStatus(
+  ...states: (ProjectStatus | undefined)[]
+): ProjectStatus {
+  return PROJECT_STATUS_PRIORITY.find((state) => states.includes(state)) ??
+    "none";
+}
 /** Connection-local repository identity; checkout roots are explicit native facts. */
 export interface ProjectTopology {
   repoID: string;

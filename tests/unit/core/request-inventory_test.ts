@@ -38,6 +38,7 @@ import {
   RpcRegistry,
 } from "../../../core/mod.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
+import { NavigationDefault } from "../../../core/features/navigation-default.ts";
 import { test } from "../../support/resources.ts";
 import { registerCatalogs } from "../../../core/features/catalogs.ts";
 import { createCatalogCodecs } from "@otk/protocol";
@@ -46,6 +47,16 @@ import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { registerDigests } from "../../../core/features/digests.ts";
 import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
+
+function navigation(inbox: InboxFeature): NavigationDefault {
+  return new NavigationDefault({
+    hierarchy: inbox.index.hierarchy,
+    scopes: (directory) =>
+      inbox.summaries.values.get(directory)?.scopes ?? [directory],
+    entries: (directory) => inbox.index.catalog(directory),
+    status: (id) => inbox.navigationStatus(id),
+  });
+}
 
 async function composition() {
   const db = new OtkDb(await fixture(), [
@@ -86,7 +97,7 @@ async function composition() {
   const prefs = new Prefs(db, prefsOptions),
     frecency = new Frecency(db, frecencyOptions);
   registerPrefs(registry, harness, prefs);
-  registerLayout(registry, prefs);
+  registerLayout(registry, prefs, navigation(inbox));
   registerFrecency(registry, harness, frecency);
   const receipts = new Requests(db);
   const coordinator = (fingerprint?: (canonical: string) => Promise<string>) =>
@@ -130,6 +141,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "frecency.bump",
   ];
   const reads = [
+    "navigation.default",
     "inbox.get",
     "projects.list",
     "projects.scan",
@@ -210,7 +222,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     cfg().digest.publishrows,
   );
   Core.registerPrefs(rpc, harness, f.prefs);
-  Core.registerLayout(rpc, f.prefs);
+  Core.registerLayout(rpc, f.prefs, navigation(f.inbox));
   Core.registerFrecency(rpc, harness, f.frecency);
   approvals.register(rpc);
   for (
@@ -287,6 +299,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "prefs.set",
     "layout.patch",
     "layout.location",
+    "navigation.default",
     "inbox.get",
     "projects.list",
     "projects.add",
@@ -321,7 +334,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 26, // Per-kind catalog demand is independent of the watch lease.
+      read: 27, // Project defaults share one cancellable read; catalogs retain their demand lane.
       native: 19,
       local: 10,
       "prepared-local": 6,
