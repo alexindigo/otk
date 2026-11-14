@@ -234,6 +234,9 @@ Deno.test("usage and helper labels keep the command distinct from the tool descr
     ),
     { name: "bash", title: "pwd", startedAt: 1 },
   );
+  const unnamed = toolProgress("future", {}, {}, 1);
+  assertEquals(unnamed, { name: "future", startedAt: 1 });
+  assertEquals(unnamed, JSON.parse(JSON.stringify(unnamed)));
 });
 Deno.test("SQL split/inline labels and helper progress share owner-declared bounded fields", async () => {
   const db = new DatabaseSync(":memory:");

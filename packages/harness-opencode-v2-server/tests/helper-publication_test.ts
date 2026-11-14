@@ -94,6 +94,7 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
   try {
     await scan();
     assertEquals(publications.length, 1);
+    assertEquals(saved!.helper, JSON.parse(JSON.stringify(saved!.helper)));
     await scan();
     assertEquals(publications.length, 1);
     assertEquals(sink.requestHelper("opcv2-ses_helper", false), false);
@@ -164,6 +165,12 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
       "V2 helper source changed",
     );
     assertEquals(saved?.helper?.progress, sourceRetained);
+    for (const publication of publications) {
+      assertEquals(
+        publication.helper,
+        JSON.parse(JSON.stringify(publication.helper)),
+      );
+    }
   } finally {
     await sink.close();
     db.close();

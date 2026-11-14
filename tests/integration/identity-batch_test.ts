@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
 import { identityReadCodec } from "@otk/harness";
+import { assertIdentityFields } from "../support/identity-assertions.ts";
 import { DigestNativeDb } from "@otk/harness-opencode-v1";
 import type { TaskRecord } from "@otk/protocol";
 import { DigestBridge } from "../../core/digest/bridge.ts";
@@ -54,8 +55,8 @@ test("stock native batch identity consumer, task grouping, tombstone seen and un
       directory: oc.directory,
       parentID: parent.id,
     }].sort((a, b) => a.id.localeCompare(b.id));
-    assertEquals(sql.identities([parent.id, child.id]), expected);
-    assertEquals(
+    assertIdentityFields(sql.identities([parent.id, child.id]), expected);
+    assertIdentityFields(
       await bridge.read("identity.batch", {
         ids: [parent.id, child.id, "opcv1-ses_missing"],
       }, { owner: "proof", priority: "user" }),

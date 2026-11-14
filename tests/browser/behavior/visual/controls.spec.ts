@@ -113,10 +113,9 @@ test(
       expect(s.centers).toBeLessThanOrEqual(.5);
       expect(Math.abs(s.right - s.parentRight)).toBeLessThanOrEqual(.5);
     }
-    expect(g.selects.map((s: { value: string }) => s.value)).toEqual([
-      "hide",
-      "auto",
-    ]);
+    // UX1 represents thinking as a positive expansion toggle, not a select.
+    expect(g.selects.map((s: { value: string }) => s.value)).toEqual(["auto"]);
+    await expect(page.locator("input[name=thinking]")).not.toBeChecked();
     // Rule 3 supersedes disabled Markdown checkbox controls with named status images.
     expect(g.tasks.map((t) => t.label)).toEqual(["Not done", "Done"]);
     for (const task of g.tasks) {

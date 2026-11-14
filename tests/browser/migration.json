@@ -13082,7 +13082,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/tools.spec.ts",
-              "testID": "messages.bash-ten-thirty-cwd"
+              "testID": "messages.bash-complete-output-cwd"
             }
           ],
           "retainedCoverage": {
@@ -13090,7 +13090,7 @@
               "original scenario (unchanged)"
             ],
             "states": [
-              "R1 bash output is ten lines, expands to thirty, and displays differing cwd"
+              "R1 bash disclosure reveals all thirty lines and displays differing cwd"
             ]
           },
           "lowerTierWitness": {

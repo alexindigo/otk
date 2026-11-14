@@ -155,6 +155,31 @@ async function fixture(disk = false) {
   };
 }
 
+Deno.test("V2 coherent publications omit absent errors and clear retained failures", async () => {
+  const f = await fixture();
+  try {
+    f.seed("u", 1, "user");
+    for (let n = 2; n < 7; n++) {
+      f.seed(`a${n}`, n, "assistant", { cost: 1, tokens: zero });
+    }
+    f.seed("idle", 7, "idle");
+    await f.scan();
+    assertEquals(Object.hasOwn(f.saved()!.summary, "error"), false);
+    f.saved()!.summary.error = "Previous source failure";
+    f.seed("a6", 6, "assistant", { cost: 2, tokens: zero });
+    f.sink.invalidate(id, 2);
+    await f.scan();
+    for (const delta of f.publications) {
+      assertEquals(Object.hasOwn(delta.summary, "error"), false);
+      assertEquals(delta.summary, JSON.parse(JSON.stringify(delta.summary)));
+    }
+    assertEquals(Object.hasOwn(f.saved()!.summary, "error"), false);
+    assertEquals(derivedValue(f.saved()!.summary.total)?.cost, 9);
+  } finally {
+    await f.close();
+  }
+});
+
 Deno.test("V2 covered turn and opened detail use one working-time result across resumed gaps", async () => {
   const f = await fixture();
   try {
