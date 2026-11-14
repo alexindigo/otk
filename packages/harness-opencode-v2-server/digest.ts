@@ -1220,12 +1220,14 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     signal: AbortSignal,
     _execution?: DigestExecution,
   ): Promise<string | undefined> {
+    const connection = this.#connection;
     if (job.projection === "helper") {
       return await this.#helperStep(job, budget, signal);
     }
     const raw = await this.#ensure(job.sessionID, signal),
       entry = metadata(raw),
       source = this.#source;
+    if (connection !== this.#connection) return "reconcile";
     let scan = this.#scan(job.sessionID);
     // Fine keys belong to the admitted job, not durable authority. Coalescing or
     // restart can retire them; an exhausted cursor cannot then certify refresh.
@@ -1267,6 +1269,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       });
     }
     if (!rows) {
+      if (selected) {
+        // Opaque API pages cannot replace a selected SQL identity set.
+        this.invalidate(job.sessionID, scan.revision);
+        return "reconcile";
+      }
       const page = await this.messages.page(
         job.sessionID,
         Math.min(budget.rows, SCAN_ROWS),
@@ -1280,6 +1287,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     signal.throwIfAborted();
     const currentScan = this.#scan(job.sessionID);
     if (
+      connection !== this.#connection ||
       source !== this.#source ||
       !currentScan || currentScan.revision !== admitted.revision ||
       currentScan.generation !== admitted.generation ||
@@ -1296,15 +1304,26 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         (this.#native ? rows.length < Math.min(budget.rows, SCAN_ROWS) : !next);
     const turns = new Set<string>();
     this.storage.transaction(() => {
+      const boundaryTurn = (seq: number) => {
+        const row = this.storage.sql.prepare(
+          "SELECT coalesce(turn_id,message_id) AS turn FROM opcv2_transcript_header WHERE session_id=? AND seq<? AND (turn_id IS NOT NULL OR type='user') ORDER BY seq DESC LIMIT 1",
+        ).get(job.sessionID, seq);
+        if (row?.turn) turns.add(String(row.turn));
+      };
       const put = this.storage.sql.prepare(
         "INSERT INTO opcv2_transcript_header(session_id,message_id,seq,type,turn_id,scalar,generation) VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET seq=excluded.seq,type=excluded.type,turn_id=excluded.turn_id,scalar=excluded.scalar,generation=excluded.generation",
       );
       if (selected) {
         for (
           const old of this.storage.sql.prepare(
-            "SELECT turn_id FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
+            "SELECT turn_id,type,seq FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
           ).all(job.sessionID, JSON.stringify(selected))
-        ) if (old.turn_id) turns.add(String(old.turn_id));
+        ) {
+          if (old.turn_id) turns.add(String(old.turn_id));
+          if (old.type === "idle" || old.type === "user") {
+            boundaryTurn(Number(old.seq));
+          }
+        }
         this.storage.sql.prepare(
           "DELETE FROM opcv2_transcript_header WHERE session_id=? AND message_id IN (SELECT value FROM json_each(?))",
         ).run(job.sessionID, JSON.stringify(selected));
@@ -1320,6 +1339,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           JSON.stringify(row),
           admitted.generation,
         );
+      }
+      if (selected) {
+        for (const row of rows!) {
+          if (row.type === "idle" || row.type === "user") boundaryTurn(row.seq);
+        }
       }
       if (!this.#native) {
         for (const row of rows!) {
@@ -1659,8 +1683,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     budget: DigestBudget,
     signal: AbortSignal,
   ): Promise<string | undefined> {
+    const connection = this.#connection;
     const raw = await this.#ensure(job.sessionID, signal, false),
       source = this.#source;
+    if (connection !== this.#connection) return "reconcile";
     let scan = this.#helpers.get(job.sessionID);
     if (!scan || scan.source !== source) {
       const previous = Number(
