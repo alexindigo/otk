@@ -320,7 +320,12 @@ export default function ProjectTabs(props: {
       const box = tab.getBoundingClientRect();
       return box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
     });
-    const target = direction === "next" ? visible.at(-1) : visible[0];
+    const boundary = direction === "next" ? visible.at(-1) : visible[0];
+    // Overlap pages when several tabs fit. A sole full tab cannot overlap
+    // itself: target its neighbour so paging still makes forward/back progress.
+    const target = visible.length === 1
+      ? tabs[tabs.indexOf(boundary!) + (direction === "next" ? 1 : -1)]
+      : boundary;
     if (target) {
       const box = target.getBoundingClientRect();
       lane.scrollBy({
