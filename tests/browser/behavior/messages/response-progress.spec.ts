@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { openWorkLogs, prompt } from "../../pages/transcript.ts";
 
 test.use({ profile: "messages-tools" });
 test("messages.response-progress-motion-completion-interruption", {
@@ -125,6 +125,7 @@ test("messages.response-progress-motion-completion-interruption", {
   await prompt(page, "Read the directory, then explain");
   await expect(page.locator("[data-role=assistant] .otk-text").last())
     .toHaveText("The next step is still streaming.");
+  await openWorkLogs(page);
   await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   expect(
     await page.locator("[data-role=assistant]").last().evaluate((article) =>

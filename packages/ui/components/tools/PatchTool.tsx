@@ -30,7 +30,7 @@ export function registerPatchTool(tools: ToolRegistry): void {
           : "Path not reported"
       ).join(", "),
       changes: changeCounts(call.files),
-      expanded: context.prefs?.collapseFileChanges === false,
+      category: "fileChanges",
     }),
   );
 }

@@ -9,6 +9,7 @@ export interface PartGroup {
   id: string;
   parts: Part[];
   work: boolean;
+  required?: boolean;
 }
 export interface PartFrame {
   id: string;
@@ -87,10 +88,12 @@ export function partGroups(
     const work = !!value.work, previous = groups.at(-1);
     if (work && previous?.work) {
       previous.parts.push(part);
+      if (value.required) previous.required = true;
     } else {groups.push({
         id: part.id,
         parts: [part],
         work,
+        ...(value.required ? { required: true } : {}),
       });}
   }
   return groups;

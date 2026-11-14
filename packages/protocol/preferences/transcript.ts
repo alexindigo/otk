@@ -9,6 +9,14 @@ export interface TranscriptPreferences {
   scrollbar: boolean;
   showCost: boolean;
   collapseFileChanges: boolean;
+  expandWork: boolean;
+  expandToolOutput: boolean;
+  expandSystem: boolean;
+  expandDelegation: boolean;
+  expandOutgoing: boolean;
+  expandRecords: boolean;
+  expandSource: boolean;
+  expandCompaction: boolean;
 }
 export function registerTranscriptPreferences(
   registry: PreferenceRegistry,
@@ -17,8 +25,16 @@ export function registerTranscriptPreferences(
     key: "collapseFileChanges",
     default: true,
     validate: booleanPreference,
-    label: "Collapse file changes",
-    display: { order: 5, control: { kind: "toggle" } },
+    label: "Expand file changes by default",
+    display: {
+      order: 5,
+      control: { kind: "toggle", onValue: false, offValue: true },
+    },
+    settings: {
+      group: "transcript",
+      order: 3,
+      control: { kind: "toggle", onValue: false, offValue: true },
+    },
   });
   registry.register({
     key: "showCost",
@@ -38,8 +54,13 @@ export function registerTranscriptPreferences(
     key: "toolDetails",
     default: true,
     validate: booleanPreference,
-    label: "Tool details",
+    label: "Show successful tool rows",
     display: { order: 2, control: { kind: "toggle" } },
+    settings: {
+      group: "transcript-visibility",
+      order: 1,
+      control: { kind: "toggle" },
+    },
   });
   registry.register({
     key: "conceal",
@@ -50,10 +71,15 @@ export function registerTranscriptPreferences(
   });
   registry.register({
     key: "genericToolOutput",
-    default: false,
+    default: true,
     validate: booleanPreference,
-    label: "Generic tool output",
+    label: "Show results for unrecognized tools",
     display: { order: 4, control: { kind: "toggle" } },
+    settings: {
+      group: "transcript-visibility",
+      order: 2,
+      control: { kind: "toggle" },
+    },
   });
   registry.register({
     key: "scrollbar",
@@ -67,16 +93,35 @@ export function registerTranscriptPreferences(
     default: "hide",
     validate: (value): value is "show" | "hide" =>
       value === "show" || value === "hide",
-    label: "Thinking",
+    label: "Expand thinking by default",
+    settings: {
+      group: "transcript",
+      order: 4,
+      control: { kind: "toggle", onValue: "show", offValue: "hide" },
+    },
     display: {
       order: 8,
-      control: {
-        kind: "select",
-        options: [
-          { value: "hide", label: "Hide" },
-          { value: "show", label: "Show" },
-        ],
-      },
+      control: { kind: "toggle", onValue: "show", offValue: "hide" },
     },
   });
+  for (
+    const [key, label, order] of [
+      ["expandWork", "Expand work logs by default", 1],
+      ["expandToolOutput", "Expand tool output by default", 2],
+      ["expandSystem", "Expand System rows by default", 5],
+      ["expandDelegation", "Expand subagent results by default", 6],
+      ["expandOutgoing", "Expand outgoing messages by default", 7],
+      ["expandRecords", "Expand other native records by default", 8],
+      ["expandSource", "Expand native source by default", 9],
+      ["expandCompaction", "Always keep session compaction expanded", 10],
+    ] as const
+  ) {
+    registry.register({
+      key,
+      default: false,
+      validate: booleanPreference,
+      label,
+      settings: { group: "transcript", order, control: { kind: "toggle" } },
+    });
+  }
 }

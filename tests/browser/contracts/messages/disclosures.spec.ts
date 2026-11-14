@@ -8,6 +8,12 @@ test("messages.disclosures-unmount-retain-choice-draft", {
 }, async ({ isolatedState: state, page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await openSession(state, page, "tstv1-otk");
+  await expect(page.locator(".otk-work-fold")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.locator(".otk-work-body")).toHaveCount(0);
+  await page.locator(".otk-work-fold").click();
   const toggle = page.locator(".otk-tool-toggle");
   await expect(toggle).toBeAttached();
   await expect(page.locator(".otk-tool-body .otk-code")).toHaveCount(0);

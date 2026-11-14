@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  DEFAULT_PREFS,
+  type DisclosureCategory,
+  type Preferences,
+} from "@otk/protocol";
 import type { WindowAnchor } from "./window.ts";
 export interface TranscriptAnchor extends WindowAnchor {
   messageID?: string;
@@ -6,8 +11,17 @@ export interface TranscriptAnchor extends WindowAnchor {
 
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
+  defaultFor(
+    category: DisclosureCategory,
+    prefs?: Partial<Preferences>,
+  ): boolean;
   disclosure(key: string, generation: string): {
     value(): boolean | undefined;
+    expanded(
+      category: DisclosureCategory,
+      prefs?: Partial<Preferences>,
+      required?: boolean,
+    ): boolean;
     set(value: boolean): void;
   };
   retire(key: string): void;
@@ -23,7 +37,27 @@ export function createTranscriptInteraction(): TranscriptInteraction {
   const generations = new Map<string, number>();
   const windows = new Map<string, Map<string, number>>();
   let anchor: TranscriptAnchor | undefined;
+  const defaultFor = (
+    category: DisclosureCategory,
+    prefs: Partial<Preferences> = {},
+  ) => {
+    const defaults = { ...DEFAULT_PREFS, ...prefs };
+    const categories: Record<DisclosureCategory, boolean> = {
+      work: defaults.expandWork,
+      toolOutput: defaults.expandToolOutput,
+      reasoning: defaults.thinking === "show",
+      fileChanges: !defaults.collapseFileChanges,
+      system: defaults.expandSystem,
+      delegation: defaults.expandDelegation,
+      outgoing: defaults.expandOutgoing,
+      compaction: defaults.expandCompaction,
+      record: defaults.expandRecords,
+      source: defaults.expandSource,
+    };
+    return categories[category];
+  };
   return {
+    defaultFor,
     disclosure(key, generation) {
       let value = choices.get(key);
       if (value?.generation !== generation) {
@@ -33,6 +67,9 @@ export function createTranscriptInteraction(): TranscriptInteraction {
       const owner = value;
       return {
         value: () => choices.get(key) === owner ? owner.open : undefined,
+        expanded: (category, prefs, required = false) =>
+          (choices.get(key) === owner ? owner.open : undefined) ??
+            (required || defaultFor(category, prefs)),
         set(open) {
           if (choices.get(key) === owner) owner.open = open;
         },

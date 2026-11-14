@@ -2,11 +2,75 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { expandTool, prompt, runNativeTool } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  openWorkLogs,
+  prompt,
+  runNativeTool,
+  toolScript,
+} from "../../pages/transcript.ts";
 test.describe("actual tool forms", () => {
   test.use({ profile: "messages-forms" });
+  test("messages.native-failed-shell-visible-under-collapsed-defaults", {
+    tag: ["@messages"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await state.product("prefs.set", { key: "toolDetails", value: false });
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Visible failure",
+    });
+    await openSession(state, page, session.id);
+    await toolScript(state, "bash", {
+      command: "exit 7",
+      description: "Expected failure",
+    });
+    await prompt(page, "Run the failing command");
+    await expect(page.locator(".otk-message-flow")).toContainText(
+      "Tool finished.",
+    );
+    for (const reload of [false, true]) {
+      if (reload) await page.reload();
+      const row = page.locator("[data-tool=bash]");
+      await expect(row).toBeVisible();
+      await expect(
+        page.locator(".otk-work-log").filter({ has: row }).locator(
+          ".otk-work-fold",
+        ),
+      ).toHaveAttribute("aria-expanded", "true");
+      await expect(row.locator(".otk-tool-toggle")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+      await expect(row.locator(".otk-tool-toggle")).toContainText(
+        "Exited with code 7",
+      );
+      await expect(row).toHaveClass(/is-error/);
+      await expect(row.locator(".otk-tool-body")).toHaveCount(0);
+    }
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.locator("[data-tool=bash] .otk-tool-toggle").focus();
+      await page.screenshot({
+        path: info.outputPath(`failure-${theme}.png`),
+        fullPage: true,
+      });
+    }
+    const record = page.locator("[data-native-record=step] .otk-tool-toggle")
+      .first();
+    await expect(record).toHaveAttribute("aria-expanded", "false");
+    await state.product("prefs.set", { key: "expandRecords", value: true });
+    await expect(record).toHaveAttribute("aria-expanded", "true");
+    await record.click();
+    for (const value of [false, true]) {
+      await state.product("prefs.set", { key: "expandRecords", value });
+      await expect(record).toHaveAttribute("aria-expanded", "false");
+    }
+  });
   test(
-    "messages.bash-ten-thirty-cwd",
+    "messages.bash-complete-output-cwd",
     { tag: ["@messages"] },
     async ({ isolatedState: state, page }) => {
       await state.controller.call("writeProjectFiles", {
@@ -26,18 +90,14 @@ test.describe("actual tool forms", () => {
       await expandTool(page, "[data-tool=bash]");
       await expect.poll(() =>
         page.locator("[data-tool=bash] .otk-tool-output").textContent().then(
-          (s) => s!.split("\n").length,
+          (s) => s!.trimEnd().split("\n").length,
         )
-      ).toBe(10);
+      ).toBe(30);
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Running in",
       );
-      await page.locator("[data-tool=bash] .otk-output-toggle").click();
-      await expect.poll(() =>
-        page.locator("[data-tool=bash] .otk-tool-output").textContent().then(
-          (s) => s!.split("\n").length,
-        )
-      ).toBe(30);
+      await expect(page.locator("[data-tool=bash] .otk-output-toggle"))
+        .toHaveCount(0);
     },
   );
   test("messages.native-read-search-fetch-skill-generic-forms", {
@@ -90,7 +150,7 @@ test.describe("actual tool forms", () => {
             include: "*.txt",
           },
       );
-      const selector = `[data-message="${raw.messageID}"] .otk-tool-line`;
+      const selector = `[data-message="${raw.messageID}"] [data-tool]`;
       await expandTool(page, selector);
       const brief = page.locator(
         `.otk-tool-line:has([data-search-mode=${name}]) .otk-tool-brief`,
@@ -107,18 +167,9 @@ test.describe("actual tool forms", () => {
     );
     await runNativeTool(state, page, s.id, "echo_fixture", {});
     await page.locator(".otk-display-menu > button").click();
-    await page.locator("input[name=genericToolOutput]").click();
     await expect(page.locator("input[name=genericToolOutput]")).toBeChecked();
     await page.keyboard.press("Escape");
     await expandTool(page, "[data-tool=external]");
-    await expect(page.locator("[data-tool=external] .otk-tool-output"))
-      .toHaveJSProperty(
-        "textContent",
-        Array.from({ length: 10 }, (_, i) => `Generic line ${i + 1}`).join(
-          "\n",
-        ),
-      );
-    await page.locator("[data-tool=external] .otk-output-toggle").click();
     await expect(page.locator("[data-tool=external] .otk-tool-output"))
       .toHaveJSProperty(
         "textContent",
@@ -133,6 +184,7 @@ test.describe("tool permission/error states", () => {
   test("messages.permission-denial-error-state-contract", {
     tag: ["@messages"],
   }, async ({ isolatedState: state, page }) => {
+    await state.product("prefs.set", { key: "expandWork", value: true });
     const s = await state.native<{ id: string }>("/session", "POST", {
       title: "Tool states",
     });
@@ -152,6 +204,7 @@ test.describe("tool permission/error states", () => {
         page,
         name === "bash" ? "Ask permission" : "Ask web search permission",
       );
+      await openWorkLogs(page);
       await expect(page.locator(`[data-tool=${name}].otk-tool-waiting`))
         .toBeAttached();
       await page.locator(".otk-permission-actions > button").nth(2).click();
@@ -177,6 +230,7 @@ test.describe("tool permission/error states", () => {
     });
     await state.queue(["Missing file handled."]);
     await prompt(page, "Show a tool error");
+    await openWorkLogs(page);
     await expect(page.locator("[data-tool=read][data-tool-status=error]"))
       .toBeAttached();
     await expect(page.locator(".otk-message-flow")).toContainText(

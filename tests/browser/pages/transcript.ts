@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { Json } from "../../support/fixture-control.ts";
 
@@ -58,7 +58,40 @@ export async function toolScript(
   await state.queue([reply]);
 }
 
-export async function expandTool(page: Page, selector: string) {
+/** Explicitly open mounted work groups before addressing their lazy children. */
+export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
+  await expect(scope.locator(".otk-work-fold").first()).toBeAttached();
+  // Opening a group can retire other virtual rows. Reacquire the next closed
+  // group instead of retaining population indexes across geometry changes.
+  const closed = scope.locator('.otk-work-fold[aria-expanded="false"]');
+  while (true) {
+    // Expanding a predecessor can leave the next fold mounted only for its
+    // pending measurement. Reveal its source through the native viewport before
+    // clicking, rather than asking Playwright to scroll a retiring DOM node.
+    const selector = await closed.evaluateAll((buttons) => {
+      const button = buttons[0];
+      if (!button) return;
+      const message = button.closest("[data-message]")!,
+        row = button.closest("[data-virtual-key]")!;
+      return `[data-message=${
+        JSON.stringify(message.getAttribute("data-message"))
+      }] ` +
+        `[data-virtual-key=${
+          JSON.stringify(row.getAttribute("data-virtual-key"))
+        }] .otk-work-fold`;
+    });
+    if (!selector) break;
+    await revealAcquired(page, selector);
+    await page.locator(selector).click();
+  }
+}
+
+export async function expandTool(
+  page: Page,
+  selector: string,
+  scope?: Locator,
+) {
+  await openWorkLogs(page, scope ?? page);
   const toggle = page.locator(selector + " .otk-tool-toggle");
   await expect(toggle).toBeAttached();
   if (await toggle.getAttribute("aria-expanded") !== "true") {
@@ -70,9 +103,9 @@ export async function expandTool(page: Page, selector: string) {
 export async function showFileChanges(state: TestState, page: Page) {
   await page.locator(".otk-display-menu > button").click();
   const input = page.locator("input[name=collapseFileChanges]");
-  await expect(input).toBeChecked();
-  await input.click();
   await expect(input).not.toBeChecked();
+  await input.click();
+  await expect(input).toBeChecked();
   await expect.poll(async () =>
     (await state.product("prefs.get", {})).collapseFileChanges
   ).toBe(false);
@@ -304,6 +337,9 @@ export async function runNativeTool(
     "idle",
     { timeout: 60_000 },
   );
+  const message = `[data-message="${result!.messageID}"]`;
+  await revealAcquired(page, message);
+  await openWorkLogs(page, page.locator(message));
   return result!;
 }
 

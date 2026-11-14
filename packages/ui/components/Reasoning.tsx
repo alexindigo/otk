@@ -15,12 +15,15 @@ export default function Reasoning(
     conceal?: boolean;
   },
 ) {
-  const [expanded, setExpanded] = retainedDisclosure("reasoning");
+  const [open, setExpanded] = retainedDisclosure(
+    "reasoning",
+    "reasoning",
+    () => ({ thinking: props.mode }),
+  );
   const toggle = ownedAction(
     "reasoning.toggle",
     () => setExpanded(!open()),
   );
-  const open = () => props.mode === "show" || expanded();
   const heading = () => {
     const first = props.part.blocks[0];
     return first?.b === "paragraph" && first.inline.length === 1 &&
@@ -46,23 +49,14 @@ export default function Reasoning(
   }
   return (
     <section class={["otk-reasoning", { "is-open": open() }]}>
-      <Show
-        when={props.mode !== "show"}
-        fallback={
-          <div class="otk-reasoning-heading" role="heading" aria-level="3">
-            <Heading />
-          </div>
-        }
+      <button
+        type="button"
+        aria-expanded={open() ? "true" : "false"}
+        onClick={() => void toggle()}
       >
-        <button
-          type="button"
-          aria-expanded={open() ? "true" : "false"}
-          onClick={() => void toggle()}
-        >
-          <ChevronIcon class="otk-reasoning-chevron" />
-          <Heading />
-        </button>
-      </Show>
+        <ChevronIcon class="otk-reasoning-chevron" />
+        <Heading />
+      </button>
       <Show when={open()}>
         <div class="otk-reasoning-body">
           <Show when={title()}>

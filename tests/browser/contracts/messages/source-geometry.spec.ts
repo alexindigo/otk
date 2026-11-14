@@ -4,6 +4,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import {
   copySelection,
   nativeIdle,
+  openWorkLogs,
   prompt,
   scrollTranscript,
   selectSourceWord,
@@ -134,6 +135,7 @@ test("messages.code-projection-copy-numbered-geometry", {
   });
   await nativeIdle(state, write.id);
   await openSession(state, page, write.id);
+  await openWorkLogs(page);
   await expect(page.locator(".otk-code[data-numbered=true] code"))
     .toHaveJSProperty("textContent", source);
   await expect(page.locator(".otk-code-plain")).toBeAttached({
@@ -187,6 +189,7 @@ test("messages.leading-clip-true-colour-gutter", {
     "data-status",
     "idle",
   );
+  await openWorkLogs(page);
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1999$/ }))
     .toHaveCount(1);
   const delta = await page.evaluate<number>(
@@ -272,6 +275,7 @@ test("messages.numbered-empty-blank-terminal-geometry", {
       content,
     }, "Written.");
     await prompt(page, "Write shape " + index);
+    await openWorkLogs(page);
     await expect(page.locator(".otk-code[data-numbered=true] code"))
       .toHaveJSProperty("textContent", content);
     await expect.poll(() =>

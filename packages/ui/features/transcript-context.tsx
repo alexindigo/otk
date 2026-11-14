@@ -13,6 +13,7 @@ import {
   createTranscriptInteraction,
   type TranscriptInteraction,
 } from "@otk/client";
+import type { DisclosureCategory, Preferences } from "@otk/protocol";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
@@ -75,21 +76,32 @@ export function sourceRegion(messageID: () => string) {
     setElement(element);
   };
 }
-/** A disclosure owns only its explicit choice; expensive content is a factory. */
+/** The client resolves defaults; this binding only publishes an explicit intent. */
 export function retainedDisclosure(
   kind: string,
+  category: DisclosureCategory | (() => DisclosureCategory),
+  prefs: () => Partial<Preferences> = () => ({}),
   identity = useContentIdentity(),
+  required: () => boolean = () => false,
 ) {
-  const interaction = useContext(Interaction);
+  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
   const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
-  const choice = interaction?.disclosure(
+  const choice = interaction.disclosure(
     key(identity) + ":" + kind,
     interaction.generation(id),
   );
-  const [value, setValue] = createSignal<boolean | undefined>(choice?.value());
-  return [value, (open: boolean) => {
-    choice?.set(open);
-    setValue(open);
+  const [revision, setRevision] = createSignal(0);
+  const expanded = () => {
+    revision();
+    return choice.expanded(
+      typeof category === "function" ? category() : category,
+      prefs(),
+      required(),
+    );
+  };
+  return [expanded, (open: boolean) => {
+    choice.set(open);
+    setRevision((value) => value + 1);
   }] as const;
 }
 const key = (identity: ContentIdentity) =>

@@ -1010,6 +1010,14 @@ handle cannot change a replacement. `ensure(id, signal?)` supports a view's
 reveal lifetime without creating another body owner or cancelling other
 consumers.
 
+`interaction.defaultFor(category, prefs)` resolves the neutral category's
+starting state. A disclosure's `expanded(category, prefs, required?)` resolves
+explicit choice before that default; required rows open an unset enclosing work
+group so failure facts stay visible. No preference write becomes an explicit row
+choice. `toolFailure` consumes neutral lifecycle/result evidence, never native
+metadata; adapters can supply `ToolBase.failure.message` independently of
+lifecycle status.
+
 `createListScopes()` owns plain query/scroll/anchor interaction values keyed by
 server, directory and optional task. It retains no DOM, content or observers;
 server removal retires only that server's values. Views can unmount and borrow

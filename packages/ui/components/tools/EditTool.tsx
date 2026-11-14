@@ -23,7 +23,7 @@ export function registerEditTool(tools: ToolRegistry): void {
       target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
       changes: changeCounts(call.files),
-      expanded: context.prefs?.collapseFileChanges === false,
+      category: "fileChanges",
     }),
   );
 }

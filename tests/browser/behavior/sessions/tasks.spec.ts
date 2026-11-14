@@ -9,6 +9,8 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   tag: ["@sessions", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   test.setTimeout(120_000);
+  await state.product("prefs.set", { key: "expandWork", value: true });
+  await state.product("prefs.set", { key: "expandDelegation", value: true });
   const root = await state.native<{ id: string }>("/session", "POST", {
     title: "Subagents",
   });

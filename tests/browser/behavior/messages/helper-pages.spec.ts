@@ -21,6 +21,9 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
     seed = await observation(),
     { parent, child, work, tool } = seed.helper;
   await page.setViewportSize({ width: 1280, height: 900 });
+  // This progress-paint contract explicitly opts into visible helper bodies.
+  await state.product("prefs.set", { key: "expandWork", value: true });
+  await state.product("prefs.set", { key: "expandDelegation", value: true });
   await page.addInitScript(() => {
     const Native = WebSocket;
     let start: number | undefined;

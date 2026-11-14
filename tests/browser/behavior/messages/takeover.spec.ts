@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { openWorkLogs } from "../../pages/transcript.ts";
 test("messages.takeovers-retain-two-drafts-native-outcomes", {
   tag: ["@messages"],
 }, async ({ state, page }) => {
@@ -58,6 +59,7 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Keep this session's unsent work",
   );
+  await openWorkLogs(page);
   await page.locator("[data-tool=bash] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=bash] .otk-tool-output")).toHaveText(
     "takeover-bytes",

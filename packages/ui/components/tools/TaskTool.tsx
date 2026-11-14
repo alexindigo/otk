@@ -17,7 +17,7 @@ export function registerTaskTool(tools: ToolRegistry): void {
       verb: "Delegate",
       target: call.agent || "Unknown agent",
       summary: call.description,
-      expanded: true,
+      category: "delegation",
     }),
   );
 }

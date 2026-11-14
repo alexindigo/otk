@@ -7,6 +7,8 @@ test(
   "messages.programmatic-reveal-real-click",
   { tag: ["@messages"] },
   async ({ state, page }) => {
+    await state.product("prefs.set", { key: "expandWork", value: true });
+    await state.product("prefs.set", { key: "expandDelegation", value: true });
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Reveal without follow feedback",
     });

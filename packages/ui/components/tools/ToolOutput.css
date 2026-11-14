@@ -4,8 +4,3 @@
   font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
   margin: 8px 0;
 }
-.otk-output-toggle {
-  align-self: flex-start;
-  font-size: var(--text-meta);
-  padding: 4px 8px;
-}
