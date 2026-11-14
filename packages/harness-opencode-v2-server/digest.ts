@@ -201,7 +201,11 @@ export class OpencodeV2DigestSink implements DigestSink {
       }),
       ...this.#transcripts.readers,
       "supervision.terminals": async ({ after }, signal) => {
-        await this.#prepare(signal, true);
+        // One source/project proof refresh per inventory pass, at its first
+        // page. Continuation pages reuse that generation's proof (registration
+        // and project fences still apply), so native reads stay independent
+        // of population size.
+        await this.#prepare(signal, after === "");
         this.#check(signal);
         return this.#native?.terminals(after, policy.publishrows) ?? [];
       },

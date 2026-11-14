@@ -63,6 +63,10 @@ ceilings. Unrelated-session RPCs, including batched scope identities, and
 discovered-directory native reads are zero. Index entries contain only the
 leased session; every project has one keyed summary.
 
+A terminal inventory refreshes its native source/project proof once, at its
+first page; continuation pages reuse that proof, so `/info` and `/project` reads
+do not grow with the population.
+
 The native catalog ceiling is independent of observed counts: seven shipped
 catalog codecs (`packages/protocol/catalogs/codecs.ts`) x five owner acquisition
 or refresh sources = 35 per endpoint at either population. Those sources are
