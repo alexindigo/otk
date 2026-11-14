@@ -10,6 +10,7 @@ const record = (value: unknown): Record<string, unknown> =>
 function legacyRead(
   output: string,
   display: Record<string, unknown>,
+  truncated: boolean,
 ): ToolResult | undefined {
   if (display.type === "directory") {
     const match =
@@ -29,7 +30,7 @@ function legacyRead(
       paths: entries.map((v: string) => `${path.replace(/\/$/, "")}/${v}`),
       offset: display.offset,
       total: display.totalEntries,
-      truncated: display.truncated,
+      truncated: truncated || display.truncated,
     };
   }
   const match =
@@ -73,7 +74,7 @@ function legacyRead(
     startLine,
     endLine,
     totalLines,
-    truncated: match[4] === undefined,
+    truncated: truncated || match[4] === undefined,
   };
 }
 /** Characterized stock 2.2.6 model wrappers. Incomplete shapes stay verbatim. */
@@ -87,7 +88,7 @@ export function toolResult(
   if (output === undefined) return;
   const lines = output.split("\n");
   if (name === "read") {
-    const legacy = legacyRead(output, record(metadata.display));
+    const legacy = legacyRead(output, record(metadata.display), truncated);
     if (legacy) return legacy;
     const file = /^Read file .+, (?:lines (\d+)-(\d+)|(0) lines)$/.exec(
       lines[0],
