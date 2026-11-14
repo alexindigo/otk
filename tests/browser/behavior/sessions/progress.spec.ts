@@ -118,6 +118,18 @@ test("progress.count-rate-eta-and-stalled-wait", {
     body: JSON.stringify(geometry),
     contentType: "application/json",
   });
+  // Long stalls belong to held indexing/page work, not a permission lifetime.
+  await page.clock.setFixedTime(
+    new Date(await page.evaluate(() => Date.now()) + 12 * 86400_000),
+  );
+  await page.clock.runFor(1100);
+  await expect(status).toContainText("No progress for 12 days");
+  await expect(pageStatus).toHaveText(
+    "Still loading messages (12 days): waiting for opencode to respond",
+  );
+  await expect(listStatus).toHaveText(
+    "Still loading sessions (12 days): waiting for opencode to respond",
+  );
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "release",
