@@ -138,6 +138,51 @@ Deno.test("classified native reads have one injected deadline and safe backend l
   assertEquals(error.failure.code, "native.unavailable");
 });
 
+Deno.test("V1 generation abort during a response body keeps reads unavailable and effects unknown", async () => {
+  for (const classification of ["read", "effect"] as const) {
+    const generation = new AbortController();
+    const entered = Promise.withResolvers<void>();
+    let calls = 0;
+    const client = new Client({
+      url: "http://fixture",
+      username: "",
+      password: "",
+      db: "",
+      heartbeattimeout: 25,
+      reconnectmax: 30,
+      requestms: 1000,
+    }, (_url, options) => {
+      calls++;
+      return Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("["));
+              options!.signal!.addEventListener("abort", () => {
+                controller.error(options!.signal!.reason);
+              }, { once: true });
+              entered.resolve();
+            },
+          }),
+        ),
+      );
+    });
+    const rejected = assertRejects(() =>
+      client.json("/pending", {
+        classification,
+        method: classification === "read" ? "GET" : "POST",
+        signal: generation.signal,
+      }), NativeRequestFailure);
+    await entered.promise;
+    generation.abort(new TypeError("error reading a body from connection"));
+    assertEquals(
+      (await rejected).outcome,
+      classification === "read" ? "unavailable" : "unknown",
+    );
+    assertEquals(calls, 1);
+  }
+});
+
 Deno.test("mutating native ports forward the context and scoped launches join actual settlement", async () => {
   let fences = 0;
   const context: OperationContext = {

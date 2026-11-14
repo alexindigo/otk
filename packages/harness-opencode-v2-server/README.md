@@ -21,6 +21,11 @@ cannot return late data. `effect` fences each native exchange immediately before
 I/O, has no finite mutation deadline, and retains ambiguous outcomes as unknown.
 `sequence` serializes a whole same-session operation, including preparation,
 selection checkpoints and final settlement. Disconnect aborts and joins effects.
+The client distinguishes a retired stream generation from explicit lifetime or
+caller cancellation. Generation loss makes finite reads and undispatched work
+unavailable; a dispatched mutation whose result was lost stays unknown. Raw body
+read errors remain diagnostic causes, never untyped request outcomes or retry
+permission for mutations.
 
 Session actions use authoritative GETs after 204 metadata updates. Archive and
 code revert are independently advertised; V1 does not acquire either capability.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
+import { OperationFailure } from "@otk/protocol";
 import {
   decodeEvent,
   type StreamPorts,
@@ -146,6 +147,59 @@ Deno.test("V2 stream reconnect re-discovers, resyncs and fences old generations"
     "ready",
   ]);
   await x.stream.stop();
+});
+
+Deno.test("V2 mid-body reset is caught by the stream loop and reconnects", async () => {
+  const disconnected: number[] = [];
+  const x = setup({
+    disconnected: (generation) => disconnected.push(generation),
+  });
+  try {
+    await x.stream.start();
+    const client = x.stream.client;
+    const reset = new TypeError("error reading a body from connection");
+    x.controllers[0].enqueue(new TextEncoder().encode('data: {"type":'));
+    x.controllers[0].error(reset);
+    await until(() => disconnected.length === 1);
+    assertEquals(client.signal.aborted, true);
+    assertEquals(x.diagnostics, [reset]);
+    await until(() =>
+      x.order.filter((event) => event === "ready").length === 2
+    );
+    x.send({ type: "session.execution.started", data: { sessionID: "ses_1" } });
+    await until(() => x.applied.length === 1);
+    assertEquals(disconnected, [1]);
+  } finally {
+    await x.stream.stop();
+  }
+});
+
+Deno.test("V2 body-read failure retires concurrent reads as unavailable, not a raw transport throw", async () => {
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const x = setup();
+  try {
+    await x.stream.start();
+    const reading = x.stream.client.read(async () => {
+      entered.resolve();
+      await release.promise;
+      return "late native result";
+    });
+    const rejected = assertRejects(() => reading, OperationFailure);
+    await entered.promise;
+    x.controllers[0].enqueue(new TextEncoder().encode('data: {"type":'));
+    x.controllers[0].error(
+      new TypeError("error reading a body from connection"),
+    );
+    await until(() => x.diagnostics.length === 1);
+    release.resolve();
+    const error = await rejected;
+    assertEquals(error.outcome, "unavailable");
+    assertEquals(error.code, "native.unavailable");
+  } finally {
+    release.resolve();
+    await x.stream.stop();
+  }
 });
 Deno.test("V2 stream stop joins bootstrap and drops its late commit", async () => {
   let commit = false, entered = false;

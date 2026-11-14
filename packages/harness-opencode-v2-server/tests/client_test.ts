@@ -400,3 +400,95 @@ Deno.test("V2 read deadlines remain unavailable, while late lifecycle continuati
   gate.resolve(42);
   await cancelled;
 });
+
+Deno.test("V2 generation loss keeps dispatched mutations unknown and queued work unavailable without replay", async () => {
+  const generation = new AbortController(), lifetime = new AbortController();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let calls = 0;
+  const client = new V2Client(
+    service,
+    1000,
+    generation.signal,
+    async () => {
+      calls++;
+      entered.resolve();
+      await release.promise;
+      return new Response(null, { status: 204 });
+    },
+    undefined,
+    undefined,
+    lifetime.signal,
+  );
+  const mutate = () =>
+    client.sequence(
+      "ses_one",
+      () =>
+        client.effect((api) =>
+          api.session.update({ sessionID: "ses_one", title: "One" })
+        ),
+    );
+  const first = assertRejects(mutate, OperationFailure);
+  await entered.promise;
+  const queued = assertRejects(mutate, OperationFailure);
+  generation.abort(new TypeError("error reading a body from connection"));
+  release.resolve();
+  assertEquals((await first).outcome, "unknown");
+  assertEquals((await queued).outcome, "unavailable");
+  const read = await assertRejects(
+    () => client.read(() => Promise.resolve(42)),
+    OperationFailure,
+  );
+  assertEquals(read.outcome, "unavailable");
+  const effect = await assertRejects(mutate, OperationFailure);
+  assertEquals(effect.outcome, "unavailable");
+  assertEquals(
+    calls,
+    1,
+    "neither queued work nor uncertain delivery is replayed",
+  );
+  await client.join();
+});
+
+Deno.test("V2 generation loss during the effect fence is unavailable and never dispatches", async () => {
+  const generation = new AbortController(), lifetime = new AbortController();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let calls = 0;
+  const client = new V2Client(
+    service,
+    1000,
+    generation.signal,
+    () => {
+      calls++;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    },
+    undefined,
+    undefined,
+    lifetime.signal,
+  );
+  const operation: OperationContext = {
+    signal: new AbortController().signal,
+    key: { key: "key", clientID: "client", window: "window" },
+    progress() {},
+    beforeEffect: () => {
+      entered.resolve();
+      return release.promise;
+    },
+    checkpoint: () => Promise.resolve(),
+  };
+  const rejected = assertRejects(
+    () =>
+      client.effect(
+        (api) => api.session.update({ sessionID: "ses_one", title: "One" }),
+        operation,
+      ),
+    OperationFailure,
+  );
+  await entered.promise;
+  generation.abort(new TypeError("error reading a body from connection"));
+  release.resolve();
+  assertEquals((await rejected).outcome, "unavailable");
+  assertEquals(calls, 0);
+  await client.join();
+});

@@ -31,6 +31,7 @@ async function observed(
   const config = cfg(),
     projection = createTranscriptProjection(),
     errors: unknown[] = [],
+    connections: string[] = [],
     removed: string[] = [];
   const adapter = new OpencodeV2ServerAdapter(
     {
@@ -44,7 +45,9 @@ async function observed(
   resources().defer("notice adapter", () => adapter.core.stop());
   if (storage) adapter.storage(storage);
   await adapter.core.start({
-    connection() {},
+    connection(state) {
+      connections.push(state);
+    },
     indexReset() {},
     indexUpsert() {},
     indexRemove(id) {
@@ -56,7 +59,7 @@ async function observed(
   });
   adapter.core.subscriptions(id, 1);
   projection.replace((await adapter.core.listMessages(id, {})).items);
-  return { adapter, projection, errors, removed };
+  return { adapter, projection, errors, removed, connections };
 }
 function record(message: Message) {
   return message.parts.find((p) => p.kind === "external" && p.activity);
@@ -830,7 +833,10 @@ Deno.test({
       fake.failRemaining("The usage limit has been reached");
       const native = await OpencodeV2Test.start(fake),
         target = await native.createSession(),
-        { adapter, projection } = await observed(native, target.id);
+        { adapter, projection, connections } = await observed(
+          native,
+          target.id,
+        );
       await native.prompt(target.id, "Delegate, then report result");
       const rows = await waitFor(() => projection.messages(), (rows) =>
         rows.some((m) => {
@@ -856,7 +862,27 @@ Deno.test({
       assert(snapshot.items.some((m) =>
         JSON.stringify(record(m) ?? {}).includes("Explore failed")
       ));
-      native.proxy.disconnect();
+      native.proxy.freeze();
+      try {
+        native.proxy.disconnect();
+        await waitFor(() =>
+          Promise.resolve(connections.at(-1)), (state) =>
+          state === "reconnecting");
+        assert(
+          projection.messages().some((m) =>
+            JSON.stringify(record(m) ?? {}).includes("Explore failed")
+          ),
+          "the retained notice survives the disconnected generation",
+        );
+      } finally {
+        native.proxy.thaw();
+      }
+      await waitFor(() =>
+        Promise.resolve(connections), (states) =>
+        states.at(-1) === "connected" &&
+        states.filter((state) =>
+            state === "connected"
+          ).length >= 2);
       const after = await adapter.core.listMessages(target.id, {});
       assert(after.items.some((m) =>
         JSON.stringify(record(m) ?? {}).includes("Explore failed")
