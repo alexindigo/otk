@@ -187,6 +187,72 @@ Deno.test("V1 failed task result and independent assistant failure retain both e
   assertEquals(failure.error?.message, error);
 });
 
+Deno.test("V1 malformed task envelopes preserve complete outgoing context without breaking record mapping", () => {
+  for (
+    const child of ["child/path", "child name", "opcv1-child", "child.example"]
+  ) {
+    const envelope =
+      `<task id="${child}" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+    const message = mapMessage(info, [{ ...text(true), text: envelope }]);
+    assertEquals(message.role, "context");
+    assertEquals(message.source?.payload, envelope);
+    const part = message.parts[0];
+    assert(part.kind === "external");
+    assertEquals(part.activity?.child, undefined);
+    assertEquals(part.activity?.direction, "outgoing");
+    assertEquals(part.source?.payload, envelope);
+  }
+});
+
+Deno.test("V1 malformed optional child metadata preserves task and unknown tool results without a link", () => {
+  for (
+    const child of ["child/path", "child name", "opcv1-child", "child.example"]
+  ) {
+    const envelope =
+      `<task id="${child}" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+    for (const tool of ["task", "future-tool"]) {
+      const raw: RawPart = {
+        ...text(false),
+        type: "tool",
+        tool,
+        callID: "call",
+        state: {
+          status: "completed",
+          input: {},
+          output: envelope,
+          metadata: { sessionId: child },
+        },
+      };
+      const mapped = mapPart(raw);
+      assert(mapped.kind === "tool");
+      assertEquals(
+        "childSessionID" in mapped.call
+          ? mapped.call.childSessionID
+          : undefined,
+        undefined,
+      );
+      assertEquals(mapped.call.output, envelope);
+      assertEquals(mapped.call.source?.payload, envelope);
+      assertEquals(mapped.call.outputContent, undefined);
+    }
+  }
+});
+
+Deno.test("V1 malformed task output is not accepted as a decoded task envelope", () => {
+  const envelope =
+    `<task id="child/path" state="completed">\n<task_result>\nDone\n</task_result>\n</task>`;
+  const mapped = mapPart({
+    ...text(false),
+    type: "tool",
+    tool: "task",
+    callID: "call",
+    state: { status: "completed", input: {}, output: envelope },
+  });
+  assert(mapped.kind === "tool");
+  assertEquals(mapped.call.outputContent, undefined);
+  assertEquals(mapped.call.output, envelope);
+});
+
 Deno.test("V1 retained outcomes compose with native history in ten-row pages without omission or duplication", async () => {
   const settings = cfg(), retained = new V1RecordRetention();
   for (let i = 13; i <= 32; i++) {
@@ -308,7 +374,12 @@ Deno.test("V1 record projection classifies header-before-parts and retains non-t
     "description",
     " records",
   )!;
-  assertEquals(changed.description, "Inspect records");
+  assertEquals(changed.part.description, "Inspect records");
+  assertEquals(changed.message.info, info);
+  assertEquals(
+    changed.message.parts.find((part) => part.id === "subtask"),
+    changed.part,
+  );
   assertEquals(
     projection.delta("s", "m", "subtask", "unknown", "x"),
     undefined,

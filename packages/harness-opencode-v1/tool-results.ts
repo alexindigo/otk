@@ -3,6 +3,7 @@ import type { ToolResult } from "@otk/protocol";
 import type { RawPart } from "./types.ts";
 import { markdown } from "@otk/content";
 import { fileLanguage } from "./language.ts";
+import { opencodeV1SessionID as ids } from "./ids.ts";
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -132,6 +133,12 @@ export function taskEnvelope(
     /^<task id="([^"\n]+)" state="(running|completed|error)">\n(?:<summary>([^\n]*)<\/summary>\n)?<(task_result|task_error)>\n([\s\S]*)\n<\/\4>\n<\/task>$/
       .exec(output);
   if (!match || (match[2] === "error") !== (match[4] === "task_error")) return;
+  try {
+    ids.encode(match[1]);
+  } catch {
+    // A malformed relationship is still source text, not a decoded task.
+    return;
+  }
   return {
     sessionID: match[1],
     state: match[2],
