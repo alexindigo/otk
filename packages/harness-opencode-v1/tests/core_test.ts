@@ -135,7 +135,10 @@ Deno.test("mapping retains native source, handles all part kinds and interrupted
   assert(message.role === "assistant" && message.interrupted);
   assert(
     parts.every((part, i) =>
-      reachable(part, derivePart(raws[i])).preview.includes(
+      reachable(part, derivePart(raws[i]), {
+        origin: "message",
+        id: raws[i].messageID,
+      }).preview.includes(
         '"private":"secret"',
       )
     ),
@@ -170,20 +173,26 @@ Deno.test("mapping retains native source, handles all part kinds and interrupted
   assert(generic.kind === "tool" && generic.call.tool === "external");
   assertEquals(generic.call.output?.length, 65_536);
 });
-Deno.test("unrecognized part kinds retain their external name and bounded payload", () => {
-  const part = mapPart({
+Deno.test("unrecognized part kinds retain their external name and on-demand source", () => {
+  const raw = {
     id: "part",
     messageID: "message",
     sessionID: "session",
     type: "plugin.card",
     metadata: { title: "😀".repeat(40000) },
-  });
+  };
+  const part = mapPart(raw);
   assert(part.kind === "external");
   assertEquals(part.name, "opencode-v1/plugin.card");
   assertEquals(part.id, "part");
-  assert(part.data!.includes('"title"'));
-  assert(new TextEncoder().encode(part.data).length <= 65536);
-  assert(!part.data!.includes("�"));
+  assertEquals(part.data, undefined);
+  const view = reachable(part, derivePart(raw), {
+    origin: "message",
+    id: raw.messageID,
+  });
+  assert(view.preview.includes('"title"'));
+  assert(new TextEncoder().encode(view.preview).length <= 65536);
+  assert(!view.preview.includes("�"));
 });
 const patch =
   "--- a/example.ts\n+++ b/example.ts\n@@ -1,2 +1,2 @@\n before\n-old\n+new\n";

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ApprovalModel,
+  commandFailureFacts,
   type CommandHub,
   type EntryChanges,
   failureNote,
@@ -73,7 +74,12 @@ export function applicationNotifications(input: {
     (id, args) => input.commands.run(id, args),
     (error, note, action) =>
       fail(error, {
-        action: action?.label ?? "Running notification action",
+        // The hub froze this originating action before invocation; never look
+        // up a replacement command's public wording after it fails.
+        ...commandFailureFacts({
+          id: action?.command,
+          title: action?.label ?? "Running notification action",
+        }),
         target: note?.sessionRef
           ? target(note.sessionRef.sidecar, note.sessionRef.session)
           : undefined,
