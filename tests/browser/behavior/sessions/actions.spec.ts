@@ -212,7 +212,19 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
     .toHaveText("Checking whether this finished");
   await expect(page.locator(".otk-operation-feedback")).toHaveCount(1);
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText("Compact refused");
+  // ERR5 retains the native facts once; pending composer feedback is only a pointer.
+  const retained = page.locator('[data-native-record$="/request-failure"]')
+    .filter({
+      hasText: "Compact refused",
+    });
+  await expect(retained).toHaveCount(1);
+  await expect(retained).toContainText("Compact refused (HTTP 500)");
+  await expect(page.locator(".otk-operation-feedback")).not.toContainText(
+    "Compact refused",
+  );
+  await expect(
+    page.locator(".otk-failure-content").filter({ hasText: "Compact refused" }),
+  ).toHaveCount(1);
 });
 
 test(

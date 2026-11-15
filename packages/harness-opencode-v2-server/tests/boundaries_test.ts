@@ -8,6 +8,7 @@ import type { V2Client } from "../client.ts";
 import { createTranscriptProjection } from "@otk/client";
 import { cfg } from "../../../tests/support/config.ts";
 import { eventMessage } from "../messages.ts";
+import { requestFailureFacts } from "../request-failure.ts";
 
 const sid = "opcv2-ses_fixture";
 /** Only the named durable records can be read; any other read is a defect. */
@@ -27,9 +28,18 @@ function liveFixture(records: Record<string, NativeMessage> = {}) {
     client: () =>
       ({
         read: (run: (value: typeof api) => Promise<unknown>) => run(api),
+        failureFacts: requestFailureFacts,
       }) as unknown as V2Client,
     policy: cfg().messages,
     sequence: () => Promise.resolve(8),
+    facts: (input) =>
+      Promise.resolve({
+        source: "sql:fixture",
+        metadata: { boundaries: [] },
+        contexts: Object.fromEntries(
+          input.messages.map((id) => [id, { order: 8 }]),
+        ),
+      }),
     content: (_id, op) => projection.apply(op),
     diagnostic(error) {
       throw error;
@@ -103,6 +113,13 @@ Deno.test("NT3 live terminal-only compaction, streamed lifecycle and selection r
         },
       ]
     ) {
+      // The adapter materializes the canonical retained failure before routing
+      // the native lifecycle edge. That edge must not add another idle record.
+      await transcript.executionFailure({
+        ...event,
+        created: 1,
+        data: { ...event.data, sessionID: "ses_fixture" },
+      });
       await transcript.event({
         ...event,
         created: 1,
@@ -114,7 +131,7 @@ Deno.test("NT3 live terminal-only compaction, streamed lifecycle and selection r
       "msg_queued",
       "msg_later",
       "msg_model",
-      "msg_idle",
+      "request:failure:execution:evt_idle",
     ]);
     const titles = projection.messages().flatMap((m) =>
       m.parts.flatMap((p) => p.kind === "external" ? [p.activity?.title] : [])

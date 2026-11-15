@@ -124,7 +124,9 @@ repeating the full facts. The session composer injects the existing transcript
 reveal command as its callback; that owner resolves grouped reply keys, ensures
 the source and reveals/focuses the message through its public control. No native
 anchor scroll or cross-component DOM lookup is introduced. Only the retained
-record renderer asks FP1 for the full presentation.
+record renderer asks FP1 for the full presentation in that session view. The
+session error indicator borrows the same short reference and reveal callback;
+cross-session notification surfaces still carry the full failure facts.
 
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;

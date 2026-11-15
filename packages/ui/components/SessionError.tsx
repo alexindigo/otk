@@ -12,6 +12,7 @@ export default function SessionError(
     operationKey?: string;
     diagnosticID?: string;
     target?: import("@otk/protocol").FailureTarget;
+    onReveal?(messageID: string): void;
   },
 ) {
   const feedback = createMemo(() => {
@@ -25,7 +26,9 @@ export default function SessionError(
       actionLabel: "Running session",
       target: props.target,
     });
-    return failure ? presentFailure(failure) : undefined;
+    return failure
+      ? presentFailure(failure, { surface: "session", view: props.target })
+      : undefined;
   });
   return (
     <Show when={feedback()}>
@@ -40,7 +43,12 @@ export default function SessionError(
           }]}
         >
           {feedback()?.failure
-            ? <FailureContent failure={feedback()!.failure!} />
+            ? (
+              <FailureContent
+                failure={feedback()!.failure!}
+                onReveal={props.onReveal}
+              />
+            )
             : feedback()?.text}
         </p>
       </section>

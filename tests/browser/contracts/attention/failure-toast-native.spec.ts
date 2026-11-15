@@ -45,13 +45,7 @@ test("attention.native-failure-toast-identifies-the-background-session", {
   // This native failure supplies a reason, not an owner-authored recovery step.
   await expect(toast.locator(".otk-failure-recovery")).toHaveCount(0);
   await expect(page.locator('.otk-toast[data-kind="done"]')).toHaveCount(0);
-  if (info.project.name === "oc-2.2.6") {
-    await expect(
-      page.locator('.otk-toast[data-kind="error"]').filter({
-        has: page.getByText("Session failed", { exact: true }),
-      }),
-    ).toHaveCount(1);
-  }
+  await expect(page.locator('.otk-toast[data-kind="error"]')).toHaveCount(1);
   // A failed native execution can also produce a legitimate unseen finish.
   // It must not invent pending user input; error-only badge isolation is covered
   // by the request-burst and controlled-notification consumer proofs.

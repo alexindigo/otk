@@ -22,6 +22,51 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
+Deno.test("causal replies follow their prompt even when queued source order follows the failure", () => {
+  const projection = createTranscriptProjection();
+  const control: Message = {
+    id: "switch",
+    sessionID: "tstv1-s",
+    role: "context",
+    sourceOrder: 1,
+    time: { created: 1 },
+    parts: [],
+  };
+  const failure: Message = {
+    id: "failure",
+    sessionID: "tstv1-s",
+    role: "context",
+    replyTo: "prompt",
+    sourceOrder: 2,
+    time: { created: 2 },
+    parts: [],
+  };
+  const prompt: Message = {
+    id: "prompt",
+    sessionID: "tstv1-s",
+    role: "user",
+    sourceOrder: 3,
+    time: { created: 3 },
+    parts: [],
+  };
+  const other: Message = { ...control, id: "other-control", sourceOrder: 2.5 };
+  for (
+    const messages of [[control, failure, other, prompt], [
+      prompt,
+      failure,
+      other,
+      control,
+    ]]
+  ) {
+    projection.replace(messages);
+    assertEquals(projection.state.replyIDs, [
+      "switch",
+      "other-control",
+      "prompt",
+      "reply:prompt",
+    ]);
+  }
+});
 Deno.test("message clock refinement preserves terminal authority and body identity without reviving removals", () => {
   const projection = createTranscriptProjection();
   const message = {

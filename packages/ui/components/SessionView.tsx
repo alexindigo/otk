@@ -528,6 +528,10 @@ export default function SessionView(props: {
                           }}
                           operationKey={feedback()?.identity}
                           diagnosticID={feedback()?.diagnosticID}
+                          onReveal={(messageID) =>
+                            void reveal({ messageID }).catch((cause) =>
+                              setRevealError(failureValue(cause))
+                            )}
                         />
                         <Show when={props.retryState}>
                           {(retry) => (

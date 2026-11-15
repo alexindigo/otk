@@ -7,6 +7,7 @@ import type { V2Client } from "../client.ts";
 import type { NativeMessage, NativeSession } from "../messages.ts";
 import type { PrefetchPage, TranscriptFacts } from "../transcript-reads.ts";
 import { opencodeV2SessionID as ids } from "../ids.ts";
+import { requestFailureFacts } from "../request-failure.ts";
 const id = ids.encode("ses_prefetch");
 const policy: MessagePolicy = {
   prefetchms: 10000,
@@ -70,6 +71,7 @@ function fixture(
   };
   const client = {
     service: { version: "2.2.6" },
+    failureFacts: requestFailureFacts,
     read: <T>(run: (api: unknown) => Promise<T>) => run(api),
   } as unknown as V2Client;
   const digest = {
@@ -112,6 +114,114 @@ function fixture(
   });
   return { value, counts: () => ({ bodies, scalars, coverage }), speculative };
 }
+Deno.test("V2 failed-idle snapshots and later live delivery share one retained failure", async () => {
+  const error = { type: "APIError", message: "Provider limit", status: 403 };
+  const f = fixture(undefined, undefined, [
+    ...newest.slice(0, -1),
+    {
+      id: "msg_19",
+      type: "idle",
+      outcome: "failed",
+      error,
+      time: { created: 19 },
+    } as NativeMessage,
+  ]);
+  try {
+    const first = await f.value.page(id);
+    const retained = first.items.find((m) =>
+      m.id === "request:failure:execution:evt_19"
+    );
+    assert(retained);
+    assertEquals(
+      first.items.filter((m) =>
+        m.parts.some((p) =>
+          p.kind === "external" &&
+          (p.failure || p.activity?.title === "Execution failed")
+        )
+      ).length,
+      1,
+    );
+    assertEquals(retained.sourceOrder, 18.5);
+    const live = await f.value.executionFailure({
+      id: "evt_19",
+      type: "session.execution.failed",
+      created: 19,
+      data: { sessionID: "ses_prefetch", error },
+    }, "prefetch");
+    assertEquals(
+      retained.parts[0].kind === "external" && retained.parts[0].failure,
+      live,
+    );
+    const again = await f.value.page(id);
+    assertEquals(again.items, first.items);
+    assertEquals((await f.value.requests.page(id, undefined, 10)).length, 1);
+  } finally {
+    await f.value.stop();
+  }
+});
+Deno.test("V2 snapshot/live failure materialization joins one native identity", async () => {
+  const error = { type: "APIError", message: "Provider limit", status: 403 };
+  const f = fixture(undefined, undefined, [
+    ...newest.slice(0, -1),
+    {
+      id: "msg_19",
+      type: "idle",
+      outcome: "failed",
+      error,
+      time: { created: 19 },
+    } as NativeMessage,
+  ]);
+  try {
+    const [first, live] = await Promise.all([
+      f.value.page(id),
+      f.value.executionFailure({
+        id: "evt_19",
+        type: "session.execution.failed",
+        created: 19,
+        data: { sessionID: "ses_prefetch", error },
+      }, "prefetch"),
+    ]);
+    const retained = first.items.find((m) =>
+      m.id === "request:failure:execution:evt_19"
+    );
+    assert(retained);
+    assertEquals(
+      retained.parts[0].kind === "external" && retained.parts[0].failure,
+      live,
+    );
+    assertEquals((await f.value.page(id)).items, first.items);
+    assertEquals((await f.value.requests.page(id, undefined, 10)).length, 1);
+  } finally {
+    await f.value.stop();
+  }
+});
+Deno.test("V2 failed-idle API snapshots do not mistake page-local order for native sequence", async () => {
+  const f = fixture(undefined, undefined, [{
+    id: "msg_19",
+    type: "idle",
+    outcome: "failed",
+    error: { type: "APIError", message: "Provider limit" },
+    time: { created: 19 },
+  } as NativeMessage], "api:fixture:1");
+  try {
+    const page = await f.value.page(id);
+    assert(page.items.some((m) => m.id === "request:failure:execution:evt_19"));
+    assertEquals(
+      (await f.value.requests.get(id, "failure:execution:evt_19"))?.position,
+      {
+        after: null,
+        rank: 0,
+        basis: "clock",
+      },
+    );
+    assertEquals(
+      await f.value.requests.page(id, undefined, 10, "sequence"),
+      [],
+    );
+  } finally {
+    await f.value.stop();
+  }
+});
 Deno.test("V2 bounded retained paging preserves native sequence across copied regressing clocks", async () => {
   const f = fixture(
     undefined,

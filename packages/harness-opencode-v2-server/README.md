@@ -239,6 +239,18 @@ not a session-header presentation. Stock 2.2.6's asynchronous
 ModelUnavailableError does not supply suggestions; source-backed rejection
 envelopes that supply them retain them.
 
+Failed native idle rows materialize that same retained execution failure during
+snapshot acquisition, even before the SSE observer reaches the event. Snapshot
+and live routes join by native identity, preserving the first retained facts and
+position. The native failed-idle activity is not projected alongside its
+retained failure: both routes expose one record. Selection may fail before
+promotion, so the scalar facts owner uses the native inbox's enqueue sequence
+and delivery priority to identify the pending input. Retention preserves that
+association after input retirement; a persisted native event journal can also
+reconstruct historical pending inputs. Stock V2 leaves that journal empty by
+default. Reply placement honors the causal prompt without moving preceding
+native controls. A snapshot needs no second read to recover the failure.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank

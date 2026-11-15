@@ -2,6 +2,7 @@
 import {
   contextualFailure,
   failureFeedback,
+  type FailurePlacement,
   type FailurePresentation,
   FailurePresenter,
   type Feedback,
@@ -184,7 +185,7 @@ export function failureNote(
       (id, error) => console.error("Action diagnostic", id, error),
       context,
     );
-  const feedback = shipped.group(failure);
+  const feedback = shipped.present(failure, { surface: "notification" });
   const target = failure.facts?.target;
   return {
     id: `failure/${feedback.identity}`,
@@ -225,9 +226,6 @@ export function sessionFailure(
 ): PublicFailure | undefined {
   if (!observation && !reason) return;
   const prior = observation?.failure;
-  // The plugin's record is the authoritative full presentation. Do not create
-  // another presentation merely because the same failure also has status facts.
-  if (prior?.facts?.record) return;
   return {
     code: prior?.code ?? "session.failure",
     retry: prior?.retry ?? "none",
@@ -249,9 +247,9 @@ export function sessionFailure(
 }
 export function presentFailure(
   failure: import("@otk/protocol").PublicFailure,
-  surface: "feedback" | "record" = "feedback",
+  placement?: FailurePlacement,
 ): Feedback {
-  return shipped.present(failure, surface);
+  return shipped.present(failure, placement);
 }
 
 /** Target-bound presentation outlives any mounted view and borrows request state. */
