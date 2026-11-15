@@ -299,11 +299,21 @@ export function createSession(
     sync();
   };
   const open = (value?: Selection) => {
+    if (stopped) return;
     if (
-      stopped ||
-      (value?.sidecarId === selected?.sidecarId &&
-        value?.sessionID === selected?.sessionID)
-    ) return;
+      value?.sidecarId === selected?.sidecarId &&
+      value?.sessionID === selected?.sessionID
+    ) {
+      // Route orientation can change after hierarchy acquisition without a new
+      // transcript identity. Keep navigation's accepted selection authoritative,
+      // but do not release/reacquire the same session's bodies or catalogs.
+      if (value?.rootID !== selected?.rootID) {
+        selected = value;
+        if (external) external = { ...external, selected: value };
+        sync();
+      }
+      return;
+    }
     release?.();
     resource?.selected(false);
     release = undefined;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { IndexEntry, TaskRecord } from "@otk/protocol";
+import { projectSessionHierarchy } from "@otk/protocol";
 import { sessionTree } from "../session-tree.ts";
 import * as client from "@otk/client";
 const entry = (id: string, parentID?: string): IndexEntry => ({
@@ -28,6 +29,30 @@ const task = (id: string, sessions: string[], order = 0): TaskRecord => ({
   sessions,
   order,
 });
+Deno.test("task metadata arriving after hierarchy never removes sessions from the tree", () => {
+  for (const followParent of [false, true]) {
+    const entries = [entry("root"), entry("helper", "root"), entry("other")];
+    const tasks = [task("promoted", ["root"])];
+    const nodes = projectSessionHierarchy(entries, tasks, { followParent });
+    const projected = entries.map((e) => ({
+      ...e,
+      hierarchy: nodes.get(e.id)!,
+    }));
+    for (const metadata of [[], tasks, []]) {
+      const groups = sessionTree(projected, metadata, "/project");
+      assertEquals(
+        groups.flatMap((g) => g.rows.map((r) => r.session.id)).sort(),
+        ["helper", "other", "root"],
+        "missing task presentation metadata cannot filter family identities",
+      );
+      assertEquals(
+        groups.find((g) => g.rows.some((r) => r.session.id === "root"))?.id,
+        metadata.length ? "promoted" : "",
+      );
+    }
+  }
+});
+
 Deno.test("session tree preserves task order, parent-child paths and nearest explicit ownership without duplicating helpers", () => {
   const entries = [
     entry("root"),

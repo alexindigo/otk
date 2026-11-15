@@ -435,8 +435,13 @@ test("revert.pending-error-owned-feedback-retry", {
   await action(state, "freeze");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
-  // Archive capture has its own status row; this assertion owns rollback progress.
-  await expect(page.locator(".otk-rollback-status[role=status]"))
+  // Preparation and admitted requests hand progress between existing owners.
+  // Assert the one visible rollback status, not either owner's private class.
+  await expect(
+    page.locator(".otk-composer-notice [role=status]").filter({
+      hasText: "Rolling back",
+    }),
+  )
     .toContainText("Rolling back");
   await action(state, "release");
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
@@ -507,7 +512,17 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
   );
   await action(state, "hold", "unrevert");
   await prompt(page, "/redo");
-  await expect(page.locator(".otk-rollback-status[role=status]"))
+  // Observe the held native restore, rather than racing pre-dispatch archive
+  // preparation against the request owner's progress presentation.
+  await expect.poll(async () =>
+    (await state.observe<{ transport: { mutations: string[] } }>()).transport
+      .mutations.includes("unrevert")
+  ).toBe(true);
+  await expect(
+    page.locator(".otk-composer-notice [role=status]").filter({
+      hasText: "Restoring",
+    }),
+  )
     .toContainText("Restoring");
   await action(state, "release");
   await expect(input).toHaveValue("");
