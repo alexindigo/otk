@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import {
+  commandFailureFacts,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./Palette.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
@@ -32,6 +37,10 @@ export default function Palette(
     );
   };
   const invoke = async (id: string) => {
+    const facts = commandFailureFacts({
+      id,
+      title: commands.metadata(id)?.title,
+    });
     try {
       await commands.run(id);
       if (active) props.onClose();
@@ -42,7 +51,7 @@ export default function Palette(
       }
       if (active) {
         setError(
-          failureValue(error, { action: commands.metadata(id)?.title ?? id }),
+          failureValue(error, facts),
         );
       }
     }
