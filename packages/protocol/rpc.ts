@@ -39,6 +39,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.revertCode": { kind: "mutation", pending: "Reverting code changes" },
   "commands.list": { kind: "read", pending: "Loading commands" },
   "history.list": { kind: "read", pending: "Loading prompt history" },
+  "history.prompt": { kind: "read", pending: "Saving an earlier prompt" },
   "history.attachments": { kind: "read", pending: "Preparing attachments" },
   "find.files": { kind: "read", pending: "Finding files" },
   "agents.list": { kind: "read", pending: "Loading agents" },
@@ -242,6 +243,10 @@ export interface RpcMethods
   };
   "commands.list": { params: { sessionID: string }; result: CommandOption[] };
   "history.list": { params: Record<string, never>; result: HistoryEntry[] };
+  "history.prompt": {
+    params: { sessionID: string; messageID: string };
+    result: HistoryEntry | null;
+  };
   "history.attachments": {
     params: { refs: HistoryAttachmentRef[] };
     result: { items: HistoryAttachment[] };

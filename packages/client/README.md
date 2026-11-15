@@ -843,13 +843,49 @@ and replaces only empty or transaction-owned content, never edits made during
 the operation. Restore and Redo share exact pre-revert restoration when the
 draft is unchanged. Selection and operation-owner replacement do not retire
 completed provenance. Newer text, attachments, choices and editors remain
-untouched; `reverts.get(key)` retains the old/current pair as the decision-47
-seam, without choosing a conflict interaction. Storage remains in memory with
-Drafts, not across reloads (decision 48 remains open). Dropping a draft retires
-its transaction and captured writers. Selection/disposal retire pending waits
-and recall effects; a confirmed native clear still settles its captured draft
-through an identity-fenced restorer, never the replacement view or transaction.
-`abort(target?)` accepts a captured target for that same owner.
+untouched; `reverts.get(key)` retains the old/current pair for the
+branch-history owner's saved/current choice. Drafts remains in memory; the
+separate browser archive persists its captured draft copies across reloads.
+Dropping a draft retires its transaction and captured writers.
+Selection/disposal retire pending waits and recall effects; a confirmed native
+clear still settles its captured draft through an identity-fenced restorer,
+never the replacement view or transaction. `abort(target?)` accepts a captured
+target for that same owner.
+
+`createBranchHistory` owns browser-local earlier branches, separately from live
+transcripts and Drafts. On a history-capable server, OTK-initiated revert
+captures every ordinary cursor page before staging the native boundary,
+including unloaded messages. `connectBranchHistory` composes its ports in the
+client. Detached archive pages use the canonical transcript owner's admission
+queue and lifetime cancellation, without changing the live paging boundary or
+projection. This precedes prompt/command, Compact and version-specific native
+commit paths. Exact selected prompts come from the plugin's `history.prompt`
+reader, independently of the 50-entry recall window; attachment references are
+resolved before deletion. Plugin-owned bounded Source previews are materialized
+too; saved Source folds never query the live native transcript. Common
+submission and Compact admission retain the current draft before dispatch. The
+archive is not native history and never restores files. Operations initiated
+elsewhere cannot recover content this browser never captured.
+
+Prompt-history absence is a separate capability result, not an exception-based
+fallback. Revert and sending still proceed without archive reads or writes,
+while `preservationWarning()` supplies the visible pre-send strip notice. The
+notice is derived from the selected server's capability and the native revert
+strip, so it survives reload. A failed advertised reader or storage write still
+blocks the destructive action with its normal failure feedback.
+
+Entries are kept in this browser's localStorage, keyed by exact server URL and
+session plus a branch ID, across reloads until explicit per-branch Delete. No
+automatic eviction, count limit or expiry exists. Serialized UTF-16 storage size
+includes the key. Quota or storage rejection preserves older entries, retains
+the current composer and reports action/target/reason/next step through FP1;
+preparation failure prevents native dispatch. Post-action status bookkeeping
+cannot make a native send appear unsent. Prompt/draft reuse preserves displaced
+drafts in the same archive before offering the saved/current choice. Explicit
+Default variant ownership and editor/attachment state survive serialization.
+Clearing browser data, private-profile lifetime or changing origin removes or
+isolates these browser copies; they are not server backups or filesystem
+backups.
 
 Intent completion waits for authoritative transcript publication, including an
 in-flight resync. A rollback must remove its boundary prompt; restoring must

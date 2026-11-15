@@ -273,7 +273,7 @@ test("each optional registration contributes only its present capability and cor
     ["session.prompt", "session.abort"],
     ["session.shell"],
     ["commands.list", "session.command"],
-    ["history.list", "history.attachments"],
+    ["history.prompt", "history.list", "history.attachments"],
     ["find.files"],
     ["agents.list"],
     ["models.list"],
@@ -336,6 +336,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       listCommands: () => Promise.resolve([]),
     },
     history: {
+      entry: () => Promise.resolve(undefined),
       listHistory: () => Promise.resolve([]),
       attachments: () => Promise.resolve([]),
       attachment: () =>

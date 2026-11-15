@@ -45,6 +45,10 @@ export * from "./attention-grace.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
+export * from "./branch-history.ts";
+export * from "./branch-draft-labels.ts";
+export * from "./message-presentation.ts";
+export * from "./saved-branch-projection.ts";
 export type {
   DraftRevertCapture,
   DraftReverts,

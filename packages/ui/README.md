@@ -1121,7 +1121,31 @@ advertised `revertCode` capability adds Revert code changes to the same prompt
 context menu. It uses the existing selected-session revert owner and remains
 hidden on backends without that capability. Session targets similarly offer
 Archive or Unarchive only with `sessionArchive`, using authoritative state and
-the shared CommandMenu. No overlay, style or local archive store is added.
+the shared CommandMenu. No overlay or style is added to these native actions.
+
+`SavedBranchNotice` adds Unrevert to that same joined notice. The client branch
+owner supplies its browser-local copies, measured size, deletion and
+draft-choice intents. `SavedBranches` opens the selected earlier branch inside
+the session, clearly separate from live native history, with no file
+restoration. It reuses Message in read-only mode and the normal measured
+VirtualList. Source previews are saved data; snapshot contexts have no native
+reader, live content actions or visibility lease. Live viewport
+observers/windows unmount while the saved view is open and remount through their
+ordinary position owner on return. Canonical session data, lights, unsent
+composer and navigation keep their existing owners. Prompt/draft reuse retains
+both candidates before offering a choice. Delete is explicit per saved branch;
+no hidden retention policy or server archive exists. The client saved-branch
+projection supplies frozen message presentations: only known captured footer
+facts, with no live activity or unresolved digest/timing placeholders. Stored
+native lifecycle evidence remains unchanged. Message renders those same
+projected facts through its shared footer instead of per-indicator saved-view
+exceptions. Draft labels come from the client sentence-case source.
+
+The client owner also supplies `preservationWarning()` for servers without
+prompt history. RolledBackContent renders it outside the disclosure, so the
+limitation is visible before Send even when details are collapsed or after a
+reload. Revert, Restore and Send remain available; the view never interprets RPC
+failures as a missing capability.
 
 Primary notice content shares `ComposerNoticeRow`: disclosure, error and fork
 facts use one control-height row with the same leading icon slot and

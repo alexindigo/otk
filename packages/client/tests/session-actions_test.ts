@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import * as client from "@otk/client";
 import type { PromptPart } from "@otk/protocol";
 import {
@@ -8,6 +8,95 @@ import {
   shellInfo,
   shellTask,
 } from "./shell-fixture.ts";
+
+Deno.test("branch preservation owns revert, every shared submission, and Compact before native admission", async () => {
+  const f = shellFixture(), events: string[] = [];
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => {
+        events.push("save-branch");
+        return Promise.resolve();
+      },
+      beforeCommit: () => {
+        events.push("save-draft");
+        return Promise.resolve();
+      },
+      settled: () => {
+        events.push("settle");
+        return Promise.resolve();
+      },
+    },
+  });
+  f.reply((_server, method) => {
+    events.push(method);
+    if (method === "tasks.create") {
+      return Promise.resolve(shellTask("promoted", ["selected"]));
+    }
+    if (method === "session.get") return Promise.resolve(shellInfo("selected"));
+    return Promise.resolve(
+      method === "session.revert" ? shellInfo("selected") : null,
+    );
+  });
+  const target = { sidecarId: "local", sessionID: "selected" };
+  await actions.revert(target, "boundary");
+  assertEquals(events.slice(0, 2), ["save-branch", "session.revert"]);
+  events.length = 0;
+  await actions.compact(target, { provider: "p", model: "m" });
+  assertEquals(events.slice(0, 3), ["save-draft", "session.compact", "settle"]);
+  events.length = 0;
+  await actions.submission(target)(() => {
+    events.push("mode-specific-send");
+    return Promise.resolve();
+  });
+  assertEquals(
+    events.filter((e) =>
+      ["save-draft", "mode-specific-send", "settle"].includes(e)
+    ),
+    ["save-draft", "mode-specific-send", "settle"],
+  );
+  f.resources.stop();
+});
+
+Deno.test("failed branch preservation prevents native send and Compact", async () => {
+  const f = shellFixture();
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => Promise.reject(new Error("storage-full")),
+      beforeCommit: () => Promise.reject(new Error("storage-full")),
+      settled: () => Promise.resolve(),
+    },
+  });
+  const target = { sidecarId: "local", sessionID: "selected" };
+  await assertRejects(
+    () => actions.revert(target, "boundary"),
+    Error,
+    "storage-full",
+  );
+  await assertRejects(
+    () => actions.compact(target, { provider: "p", model: "m" }),
+    Error,
+    "storage-full",
+  );
+  await assertRejects(
+    () =>
+      actions.submission(target)(() => {
+        throw new Error("native must not run");
+      }),
+    Error,
+    "storage-full",
+  );
+  assertEquals(
+    f.calls.filter((c) =>
+      ["session.revert", "session.compact", "session.prompt"].includes(
+        String(c[1]),
+      )
+    ),
+    [],
+  );
+  f.resources.stop();
+});
 
 Deno.test("session actions resolve directory from index then matching selected info then authoritative RPC", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);

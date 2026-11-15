@@ -136,6 +136,7 @@ test("every body/catalog read has volatile recovery, target scope and caller can
     ["find.files", { sessionID: "tstv1-one", query: "file" }],
     ["usage.get", { sessionID: "tstv1-one", turnID: "turn" }],
     ["history.list", {}],
+    ["history.prompt", { sessionID: "tstv1-one", messageID: "prompt-one" }],
     ["history.attachments", {
       refs: [{ messageID: "message", partID: "part" }],
     }],
@@ -189,6 +190,8 @@ test("every body/catalog read has volatile recovery, target scope and caller can
             read(signal),
         },
         history: {
+          entry: (_id: string, _message: string, signal?: AbortSignal) =>
+            read(signal),
           listHistory: (signal?: AbortSignal) => read(signal),
           attachments: (_ref: unknown, signal?: AbortSignal) => read(signal),
         },

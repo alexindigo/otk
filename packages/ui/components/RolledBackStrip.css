@@ -34,3 +34,6 @@
   color: var(--otk-fg-3);
   padding-top: 8px;
 }
+.otk-rollback-preservation-warning {
+  margin: 8px 0 0;
+}

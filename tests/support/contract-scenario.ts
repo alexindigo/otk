@@ -33,8 +33,13 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
-  if (profile === "contract-menus-session-actions") {
-    return await sessionActionsScenario();
+  if (
+    profile === "contract-menus-session-actions" ||
+    profile === "contract-menus-session-actions-no-history"
+  ) {
+    return await sessionActionsScenario(
+      profile === "contract-menus-session-actions",
+    );
   }
   if (profile === "contract-typed-forms") return await typedFormScenario();
   if (profile === "contract-load-priority") return await loadPriorityScenario();

@@ -67,6 +67,20 @@ const Sources = createContext<SourceReader | null>(null);
 export function useNativeSource(): SourceReader | null {
   return useContext(Sources);
 }
+/** A saved presentation cannot borrow a live transcript's source reader, action
+ * ports, visibility observer or disclosure identities. It has no native demand. */
+export function TranscriptSnapshot(props: { children: Element }): Element {
+  const interaction = createTranscriptInteraction();
+  return (
+    <Sources value={null}>
+      <Actions value={null}>
+        <Visibility value={null}>
+          <Interaction value={interaction}>{props.children}</Interaction>
+        </Visibility>
+      </Actions>
+    </Sources>
+  );
+}
 export function contentGeneration() {
   const interaction = useContext(Interaction);
   return (id: string) => interaction?.generation(id) ?? id;

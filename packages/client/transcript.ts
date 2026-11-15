@@ -115,6 +115,9 @@ export interface TranscriptOwner {
   state: TranscriptState;
   readonly projection: TranscriptProjection;
   readonly interaction: TranscriptInteraction;
+  /** Detached explicit archive demand, admitted by the canonical body owner.
+   * Does not replace the live viewport's paging boundary or projection. */
+  snapshotPage(before?: string): Promise<MessagePage>;
   source(
     messageID: string,
     text: (part: Part) => string | undefined,
@@ -919,10 +922,20 @@ export function createTranscript(
     string,
     Promise<import("@otk/protocol").NativeSourceView>
   >();
+  const snapshotLifetime = new AbortController();
   const owner: TranscriptOwner = {
     progress: () => readProgress.display("page", readLabel),
     projection,
     interaction,
+    snapshotPage: (before) =>
+      acquire(
+        () =>
+          connection(target.sidecarId).rpc.call("session.messages", {
+            sessionID: target.sessionID,
+            before,
+          }, { signal: snapshotLifetime.signal }),
+        snapshotLifetime.signal,
+      ),
     nativeSource: (ref, options) => {
       if (options?.retry) sources.delete(ref);
       let read = sources.get(ref);
@@ -1542,6 +1555,7 @@ export function createTranscript(
       return work;
     },
     stop(): void {
+      snapshotLifetime.abort();
       readProgress.stop();
       interaction.clear();
       sources.clear();
