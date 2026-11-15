@@ -49,7 +49,11 @@ export function referenceSources<T extends Message | Part>(
 ): T {
   for (const { path, holder, part } of holders(value)) {
     const source = holder.source;
-    if (!source || source.ref !== undefined) continue;
+    if (!source) continue;
+    if (source.ref !== undefined) {
+      if (part?.kind === "external") delete part.data;
+      continue;
+    }
     holder.source = {
       kind: source.kind,
       ref: ref(path),
@@ -58,8 +62,21 @@ export function referenceSources<T extends Message | Part>(
         ? { payload: source.payload }
         : {}),
     };
+    if (part?.kind === "external") delete part.data;
   }
   return value;
+}
+/** Opaque references and their structural owners, without plugin decoding. */
+export function* sourceEntries(value: Message | Part): Generator<{
+  ref: string;
+  path: string;
+  owner: object;
+}> {
+  for (const { holder, path } of holders(value)) {
+    if (holder.source?.ref) {
+      yield { ref: holder.source.ref, path, owner: holder };
+    }
+  }
 }
 /** The derived source at one structural location, as a bounded view. */
 export function sourceAt(

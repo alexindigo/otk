@@ -277,6 +277,16 @@ decisions remain open.
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
 
+Native Source previews have one transcript-owned per-reference resource.
+`nativeSource(ref)` returns its plain state/subscribe owner; an open fold calls
+`retain()` and releases that lease on close. Mounting a row or a closed fold
+does not read. Accepted changes invalidate the matching structural owner without
+decoding plugin references; open demand refreshes automatically and coalesces
+pending replacements. Obsolete results cannot publish. Unchanged remounts and
+themes reuse both successful and failed outcomes; Retry explicitly refreshes.
+The existing 64-entry reuse cache never evicts retained folds. Body removal,
+cooling and stop retire source values and pending reads.
+
 ## Public API
 
 `publicDefaultsFrom` reads the allowlisted `{ defaultPort }` session-bootstrap
