@@ -116,6 +116,29 @@ async function fixture() {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   return stack(fake, oc);
 }
+/** I2's adapter boundary: native record internals (a tool part's `state`
+ * object, `metadata` objects) never cross into neutral content ops. Only the
+ * protocol's own fields of those names may appear, in their declared shapes:
+ * an activity's lifecycle `state`, a recovery op's `state` word and an
+ * external call's bounded `metadata` preview string. */
+function nativeInternals(value: unknown, path = ""): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, i) => nativeInternals(item, `${path}[${i}]`));
+  }
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, child]) => {
+    const at = `${path}.${key}`;
+    const declared = key === "state"
+      ? (path.endsWith(".activity") && !!child && typeof child === "object" &&
+        Object.keys(child).sort().join() === "facts,key,label") ||
+        (Reflect.get(value, "op") === "stream.recovery" &&
+          typeof child === "string")
+      : key === "metadata"
+      ? Reflect.get(value, "tool") === "external" && typeof child === "string"
+      : true;
+    return [...(declared ? [] : [at]), ...nativeInternals(child, at)];
+  });
+}
 async function neutralFixture() {
   const fake = new FakeLlm(), oc = await selectedNative(fake);
   return stack(fake, oc);
@@ -253,11 +276,49 @@ test("I2 streaming blocks, busy/idle index, final history and adapter boundary",
       JSON.stringify(part.blocks) === JSON.stringify(markdown(reply))
     );
     assert(part, JSON.stringify(history));
-    assert(!JSON.stringify(ops).includes('"metadata"'));
-    assert(!JSON.stringify(ops).includes('"state"'));
+    assertEquals(nativeInternals(ops), []);
   } finally {
     await f.stop();
   }
+});
+test("adapter boundary oracle accepts declared neutral fields and rejects native internals", () => {
+  const activity = {
+    key: "succeeded",
+    label: "succeeded",
+    facts: { active: false, terminal: true },
+  };
+  assertEquals(
+    nativeInternals([
+      {
+        op: "message.upsert",
+        message: { parts: [{ activity: { state: activity } }] },
+      },
+      { op: "stream.recovery", state: "ready" },
+      {
+        op: "part.upsert",
+        part: { call: { tool: "external", metadata: "{}" } },
+      },
+    ]),
+    [],
+  );
+  assertEquals(
+    nativeInternals([
+      {
+        op: "part.upsert",
+        part: { state: { status: "completed", input: {} } },
+      },
+      { op: "part.upsert", part: { call: { tool: "bash", metadata: {} } } },
+      {
+        op: "message.upsert",
+        message: { parts: [{ activity: { state: "done" } }] },
+      },
+    ]),
+    [
+      "[0].part.state",
+      "[1].part.call.metadata",
+      "[2].message.parts[0].activity.state",
+    ],
+  );
 });
 test("I3 unsubscribed client receives index but no content", async () => {
   const f = await neutralFixture();
