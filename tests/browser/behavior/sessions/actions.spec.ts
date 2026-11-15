@@ -212,19 +212,21 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
     .toHaveText("Checking whether this finished");
   await expect(page.locator(".otk-operation-feedback")).toHaveCount(1);
   await expect(page.locator(".otk-session-error")).toHaveCount(0);
-  // ERR5 retains the native facts once; pending composer feedback is only a pointer.
-  const retained = page.locator('[data-native-record$="/request-failure"]')
-    .filter({
-      hasText: "Compact refused",
-    });
-  await expect(retained).toHaveCount(1);
-  await expect(retained).toContainText("Compact refused (HTTP 500)");
-  await expect(page.locator(".otk-operation-feedback")).not.toContainText(
-    "Compact refused",
-  );
+  // ERR5 gives this view one full retained presentation, not a second transient
+  // copy. A native failure cause remains visible even while outcome is unknown.
+  const record = page.locator('[data-native-record$="/request-failure"]');
+  await expect(record).toHaveCount(1);
+  await expect(record).toHaveAttribute("role", "status");
+  await expect(record).toContainText("Compact refused");
+  await expect(record).toContainText("HTTP 500");
   await expect(
     page.locator(".otk-failure-content").filter({ hasText: "Compact refused" }),
   ).toHaveCount(1);
+  await expect(page.locator(".otk-operation-feedback"))
+    .not.toContainText("Compact refused");
+  await expect(page.locator(".otk-operation-feedback"))
+    .not.toContainText("HTTP 500");
+  await expect(record.locator(".otk-failure-recovery")).toHaveCount(0);
 });
 
 test(
