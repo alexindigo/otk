@@ -237,10 +237,10 @@ test.describe("prepend anchor", () => {
         for (const record of records) {
           for (const node of Array.from(record.addedNodes)) {
             if (
+              record.target instanceof HTMLElement &&
+              record.target.matches('[aria-label="Transcript messages"]') &&
               node instanceof HTMLElement &&
-              node.matches(
-                '[aria-label="Transcript messages"] > .otk-virtual-item',
-              )
+              node.matches(".otk-virtual-item")
             ) mounted.add(node);
           }
           for (const node of Array.from(record.removedNodes)) {
