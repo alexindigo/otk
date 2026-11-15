@@ -14,6 +14,47 @@ import { resources, withResources } from "../support/resources.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 
+Deno.test({
+  name: "FX25 one native selection failure follows its queued causal prompt",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("FX25 causal failure", async () => {
+      const native = await OpencodeV2Test.start(new FakeLlm());
+      const target = await native.createSession();
+      const observed = await application(native, target.id);
+      await native.api.session.switchAgent({
+        sessionID: target.nativeID,
+        agent: "missing-fx25-agent",
+      });
+      await native.api.session.prompt({
+        sessionID: target.nativeID,
+        text: "Fail at native selection",
+      });
+      const snapshot = await waitFor(() => observed.page(), (page) =>
+        page.items.some((m) =>
+          m.parts.some((p) =>
+            p.kind === "external" && p.failure
+          )
+        ));
+      const failure = snapshot.items.filter((m) =>
+        m.parts.some((p) => p.kind === "external" && p.failure)
+      );
+      assertEquals(failure.length, 1);
+      const prompt = snapshot.items.find((m) => m.role === "user")!;
+      assert(prompt);
+      assertEquals(
+        failure[0].role === "context" && failure[0].replyTo,
+        prompt.id,
+      );
+      const projection = createTranscriptProjection();
+      projection.replace(snapshot.items);
+      assert(
+        projection.state.replyIDs.indexOf(prompt.id) <
+          projection.state.replyIDs.indexOf(`reply:${prompt.id}`),
+      );
+    }),
+});
+
 /** Exact record equality: identity, role, time and every part field. Helper
  * progress is independently refreshed derived metadata (its own revision and
  * readiness), so it is the only field outside this oracle. */
@@ -304,13 +345,30 @@ Deno.test({
         target = await native.createSession(),
         observed = await application(native, target.id);
       await native.prompt(target.id, "Report provider failure");
-      await waitFor(() => observed.projection(), (rows) =>
-        rows.some((m) => {
-          const p = part(m);
-          return p?.kind === "external" && p.name === "opencode-v2/idle" &&
-            p.activity?.detail === "The usage limit has been reached";
-        }));
-      await waitFor(() => observed.projection(), (rows) =>
+      // FX25: the retained failure is the parent's one execution-outcome
+      // presentation; a second native failed-idle activity is no longer valid.
+      const failed = (rows: readonly Message[]) =>
+        rows.filter((m) =>
+          m.parts.some((p) =>
+            p.kind === "external" &&
+            p.failure?.code === "native.execution" &&
+            p.failure.facts?.reason === "The usage limit has been reached"
+          )
+        );
+      const parent = await waitFor(() => observed.projection(), (rows) =>
+        failed(rows).length > 0);
+      assertEquals(failed(parent).length, 1);
+      assertEquals(
+        parent.some((m) =>
+          m.parts.some((p) =>
+            p.kind === "external" && p.name === "opencode-v2/idle" &&
+            p.activity?.state?.key === "failed"
+          )
+        ),
+        false,
+      );
+      await waitFor(() =>
+        observed.projection(), (rows) =>
         rows.some((m) => {
           const p = part(m);
           return p?.kind === "external" &&
@@ -319,7 +377,8 @@ Deno.test({
               "The usage limit has been reached",
             );
         }));
-      await waitFor(() => native.api.session.active(), (active) =>
+      await waitFor(() =>
+        native.api.session.active(), (active) =>
         !Object.keys(active).length);
       await parity(native, observed);
     }),

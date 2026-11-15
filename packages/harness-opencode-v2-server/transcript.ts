@@ -256,6 +256,7 @@ export class Transcript {
     if (this.#lifetime.signal.aborted) this.#lifetime = new AbortController();
   }
   readonly requests: RequestRetention;
+  #executionFailures = new Map<string, Promise<Message>>();
   constructor(
     readonly options: {
       client(): V2Client;
@@ -769,6 +770,9 @@ export class Transcript {
     terminal = false,
     fromRecovery = false,
   ): Message | undefined {
+    // The retained execution outcome owns failed-idle presentation on both
+    // snapshot and live paths. Do not project a second native activity record.
+    if (raw.type === "idle" && raw.outcome === "failed") return;
     if (raw.type === "assistant") {
       const current = this.#live.get(raw.id);
       if (
@@ -957,6 +961,24 @@ export class Transcript {
         cutoff,
       }, signal);
       this.#acceptFacts(owner, facts);
+      // A native snapshot can see its failed idle before the SSE observer has
+      // processed it. Both routes materialize the same retained failure first.
+      for (const raw of page.items) {
+        if (raw.type === "idle" && raw.outcome === "failed") {
+          await this.#executionFailure(
+            id,
+            raw.id,
+            raw.error,
+            millis(raw.time.created),
+            facts.contexts[raw.id],
+            owner.raw.title,
+            facts.source.startsWith("sql")
+              ? facts.contexts[raw.id]?.order
+              : undefined,
+          );
+          signal.throwIfAborted();
+        }
+      }
       let items = page.items.flatMap((raw) => {
         const context = facts!.contexts[raw.id];
         if (!context) {
@@ -1403,33 +1425,17 @@ export class Transcript {
       typeof event.data.sessionID !== "string"
     ) return;
     const id = ids.encode(event.data.sessionID);
-    const failure = {
-      code: "native.execution",
-      retry: "none" as const,
-      diagnosticID: event.id ? `execution:${event.id}` : crypto.randomUUID(),
-      facts: {
-        ...this.reader.client().failureFacts(event.data.error),
-        actionLabel: "Running session",
-        target: { sessionID: id, label },
-        outcome: "rejected" as const,
-      },
-    };
-    let message = requestFailureRecord(
-      id,
-      failure,
-      event.created ?? Date.now(),
-    );
+    const nativeID = event.id?.replace(/^evt_/, "msg_");
+    let context: MessageContext | undefined;
+    let nativeOrder: number | undefined;
     if (event.id) {
       try {
-        const nativeID = event.id.replace(/^evt_/, "msg_");
         const facts = await this.#facts(
-          { sessionID: id, messages: [nativeID] },
+          { sessionID: id, messages: [nativeID!] },
           this.#lifetime.signal,
         );
-        const replyTo = facts.contexts[nativeID]?.replyTo;
-        if (replyTo) {
-          message = { ...message, replyTo };
-        }
+        context = facts.contexts[nativeID!];
+        if (facts.source.startsWith("sql")) nativeOrder = context?.order;
       } catch (error) {
         this.#lifetime.signal.throwIfAborted();
         this.options.diagnostic(error);
@@ -1437,23 +1443,102 @@ export class Transcript {
     }
     // Resolve the native turn before the first publication, so the same failure
     // never has a transient standalone and then a turn-attached identity.
-    await this.failure(message);
+    const message = await this.#executionFailure(
+      id,
+      nativeID,
+      event.data.error,
+      event.created ?? Date.now(),
+      context,
+      label,
+      nativeOrder,
+    );
     const part = message.parts[0];
     return part.kind === "external" ? part.failure : undefined;
+  }
+  #executionFailure(
+    id: string,
+    nativeID: string | undefined,
+    error: unknown,
+    created: number,
+    context: MessageContext | undefined,
+    label?: string,
+    nativeOrder?: number,
+  ): Promise<Message> {
+    const key = `${id}/${nativeID ?? crypto.randomUUID()}`;
+    const pending = this.#executionFailures.get(key);
+    if (pending) return pending;
+    const work = this.#materializeExecutionFailure(
+      id,
+      nativeID,
+      error,
+      created,
+      context,
+      label,
+      nativeOrder,
+    )
+      .finally(() => this.#executionFailures.delete(key));
+    this.#executionFailures.set(key, work);
+    return work;
+  }
+  async #materializeExecutionFailure(
+    id: string,
+    nativeID: string | undefined,
+    error: unknown,
+    created: number,
+    context: MessageContext | undefined,
+    label?: string,
+    nativeOrder?: number,
+  ): Promise<Message> {
+    const diagnosticID = nativeID
+      ? `execution:${nativeID.replace(/^msg_/, "evt_")}`
+      : crypto.randomUUID();
+    const key = `failure:${diagnosticID}`;
+    const previous = await this.requests.get(id, key);
+    if (previous?.outcome) return previous.outcome;
+    const message = requestFailureRecord(
+      id,
+      {
+        code: "native.execution",
+        retry: "none",
+        diagnosticID,
+        facts: {
+          ...this.reader.client().failureFacts(error),
+          actionLabel: "Running session",
+          target: { sessionID: id, label },
+          outcome: "rejected",
+        },
+      },
+      created,
+      context?.replyTo,
+    );
+    const after = nativeOrder === undefined ? undefined : nativeOrder - 1;
+    await this.#observe(
+      id,
+      key,
+      message,
+      previous,
+      after === undefined ? undefined : {
+        after,
+        rank: this.requests.rank(id, after),
+        basis: "stream",
+      },
+    );
+    return message;
   }
   async #observe(
     id: string,
     requestID: string,
     outcome: Message,
     previous: import("./request-retention.ts").RetainedRequest | undefined,
+    nativePosition?: RequestPosition,
   ): Promise<void> {
     const value = { ...previous, id: requestID, sessionID: id, outcome };
     const settled = previous?.outcome && previous.position &&
       previous.position.basis !== "pending";
     const known = this.#watermarks.get(id);
-    if (settled || known !== undefined) {
+    if (settled || nativePosition || known !== undefined) {
       // A redelivered settlement keeps its first proven position.
-      const position = settled ? previous.position! : {
+      const position = settled ? previous.position! : nativePosition ?? {
         after: known!,
         rank: this.requests.rank(id, known!),
         basis: "stream" as const,
@@ -1932,10 +2017,8 @@ export class Transcript {
     ) {
       const raw = eventMessage(event);
       if (raw) {
-        this.#publish(id, {
-          op: "message.upsert",
-          message: this.#map(raw, id, contextFor(raw.id))!,
-        });
+        const message = this.#map(raw, id, contextFor(raw.id));
+        if (message) this.#publish(id, { op: "message.upsert", message });
       }
       this.recovery.terminal(id);
       return;

@@ -1,5 +1,11 @@
 # @otk/client
 
+Failure facts and failed completion update one session-outcome notification in
+the notification owner, in either arrival order. Terminal-only delivery remains
+available and later facts enrich it without adding a second toast. Transcript
+reply groups cannot precede their known causal prompt, including inbox prompts
+whose acquired source position follows an early selection failure.
+
 ProgressEstimate derives EWMA completion rate and variance-aware ETA from worker
 active-work facts, resetting at scope/generation replacement. createProgress
 owns the coalesced one-second publication clock, stopping it when work is ready
@@ -267,11 +273,13 @@ adds no history surface, raw Details view or new persistence lifetime; those
 decisions remain open.
 
 When a producer supplies `FailureFacts.record`, that transcript identity owns
-the single full presentation. FP1's default feedback projection is a short
-linked reference; only `describe/present(failure, "record")` requests the full
-facts. The session-error projection does not create another presentation for a
-retained failure. Group counts and diagnostic identity stay with the same owner;
-this does not choose cross-session grouping or a new persistence lifetime.
+the single full presentation in its session view. FP1 scopes placement by
+surface and view: target-bound feedback and the matching session indicator use a
+short linked reference; a different server/session view and notification
+surfaces keep the full facts. `describe/present(failure, "record")` always
+renders full facts. `sessionFailure` never drops an observation for presentation
+reasons. Group counts and diagnostic identity stay with the same owner; this
+does not choose cross-session grouping or a new persistence lifetime.
 
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.

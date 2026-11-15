@@ -67,9 +67,24 @@ async function errorConsumer(
     }
   }
   const observation = errorObservation(current)!;
-  await expect(page.locator(".otk-session-error-message")).toContainText(
-    observation.failure?.facts?.reason ?? observation.message,
-  );
+  const record = observation.failure?.facts?.record;
+  if (record) {
+    // The session indicator points to the one full retained presentation.
+    await expect(page.locator(".otk-session-error-message")).toHaveText(
+      "See the session error",
+    );
+    await page.locator(".otk-session-error-message a").click();
+    const full = page.locator('[data-native-record$="/request-failure"]')
+      .filter({
+        hasText: observation.failure!.facts!.reason!,
+      });
+    await expect(full).toHaveCount(1);
+    await expect(full).toContainText(observation.failure!.facts!.reason!);
+  } else {
+    await expect(page.locator(".otk-session-error-message")).toContainText(
+      observation.failure?.facts?.reason ?? observation.message,
+    );
+  }
   await expect(page.locator(".otk-session-error-message a")).toHaveAttribute(
     "href",
     `#/local/${id}`,
@@ -196,6 +211,42 @@ for (const kind of ["http", "event", "late-http"] as const) {
         expect((await state.observe<{ requests: unknown[] }>()).requests)
           .toEqual([]);
         await reload(state, page, frames, session.id, snapshot);
+        if (kind === "event") {
+          const failures = page.locator(".otk-messages [data-native-record]")
+            .filter({
+              hasText: observation.failure?.facts?.reason ??
+                observation.message,
+            });
+          await expect(failures).toHaveCount(1);
+          if (info.project.name === "oc-2.2.6") {
+            const prompt = page.locator(".otk-user-bubble").filter({
+              hasText: "Fail at native selection",
+            });
+            await expect(prompt).toHaveCount(1);
+            expect(
+              await failures.evaluate((failure) => {
+                const prompt = Array.from(
+                  document.querySelectorAll(".otk-user-bubble"),
+                ).find((node) =>
+                  node.textContent?.includes("Fail at native selection")
+                )!;
+                return !!(prompt.compareDocumentPosition(failure) &
+                  Node.DOCUMENT_POSITION_FOLLOWING);
+              }),
+            ).toBe(true);
+          }
+          for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+            await state.product("prefs.set", { key: "theme", value: theme });
+            await expect(page.locator("html")).toHaveAttribute(
+              "data-otk-theme",
+              theme,
+            );
+            await info.attach(`session-failure-${theme}`, {
+              body: await page.screenshot({ fullPage: true }),
+              contentType: "image/png",
+            });
+          }
+        }
       },
     );
   });

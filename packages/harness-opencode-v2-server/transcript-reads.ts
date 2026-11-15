@@ -558,6 +558,7 @@ export class TranscriptReads {
     ];
     const rows = sql.prepare(`SELECT id,type,seq,
       ${this.#migrationSQL(sql)} AS migrated,
+      json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.outcome') AS outcome,
       json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.time.completed') AS completed,
       (SELECT u.id FROM session_message u WHERE u.session_id=m.session_id AND u.type='user' AND u.seq<=m.seq ORDER BY u.seq DESC LIMIT 1) AS user_id,
       (SELECT json_extract(CASE WHEN json_valid(a.data) THEN a.data ELSE '{}' END,'$.agent') FROM session_message a WHERE a.session_id=m.session_id AND a.type='agent-switched' AND a.seq<=m.seq ORDER BY a.seq DESC LIMIT 1) AS agent,
@@ -584,7 +585,9 @@ export class TranscriptReads {
           : {}),
         order: Number(row.seq),
         replyTo: row.type === "assistant" || row.type === "idle"
-          ? text(row.user_id)
+          ? (row.type === "idle" && row.outcome === "failed"
+            ? this.#pendingInput(sql, sid, Number(row.seq))
+            : undefined) ?? text(row.user_id)
           : undefined,
         agent: text(row.agent) ?? text(following.agent),
         model:
@@ -665,6 +668,51 @@ export class TranscriptReads {
         cutoffCreated: cutoff ? Number(cutoff.time_created) : undefined,
       },
     };
+  }
+  /** Selection can fail before inbox promotion. Reconstruct the native next
+   * input at this durable boundary, not today's inbox or event arrival order.
+   * Only IDs, kinds and delivery scalars leave the proven read-only source. */
+  #pendingInput(
+    sql: Pick<DatabaseSync, "prepare">,
+    sid: string,
+    through: number,
+  ): string | undefined {
+    // Stock native services do not persist the event journal by default. Their
+    // inbox still carries the authoritative enqueue sequence at first failure;
+    // the retained outcome keeps this association after that input is retired.
+    if (
+      sql.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_inbox'",
+      ).get()
+    ) {
+      const pending = sql.prepare(
+        "SELECT id,type FROM session_inbox WHERE session_id=? AND enqueued_seq<? ORDER BY CASE delivery WHEN 'steer' THEN 0 ELSE 1 END,enqueued_seq LIMIT 1",
+      ).get(sid, through);
+      if (pending) {
+        return pending.type === "user" ? text(pending.id) : undefined;
+      }
+    }
+    if (
+      !sql.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event'",
+      ).get()
+    ) return;
+    const row = sql.prepare(`WITH pending AS (
+      SELECT json_extract(e.data,'$.inboxID') AS id,
+        json_extract(e.data,'$.item.type') AS kind,e.seq,
+        COALESCE((SELECT json_extract(c.data,'$.delivery') FROM event c
+          WHERE c.aggregate_id=e.aggregate_id AND c.type='session.inbox.delivery.changed.1'
+          AND json_extract(c.data,'$.inboxID')=json_extract(e.data,'$.inboxID')
+          AND c.seq>e.seq AND c.seq<? ORDER BY c.seq DESC LIMIT 1),
+          json_extract(e.data,'$.item.delivery')) AS delivery
+      FROM event e WHERE e.aggregate_id=? AND e.type='session.inbox.enqueued.1' AND e.seq<?
+        AND NOT EXISTS (SELECT 1 FROM event r WHERE r.aggregate_id=e.aggregate_id
+          AND r.type IN ('session.inbox.delivered.1','session.inbox.cancelled.1')
+          AND r.seq>e.seq AND r.seq<?
+          AND json_extract(r.data,'$.inboxID')=json_extract(e.data,'$.inboxID'))
+    ) SELECT id,kind FROM pending ORDER BY CASE delivery WHEN 'steer' THEN 0 ELSE 1 END,seq LIMIT 1`)
+      .get(through, sid, through, through);
+    return row?.kind === "user" ? text(row.id) : undefined;
   }
   async prefetch(
     input: PrefetchInput,

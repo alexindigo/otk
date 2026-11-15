@@ -202,6 +202,31 @@ export function createTranscriptProjection(): TranscriptProjection {
       for (let i = first; i < end; i++) touched.add(userOrder[i]);
     }
   };
+  const orderGroup = (key: string) => {
+    const position = (key: string) => {
+      const message = read(state.repliesByID[key].messageIDs[0]);
+      const prompt = message.role !== "user" && message.replyTo
+        ? read(message.replyTo)
+        : undefined;
+      const anchor = prompt && compare(message, prompt) < 0
+        ? prompt
+        : undefined;
+      return { message: anchor ?? message, reply: anchor ? 1 : 0 };
+    };
+    const target = position(key);
+    const keys = state.replyIDs.filter((id) => id !== key);
+    let low = 0, high = keys.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1, other = position(keys[mid]);
+      if (
+        (compare(other.message, target.message) || other.reply - target.reply) <
+          0
+      ) low = mid + 1;
+      else high = mid;
+    }
+    keys.splice(low, 0, key);
+    state.replyIDs = keys;
+  };
   const group = (key: string, ids: string[], changed?: Message) => {
     const previous = state.repliesByID[key];
     if (!ids.length) {
@@ -286,23 +311,10 @@ export function createTranscriptProjection(): TranscriptProjection {
       pending: previous?.pending,
       revision: (previous?.revision ?? 0) + 1,
     };
-    if (!previous || previous.messageIDs[0] !== ids[0]) {
-      const keys = state.replyIDs.filter((id) => id !== key);
-      let low = 0, high = keys.length;
-      while (low < high) {
-        const mid = (low + high) >>> 1;
-        if (
-          compare(
-            read(state.repliesByID[keys[mid]].messageIDs[0]),
-            read(ids[0]),
-          ) < 0
-        ) {
-          low = mid + 1;
-        } else high = mid;
-      }
-      keys.splice(low, 0, key);
-      state.replyIDs = keys;
-    }
+    if (
+      !previous || previous.messageIDs[0] !== ids[0] ||
+      changed?.id === ids[0] && compare(previous.message, changed) !== 0
+    ) orderGroup(key);
   };
   const queues = () => {
     const current = userOrder.at(-1), cutoff = boundary();
@@ -366,6 +378,15 @@ export function createTranscriptProjection(): TranscriptProjection {
     }
     const ids = state.repliesByID[key]?.messageIDs ?? [];
     const location = locations.get(message.id);
+    const causalKey = message.role === "user" && reordered &&
+        state.repliesByID[`reply:${message.id}`]
+      ? `reply:${message.id}`
+      : undefined;
+    // Its effective position changes with the prompt. Remove it before binary
+    // insertion so the remaining group order is still a sorted search space.
+    if (causalKey) {
+      state.replyIDs = state.replyIDs.filter((id) => id !== causalKey);
+    }
     group(
       key,
       location?.key === key && !reordered
@@ -373,6 +394,9 @@ export function createTranscriptProjection(): TranscriptProjection {
         : insert(ids.filter((id) => id !== message.id), message.id, read),
       message,
     );
+    // An earlier failure may already refer to this still-queued prompt. Only
+    // reposition its one reply group, never traverse historical messages.
+    if (causalKey) orderGroup(causalKey);
     detached = undefined;
   };
   const remove = (id: string) => {

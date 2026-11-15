@@ -62,6 +62,7 @@ export class NotificationTriggers {
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
+  #outcomes = new Map<string, Note>();
   #index?: ClientIndex;
   constructor(
     readonly emit: (note: Note) => void,
@@ -78,6 +79,12 @@ export class NotificationTriggers {
       if (key.startsWith(sidecar + "/")) {
         this.#kinds.delete(key);
         this.retract(key);
+      }
+    }
+    for (const [key, note] of this.#outcomes) {
+      if (key.startsWith(sidecar + "/")) {
+        this.#outcomes.delete(key);
+        this.retract(note.id);
       }
     }
   }
@@ -188,6 +195,11 @@ export class NotificationTriggers {
     else state.roots.delete(session);
     if (!entry) {
       if (this.#kinds.delete(id)) this.retract(id);
+      const outcome = this.#outcomes.get(id);
+      if (outcome) {
+        this.#outcomes.delete(id);
+        this.retract(outcome.id);
+      }
       return;
     }
     const outcome = completedAt === entry.terminal ? entry.outcome : undefined;
@@ -207,30 +219,96 @@ export class NotificationTriggers {
       !previous && !finished && !entry.permissions && !entry.questions &&
         !entry.error
     ) return;
-    if (entry.error && entry.errorIdentity !== old.errorIdentity) {
-      for (
-        const observation of entry.observations?.length
-          ? entry.observations
-          : [undefined]
+    const priorOutcome = this.#outcomes.get(id);
+    if (old.status === "idle" && entry.status !== "idle" && priorOutcome) {
+      this.#outcomes.delete(id);
+      this.retract(priorOutcome.id);
+    }
+    const publishOutcome = (note: Note) => {
+      const previous = this.#outcomes.get(id);
+      if (previous && previous.id !== note.id) this.retract(previous.id);
+      this.#outcomes.set(id, note);
+      this.emit(note);
+    };
+    // Failure facts and failed completion are updates to the same session
+    // outcome, not independent notification producers. This also enriches a
+    // terminal-only note when its facts arrive later.
+    let failure: Note | undefined;
+    const failed = entry.error && (entry.errorIdentity !== old.errorIdentity ||
+      finished && outcome === "failed");
+    if (failed) {
+      const failures =
+        (entry.observations?.length ? entry.observations : [undefined])
+          .map((observation) =>
+            sessionFailure(observation, entry.error, {
+              actionLabel: "Running session",
+              target: {
+                sidecarId: sidecar,
+                sessionID: session,
+                directory: entry.directory,
+                label: entry.title,
+              },
+            })
+          ).filter((value) => value !== undefined);
+      const latest = failures.at(-1);
+      if (latest) {
+        failure = failureNote(
+          new RequestFailure({
+            ...latest,
+            facts: {
+              ...latest.facts,
+              reason: [
+                ...new Set(
+                  failures.map((value) => value.facts?.reason).filter(Boolean),
+                ),
+              ].join("\n"),
+            },
+          }),
+        );
+      }
+    }
+    if (failure) publishOutcome({ ...failure, id: `${id}/outcome/failed` });
+    else if (
+      finished && entry.status === "idle" && !entry.permissions &&
+      !entry.questions
+    ) {
+      // A terminal arriving after its facts must not replace those facts with
+      // generic copy. Failed/unknown completion enriches the same outcome.
+      const retained = this.#outcomes.get(id);
+      if (
+        !(retained?.id === `${id}/outcome/failed` &&
+          (outcome === "failed" || outcome === undefined))
       ) {
-        const failure = sessionFailure(observation, entry.error, {
-          actionLabel: "Running session",
-          target: {
-            sidecarId: sidecar,
-            sessionID: session,
-            directory: entry.directory,
-            label: entry.title,
-          },
+        publishOutcome({
+          // Preserve existing successful/unknown completion identities. Only
+          // failed completion joins the independent failure-facts outcome key.
+          id: outcome === "failed" ? `${id}/outcome/failed` : id,
+          kind: outcome === "failed"
+            ? "error"
+            : outcome === "succeeded"
+            ? "done"
+            : "info",
+          sessionRef: { sidecar, session },
+          title: outcome === "failed"
+            ? "Session failed"
+            : outcome === "interrupted"
+            ? "Session interrupted"
+            : outcome === "succeeded"
+            ? "Session done"
+            : "Session finished (outcome unknown)",
+          body: sessionTitle(session, entry.title),
+          actions: [{
+            label: "Open",
+            command: "session.open",
+            args: { sidecarId: sidecar, sessionID: session },
+            default: true,
+          }],
         });
-        const note = failure && failureNote(new RequestFailure(failure));
-        if (note) this.emit(note);
       }
     }
     const pending = this.#kinds.get(id);
     const resolved = (pending === "permission" && !entry.permissions) ||
-      (pending === "question" && !entry.questions) ||
-      (["done", "error", "info"].includes(pending ?? "") &&
-        entry.status !== "idle");
+      (pending === "question" && !entry.questions);
     const remaining = resolved
       ? entry.permissions
         ? "permission"
@@ -242,44 +320,29 @@ export class NotificationTriggers {
       ? "permission"
       : entry.questions > old.questions
       ? "question"
-      : finished &&
-          entry.status === "idle" &&
-          !entry.permissions && !entry.questions
-      ? outcome === "succeeded"
-        ? "done"
-        : outcome === "failed"
-        ? "error"
-        : "info"
       : remaining;
     if (kind) {
+      // Ordinary completion and input attention historically replace one root
+      // note. Do not retain a stale alias that could later retract its input.
+      if (this.#outcomes.get(id)?.id === id) this.#outcomes.delete(id);
       this.#kinds.set(id, kind);
-      this.emit({
-        id,
-        kind,
-        sessionRef: { sidecar, session },
-        title: finished && !["permission", "question"].includes(kind)
-          ? outcome === "failed"
-            ? "Session failed"
-            : outcome === "interrupted"
-            ? "Session interrupted"
-            : outcome === "succeeded"
-            ? "Session done"
-            : "Session finished (outcome unknown)"
-          : ({
-            done: "Session done",
-            permission: "Permission needed",
-            question: "Question needs input",
-            error: "Session error",
-            info: "Information",
-          })[kind],
-        body: sessionTitle(session, entry.title),
-        actions: [{
-          label: "Open",
-          command: "session.open",
-          args: { sidecarId: sidecar, sessionID: session },
-          default: true,
-        }],
-      });
+      this.emit(
+        {
+          id,
+          kind,
+          sessionRef: { sidecar, session },
+          title: kind === "permission"
+            ? "Permission needed"
+            : "Question needs input",
+          body: sessionTitle(session, entry.title),
+          actions: [{
+            label: "Open",
+            command: "session.open",
+            args: { sidecarId: sidecar, sessionID: session },
+            default: true,
+          }],
+        },
+      );
     } else if (resolved) {
       this.#kinds.delete(id);
       this.retract(id);

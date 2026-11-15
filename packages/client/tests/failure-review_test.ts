@@ -15,6 +15,120 @@ import {
 import { latestTerminal, type SupervisionEvidence } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
 
+Deno.test("failed completion and failure facts merge into one session-outcome note in either arrival order", () => {
+  for (const factsFirst of [true, false]) {
+    const notes = new Map<string, Note>();
+    const trigger = new NotificationTriggers(
+      (note) => notes.set(note.id, note),
+      (id) => notes.delete(id),
+    );
+    const entry = shellEntry("tstv1-one-failure");
+    trigger.receive("remote", {
+      t: "index.snapshot",
+      rev: 1,
+      entries: [{ ...entry, status: "busy" }],
+    });
+    const error = { error: "Agent not found: missing-agent" };
+    const terminal = { terminal: 20, outcome: "failed" as const };
+    trigger.receive("remote", {
+      t: "index.patch",
+      rev: 2,
+      ops: [{
+        op: "upsert",
+        entry: {
+          ...entry,
+          status: factsFirst ? "busy" : "idle",
+          attention: { ...entry.attention, ...(factsFirst ? error : {}) },
+          ...(factsFirst ? {} : { activity: terminal }),
+        },
+      }],
+    });
+    if (factsFirst) {
+      trigger.receive("remote", {
+        t: "index.patch",
+        rev: 3,
+        ops: [{
+          op: "upsert",
+          entry: {
+            ...entry,
+            status: "busy",
+            title: "Enriched title",
+            attention: { ...entry.attention, ...error },
+          },
+        }],
+      });
+      assertEquals(notes.size, 1);
+    }
+    trigger.receive("remote", {
+      t: "index.patch",
+      rev: factsFirst ? 4 : 3,
+      ops: [{
+        op: "upsert",
+        entry: {
+          ...entry,
+          status: "idle",
+          attention: { ...entry.attention, ...error },
+          activity: terminal,
+        },
+      }],
+    });
+    assertEquals(notes.size, 1);
+    const note = [...notes.values()][0];
+    assertEquals(notificationFailure(note)?.value.facts?.reason, error.error);
+    assertEquals(note.actions[0].label, "Open session");
+    assertEquals(note.sessionRef, { sidecar: "remote", session: entry.id });
+  }
+});
+
+Deno.test("failed outcome coalescing never consumes independent input attention", () => {
+  const notes = new Map<string, Note>();
+  const trigger = new NotificationTriggers(
+    (note) => notes.set(note.id, note),
+    (id) => notes.delete(id),
+  );
+  const entry = shellEntry("tstv1-failure-with-input");
+  trigger.receive("remote", { t: "index.snapshot", rev: 1, entries: [entry] });
+  trigger.receive("remote", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{
+      op: "upsert",
+      entry: {
+        ...entry,
+        attention: {
+          ...entry.attention,
+          permissions: 1,
+          error: "Provider limit",
+        },
+        activity: { terminal: 20, outcome: "failed" },
+      },
+    }],
+  });
+  assertEquals([...notes.values()].map((note) => note.kind).sort(), [
+    "error",
+    "permission",
+  ]);
+  trigger.receive("remote", {
+    t: "index.patch",
+    rev: 3,
+    ops: [{
+      op: "upsert",
+      entry: {
+        ...entry,
+        attention: { ...entry.attention, error: "Provider limit" },
+        activity: { terminal: 20, outcome: "failed" },
+      },
+    }],
+  });
+  assertEquals(notes.size, 1);
+  assertEquals(
+    notificationFailure([...notes.values()][0])?.value.facts?.reason,
+    "Provider limit",
+  );
+  trigger.reset("remote");
+  assertEquals(notes.size, 0);
+});
+
 Deno.test("every connection borrows the same sidecar-keyed title source", () => {
   const collection = createSidecars(() => {}, {
     storage: {
@@ -204,10 +318,10 @@ Deno.test("finish notifications use terminal outcome before separate error obser
   for (
     const outcome of ["failed", "succeeded", "interrupted", undefined] as const
   ) {
-    const notes: Note[] = [];
+    const notes: Note[] = [], retracted: string[] = [];
     const trigger = new NotificationTriggers(
       (note) => notes.push(note),
-      () => {},
+      (id) => retracted.push(id),
     );
     const entry = shellEntry("tstv1-review");
     trigger.receive("remote", {
@@ -250,7 +364,8 @@ Deno.test("finish notifications use terminal outcome before separate error obser
         }],
       });
       assertEquals(notes.at(-1)?.title, "Session failed");
-      assertEquals(notes.at(-1)?.id, notes[0].id);
+      assertEquals(notes.at(-1)?.id, "remote/tstv1-review/outcome/failed");
+      assertEquals(retracted, [notes[0].id]);
     }
   }
 });

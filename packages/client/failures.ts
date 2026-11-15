@@ -38,6 +38,11 @@ export interface FeedbackOwner {
   fail(cause: unknown): void;
   clear(): void;
 }
+/** Placement is local to a surface/view, never a reason to discard a failure. */
+export type FailurePlacement = "record" | {
+  surface: "feedback" | "session" | "notification";
+  view?: FailureTarget;
+};
 export class RequestFailure extends Error {
   constructor(readonly failure: PublicFailure) {
     super(failure.facts?.reason ?? "Request rejected");
@@ -72,7 +77,10 @@ export class FailurePresenter {
   }
   #present(
     failure: PublicFailure,
-    surface: "feedback" | "record" = "feedback",
+    placement: FailurePlacement = {
+      surface: "feedback",
+      view: failure.facts?.target,
+    },
   ): Feedback {
     // Public facts are a wire DTO. Snapshot its owned object levels so a
     // framework-bound feedback value cannot leak proxies into delivery ports.
@@ -95,6 +103,11 @@ export class FailurePresenter {
     };
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
+    const reference = placement !== "record" &&
+      placement.surface !== "notification" && placement.view?.sessionID &&
+      placement.view.sessionID === facts.target?.sessionID &&
+      (placement.view.sidecarId ?? "local") ===
+        (facts.target?.sidecarId ?? "local");
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
     const target = this.context.target?.(facts.target ?? {}) ??
@@ -120,11 +133,13 @@ export class FailurePresenter {
       count: 1,
       occurrences: [failure.diagnosticID],
       ...(known ? {} : { generic: true }),
-      ...(facts.record && surface !== "record"
+      ...(facts.record && reference
         ? {
           reference: {
             messageID: facts.record.messageID,
-            label: facts.record.label ?? "See the error above",
+            label: placement.surface === "session"
+              ? "See the session error"
+              : facts.record.label ?? "See the error above",
           },
         }
         : {}),
@@ -160,13 +175,13 @@ export class FailurePresenter {
   }
   describe(
     failure: PublicFailure,
-    surface: "feedback" | "record" = "feedback",
+    placement?: FailurePlacement,
   ): Feedback {
-    return this.#present(failure, surface);
+    return this.#present(failure, placement);
   }
   present(
     failure: PublicFailure,
-    surface: "feedback" | "record" = "feedback",
+    placement?: FailurePlacement,
   ): Feedback {
     const key = this.groupingKey(failure);
     let group = this.#groups.get(key);
@@ -175,7 +190,7 @@ export class FailurePresenter {
       this.#groups.set(key, group);
     }
     group.occurrences.add(failure.diagnosticID);
-    const value = this.#present(failure, surface);
+    const value = this.#present(failure, placement);
     return {
       ...value,
       identity: group.identity,
