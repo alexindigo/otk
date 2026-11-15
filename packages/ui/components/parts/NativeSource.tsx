@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../tools/ToolFrame.css" with { type: "text" };
 import "./NativeSource.css" with { type: "text" };
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from "solid-js";
 import type { Preferences } from "@otk/protocol";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
@@ -30,49 +36,42 @@ export default function NativeSource(props: {
     () => props.prefs,
   );
   const read = useNativeSource();
-  const [loaded, setLoaded] = createSignal<Loaded>();
-  let live = true, attempt = 0;
-  onCleanup(() => live = false);
-  // The transcript owner keeps each result per reference, so a remount or a
-  // theme change shows the same outcome without reading again.
-  const load = (retry = false) => {
-    const ref = props.reference;
-    if (!ref || (!retry && loaded())) return;
-    if (!read) {
-      setLoaded({
+  const resource = createMemo(() =>
+    open() && props.reference ? read?.(props.reference) : undefined
+  );
+  const [revision, setRevision] = createSignal(0);
+  const toggle = () => setOpen(!open());
+  // An explicit choice or the category default can open the fold; either reads.
+  createEffect(() => [open(), resource()] as const, ([expanded, owner]) => {
+    if (!expanded || !owner) return;
+    const off = owner.subscribe(() => setRevision((v) => v + 1));
+    const release = owner.retain();
+    onCleanup(() => {
+      off();
+      release();
+    });
+  });
+  const shown = (): Loaded | undefined => {
+    revision();
+    if (!props.reference) {
+      return props.preview && { state: "ready" as const, ...props.preview };
+    }
+    const value = resource()?.state;
+    if (!value) {
+      return {
         state: "failed",
         failure: failureValue(new Error("Source is unavailable here"), {
           action: "Load source",
           reason: "This view has no source reader",
           recovery: "Open the conversation in its own view",
         }),
-      });
-      return;
+      };
     }
-    const current = ++attempt;
-    setLoaded({ state: "loading" });
-    read(ref, { retry }).then((view) => {
-      if (live && current === attempt) {
-        setLoaded({ state: "ready", ...sourcePreview(view) });
-      }
-    }, (error) => {
-      if (!live || current !== attempt) return;
-      setLoaded({
-        state: "failed",
-        failure: failureValue(error, { action: "Load source" }),
-      });
-    });
-  };
-  const toggle = () => setOpen(!open());
-  // An explicit choice or the category default can open the fold; either reads.
-  createEffect(open, (value) => {
-    if (value) load();
-  });
-  const shown = () => {
-    if (!props.reference) {
-      return props.preview && { state: "ready" as const, ...props.preview };
-    }
-    return loaded();
+    return value.state === "ready"
+      ? { state: "ready", ...sourcePreview(value.value) }
+      : value.state === "failed"
+      ? value
+      : { state: "loading" };
   };
   return (
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
@@ -109,7 +108,7 @@ export default function NativeSource(props: {
                     ...feedback,
                     action: {
                       label: "Retry",
-                      run: () => load(true),
+                      run: () => resource()?.retry(),
                     },
                   };
                 })()}

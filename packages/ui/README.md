@@ -230,6 +230,12 @@ expanded record does not repeat a state label already shown by its heading or a
 parameter. Parameter values, plain or navigable, share one value primitive, so
 they align to the same column edge and baseline.
 
+The Source fold borrows the transcript's per-reference preview resource while
+open; it retains no second preview or pending-read authority. Reference changes
+rebind the lease and canonical record changes refresh open consumers. Closing
+releases demand, so hidden invalidations perform no reads. Unchanged remounts
+reuse the same cached outcome, including failures.
+
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its
 lifetime, so continued backend steps share one indicator and terminal replies
