@@ -11,6 +11,7 @@ import {
 } from "./failures.ts";
 import type {
   FailureFacts,
+  FailureTarget,
   PublicFailure,
   RequestMetadataRegistry,
 } from "@otk/protocol";
@@ -251,6 +252,32 @@ export function presentFailure(
 ): Feedback {
   return shipped.present(failure, placement);
 }
+/**
+ * A session view's composer-origin pointer: its own composer feedback, or the
+ * session's retained composer submission failure when another client
+ * submitted it. Either spends the view's one pointer before the session
+ * indicator.
+ */
+export function composerPointer(
+  failures: readonly PublicFailure[],
+  view: FailureTarget | undefined,
+  local?: Feedback,
+): Feedback | undefined {
+  if (local?.failure?.reference) return local;
+  for (const failure of failures) {
+    if (failure.facts?.origin !== "composer") continue;
+    const shown = shipped.describe(failure, { surface: "feedback", view });
+    if (shown.failure?.reference) return shown;
+  }
+  return local;
+}
+export function placeFailure(
+  failure: PublicFailure,
+  placement: FailurePlacement,
+  occupant?: Feedback,
+): Feedback | undefined {
+  return shipped.place(failure, placement, occupant);
+}
 
 /** Target-bound presentation outlives any mounted view and borrows request state. */
 export function createRequestFeedback(
@@ -285,8 +312,13 @@ export function createRequestFeedback(
         return local;
       }
       if (state.error) {
+        const shown = shipped.place(state.error, {
+          surface: "feedback",
+          view: state.error.facts?.target,
+        });
+        if (!shown) return;
         return {
-          ...shipped.present(state.error),
+          ...shown,
           identity: state.ref.key,
           diagnosticID: state.error.diagnosticID,
         };

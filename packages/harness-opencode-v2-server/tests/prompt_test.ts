@@ -20,6 +20,7 @@ function fixture() {
     agent = "build",
     model = { providerID: "fake", id: "scripted", variant: "default" },
     fail = "";
+  const submissions: { sessionID: string; messageID: string }[] = [];
   const operation: OperationContext = {
     signal: new AbortController().signal,
     beforeEffect() {
@@ -31,7 +32,12 @@ function fixture() {
       return Promise.resolve();
     },
     progress() {},
-    key: { clientID: "fixture", key: "prompt", window: "test" },
+    key: {
+      clientID: "fixture",
+      key: "prompt",
+      window: "test",
+      origin: "composer",
+    },
   };
   const client = new V2Client(
     { endpoint: { url: "http://localhost:4000" }, pid: 1, version: "2.2.6" },
@@ -74,7 +80,16 @@ function fixture() {
     },
   );
   return {
-    prompt: new V2Prompt(() => client),
+    prompt: new V2Prompt(
+      () => client,
+      undefined,
+      undefined,
+      (sessionID, messageID) => {
+        submissions.push({ sessionID, messageID });
+        return Promise.resolve();
+      },
+    ),
+    submissions,
     client,
     calls,
     receipts,
@@ -102,7 +117,12 @@ Deno.test("V2 prepares then separately fences changed agent/model/variant and se
     "prompt",
   ]);
   assertEquals(f.calls.map((c) => c.fenced), [0, 1, 2, 3]);
-  assertEquals(f.calls.at(-1)?.body, { text: "  exact text\n" });
+  assertEquals(f.submissions.length, 1);
+  assertEquals(f.submissions[0].sessionID, input.sessionID);
+  assertEquals(f.calls.at(-1)?.body, {
+    id: f.submissions[0].messageID,
+    text: "  exact text\n",
+  });
   assertEquals(f.receipts.map((r) => r.kind), [
     "prompt-selection",
     "prompt-selection",

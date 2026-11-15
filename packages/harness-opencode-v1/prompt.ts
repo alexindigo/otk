@@ -14,15 +14,25 @@ import type { Directory } from "./directory.ts";
 import type { RawPromptPart } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { attachmentMime } from "./attachment-mime.ts";
+import { submissionID } from "./submission-id.ts";
 export function prompt(
   client: Client,
   directory: Directory,
   cancel: (id: string) => void,
   policy?: AttachmentPolicy,
+  submitted?: (
+    sessionID: string,
+    messageID: string,
+    origin: import("@otk/protocol").RequestOrigin,
+  ) => void,
 ): PromptCapability {
   return {
     async prompt(input, operation) {
       const dir = await directory.resolve(input.sessionID);
+      const parts = await mapPromptParts(input.parts, dir, operation, policy);
+      const origin = operation?.key.origin;
+      const messageID = submitted && origin ? submissionID() : undefined;
+      if (messageID && origin) submitted!(input.sessionID, messageID, origin);
       await client.request(
         `/session/${
           encodeURIComponent(ids.decode(input.sessionID))
@@ -34,7 +44,8 @@ export function prompt(
             : {}),
           query: { directory: dir },
           body: {
-            parts: await mapPromptParts(input.parts, dir, operation, policy),
+            ...(messageID ? { messageID } : {}),
+            parts,
             variant: input.variant,
             agent: input.agent,
             model: input.model

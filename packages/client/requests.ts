@@ -30,6 +30,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
   intent?: IntentIdentity;
   owner?: string;
+  origin?: import("@otk/protocol").RequestOrigin;
   facts?: import("@otk/protocol").FailureFacts;
 }
 export interface OperationState {
@@ -310,10 +311,16 @@ export class RequestTracker {
   failureFacts(
     method: string,
     params: unknown,
-    options: Pick<RequestOptions, "owner" | "facts"> = {},
+    options: Pick<RequestOptions, "owner" | "facts" | "origin" | "intent"> = {},
   ): import("@otk/protocol").FailureFacts {
     const routing = requestFailureFacts(method, params, this.options.sidecarId);
-    const facts = { ...routing, ...options.facts };
+    const facts = {
+      ...routing,
+      ...options.facts,
+      ...(options.intent?.origin ?? options.origin
+        ? { origin: options.intent?.origin ?? options.origin }
+        : {}),
+    };
     const target = {
       ...routing.target,
       ...options.facts?.target,
@@ -355,6 +362,9 @@ export class RequestTracker {
           window: this.#window?.id ?? "",
         }),
       id: crypto.randomUUID(),
+      ...(options.intent?.origin ?? options.origin
+        ? { origin: options.intent?.origin ?? options.origin }
+        : {}),
     };
     if (!ref.window && this.#window) ref.window = this.#window.id;
     const canonical = canonicalRequest(params);
@@ -362,7 +372,7 @@ export class RequestTracker {
     if (
       prior && prior.state.ref.clientID === ref.clientID &&
       prior.state.ref.window === ref.window && prior.state.method === method &&
-      prior.canonical === canonical
+      prior.canonical === canonical && prior.state.ref.origin === ref.origin
     ) return prior.operation;
     if (prior) {
       const failure: PublicFailure = {
@@ -494,6 +504,7 @@ export class RequestTracker {
       facts: {
         ...item.state.facts,
         ...error.facts,
+        ...(item.state.ref.origin ? { origin: item.state.ref.origin } : {}),
         target: this.#target({
           ...item.state.facts?.target,
           ...error.facts?.target,

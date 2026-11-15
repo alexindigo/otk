@@ -1079,7 +1079,7 @@ try {
                 sessionID,
                 command: "missing-otk-command",
                 arguments: "",
-              })
+              }, "composer")
               : client!.rpc("session.shell", {
                 sessionID,
                 // V2 shell has no agent selection field. Reject invalid input
@@ -1088,7 +1088,7 @@ try {
                   ? ""
                   : "echo should-not-run",
                 agent: "missing-otk-agent",
-              });
+              }, "composer");
             // Match the original independent-client fault injection. Keeping the
             // controller responsive lets the browser observe the deferred error
             // rather than serializing all inspection behind its native receipt.

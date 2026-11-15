@@ -607,10 +607,20 @@ export class OpencodeV1Adapter implements Harness {
     registry.register(
       "prompt",
       (() => {
-        const capability = prompt(this.client, directory, (id) => {
-          this.#abortCommands(id);
-          this.#errors.cancel(id);
-        }, cfg.attachments);
+        const capability = prompt(
+          this.client,
+          directory,
+          (id) => {
+            this.#abortCommands(id);
+            this.#errors.cancel(id);
+          },
+          cfg.attachments,
+          (sessionID, messageID, origin) => {
+            this.#retention.observe(sessionID, `submission:${messageID}`, {
+              origin,
+            }, Date.now());
+          },
+        );
         return {
           ...capability,
           prompt: async (
@@ -628,6 +638,8 @@ export class OpencodeV1Adapter implements Harness {
                   input.sessionID,
                   "prompt",
                   error,
+                  undefined,
+                  operation?.key.origin,
                 );
               }
               throw error;
@@ -657,7 +669,13 @@ export class OpencodeV1Adapter implements Harness {
               await capability.command(input, operation);
             } catch (error) {
               if (!operation?.signal.aborted) {
-                this.#requestFailure(input.sessionID, "command", error);
+                this.#requestFailure(
+                  input.sessionID,
+                  "command",
+                  error,
+                  undefined,
+                  operation?.key.origin,
+                );
               }
               throw error;
             }
@@ -1181,6 +1199,7 @@ export class OpencodeV1Adapter implements Harness {
     action: string,
     error: unknown,
     recordID?: string,
+    origin?: import("@otk/protocol").RequestOrigin,
   ): void {
     if (!this.#errors.accepts(sessionID)) return;
     if (
@@ -1202,6 +1221,7 @@ export class OpencodeV1Adapter implements Harness {
       facts: {
         ...error.facts,
         action: `session.${action}`,
+        origin,
         target: { sessionID, label: this.#index.getMetadata(sessionID)?.title },
         outcome: error.outcome,
       },
@@ -1247,7 +1267,10 @@ export class OpencodeV1Adapter implements Harness {
       created: message.time.created,
       message,
     });
-    if (error.facts && record) error.facts.record = record;
+    if (error.facts && record) {
+      error.facts.record = record;
+      error.facts.origin = failure.facts.origin;
+    }
     if (this.buffers.subscribed(sessionID)) {
       this.#sink.content(sessionID, { op: "message.upsert", message });
     }
@@ -1265,7 +1288,11 @@ export class OpencodeV1Adapter implements Harness {
       operation,
       options?.operation?.key.key,
     );
-    const failureAttempt = this.#failureAttempts.begin(sessionID, token.id);
+    const failureAttempt = this.#failureAttempts.begin(
+      sessionID,
+      token.id,
+      options?.operation?.key.origin,
+    );
     const settled = this.client.json(path, {
       ...options,
       signal: controller.signal,
@@ -1282,6 +1309,7 @@ export class OpencodeV1Adapter implements Harness {
             operation,
             error,
             failureAttempt.recordID,
+            options?.operation?.key.origin,
           );
           const cause = error instanceof NativeRequestFailure
             ? error.original
@@ -2380,6 +2408,13 @@ export class OpencodeV1Adapter implements Harness {
         facts: {
           ...this.client.failureFacts(error),
           actionLabel: "Running session",
+          origin: this.#failureAttempts.origin(sessionID) ??
+            this.#retention.get(
+              sessionID,
+              `submission:${this.#failureTurns.get(sessionID)?.prompt}`,
+            )?.request?.origin as
+              | import("@otk/protocol").RequestOrigin
+              | undefined,
           target: { sessionID, label: entry?.title },
           outcome: "rejected" as const,
         },
@@ -2416,7 +2451,12 @@ export class OpencodeV1Adapter implements Harness {
         {
           ...failure,
           diagnosticID: priorFailure?.diagnosticID ?? failure.diagnosticID,
-          facts: { ...priorFailure?.facts, ...failure.facts, reason },
+          facts: {
+            ...priorFailure?.facts,
+            ...failure.facts,
+            origin: priorFailure?.facts?.origin ?? failure.facts.origin,
+            reason,
+          },
         },
         previous?.created ?? message.time.created,
         previous?.message ? previous.message.replyTo : message.replyTo,

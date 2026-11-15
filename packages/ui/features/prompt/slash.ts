@@ -22,6 +22,7 @@ export function submitPromptCommand(
     parts?: Extract<PromptPart, { kind: "file" }>[];
     skill?: SkillOption;
   } = {},
+  origin: import("@otk/protocol").RequestOrigin = "composer",
 ) {
   return ctx.submit(async (options) => {
     if (!args.selection) await ctx.ready();
@@ -44,7 +45,7 @@ export function submitPromptCommand(
         part,
       ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file"),
     }, options);
-  });
+  }, origin);
 }
 export function registerSlashPrompt(prompt: PromptRegistry): void {
   prompt.register({
@@ -58,7 +59,8 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         available: () =>
           ctx.active() && !ctx.props.suspended && ctx.props.connected &&
           ctx.supports("commands"),
-        execute: (command, args) => submitPromptCommand(ctx, command, args),
+        execute: (command, args, origin) =>
+          submitPromptCommand(ctx, command, args, origin),
       });
       ctx.own(owner.dispose);
       let mounted = false;

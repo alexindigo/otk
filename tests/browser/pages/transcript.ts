@@ -82,7 +82,21 @@ export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
     });
     if (!selector) break;
     await revealAcquired(page, selector);
-    await page.locator(selector).click();
+    // The virtual list may retire this row after its reveal. Click it in the
+    // same page task that finds it; if it is gone, reacquire the next closed
+    // fold instead of waiting on a retired identity.
+    await page.evaluate((selector) => {
+      (document.querySelector(selector) as HTMLElement | null)?.click();
+    }, selector);
+    // Settled when this fold is open or retired; a retired one is reacquired.
+    await expect.poll(() =>
+      page.evaluate(
+        (selector) =>
+          document.querySelector(selector)?.getAttribute("aria-expanded") !==
+            "false",
+        selector,
+      )
+    ).toBe(true);
   }
 }
 

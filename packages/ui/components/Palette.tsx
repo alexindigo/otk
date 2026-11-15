@@ -33,7 +33,10 @@ export default function Palette(
   };
   const invoke = async (id: string) => {
     try {
-      await commands.run(id);
+      await commands.run(id, undefined, {
+        ...commands.context(),
+        origin: "palette",
+      });
       if (active) props.onClose();
     } catch (error) {
       if (ports.failureOwned?.(error)) {

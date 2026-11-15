@@ -274,7 +274,8 @@ decisions remain open.
 
 When a producer supplies `FailureFacts.record`, that transcript identity owns
 the single full presentation in its session view. FP1 scopes placement by
-surface and view: target-bound feedback and the matching session indicator use a
+surface, view and origin: composer-origin failures use only target-bound
+feedback; native session failures use only the session indicator. Each is a
 short linked reference; a different server/session view and notification
 surfaces keep the full facts. `describe/present(failure, "record")` always
 renders full facts. `sessionFailure` never drops an observation for presentation

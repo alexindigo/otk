@@ -3,6 +3,7 @@ export interface FailureAttempt {
   readonly sessionID: string;
   readonly id: string;
   readonly recordID: string;
+  readonly origin?: import("@otk/protocol").RequestOrigin;
 }
 /** Pending admission is not report deduplication. A terminal attempt cannot
  * consume a later error merely because it belongs to the same session. */
@@ -10,9 +11,21 @@ export class FailureAttempts {
   #pending = new Map<string, FailureAttempt>();
   #reported = new Map<string, { recordID: string; reason: string }>();
   #events = new Map<string, Map<string, string>>();
-  begin(sessionID: string, id: string): FailureAttempt {
+  origin(sessionID: string): import("@otk/protocol").RequestOrigin | undefined {
+    return this.#pending.get(sessionID)?.origin;
+  }
+  begin(
+    sessionID: string,
+    id: string,
+    origin?: import("@otk/protocol").RequestOrigin,
+  ): FailureAttempt {
     this.retire(sessionID);
-    const attempt = { sessionID, id, recordID: `request:failure:launch:${id}` };
+    const attempt = {
+      sessionID,
+      id,
+      recordID: `request:failure:launch:${id}`,
+      origin,
+    };
     this.#pending.set(sessionID, attempt);
     return attempt;
   }

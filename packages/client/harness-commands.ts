@@ -12,7 +12,11 @@ export interface SkillChoice extends SkillOption {
 /** Adapter data enters the same registry as local actions; surfaces never merge it. */
 export function createHarnessCommands(hub: CommandHub, ports: {
   available(): boolean;
-  execute(command: CommandOption, args: Record<string, unknown>): Promise<void>;
+  execute(
+    command: CommandOption,
+    args: Record<string, unknown>,
+    origin?: import("@otk/protocol").RequestOrigin,
+  ): Promise<void>;
 }): HarnessCommands {
   const registered = new Map<string, { signature: string; release(): void }>();
   return {
@@ -70,8 +74,8 @@ export function createHarnessCommands(hub: CommandHub, ports: {
                 reason:
                   "Session is not connected or the command owner is inactive",
               },
-          run: (_context, args: Record<string, unknown> = {}) =>
-            ports.execute(command, args),
+          run: (context, args: Record<string, unknown> = {}) =>
+            ports.execute(command, args, context.origin),
         });
         registered.set(id, { signature, release });
       }

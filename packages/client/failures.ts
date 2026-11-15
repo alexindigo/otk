@@ -43,6 +43,10 @@ export type FailurePlacement = "record" | {
   surface: "feedback" | "session" | "notification";
   view?: FailureTarget;
 };
+function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
+  return !!a?.sessionID && a.sessionID === b?.sessionID &&
+    (a.sidecarId ?? "local") === (b.sidecarId ?? "local");
+}
 export class RequestFailure extends Error {
   constructor(readonly failure: PublicFailure) {
     super(failure.facts?.reason ?? "Request rejected");
@@ -179,6 +183,35 @@ export class FailurePresenter {
   ): Feedback {
     return this.#present(failure, placement);
   }
+  /**
+   * A view shows at most one short pointer to its retained failure records.
+   * A pointer belongs to its failure's input origin: composer submissions
+   * point from the composer, everything else from the session. A composer
+   * pointer shown in the same view (`occupant`) takes precedence, so the
+   * session indicator waits until no composer pointer is present. Records
+   * themselves are never budgeted, and no failures are correlated here.
+   */
+  place(
+    failure: PublicFailure,
+    placement: FailurePlacement,
+    occupant?: Feedback,
+  ): Feedback | undefined {
+    const value = this.#present(failure, placement);
+    if (value.failure?.reference && placement !== "record") {
+      const origin = failure.facts?.origin ?? "session";
+      if (
+        placement.surface === "session" && origin === "composer" ||
+        placement.surface === "feedback" && origin !== "composer"
+      ) return;
+      const held = occupant?.failure;
+      if (
+        placement.surface === "session" && held?.reference &&
+        held.value.facts?.origin === "composer" &&
+        sameView(held.value.facts.target, placement.view)
+      ) return;
+    }
+    return this.present(failure, placement);
+  }
   present(
     failure: PublicFailure,
     placement?: FailurePlacement,
@@ -266,9 +299,11 @@ export function failureFeedback(
 ): Feedback | undefined {
   if (cause instanceof RequestReleased) return undefined;
   if (cause instanceof FeedbackFailure) return cause.feedback;
-  return presenter.present(
-    cause instanceof RequestFailure
-      ? contextualFailure(cause.failure, context)
-      : localFailure(cause, diagnostic, context),
-  );
+  const failure = cause instanceof RequestFailure
+    ? contextualFailure(cause.failure, context)
+    : localFailure(cause, diagnostic, context);
+  return presenter.place(failure, {
+    surface: "feedback",
+    view: failure.facts?.target,
+  });
 }

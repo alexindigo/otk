@@ -16,6 +16,7 @@ import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { interrupt } from "./interrupt.ts";
 import { selectionModel } from "./selection.ts";
+import { submissionID } from "./submission-id.ts";
 type NativeInput = Parameters<OpenCodeClient["session"]["prompt"]>[0];
 type Prepared = Pick<NativeInput, "text" | "files" | "agents">;
 
@@ -247,6 +248,11 @@ export class V2Prompt implements PromptCapability {
       id: string,
       operation?: OperationContext,
     ) => Promise<void>,
+    readonly submitted?: (
+      sessionID: string,
+      messageID: string,
+      origin: import("@otk/protocol").RequestOrigin,
+    ) => Promise<void>,
   ) {}
   async prompt(
     input: PromptInput,
@@ -300,8 +306,16 @@ export class V2Prompt implements PromptCapability {
           },
         });
       }
+      const origin = operation?.key.origin;
+      const id = this.submitted && origin ? submissionID() : undefined;
+      if (id && origin) await this.submitted!(input.sessionID, id, origin);
       await client.effect(
-        (api) => api.session.prompt({ sessionID: native, ...prepared }),
+        (api) =>
+          api.session.prompt({
+            sessionID: native,
+            ...(id ? { id } : {}),
+            ...prepared,
+          }),
         operation,
       );
     }, operation);
