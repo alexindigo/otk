@@ -247,6 +247,13 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#refreshAttention(id);
         }
       },
+      // Inventory-first requests keep their facts for a later outcome.
+      (sessionID, requestID, request) =>
+        void this.transcript.requests.observe({
+          id: requestID,
+          sessionID,
+          request,
+        }).catch((error) => this.diagnostic(error)),
     );
     this.prompts = new V2Prompt(
       () => this.stream.client,
