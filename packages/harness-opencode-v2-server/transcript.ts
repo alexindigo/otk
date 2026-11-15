@@ -1505,7 +1505,7 @@ export class Transcript {
       const previous = await this.requests.get(id, requestID);
       this.#lifetime.signal.throwIfAborted();
       if (event.type === "permission.asked" || event.type === "form.created") {
-        await this.requests.put({ id: requestID, sessionID: id, request });
+        await this.requests.observe({ id: requestID, sessionID: id, request });
       } else if (
         ["permission.replied", "form.replied", "form.cancelled"].includes(
           event.type,

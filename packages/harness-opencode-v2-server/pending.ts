@@ -19,7 +19,8 @@ type NativeForm = Awaited<
   ReturnType<OpenCodeClient["form"]["list"]>
 >["data"][number];
 type Location = { directory: string; workspaceID?: string };
-/** One canonical pending-request owner; routing location stays private to this adapter. */
+/** One canonical pending-request owner; routing location stays private to this adapter.
+ * Every request it admits, from a live event or an inventory, is reported. */
 export class V2Pending {
   #settled = new Set<string>();
   #permissions = new Map<
@@ -51,6 +52,11 @@ export class V2Pending {
       sessionID: string,
       op: import("@otk/protocol").ContentOp,
     ) => void,
+    readonly observed: (
+      sessionID: string,
+      requestID: string,
+      request: Record<string, unknown>,
+    ) => void = () => {},
   ) {
     this.permissions = {
       listPermissions: async (id, signal) => {
@@ -389,6 +395,7 @@ export class V2Pending {
         location,
         source: raw.source,
       });}
+    this.observed(request.sessionID, raw.id, structuredClone(raw));
     this.changed(request.sessionID, { op: "permission.upsert", request });
   }
   replaceForms(location: Location, forms: readonly NativeForm[]): void {
@@ -484,6 +491,7 @@ export class V2Pending {
       ...(question ? { question } : {}),
     });
     if (request.owner.kind === "session") {
+      this.observed(request.owner.sessionID, raw.id, structuredClone(raw));
       this.changed(request.owner.sessionID, { op: "form.upsert", request });
     }
     if (question) {

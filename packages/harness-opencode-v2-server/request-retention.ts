@@ -41,6 +41,10 @@ export interface RequestRetention {
   bind(storage: PluginStorage): void;
   get(sessionID: string, id: string): Promise<RetainedRequest | undefined>;
   put(value: RetainedRequest): Promise<void>;
+  /** Pending request facts from any transport; a settled outcome is kept. */
+  observe(
+    value: Required<Pick<RetainedRequest, "id" | "sessionID" | "request">>,
+  ): Promise<void>;
   /** Next rank after the observations already placed at `after`. */
   rank(sessionID: string, after: number): number;
   page(
@@ -195,6 +199,23 @@ export class V2RequestRetention implements RequestRetention {
       this.#replace(this.#read(value.sessionID, value.id), value)
     );
     return Promise.resolve();
+  }
+  observe(
+    value: Required<Pick<RetainedRequest, "id" | "sessionID" | "request">>,
+  ): Promise<void> {
+    try {
+      this.#write(() => {
+        const previous = this.#read(value.sessionID, value.id);
+        if (
+          previous?.outcome ||
+          JSON.stringify(previous?.request) === JSON.stringify(value.request)
+        ) return;
+        this.#replace(previous, { ...previous, ...value });
+      });
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
   rank(sessionID: string, after: number): number {
     const key = prefix(sessionID, "sequence") + descending(after) + "/",
