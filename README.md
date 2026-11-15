@@ -362,13 +362,23 @@ here and Copy, or a completed reply for Fork from here and Copy. Forks open
 through the chosen reply with an empty composer; their files are shared with the
 original. Revert rolls back files and conversation using opencode's native
 semantics, without confirmation. The joined composer strip lists rolled-back
-prompts and files and offers Restore until the next prompt makes the rollback
-permanent; Compact also makes it permanent. Undo previous prompt and Redo are in
-the palette and available as `/undo` and `/redo`; Undo can interrupt active
-work. Recalled content never overwrites an edited draft. Timeline in the right
-panel lists the loaded prompts chronologically: click to scroll and focus a
-prompt, use the same Revert/Copy actions, or Load earlier prompts to page the
-transcript.
+prompts and files and offers Restore before the next native commit; Compact also
+commits the rollback. When the server provides prompt history, before staging a
+revert OTK saves the earlier displayed branch, exact prompts/attachments and
+draft in this browser's localStorage. Unrevert stays available after sending and
+opens that read-only earlier branch inside the session, with prompt reuse and
+explicit Delete. It survives reloads in this browser, not clearing browser data
+or changing origin. Native deleted messages and files are not restored. Storage
+is about 5 MB per origin; a failed save reports what was not saved and prevents
+native dispatch, without deleting older branches. A server without prompt
+history still supports Revert and Send; the rollback strip warns before sending
+that this earlier branch cannot be kept. Edited drafts are retained alongside
+saved drafts with an explicit choice before replacement. Undo previous prompt
+and Redo are in the palette and available as `/undo` and `/redo`; Undo can
+interrupt active work. Recalled content never overwrites an edited draft.
+Timeline in the right panel lists the loaded prompts chronologically: click to
+scroll and focus a prompt, use the same Revert/Copy actions, or Load earlier
+prompts to page the transcript.
 
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow

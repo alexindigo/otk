@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Capabilities, ContentReplay } from "@otk/harness";
-import type { ContentSession, Message } from "@otk/protocol";
+import type { ContentSession, HistoryEntry, Message } from "@otk/protocol";
 import { coreBackendFixture } from "./core-backend.ts";
 import { fixture } from "./config.ts";
 import { fixtureMessagePolicy, fixturePage } from "./message-pages.ts";
@@ -10,8 +10,16 @@ import { WsClient } from "./ws-client.ts";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
 
 /** Public external-backend composition for additive menu capabilities. */
-export async function sessionActionsScenario() {
+export async function sessionActionsScenario(history = true) {
   const root = await fixture(), id = "tstv1-core", calls: unknown[] = [];
+  const input = "Keep session actions reversible until the next prompt.";
+  const entry: HistoryEntry = {
+    input,
+    mode: "normal",
+    parts: [{ kind: "text", text: input }],
+    time: 1,
+  };
+  let committed = false;
   const replay = new ContentReplay({
     ...fixtureMessagePolicy,
     nonce: () => crypto.randomUUID(),
@@ -37,7 +45,7 @@ export async function sessionActionsScenario() {
             : [],
           prompts: [{
             messageID,
-            preview: "Keep session actions reversible until the next prompt.",
+            preview: input,
             time: 1,
           }],
         }
@@ -50,7 +58,30 @@ export async function sessionActionsScenario() {
     return Promise.resolve(session);
   };
   const capabilities: Capabilities = {
-    prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
+    prompt: {
+      prompt: () => {
+        calls.push(["prompt", id]);
+        if (session.revert) committed = true;
+        return boundary().then(() => {});
+      },
+      abort: () => Promise.resolve(),
+    },
+    ...(history
+      ? {
+        history: {
+          entry: (target: string, messageID: string) => {
+            calls.push(["history.prompt", target, messageID]);
+            return Promise.resolve(
+              target === id && messageID === "prompt-v4" ? entry : undefined,
+            );
+          },
+          listHistory: () => Promise.resolve([entry]),
+          attachments: () => Promise.resolve([]),
+          attachment: () =>
+            Promise.reject(new Error("This scene has no attachments")),
+        },
+      }
+      : {}),
     sessionActions: {
       rename: (_id, title) => {
         session = { ...session, title };
@@ -81,7 +112,12 @@ export async function sessionActionsScenario() {
         return boundary(messageID, true);
       },
     },
-    restore: { restore: () => boundary() },
+    restore: {
+      restore: () => {
+        calls.push(["restore", id]);
+        return boundary();
+      },
+    },
   };
   const f = await coreBackendFixture(root, capabilities);
   session = { ...f.session, title: "Session actions review" };
@@ -99,7 +135,7 @@ export async function sessionActionsScenario() {
         b: "paragraph",
         inline: [{
           i: "text",
-          text: "Keep session actions reversible until the next prompt.",
+          text: input,
         }],
       }],
     }],
@@ -138,7 +174,7 @@ export async function sessionActionsScenario() {
     Promise.resolve({
       ...fixturePage(
         id,
-        session.revert ? [] : messages,
+        session.revert || committed ? [] : messages,
         undefined,
         session,
         replay.clock(id),

@@ -242,7 +242,7 @@ test("revert.restore-settles-origin-draft-after-leaving-during-native-clear", {
   await action(state, "hold", "unrevert");
   await page.getByRole("button", { name: "Restore conversation", exact: true })
     .click();
-  await expect(page.locator(".otk-composer-notice [role=status]"))
+  await expect(page.locator(".otk-rollback-status[role=status]"))
     .toContainText("Restoring");
   await openSession(state, page, other.id);
   await input.fill("Other draft stays");
@@ -435,7 +435,8 @@ test("revert.pending-error-owned-feedback-retry", {
   await action(state, "freeze");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
-  await expect(page.locator(".otk-composer-notice [role=status]"))
+  // Archive capture has its own status row; this assertion owns rollback progress.
+  await expect(page.locator(".otk-rollback-status[role=status]"))
     .toContainText("Rolling back");
   await action(state, "release");
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
@@ -506,7 +507,7 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
   );
   await action(state, "hold", "unrevert");
   await prompt(page, "/redo");
-  await expect(page.locator(".otk-composer-notice [role=status]"))
+  await expect(page.locator(".otk-rollback-status[role=status]"))
     .toContainText("Restoring");
   await action(state, "release");
   await expect(input).toHaveValue("");

@@ -289,6 +289,17 @@ RPC.
 200-character whitespace-collapsed previews) and a metadata-only boundary
 `prompt: HistoryEntry` for draft recall. Older peers can omit both fields.
 
+The optional `history` capability includes exact selected-prompt
+`entry(sessionID,
+messageID, signal)` reads, exposed as `history.prompt`, as
+well as recall and attachment reads. Browser branch preservation for Unrevert
+after Send depends on this capability. Revert, Revert code and Restore remain
+independent: without history they still proceed, and the rollback strip visibly
+explains before Send that this server cannot keep the earlier branch. The client
+derives absence from the capability advertisement, never from a failed read. A
+declared history read or storage failure remains a real preservation failure,
+not a lossy fallback.
+
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,

@@ -10,6 +10,7 @@ import type {
 } from "@otk/protocol";
 import { createTranscripts, type TranscriptClock } from "../transcripts.ts";
 import { SidecarConnection } from "../connection.ts";
+import { RequestReleased } from "../failures.ts";
 import {
   connectRequests,
   replyRequest,
@@ -125,6 +126,48 @@ const policy = {
   preloadms: 30,
   concurrency: 4,
 };
+
+Deno.test("archive pages share canonical body admission without changing live paging or projection", async () => {
+  const f = fixture({ ...policy, concurrency: 1 });
+  try {
+    const first = f.owner.snapshotPage(target("a"));
+    const second = f.owner.snapshotPage(target("b"));
+    await turns();
+    assertEquals(
+      f.requests.length,
+      1,
+      "archive demand uses the shared admission slot",
+    );
+    await f.reply();
+    const page = await first;
+    assertEquals(page.items.length, 10);
+    assertEquals(f.requests.length, 1);
+    await f.reply();
+    await second;
+    assertEquals(f.owner.get(target("a"))!.state.messageIDs, []);
+    assertEquals(f.owner.get(target("b"))!.state.messageIDs, []);
+    assertEquals(
+      f.subscriptions.size,
+      0,
+      "detached archive pages do not create live subscriptions",
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("archive page demand cannot survive its canonical transcript lifetime", async () => {
+  const f = fixture(policy);
+  try {
+    const pending = f.owner.snapshotPage(target("a"));
+    const rejected = assertRejects(() => pending, RequestReleased);
+    await turns();
+    f.owner.stop();
+    await rejected;
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("tail readiness joins the newest baseline without traversing older history", async () => {
   const f = fixture(policy);

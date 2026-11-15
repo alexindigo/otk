@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { derivedValue, isAssistantTerminal } from "@otk/protocol";
+import { isAssistantTerminal } from "@otk/protocol";
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
+import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
@@ -121,6 +122,9 @@ export default function Message(
     paneWidth?: number;
     onOpenChild(id: string): void;
     queued: boolean;
+    /** Saved presentation has no live-history mutation or usage actions. */
+    readOnly?: boolean;
+    presentation?: MessagePresentation;
     control?(control: MessageControl): (() => void) | void;
     copySource?(
       id: string,
@@ -199,11 +203,16 @@ export default function Message(
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
-  const streaming = () =>
-    props.message.role === "assistant" && !isAssistantTerminal(props.message);
-  const progress = () => streaming() || !!props.activeRecord;
-  // Only the adapter's shared accumulator supplies a whole-turn duration.
-  const time = () => derivedValue(props.summary)?.timing;
+  const presentation = () =>
+    props.presentation ??
+      messagePresentation(
+        props.message,
+        props.summary,
+        "live",
+        props.activeRecord,
+      );
+  const streaming = () => presentation().streaming;
+  const progress = () => presentation().progress;
   const error = () =>
     props.message.role === "assistant" && !props.message.interrupted
       ? props.message.error?.message
@@ -216,7 +225,11 @@ export default function Message(
             article = element;
           },
           contextTarget(() => ({
-            kind: prompt() ? "prompt" : "reply",
+            kind: props.readOnly
+              ? "saved-message"
+              : prompt()
+              ? "prompt"
+              : "reply",
             data: target(),
           })),
         ]}
@@ -333,13 +346,15 @@ export default function Message(
                 <span class="otk-queued">Queued</span>
               </Show>
             </span>
-            <MessageActions
-              kind="prompt"
-              revealed={revealed()}
-              target={target()}
-              region={() => article}
-              onReveal={setRevealed}
-            />
+            <Show when={!props.readOnly}>
+              <MessageActions
+                kind="prompt"
+                revealed={revealed()}
+                target={target()}
+                region={() => article}
+                onReveal={setRevealed}
+              />
+            </Show>
           </footer>
         </Show>
         <Show when={assistant()}>
@@ -388,34 +403,46 @@ export default function Message(
                       <span>
                         {message().model.provider}/{message().model.model}
                       </span>
-                      <span
-                        class="otk-turn-time"
-                        title={timingExplanation(time())}
-                      >
-                        {workingTime(time()) ??
-                          (streaming() ? "streaming" : "Time unknown")}
-                      </span>
-                      <TurnUsage
-                        summary={props.summary}
-                        detail={() => props.usage}
-                        error={props.usageError}
-                        open={props.openUsage}
-                        control={(control) => {
-                          usageControl = control;
-                        }}
-                        showCost={props.prefs.showCost}
-                      />
+                      <Show when={presentation().time}>
+                        {(time) => (
+                          <span
+                            class="otk-turn-time"
+                            title={timingExplanation(time().timing)}
+                          >
+                            {workingTime(time().timing) ?? time().fallback}
+                          </span>
+                        )}
+                      </Show>
+                      <Show when={presentation().usage}>
+                        {(usage) => (
+                          <TurnUsage
+                            summary={usage().summary}
+                            detail={() => props.usage}
+                            error={props.usageError}
+                            open={props.openUsage}
+                            control={(control) => {
+                              usageControl = control;
+                            }}
+                            showCost={props.prefs.showCost}
+                          />
+                        )}
+                      </Show>
+                      <For each={presentation().facts}>
+                        {(text) => <span>{text}</span>}
+                      </For>
                       <Show when={message().interrupted}>
                         <span>interrupted</span>
                       </Show>
                     </span>
-                    <MessageActions
-                      kind="reply"
-                      revealed={revealed()}
-                      target={target()}
-                      region={() => article}
-                      onReveal={setRevealed}
-                    />
+                    <Show when={!props.readOnly}>
+                      <MessageActions
+                        kind="reply"
+                        revealed={revealed()}
+                        target={target()}
+                        region={() => article}
+                        onReveal={setRevealed}
+                      />
+                    </Show>
                     <span class="otk-output-time-group">
                       <time
                         class="otk-last-output-time"

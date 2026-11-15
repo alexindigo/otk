@@ -2,12 +2,28 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { HistoryAttachmentRef } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 import { readExecution } from "../requests/policies.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.history;
   if (!capability) return;
+  rpc.register("history.prompt", {
+    execution: readExecution((p: { sessionID: string }) => ({
+      sessionID: p.sessionID,
+      resource: "prompt-history",
+    })),
+    params: (p) => ({
+      sessionID: sessionID(p)!,
+      messageID: text(p, "messageID")!,
+    }),
+    handler: async (ctx, p) =>
+      await capability.entry(
+        p.sessionID,
+        p.messageID,
+        ctx.execution?.signal,
+      ) ?? null,
+  });
   rpc.register("history.list", {
     execution: readExecution(() => ({ resource: "prompt-history" })),
     params: () => undefined,

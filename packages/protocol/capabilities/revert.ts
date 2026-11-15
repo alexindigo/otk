@@ -9,6 +9,8 @@ export interface RevertCapability {
   ): Promise<ContentSession>;
 }
 export interface RevertCapabilities {
+  /** Independent of prompt history. Without history, the browser warns that the
+   * reverted branch cannot be preserved for Unrevert after sending. */
   revert: RevertCapability;
   /** Independent advertisement for explicit file rollback. */
   revertCode: RevertCapability;

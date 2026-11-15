@@ -182,6 +182,67 @@ test("metadata feature registrations declare local atomic recovery and volatile 
   }
 });
 
+for (const history of [false, true]) {
+  test(`Revert and Restore remain independent; branch preservation requires prompt history: ${history}`, async () => {
+    const f = await composition();
+    const entry = {
+      input: "Exact\n  prompt",
+      mode: "normal" as const,
+      parts: [],
+      time: 1,
+    };
+    const harness = {
+      ...f.registry.context.harness,
+      capabilities: {
+        revert: {},
+        revertCode: {},
+        restore: {},
+        ...(history
+          ? {
+            history: {
+              entry: () => Promise.resolve(entry),
+              listHistory: () => Promise.resolve([]),
+              attachments: () => Promise.resolve([]),
+            },
+          }
+          : {}),
+      },
+    } as unknown as Harness;
+    const rpc = new RpcRegistry(harness, f.db);
+    Core.registerHistory(rpc, harness);
+    Core.registerRevert(rpc, harness);
+    try {
+      assertEquals(
+        rpc.methods().sort(),
+        [
+          "session.revert",
+          "session.revertCode",
+          "session.restore",
+          ...(history
+            ? ["history.prompt", "history.list", "history.attachments"]
+            : []),
+        ].sort(),
+      );
+      assertEquals(
+        rpc.policy("history.prompt")?.kind,
+        history ? "read" : undefined,
+      );
+      if (history) {
+        assertEquals(
+          await rpc.dispatch("history.prompt", {
+            sessionID: "tstv1-one",
+            messageID: "prompt-one",
+          }),
+          entry,
+        );
+      }
+    } finally {
+      f.inbox.close();
+      f.db.close();
+    }
+  });
+}
+
 test("the shipped registry inventory matches all feature conformance rows and every method declares recovery", async () => {
   const f = await composition();
   const harness = {
@@ -207,7 +268,9 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "restore",
       "digests",
       "catalogs",
-    ].map((name) => [name, {}])),
+    ].map((
+      name,
+    ) => [name, name === "history" ? { entry: () => undefined } : {}])),
   } as unknown as Harness;
   const rpc = new RpcRegistry(harness, f.db), index = new IndexStore();
   const approvals = new PermissionFeature(
@@ -292,6 +355,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "usage.get",
     "source.get",
     "history.list",
+    "history.prompt",
     "history.attachments",
     "catalogs.watch",
     "catalogs.demand",
@@ -337,7 +401,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 28, // Project defaults share one cancellable read; catalogs retain their demand lane.
+      read: 29, // Project defaults share one cancellable read; catalogs retain their demand lane.
       native: 19,
       local: 10,
       "prepared-local": 6,

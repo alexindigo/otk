@@ -10,6 +10,14 @@ export interface HistoryAttachment {
   part: Extract<PromptPart, { source: "upload" }>;
 }
 export interface HistoryCapability {
+  /** Exact selected prompt, independent of the global recall window. The history
+   * advertisement promises this read; browser branch preservation depends on it.
+   * Revert without history remains supported, with a visible pre-send limitation. */
+  entry(
+    sessionID: string,
+    messageID: string,
+    signal?: AbortSignal,
+  ): Promise<HistoryEntry | undefined>;
   listHistory(
     signal?: AbortSignal,
     directory?: string,

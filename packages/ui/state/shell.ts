@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import {
+  type BranchHistory,
   type ClientSession,
+  connectBranchHistory,
   createCurrentClient,
   createDrafts,
   createForkNotes,
@@ -37,6 +39,7 @@ export interface ShellState {
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
+  branchHistory: BranchHistory;
   current: CurrentClient;
   actions: SessionActions;
   rename: SessionRename;
@@ -86,10 +89,20 @@ export function createShellState(o: { api: URL }): ShellState {
     (id) => sidecars.connection(id),
   );
   const forkNotes = createForkNotes(solidState);
+  const branchHistory = connectBranchHistory({
+    storage: globalThis.localStorage,
+    drafts,
+    factory: solidState,
+    api: o.api,
+    resources,
+    transcripts: session.transcripts,
+    attachments: (parts, origin) => actions.attachments(parts, origin),
+  });
   const actions = createSessionActions({
     resources,
     session,
     current,
+    branchHistory,
     submitted: (target, action) =>
       forkNotes.submission(
         sessionKey(target.sidecarId, target.sessionID),
@@ -153,6 +166,10 @@ export function createShellState(o: { api: URL }): ShellState {
     confirm: (message) => globalThis.confirm(message),
   });
   const transcriptScopes = createTranscriptScopes({ resources, session });
+  createEffect(
+    () => session.state.selection,
+    (target) => branchHistory.select(target),
+  );
   onCleanup(() => {
     document.removeEventListener("visibilitychange", observePresence);
     globalThis.removeEventListener("focus", observePresence);
@@ -167,6 +184,9 @@ export function createShellState(o: { api: URL }): ShellState {
   createEffect(() => {
     focused();
     visible();
+    // Reading an earlier branch is not viewing the live session's terminal.
+    // Resume this ordinary view intent with current facts when returning live.
+    if (branchHistory.state.opened) return;
     const selected = session.state.selection, data = actions.info();
     const project = selected ? undefined : navigation.state.project;
     const sidecar = selected?.sidecarId ?? project?.sidecarId;
@@ -181,7 +201,9 @@ export function createShellState(o: { api: URL }): ShellState {
           .finishes[selected.sessionID] ?? 0
         : 0,
     };
-  }, navigation.observeView);
+  }, (value) => {
+    if (value) navigation.observeView(value);
+  });
   createEffect(() => {
     const p = navigation.state.project;
     return p &&
@@ -196,6 +218,7 @@ export function createShellState(o: { api: URL }): ShellState {
     resources,
     session,
     drafts,
+    branchHistory,
     current,
     actions,
     rename,

@@ -12,7 +12,11 @@ import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import OperationFeedback from "./OperationFeedback.tsx";
 /** View-local disclosure; operation state and projection belong to the client. */
 export default function RolledBackStrip(
-  props: { strip?: RevertStrip; state: SessionRevert["state"] },
+  props: {
+    strip?: RevertStrip;
+    state: SessionRevert["state"];
+    preservationWarning?: string;
+  },
 ) {
   return (
     <ComposerNotice>
@@ -21,7 +25,11 @@ export default function RolledBackStrip(
   );
 }
 export function RolledBackContent(
-  props: { strip?: RevertStrip; state: SessionRevert["state"] },
+  props: {
+    strip?: RevertStrip;
+    state: SessionRevert["state"];
+    preservationWarning?: string;
+  },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [expanded, setExpanded] = createSignal(false);
@@ -94,6 +102,11 @@ export function RolledBackContent(
                 {strip().preview}
               </span>
             </ComposerNoticeRow>
+            <Show when={props.preservationWarning}>
+              <p class="otk-rollback-preservation-warning" role="note">
+                {props.preservationWarning}
+              </p>
+            </Show>
             <Show when={expanded()}>
               <div class="otk-rollback-details">
                 <For

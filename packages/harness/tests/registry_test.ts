@@ -44,6 +44,7 @@ Deno.test("a core-only harness needs no optional implementation; registry snapsh
   );
   assertEquals(missing.code, "capability");
   const history = {
+    entry: () => Promise.resolve(undefined),
     listHistory: () => Promise.resolve([]),
     attachments: () => Promise.resolve([]),
     attachment: () => Promise.reject(new Error("gone")),

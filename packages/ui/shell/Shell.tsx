@@ -66,6 +66,7 @@ export default function Shell(
     resources,
     session,
     drafts,
+    branchHistory,
     actions,
     rename,
     revert,
@@ -731,6 +732,7 @@ export default function Shell(
                               sidecarId={session.state.selection?.sidecarId}
                               revert={session.state.content.revert}
                               rollback={revert}
+                              branchHistory={branchHistory}
                               strip={revert.strip(session.state.content)}
                               busy={!!session.state.selection &&
                                 ["busy", "retry"].includes(

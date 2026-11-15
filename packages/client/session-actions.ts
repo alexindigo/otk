@@ -20,6 +20,8 @@ import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
 import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
+import type { BranchHistory } from "./branch-history.ts";
+import { branchDraftLabels } from "./branch-draft-labels.ts";
 
 export interface SessionActions {
   rpc(target: Selection): InboxRpc["call"];
@@ -67,6 +69,7 @@ export function createSessionActions(o: {
   resources: ServerResources;
   session: Pick<ClientSession, "state">;
   current: CurrentClient;
+  branchHistory?: Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">;
   /** Wrap the common submission lifetime, including shell/native commands. */
   submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
 }): SessionActions {
@@ -130,7 +133,14 @@ export function createSessionActions(o: {
               new Error("This session was deleted from the agent service"),
             );
           }
-          return action();
+          return (async () => {
+            await o.branchHistory?.beforeCommit(target);
+            try {
+              return await action();
+            } finally {
+              await o.branchHistory?.settled(target);
+            }
+          })();
         };
         return o.submitted ? o.submitted(target, admit) : admit();
       },
@@ -258,8 +268,17 @@ export function createSessionActions(o: {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       await act(
         target,
-        () =>
-          rpc.call("session.compact", { sessionID: target.sessionID, model }),
+        async () => {
+          await o.branchHistory?.beforeCommit(target);
+          try {
+            return await rpc.call("session.compact", {
+              sessionID: target.sessionID,
+              model,
+            });
+          } finally {
+            await o.branchHistory?.settled(target);
+          }
+        },
       );
     },
     rename(target, title) {
@@ -293,19 +312,34 @@ export function createSessionActions(o: {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(
         target,
-        () =>
-          rpc.call(code ? "session.revertCode" : "session.revert", {
-            sessionID: target.sessionID,
-            messageID,
-          }, options),
+        async () => {
+          await o.branchHistory?.prepare(target, messageID);
+          return await rpc.call(
+            code ? "session.revertCode" : "session.revert",
+            {
+              sessionID: target.sessionID,
+              messageID,
+            },
+            options,
+          );
+        },
       );
     },
     restore(target, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(
         target,
-        () =>
-          rpc.call("session.restore", { sessionID: target.sessionID }, options),
+        async () => {
+          await o.branchHistory?.beforeCommit(
+            target,
+            branchDraftLabels.beforeRestore,
+          );
+          const result = await rpc.call("session.restore", {
+            sessionID: target.sessionID,
+          }, options);
+          await o.branchHistory?.settled(target, true);
+          return result;
+        },
       );
     },
     async prompt(parts, selection) {
