@@ -171,6 +171,14 @@ non-sortable IDs; synthetic/system/skill/shell/compaction rows never become
 real-prompt anchors. Text and reasoning identities count their own ordinals;
 tools use call IDs.
 
+Assistant causal context belongs to that same transcript owner. Explicit native
+message parent metadata, accepted scalar message context and the native open
+prompt admit a step into its turn. Scalar prompt facts are accepted before page
+replay: an early live header without replyTo cannot overwrite that proven
+context in the snapshot or catchup and create another reply/usage footer.
+Historical per-message context does not borrow a newer prompt, and no UI
+inference or extra body read supplies the association.
+
 `tool-interpretation.ts` owns current and migrated tool aliases, argument and
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,
