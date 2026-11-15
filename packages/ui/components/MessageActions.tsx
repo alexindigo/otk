@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./MessageActions.css" with { type: "text" };
 import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
-import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import {
+  commandFailureFacts,
+  type ContextAction,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 import { commandHints, useCommandPorts } from "../keyboard/context.tsx";
@@ -53,8 +59,10 @@ export default function MessageActions(props: {
       commands.filter((command) => command.id === id)
     );
   };
-  const run = async (id: string) => {
+  const run = async (action: ContextAction) => {
     if (pending()) return;
+    const { id } = action;
+    const facts = commandFailureFacts(action);
     setPending(id);
     setError("");
     try {
@@ -64,7 +72,7 @@ export default function MessageActions(props: {
       if (active) {
         setError(
           failureValue(error, {
-            action: ports.commands.metadata(id)?.title ?? id,
+            ...facts,
             target: props.target,
           }),
         );
@@ -91,7 +99,7 @@ export default function MessageActions(props: {
               aria-label={action().title}
               title={hints.title(action().id, action().title)}
               aria-busy={pending() === action().id ? "true" : undefined}
-              onClick={() => void run(action().id)}
+              onClick={() => void run(action())}
             >
               <Show
                 when={action().id === "reply.fork"}
