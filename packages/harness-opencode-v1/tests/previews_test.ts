@@ -2,7 +2,8 @@
 import { assert, assertEquals } from "@std/assert";
 import { EXTERNAL_PREVIEW_BYTES, preview } from "../previews.ts";
 import { mapTool } from "../map-tools.ts";
-import { mapPart } from "../map.ts";
+import { derivePart, mapPart } from "../map.ts";
+import { reachable } from "./source-support.ts";
 import type { RawPart } from "../types.ts";
 
 Deno.test("external preview reports UTF-8 truncation without splitting a codepoint", () => {
@@ -41,7 +42,14 @@ Deno.test("external input metadata unknown parts and output consume the same byt
   const unknown = { ...part, type: "extension" };
   const mapped = mapPart(unknown);
   assert(mapped.kind === "external");
-  assertEquals(mapped.data, preview(unknown).text);
+  assertEquals(mapped.data, undefined);
+  assertEquals(
+    reachable(mapped, derivePart(unknown), {
+      origin: "message",
+      id: unknown.messageID,
+    }).preview,
+    preview(unknown).text,
+  );
   part.state!.output = "";
   assertEquals(mapTool(part).output, "");
   part.state!.output = undefined;
