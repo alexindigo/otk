@@ -78,8 +78,14 @@ export function sessionTree<T extends SessionStructure>(
   )
     .sort((a, b) => a.order - b.order);
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
-  const groupFor = (entry: T): string =>
-    (entry.hierarchy ?? nodes?.get(entry.id))?.taskID ?? "";
+  const taskByID = new Map(ordered.map((t) => [t.id, t]));
+  const groupFor = (entry: T): string => {
+    const id = (entry.hierarchy ?? nodes?.get(entry.id))?.taskID;
+    // Hierarchy and inbox metadata publish independently. Until the named task
+    // arrives (or after it is removed), retain its sessions in the ungrouped
+    // presentation instead of assigning them to a bucket nobody can render.
+    return id && taskByID.has(id) ? id : "";
+  };
   const buckets = new Map<string, T[]>();
   for (const session of sessions) {
     const id = groupFor(session);
@@ -87,7 +93,6 @@ export function sessionTree<T extends SessionStructure>(
     buckets.get(id)!.push(session);
   }
   const needle = query.trim().toLocaleLowerCase();
-  const taskByID = new Map(ordered.map((t) => [t.id, t]));
   return [...ordered.map((t) => ({ id: t.id, title: t.name })), {
     id: "",
     title: "Not in a task",

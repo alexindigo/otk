@@ -11,6 +11,36 @@ import {
   fixturePage,
 } from "../../../tests/support/message-pages.ts";
 
+Deno.test("same-session route orientation updates selection without replacing its resources", () => {
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame() {},
+  }, { messages: fixtureMessagePolicy });
+  connection.subscribe = () => {};
+  const owner = createSession(() => connection, () => undefined);
+  const target = { sidecarId: "server", sessionID: "child" };
+  try {
+    owner.open(target);
+    const transcript = owner.transcript, models = owner.models;
+    let changes = 0;
+    const release = owner.subscribe(() => changes++);
+    owner.open({ ...target, rootID: "root" });
+    assertEquals(owner.state.selection, { ...target, rootID: "root" });
+    assertEquals(owner.transcript, transcript);
+    assertEquals(owner.models, models);
+    owner.open({ ...target, rootID: "root" });
+    assertEquals(changes, 1, "identical route remains a no-op");
+    owner.open(target);
+    assertEquals(owner.state.selection, target);
+    assertEquals(owner.transcript, transcript);
+    assertEquals(changes, 2);
+    release();
+  } finally {
+    owner.stop();
+    connection.rpc.close();
+  }
+});
+
 Deno.test("selected facade borrows a preloaded resource on return and immediately reserves the next ten", async () => {
   const frames: Extract<ClientFrame, { t: "request" }>[] = [];
   const connection = new SidecarConnection("http://example.test", {
