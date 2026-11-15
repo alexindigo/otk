@@ -79,6 +79,19 @@ export function createSessionUsage(
     metadata
       ? metadata(target)
       : index?.get(target.sidecarId, target.sessionID);
+  interface Demand {
+    summary?: string;
+    witness?: string;
+  }
+  const demand = (target: UsageTarget): Demand => {
+    const result = indexed(target)?.digest.turns[target.turnID];
+    return {
+      summary: JSON.stringify(derivedValue(result)),
+      witness: result?.state === "known"
+        ? JSON.stringify([result.witness.source, result.witness.revision])
+        : undefined,
+    };
+  };
   interface Resource {
     target: UsageTarget;
     ledger?: UsageLedger;
@@ -96,6 +109,8 @@ export function createSessionUsage(
     overflow: boolean;
     again: boolean;
     summary?: string;
+    pendingDemand?: Demand;
+    refreshDemand?: Demand;
     retry?: ReturnType<typeof setTimeout>;
   }
   const resources = new Map<string, Resource>();
@@ -226,7 +241,13 @@ export function createSessionUsage(
     ) return Promise.resolve();
     const key = usageKey(target), resource = ensure(target);
     if (resource.pending) {
-      if (refresh) resource.again = true;
+      if (refresh) {
+        const requested = demand(target);
+        if (
+          requested.summary !== resource.pendingDemand?.summary ||
+          requested.witness !== resource.pendingDemand?.witness
+        ) resource.refreshDemand = requested;
+      }
       return resource.pending;
     }
     if (resource.value && !refresh) return Promise.resolve();
@@ -237,6 +258,8 @@ export function createSessionUsage(
     resource.bytes = 0;
     resource.overflow = false;
     const admitted = resource.minimum;
+    const admittedDemand = resource.pendingDemand = demand(target);
+    resource.refreshDemand = undefined;
     const work = Promise.resolve().then(async () => {
       try {
         const value = await connection(target.sidecarId).rpc.call("usage.get", {
@@ -311,10 +334,22 @@ export function createSessionUsage(
         }
       } finally {
         if (resource.controller === abort) {
+          const requested = resource.refreshDemand;
+          // A second consumer shares this read. Summary publication can also be
+          // covered by its response, but a newer known witness needs one successor.
+          const uncovered = requested && (
+            (admittedDemand.witness !== undefined &&
+              requested.witness !== admittedDemand.witness) ||
+            JSON.stringify(resource.value?.summary) !== requested.summary
+          );
           resource.pending = undefined;
+          resource.pendingDemand = undefined;
+          resource.refreshDemand = undefined;
           resource.events = [];
           resource.bytes = 0;
-          if (resources.get(key) === resource && resource.again) {
+          if (
+            resources.get(key) === resource && (resource.again || uncovered)
+          ) {
             resource.again = false;
             if (resource.retry === undefined) {
               queueMicrotask(() => void load(target, true));
@@ -381,14 +416,16 @@ export function createSessionUsage(
             remove(key);
             continue;
           }
-          const summary = JSON.stringify(
-            derivedValue(entry.digest.turns[resource.target.turnID]),
-          );
-          if (resource.summary !== summary) {
-            resource.summary = summary;
-            if (JSON.stringify(resource.value?.summary) !== summary) {
-              void load(resource.target, true);
-            }
+          const requested = demand(resource.target);
+          const changed = resource.summary !== requested.summary;
+          resource.summary = requested.summary;
+          if (
+            (changed &&
+              JSON.stringify(resource.value?.summary) !== requested.summary) ||
+            (resource.pending &&
+              requested.witness !== resource.pendingDemand?.witness)
+          ) {
+            void load(resource.target, true);
           }
         } else if (frame.t === "transcript.invalidated") {
           if (
