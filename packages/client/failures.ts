@@ -17,6 +17,8 @@ export interface FailurePresentation {
   occurrences: readonly string[];
   /** No feature-authored reason: Details carry the diagnostic ID instead. */
   generic?: boolean;
+  /** A retained record owns the facts; another surface only points to it. */
+  reference?: { messageID: string; label: string };
 }
 /** Plain words when no owner published a reason; never jargon. */
 export const GENERIC_FAILURE_REASON = "OTK has no further details";
@@ -68,7 +70,10 @@ export class FailurePresenter {
     }
     this.#contributions.set(code, present);
   }
-  #present(failure: PublicFailure): Feedback {
+  #present(
+    failure: PublicFailure,
+    surface: "feedback" | "record" = "feedback",
+  ): Feedback {
     // Public facts are a wire DTO. Snapshot its owned object levels so a
     // framework-bound feedback value cannot leak proxies into delivery ports.
     const sourceFacts = failure.facts;
@@ -80,6 +85,9 @@ export class FailurePresenter {
             ...sourceFacts,
             ...(sourceFacts.target
               ? { target: { ...sourceFacts.target } }
+              : {}),
+            ...(sourceFacts.record
+              ? { record: { ...sourceFacts.record } }
               : {}),
           },
         }
@@ -112,11 +120,19 @@ export class FailurePresenter {
       count: 1,
       occurrences: [failure.diagnosticID],
       ...(known ? {} : { generic: true }),
+      ...(facts.record && surface !== "record"
+        ? {
+          reference: {
+            messageID: facts.record.messageID,
+            label: facts.record.label ?? "See the error above",
+          },
+        }
+        : {}),
     };
     return {
       ...enrichment,
       kind: pending ? "pending" : "error",
-      text: [
+      text: presentation.reference?.label ?? [
         `${heading} for ${target.label}: ${presentation.reason}`,
         ...recovery ? [recovery] : [],
       ].map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`)
@@ -142,10 +158,16 @@ export class FailurePresenter {
       failure.retry,
     ]);
   }
-  describe(failure: PublicFailure): Feedback {
-    return this.#present(failure);
+  describe(
+    failure: PublicFailure,
+    surface: "feedback" | "record" = "feedback",
+  ): Feedback {
+    return this.#present(failure, surface);
   }
-  present(failure: PublicFailure): Feedback {
+  present(
+    failure: PublicFailure,
+    surface: "feedback" | "record" = "feedback",
+  ): Feedback {
     const key = this.groupingKey(failure);
     let group = this.#groups.get(key);
     if (!group) {
@@ -153,7 +175,7 @@ export class FailurePresenter {
       this.#groups.set(key, group);
     }
     group.occurrences.add(failure.diagnosticID);
-    const value = this.#present(failure);
+    const value = this.#present(failure, surface);
     return {
       ...value,
       identity: group.identity,

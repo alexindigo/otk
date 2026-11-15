@@ -112,7 +112,7 @@ export async function observationFixture() {
       );
     }
     const match = path.match(
-      /^\/session\/(case-[ab])(?:\/(shell|command|abort))?$/,
+      /^\/session\/(case-[ab])(?:\/(shell|command|abort|prompt_async))?$/,
     );
     assert(match, `Unexpected native request: ${path}`);
     const session = sessions.find((session) => session.id === match[1])!;
@@ -126,6 +126,9 @@ export async function observationFixture() {
       return Promise.resolve(Response.json(session));
     }
     if (match[2] === "abort") return Promise.resolve(Response.json({}));
+    if (match[2] === "prompt_async") {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     const signal = options?.signal;
     assert(signal, "Owned HTTP operation has no lifecycle signal");
     return new Promise<Response>((resolve, reject) => {
@@ -147,10 +150,10 @@ export async function observationFixture() {
     await stopped;
   });
   const wait = async (read: () => boolean) => {
-    const deadline = Date.now() + 5000;
+    const deadline = performance.now() + 5000;
     while (!read()) {
       assert(
-        Date.now() < deadline,
+        performance.now() < deadline,
         `Normal error consumer stalled: ${JSON.stringify(ops)}`,
       );
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -194,6 +197,36 @@ export async function observationFixture() {
     entries,
     wait,
     sessions,
+    send,
+    async directPrompt(messageID: string, sessionID = "case-a") {
+      await requireCapability(adapter.capabilities, "prompt").prompt({
+        sessionID: `opcv1-${sessionID}`,
+        mode: "normal",
+        parts: [{ kind: "text", text: "A later direct prompt" }],
+      });
+      send("message.updated", {
+        info: {
+          id: messageID,
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+        },
+      });
+      send("message.part.updated", {
+        part: {
+          id: `${messageID}-text`,
+          sessionID,
+          messageID,
+          type: "text",
+          text: "A later direct prompt",
+        },
+      });
+      await wait(() =>
+        ops.some(({ event }) =>
+          event.op === "message.upsert" && event.message.id === messageID
+        )
+      );
+    },
     async submit(method: "shell" | "command", sessionID = "case-a") {
       const invoke = method === "shell"
         ? requireCapability(adapter.capabilities, "shell").shell

@@ -4,18 +4,29 @@ import "./UnknownPart.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { ChildRef } from "@otk/protocol";
 import type { PartProps, PartRegistry } from "../../registries/renderers.ts";
-import { retainedDisclosure } from "../../features/transcript-context.tsx";
+import {
+  retainedDisclosure,
+  useContentIdentity,
+} from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
 import Icon from "../Icon.tsx";
 import {
+  unknownPartFailure,
   unknownPartPresentation,
   unknownPartPreview,
   unknownPartSource,
 } from "./unknown-part.ts";
 import NativeSource from "./NativeSource.tsx";
+import { presentFailure } from "@otk/client";
+import FailureContent from "../FailureContent.tsx";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
+  const identity = useContentIdentity();
+  const failure = () => {
+    const value = unknownPartFailure(props.part, identity);
+    return value ? presentFailure(value, "record").failure : undefined;
+  };
   const activity = () =>
     props.part.kind === "external" ? props.part.activity : undefined;
   const [expanded, setExpanded] = retainedDisclosure(
@@ -85,74 +96,94 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     </>
   );
   return (
-    <section
-      class={["otk-tool-line otk-native-record", {
-        "is-error": activity()?.tone === "error",
-        "is-open": !!expanded(),
-      }]}
-      data-native-record={name()}
-      data-activity-state={activity()?.state?.key}
-    >
-      <header class="otk-tool-state otk-control-row">
-        <Show
-          when={details()}
-          fallback={
-            <div class="otk-tool-heading otk-control-grow">{heading()}</div>
-          }
+    <Show
+      when={failure()}
+      fallback={
+        <section
+          class={["otk-tool-line otk-native-record", {
+            "is-error": activity()?.tone === "error",
+            "is-open": !!expanded(),
+          }]}
+          data-native-record={name()}
+          data-activity-state={activity()?.state?.key}
         >
-          <button
-            type="button"
-            class="otk-tool-toggle otk-control-grow"
-            aria-expanded={expanded() ? "true" : "false"}
-            onClick={() => setExpanded(!expanded())}
-          >
-            {heading()}
-          </button>
-        </Show>
-        <Show when={activity()?.child}>{(ref) => child(ref())}</Show>
-      </header>
-      <Show when={expanded() && details()}>
-        <div class="otk-tool-body">
-          <Show when={state()}>{(value) => <p>{value()}</p>}</Show>
-          <Show when={activity()?.parameters?.length}>
-            <dl class="otk-native-parameters">
-              <For
-                each={activity()?.parameters}
-                keyed={(parameter) => parameter.key}
+          <header class="otk-tool-state otk-control-row">
+            <Show
+              when={details()}
+              fallback={
+                <div class="otk-tool-heading otk-control-grow">{heading()}</div>
+              }
+            >
+              <button
+                type="button"
+                class="otk-tool-toggle otk-control-grow"
+                aria-expanded={expanded() ? "true" : "false"}
+                onClick={() => setExpanded(!expanded())}
               >
-                {(parameter) => (
-                  <>
-                    <dt>{parameter().label}</dt>
-                    <dd>
-                      <Show
-                        when={parameter().child}
-                        fallback={
-                          <span class="otk-native-value">
-                            {parameter().value}
-                          </span>
-                        }
-                      >
-                        {(ref) => child(ref(), true)}
-                      </Show>
-                    </dd>
-                  </>
+                {heading()}
+              </button>
+            </Show>
+            <Show when={activity()?.child}>{(ref) => child(ref())}</Show>
+          </header>
+          <Show when={expanded() && details()}>
+            <div class="otk-tool-body">
+              <Show when={state()}>{(value) => <p>{value()}</p>}</Show>
+              <Show when={activity()?.parameters?.length}>
+                <dl class="otk-native-parameters">
+                  <For
+                    each={activity()?.parameters}
+                    keyed={(parameter) => parameter.key}
+                  >
+                    {(parameter) => (
+                      <>
+                        <dt>{parameter().label}</dt>
+                        <dd>
+                          <Show
+                            when={parameter().child}
+                            fallback={
+                              <span class="otk-native-value">
+                                {parameter().value}
+                              </span>
+                            }
+                          >
+                            {(ref) => child(ref(), true)}
+                          </Show>
+                        </dd>
+                      </>
+                    )}
+                  </For>
+                </dl>
+              </Show>
+              <Show when={activity()?.body}>
+                {(body) => (
+                  <Blocks blocks={body()} conceal={props.prefs.conceal} />
                 )}
-              </For>
-            </dl>
+              </Show>
+              <Show when={preview() || reference()}>
+                <NativeSource
+                  reference={reference()}
+                  preview={preview()}
+                  prefs={props.prefs}
+                />
+              </Show>
+            </div>
           </Show>
-          <Show when={activity()?.body}>
-            {(body) => <Blocks blocks={body()} conceal={props.prefs.conceal} />}
-          </Show>
-          <Show when={preview() || reference()}>
-            <NativeSource
-              reference={reference()}
-              preview={preview()}
-              prefs={props.prefs}
-            />
-          </Show>
-        </div>
-      </Show>
-    </section>
+        </section>
+      }
+    >
+      {(value) => (
+        <section
+          class="otk-native-record otk-error"
+          data-native-record={name()}
+          role={value().value.facts?.outcome === "unknown" ||
+              value().value.facts?.outcome === "unavailable"
+            ? "status"
+            : "alert"}
+        >
+          <FailureContent failure={value()} />
+        </section>
+      )}
+    </Show>
   );
 }
 export function registerUnknownPart(parts: PartRegistry): void {

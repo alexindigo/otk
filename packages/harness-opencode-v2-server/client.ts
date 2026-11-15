@@ -6,11 +6,11 @@ import {
   type FailureFacts,
   type OperationContext,
   OperationFailure,
-  publicFailureReason,
 } from "@otk/protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DiscoveredService } from "./discovery.ts";
 import { serviceHeaders } from "./discovery.ts";
+import { requestFailureFacts } from "./request-failure.ts";
 
 export class V2MissingSession extends HarnessError {
   constructor(facts?: FailureFacts) {
@@ -27,13 +27,24 @@ export class V2HttpFailure extends FailureCause {
     readonly detail: { message: string; kind?: string; ref?: string },
     readonly _tag?: string,
     cause?: unknown,
+    facts?: FailureFacts,
   ) {
-    super(detail.message, { reason: detail.message, status }, cause);
+    super(detail.message, facts ?? { reason: detail.message, status }, cause);
   }
 }
 /** One endpoint generation. Re-discovery replaces this owner, never the service. */
 export class V2Client {
   readonly readiness: NativeReadiness;
+  failureFacts(raw: unknown, status?: number): FailureFacts {
+    return requestFailureFacts(raw, status, [
+      ...(this.service.endpoint.auth?.type === "basic"
+        ? [this.service.endpoint.auth.password]
+        : []),
+      ...Object.values(serviceHeaders(this.service.endpoint)).flatMap(
+        (value) => [value, value.replace(/^\S+\s+/, "")],
+      ),
+    ]);
+  }
   readonly #api: OpenCodeClient;
   readonly #reads = new AsyncLocalStorage<
     { signal: AbortSignal; failure?: V2HttpFailure }
@@ -117,13 +128,6 @@ export class V2Client {
               : [AbortSignal.timeout(requestms)]),
           ]),
         });
-        if (response.status === 401) {
-          await response.body?.cancel();
-          throw new HarnessError(
-            "authentication",
-            "Opencode authentication failed (401).",
-          );
-        }
         if (!response.ok && (!effect || !effect.observation)) {
           let body: Record<string, unknown> = {};
           try {
@@ -135,26 +139,29 @@ export class V2Client {
           const data = body.data && typeof body.data === "object"
             ? body.data as Record<string, unknown>
             : body;
-          const failure = new V2HttpFailure(response.status, {
-            message: typeof data.message === "string"
-              ? publicFailureReason(
-                data.message,
-                [
-                  ...(service.endpoint.auth?.type === "basic"
-                    ? [service.endpoint.auth.password]
-                    : []),
-                  ...Object.values(serviceHeaders(service.endpoint)).flatMap((
-                    value,
-                  ) => [value, value.replace(/^\S+\s+/, "")]),
-                ],
-              )
-              : `Opencode request failed (${response.status}).`,
-            ...(typeof body.name === "string" ? { kind: body.name } : {}),
-            ...(typeof data.ref === "string" ? { ref: data.ref } : {}),
-          }, typeof body._tag === "string" ? body._tag : undefined);
+          const facts = this.failureFacts(body, response.status);
+          const failure = new V2HttpFailure(
+            response.status,
+            {
+              message: facts.reason!,
+              ...(typeof body.name === "string" ? { kind: body.name } : {}),
+              ...(typeof data.ref === "string" ? { ref: data.ref } : {}),
+            },
+            typeof body._tag === "string" ? body._tag : undefined,
+            body,
+            facts,
+          );
           if (effect) effect.failure = failure;
           const read = this.#reads.getStore();
           if (read) read.failure = failure;
+          if (response.status === 401) {
+            await response.body?.cancel();
+            throw new HarnessError(
+              "authentication",
+              "Opencode authentication failed (401).",
+              facts,
+            );
+          }
         }
         return response;
       },
@@ -224,6 +231,15 @@ export class V2Client {
         known instanceof HarnessError ||
         context.failure && context.failure.status >= 400 &&
           context.failure.status < 500 ||
+        context.failure &&
+          [
+            "ConfigInvalidError",
+            "ConfigJsonError",
+            "ProviderModelNotFoundError",
+            "ProviderAuthError",
+          ].includes(
+            context.failure.detail.kind ?? context.failure._tag ?? "",
+          ) ||
         tag &&
           /(?:Invalid|NotFound|Busy|Unauthorized|Validation|Denied|Conflict|AttachmentError)/
             .test(tag)
@@ -291,7 +307,15 @@ export class V2Client {
           "Opencode authentication failed (401).",
         );
       }
-      if (tag === "InvalidRequestError" || tag === "InvalidCursorError") {
+      if (
+        tag === "InvalidRequestError" || tag === "InvalidCursorError" ||
+        [
+          "ConfigInvalidError",
+          "ConfigJsonError",
+          "ProviderModelNotFoundError",
+          "ProviderAuthError",
+        ].includes(tag ?? context.failure?.detail.kind ?? "")
+      ) {
         throw new OperationFailure(
           "rejected",
           "native.rejected",

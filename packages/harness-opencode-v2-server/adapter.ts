@@ -39,6 +39,7 @@ import { commands } from "./commands.ts";
 import { V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
 import { V2Shells } from "./shells.ts";
+import { requestFailureRecord } from "./request-failure.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -289,7 +290,16 @@ export class OpencodeV2ServerAdapter implements Harness {
             signal ?? new AbortController().signal,
           ),
       },
-      prompt: this.prompts,
+      prompt: {
+        prompt: (input, operation) =>
+          this.#action(
+            input.sessionID,
+            "prompt",
+            operation,
+            () => this.prompts.prompt(input, operation),
+          ),
+        abort: (id, operation) => this.prompts.abort(id, operation),
+      },
       permissions: this.pending.permissions,
       forms: this.pending.forms,
       questions: this.pending.questions,
@@ -651,19 +661,54 @@ export class OpencodeV2ServerAdapter implements Harness {
   }
   async #action<T>(
     id: string,
-    kind: NonNullable<ErrorObservation["operation"]>,
+    kind: NonNullable<ErrorObservation["operation"]> | "prompt",
     operation: import("@otk/protocol").OperationContext | undefined,
     run: () => Promise<T>,
   ): Promise<T> {
-    const token = this.#errors.begin(id, kind, operation?.key.key);
+    const token = kind === "prompt"
+      ? undefined
+      : this.#errors.begin(id, kind, operation?.key.key);
     try {
       return await run();
-    } catch (error) {
+    } catch (cause) {
+      const error =
+        cause instanceof HarnessError && cause.code === "authentication"
+          ? new OperationFailure("rejected", cause.code, cause, cause.facts)
+          : cause;
+      if (
+        this.#errors.accepts(id) && !operation?.signal.aborted &&
+        error instanceof OperationFailure &&
+        (error.outcome === "rejected" ||
+          error.outcome === "unknown" && error.facts?.status !== undefined)
+      ) {
+        const failure = {
+          code: error.code,
+          retry: error.outcome === "rejected"
+            ? "new-intent" as const
+            : "none" as const,
+          diagnosticID: error.diagnosticID,
+          facts: {
+            ...error.facts,
+            action: `session.${kind}`,
+            target: {
+              sessionID: id,
+              label: this.#index.getMetadata(id)?.title,
+            },
+            outcome: error.outcome,
+          },
+        };
+        const message = requestFailureRecord(id, failure);
+        await this.transcript.failure(message);
+        const part = message.parts[0];
+        if (error.facts && part.kind === "external") {
+          error.facts.record = part.failure?.facts?.record;
+        }
+      }
       // Definitive input rejection belongs to the requesting operation, not the
       // session's execution history. Native events and uncertain HTTP outcomes
       // retain their independent session diagnostics.
       if (
-        !operation?.signal.aborted && this.#sink &&
+        token && !operation?.signal.aborted && this.#sink &&
         !(error instanceof OperationFailure && error.outcome === "rejected")
       ) {
         let cause: unknown = error;
@@ -698,7 +743,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
       throw error;
     } finally {
-      this.#errors.settled(token);
+      if (token) this.#errors.settled(token);
     }
   }
   #merge(row: SessionMetadata): void {
@@ -1154,6 +1199,17 @@ export class OpencodeV2ServerAdapter implements Harness {
           : undefined,
       }]);
     }
+    if (
+      event.type === "session.execution.failed" &&
+      typeof event.data.sessionID === "string" &&
+      !this.#errors.accepts(ids.encode(event.data.sessionID))
+    ) return;
+    const executionFailure = await this.transcript.executionFailure(
+      event,
+      typeof event.data.sessionID === "string"
+        ? this.#index.getMetadata(ids.encode(event.data.sessionID))?.title
+        : undefined,
+    );
     await this.transcript.event(event);
     const shell = this.#shells.event(event);
     if (shell) {
@@ -1270,10 +1326,12 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (event.type === "session.execution.failed" && !this.#running.has(sid)) {
       const error = event.data.error;
       this.#errors.native(ids.encode(sid), {
-        message: error && typeof error === "object" &&
-            typeof Reflect.get(error, "message") === "string"
-          ? String(Reflect.get(error, "message"))
-          : "Execution failed.",
+        ...(executionFailure ? { failure: executionFailure } : {}),
+        message: executionFailure?.facts?.reason ??
+          (error && typeof error === "object" &&
+              typeof Reflect.get(error, "message") === "string"
+            ? String(Reflect.get(error, "message"))
+            : "Execution failed."),
       }, event.id);
     }
     if (

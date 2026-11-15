@@ -55,8 +55,20 @@ for (const mode of ["prompt", "command"] as const) {
           await expect(page.locator(".otk-composer-notice [role=alert]"))
             .toHaveCount(1);
           await expect(page.locator(".otk-composer-notice [role=alert]"))
+            .toHaveText(
+              mode === "prompt"
+                ? "Not sent - see the error above"
+                : "See the error above",
+            );
+          const failure = page.getByRole("region", {
+            name: "Transcript",
+            exact: true,
+          })
+            .locator('[data-native-record$="/request-failure"]');
+          await expect(failure).toHaveCount(1);
+          await expect(failure)
             .toContainText(/Cannot read attachment "?selected\.txt"?/);
-          await expect(page.locator(".otk-composer-notice [role=alert]"))
+          await expect(failure)
             .toContainText("Required attachments");
           expect(await readDraft()).toEqual(original);
           expect((await state.observe<{ requests: unknown[] }>()).requests)

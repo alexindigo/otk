@@ -10,9 +10,40 @@ import { PartRegistry } from "../registries/renderers.ts";
 import { hasActiveRecord, messageFrames } from "../components/work-log.ts";
 import { createMessageLayout } from "../components/message-layout.ts";
 import {
+  unknownPartFailure,
   unknownPartPresentation,
   unknownPartPreview,
 } from "../components/parts/unknown-part.ts";
+import { createFailurePresenter } from "@otk/client";
+
+Deno.test("failure fallback borrows its remote origin and keeps captured native target facts", () => {
+  const part: ExternalPart = {
+    kind: "external",
+    id: "failure",
+    name: "acme/failure",
+    failure: {
+      code: "native.failure",
+      retry: "none",
+      diagnosticID: "original",
+      facts: {
+        actionLabel: "Running session",
+        reason: "Native reason",
+        target: { sessionID: "opcv1-ses_failure", label: "Captured title" },
+      },
+    },
+  };
+  const value = unknownPartFailure(part, {
+    sidecarId: "remote",
+    sessionID: "opcv1-ses_other",
+    label: "Later title",
+  });
+  assert(value);
+  const shown = createFailurePresenter().describe(value).failure!;
+  assertEquals(shown.target.label, "Captured title");
+  assertEquals(shown.target.href, "#/remote/opcv1-ses_failure");
+  assertEquals(unknownPartPresentation(part).required, true);
+  assertEquals(unknownPartPresentation(part).copyable, false);
+});
 
 const part: ExternalPart = {
   kind: "external",

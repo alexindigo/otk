@@ -119,6 +119,13 @@ FailureContent renders recovery only when the action/cause owner supplies it. An
 absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
 
+FailureContent also renders FP1's short retained-record reference without
+repeating the full facts. The session composer injects the existing transcript
+reveal command as its callback; that owner resolves grouped reply keys, ensures
+the source and reveals/focuses the message through its public control. No native
+anchor scroll or cross-component DOM lookup is introduced. Only the retained
+record renderer asks FP1 for the full presentation.
+
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use

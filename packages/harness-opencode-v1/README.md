@@ -25,6 +25,31 @@ observations from native inventories and live asks share retention; richer raw
 asks and terminal outcomes cannot be downgraded by later inventories. Outcome
 summaries use the requested tool/target or question header/text, not IDs.
 
+`request-failure.ts` selects public native error facts and constructs retained
+failure records. Prompt rejection and asynchronous `session.error` use the same
+record and FP1 failure presentation. Native turn association is explicit and
+never creates a prompt/recall anchor. Messages, config paths/issues, model
+suggestions and HTTP status survive; raw responses/config values remain
+diagnostic and the existing credential filter applies before retention. Rejected
+submits leave composer ownership unchanged; an accepted prompt is not unsent.
+
+The retained failure supplies its neutral record reference to FP1, including the
+same HTTP outcome delivered to the requesting client. V1's readable model error
+and promptAsync cause update one causal-prompt record, not two rows; distinct
+prompt identities stay distinct. Repeated readable facts keep the original
+reason, including native suggestions, while the native cause remains diagnostic.
+Without a prompt anchor, the failure remains a chronological session-tail
+record.
+
+`FailureAttempts` owns launch admission by attempt identity. HTTP success or
+failure and the first native report settle admission immediately; cancellation,
+new prompts, deletion and disposal retire it. Settled native-report identities
+only deduplicate an already observed reason/cause or exact event replay; they
+are never a pending session-wide match for an unrelated late error. Each HTTP
+continuation retains its own captured attempt key, so an older settlement cannot
+consume a newer attempt. Native prompt identity and retained chronological
+records remain separate from this ephemeral correlation lifecycle.
+
 The public `Client` also supports explicit
 `classification: read | effect |
 stream` and optional neutral `operation`

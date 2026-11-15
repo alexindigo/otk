@@ -278,7 +278,8 @@ test("composer.deferred-slash-failure-keeps-new-draft-and-reloads-authority", {
     );
     return;
   }
-  await expect(page.locator(".otk-session-error")).toBeVisible();
+  await expect(page.locator('[data-native-record$="/request-failure"]'))
+    .toHaveCount(2);
   const snapshot = await composerError(state, page, frames, session.id);
   expect(snapshot.error).toMatch(/^Command not found: "missing-otk-command"\./);
   await expect(prompt(page)).toHaveValue("keep this draft");

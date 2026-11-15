@@ -5,6 +5,32 @@ import { Transcript } from "../transcript.ts";
 import { V2RequestRetention } from "../request-retention.ts";
 import type { V2Event } from "../stream.ts";
 import { opencodeV2SessionID as ids } from "../ids.ts";
+import { requestFailureRecord } from "../request-failure.ts";
+
+Deno.test("V2 unanchored failure is one retained record after existing native history, never a header", async () => {
+  const f = fixture(() => 20);
+  try {
+    const message = requestFailureRecord(sid, {
+      code: "native.rejected",
+      retry: "none",
+      diagnosticID: "unanchored",
+      facts: { reason: "Native refusal", target: { sessionID: sid } },
+    }, 1);
+    await f.transcript.failure(message);
+    await f.transcript.failure(message);
+    const rows = await f.requests.page(sid, undefined, 10, "sequence");
+    assertEquals(rows.length, 1);
+    assertEquals(rows[0].sourceOrder, 20.5);
+    assertEquals(rows[0].role === "context" && rows[0].replyTo, undefined);
+    assertEquals(
+      rows[0].parts[0].kind === "external" &&
+        rows[0].parts[0].failure?.facts?.record?.messageID,
+      message.id,
+    );
+  } finally {
+    await f.transcript.stop();
+  }
+});
 
 const native = "ses_positions", sid = ids.encode(native);
 const policy: MessagePolicy = {

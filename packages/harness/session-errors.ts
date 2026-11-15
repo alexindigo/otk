@@ -27,6 +27,10 @@ export class SessionErrors {
   register(sessionID: string): void {
     this.#removed.delete(sessionID);
   }
+  /** All failure projections borrow this owner's native-deletion fence. */
+  accepts(sessionID: string): boolean {
+    return !this.#removed.has(sessionID);
+  }
   snapshot(sessionID: string): SessionErrorState {
     return structuredClone(
       this.#states.get(sessionID) || this.baseline(sessionID) ||

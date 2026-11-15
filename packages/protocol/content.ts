@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionErrorState } from "./errors.ts";
+import type { PublicFailure } from "./requests.ts";
 import type { HistoryEntry } from "./history.ts";
 import type { StreamStamp } from "./transcript.ts";
 /** A concrete hex colour or a semantic role, resolved by the consumer's theme. */
@@ -352,6 +353,8 @@ export interface ExternalPart {
   name: string;
   data?: string;
   activity?: Activity;
+  /** Producer-selected failure facts, rendered by the shared failure owner. */
+  failure?: PublicFailure;
   source?: NativeSource;
   /** Producer-declared message content: Copy includes `source.payload`.
    * Unset for bookkeeping, which stays visible and inspectable via `source`. */
@@ -408,6 +411,8 @@ export interface ContextMessage {
   id: string;
   sessionID: string;
   role: "context";
+  /** Native turn association, without making a context record a prompt anchor. */
+  replyTo?: string;
   sourceOrder?: number;
   source?: NativeSource;
   time: { created: number };

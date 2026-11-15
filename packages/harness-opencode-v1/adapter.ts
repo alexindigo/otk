@@ -7,6 +7,7 @@ import {
   isCancellation,
   latestTerminal,
   normalizeError,
+  OperationFailure,
   sourceAt,
   type TerminalEvidence,
 } from "@otk/protocol";
@@ -28,6 +29,7 @@ import {
 } from "@otk/harness";
 import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
+import { FailureAttempts } from "./failure-attempts.ts";
 import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
 import { terminalFacts, terminalToken } from "./db-hints.ts";
@@ -48,12 +50,14 @@ import { MessageClocks } from "./message-clocks.ts";
 import {
   eventRecord,
   isPrompt,
+  isPromptPart,
   parseSourceRef,
   RecordProjection,
   recordReference,
   sourceFailure,
 } from "./records.ts";
 import { V1RecordRetention } from "./record-retention.ts";
+import { requestFailureRecord } from "./request-failure.ts";
 import { SelectionIntents } from "./selection-intent.ts";
 import { messageOutput } from "./message-clock.ts";
 import { mapPermission } from "./map.ts";
@@ -122,6 +126,11 @@ const contentEvents = new Set([
 ]);
 export class OpencodeV1Adapter implements Harness {
   #retention = new V1RecordRetention();
+  #failureAttempts = new FailureAttempts();
+  #failureTurns = new Map<
+    string,
+    { candidate?: string; prompt?: string; created?: number }
+  >();
   storage(storage: import("@otk/harness").PluginStorage): void {
     this.#retention.bind(storage);
   }
@@ -597,15 +606,64 @@ export class OpencodeV1Adapter implements Harness {
     const launch: Launch = (...args) => this.#launch(...args);
     registry.register(
       "prompt",
-      prompt(this.client, directory, (id) => {
-        this.#abortCommands(id);
-        this.#errors.cancel(id);
-      }, cfg.attachments),
+      (() => {
+        const capability = prompt(this.client, directory, (id) => {
+          this.#abortCommands(id);
+          this.#errors.cancel(id);
+        }, cfg.attachments);
+        return {
+          ...capability,
+          prompt: async (
+            input: Parameters<typeof capability.prompt>[0],
+            operation?: Parameters<typeof capability.prompt>[1],
+          ) => {
+            this.#failureAttempts.retire(input.sessionID);
+            const turn = this.#failureTurns.get(input.sessionID);
+            this.#failureTurns.set(input.sessionID, { created: turn?.created });
+            try {
+              await capability.prompt(input, operation);
+            } catch (error) {
+              if (!operation?.signal.aborted) {
+                this.#requestFailure(
+                  input.sessionID,
+                  "prompt",
+                  error,
+                );
+              }
+              throw error;
+            }
+          },
+        };
+      })(),
     );
     registry.register("shell", shell(this.client, directory, launch));
     registry.register(
       "commands",
-      commands(this.client, directory, launch, this.catalogs, cfg.attachments),
+      (() => {
+        const capability = commands(
+          this.client,
+          directory,
+          launch,
+          this.catalogs,
+          cfg.attachments,
+        );
+        return {
+          ...capability,
+          command: async (
+            input: Parameters<typeof capability.command>[0],
+            operation?: Parameters<typeof capability.command>[1],
+          ) => {
+            try {
+              await capability.command(input, operation);
+            } catch (error) {
+              if (!operation?.signal.aborted) {
+                this.#requestFailure(input.sessionID, "command", error);
+              }
+              throw error;
+            }
+          },
+        };
+      })(),
     );
     registry.register("history", this.#history);
     registry.register("catalogs", {
@@ -913,6 +971,8 @@ export class OpencodeV1Adapter implements Harness {
   #questionFresh = new Map<string, number>();
   #permissionInventories = new Map<string, number>();
   async #shutdown(): Promise<void> {
+    this.#failureTurns.clear();
+    this.#failureAttempts.clear();
     this.#helperObservation?.();
     this.#helperObservation = undefined;
     this.#abortCommands();
@@ -1104,6 +1164,94 @@ export class OpencodeV1Adapter implements Harness {
       })),
     };
   }
+  #failureCreated(sessionID: string, recordID?: string): number {
+    const previous = recordID && this.#retention.get(sessionID, recordID);
+    if (previous) return previous.created;
+    // Retained timestamps are the transcript's ordering keys. Allocate once at
+    // receipt, including equal/backward clocks; updates keep their original key.
+    const latest = this.#retention.page(sessionID, undefined, 1)[0];
+    return Math.max(
+      Date.now(),
+      this.#failureTurns.get(sessionID)?.created ?? 0,
+      latest ? latest.time.created + 1 : 0,
+    );
+  }
+  #requestFailure(
+    sessionID: string,
+    action: string,
+    error: unknown,
+    recordID?: string,
+  ): void {
+    if (!this.#errors.accepts(sessionID)) return;
+    if (
+      !(error instanceof OperationFailure) ||
+      !(error.outcome === "rejected" ||
+        error.outcome === "unknown" && error.facts?.status !== undefined)
+    ) {
+      return;
+    }
+    // Launch failures may already have been retained before the capability's
+    // admission promise rejects; preparation failures reach this owner here.
+    if (error.facts?.record) return;
+    const failure = {
+      code: error.code,
+      retry: error.outcome === "rejected"
+        ? "new-intent" as const
+        : "none" as const,
+      diagnosticID: error.diagnosticID,
+      facts: {
+        ...error.facts,
+        action: `session.${action}`,
+        target: { sessionID, label: this.#index.getMetadata(sessionID)?.title },
+        outcome: error.outcome,
+      },
+    };
+    const prior = recordID
+      ? this.#retention.get(sessionID, recordID)?.message
+      : undefined;
+    const priorPart = prior?.parts.find((part) =>
+      part.kind === "external" && part.failure
+    );
+    const priorFailure = priorPart?.kind === "external"
+      ? priorPart.failure
+      : undefined;
+    if (priorFailure?.facts) {
+      failure.facts = {
+        ...failure.facts,
+        outcome: priorFailure.facts.outcome === "rejected"
+          ? "rejected"
+          : failure.facts.outcome,
+        status: failure.facts.status ?? priorFailure.facts.status,
+        reason: [
+          ...new Set(
+            [priorFailure.facts.reason, failure.facts.reason].filter(Boolean),
+          ),
+        ].join("\n"),
+      };
+    }
+    const message = requestFailureRecord(
+      sessionID,
+      failure,
+      this.#failureCreated(sessionID, recordID),
+      prior?.role === "context" ? prior.replyTo : undefined,
+      recordID,
+    );
+    // Keep the original native failure class/certainty and diagnostic identity;
+    // annotate its producer-selected facts only after the retained record exists.
+    const record = message.parts[0].kind === "external"
+      ? message.parts[0].failure?.facts?.record
+      : undefined;
+    this.#retention.put({
+      id: message.id,
+      sessionID,
+      created: message.time.created,
+      message,
+    });
+    if (error.facts && record) error.facts.record = record;
+    if (this.buffers.subscribed(sessionID)) {
+      this.#sink.content(sessionID, { op: "message.upsert", message });
+    }
+  }
   #launch(
     sessionID: string,
     operation: Parameters<Launch>[1],
@@ -1117,14 +1265,24 @@ export class OpencodeV1Adapter implements Harness {
       operation,
       options?.operation?.key.key,
     );
+    const failureAttempt = this.#failureAttempts.begin(sessionID, token.id);
     const settled = this.client.json(path, {
       ...options,
       signal: controller.signal,
       classification: "effect",
-    }).then(() => {});
+    }).then(() => {
+      this.#failureAttempts.settle(failureAttempt);
+    });
     const request = settled.then(() => this.#errors.settled(token)).catch(
       (error) => {
         if (!this.#stopped && !controller.signal.aborted) {
+          this.#failureAttempts.settle(failureAttempt);
+          this.#requestFailure(
+            sessionID,
+            operation,
+            error,
+            failureAttempt.recordID,
+          );
           const cause = error instanceof NativeRequestFailure
             ? error.original
             : error;
@@ -1146,6 +1304,7 @@ export class OpencodeV1Adapter implements Harness {
         }
       },
     ).finally(() => {
+      this.#failureAttempts.settle(failureAttempt);
       this.#errors.settled(token);
       this.#commands.delete(controller);
     });
@@ -1153,6 +1312,8 @@ export class OpencodeV1Adapter implements Harness {
     return { admitted: settled, settled };
   }
   #abortCommands(sessionID?: string): void {
+    if (sessionID) this.#failureAttempts.retire(sessionID);
+    else this.#failureAttempts.clear();
     for (const [controller, request] of this.#commands) {
       if (sessionID === undefined || request.sessionID === sessionID) {
         controller.abort();
@@ -1975,6 +2136,33 @@ export class OpencodeV1Adapter implements Harness {
     const raw = p.part as RawPart | undefined;
     const identity = p.sessionID ?? info?.sessionID ?? raw?.sessionID;
     const sessionID = typeof identity === "string" ? ids.encode(identity) : "";
+    if (sessionID) {
+      const turn = this.#failureTurns.get(sessionID) ?? {};
+      if (info?.time?.created !== undefined) {
+        turn.created = Math.max(turn.created ?? 0, info.time.created);
+      }
+      if (type === "message.updated" && info?.role === "user") {
+        if (turn.candidate !== info.id) {
+          this.#failureAttempts.retire(sessionID);
+          turn.prompt = undefined;
+        }
+        turn.candidate = info.id;
+      }
+      if (
+        type === "message.updated" && info?.role === "assistant" &&
+        info.parentID
+      ) turn.prompt = info.parentID;
+      if (raw && raw.messageID === turn.candidate && isPromptPart(raw)) {
+        turn.prompt = raw.messageID;
+      }
+      if (turn.candidate || turn.prompt) {
+        this.#failureTurns.set(sessionID, turn);
+      }
+      if (type === "session.deleted") {
+        this.#failureTurns.delete(sessionID);
+        this.#failureAttempts.remove(sessionID);
+      }
+    }
     if (
       sessionID && this.digest?.projects &&
       (type === "permission.asked" || type === "question.asked")
@@ -2168,9 +2356,91 @@ export class OpencodeV1Adapter implements Harness {
       return;
     }
     if (type === "session.error") {
+      if (!this.#errors.accepts(sessionID)) return;
+      if (this.#failureAttempts.replay(sessionID, event.payload.id)) return;
       const error = p.error as Info["error"];
+      // Native cancellation belongs to NT4's Interrupted record, not a failed
+      // submission/execution. Keep its existing independent diagnostic channel.
+      if (error?.name === "MessageAbortedError") {
+        this.#failureAttempts.retire(sessionID);
+        this.#errors.native(sessionID, {
+          message: error.data?.message || "Execution interrupted.",
+          kind: error.name,
+        }, event.payload.id);
+        return;
+      }
+      const failure = {
+        code: "native.execution",
+        retry: "none" as const,
+        diagnosticID: this.#failureTurns.get(sessionID)?.prompt
+          ? `execution:${this.#failureTurns.get(sessionID)!.prompt}`
+          : event.payload.id
+          ? `execution:${event.payload.id}`
+          : crypto.randomUUID(),
+        facts: {
+          ...this.client.failureFacts(error),
+          actionLabel: "Running session",
+          target: { sessionID, label: entry?.title },
+          outcome: "rejected" as const,
+        },
+      };
+      const recordID = this.#failureAttempts.native(
+        sessionID,
+        failure.facts.reason ?? "Native operation failed",
+        `request:failure:${failure.diagnosticID}`,
+        event.payload.id,
+      );
+      const message = requestFailureRecord(
+        sessionID,
+        failure,
+        this.#failureCreated(sessionID, recordID),
+        this.#failureTurns.get(sessionID)?.prompt,
+        recordID,
+      );
+      const previous = this.#retention.get(sessionID, message.id);
+      const priorPart = previous?.message?.parts.find((part) =>
+        part.kind === "external" && part.failure
+      );
+      const priorFailure = priorPart?.kind === "external"
+        ? priorPart.failure
+        : undefined;
+      const priorReason = priorFailure?.facts?.reason,
+        nextReason = failure.facts.reason;
+      // Stock getModel and promptAsync report the same failed turn twice. The
+      // native cause stays diagnostic; identical readable facts enrich one row.
+      const reason = priorReason && nextReason?.includes(priorReason)
+        ? priorReason
+        : [...new Set([priorReason, nextReason].filter(Boolean))].join("\n");
+      const retained = requestFailureRecord(
+        sessionID,
+        {
+          ...failure,
+          diagnosticID: priorFailure?.diagnosticID ?? failure.diagnosticID,
+          facts: { ...priorFailure?.facts, ...failure.facts, reason },
+        },
+        previous?.created ?? message.time.created,
+        previous?.message ? previous.message.replyTo : message.replyTo,
+        recordID,
+      );
+      const retainedPart = retained.parts[0];
+      const retainedFailure = retainedPart.kind === "external"
+        ? retainedPart.failure
+        : undefined;
+      this.#retention.put({
+        id: message.id,
+        sessionID,
+        created: previous?.created ?? message.time.created,
+        message: retained,
+      });
+      if (this.buffers.subscribed(sessionID)) {
+        sink.content(sessionID, {
+          op: "message.upsert",
+          message: retained,
+        });
+      }
       this.#errors.native(sessionID, {
-        message: error?.data?.message || "Harness error",
+        failure: retainedFailure,
+        message: failure.facts.reason ?? "Native operation failed",
         ...(error?.name ? { kind: error.name } : {}),
         ...(error?.data?.ref ? { ref: error.data.ref } : {}),
       }, event.payload.id);

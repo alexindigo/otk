@@ -42,6 +42,7 @@ import {
   errorFeedback,
   type FailureValue,
   failureValue,
+  replyKey,
   sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -167,6 +168,10 @@ export default function SessionView(props: {
         {(value) => (
           <OperationFeedback
             feedback={value()}
+            onReveal={(messageID) =>
+              void reveal({ messageID }).catch((cause) =>
+                setRevealError(failureValue(cause))
+              )}
             control={(control) => noticeControl = control}
           />
         )}
@@ -231,9 +236,9 @@ export default function SessionView(props: {
     };
   };
   const controls = new Map<string, MessageControl>();
-  ownedCommand(useCommandPorts(), {
+  const reveal = ownedCommand(useCommandPorts(), {
     id: "transcript.reveal",
-    title: "Reveal prompt",
+    title: "Reveal message",
     category: "Transcript",
     arguments: {
       type: "object",
@@ -245,11 +250,14 @@ export default function SessionView(props: {
       setRevealError(undefined);
       following?.pause();
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
-      await window?.reveal(target.messageID, {
+      const message = projection().messagesByID[target.messageID];
+      if (!message) throw new Error("Message is no longer available");
+      const key = replyKey(message), reply = projection().repliesByID[key];
+      await window?.reveal(key, {
         align: "center",
         focus: () => {
-          const control = controls.get(target.messageID);
-          if (!control) throw new Error("Prompt is no longer available");
+          const control = controls.get(reply?.message.id ?? target.messageID);
+          if (!control) throw new Error("Message is no longer available");
           control.reveal();
         },
       });
