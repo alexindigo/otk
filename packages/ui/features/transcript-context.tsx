@@ -11,13 +11,10 @@ import {
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
   createTranscriptInteraction,
+  type NativeSourceOwner,
   type TranscriptInteraction,
 } from "@otk/client";
-import type {
-  DisclosureCategory,
-  NativeSourceView,
-  Preferences,
-} from "@otk/protocol";
+import type { DisclosureCategory, Preferences } from "@otk/protocol";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
@@ -60,8 +57,7 @@ const Actions = createContext<ContentActions | null>(null);
 const Interaction = createContext<TranscriptInteraction | null>(null);
 type SourceReader = (
   ref: string,
-  options?: { retry?: boolean },
-) => Promise<NativeSourceView>;
+) => NativeSourceOwner;
 const Sources = createContext<SourceReader | null>(null);
 /** The transcript's on-demand reader for plugin-owned source references. */
 export function useNativeSource(): SourceReader | null {

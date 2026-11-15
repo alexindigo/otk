@@ -9,6 +9,7 @@ import {
 import {
   CommandHub,
   createInbox,
+  createNativeSources,
   createSessionRename,
   createSessionSubmission,
   createTabs,
@@ -26,6 +27,8 @@ import {
   DEFAULT_PREFS,
   errorMessage,
   type InboxSnapshot,
+  type Message as RecordMessage,
+  type NativeSourceView,
   type PreferenceKey,
   type Preferences,
   type ShellLayout,
@@ -171,6 +174,129 @@ export function LayoutTabs(props: { onTheme(id: string): void }): Element {
         onCreateSession={() => Promise.resolve()}
         actions={actions}
       />
+    </CommandProvider>
+  );
+}
+
+/** Independent public consumer: controlled read port, real resource and stable keyed UI. */
+export function SourceOwnership(): Element {
+  let serial = 0, hold = false;
+  const [reads, setReads] = createSignal(0);
+  let canonical: RecordMessage = {
+    role: "context",
+    id: "record",
+    sessionID: "tstv1-source",
+    time: { created: 1 },
+    parts: [{
+      kind: "external",
+      id: "stable-part",
+      name: "record",
+      activity: {
+        kindLabel: "record",
+        layout: "row",
+        category: "record",
+        tone: "normal",
+        title: "Source fixture",
+        detail: "value 0",
+      },
+      source: { kind: "test", ref: "ref-0" },
+    }],
+  };
+  const [message, setMessage] = createSignal<RecordMessage>(canonical);
+  const pending: (() => void)[] = [];
+  const sources = createNativeSources({
+    messages: () => ({ record: canonical }),
+    limit: 64,
+    load: () => {
+      setReads((n) => n + 1);
+      const preview = JSON.stringify(canonical.parts[0]);
+      const value: NativeSourceView = {
+        kind: "test",
+        preview,
+        bytes: new TextEncoder().encode(preview).length,
+        truncated: false,
+      };
+      return new Promise((resolve) => {
+        const done = () => resolve(value);
+        if (hold) pending.push(done);
+        else done();
+      });
+    },
+  });
+  onCleanup(() => sources.stop());
+  const change = (replacement: boolean) => {
+    serial++;
+    const old = canonical, part = old.parts[0];
+    if (part.kind !== "external") {
+      throw new Error("Source fixture needs an external part");
+    }
+    canonical = {
+      ...old,
+      parts: [{
+        ...part,
+        activity: {
+          kindLabel: "record",
+          layout: "row",
+          category: "record",
+          tone: "normal",
+          title: "Source fixture",
+          detail: `value ${serial}`,
+        },
+        source: {
+          kind: "test",
+          ref: replacement ? `ref-${serial}` : part.source!.ref,
+        },
+      }],
+    };
+    setMessage(canonical);
+    sources.sync();
+  };
+  const ui = createUiRegistries();
+  registerUnknownPart(ui.parts);
+  return (
+    <CommandProvider commands={new CommandHub()}>
+      <UiProvider registries={ui}>
+        <button type="button" onClick={() => change(false)}>
+          Update record
+        </button>
+        <button type="button" onClick={() => change(true)}>
+          Replace reference
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            hold = true;
+          }}
+        >
+          Hold reads
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            hold = false;
+            for (const done of pending.splice(0)) done();
+          }}
+        >
+          Release reads
+        </button>
+        <output data-source-reads>{reads()}</output>
+        <TranscriptContext
+          nativeSource={new URL(location.href).searchParams.has(
+              "missing-source-reader",
+            )
+            ? undefined
+            : sources.get}
+        >
+          <Message
+            message={message()}
+            prefs={DEFAULT_PREFS}
+            paneWidth={900}
+            permissions={[]}
+            queued={false}
+            onOpenChild={() => {}}
+          />
+        </TranscriptContext>
+      </UiProvider>
     </CommandProvider>
   );
 }
