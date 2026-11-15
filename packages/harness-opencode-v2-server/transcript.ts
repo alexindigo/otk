@@ -434,8 +434,35 @@ export class Transcript {
     if (!view) throw sourceFailure("item");
     return view;
   }
+  #assistantContext(
+    id: string,
+    messageID: string,
+    context: MessageContext,
+    parentID?: string,
+    admitting = false,
+  ): MessageContext {
+    const baseline = this.#baselines.get(id);
+    const replyTo = parentID ?? baseline?.contexts.get(messageID)?.replyTo ??
+      context.replyTo ?? (admitting ? baseline?.prompt?.id : undefined);
+    return replyTo === context.replyTo ? context : { ...context, replyTo };
+  }
+  #causalEvent(id: string, event: ContentOp): ContentOp {
+    if (event.op !== "message.upsert" || event.message.role !== "assistant") {
+      return event;
+    }
+    const message = event.message;
+    const context = this.#assistantContext(id, message.id, {
+      order: message.sourceOrder ?? message.time.created,
+      replyTo: message.replyTo,
+    });
+    return context.replyTo === message.replyTo ? event : {
+      ...event,
+      message: { ...message, replyTo: context.replyTo },
+    };
+  }
   #publish(id: string, event: ContentOp): void {
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
+      event = this.#causalEvent(id, event);
       if (event.op === "message.upsert") {
         event = {
           ...event,
@@ -513,8 +540,15 @@ export class Transcript {
         if (facts.cutoffOrder !== undefined) facts.cutoffOrder += shift;
       }
     }
+    // Scalar native context is authoritative before the page/replay is sealed.
+    // A live step can have arrived while this first capture was still reading.
+    baseline.prompt = facts.metadata.prompt;
     for (const [id, context] of Object.entries(facts.contexts)) {
       baseline.contexts.set(id, context);
+      const live = this.#live.get(id);
+      if (live && context.replyTo && !live.context.replyTo) {
+        live.context = { ...live.context, replyTo: context.replyTo };
+      }
     }
   }
   changed(id?: string): void {
@@ -840,6 +874,14 @@ export class Transcript {
         };
       }
     }
+    if (raw.type === "assistant") {
+      context = this.#assistantContext(
+        id,
+        raw.id,
+        context,
+        text(record(raw.metadata).parentID),
+      );
+    }
     let mapped = mapMessage(raw, id, context);
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
@@ -1127,6 +1169,9 @@ export class Transcript {
           generation: event.stream.generation,
         });
         return false;
+      }).map((value) => {
+        const event = this.#causalEvent(id, value.event);
+        return event === value.event ? value : { ...value, event };
       });
       if (this.recovery.scoped(id)) {
         for (const m of items) {
@@ -1836,15 +1881,24 @@ export class Transcript {
       };
       const baseline = this.#baselines.get(id),
         context = {
-          ...(existing?.context ?? baseline?.contexts.get(messageID) ?? {
-            order: baseline?.source?.startsWith("api")
-              ? Math.max(
-                0,
-                ...[...baseline.contexts.values()].map((c) => c.order),
-              ) + 1
-              : event.durable?.seq ?? ++this.#revisions,
-            replyTo: baseline?.prompt?.id,
-          }),
+          ...this.#assistantContext(
+            id,
+            messageID,
+            existing?.context ?? baseline?.contexts.get(messageID) ?? {
+              order: baseline?.source?.startsWith("api")
+                ? Math.max(
+                  0,
+                  ...[...baseline.contexts.values()].map((c) => c.order),
+                ) + 1
+                : event.durable?.seq ?? ++this.#revisions,
+            },
+            text(d.parentID) ??
+              text(
+                record("metadata" in event ? event.metadata : undefined)
+                  .parentID,
+              ),
+            true,
+          ),
           terminal: undefined,
         };
       baseline?.contexts.set(messageID, context);
