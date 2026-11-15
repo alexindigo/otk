@@ -12,11 +12,14 @@ import { parseSourceRef } from "../records.ts";
 export function reachable(
   loaded: Message | Part,
   derived: Message | Part,
+  expected: { origin: "message" | "record"; id: string },
 ): NativeSourceView {
   const source = "source" in loaded ? loaded.source : undefined;
   assert(source?.ref, "Loaded item must keep a source reference");
   assertEquals(source.preview, undefined);
-  const view = sourceAt(derived, parseSourceRef(source.ref).path);
+  const decoded = parseSourceRef(source.ref);
+  assertEquals({ origin: decoded.origin, id: decoded.id }, expected);
+  const view = sourceAt(derived, decoded.path);
   assert(view, "Referenced source must stay reachable");
   return view;
 }
