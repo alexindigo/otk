@@ -64,8 +64,10 @@ test("messages.highlight-2000-lines-passive-latency", {
     delay: 0,
   });
   await prompt(page, "Highlight the large block then twenty chunks");
+  // The newest reply is the last virtual row holding an assistant: a V2
+  // execution record can follow it as the transcript's final row.
   const measured =
-    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item) [data-role=assistant] .otk-text';
+    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item:has([data-role=assistant])) [data-role=assistant] .otk-text';
   await page.evaluate(
     `highlightMeasure(${
       JSON.stringify(measured + " .otk-code code")
@@ -150,6 +152,36 @@ test("messages.highlight-2000-lines-passive-latency", {
         "highlightEvidence.revisions.at(-1)?.marker==='passive239' && highlightEvidence.revisions.every(sample=>sample.end!==undefined)",
       ),
     { timeout: 30_000 },
+  ).toBe(true);
+  // Following keeps the newest reply's last line in view after any trailing
+  // record lands below it.
+  if (state.controller.info!.version.startsWith("2.")) {
+    await expect(
+      page.locator(
+        '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item)',
+      ),
+    ).toContainText("Execution succeeded");
+  }
+  await expect.poll(() =>
+    page.locator(".otk-messages").evaluate((root) => {
+      const codes = Array.from(root.querySelectorAll(".otk-code code"))
+        .filter((node) => node.textContent?.includes("passive239"));
+      const code = codes[codes.length - 1];
+      if (!code) return false;
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const offset = node.textContent!.indexOf("passive239");
+        if (offset < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + "passive239".length);
+        const line = range.getBoundingClientRect(),
+          view = root.getBoundingClientRect();
+        return line.width > 0 && line.top >= view.top &&
+          line.bottom <= view.bottom;
+      }
+      return false;
+    })
   ).toBe(true);
   await page.evaluate("highlightCancel()");
   const evidence = await page.evaluate<HighlightEvidence>("highlightEvidence");
