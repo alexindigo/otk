@@ -9,6 +9,7 @@ import {
 export type { CommandArguments } from "./command-arguments.ts";
 /** Invocation-time context supplied by the consumer, never browser globals. */
 export interface CommandContext {
+  origin?: import("@otk/protocol").RequestOrigin;
   sidecar?: string;
   session?: string;
   focus?: string;

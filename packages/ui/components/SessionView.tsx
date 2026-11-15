@@ -528,6 +528,7 @@ export default function SessionView(props: {
                           }}
                           operationKey={feedback()?.identity}
                           diagnosticID={feedback()?.diagnosticID}
+                          composer={feedback()}
                           onReveal={(messageID) =>
                             void reveal({ messageID }).catch((cause) =>
                               setRevealError(failureValue(cause))

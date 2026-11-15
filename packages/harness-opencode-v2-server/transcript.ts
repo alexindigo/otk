@@ -1414,6 +1414,17 @@ export class Transcript {
     const previous = await this.requests.get(message.sessionID, key);
     await this.#observe(message.sessionID, key, message, previous);
   }
+  async submission(
+    sessionID: string,
+    messageID: string,
+    origin: import("@otk/protocol").RequestOrigin = "composer",
+  ): Promise<void> {
+    await this.requests.observe({
+      sessionID,
+      id: `submission:${messageID}`,
+      request: { origin },
+    });
+  }
   /** Execution errors can precede any assistant. Their native idle boundary
    * supplies the exact preceding prompt through the existing scalar facts owner. */
   async executionFailure(
@@ -1495,6 +1506,12 @@ export class Transcript {
     const key = `failure:${diagnosticID}`;
     const previous = await this.requests.get(id, key);
     if (previous?.outcome) return previous.outcome;
+    const submission = context?.replyTo
+      ? await this.requests.get(id, `submission:${context.replyTo}`)
+      : undefined;
+    const origin = submission?.request?.origin as
+      | import("@otk/protocol").RequestOrigin
+      | undefined;
     const message = requestFailureRecord(
       id,
       {
@@ -1504,6 +1521,7 @@ export class Transcript {
         facts: {
           ...this.reader.client().failureFacts(error),
           actionLabel: "Running session",
+          ...(origin ? { origin } : {}),
           target: { sessionID: id, label },
           outcome: "rejected",
         },

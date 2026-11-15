@@ -113,7 +113,11 @@ export class Rpc {
         : typeof fields.directory === "string"
         ? fields.directory
         : undefined);
-    options = { ...options, owner };
+    options = {
+      ...options,
+      owner,
+      origin: options.intent?.origin ?? options.origin ?? "api",
+    };
     if (owner && this.metadata.get(method)?.kind === "mutation") {
       this.requests.forgetFailures(owner, method);
       this.#feedback.get(owner)?.clear();

@@ -131,7 +131,11 @@ export class WsClient {
       timeout,
     ) as Promise<ServerFrame>;
   }
-  async rpc<T = unknown>(method: string, params: unknown): Promise<T> {
+  async rpc<T = unknown>(
+    method: string,
+    params: unknown,
+    origin?: import("@otk/protocol").RequestOrigin,
+  ): Promise<T> {
     const welcome = this.#welcome;
     if (!welcome || welcome.t !== "welcome") {
       throw new Error("Request needs a welcome");
@@ -141,6 +145,7 @@ export class WsClient {
       key: crypto.randomUUID(),
       clientID: this.#clientID,
       window: welcome.requests.window.id,
+      ...(origin ? { origin } : {}),
     };
     this.send({ t: "request", ref, method, params });
     const frame = await this.wait((frame) =>

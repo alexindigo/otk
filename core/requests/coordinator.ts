@@ -103,9 +103,11 @@ export class RequestCoordinator {
     cause: unknown,
     method?: string,
     scope?: { sessionID?: string; directory?: string },
+    origin?: import("@otk/protocol").RequestOrigin,
   ): PublicFailure {
     return publicFailure(cause, this.options.diagnostic ?? (() => {}), {
       ...(method ? { action: method } : {}),
+      ...(origin ? { origin } : {}),
       ...(scope ? { target: scope } : {}),
     });
   }
@@ -161,7 +163,12 @@ export class RequestCoordinator {
     if (!entry) {
       entry = {
         record,
-        ref,
+        ref: {
+          ...ref,
+          origin: (record.origin ?? undefined) as
+            | import("@otk/protocol").RequestOrigin
+            | undefined,
+        },
         policy,
         controller: new AbortController(),
         recipients: new Map(),
@@ -311,6 +318,21 @@ export class RequestCoordinator {
             ?.close();
         }
         const record = this.options.receipts.get(keyOf(principal, ref));
+        if (record && (record.origin ?? undefined) !== ref.origin) {
+          if (control.t === "request.resume") {
+            recipient.send({
+              t: "request.rejected",
+              ref,
+              error: this.#failure(
+                new ExecutionFailure({
+                  code: "request.conflict",
+                  retry: "none",
+                }),
+              ),
+            });
+          }
+          continue;
+        }
         if (!record || record.window_id !== ref.window) {
           if (control.t !== "request.resume") continue;
           const live = !record && control.t === "request.resume" &&
@@ -395,7 +417,8 @@ export class RequestCoordinator {
       if (
         old &&
         (old.fingerprint !== fingerprint || old.method !== control.method ||
-          old.window_id !== ref.window)
+          old.window_id !== ref.window ||
+          (old.origin ?? undefined) !== ref.origin)
       ) throw new ExecutionFailure({ code: "request.conflict", retry: "none" });
       if (!old || !terminal(old) && old.dispatched_at === null) {
         const retained = [...this.#entries.values()].filter((entry) =>
@@ -424,6 +447,7 @@ export class RequestCoordinator {
         window_id: ref.window,
         method: control.method,
         fingerprint,
+        origin: ref.origin ?? null,
         execution: prepared.execution.kind === "prepared-local"
           ? "local"
           : prepared.execution.kind,
@@ -477,7 +501,7 @@ export class RequestCoordinator {
       recipient.send({
         t: "request.rejected",
         ref,
-        error: this.#failure(cause, control.method),
+        error: this.#failure(cause, control.method, undefined, ref.origin),
       });
     } finally {
       admission?.release();
@@ -524,6 +548,12 @@ export class RequestCoordinator {
         clientID: entry.ref.clientID,
         key: entry.ref.key,
         window: entry.ref.window,
+        ...(entry.record.origin
+          ? {
+            origin: entry.record
+              .origin as import("@otk/protocol").RequestOrigin,
+          }
+          : {}),
       },
       signal: entry.controller.signal,
       progress: (value) => this.#progress(entry, value),
@@ -762,10 +792,17 @@ export class RequestCoordinator {
               code: "checking-outcome",
             });
           } else {
-            const failure = this.#failure(cause, entry.record.method, {
-              sessionID: entry.record.scope_session ?? undefined,
-              directory: entry.record.scope_directory ?? undefined,
-            });
+            const failure = this.#failure(
+              cause,
+              entry.record.method,
+              {
+                sessionID: entry.record.scope_session ?? undefined,
+                directory: entry.record.scope_directory ?? undefined,
+              },
+              entry.record.origin as
+                | import("@otk/protocol").RequestOrigin
+                | undefined,
+            );
             this.#transition(entry, {
               state: "failed",
               error_code: failure.code,

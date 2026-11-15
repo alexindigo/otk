@@ -261,6 +261,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       config.attachments,
       (id, operation) =>
         this.#shells.interrupt(this.stream.client, id, operation),
+      (id, messageID, origin) =>
+        this.transcript.submission(id, messageID, origin),
     );
     const catalogCapabilities: Capabilities = this.catalogs
       ? {
@@ -690,6 +692,7 @@ export class OpencodeV2ServerAdapter implements Harness {
           facts: {
             ...error.facts,
             action: `session.${kind}`,
+            origin: operation?.key.origin,
             target: {
               sessionID: id,
               label: this.#index.getMetadata(id)?.title,
@@ -702,6 +705,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         const part = message.parts[0];
         if (error.facts && part.kind === "external") {
           error.facts.record = part.failure?.facts?.record;
+          error.facts.origin = failure.facts.origin;
         }
       }
       // Definitive input rejection belongs to the requesting operation, not the

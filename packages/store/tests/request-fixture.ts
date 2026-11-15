@@ -3,6 +3,7 @@ import type { RequestRecord } from "@otk/store";
 
 export function record(window: string, key = "intent"): RequestRecord {
   return {
+    origin: null,
     principal: "u",
     client_id: "client",
     intent_key: key,

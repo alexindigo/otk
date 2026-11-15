@@ -73,6 +73,7 @@ for (const method of ["shell", "command"] as const) {
       await f.submit(method);
       await native(f, "The launched native failed", "first-terminal");
       const first = structuredClone(records(f)[0]);
+      assertEquals(failure(first).facts?.origin, undefined);
       await native(f, "An independent native failure", "independent-terminal");
       assertEquals(records(f).length, 2);
       assertEquals(records(f).find((row) => row.id === first.id), first);
@@ -83,6 +84,7 @@ for (const method of ["shell", "command"] as const) {
         503,
       );
       assertEquals(failure(records(f)[1]).facts?.status, undefined);
+      assertEquals(failure(records(f)[1]).facts?.origin, undefined);
     } finally {
       await f.stop();
     }
@@ -117,6 +119,8 @@ for (const method of ["shell", "command"] as const) {
       assertEquals(records(f).length, 2);
       assertEquals(records(f).find((row) => row.id === original.id), original);
       assertEquals((records(f)[1] as ContextMessage).replyTo, undefined);
+      assertEquals(failure(records(f)[0]).facts?.origin, undefined);
+      assertEquals(failure(records(f)[1]).facts?.origin, undefined);
     } finally {
       await f.stop();
     }

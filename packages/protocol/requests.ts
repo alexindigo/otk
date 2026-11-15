@@ -11,10 +11,13 @@ export interface RequestWindow {
   id: string;
   expiresAt: number;
 }
+export type RequestOrigin = "composer" | "palette" | "api";
 export interface IntentIdentity {
   clientID: string;
   key: string;
   window: string;
+  /** Captured by the submitting surface, immutable for this intent. */
+  origin?: RequestOrigin;
 }
 export interface RequestRef extends IntentIdentity {
   id: string;
@@ -52,6 +55,8 @@ export interface FailureFacts {
   /** Specific next step from the action/cause owner; omit when none is known. */
   recovery?: string;
   outcome?: "unknown" | "unavailable" | "rejected";
+  /** The input surface that caused this failure, independent of its transport. */
+  origin?: RequestOrigin | "session";
   /** The producer has retained the full failure at this transcript identity. */
   record?: { messageID: string; label?: string };
 }
@@ -198,7 +203,12 @@ export function requestRef(value: unknown, bootstrap = false): RequestRef {
   }
   const ref = value as Record<string, unknown>;
   if (
-    Object.keys(ref).length !== 4 ||
+    Object.keys(ref).some((name) =>
+      !["id", "key", "clientID", "window", "origin"].includes(name)
+    ) ||
+    (ref.origin !== undefined &&
+      (typeof ref.origin !== "string" ||
+        !["composer", "palette", "api"].includes(ref.origin))) ||
     ["id", "key", "clientID", "window"].some((name) =>
       typeof ref[name] !== "string" ||
       !(name === "window" && bootstrap && ref[name] === "bootstrap") &&
@@ -210,6 +220,9 @@ export function requestRef(value: unknown, bootstrap = false): RequestRef {
     key: ref.key as string,
     clientID: ref.clientID as string,
     window: ref.window as string,
+    ...(ref.origin === undefined
+      ? {}
+      : { origin: ref.origin as RequestOrigin }),
   };
 }
 /** Equality representation, never a persisted input/body. */

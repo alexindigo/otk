@@ -11,6 +11,9 @@ export const requestsMigrations: FeatureMigrations = {
   }, {
     version: 2,
     sql: new URL("./migrations/requests/002.sql", import.meta.url),
+  }, {
+    version: 3,
+    sql: new URL("./migrations/requests/003.sql", import.meta.url),
   }],
 };
 export interface ReceiptKey {
@@ -50,6 +53,7 @@ export interface RequestRecord extends ReceiptKey {
   error_field: string | null;
   diagnostic_id: string | null;
   error_facts?: string | null;
+  origin?: string | null;
 }
 const identity = ["principal", "client_id", "intent_key"] as const;
 const admission = [
@@ -57,6 +61,7 @@ const admission = [
   "window_id",
   "method",
   "fingerprint",
+  "origin",
   "execution",
   "accepted_at",
   "retention_until",
@@ -119,6 +124,12 @@ function validate(record: RequestRecord): void {
     }
   }
   keys(record);
+  if (
+    record.origin !== null &&
+    !["composer", "palette", "api"].includes(record.origin!)
+  ) {
+    throw new TypeError("Invalid request origin");
+  }
   for (const name of nullableText) {
     if (record[name] !== null) key(record[name]);
   }
@@ -205,7 +216,11 @@ export class Requests {
     tx?: StoreWrite,
   ): { inserted: boolean; record: RequestRecord } {
     return this.db.write(() => {
-      input = { ...input, error_facts: input.error_facts ?? null };
+      input = {
+        ...input,
+        error_facts: input.error_facts ?? null,
+        origin: input.origin ?? null,
+      };
       validate(input);
       if (
         input.state !== "queued" || input.seq !== 1 ||

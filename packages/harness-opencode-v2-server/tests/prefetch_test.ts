@@ -41,6 +41,7 @@ function fixture(
   cover?: () => Promise<TranscriptFacts["metadata"]>,
   rows = newest,
   source = "sql:fixture:1",
+  replyTo?: string,
 ) {
   let bodies = 0, scalars = 0, coverage = 0;
   const speculative: { optional?: boolean; priority?: string }[] = [];
@@ -90,6 +91,13 @@ function fixture(
             ),
           ),
           source,
+          ...(replyTo
+            ? {
+              contexts: Object.fromEntries(
+                input.messages.map((id) => [id, { order: 19, replyTo }]),
+              ),
+            }
+            : {}),
         });
       }
       speculative.push(options);
@@ -113,6 +121,50 @@ function fixture(
     diagnostic: () => {},
   });
   return { value, counts: () => ({ bodies, scalars, coverage }), speculative };
+}
+for (const origin of ["composer", "session"] as const) {
+  Deno.test(`V2 retained execution failure preserves ${origin} origin through live and page reads`, async () => {
+    const error = { type: "APIError", message: "Provider limit", status: 403 };
+    const f = fixture(
+      undefined,
+      undefined,
+      [{
+        id: "msg_19",
+        type: "idle",
+        outcome: "failed",
+        error,
+        time: { created: 19 },
+      } as NativeMessage],
+      "sql:fixture:1",
+      "msg_prompt",
+    );
+    try {
+      if (origin === "composer") await f.value.submission(id, "msg_prompt");
+      const live = await f.value.executionFailure({
+        id: "evt_19",
+        type: "session.execution.failed",
+        created: 19,
+        data: { sessionID: "ses_prefetch", error },
+      });
+      assertEquals(
+        live?.facts?.origin,
+        origin === "composer" ? origin : undefined,
+      );
+      const page = await f.value.page(id);
+      const record = page.items.find((m) =>
+        m.id === "request:failure:execution:evt_19"
+      );
+      assert(record);
+      assertEquals(
+        record.parts[0].kind === "external" &&
+          record.parts[0].failure?.facts?.origin,
+        origin === "composer" ? origin : undefined,
+      );
+      assertEquals((await f.value.requests.page(id, undefined, 10)).length, 1);
+    } finally {
+      await f.value.stop();
+    }
+  });
 }
 Deno.test("V2 failed-idle snapshots and later live delivery share one retained failure", async () => {
   const error = { type: "APIError", message: "Provider limit", status: 403 };
