@@ -251,6 +251,17 @@ export class StreamBuffers {
       }
       : undefined;
   }
+  /** Exact acquired append source, scoped to its owning native identities. */
+  source(
+    partID: string,
+    sessionID: string,
+    messageID: string,
+  ): string | undefined {
+    const active = this.#parts.get(partID);
+    return active?.sessionID === sessionID && active.messageID === messageID
+      ? active.stream.text
+      : undefined;
+  }
   replay(sessionID: string, emit: Emit): void {
     this.checkpoint(sessionID, emit);
   }
