@@ -14,7 +14,7 @@ import { mapTool, shellFailure } from "./tool-interpretation.ts";
 import { nativeSource, sourceRef } from "./native-source.ts";
 import { referenceSources } from "@otk/protocol";
 import { subagentBody } from "./tool-results.ts";
-import { opencodeV2SessionID as ids } from "./ids.ts";
+import { opencodeV2SessionID as ids, optionalSessionID } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
 export {
   mapFileDiffs,
@@ -505,9 +505,8 @@ export function mapMessage(
     if (meta.source === "subagent") {
       const agent = text(meta.agent),
         childID = text(meta.childID),
-        child = childID
-          ? { sessionID: ids.encode(childID), label: "Open task" }
-          : undefined;
+        sessionID = optionalSessionID(childID),
+        child = sessionID ? { sessionID, label: "Open task" } : undefined;
       const outcome = state === "error"
         ? "failed"
         : state === "cancelled"

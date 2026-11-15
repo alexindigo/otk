@@ -196,7 +196,11 @@ Native shutdown is continuity loss, never an invented idle success.
 
 Recognized subagent envelopes are removed only by exact metadata-derived
 prefix/suffix matching; malformed source remains inspectable. Foreground
-delegation renders Markdown blocks, while shell output remains literal.
+delegation renders Markdown blocks, while shell output remains literal. Optional
+child relationships share the native codec's non-throwing projection: malformed
+metadata cannot invalidate a complete tool or synthetic record. Its exact source
+and raw relationship parameter remain available without a link; mandatory
+session identities still reject invalid inputs.
 
 Typed messages, parts and calls retain source alongside their projections. Text
 payloads remain exact; structured source uses stable JSON with a bounded UTF-8

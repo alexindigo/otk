@@ -207,10 +207,12 @@ export class Transcript {
   #shells = new Map<string, LiveShell>();
   #projected = new Map<
     string,
-    {
-      shells: Map<string, string>;
-      compaction?: Extract<NativeMessage, { type: "compaction" }>;
-    }
+    { shells: Map<string, string> }
+  >();
+  /** Live lifecycle authority, never replaced by historical mapping. */
+  #compactions = new Map<
+    string,
+    Extract<NativeMessage, { type: "compaction" }>
   >();
   #finished = new Map<string, Map<string, { start?: number; at?: number }>>();
   #boundaries = new Map<string, string>();
@@ -570,6 +572,8 @@ export class Transcript {
     }
     if (id === undefined) this.#projected.clear();
     else this.#projected.delete(id);
+    if (id === undefined) this.#compactions.clear();
+    else this.#compactions.delete(id);
     if (id === undefined) this.#queued.clear();
     else this.#queued.delete(id);
     for (const [key, owner] of this.#opening) {
@@ -607,6 +611,8 @@ export class Transcript {
     }
     if (id === undefined) this.#projected.clear();
     else this.#projected.delete(id);
+    if (id === undefined) this.#compactions.clear();
+    else this.#compactions.delete(id);
     if (id === undefined) this.#queued.clear();
     else this.#queued.delete(id);
     for (const [key, owner] of this.#opening) {
@@ -827,14 +833,11 @@ export class Transcript {
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
     mapped = this.#decorateHelpers(mapped);
-    if (raw.type === "shell" || raw.type === "compaction") {
+    if (raw.type === "shell") {
       let known = this.#projected.get(id);
       if (!known) this.#projected.set(id, known = { shells: new Map() });
-      if (raw.type === "compaction") known.compaction = structuredClone(raw);
-      else {
-        known.shells.set(raw.shellID, raw.id);
-        if (raw.status === "running") this.#watchShell(id, raw, context);
-      }
+      known.shells.set(raw.shellID, raw.id);
+      if (raw.status === "running") this.#watchShell(id, raw, context);
     }
     if (raw.type !== "assistant") return mapped;
     if (!settled && !this.#finished.get(id)?.has(raw.id)) {
@@ -961,6 +964,12 @@ export class Transcript {
             "Message metadata changed during page capture",
           );
         }
+        // Reconnect can discover an in-flight compaction without its start
+        // event. A page may seed an absent owner, never replace a live one.
+        if (
+          raw.type === "compaction" && raw.status === "running" &&
+          !this.#compactions.has(id)
+        ) this.#compactions.set(id, structuredClone(raw));
         const mapped = this.#map(raw, id, context);
         return mapped ? [mapped] : [];
       }).sort(compareMessages);
@@ -1543,18 +1552,9 @@ export class Transcript {
       return;
     }
     if (
-      /^session\.step\.(started|ended|failed)$/.test(event.type) ||
       /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
     ) {
-      for (const live of this.#live.values()) {
-        if (live.session !== id || !live.raw.retry) continue;
-        delete live.raw.retry;
-        this.#publish(id, {
-          op: "part.remove",
-          messageID: live.raw.id,
-          partID: `${live.raw.id}:retry`,
-        });
-      }
+      this.#clearRetry(id);
     }
     if (
       event.type.startsWith("session.") &&
@@ -1734,7 +1734,7 @@ export class Transcript {
       return;
     }
     if (event.type.startsWith("session.compaction.") && sourceID) {
-      const known = this.#projected.get(id)?.compaction,
+      const known = this.#compactions.get(id),
         nativeID = text(d.inputID) ??
           (event.type.endsWith("started")
             ? sourceID
@@ -1752,6 +1752,7 @@ export class Transcript {
             ...known,
             summary: known.summary + (text(d.text) ?? ""),
           };
+          this.#compactions.set(id, raw);
           this.#publish(id, {
             op: "message.upsert",
             message: this.#map(raw, id, contextFor(nativeID))!,
@@ -1779,6 +1780,7 @@ export class Transcript {
           ? known.time
           : { created: event.created ?? Date.now() },
       } as Extract<NativeMessage, { type: "compaction" }>;
+      this.#compactions.set(id, structuredClone(raw));
       const message = this.#map(
         raw,
         id,
@@ -1911,6 +1913,7 @@ export class Transcript {
         typeof model.id !== "string" || typeof model.providerID !== "string" ||
         typeof d.agent !== "string"
       ) return;
+      this.#clearRetry(id, messageID);
       const raw: Extract<NativeMessage, { type: "assistant" }> = {
         id: messageID,
         type: "assistant",
@@ -2096,6 +2099,7 @@ export class Transcript {
         event.type === "session.step.ended" ||
         event.type === "session.step.failed"
       ) {
+        this.#clearRetry(id, messageID);
         if (!live) {
           let finished = this.#finished.get(id);
           if (!finished) this.#finished.set(id, finished = new Map());
@@ -2225,6 +2229,20 @@ export class Transcript {
         if (message) this.#publish(id, { op: "message.upsert", message });
       }
       return;
+    }
+  }
+  #clearRetry(session: string, messageID?: string): void {
+    for (const live of this.#live.values()) {
+      if (
+        live.session !== session || !live.raw.retry ||
+        messageID !== undefined && live.raw.id !== messageID
+      ) continue;
+      delete live.raw.retry;
+      this.#publish(session, {
+        op: "part.remove",
+        messageID: live.raw.id,
+        partID: `${live.raw.id}:retry`,
+      });
     }
   }
   #queue(session: string, inboxID: string, kind: unknown): void {

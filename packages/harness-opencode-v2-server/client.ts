@@ -277,8 +277,8 @@ export class V2Client {
       signal?.throwIfAborted();
       return value;
     } catch (cause) {
-      signal?.throwIfAborted();
       this.#checkConnection();
+      signal?.throwIfAborted();
       const known = nativeFailure(cause);
       if (known) throw known;
       const tag = errorTag(cause);

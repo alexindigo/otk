@@ -6,7 +6,12 @@ anchors. Mixed messages retain their prompt and carry each synthetic expansion
 as an outgoing part. Snapshot, live projection, worker SQL and API fallback
 share this evidence contract. Bookkeeping, compaction, interruption, delegation,
 retry and unknown records remain visible with their native source; task result
-envelopes share one decoder and render as blocks.
+envelopes share one decoder and render as blocks. Malformed optional child
+relationships never invalidate their containing record: task envelopes fall back
+to exact outgoing context, and tool metadata keeps its source without a child
+link. Record deltas return their coherent header/parts snapshot independently of
+cache retention; missing headers use bounded recovery. Unavailable optional
+revert SQL likewise leaves the existing API fallback active.
 
 `V1RecordRetention` owns the versioned V1 request/outcome and retry schema.
 Application composition injects an isolated `PluginStorage` through

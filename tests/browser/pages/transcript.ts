@@ -465,7 +465,7 @@ export function compactionBoundary(state: TestState) {
       queued: '[data-native-record="opencode-v2/compaction"] .otk-tool-verb',
       queuedLabel: "Session compaction queued",
       running: "Session compaction started",
-      completed: /^Session compacted(?: - .* in - .* out)?$/,
+      completed: /^Session compacted(?: by provider)?(?: - .* in - .* out)?$/,
     }
     : {
       selector: '[data-native-record="opencode-v1/compaction-summary"]',
