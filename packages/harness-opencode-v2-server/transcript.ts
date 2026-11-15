@@ -39,6 +39,7 @@ import {
   inboxMessage,
   lifecycleRecord,
   mapMessage,
+  mapSession,
   type MessageContext,
   millis,
   partID,
@@ -91,6 +92,7 @@ interface Cursor {
   source: string;
   retained?: { created: number; id: string; order?: number };
   reuse?: boolean;
+  snapshot?: true;
 }
 interface LiveShell {
   session: string;
@@ -145,12 +147,14 @@ function decode(token: string): Cursor {
           "source",
           "retained",
           "reuse",
+          "snapshot",
         ].includes(key)
       ) ||
       v.v !== 2 || typeof v.session !== "string" ||
       typeof v.epoch !== "string" || typeof v.native !== "string" ||
       (!v.native && !v.retained) || typeof v.source !== "string" || !v.source ||
       (v.reuse !== undefined && typeof v.reuse !== "boolean") ||
+      (v.snapshot !== undefined && v.snapshot !== true) ||
       (v.retained !== undefined &&
         (!Number.isFinite(v.retained.created) ||
           typeof v.retained.id !== "string" ||
@@ -965,11 +969,19 @@ export class Transcript {
   ): Promise<MessagePage> {
     return this.#own(this.#page(id, before, signal, publish));
   }
+  snapshot(
+    id: string,
+    before?: string,
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<MessagePage> {
+    return this.#own(this.#page(id, before, signal, undefined, true));
+  }
   async #page(
     id: string,
     before?: string,
     signal: AbortSignal = new AbortController().signal,
     publish?: (page: MessagePage) => void,
+    snapshot = false,
   ): Promise<MessagePage> {
     ids.decode(id);
     signal.throwIfAborted();
@@ -977,10 +989,10 @@ export class Transcript {
     let baseline = this.#baselines.get(id);
     if (
       token &&
-      (!baseline || token.session !== id ||
+      (!baseline || !!token.snapshot !== snapshot || token.session !== id ||
         token.epoch !== this.replay.clock(id).epoch ||
         token.cutoff !== (baseline.raw.revert?.messageID ?? null) ||
-        token.source !== baseline.source)
+        (!snapshot && token.source !== baseline.source))
     ) {
       throw new HarnessError(
         "cursor-stale",
@@ -996,16 +1008,17 @@ export class Transcript {
         owner.controller.signal,
         this.#lifetime.signal,
       ]);
-      const cutoff = owner.raw.revert?.messageID,
+      const boundary = owner.raw.revert?.messageID,
+        cutoff = snapshot ? undefined : boundary,
         compatible =
           (this.#client ?? this.options.client()).service.version === "2.2.6",
         native = token
           ? token.native || undefined
           : (cutoff && compatible ? nativeCursor(cutoff) : undefined);
-      const cached = native
+      const cached = !snapshot && native
         ? this.#cache?.get(this.#key(id, owner, native))
         : undefined;
-      if (!cached && native) {
+      if (!snapshot && !cached && native) {
         const key = this.#key(id, owner, native),
           work = this.#prefetch.get(key);
         if (work) {
@@ -1026,7 +1039,14 @@ export class Transcript {
         messages: page.items.map((m) => m.id),
         cutoff,
       }, signal);
-      this.#acceptFacts(owner, facts);
+      if (snapshot) {
+        if (token && token.source !== facts.source) {
+          throw new HarnessError(
+            "cursor-stale",
+            "History source changed during archive capture",
+          );
+        }
+      } else this.#acceptFacts(owner, facts);
       let items = page.items.flatMap((raw) => {
         const context = facts!.contexts[raw.id];
         if (!context) {
@@ -1038,10 +1058,12 @@ export class Transcript {
         // Reconnect can discover an in-flight compaction without its start
         // event. A page may seed an absent owner, never replace a live one.
         if (
-          raw.type === "compaction" && raw.status === "running" &&
+          !snapshot && raw.type === "compaction" && raw.status === "running" &&
           !this.#compactions.has(id)
         ) this.#compactions.set(id, structuredClone(raw));
-        const mapped = this.#map(raw, id, context);
+        const mapped = snapshot
+          ? mapMessage(raw, id, context)
+          : this.#map(raw, id, context);
         return mapped ? [mapped] : [];
       }).sort(compareMessages);
       const sequence = facts.source.startsWith("sql");
@@ -1094,7 +1116,7 @@ export class Transcript {
           MESSAGE_PAGE_SIZE + 1,
           "timeline",
         );
-      if (sequence && facts.cutoffOrder !== undefined) {
+      if (!snapshot && sequence && facts.cutoffOrder !== undefined) {
         this.requests.cutoff(id, facts.cutoffOrder);
       }
       signal.throwIfAborted();
@@ -1133,6 +1155,76 @@ export class Transcript {
       const overflow = candidates.length > MESSAGE_PAGE_SIZE;
       const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
       items = selected.sort(compareMessages);
+      const older = overflow
+        ? encode({
+          v: 2,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: native ?? "",
+          reuse: true,
+          source: facts.source,
+          retained: edge(
+            selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
+          ),
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : page.next
+        ? encode({
+          v: 2,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: page.next,
+          source: facts.source,
+          ...(lower ? { retained: lower } : {}),
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : null;
+      if (snapshot) {
+        const session = mapSession(owner.raw);
+        signal.throwIfAborted();
+        if (
+          owner !== this.#baselines.get(id) ||
+          owner.epoch !== this.replay.clock(id).epoch
+        ) {
+          throw new HarnessError(
+            "cursor-stale",
+            "History baseline was replaced",
+          );
+        }
+        const sealed = capture.seal();
+        if (sealed.clock.seq !== capture.from.seq) {
+          throw new HarnessError(
+            "capture-stale",
+            "History changed during archive capture",
+          );
+        }
+        const turnIDs = [
+          ...new Set(
+            items.filter((m) => m.role === "assistant").map((m) =>
+              m.role === "assistant" ? m.replyTo ?? m.id : m.id
+            ),
+          ),
+        ];
+        return {
+          sessionID: id,
+          version: this.replay.version(id),
+          from: capture.from,
+          clock: sealed.clock,
+          session,
+          items,
+          older,
+          helpers: {},
+          recovering: [],
+          catchup: [],
+          turns: Object.fromEntries(turnIDs.map((turnID) => [turnID, {
+            boundary: facts.metadata.boundaries.find((b) =>
+              b.turnID === turnID
+            ) ?? { turnID, complete: false },
+          }])),
+        };
+      }
       this.buffers.epoch(id, owner.epoch);
       this.buffers.checkpoint(id, (sid, op) => this.#publish(sid, op));
       items = items.map((m) => this.buffers.overlay(m));
@@ -1241,30 +1333,7 @@ export class Transcript {
         clock: sealed.clock,
         session: owner.presentation,
         items,
-        older: overflow
-          ? encode({
-            v: 2,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: native ?? "",
-            source: facts.source,
-            reuse: true,
-            retained: edge(
-              selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
-            ),
-          })
-          : page.next
-          ? encode({
-            v: 2,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: page.next,
-            source: facts.source,
-            ...(lower ? { retained: lower } : {}),
-          })
-          : null,
+        older,
         prompt: facts.metadata.prompt,
         catchup,
         helpers: {},

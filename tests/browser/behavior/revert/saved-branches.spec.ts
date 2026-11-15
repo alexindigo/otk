@@ -257,9 +257,33 @@ test(
     await expect(alert).toContainText("Delete a saved branch");
     expect(
       (await state.product("session.get", { sessionID: source.id })).revert,
-    ).toBeFalsy();
-    await expect(page.locator(".otk-messages")).toContainText(
-      "The original reply remains.",
-    );
+    ).toBeTruthy();
+    // Preservation gates destructive Send, not reversible Revert dispatch.
+    const input = page.locator("textarea[name=prompt]");
+    await input.fill("Replacement blocked by quota");
+    await input.press("Enter");
+    await expect(alert).toHaveCount(1);
+    await expect(alert).toContainText("Saving an earlier branch");
+    await expect(alert).toContainText("Quota-protected branch");
+    await expect(alert).toContainText("localStorage is full");
+    await expect(alert).toContainText("Delete a saved branch");
+    await expect(input).toHaveValue("Replacement blocked by quota");
+    expect(
+      (await state.product("session.get", { sessionID: source.id })).revert,
+    ).toBeTruthy();
+    expect(
+      (await messages(state, source.id)).some((m) =>
+        m.parts.some((p) =>
+          p.type === "text" && p.text === "Keep this original prompt"
+        )
+      ),
+    ).toBe(true);
+    expect(
+      (await messages(state, source.id)).some((m) =>
+        m.parts.some((p) =>
+          p.type === "text" && p.text === "Replacement blocked by quota"
+        )
+      ),
+    ).toBe(false);
   },
 );

@@ -21,7 +21,6 @@ import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
 import type { BranchHistory } from "./branch-history.ts";
-import { branchDraftLabels } from "./branch-draft-labels.ts";
 
 export interface SessionActions {
   rpc(target: Selection): InboxRpc["call"];
@@ -313,8 +312,7 @@ export function createSessionActions(o: {
       return act(
         target,
         async () => {
-          await o.branchHistory?.prepare(target, messageID);
-          return await rpc.call(
+          const result = await rpc.call(
             code ? "session.revertCode" : "session.revert",
             {
               sessionID: target.sessionID,
@@ -322,6 +320,12 @@ export function createSessionActions(o: {
             },
             options,
           );
+          // Staging is reversible. Preservation gates the next committing send,
+          // while its owner retains any background failure through FP1.
+          if (result.revert) {
+            void o.branchHistory?.prepare(target, messageID).catch(() => {});
+          }
+          return result;
         },
       );
     },
@@ -330,10 +334,6 @@ export function createSessionActions(o: {
       return act(
         target,
         async () => {
-          await o.branchHistory?.beforeCommit(
-            target,
-            branchDraftLabels.beforeRestore,
-          );
           const result = await rpc.call("session.restore", {
             sessionID: target.sessionID,
           }, options);

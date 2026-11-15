@@ -40,6 +40,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "commands.list": { kind: "read", pending: "Loading commands" },
   "history.list": { kind: "read", pending: "Loading prompt history" },
   "history.prompt": { kind: "read", pending: "Saving an earlier prompt" },
+  "history.messages": { kind: "read", pending: "Saving an earlier branch" },
   "history.attachments": { kind: "read", pending: "Preparing attachments" },
   "find.files": { kind: "read", pending: "Finding files" },
   "agents.list": { kind: "read", pending: "Loading agents" },
@@ -246,6 +247,10 @@ export interface RpcMethods
   "history.prompt": {
     params: { sessionID: string; messageID: string };
     result: HistoryEntry | null;
+  };
+  "history.messages": {
+    params: import("./transcript.ts").MessagePageInput;
+    result: import("./transcript.ts").MessagePage;
   };
   "history.attachments": {
     params: { refs: HistoryAttachmentRef[] };

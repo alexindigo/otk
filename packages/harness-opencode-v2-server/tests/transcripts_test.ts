@@ -1023,3 +1023,108 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
     await t.stop();
   }
 });
+
+Deno.test("V2 retained archive pages include hidden native and request rows without changing live authority", async () => {
+  const rows = Array.from(
+    { length: 21 },
+    (_, i) => ({
+      ...user(`msg_${String(i).padStart(2, "0")}`),
+      time: { created: i + 1 },
+    }),
+  );
+  const reads: { limit: number; cursor?: string }[] = [],
+    updates: ContentOp[] = [];
+  const api = {
+    session: {
+      inbox: { list: () => Promise.resolve([]) },
+      get: () =>
+        Promise.resolve({
+          id: "ses_fixture",
+          projectID: "p",
+          location: { directory: "/project" },
+          time: { created: 1, updated: 30 },
+          revert: { messageID: "msg_10", files: [] },
+        }),
+    },
+    message: {
+      list: (input: { limit: number; cursor?: string }) => {
+        reads.push(input);
+        const before = input.cursor
+          ? JSON.parse(
+            atob(input.cursor.replaceAll("-", "+").replaceAll("_", "/")),
+          ).id
+          : undefined;
+        const candidates = rows.filter((r) => !before || r.id < before)
+          .reverse();
+        const data = candidates.slice(0, input.limit);
+        const next = data.length === input.limit
+          ? btoa(JSON.stringify({ id: data.at(-1)!.id }))
+          : undefined;
+        return Promise.resolve({ data, cursor: { next } });
+      },
+    },
+  };
+  const client = {
+    service: { version: "2.2.6" },
+    read: <T>(run: (api: unknown) => Promise<T>) => run(api),
+  } as unknown as V2Client;
+  const t = new Transcript({
+    client: () => client,
+    policy: { ...policy, prefetchbytes: 0 },
+    facts: (input) =>
+      Promise.resolve({
+        ...factsFrom(
+          rows.map((r, i) => scalarMessage(r, i + 1)),
+          input.messages,
+          input.cutoff,
+        ),
+        source: "sql",
+      }),
+    content: (_id, op) => updates.push(op),
+    diagnostic() {},
+    invalidated() {},
+  });
+  try {
+    await t.requests.put({
+      id: "hidden",
+      sessionID: id,
+      position: { after: 19, rank: 1, basis: "stream" },
+      outcome: {
+        id: "request:hidden",
+        sessionID: id,
+        role: "user",
+        time: { created: 20 },
+        parts: [],
+      },
+    });
+    const live = await t.page(id);
+    assert(live.items.every((m) => m.id < "msg_10"));
+    reads.length = 0;
+    const start = t.replay.clock(id), events = updates.length;
+    let page = await t.snapshot(id);
+    const continuation = page.older!;
+    const saved = [...page.items];
+    while (page.older) {
+      page = await t.snapshot(id, page.older);
+      saved.push(...page.items);
+    }
+    assertEquals(new Set(saved.map((m) => m.id)).size, 22);
+    assert(saved.some((m) => m.id === "msg_20"));
+    assert(saved.some((m) => m.id === "request:hidden"));
+    assert(
+      reads.every((r) => r.limit === 10),
+      "Archive must not trigger an unbounded preview or global prompt scan",
+    );
+    assertEquals(updates.length, events);
+    assertEquals(t.replay.clock(id), start);
+    await assertRejects(() => t.page(id, continuation));
+    const current = await t.page(id);
+    assertEquals(current.prompt, live.prompt);
+    assertEquals(current.items, live.items);
+    const controller = new AbortController();
+    controller.abort();
+    await assertRejects(() => t.snapshot(id, undefined, controller.signal));
+  } finally {
+    await t.stop();
+  }
+});
