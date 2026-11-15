@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
+import {
+  commandFailureFacts,
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "@otk/client";
 import {
   createEffect,
   createMemo,
@@ -122,6 +127,7 @@ export default function CommandMenu(props: {
     }
     setArmed(undefined);
     setPending(item.key);
+    const facts = commandFailureFacts(action);
     props.beforeRun?.();
     const origin = document.activeElement;
     onSettled(() => {
@@ -142,7 +148,7 @@ export default function CommandMenu(props: {
         menu.close();
         return;
       }
-      const value = failureValue(cause, { action: action.title });
+      const value = failureValue(cause, facts);
       setError({ key: action.key, value });
       props.onError?.(value);
     } finally {
