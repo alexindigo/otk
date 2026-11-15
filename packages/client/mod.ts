@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export {
+  createNativeSources,
+  type NativeSourceOwner,
+  type NativeSources,
+  type NativeSourceState,
+} from "./native-sources.ts";
 export { fitOverflow, overflowPreference } from "./overflow.ts";
 export * from "./directory-catalogs.ts";
 export * from "./harness-commands.ts";

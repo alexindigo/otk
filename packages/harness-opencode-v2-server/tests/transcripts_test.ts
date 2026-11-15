@@ -41,6 +41,101 @@ const user = (key: string): NativeMessage => ({
   text: key,
   time: { created: 1 },
 });
+Deno.test("V2 Source follows acquired live tool progress without a persisted message read", async () => {
+  const updates: ContentOp[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No persisted read for acquired live source");
+    },
+    policy,
+    content: (_id, op) => updates.push(op),
+    diagnostic() {},
+    invalidated() {},
+  });
+  transcript.subscriptions(id, 1);
+  try {
+    await transcript.event({
+      type: "session.step.started",
+      created: 1,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        agent: "build",
+        model: { id: "model", providerID: "test" },
+      },
+    });
+    const data = {
+      sessionID: "ses_fixture",
+      assistantMessageID: "msg",
+      id: "tool",
+    };
+    await transcript.event({
+      type: "session.tool.input.started",
+      created: 2,
+      data: { ...data, name: "bash" },
+    });
+    await transcript.event({
+      type: "session.tool.called",
+      created: 3,
+      data: { ...data, input: { command: "pwd" } },
+    });
+    const source = () => {
+      const op = updates.filter((op) =>
+        op.op === "part.upsert" && op.part.kind === "tool"
+      ).at(-1);
+      assert(op?.op === "part.upsert" && op.part.kind === "tool");
+      return op.part.call.source!.ref!;
+    };
+    const ref = source();
+    assert(
+      (await transcript.source(id, ref, new AbortController().signal)).preview
+        .includes('"command":"pwd"'),
+    );
+    await transcript.event({
+      type: "session.tool.success",
+      created: 4,
+      data: { ...data, content: [{ type: "text", text: "exact output" }] },
+    });
+    assertEquals(source(), ref);
+    assert(
+      (await transcript.source(id, ref, new AbortController().signal)).preview
+        .includes("exact output"),
+    );
+    await transcript.event({
+      type: "session.text.started",
+      created: 5,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        ordinal: 0,
+      },
+    });
+    await transcript.event({
+      type: "session.text.delta",
+      created: 6,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        ordinal: 0,
+        delta: "unpersisted append",
+      },
+    });
+    const header = updates.find((op) => op.op === "message.upsert");
+    assert(header?.op === "message.upsert");
+    assert(
+      (await transcript.source(
+        id,
+        header.message.source!.ref!,
+        new AbortController().signal,
+      )).preview.includes("unpersisted append"),
+    );
+    await assertRejects(() =>
+      transcript.source(ids.encode("other"), ref, new AbortController().signal)
+    );
+  } finally {
+    await transcript.stop();
+  }
+});
 Deno.test("V2 live historical tools and snapshot checkpoints use the same interpretation", async () => {
   const updates: ContentOp[] = [];
   const transcript = new Transcript({

@@ -22,6 +22,10 @@ import {
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
 import {
+  createNativeSources,
+  type NativeSourceOwner,
+} from "./native-sources.ts";
+import {
   compareMessages,
   isRealPrompt,
   mergePromptSelection,
@@ -123,11 +127,10 @@ export interface TranscriptOwner {
     text: (part: Part) => string | undefined,
   ): Promise<string>;
   /** Exact native source behind a plugin-owned reference, read on demand. */
-  /** One read per reference, success or failure, until Retry replaces it. */
+  /** Borrow one Source resource for this reference's current content lifetime. */
   nativeSource?(
     ref: string,
-    options?: { retry?: boolean },
-  ): Promise<import("@otk/protocol").NativeSourceView>;
+  ): NativeSourceOwner;
   subscribe(listener: (state: TranscriptState) => void): () => void;
   /** Live completions in this open lifetime; snapshots/paging are silent. */
   onToolCompleted(
@@ -161,6 +164,15 @@ export function createTranscript(
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
   const projection = createTranscriptProjection();
+  const sources = createNativeSources({
+    messages: () => projection.state.messagesByID,
+    load: (ref, signal) =>
+      connection(target.sidecarId).rpc.call("source.get", {
+        sessionID: target.sessionID,
+        ref,
+      }, signal),
+    limit: SOURCE_RESULTS,
+  });
   const readProgress = createProgress(factory);
   let readFacts: import("@otk/protocol").ProgressFacts | undefined;
   let readLabel = "Loading messages";
@@ -330,6 +342,24 @@ export function createTranscript(
     const previous = op.op === "part.upsert"
       ? projection.state.messagesByID[op.messageID]
       : undefined;
+    // Native source can change even when its neutral presentation is equal.
+    // Structural location, not decoding an opaque ref, identifies this owner.
+    if (op.op === "message.upsert") sources.changed(op.message.id);
+    else if (
+      "messageID" in op && op.messageID !== undefined &&
+      ["part.upsert", "part.remove", "part.blocks", "message.clock"].includes(
+        op.op,
+      )
+    ) {
+      sources.changed(
+        op.messageID,
+        op.op === "part.upsert"
+          ? op.part.id
+          : "partID" in op
+          ? op.partID
+          : undefined,
+      );
+    }
     return projection.apply(op)
       ? attach(
         reduceRecovery(
@@ -380,6 +410,7 @@ export function createTranscript(
     state.replyIDs = projection.state.replyIDs;
     state.repliesByID = projection.state.repliesByID;
     state.queuedIDs = projection.state.queuedIDs;
+    sources.sync();
     state.recovering = state.content.recovering ?? [];
     state.olderCursor = cursor;
     state.pageLoading = state.paging || state.loading;
@@ -469,6 +500,7 @@ export function createTranscript(
     }, settings.retryms);
   };
   const invalidate = () => {
+    sources.invalidate();
     missing = true;
     buffer = [];
     bufferBytes = 0;
@@ -918,10 +950,6 @@ export function createTranscript(
       void work.then(reserve);
     }
   };
-  const sources = new Map<
-    string,
-    Promise<import("@otk/protocol").NativeSourceView>
-  >();
   const snapshotLifetime = new AbortController();
   const owner: TranscriptOwner = {
     progress: () => readProgress.display("page", readLabel),
@@ -936,25 +964,7 @@ export function createTranscript(
           }, { signal: snapshotLifetime.signal }),
         snapshotLifetime.signal,
       ),
-    nativeSource: (ref, options) => {
-      if (options?.retry) sources.delete(ref);
-      let read = sources.get(ref);
-      if (read) {
-        // Most recently used stays; the oldest bounded entry leaves first.
-        sources.delete(ref);
-      } else {
-        read = connection(target.sidecarId).rpc.call("source.get", {
-          sessionID: target.sessionID,
-          ref,
-        });
-        read.catch(() => {});
-        if (sources.size >= SOURCE_RESULTS) {
-          sources.delete(sources.keys().next().value!);
-        }
-      }
-      sources.set(ref, read);
-      return read;
-    },
+    nativeSource: sources.get,
     async source(messageID, text) {
       const id = generation;
       await owner.ensure(messageID);
@@ -1244,11 +1254,13 @@ export function createTranscript(
           return;
         }
         clock = undefined;
+        sources.invalidate();
         missing = true;
         void refetch();
         return;
       }
       if (frame.t === "welcome") {
+        sources.invalidate();
         authority = minimum = undefined;
         void refetch();
         return;
@@ -1558,7 +1570,7 @@ export function createTranscript(
       snapshotLifetime.abort();
       readProgress.stop();
       interaction.clear();
-      sources.clear();
+      sources.stop();
       owner.temperature("cold");
     },
   };
