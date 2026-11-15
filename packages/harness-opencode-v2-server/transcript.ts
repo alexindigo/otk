@@ -389,10 +389,38 @@ export class Transcript {
             { order: 0 },
           );
         } else {
+          const live = this.#live.get(value.id);
+          const shell = [...this.#shells.values()].find((owner) =>
+            owner.session === id && owner.raw.id === value.id
+          );
+          let raw = live?.session === id
+            ? live.raw
+            : shell?.raw ?? await this.reader.get(id, value.id, signal);
+          if (raw.type === "assistant") {
+            const ordinals = { text: 0, reasoning: 0 };
+            raw = {
+              ...raw,
+              content: raw.content.map((part) => {
+                if (
+                  part.type !== "text" && part.type !== "reasoning"
+                ) return part;
+                const acquired = this.buffers.source(
+                  partID(raw.id, part.type, ordinals[part.type]++),
+                  id,
+                  raw.id,
+                );
+                return acquired === undefined
+                  ? part
+                  : { ...part, text: acquired };
+              }),
+            };
+          }
           derived = mapMessage(
-            await this.reader.get(id, value.id, signal),
+            raw,
             id,
-            { order: 0 },
+            live?.session === id
+              ? live.context
+              : shell?.context ?? { order: 0 },
           );
         }
       } catch (error) {

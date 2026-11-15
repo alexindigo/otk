@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { type Message, referenceSources, sourceAt } from "../mod.ts";
+import { type Message, type Part, referenceSources, sourceAt } from "../mod.ts";
 
 const source = (kind: string, payload?: string) => ({
   kind,
@@ -102,4 +102,28 @@ Deno.test("loaded items keep plugin references; declared content keeps its copy 
   assertEquals(sourceAt(derive(), "p:missing"), undefined);
   // Referencing is idempotent and never re-reads an already loaded value.
   assertEquals(referenceSources(loaded, () => "other"), loaded);
+});
+
+Deno.test("referenced external parts release legacy previews but preserve declared copy and unreferenced producers", () => {
+  for (const content of [true, false]) {
+    const part: Part = {
+      kind: "external",
+      id: "p",
+      name: "legacy",
+      data: "redundant raw preview",
+      content,
+      source: source("record", " exact copy \n"),
+    };
+    referenceSources(part, () => "opaque");
+    assertEquals(part.data, undefined);
+    assertEquals(part.source?.payload, content ? " exact copy \n" : undefined);
+  }
+  const legacy: Part = {
+    kind: "external",
+    id: "p",
+    name: "legacy",
+    data: "keep me",
+  };
+  referenceSources(legacy, () => "unused");
+  assertEquals(legacy.data, "keep me");
 });
