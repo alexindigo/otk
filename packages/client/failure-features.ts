@@ -225,6 +225,9 @@ export function sessionFailure(
 ): PublicFailure | undefined {
   if (!observation && !reason) return;
   const prior = observation?.failure;
+  // The plugin's record is the authoritative full presentation. Do not create
+  // another presentation merely because the same failure also has status facts.
+  if (prior?.facts?.record) return;
   return {
     code: prior?.code ?? "session.failure",
     retry: prior?.retry ?? "none",
@@ -246,8 +249,9 @@ export function sessionFailure(
 }
 export function presentFailure(
   failure: import("@otk/protocol").PublicFailure,
+  surface: "feedback" | "record" = "feedback",
 ): Feedback {
-  return shipped.present(failure);
+  return shipped.present(failure, surface);
 }
 
 /** Target-bound presentation outlives any mounted view and borrows request state. */

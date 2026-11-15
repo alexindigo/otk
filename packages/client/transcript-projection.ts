@@ -26,7 +26,8 @@ export interface TranscriptProjectionState {
   queuedIDs: Set<string>;
 }
 export const replyKey = (message: Message): string =>
-  message.role === "assistant"
+  (message.role === "assistant" ||
+      message.role === "context" && message.replyTo !== undefined)
     ? `reply:${message.replyTo ?? message.id}`
     : message.id;
 const compare = compareMessages;

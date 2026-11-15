@@ -111,7 +111,8 @@ test.describe("direct native deferred failure", () => {
         );
         return;
       }
-      await expect(page.locator(".otk-session-error")).toBeVisible();
+      await expect(page.locator('[data-native-record$="/request-failure"]'))
+        .toHaveCount(2);
       const snapshot = await composerError(state, page, frames, session.id);
       expect(snapshot.error).toMatch(/^Agent not found: "missing-otk-agent"\./);
       await expect(prompt(page)).toHaveValue("keep this draft");

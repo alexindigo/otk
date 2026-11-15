@@ -52,6 +52,8 @@ export interface FailureFacts {
   /** Specific next step from the action/cause owner; omit when none is known. */
   recovery?: string;
   outcome?: "unknown" | "unavailable" | "rejected";
+  /** The producer has retained the full failure at this transcript identity. */
+  record?: { messageID: string; label?: string };
 }
 /** Capture only routing facts, never the request input or an invalid identity. */
 export function requestFailureFacts(

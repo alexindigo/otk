@@ -8,6 +8,7 @@ import {
 } from "@otk/protocol";
 import { finiteResponse } from "./finite-response.ts";
 import { NativeReadiness } from "./readiness.ts";
+import { requestFailureFacts } from "./request-failure.ts";
 import {
   type OperationContext,
   OperationFailure,
@@ -53,7 +54,14 @@ function classifyNative(
 ): NativeRequestFailure {
   if (cause instanceof NativeRequestFailure) return cause;
   if (
-    cause instanceof HttpFailure && cause.status >= 400 && cause.status < 500
+    cause instanceof HttpFailure &&
+    (cause.status >= 400 && cause.status < 500 ||
+      [
+        "ConfigInvalidError",
+        "ConfigJsonError",
+        "ProviderModelNotFoundError",
+        "ProviderAuthError",
+      ].includes(cause.detail.kind ?? ""))
   ) {
     const code = cause.detail.kind === "SessionBusyError"
       ? "session.busy"
@@ -121,9 +129,10 @@ export class HttpFailure extends HarnessError {
     readonly detail: { message: string; kind?: string; ref?: string },
     original?: unknown,
     publicReason?: string,
+    facts?: FailureCause["facts"],
   ) {
     super(`harness_${status}`, detail.message.slice(0, 1024));
-    this.facts = {
+    this.facts = facts ?? {
       reason: publicFailureReason(publicReason ?? detail.message),
       status,
     };
@@ -132,6 +141,19 @@ export class HttpFailure extends HarnessError {
 }
 export class Client {
   readonly readiness: NativeReadiness;
+  failureFacts(
+    raw: unknown,
+    status?: number,
+  ): import("@otk/protocol").FailureFacts {
+    const authorization = this.cfg.password
+      ? `Basic ${btoa(`${this.cfg.username}:${this.cfg.password}`)}`
+      : "";
+    return requestFailureFacts(raw, status, [
+      this.cfg.password,
+      authorization,
+      authorization.replace(/^\S+\s+/, ""),
+    ]);
+  }
   constructor(
     readonly cfg: OpencodeV1Config["harness"],
     readonly fetcher: typeof fetch = fetch,
@@ -230,9 +252,11 @@ export class Client {
       let message = text.trim() || fallback;
       let publicReason: string | undefined;
       let kind: string | undefined, ref: string | undefined;
+      let native: unknown;
       const identities: string[] = [];
       try {
         const value: unknown = JSON.parse(text);
+        native = value;
         message = fallback;
         if (typeof value === "string" && value.trim()) {
           message = errorMessage(value);
@@ -291,6 +315,9 @@ export class Client {
             headers.get("Authorization") ?? "",
             (headers.get("Authorization") ?? "").replace(/^\S+\s+/, ""),
           ]),
+        native === undefined
+          ? undefined
+          : this.failureFacts(native, response.status),
       );
     }
     return response;

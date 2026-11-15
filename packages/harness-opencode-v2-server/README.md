@@ -221,6 +221,24 @@ sequence, not copied clocks; the API fallback uses the existing clock-based
 source authority. Requests remain context records, never prompts or duplicated
 tool outcomes.
 
+`request-failure.ts` supplies plugin-owned failure records for rejected submits
+and asynchronous execution failures, using the same retention and FP1 public
+failure owner. Execution records retain the exact native turn association
+through the existing scalar transcript facts reader; no assistant is required.
+Native message/config-path/model-suggestion/status facts pass through the
+credential filter before publication or storage, never raw response/config
+bodies. Drafts remain owned by the composer when submit rejects. Unknown
+outcomes retain their existing reconciliation semantics, without a fabricated
+retry action.
+
+The retained failure supplies a neutral record reference, so FP1 presents its
+facts only at that record and projects other feedback as a short reference.
+Execution association resolves before the first retained publication. Unanchored
+failures borrow the existing sequence/clock position owner at the session tail,
+not a session-header presentation. Stock 2.2.6's asynchronous
+ModelUnavailableError does not supply suggestions; source-backed rejection
+envelopes that supply them retain them.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank

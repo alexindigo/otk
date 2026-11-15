@@ -2,6 +2,7 @@
 import "./fixture-diagnostics.ts";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
 import { nativeFixture } from "./native-fixture.ts";
+import { submitFailureScenario } from "./request-failure-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import { browserSessionID, seedBrowserSession } from "./browser-native.ts";
 import { resources, withResources } from "./resources.ts";
@@ -109,7 +110,9 @@ try {
       | ReturnType<typeof transportScenario>
       | Awaited<ReturnType<typeof nativeMessageScenario>>
       | ReturnType<typeof nativeComposerScenario>
+      | ReturnType<typeof submitFailureScenario>
       | undefined;
+    let submitFailure: ReturnType<typeof submitFailureScenario> | undefined;
     let contract: Awaited<ReturnType<typeof contractScenario>> | undefined;
     let bootstrap: {
       busy: { id: string };
@@ -578,6 +581,9 @@ try {
           if (profile === "composer-native-default") {
             transport = nativeComposerScenario(fixture.oc);
           }
+          if (profile === "composer-request-failure") {
+            transport = submitFailure = submitFailureScenario(fixture.oc);
+          }
           if (
             [
               "messages-helper-pages",
@@ -1040,6 +1046,13 @@ try {
           }
           return null;
         case "scenario":
+          if (
+            profile === "composer-request-failure" &&
+            frame.params.action === "fail"
+          ) {
+            submitFailure!.control("fail");
+            return null;
+          }
           if (profile === "isolated" && frame.params.action === "succeed") {
             console.debug("fixture diagnostic debug");
             console.log("fixture diagnostic log");

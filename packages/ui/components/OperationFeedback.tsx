@@ -13,6 +13,7 @@ export default function OperationFeedback(
     feedback: Feedback;
     icon?: Element;
     control?(control: { focus(): void }): void;
+    onReveal?(messageID: string): void;
   },
 ): Element {
   return (
@@ -34,7 +35,12 @@ export default function OperationFeedback(
       }
     >
       {props.feedback.failure
-        ? <FailureContent failure={props.feedback.failure} />
+        ? (
+          <FailureContent
+            failure={props.feedback.failure}
+            onReveal={props.onReveal}
+          />
+        )
         : (
           <span class="otk-control-label" title={props.feedback.text}>
             {props.feedback.text}

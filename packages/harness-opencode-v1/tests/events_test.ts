@@ -238,6 +238,7 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
       ops.filter((op) => op.op !== "agent.colors").map((op) => op.op),
       [
         "session.error",
+        "message.upsert",
         "session.error",
         "permission.upsert",
         "message.upsert",
@@ -266,7 +267,32 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
     for (const decoration of decorations) {
       assertEquals(decoration, { op: "agent.colors", colors: {} });
     }
-    assertEquals(ops.slice(0, 2), [
+    const failures = ops.filter((op) =>
+      op.op === "message.upsert" &&
+      op.message.parts.some((part) => part.kind === "external" && part.failure)
+    );
+    assertEquals(
+      failures.length,
+      1,
+      "The native error has one retained failure record, not a duplicate sync companion",
+    );
+    assert(
+      failures[0].op === "message.upsert" &&
+        failures[0].message.parts.some((part) =>
+          part.kind === "external" &&
+          part.failure?.facts?.reason === "fixture error"
+        ),
+    );
+    assert(failures[0].op === "message.upsert");
+    const failure = failures[0].message.parts.find((part) =>
+      part.kind === "external" && part.failure
+    );
+    assert(failure?.kind === "external" && failure.failure);
+    assertEquals(
+      failure.failure.facts?.target?.sessionID,
+      "opcv1-" + session.id,
+    );
+    assertEquals(ops.filter((op) => op.op === "session.error").slice(0, 2), [
       {
         op: "session.error",
         error: undefined,
@@ -280,6 +306,7 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
           observations: [{
             id: "observation-2",
             source: "event",
+            failure: failure.failure,
             message: "fixture error",
             kind: "UnknownError",
           }],

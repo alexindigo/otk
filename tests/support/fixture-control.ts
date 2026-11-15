@@ -81,6 +81,7 @@ export const profiles = {
   "composer-long-command": "v1",
   "composer-history": "v1",
   "composer-shell-failure": "v1",
+  "composer-request-failure": "neutral",
   "contract-composer-missing": "neutral",
   "contract-composer-none": "neutral",
   "contract-composer-pending-choice": "neutral",

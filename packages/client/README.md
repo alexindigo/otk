@@ -266,6 +266,13 @@ create input attention or badges, and paging does not dismiss evidence. This
 adds no history surface, raw Details view or new persistence lifetime; those
 decisions remain open.
 
+When a producer supplies `FailureFacts.record`, that transcript identity owns
+the single full presentation. FP1's default feedback projection is a short
+linked reference; only `describe/present(failure, "record")` requests the full
+facts. The session-error projection does not create another presentation for a
+retained failure. Group counts and diagnostic identity stay with the same owner;
+this does not choose cross-session grouping or a new persistence lifetime.
+
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
 

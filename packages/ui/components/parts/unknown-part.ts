@@ -2,6 +2,18 @@
 import type { Part } from "@otk/protocol";
 import type { PartPresentation } from "../../registries/renderers.ts";
 import { sourcePreview } from "./native-source-preview.ts";
+import { contextualFailure } from "@otk/client";
+
+/** The server plugin cannot know the browser's sidecar identity. Borrow the
+ * injected content origin without replacing the plugin's captured target. */
+export function unknownPartFailure(
+  part: Part,
+  origin: import("@otk/protocol").FailureTarget,
+) {
+  return part.kind === "external" && part.failure
+    ? contextualFailure(part.failure, { target: origin })
+    : undefined;
+}
 
 /** Copy carries only producer-declared content; source stays inspection-only.
  * Row records flow with a reply's work; boundaries, outgoing context and
@@ -17,7 +29,8 @@ export function unknownPartPresentation(part: Part): PartPresentation {
     ...(activity?.layout === "row" && activity.direction !== "outgoing"
       ? { work: {} }
       : {}),
-    required: activity?.tone === "error",
+    required: activity?.tone === "error" ||
+      part.kind === "external" && !!part.failure,
     copyable: content !== undefined,
     get text() {
       return content;

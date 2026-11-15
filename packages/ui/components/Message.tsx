@@ -176,8 +176,7 @@ export default function Message(
   onSettled(() =>
     props.control?.({
       reveal() {
-        if (!prompt() || !bubble) return;
-        bubble.focus({ preventScroll: true });
+        (prompt() && bubble ? bubble : article).focus({ preventScroll: true });
       },
     })
   );
@@ -227,6 +226,7 @@ export default function Message(
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
+        tabindex="-1"
       >
         <For each={frames()} keyed={(frame) => frame.id}>
           {(frame) => (

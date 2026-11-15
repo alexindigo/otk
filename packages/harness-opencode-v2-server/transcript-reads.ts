@@ -199,7 +199,9 @@ export function factsFrom(
           ? { terminal: true }
           : {}),
         order: row.seq,
-        replyTo: row.type === "assistant" ? replyTo : undefined,
+        replyTo: row.type === "assistant" || row.type === "idle"
+          ? replyTo
+          : undefined,
         agent,
         model,
       };
@@ -581,7 +583,9 @@ export class TranscriptReads {
           ? { terminal: true }
           : {}),
         order: Number(row.seq),
-        replyTo: row.type === "assistant" ? text(row.user_id) : undefined,
+        replyTo: row.type === "assistant" || row.type === "idle"
+          ? text(row.user_id)
+          : undefined,
         agent: text(row.agent) ?? text(following.agent),
         model:
           typeof model.id === "string" && typeof model.providerID === "string"

@@ -47,6 +47,7 @@ import {
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
+import { requestFailureRecord } from "./request-failure.ts";
 import {
   nativeSource,
   parseSourceRef,
@@ -1383,6 +1384,62 @@ export class Transcript {
       await this.requests.put({ ...value, position });
       this.#announce(id, value.outcome, position);
     }
+  }
+  /** Submission failures have no native message; reuse plugin-owned retention,
+   * page merging and live publication rather than a second session error store. */
+  async failure(message: Message): Promise<void> {
+    const key = message.id.replace(/^request:/, "");
+    const previous = await this.requests.get(message.sessionID, key);
+    await this.#observe(message.sessionID, key, message, previous);
+  }
+  /** Execution errors can precede any assistant. Their native idle boundary
+   * supplies the exact preceding prompt through the existing scalar facts owner. */
+  async executionFailure(
+    event: V2Event,
+    label?: string,
+  ): Promise<import("@otk/protocol").PublicFailure | undefined> {
+    if (
+      event.type !== "session.execution.failed" ||
+      typeof event.data.sessionID !== "string"
+    ) return;
+    const id = ids.encode(event.data.sessionID);
+    const failure = {
+      code: "native.execution",
+      retry: "none" as const,
+      diagnosticID: event.id ? `execution:${event.id}` : crypto.randomUUID(),
+      facts: {
+        ...this.reader.client().failureFacts(event.data.error),
+        actionLabel: "Running session",
+        target: { sessionID: id, label },
+        outcome: "rejected" as const,
+      },
+    };
+    let message = requestFailureRecord(
+      id,
+      failure,
+      event.created ?? Date.now(),
+    );
+    if (event.id) {
+      try {
+        const nativeID = event.id.replace(/^evt_/, "msg_");
+        const facts = await this.#facts(
+          { sessionID: id, messages: [nativeID] },
+          this.#lifetime.signal,
+        );
+        const replyTo = facts.contexts[nativeID]?.replyTo;
+        if (replyTo) {
+          message = { ...message, replyTo };
+        }
+      } catch (error) {
+        this.#lifetime.signal.throwIfAborted();
+        this.options.diagnostic(error);
+      }
+    }
+    // Resolve the native turn before the first publication, so the same failure
+    // never has a transient standalone and then a turn-attached identity.
+    await this.failure(message);
+    const part = message.parts[0];
+    return part.kind === "external" ? part.failure : undefined;
   }
   async #observe(
     id: string,
