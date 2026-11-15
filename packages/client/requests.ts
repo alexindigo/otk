@@ -755,9 +755,13 @@ export function createSubmissionIntent<T>(options: {
       };
     },
     submit(prepare, run) {
+      // Preparation may outlive the current send. An activation made while
+      // Sending can run an input command, but cannot acquire send eligibility
+      // merely because that captured effect settles during preparation.
+      const blocked = effect.state.pending;
       return input.submit(undefined, async () => {
         const value = await prepare();
-        if (value === undefined || effect.state.pending) return;
+        if (value === undefined || blocked || effect.state.pending) return;
         return { result: effect.submit(value, run) };
       }).then((admitted) => admitted?.result);
     },

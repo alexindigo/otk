@@ -146,8 +146,11 @@ through one presenter, without rendering arbitrary exception text.
 settlement. Repeated preparation joins synchronously and repeated sends cannot
 replace an in-flight payload. A later input command can still prepare and run
 while a send or its follow-up bookkeeping remains pending; command handling is
-not mistaken for a duplicate send. Both lifetimes stay framework-free, with
-native input and focus owned by the UI adapter.
+not mistaken for a duplicate send. Send eligibility is captured at activation:
+preparation that starts during Sending cannot admit a prompt, shell or native
+command effect after the earlier send settles. A later explicit activation can
+send the retained draft. Both lifetimes stay framework-free, with native input
+and focus owned by the UI adapter.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
