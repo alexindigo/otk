@@ -195,6 +195,21 @@ Deno.test("absent prompt history skips archive acquisition without blocking Reve
   owner.select(undefined);
   assertEquals(owner.preservationWarning(), undefined);
 });
+Deno.test("unavailable persistence mounts without a saved list but visibly refuses committing preservation", async () => {
+  const f = fixture(),
+    owner = createBranchHistory({ ...f.options, storage: null });
+  owner.select(target);
+  assertEquals(owner.state.branches, []);
+  f.staged(true);
+  f.drafts.writer("server/a")({ ...emptyDraft(), input: "Never discarded" });
+  await assertRejects(() => owner.beforeCommit(target));
+  assertEquals(f.values.size, 0);
+  assertEquals(f.calls(), 0);
+  const error = owner.state.error;
+  assert(error);
+  assert(error.failure?.reason.includes("localStorage is unavailable"));
+  assertEquals(f.drafts.current("server/a").input, "Never discarded");
+});
 Deno.test("branch history is keyed by exact server and session and never evicts old branches", async () => {
   const f = fixture();
   await f.owner.prepare(target, "2");
@@ -389,6 +404,89 @@ Deno.test("explicit Delete fences a late native settlement and cannot resurrect 
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.state.branches, []);
   assertEquals(f.owner.state.choice, undefined);
+});
+
+for (const phase of ["commit", "settle"] as const) {
+  Deno.test(`archive ${phase} merges reuse drafts saved during its held read`, async () => {
+    const f = fixture();
+    await f.owner.prepare(target, "2");
+    const id = f.owner.state.branches[0].id;
+    f.staged(true);
+    f.drafts.writer("server/a")({
+      ...emptyDraft(),
+      input: "Captured before wait",
+    });
+    const entered = Promise.withResolvers<void>(),
+      gate = Promise.withResolvers<void>();
+    if (phase === "commit") {
+      const attachments = f.options.attachments;
+      f.options.attachments = async (parts) => {
+        entered.resolve();
+        await gate.promise;
+        return attachments(parts);
+      };
+    } else {
+      f.options.session = async () => {
+        entered.resolve();
+        await gate.promise;
+        return info();
+      };
+    }
+    const work = phase === "commit"
+      ? f.owner.beforeCommit(target)
+      : f.owner.settled(target);
+    await entered.promise;
+    f.drafts.writer("server/a")({
+      ...emptyDraft(),
+      input: "Newer current draft",
+    });
+    f.owner.reuse(
+      id,
+      { ...emptyDraft(), input: "Explicit saved choice" },
+      "Saved draft",
+    );
+    f.owner.choose(true);
+    gate.resolve();
+    await work;
+    const reload = createBranchHistory(f.options);
+    reload.select(target);
+    const inputs = reload.state.branches[0].drafts.map((d) => d.value.input);
+    assert(inputs.includes("Newer current draft"));
+    assert(inputs.includes("Explicit saved choice"));
+    if (phase === "commit") assert(inputs.includes("Captured before wait"));
+    assertEquals(f.drafts.current("server/a").input, "Explicit saved choice");
+    assertEquals(reload.state.branches[0].replaced, phase === "settle");
+  });
+}
+Deno.test("capture decides pending archive membership after the session read settles", async () => {
+  const f = fixture();
+  await f.owner.prepare(target, "2");
+  const first = f.owner.state.branches[0].id, original = f.options.session;
+  const entered = Promise.withResolvers<void>(),
+    gate = Promise.withResolvers<void>();
+  let held = true;
+  f.options.session = async (t) => {
+    if (held) {
+      held = false;
+      entered.resolve();
+      await gate.promise;
+    }
+    return original(t);
+  };
+  const work = f.owner.prepare(target, "2");
+  await entered.promise;
+  await f.owner.settled(target);
+  f.staged(true);
+  gate.resolve();
+  await work;
+  const reload = createBranchHistory(f.options);
+  reload.select(target);
+  assertEquals(reload.state.branches.length, 2);
+  assertEquals(
+    reload.state.branches.find((b) => b.id === first)?.replaced,
+    true,
+  );
+  assert(reload.state.branches.some((b) => b.id !== first && !b.replaced));
 });
 
 Deno.test("archive materialization admits bounded parallel reads within each page and keeps exact order", async () => {

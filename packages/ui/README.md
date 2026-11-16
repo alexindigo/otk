@@ -243,6 +243,12 @@ expanded record does not repeat a state label already shown by its heading or a
 parameter. Parameter values, plain or navigable, share one value primitive, so
 they align to the same column edge and baseline.
 
+Saved-branch rows borrow current reply membership through the same guarded keyed
+row contract as live SessionView. A cached excluded key cannot dereference a
+replacement branch. Notification composition distinguishes the live transcript
+from independently visible request docks, so reading a saved branch does not
+consume unseen live completion/error alerts or duplicate visible request alerts.
+
 The Source fold borrows the transcript's per-reference preview resource while
 open; it retains no second preview or pending-read authority. Reference changes
 rebind the lease and canonical record changes refresh open consumers. Closing
