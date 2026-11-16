@@ -40,6 +40,9 @@ test("revert.saved-view-does-not-acknowledge-unseen-live-finishes", {
     "data-state",
     "finished",
   );
+  await expect(page.locator('.otk-toast[data-kind="done"]')).toContainText(
+    "Live work behind saved branch",
+  );
   await expect(
     page.getByRole("region", { name: "Saved earlier branch", exact: true }),
   ).toBeVisible();

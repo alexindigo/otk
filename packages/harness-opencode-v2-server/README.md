@@ -256,6 +256,12 @@ writing retention or announcing live content. Their bounded native/retained
 merge keeps one identity, preferring an existing retained failure's facts and
 position.
 
+Recovered failure context can fill a missing origin and causal parent without
+changing its record identity, Source or proven position. Archive construction
+does not persist or announce enrichment; live materialization does, including
+diagnostic-bound enrichment of an existing error observation. Current origins
+and retired observations cannot be reassigned or recreated.
+
 Live pages use that same normalized failure row before deriving continuation
 edges, so a full page of failed idles advances without replaying retained rows.
 Historical pending-input reconstruction prefers the journal at the requested

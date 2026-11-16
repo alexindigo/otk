@@ -19,6 +19,7 @@ import {
   type ErrorObservation,
   latestTerminal,
   OperationFailure,
+  type PublicFailure,
   sessionErrorMessage,
   type TerminalEvidence,
 } from "@otk/protocol";
@@ -165,6 +166,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       policy: config.messages,
       digest,
       content: (id, event, clock) => this.#sink?.content(id, event, clock),
+      recoveredFailure: (id, failure) => this.#errors.enrich(id, failure),
       invalidated: (value) => this.#sink?.invalidate(value),
       diagnostic,
       summaries: (id, turns) => {
@@ -669,9 +671,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     operation: import("@otk/protocol").OperationContext | undefined,
     run: () => Promise<T>,
   ): Promise<T> {
-    const token = kind === "prompt"
-      ? undefined
-      : this.#errors.begin(id, kind, operation?.key.key);
+    const token = this.#errors.begin(
+      id,
+      kind === "prompt" ? undefined : kind,
+      operation?.key.key,
+    );
     try {
       return await run();
     } catch (cause) {
@@ -679,6 +683,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         cause instanceof HarnessError && cause.code === "authentication"
           ? new OperationFailure("rejected", cause.code, cause, cause.facts)
           : cause;
+      let retainedFailure: PublicFailure | undefined;
       if (
         this.#errors.accepts(id) && !operation?.signal.aborted &&
         error instanceof OperationFailure &&
@@ -705,17 +710,17 @@ export class OpencodeV2ServerAdapter implements Harness {
         const message = requestFailureRecord(id, failure);
         await this.transcript.failure(message);
         const part = message.parts[0];
+        if (part.kind === "external") retainedFailure = part.failure;
         if (error.facts && part.kind === "external") {
           error.facts.record = part.failure?.facts?.record;
           error.facts.origin = failure.facts.origin;
         }
       }
-      // Definitive input rejection belongs to the requesting operation, not the
-      // session's execution history. Native events and uncertain HTTP outcomes
-      // retain their independent session diagnostics.
+      // An actual HTTP rejection has independent HTTP provenance, not an
+      // invented native execution event. Its observation borrows the retained
+      // record's diagnostic and facts so every origin has a displayed pointer.
       if (
-        token && !operation?.signal.aborted && this.#sink &&
-        !(error instanceof OperationFailure && error.outcome === "rejected")
+        !operation?.signal.aborted && this.#sink
       ) {
         let cause: unknown = error;
         const seen = new Set<unknown>();
@@ -732,7 +737,9 @@ export class OpencodeV2ServerAdapter implements Harness {
             : {
               message: error instanceof Error ? error.message : String(error),
             }),
-          ...(error instanceof OperationFailure
+          ...(retainedFailure
+            ? { failure: retainedFailure }
+            : error instanceof OperationFailure
             ? {
               failure: {
                 code: error.code,
@@ -749,7 +756,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
       throw error;
     } finally {
-      if (token) this.#errors.settled(token);
+      this.#errors.settled(token);
     }
   }
   #merge(row: SessionMetadata): void {

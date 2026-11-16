@@ -287,6 +287,11 @@ export class Transcript {
       ): void;
       invalidated(value: TranscriptInvalidation): void;
       diagnostic(error: unknown): void;
+      /** Live context recovery enriches an existing observation, never an archive read. */
+      recoveredFailure?(
+        id: string,
+        failure: import("@otk/protocol").PublicFailure,
+      ): void;
       summaries?(
         id: string,
         turns: readonly string[],
@@ -1154,12 +1159,17 @@ export class Transcript {
       }
       signal.throwIfAborted();
       const nativeItems = items;
+      const normalized = new Map(
+        [...failures.values()].map((message) => [message.id, message]),
+      );
       const candidates = [...new Map([
         ...items.filter((m) =>
           !token?.reuse || !upper || compareEdge(m, upper) < 0
         ),
         ...retained.filter((m) => !lower || compareEdge(m, lower) >= 0).map(
           (m) => {
+            const recovered = normalized.get(m.id);
+            if (recovered) m = { ...recovered, sourceOrder: m.sourceOrder };
             if (m.sourceOrder !== undefined) return m;
             // Place plugin-owned records between native sequence positions without
             // treating their clock as a native sequence number.
@@ -1632,7 +1642,21 @@ export class Transcript {
   ): Promise<Message> {
     const key = `${id}/${nativeID ?? crypto.randomUUID()}`;
     const pending = this.#executionFailures.get(key);
-    if (pending) return pending;
+    if (pending) {
+      if (!context?.replyTo) return pending;
+      return pending.then(() => {
+        this.#lifetime.signal.throwIfAborted();
+        return this.#executionFailure(
+          id,
+          nativeID,
+          error,
+          created,
+          context,
+          label,
+          nativeOrder,
+        );
+      });
+    }
     const work = this.#materializeExecutionFailure(
       id,
       nativeID,
@@ -1664,7 +1688,7 @@ export class Transcript {
       label,
       nativeOrder,
     );
-    if (!value.previous?.outcome) {
+    if (value.message !== value.previous?.outcome) {
       await this.#observe(
         id,
         value.key,
@@ -1672,6 +1696,14 @@ export class Transcript {
         value.previous,
         value.position,
       );
+      if (value.previous?.outcome) {
+        const part = value.message.parts.find((part) =>
+          part.kind === "external" && part.failure
+        );
+        if (part?.kind === "external" && part.failure) {
+          this.options.recoveredFailure?.(id, part.failure);
+        }
+      }
     }
     return value.message;
   }
@@ -1691,20 +1723,53 @@ export class Transcript {
       : crypto.randomUUID();
     const key = `failure:${diagnosticID}`;
     const previous = await this.requests.get(id, key);
-    if (previous?.outcome) {
-      return {
-        key,
-        previous,
-        message: previous.outcome,
-        position: previous.position,
-      };
-    }
-    const submission = context?.replyTo
-      ? await this.requests.get(id, `submission:${context.replyTo}`)
+    const parent =
+      previous?.outcome?.role === "context" && previous.outcome.replyTo ||
+      context?.replyTo;
+    const submission = parent
+      ? await this.requests.get(id, `submission:${parent}`)
       : undefined;
     const origin = submission?.request?.origin as
       | import("@otk/protocol").RequestOrigin
       | undefined;
+    if (previous?.outcome) {
+      const known = previous.outcome;
+      const missingOrigin = origin &&
+        known.parts.some((part) =>
+          part.kind === "external" &&
+          part.failure?.diagnosticID === diagnosticID &&
+          !part.failure.facts?.origin
+        );
+      const missingParent = known.role === "context" && !known.replyTo &&
+        context?.replyTo;
+      const message = missingOrigin || missingParent
+        ? {
+          ...known,
+          ...(missingParent ? { replyTo: missingParent } : {}),
+          parts: missingOrigin
+            ? known.parts.map((part) =>
+              part.kind === "external" &&
+                part.failure?.diagnosticID === diagnosticID &&
+                !part.failure.facts?.origin
+                ? {
+                  ...part,
+                  failure: {
+                    ...part.failure,
+                    facts: { ...part.failure.facts, origin },
+                  },
+                }
+                : part
+            )
+            : known.parts,
+        }
+        : known;
+      return {
+        key,
+        previous,
+        message,
+        position: previous.position,
+      };
+    }
     const message = requestFailureRecord(
       id,
       {
