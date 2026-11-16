@@ -2,6 +2,7 @@
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import {
   type BranchHistory,
+  browserStorage,
   type ClientSession,
   connectBranchHistory,
   createCurrentClient,
@@ -52,12 +53,14 @@ export interface ShellState {
 /** Browser capabilities and split reactive effects bind the framework-free owners. */
 export function createShellState(o: { api: URL }): ShellState {
   const index = createIndex();
+  const storage = browserStorage();
   const resources = createServerResources({
     index,
     factory: solidState,
     error: (error) => navigation.fail(error),
     sidecars: (receive) =>
       createSidecars(receive, {
+        storage,
         connection: { api: o.api },
         sessionTitle: (sidecarId, sessionID) =>
           index.get(sidecarId, sessionID)?.title,
@@ -90,7 +93,7 @@ export function createShellState(o: { api: URL }): ShellState {
   );
   const forkNotes = createForkNotes(solidState);
   const branchHistory = connectBranchHistory({
-    storage: globalThis.localStorage,
+    storage,
     drafts,
     factory: solidState,
     api: o.api,
