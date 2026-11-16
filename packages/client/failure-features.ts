@@ -272,13 +272,34 @@ export function composerPointer(
   view: FailureTarget | undefined,
   local?: Feedback,
 ): Feedback | undefined {
-  if (local?.failure?.reference) return local;
+  if (local) return local;
   for (const failure of failures) {
     if (failure.facts?.origin !== "composer") continue;
     const shown = shipped.describe(failure, { surface: "feedback", view });
     if (shown.failure?.reference) return shown;
   }
   return local;
+}
+/** The composer renders this value before it can occupy a view's pointer slot. */
+export function sessionComposerFeedback(
+  state: import("@otk/protocol").SessionErrorState | undefined,
+  view: FailureTarget | undefined,
+  local?: Feedback,
+): Feedback | undefined {
+  return composerPointer(
+    (state?.observations ?? []).flatMap((observation) => {
+      const target = observation.failure?.facts?.target;
+      if (
+        target?.sessionID && target.sessionID !== view?.sessionID ||
+        target?.sidecarId && target.sidecarId !== (view?.sidecarId ?? "local")
+      ) return [];
+      const failure = !observation.cleared && observation.failure &&
+        sessionFailure(observation, undefined, { target: view });
+      return failure ? [failure] : [];
+    }),
+    view,
+    local,
+  );
 }
 export function placeFailure(
   failure: PublicFailure,

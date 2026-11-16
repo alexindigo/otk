@@ -5,8 +5,10 @@ import type { Note, NotificationPolicy } from "./notifications.ts";
 export interface NotificationContext {
   focused: boolean;
   visible: boolean;
-  /** The session whose view (transcript and request docks) is on screen. */
+  /** The live transcript on screen, not a saved branch of that session. */
   open?: { sidecar: string; session: string };
+  /** Independently visible request docks; defaults to open for older consumers. */
+  requests?: { sidecar: string; session: string };
   /** Session tree lookup; request docks present their descendants' requests. */
   lookup?(sidecar: string, id: string): { parentID?: string } | undefined;
   prefs: Pick<
@@ -19,13 +21,18 @@ export interface NotificationContext {
  * (the docks' own scope); everything else is presented by a notification. */
 export function presentedOnScreen(
   note: Pick<Note, "kind" | "sessionRef">,
-  ctx: Pick<NotificationContext, "focused" | "visible" | "open" | "lookup">,
+  ctx: Pick<
+    NotificationContext,
+    "focused" | "visible" | "open" | "requests" | "lookup"
+  >,
 ): boolean {
-  const ref = note.sessionRef, open = ctx.open;
+  const ref = note.sessionRef,
+    request = note.kind === "permission" || note.kind === "question",
+    open = request ? ctx.requests ?? ctx.open : ctx.open;
   if (!ref || !open || !ctx.focused || !ctx.visible) return false;
   if (ref.sidecar !== open.sidecar) return false;
   if (ref.session === open.session) return true;
-  return (note.kind === "permission" || note.kind === "question") &&
+  return request &&
     !!ctx.lookup &&
     belongsToSession(
       ref.session,

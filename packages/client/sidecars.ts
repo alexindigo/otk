@@ -16,6 +16,7 @@ import {
 import { FeedbackFailure } from "./failures.ts";
 import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
+import { browserStorage } from "./browser-storage.ts";
 import type { PublicDefaults } from "./public-defaults.ts";
 import {
   type ConnectionOptions,
@@ -40,11 +41,12 @@ export interface SidecarState extends SidecarSpec {
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(
-  storage: Pick<Storage, "getItem">,
+  storage: Pick<Storage, "getItem"> | null,
   report: (error: unknown) => void = (error) =>
     console.error("Saved sidecar configuration rejected", error),
 ): SidecarSpec[] {
   const implicit = { id: LOCAL_SIDECAR, baseUrl: "", label: "This server" };
+  if (!storage) return [implicit];
   let raw: unknown;
   try {
     raw = JSON.parse(storage.getItem("otk.sidecars") || "[]");
@@ -81,7 +83,7 @@ export function readSidecars(
 }
 export interface SidecarsOptions {
   sessionTitle?(sidecarId: string, sessionID: string): string | undefined;
-  storage?: Pick<Storage, "getItem" | "setItem">;
+  storage?: Pick<Storage, "getItem" | "setItem"> | null;
   connection?: ConnectionOptions;
   diagnostic?: (error: unknown) => void;
   discoveryFetch?: typeof fetch;
@@ -105,7 +107,9 @@ export function createSidecars(
   options: SidecarsOptions = {},
   factory: StateFactory = createState,
 ): ClientSidecars {
-  const storage = options.storage ?? globalThis.localStorage;
+  const storage = options.storage === undefined
+    ? browserStorage()
+    : options.storage;
   const initial = readSidecars(storage, options.diagnostic);
   const { state, update: setState, subscribe } = factory<SidecarsState>({
     list: initial.map((item) => ({
@@ -140,7 +144,7 @@ export function createSidecars(
     return Promise.reject(failure);
   };
   const persist = () =>
-    storage.setItem(
+    storage?.setItem(
       "otk.sidecars",
       JSON.stringify(
         [...specs.values()].filter((spec) => spec.id !== LOCAL_SIDECAR),

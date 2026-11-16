@@ -81,7 +81,10 @@ export class RequestCoordinator {
   #entries = new Map<string, Entry>();
   #leases = new Map<
     string,
-    Map<RequestRecipient, { lifetime: RequestLifetime; close(): void }>
+    Map<
+      RequestRecipient,
+      { lifetime: RequestLifetime; ref: RequestRef; close(): void }
+    >
   >();
   #queues = new Map<string, Promise<void>>();
   // Preserve each sender's input order before asynchronous fingerprints finish.
@@ -313,12 +316,14 @@ export class RequestCoordinator {
           "ref" in item ? item.ref : item,
           this.options.bootstrap,
         );
-        if (control.t === "request.release") {
-          this.#leases.get(identity(keyOf(principal, ref)))?.get(recipient)
-            ?.close();
-        }
         const record = this.options.receipts.get(keyOf(principal, ref));
-        if (record && (record.origin ?? undefined) !== ref.origin) {
+        const lease = control.t === "request.release"
+          ? this.#leases.get(identity(keyOf(principal, ref)))?.get(recipient)
+          : undefined;
+        if (
+          record && (record.origin ?? undefined) !== ref.origin ||
+          lease && lease.ref.origin !== ref.origin
+        ) {
           if (control.t === "request.resume") {
             recipient.send({
               t: "request.rejected",
@@ -333,6 +338,12 @@ export class RequestCoordinator {
           }
           continue;
         }
+        // A request-owned lease can outlive its terminal receipt. Its captured
+        // admission identity still validates cleanup without reviving a receipt.
+        if (
+          lease && lease.ref.window === ref.window &&
+          (!record || record.window_id === ref.window)
+        ) lease.close();
         if (!record || record.window_id !== ref.window) {
           if (control.t !== "request.resume") continue;
           const live = !record && control.t === "request.resume" &&
@@ -927,7 +938,7 @@ export class RequestCoordinator {
         };
       },
     };
-    owners.set(recipient, { lifetime, close });
+    owners.set(recipient, { lifetime, ref: { ...entry.ref }, close });
     this.#leases.set(key, owners);
     const detached = recipient.lease.defer(close);
     if (typeof detached === "function") detach = detached;

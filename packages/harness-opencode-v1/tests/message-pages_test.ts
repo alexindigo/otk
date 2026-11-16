@@ -11,6 +11,86 @@ import { mapSession } from "../map.ts";
 import type { Session } from "../types.ts";
 import type { PrefetchPage } from "../message-prefetch.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
+import type { SessionErrorState } from "@otk/protocol";
+import { sessionErrorMessage } from "@otk/protocol";
+
+Deno.test("V1 warm point and page metadata borrow current errors without reacquiring cached native info", async () => {
+  const settings = cfg();
+  const replay = new ContentReplay({
+    ...settings.messages,
+    nonce: () => crypto.randomUUID(),
+    emit() {},
+  });
+  const raw: Session = {
+    id: "s",
+    directory: "/p",
+    projectID: "p",
+    title: "S",
+    time: { created: 1, updated: 1 },
+  };
+  const reader = new Messages(
+    new Client(
+      settings.harness,
+      () => Promise.reject(new Error("Unexpected native read")),
+    ),
+    () => "/p",
+  );
+  reader.page = () => Promise.resolve({ items: [] });
+  let state: SessionErrorState = { revision: 0, observations: [] },
+    infoReads = 0;
+  const transcript = new Transcript({
+    replay,
+    reader,
+    buffers: new StreamBuffers(),
+    raw: () => Promise.resolve(raw),
+    info: (raw) => {
+      infoReads++;
+      return Promise.resolve({
+        ...mapSession(raw),
+        errorState: state,
+        error: sessionErrorMessage(state),
+      });
+    },
+    ...{ errorState: () => state },
+    decorate: (message) => message,
+    summaries: () => ({}),
+  });
+  try {
+    assertEquals((await transcript.page("opcv1-s")).session?.errorState, state);
+    state = {
+      revision: 1,
+      currentRequestID: "request",
+      observations: [{
+        id: "rejected",
+        source: "http",
+        requestID: "request",
+        message: "Rejected prompt",
+      }],
+    };
+    assertEquals((await transcript.page("opcv1-s")).session?.errorState, state);
+    assertEquals(
+      (await transcript.page("opcv1-s")).session?.error,
+      "Rejected prompt",
+    );
+    assertEquals(infoReads, 1);
+    assertEquals((await transcript.session("opcv1-s")).errorState, state);
+    state = { revision: 2, observations: [] };
+    const cleared = (await transcript.page("opcv1-s")).session;
+    assertEquals(cleared?.errorState, state);
+    assertEquals(cleared?.error, undefined);
+    assertEquals(
+      infoReads,
+      2,
+      "Point refresh keeps its existing native metadata acquisition",
+    );
+    assertEquals(
+      (await transcript.snapshot("opcv1-s")).session?.errorState,
+      undefined,
+    );
+  } finally {
+    transcript.release();
+  }
+});
 
 Deno.test("@load @messages standalone demanded miss joins canceled speculative I/O settlement", async () => {
   const settings = cfg();

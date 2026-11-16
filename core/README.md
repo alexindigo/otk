@@ -201,6 +201,11 @@ effect needs neither permission. Declared interrupt priority continues to bypass
 ordinary effect order. `idle()` joins current owned work, not an assertion that
 a genuinely uncertain native outcome has become terminal.
 
+Request-owned leases retain their admitted origin/window independently of
+receipt retention. Release validates that identity before aborting or cleaning
+up, even after the receipt expires. Invalid controls have no resource effects;
+valid expired-receipt releases still retire their lease exactly once.
+
 Strictly local registrations never resolve native identities. Native-validated
 metadata uses `preparedLocalExecution` / `preparedLocalResultExecution`,
 including task membership, seen, frecency and enable-only approval validation.

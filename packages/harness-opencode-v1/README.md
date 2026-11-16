@@ -41,6 +41,16 @@ reason, including native suggestions, while the native cause remains diagnostic.
 Without a prompt anchor, the failure remains a chronological session-tail
 record.
 
+Definitive prompt and command-preparation rejections publish a matching HTTP
+observation through SessionErrors, borrowing the retained record's diagnostic,
+origin and facts. Launch failures consume their existing token, so an outer
+capability catch cannot duplicate the same observation. Native events remain
+independent, and cancellation/deletion keep their existing fences.
+
+Point and live-page metadata overlay current SessionErrors after native/revert
+info acquisition. Unchanged native baselines do not freeze error observations,
+and error changes do not invalidate bodies, prefetch or Source resources.
+
 `FailureAttempts` owns launch admission by attempt identity. HTTP success or
 failure and the first native report settle admission immediately; cancellation,
 new prompts, deletion and disposal retire it. Settled native-report identities

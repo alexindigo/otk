@@ -44,7 +44,7 @@ function fixture(
   replyTo?: string,
   olderRows = older,
 ) {
-  let bodies = 0, scalars = 0, coverage = 0;
+  let bodies = 0, scalars = 0, coverage = 0, failedFacts = false;
   const speculative: { optional?: boolean; priority?: string }[] = [];
   const session = {
     id: "ses_prefetch",
@@ -84,6 +84,9 @@ function fixture(
     ) => {
       if (kind === "opcv2.transcript") {
         scalars++;
+        if (failedFacts) {
+          return Promise.reject(new Error("Fixture facts unavailable"));
+        }
         const input = _input as { messages: string[] };
         return Promise.resolve({
           ...facts(
@@ -113,6 +116,7 @@ function fixture(
     },
     release: () => {},
   } as unknown as DigestPort;
+  const recoveries: import("@otk/protocol").PublicFailure[] = [];
   const value = new Transcript({
     client: () => client,
     policy,
@@ -120,9 +124,148 @@ function fixture(
     content: () => {},
     invalidated: () => {},
     diagnostic: () => {},
+    recoveredFailure: (_id, failure) => {
+      recoveries.push(failure);
+    },
   });
-  return { value, counts: () => ({ bodies, scalars, coverage }), speculative };
+  return {
+    value,
+    counts: () => ({ bodies, scalars, coverage }),
+    speculative,
+    recoveries,
+    failFacts: (failed: boolean) => {
+      failedFacts = failed;
+    },
+  };
 }
+Deno.test("recovered failure context enriches archive and durable origin without changing retained identity or position", async () => {
+  const error = { type: "APIError", message: "Provider limit", status: 403 };
+  const f = fixture(
+    undefined,
+    undefined,
+    [{
+      id: "msg_19",
+      type: "idle",
+      outcome: "failed",
+      error,
+      time: { created: 19 },
+    } as NativeMessage],
+    "sql:fixture:1",
+    "msg_prompt",
+  );
+  const key = "failure:execution:evt_19";
+  try {
+    await f.value.submission(id, "msg_prompt");
+    f.failFacts(true);
+    const initial = await f.value.executionFailure({
+      id: "evt_19",
+      type: "session.execution.failed",
+      created: 19,
+      data: { sessionID: "ses_prefetch", error },
+    });
+    assertEquals(initial?.facts?.origin, undefined);
+    const before = await f.value.requests.get(id, key);
+    assert(before?.outcome);
+    f.failFacts(false);
+    const archive = await f.value.snapshot(id),
+      archived = archive.items.find((m) => m.id === before.outcome!.id);
+    assert(archived?.role === "context");
+    const a = archived.parts[0];
+    assert(a.kind === "external");
+    assertEquals(a.failure?.facts?.origin, "composer");
+    assertEquals(archived.replyTo, "msg_prompt");
+    assertEquals(
+      await f.value.requests.get(id, key),
+      before,
+      "Read-only archive must not acquire live retention",
+    );
+    assertEquals(
+      f.recoveries,
+      [],
+      "Read-only construction cannot publish error observation enrichment",
+    );
+    const page = await f.value.page(id),
+      record = page.items.find((m) => m.id === before.outcome!.id)!;
+    assertEquals(page.items.filter((m) => m.id === record.id).length, 1);
+    assert(record.role === "context");
+    const p = record.parts[0];
+    assert(p.kind === "external");
+    assertEquals(p.failure?.facts?.origin, "composer");
+    assertEquals(p.failure?.diagnosticID, initial?.diagnosticID);
+    assertEquals(p.failure?.facts?.record, initial?.facts?.record);
+    assertEquals(record.source, before.outcome.source);
+    assertEquals(record.time, before.outcome.time);
+    const retained = await f.value.requests.get(id, key);
+    assertEquals(retained?.position, before.position);
+    const part = retained?.outcome?.parts[0];
+    assert(part?.kind === "external");
+    assertEquals(part.failure?.facts?.origin, "composer");
+    assertEquals(f.recoveries.length, 1);
+    assertEquals(f.recoveries[0].facts?.origin, "composer");
+    await f.value.submission(id, "msg_prompt", "api");
+    await f.value.page(id);
+    const again = (await f.value.requests.get(id, key))?.outcome?.parts[0];
+    assert(again?.kind === "external");
+    assertEquals(
+      again.failure?.facts?.origin,
+      "composer",
+      "Already known origin is immutable",
+    );
+    assertEquals(
+      f.recoveries.length,
+      1,
+      "Unchanged recovery cannot republish an observation",
+    );
+  } finally {
+    await f.value.stop();
+  }
+});
+Deno.test("a retained failure's known parent remains its origin authority when later context disagrees", async () => {
+  const error = { type: "APIError", message: "Provider limit", status: 403 };
+  const f = fixture(
+    undefined,
+    undefined,
+    [{
+      id: "msg_19",
+      type: "idle",
+      outcome: "failed",
+      error,
+      time: { created: 19 },
+    } as NativeMessage],
+    "sql:fixture:1",
+    "msg_prompt",
+  );
+  const key = "failure:execution:evt_19";
+  try {
+    f.failFacts(true);
+    await f.value.executionFailure({
+      id: "evt_19",
+      type: "session.execution.failed",
+      created: 19,
+      data: { sessionID: "ses_prefetch", error },
+    });
+    const retained = await f.value.requests.get(id, key);
+    assert(retained?.outcome?.role === "context");
+    await f.value.requests.put({
+      ...retained,
+      outcome: { ...retained.outcome, replyTo: "msg_prior" },
+    });
+    await f.value.submission(id, "msg_prior", "composer");
+    await f.value.submission(id, "msg_prompt", "api");
+    f.failFacts(false);
+    const record = (await f.value.snapshot(id)).items.find((message) =>
+      message.id === retained.outcome!.id
+    );
+    assert(record?.role === "context");
+    assertEquals(record.replyTo, "msg_prior");
+    const part = record.parts[0];
+    assert(part.kind === "external");
+    assertEquals(part.failure?.facts?.origin, "composer");
+    assertEquals(f.recoveries, []);
+  } finally {
+    await f.value.stop();
+  }
+});
 for (const origin of ["composer", "session"] as const) {
   Deno.test(`V2 retained execution failure preserves ${origin} origin through live and page reads`, async () => {
     const error = { type: "APIError", message: "Provider limit", status: 403 };

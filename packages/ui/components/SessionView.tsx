@@ -45,6 +45,7 @@ import {
   failureValue,
   replyKey,
   revertPresentation,
+  sessionComposerFeedback,
   sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -123,7 +124,18 @@ export default function SessionView(props: {
       props.branchHistory?.state.error,
     )
   );
-  const feedback = () => rollbackPresentation().feedback;
+  const failureTarget = () => ({
+    sidecarId: props.sidecarId,
+    sessionID: props.info?.id,
+    label: props.info?.title,
+  });
+  const feedback = createMemo(() =>
+    sessionComposerFeedback(
+      props.errorState,
+      failureTarget(),
+      rollbackPresentation().feedback,
+    )
+  );
   let noticeControl: { focus(): void } | undefined;
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
@@ -519,11 +531,7 @@ export default function SessionView(props: {
                         <SessionError
                           state={props.errorState}
                           error={props.sessionError}
-                          target={{
-                            sidecarId: props.sidecarId,
-                            sessionID: props.info?.id,
-                            label: props.info?.title,
-                          }}
+                          target={failureTarget()}
                           operationKey={feedback()?.identity}
                           diagnosticID={feedback()?.diagnosticID}
                           composer={feedback()}

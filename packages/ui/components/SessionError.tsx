@@ -2,7 +2,7 @@
 import "./SessionError.css" with { type: "text" };
 import { createMemo, Show } from "solid-js";
 import { sessionErrorObservation, type SessionErrorState } from "@otk/protocol";
-import { composerPointer, placeFailure, sessionFailure } from "@otk/client";
+import { placeFailure, sessionFailure } from "@otk/client";
 import FailureContent from "./FailureContent.tsx";
 
 export default function SessionError(
@@ -32,17 +32,7 @@ export default function SessionError(
       ? placeFailure(
         failure,
         { surface: "session", view: props.target },
-        composerPointer(
-          // Each observation belongs to this session; contextualize it the
-          // same way as the shown failure before asking for its pointer.
-          (props.state?.observations ?? []).flatMap((o) => {
-            const each = o.failure &&
-              sessionFailure(o, undefined, { target: props.target });
-            return each ? [each] : [];
-          }),
-          props.target,
-          props.composer,
-        ),
+        props.composer,
       )
       : undefined;
   });
