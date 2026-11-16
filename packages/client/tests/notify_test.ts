@@ -35,6 +35,35 @@ const note = (change: Partial<Note> = {}): Note => ({
   actions: [{ label: "Open", command: "open", default: true }],
   ...change,
 });
+Deno.test("saved transcript visibility leaves live outcomes alerting while visible request docks stay quiet", () => {
+  const context = {
+    focused: true,
+    visible: true,
+    open: undefined,
+    requests: { sidecar: "s", session: "a" },
+    prefs: DEFAULT_PREFS,
+    lookup: (_s: string, id: string) =>
+      id === "child" ? { parentID: "a" } : undefined,
+  };
+  const policy = notificationPolicy(() => context);
+  assertEquals(
+    policy(note(), () => true, true, false).channels.includes("toast"),
+    true,
+  );
+  for (const kind of ["permission", "question"] as const) {
+    for (const session of ["a", "child"]) {
+      assertEquals(
+        policy(
+          note({ kind, sessionRef: { sidecar: "s", session } }),
+          () => true,
+          true,
+          false,
+        ).channels,
+        [],
+      );
+    }
+  }
+});
 Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});

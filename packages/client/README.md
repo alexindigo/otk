@@ -465,6 +465,14 @@ staged session after reload reacquires its missing browser copy before
 committing. Failed saves retain FP1 action, target, reason and recovery by
 target across selection changes.
 
+Archive updates load the current stored branch after asynchronous reads before
+merging drafts or native bookkeeping. Reuse and explicit draft choices made
+during those reads survive; deletion retires the archive identity.
+`browserStorage()` resolves the fallible browser property once in shell
+composition. Explicit null disables sidecar persistence, not local connectivity;
+committing branch preservation still refuses visibly when storage is
+unavailable.
+
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its
 canonical content. Model catalogs and usage leases retain their existing

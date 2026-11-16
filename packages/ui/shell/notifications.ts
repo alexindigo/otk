@@ -32,6 +32,7 @@ export function applicationNotifications(input: {
   prefs(): Preferences;
   selection(): Selection | undefined;
   viewing(): boolean;
+  transcript?(): boolean;
   connection(sidecar: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
   observeEntries(
@@ -46,7 +47,10 @@ export function applicationNotifications(input: {
       focused: document.hasFocus(),
       visible: document.visibilityState === "visible",
       prefs: input.prefs(),
-      open: selected && input.viewing()
+      open: selected && input.viewing() && input.transcript?.() !== false
+        ? { sidecar: selected.sidecarId, session: selected.sessionID }
+        : undefined,
+      requests: selected && input.viewing()
         ? { sidecar: selected.sidecarId, session: selected.sessionID }
         : undefined,
       lookup: input.entry,
