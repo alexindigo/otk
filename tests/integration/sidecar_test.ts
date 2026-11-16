@@ -121,22 +121,68 @@ async function fixture() {
  * protocol's own fields of those names may appear, in their declared shapes:
  * an activity's lifecycle `state`, a recovery op's `state` word and an
  * external call's bounded `metadata` preview string. */
-function nativeInternals(value: unknown, path = ""): string[] {
+type BoundaryContext =
+  | "op"
+  | "message"
+  | "part"
+  | "call"
+  | "activity"
+  | "other";
+const oracleObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+function activityState(value: unknown): boolean {
+  if (
+    !oracleObject(value) ||
+    Object.keys(value).sort().join() !== "facts,key,label"
+  ) return false;
+  const facts = value.facts;
+  return typeof value.key === "string" && typeof value.label === "string" &&
+    oracleObject(facts) &&
+    Object.keys(facts).sort().join() === "active,terminal" &&
+    [facts.active, facts.terminal].every((fact) =>
+      fact === null || typeof fact === "boolean"
+    );
+}
+function nativeInternals(
+  value: unknown,
+  path = "",
+  context: BoundaryContext = "op",
+): string[] {
   if (Array.isArray(value)) {
-    return value.flatMap((item, i) => nativeInternals(item, `${path}[${i}]`));
+    return value.flatMap((item, i) =>
+      nativeInternals(item, `${path}[${i}]`, context)
+    );
   }
   if (!value || typeof value !== "object") return [];
   return Object.entries(value).flatMap(([key, child]) => {
     const at = `${path}.${key}`;
     const declared = key === "state"
-      ? (path.endsWith(".activity") && !!child && typeof child === "object" &&
-        Object.keys(child).sort().join() === "facts,key,label") ||
-        (Reflect.get(value, "op") === "stream.recovery" &&
-          typeof child === "string")
+      ? (context === "activity" && activityState(child)) ||
+        (context === "op" && Reflect.get(value, "op") === "stream.recovery" &&
+          typeof child === "string" &&
+          ["recovering", "ready", "unavailable"].includes(child))
       : key === "metadata"
-      ? Reflect.get(value, "tool") === "external" && typeof child === "string"
+      ? context === "call" && Reflect.get(value, "tool") === "external" &&
+        typeof child === "string"
       : true;
-    return [...(declared ? [] : [at]), ...nativeInternals(child, at)];
+    // Context only follows declared protocol edges. A native Source or unknown
+    // object cannot regain exemptions by carrying its own kind/tool/op tags.
+    const next: BoundaryContext = context === "op" && key === "message" &&
+        Reflect.get(value, "op") === "message.upsert"
+      ? "message"
+      : context === "op" && key === "part" &&
+            Reflect.get(value, "op") === "part.upsert" ||
+          context === "message" && key === "parts"
+      ? "part"
+      : context === "part" && key === "call" &&
+            Reflect.get(value, "kind") === "tool" ||
+          context === "call" && key === "children"
+      ? "call"
+      : context === "part" && key === "activity" &&
+          Reflect.get(value, "kind") === "external"
+      ? "activity"
+      : "other";
+    return [...(declared ? [] : [at]), ...nativeInternals(child, at, next)];
   });
 }
 async function neutralFixture() {
@@ -291,12 +337,14 @@ test("adapter boundary oracle accepts declared neutral fields and rejects native
     nativeInternals([
       {
         op: "message.upsert",
-        message: { parts: [{ activity: { state: activity } }] },
+        message: {
+          parts: [{ kind: "external", activity: { state: activity } }],
+        },
       },
       { op: "stream.recovery", state: "ready" },
       {
         op: "part.upsert",
-        part: { call: { tool: "external", metadata: "{}" } },
+        part: { kind: "tool", call: { tool: "external", metadata: "{}" } },
       },
     ]),
     [],
@@ -317,6 +365,74 @@ test("adapter boundary oracle accepts declared neutral fields and rejects native
       "[0].part.state",
       "[1].part.call.metadata",
       "[2].message.parts[0].activity.state",
+    ],
+  );
+  const external = (state: unknown) => ({
+    op: "part.upsert",
+    part: { kind: "external", activity: { state } },
+  });
+  assertEquals(
+    nativeInternals([
+      external({ ...activity, facts: { active: null, terminal: null } }),
+      { op: "stream.recovery", state: "recovering" },
+      { op: "stream.recovery", state: "unavailable" },
+      {
+        op: "part.upsert",
+        part: {
+          kind: "tool",
+          call: {
+            tool: "task",
+            children: [{ tool: "external", metadata: "bounded preview" }],
+          },
+        },
+      },
+    ]),
+    [],
+  );
+  const misplaced = {
+    kind: "fixture",
+    tool: "external",
+    metadata: "{}",
+    activity: { state: activity },
+  };
+  assertEquals(
+    nativeInternals([
+      {
+        op: "part.upsert",
+        part: { kind: "tool", call: { tool: "external", source: misplaced } },
+      },
+      {
+        op: "part.upsert",
+        part: {
+          kind: "external",
+          source: { op: "stream.recovery", state: "ready" },
+        },
+      },
+      external({ ...activity, key: { status: "completed", input: {} } }),
+      external({ ...activity, label: 7 }),
+      external({ ...activity, facts: { active: "false", terminal: false } }),
+      external({ ...activity, facts: { active: false } }),
+      external({
+        ...activity,
+        facts: { active: false, terminal: null, extra: true },
+      }),
+      { op: "stream.recovery", state: "done" },
+      {
+        op: "part.upsert",
+        part: { kind: "text", activity: { state: activity } },
+      },
+    ]),
+    [
+      "[0].part.call.source.metadata",
+      "[0].part.call.source.activity.state",
+      "[1].part.source.state",
+      "[2].part.activity.state",
+      "[3].part.activity.state",
+      "[4].part.activity.state",
+      "[5].part.activity.state",
+      "[6].part.activity.state",
+      "[7].state",
+      "[8].part.activity.state",
     ],
   );
 });

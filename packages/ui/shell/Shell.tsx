@@ -123,6 +123,7 @@ export default function Shell(
     prefs: () => toggles.state.prefs,
     selection: () => session.state.selection,
     viewing: () => !settings(),
+    transcript: () => !branchHistory.state.opened,
     connection: (id) => sidecars.connection(id),
     entry,
     attention,
