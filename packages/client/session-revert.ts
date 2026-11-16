@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure, RevertInfo } from "@otk/protocol";
 import { type FailureValue, failureValue } from "./failure-features.ts";
-import { RequestFailure } from "./failures.ts";
+import { type Feedback, RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import type { ContentState } from "./reduce.ts";
@@ -22,6 +22,26 @@ export interface SessionRevertState {
   error?: FailureValue;
   key?: string;
   failure?: PublicFailure;
+}
+/** One projection for the rollback owner and its borrowed request feedback. */
+export function revertPresentation(
+  state: SessionRevertState,
+  feedback?: Feedback,
+  branchFailure?: FailureValue,
+): { state: SessionRevertState; feedback?: Feedback } {
+  const sameRequest = feedback?.identity && state.key === feedback.identity;
+  const sameFailure = feedback?.diagnosticID &&
+    state.failure?.diagnosticID === feedback.diagnosticID;
+  const sameBranchFailure = branchFailure && branchFailure.diagnosticID &&
+    state.failure?.diagnosticID === branchFailure.diagnosticID;
+  const ownsPending = sameRequest && state.pending &&
+    feedback?.kind === "pending" && !feedback.failure;
+  return {
+    state: (!ownsPending && sameRequest) || sameFailure || sameBranchFailure
+      ? { ...state, pending: undefined, error: undefined }
+      : state,
+    feedback: ownsPending ? undefined : feedback,
+  };
 }
 export interface SessionRevert {
   readonly state: SessionRevertState;

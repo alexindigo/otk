@@ -219,6 +219,7 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
   await expect(record).toHaveAttribute("role", "status");
   await expect(record).toContainText("Compact refused");
   await expect(record).toContainText("HTTP 500");
+  await expect(record).toContainText("Compact refused (HTTP 500)");
   await expect(
     page.locator(".otk-failure-content").filter({ hasText: "Compact refused" }),
   ).toHaveCount(1);

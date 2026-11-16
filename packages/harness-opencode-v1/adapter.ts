@@ -493,17 +493,20 @@ export class OpencodeV1Adapter implements Harness {
         ? (id, turns, signal, cutoff, boundary) =>
           digest.transcriptMetadata(id, turns, signal, cutoff, boundary)
         : undefined,
-      decorate: (message, raw, directory) => {
-        if (this.buffers.subscribed(message.sessionID)) this.#records.seed(raw);
+      decorate: (message, raw, directory, snapshot) => {
+        if (!snapshot && this.buffers.subscribed(message.sessionID)) {
+          this.#records.seed(raw);
+        }
         const colors = this.#colors.peek(
           directory,
-          this.buffers.subscribed(message.sessionID)
+          !snapshot && this.buffers.subscribed(message.sessionID)
             ? message.sessionID
             : undefined,
         );
         if (message.role !== "context" && message.agent !== undefined) {
           message.agentColor = colors?.get(message.agent);
         }
+        if (snapshot) return message;
         for (const [i, part] of raw.parts.entries()) {
           if (part.type === "tool" && part.tool === "task") {
             message.parts[i] = referencePart({

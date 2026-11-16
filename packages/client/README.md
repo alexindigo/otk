@@ -465,6 +465,18 @@ Cancellation releases only the caller's wait, not canonical recovery or other
 consumers. Readiness also requires the serving transport's current `connected`
 fact and a linked native source; retained bodies do not certify either link.
 
+`snapshotPage(target,before?,signal?)` uses that canonical transcript's bounded
+admission queue for retained `history.messages` pages, without reducing them
+into the live view or opening Source folds. Native continuations distinguish
+retained archive reads from visible pages. BranchHistory owns one keyed,
+cancellable background capture after reversible Revert; its page-local
+source/prompt workers use configured message concurrency and preserve exact
+payload order. Every committing submission and Compact joins preservation before
+native admission. Restore does not wait for capture and fences late saves. A
+staged session after reload reacquires its missing browser copy before
+committing. Failed saves retain FP1 action, target, reason and recovery by
+target across selection changes.
+
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its
 canonical content. Model catalogs and usage leases retain their existing

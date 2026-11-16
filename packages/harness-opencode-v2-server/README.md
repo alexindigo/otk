@@ -251,6 +251,11 @@ reconstruct historical pending inputs. Stock V2 leaves that journal empty by
 default. Reply placement honors the causal prompt without moving preceding
 native controls. A snapshot needs no second read to recover the failure.
 
+Read-only archive pages share that normalized failure construction without
+writing retention or announcing live content. Their bounded native/retained
+merge keeps one identity, preferring an existing retained failure's facts and
+position.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank

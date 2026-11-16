@@ -9,7 +9,7 @@ import {
   shellTask,
 } from "./shell-fixture.ts";
 
-Deno.test("branch preservation owns revert, every shared submission, and Compact before native admission", async () => {
+Deno.test("branch preservation follows reversible revert and precedes every shared submission and Compact", async () => {
   const f = shellFixture(), events: string[] = [];
   const actions = client.createSessionActions({
     ...f,
@@ -35,12 +35,17 @@ Deno.test("branch preservation owns revert, every shared submission, and Compact
     }
     if (method === "session.get") return Promise.resolve(shellInfo("selected"));
     return Promise.resolve(
-      method === "session.revert" ? shellInfo("selected") : null,
+      method === "session.revert"
+        ? {
+          ...shellInfo("selected"),
+          revert: { messageID: "boundary", messageCount: 1, files: [] },
+        }
+        : null,
     );
   });
   const target = { sidecarId: "local", sessionID: "selected" };
   await actions.revert(target, "boundary");
-  assertEquals(events.slice(0, 2), ["save-branch", "session.revert"]);
+  assertEquals(events.slice(0, 2), ["session.revert", "save-branch"]);
   events.length = 0;
   await actions.compact(target, { provider: "p", model: "m" });
   assertEquals(events.slice(0, 3), ["save-draft", "session.compact", "settle"]);
@@ -69,11 +74,17 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     },
   });
   const target = { sidecarId: "local", sessionID: "selected" };
-  await assertRejects(
-    () => actions.revert(target, "boundary"),
-    Error,
-    "storage-full",
+  f.reply((_server, method) =>
+    Promise.resolve(
+      method === "session.revert"
+        ? {
+          ...shellInfo("selected"),
+          revert: { messageID: "boundary", messageCount: 1, files: [] },
+        }
+        : null,
+    )
   );
+  await actions.revert(target, "boundary");
   await assertRejects(
     () => actions.compact(target, { provider: "p", model: "m" }),
     Error,
@@ -89,7 +100,7 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
   );
   assertEquals(
     f.calls.filter((c) =>
-      ["session.revert", "session.compact", "session.prompt"].includes(
+      ["session.compact", "session.prompt"].includes(
         String(c[1]),
       )
     ),
@@ -268,6 +279,15 @@ Deno.test("session compact captures its target and next-prompt model inside act 
 Deno.test("revert and restore capture target RPCs inside act without promotion", async () => {
   for (const method of ["revert", "restore"] as const) {
     const f = shellFixture(), actions = client.createSessionActions(f);
+    f.reply((_server, rpc) =>
+      Promise.resolve(
+        rpc === "session.get"
+          ? shellInfo("background", "/resolved")
+          : rpc === `session.${method}`
+          ? shellInfo("background", "/resolved")
+          : null,
+      )
+    );
     const target = { sidecarId: "remote", sessionID: "background" };
     const pending = method === "revert"
       ? actions.revert(target, "boundary")

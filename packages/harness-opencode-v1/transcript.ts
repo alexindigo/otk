@@ -22,7 +22,7 @@ import {
 import type { StreamBuffers } from "@otk/content";
 import type { Messages, NativeMessage } from "./messages.ts";
 import type { Session } from "./types.ts";
-import { assistantSettled, mapMessage, mapPart } from "./map.ts";
+import { assistantSettled, mapMessage, mapPart, mapSession } from "./map.ts";
 import { isPrompt } from "./records.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import {
@@ -39,6 +39,7 @@ interface Cursor {
   native: string;
   retained?: { created: number; id: string };
   reuse?: boolean;
+  snapshot?: true;
 }
 interface Baseline {
   raw: Session;
@@ -66,12 +67,22 @@ function decode(token: string): Cursor {
     );
     if (
       Object.keys(value).some((key) =>
-        !["v", "session", "epoch", "cutoff", "native", "retained", "reuse"]
+        ![
+          "v",
+          "session",
+          "epoch",
+          "cutoff",
+          "native",
+          "retained",
+          "reuse",
+          "snapshot",
+        ]
           .includes(key)
       ) ||
       value.v !== 1 || typeof value.session !== "string" ||
       typeof value.epoch !== "string" || typeof value.native !== "string" ||
       (!value.native && !value.retained) ||
+      (value.snapshot !== undefined && value.snapshot !== true) ||
       (value.retained !== undefined &&
         (!Number.isFinite(value.retained.created) ||
           typeof value.retained.id !== "string")) ||
@@ -142,6 +153,7 @@ export class Transcript {
         message: Message,
         raw: NativeMessage,
         directory: string,
+        snapshot?: boolean,
       ): Message | Promise<Message>;
       summaries(
         id: string,
@@ -373,11 +385,27 @@ export class Transcript {
       }
     }
   }
-  async page(
+  page(
     id: string,
     before?: string,
     signal = new AbortController().signal,
     publish?: (page: MessagePage) => void,
+  ): Promise<MessagePage> {
+    return this.#page(id, before, signal, publish);
+  }
+  snapshot(
+    id: string,
+    before?: string,
+    signal = new AbortController().signal,
+  ): Promise<MessagePage> {
+    return this.#page(id, before, signal, undefined, true);
+  }
+  async #page(
+    id: string,
+    before?: string,
+    signal = new AbortController().signal,
+    publish?: (page: MessagePage) => void,
+    snapshot = false,
   ): Promise<MessagePage> {
     ids.decode(id);
     signal.throwIfAborted();
@@ -387,7 +415,7 @@ export class Transcript {
     let baseline = this.#baselines.get(id);
     if (
       token &&
-      (!baseline || token.session !== id ||
+      (!baseline || !!token.snapshot !== snapshot || token.session !== id ||
         token.epoch !== replay.clock(id).epoch ||
         token.cutoff !== (baseline.raw.revert?.messageID ?? null))
     ) {
@@ -398,11 +426,12 @@ export class Transcript {
     }
     const capture = replay.capture(id);
     try {
-      if (!token) this.options.retryRecovery?.(id);
+      if (!snapshot && !token) this.options.retryRecovery?.(id);
       baseline ??= await this.#read(id, signal);
       const owner = baseline;
       signal = AbortSignal.any([signal, owner.controller.signal]);
-      const cutoff = owner.raw.revert?.messageID;
+      const boundary = owner.raw.revert?.messageID;
+      const cutoff = snapshot ? undefined : boundary;
       let native = token?.native || undefined;
       let upper = token?.retained;
       let metadata: TranscriptMetadata | undefined;
@@ -414,11 +443,11 @@ export class Transcript {
         native = reader.cursor(cutoff, created);
         upper = { created, id: cutoff };
       }
-      const cached = native
+      const cached = !snapshot && native
         ? this.#cache?.get(this.#key(id, owner, native))
         : undefined;
       // A requested miss cancels only speculative ownership, never another caller.
-      if (!cached && native) {
+      if (!snapshot && !cached && native) {
         const key = this.#key(id, owner, native),
           work = this.#prefetch.get(key);
         if (work) {
@@ -439,7 +468,7 @@ export class Transcript {
         page.items.filter(({ info }) => !cutoff || info.id < cutoff).map(
           (raw) => {
             if (
-              raw.info.role === "assistant" &&
+              !snapshot && raw.info.role === "assistant" &&
               assistantSettled(raw.info)
             ) {
               buffers.removeMessage(raw.info.id, id);
@@ -448,7 +477,7 @@ export class Transcript {
             return this.options.decorate(
               mapMessage(raw.info, raw.parts, undefined, (part) => {
                 if (
-                  raw.info.role !== "assistant" ||
+                  snapshot || raw.info.role !== "assistant" ||
                   assistantSettled(raw.info)
                 ) {
                   return mapPart(part);
@@ -476,6 +505,7 @@ export class Transcript {
               }),
               raw,
               owner.raw.directory,
+              snapshot,
             );
           },
         ),
@@ -544,6 +574,8 @@ export class Transcript {
               created: oldest.info.time.created,
             },
           );
+        } else if (snapshot) {
+          metadata = { boundaries: [] };
         } else if (token && owner.promptReady) {
           metadata = { boundaries: [], prompt: owner.prompt };
         } else {
@@ -574,15 +606,68 @@ export class Transcript {
       // A complete clocked body page can paint while scalar coverage advances.
       // Standalone callers retain their single fully coordinated response.
       if (!publish) await acquireMetadata();
-      const session = await (owner.info ??= this.options.info(
-        owner.raw,
-        owner.controller.signal,
-      ));
+      const session = snapshot
+        ? mapSession(owner.raw)
+        : await (owner.info ??= this.options.info(
+          owner.raw,
+          owner.controller.signal,
+        ));
       signal.throwIfAborted();
       if (
         owner !== this.#baselines.get(id) ||
         owner.epoch !== replay.clock(id).epoch
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
+      const older = hasRetainedContinuation
+        ? encode({
+          v: 1,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: native ?? "",
+          reuse: true,
+          retained: { created: selected[0].time.created, id: selected[0].id },
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : page.next
+        ? encode({
+          v: 1,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: page.next,
+          ...(lower
+            ? { retained: { created: lower.time.created, id: lower.id } }
+            : {}),
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : null;
+      if (snapshot) {
+        const sealed = capture.seal();
+        if (sealed.clock.seq !== capture.from.seq) {
+          throw new HarnessError(
+            "capture-stale",
+            "History changed during archive capture",
+          );
+        }
+        const summaries = this.options.summaries(id, turns);
+        return {
+          sessionID: id,
+          version: replay.version(id),
+          from: capture.from,
+          clock: sealed.clock,
+          session,
+          items,
+          older,
+          helpers: {},
+          recovering: [],
+          catchup: [],
+          turns: Object.fromEntries(turns.map((turnID) => [turnID, {
+            summary: summaries[turnID],
+            boundary: metadata?.boundaries.find((b) => b.turnID === turnID) ??
+              { turnID, complete: false },
+          }])),
+        };
+      }
       buffers.epoch(id, owner.epoch);
       buffers.checkpoint(
         id,
@@ -690,28 +775,7 @@ export class Transcript {
         clock: sealed.clock,
         session,
         items,
-        older: hasRetainedContinuation
-          ? encode({
-            v: 1,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: native ?? "",
-            reuse: true,
-            retained: { created: selected[0].time.created, id: selected[0].id },
-          })
-          : page.next
-          ? encode({
-            v: 1,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: page.next,
-            ...(lower
-              ? { retained: { created: lower.time.created, id: lower.id } }
-              : {}),
-          })
-          : null,
+        older,
         prompt: metadata?.prompt,
         catchup,
         helpers,
