@@ -1067,16 +1067,15 @@ export class Transcript {
               ? facts.contexts[raw.id]?.order
               : undefined,
           ] as const;
-          if (snapshot) {
-            const value = await this.#executionFailureValue(...args);
-            const order = value.position && positionOrder(value.position);
-            failures.set(
-              raw.id,
-              order === undefined
-                ? value.message
-                : { ...value.message, sourceOrder: order },
-            );
-          } else await this.#executionFailure(...args);
+          if (!snapshot) await this.#executionFailure(...args);
+          const value = await this.#executionFailureValue(...args);
+          const order = value.position && positionOrder(value.position);
+          failures.set(
+            raw.id,
+            order === undefined
+              ? value.message
+              : { ...value.message, sourceOrder: order },
+          );
           signal.throwIfAborted();
         }
       }
@@ -1094,9 +1093,10 @@ export class Transcript {
           !snapshot && raw.type === "compaction" && raw.status === "running" &&
           !this.#compactions.has(id)
         ) this.#compactions.set(id, structuredClone(raw));
-        const mapped = snapshot
-          ? failures.get(raw.id) ?? mapMessage(raw, id, context)
-          : this.#map(raw, id, context);
+        const mapped = failures.get(raw.id) ??
+          (snapshot
+            ? mapMessage(raw, id, context)
+            : this.#map(raw, id, context));
         return mapped ? [mapped] : [];
       }).sort(compareMessages);
       const sequence = facts.source.startsWith("sql");
