@@ -53,6 +53,7 @@ import SharedControls, {
   LayoutTabs,
   MetadataPolicy,
   SecondaryFailures,
+  SourceOwnership,
 } from "./shared-controls.tsx";
 
 declare module "@otk/protocol" {
@@ -464,7 +465,9 @@ function Consumer(): Element {
   );
 }
 render(
-  new URL(location.href).searchParams.has("layout-tabs")
+  new URL(location.href).searchParams.has("source-ownership")
+    ? SourceOwnership
+    : new URL(location.href).searchParams.has("layout-tabs")
     ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("layout-controls")
     ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />

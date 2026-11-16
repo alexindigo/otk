@@ -36,6 +36,8 @@ export function sessions(
     listSessions: lists,
     listMessages: (id, opts, signal) =>
       transcript.page(id, opts.before, signal, opts.publish),
+    snapshotMessages: (id, opts, signal) =>
+      transcript.snapshot(id, opts.before, signal),
     async listChildren(id, signal): Promise<ContentSession[]> {
       const raw = await client.json<Session[]>(
         `/session/${encodeURIComponent(ids.decode(id))}/children`,

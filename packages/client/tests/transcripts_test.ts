@@ -169,6 +169,98 @@ Deno.test("archive page demand cannot survive its canonical transcript lifetime"
   }
 });
 
+Deno.test("Source cache replaces same-reference results when their canonical part changes", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const update = (seq: number, data: string) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq },
+        event: {
+          op: "part.upsert",
+          messageID: "a-079",
+          part: {
+            kind: "external",
+            id: "source-part",
+            name: "test",
+            data,
+            source: { kind: "record", ref: "opaque-ref" },
+          },
+        },
+      }, true);
+    update(1, "first");
+    const read = async () => {
+      // Exercise both the original Promise facade and its approved resource replacement.
+      const result = a.nativeSource!("opaque-ref") as unknown;
+      if (result instanceof Promise) return await result;
+      const resource = result as {
+        retain(): () => void;
+        state: { state: string; value?: unknown };
+        subscribe(fn: () => void): () => void;
+      };
+      const release = resource.retain();
+      try {
+        if (resource.state.state === "loading") {
+          await new Promise<void>((resolve) => {
+            const off = resource.subscribe(() => {
+              if (resource.state.state !== "loading") {
+                off();
+                resolve();
+              }
+            });
+          });
+        }
+        return resource.state.value;
+      } finally {
+        release();
+      }
+    };
+    const first = read();
+    await turns();
+    const req = f.requests.find((r) => r.method === "source.get")!;
+    assert(req);
+    f.requests.splice(f.requests.indexOf(req), 1);
+    replyRequest(f.connection.rpc, req, {
+      kind: "record",
+      preview: "first",
+      bytes: 5,
+      truncated: false,
+    });
+    await first;
+    update(2, "second");
+    const second = read();
+    await turns();
+    const next = f.requests.find((r) => r.method === "source.get");
+    assert(
+      next,
+      "Changed canonical source must not reuse the old per-reference result",
+    );
+    replyRequest(f.connection.rpc, next, {
+      kind: "record",
+      preview: "second",
+      bytes: 6,
+      truncated: false,
+    });
+    assertEquals(await second, {
+      kind: "record",
+      preview: "second",
+      bytes: 6,
+      truncated: false,
+    });
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("tail readiness joins the newest baseline without traversing older history", async () => {
   const f = fixture(policy);
   try {

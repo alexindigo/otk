@@ -51,3 +51,33 @@ Deno.test("transient command surfaces defer only to a retained sink with the sam
   );
   rpc.requests.stop();
 });
+
+Deno.test("local pre-admission failures retain one presentation owner without a native request", () => {
+  const rpc = new Rpc(() => {});
+  const cause = new RequestFailure({
+    code: "branch-history.storage",
+    retry: "new-intent",
+    diagnosticID: "local-archive",
+    facts: {
+      actionLabel: "Saving an earlier branch",
+      target: { sessionID: "tstv1-one" },
+      reason: "Storage is full",
+      recovery: "Free browser storage and retry",
+    },
+  });
+  assertEquals(rpc.ownsFailure(cause), false);
+  const sink = rpc.feedback("tstv1-one");
+  sink.fail(cause);
+  assertEquals(
+    rpc.ownsFailure(cause),
+    true,
+    "The installed target sink owns local admission failures too",
+  );
+  sink.clear();
+  assertEquals(
+    rpc.ownsFailure(cause),
+    false,
+    "A cleared sink cannot suppress a later surface",
+  );
+  rpc.requests.stop();
+});
