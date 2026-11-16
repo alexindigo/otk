@@ -90,10 +90,15 @@ export function applicationNotifications(input: {
     sound = registerSoundChannel(hub),
     stopBadge = registerBadgeChannel(hub);
   const candidates = new Map<string, Note>();
-  const publish = (incoming: Note) => {
+  const receipts = new Map<string, Note>();
+  const publish = (incoming: Note, previous?: Note) => {
     if (candidates.get(incoming.id) !== incoming) return;
     const ref = incoming.sessionRef!;
-    hub.publish(incoming);
+    const receipt = previous ? receipts.get(incoming.id) : undefined;
+    const delivered = previous
+      ? receipt && hub.replace(receipt, incoming)
+      : hub.publish(incoming);
+    if (delivered) receipts.set(incoming.id, delivered);
     const ctx = context();
     if (
       ctx.focused && ctx.visible && ctx.open?.sidecar === ref.sidecar &&
@@ -104,10 +109,11 @@ export function applicationNotifications(input: {
   };
   const retract = (id: string) => {
     candidates.delete(id);
+    receipts.delete(id);
     hub.retract(id);
   };
   const triggers = new NotificationTriggers(
-    (incoming) => {
+    (incoming, previous) => {
       if (incoming.kind === "permission" || incoming.kind === "question") {
         const ref = incoming.sessionRef!;
         incoming = {
@@ -139,10 +145,10 @@ export function applicationNotifications(input: {
             ).label,
           };
           candidates.set(incoming.id, enriched);
-          publish(enriched);
+          publish(enriched, previous);
         }, (error) => {
           if (candidates.get(incoming.id) !== incoming) return;
-          publish(incoming);
+          publish(incoming, previous);
           fail(error, {
             action: "question.list",
             target: target(ref.sidecar, ref.session),
@@ -154,7 +160,7 @@ export function applicationNotifications(input: {
         incoming.kind !== "permission" ||
         !input.connection(ref.sidecar).supports("permissions")
       ) {
-        publish(incoming);
+        publish(incoming, previous);
         return;
       }
       // Resolve action ownership before channel delivery. This schedules the input
@@ -199,10 +205,10 @@ export function applicationNotifications(input: {
           }
           : incoming;
         candidates.set(incoming.id, enriched);
-        publish(enriched);
+        publish(enriched, previous);
       }, (error) => {
         if (candidates.get(incoming.id) !== incoming) return;
-        publish(incoming);
+        publish(incoming, previous);
         fail(error, {
           action: "permission.list",
           target: target(ref.sidecar, ref.session),
@@ -219,9 +225,13 @@ export function applicationNotifications(input: {
       if (ctx.open) {
         for (const [id, note] of candidates) {
           if (
+            note.dismissOnView !== false &&
             note.sessionRef?.sidecar === ctx.open.sidecar &&
             note.sessionRef.session === ctx.open.session
-          ) candidates.delete(id);
+          ) {
+            candidates.delete(id);
+            receipts.delete(id);
+          }
         }
         hub.viewed(ctx.open.sidecar, ctx.open.session);
       }
@@ -281,6 +291,7 @@ export function applicationNotifications(input: {
       for (const stop of observed.values()) stop();
       observed.clear();
       candidates.clear();
+      receipts.clear();
       hub.stop();
       toast.stop();
       os.stop();

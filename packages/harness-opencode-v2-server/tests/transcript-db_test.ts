@@ -12,51 +12,59 @@ function fixture(): DatabaseSync {
   );
   return db;
 }
-Deno.test("failed selection anchors the native pending input at failure, including later delivery and cancellation", () => {
-  const db = fixture();
-  try {
-    db.exec(
-      "CREATE TABLE event(id TEXT,aggregate_id TEXT,seq INTEGER,type TEXT,data TEXT)",
-    );
-    const event = db.prepare(
-      "INSERT INTO event VALUES (?,'ses_fixture',?,?,?)",
-    );
-    const put = (seq: number, type: string, data: unknown) =>
-      event.run(`evt_${seq}`, seq, `${type}.1`, JSON.stringify(data));
-    put(2, "session.inbox.enqueued", {
-      inboxID: "msg_queue",
-      item: { type: "user", delivery: "queue" },
-    });
-    put(3, "session.inbox.enqueued", {
-      inboxID: "msg_steer",
-      item: { type: "user", delivery: "steer" },
-    });
-    put(4, "session.execution.failed", {});
-    put(5, "session.inbox.cancelled", { inboxID: "msg_steer" });
-    put(6, "session.execution.failed", {});
-    put(7, "session.inbox.delivered", { inboxID: "msg_queue" });
-    const message = db.prepare(
-      "INSERT INTO session_message VALUES (?,'ses_fixture',?,?,1,?)",
-    );
-    message.run("msg_old", "user", 1, "{}");
-    message.run("msg_4", "idle", 4, JSON.stringify({ outcome: "failed" }));
-    message.run("msg_6", "idle", 6, JSON.stringify({ outcome: "failed" }));
-    const reads = new TranscriptReads(
-      new Messages(() => {
-        throw new Error("no API");
-      }),
-      () => db,
-    );
-    const facts = reads.sqlFacts({
-      sessionID: sid,
-      messages: ["msg_4", "msg_6"],
-    })!;
-    assertEquals(facts.contexts.msg_4.replyTo, "msg_steer");
-    assertEquals(facts.contexts.msg_6.replyTo, "msg_queue");
-  } finally {
-    db.close();
-  }
-});
+for (const withInbox of [false, true]) {
+  Deno.test(`failed selection anchors historical pending input despite later delivery and cancellation: inbox=${withInbox}`, () => {
+    const db = fixture();
+    try {
+      db.exec(
+        "CREATE TABLE event(id TEXT,aggregate_id TEXT,seq INTEGER,type TEXT,data TEXT)",
+      );
+      const event = db.prepare(
+        "INSERT INTO event VALUES (?,'ses_fixture',?,?,?)",
+      );
+      const put = (seq: number, type: string, data: unknown) =>
+        event.run(`evt_${seq}`, seq, `${type}.1`, JSON.stringify(data));
+      put(2, "session.inbox.enqueued", {
+        inboxID: "msg_queue",
+        item: { type: "user", delivery: "queue" },
+      });
+      put(3, "session.inbox.enqueued", {
+        inboxID: "msg_steer",
+        item: { type: "user", delivery: "steer" },
+      });
+      put(4, "session.execution.failed", {});
+      put(5, "session.inbox.cancelled", { inboxID: "msg_steer" });
+      put(6, "session.execution.failed", {});
+      put(7, "session.inbox.delivered", { inboxID: "msg_queue" });
+      if (withInbox) {
+        db.exec(
+          `CREATE TABLE session_inbox(id TEXT,session_id TEXT,type TEXT,delivery TEXT,enqueued_seq INTEGER);
+      INSERT INTO session_inbox VALUES ('msg_queue','ses_fixture','user','queue',2);`,
+        );
+      }
+      const message = db.prepare(
+        "INSERT INTO session_message VALUES (?,'ses_fixture',?,?,1,?)",
+      );
+      message.run("msg_old", "user", 1, "{}");
+      message.run("msg_4", "idle", 4, JSON.stringify({ outcome: "failed" }));
+      message.run("msg_6", "idle", 6, JSON.stringify({ outcome: "failed" }));
+      const reads = new TranscriptReads(
+        new Messages(() => {
+          throw new Error("no API");
+        }),
+        () => db,
+      );
+      const facts = reads.sqlFacts({
+        sessionID: sid,
+        messages: ["msg_4", "msg_6"],
+      })!;
+      assertEquals(facts.contexts.msg_4.replyTo, "msg_steer");
+      assertEquals(facts.contexts.msg_6.replyTo, "msg_queue");
+    } finally {
+      db.close();
+    }
+  });
+}
 Deno.test("stock V2 without a persisted journal anchors pending input by native enqueue sequence", () => {
   const db = fixture();
   try {
@@ -80,6 +88,37 @@ Deno.test("stock V2 without a persisted journal anchors pending input by native 
     db.close();
   }
 });
+for (const emptyJournal of [false, true]) {
+  Deno.test(`current inbox cannot overwrite an older failure boundary: emptyJournal=${emptyJournal}`, () => {
+    const db = fixture();
+    try {
+      db.exec(
+        `CREATE TABLE session_inbox(id TEXT,session_id TEXT,type TEXT,delivery TEXT,enqueued_seq INTEGER);
+        INSERT INTO session_inbox VALUES ('msg_queue','ses_fixture','user','queue',2);
+        INSERT INTO session_message VALUES ('msg_old_failure','ses_fixture','idle',4,1,'{"outcome":"failed"}'),('msg_current_failure','ses_fixture','idle',8,1,'{"outcome":"failed"}');`,
+      );
+      if (emptyJournal) {
+        db.exec(
+          "CREATE TABLE event(id TEXT,aggregate_id TEXT,seq INTEGER,type TEXT,data TEXT)",
+        );
+      }
+      const reads = new TranscriptReads(
+        new Messages(() => {
+          throw new Error("no API");
+        }),
+        () => db,
+      );
+      const facts = reads.sqlFacts({
+        sessionID: sid,
+        messages: ["msg_old_failure", "msg_current_failure"],
+      })!;
+      assertEquals(facts.contexts.msg_old_failure.replyTo, undefined);
+      assertEquals(facts.contexts.msg_current_failure.replyTo, "msg_queue");
+    } finally {
+      db.close();
+    }
+  });
+}
 Deno.test("V2 native transcript facts use seq and scalar selections across page and cutoff boundaries", async () => {
   const db = fixture();
   try {

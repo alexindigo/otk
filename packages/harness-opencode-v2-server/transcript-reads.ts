@@ -677,27 +677,13 @@ export class TranscriptReads {
     sid: string,
     through: number,
   ): string | undefined {
-    // Stock native services do not persist the event journal by default. Their
-    // inbox still carries the authoritative enqueue sequence at first failure;
-    // the retained outcome keeps this association after that input is retired.
-    if (
-      sql.prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_inbox'",
-      ).get()
-    ) {
-      const pending = sql.prepare(
-        "SELECT id,type FROM session_inbox WHERE session_id=? AND enqueued_seq<? ORDER BY CASE delivery WHEN 'steer' THEN 0 ELSE 1 END,enqueued_seq LIMIT 1",
-      ).get(sid, through);
-      if (pending) {
-        return pending.type === "user" ? text(pending.id) : undefined;
-      }
-    }
-    if (
-      !sql.prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event'",
-      ).get()
-    ) return;
-    const row = sql.prepare(`WITH pending AS (
+    const journal = sql.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event'",
+    ).get() && sql.prepare(
+      "SELECT 1 FROM event WHERE aggregate_id=? AND type='session.inbox.enqueued.1' AND seq<? LIMIT 1",
+    ).get(sid, through);
+    if (journal) {
+      const row = sql.prepare(`WITH pending AS (
       SELECT json_extract(e.data,'$.inboxID') AS id,
         json_extract(e.data,'$.item.type') AS kind,e.seq,
         COALESCE((SELECT json_extract(c.data,'$.delivery') FROM event c
@@ -711,8 +697,26 @@ export class TranscriptReads {
           AND r.seq>e.seq AND r.seq<?
           AND json_extract(r.data,'$.inboxID')=json_extract(e.data,'$.inboxID'))
     ) SELECT id,kind FROM pending ORDER BY CASE delivery WHEN 'steer' THEN 0 ELSE 1 END,seq LIMIT 1`)
-      .get(through, sid, through, through);
-    return row?.kind === "user" ? text(row.id) : undefined;
+        .get(through, sid, through, through);
+      // Empty historical pending state is authoritative too.
+      return row?.kind === "user" ? text(row.id) : undefined;
+    }
+    // Stock services leave the journal empty. Current inbox state establishes a
+    // first failure only while the native transcript remains at that edge.
+    const latest = sql.prepare(
+      "SELECT MAX(seq) AS seq FROM session_message WHERE session_id=?",
+    ).get(sid);
+    if (Number(latest?.seq) > through) return;
+    if (
+      sql.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_inbox'",
+      ).get()
+    ) {
+      const pending = sql.prepare(
+        "SELECT id,type FROM session_inbox WHERE session_id=? AND enqueued_seq<? ORDER BY CASE delivery WHEN 'steer' THEN 0 ELSE 1 END,enqueued_seq LIMIT 1",
+      ).get(sid, through);
+      return pending?.type === "user" ? text(pending.id) : undefined;
+    }
   }
   async prefetch(
     input: PrefetchInput,

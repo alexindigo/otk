@@ -8,7 +8,11 @@ import type {
 } from "@otk/protocol";
 import { latestTerminal } from "@otk/protocol";
 import { sessionTitle } from "./session-title.ts";
-import { failureNote, sessionFailure } from "./failure-features.ts";
+import {
+  failureNote,
+  notificationFailure,
+  sessionFailure,
+} from "./failure-features.ts";
 import { RequestFailure } from "./failures.ts";
 import {
   acceptsPatch,
@@ -65,7 +69,8 @@ export class NotificationTriggers {
   #outcomes = new Map<string, Note>();
   #index?: ClientIndex;
   constructor(
-    readonly emit: (note: Note) => void,
+    /** previous identifies a same-outcome enrichment, never another fresh alert. */
+    readonly emit: (note: Note, previous?: Note) => void,
     readonly retract: (id: string) => void,
     readonly project: (sidecar: string, entries: IndexEntry[]) => IndexEntry[] =
       (_sidecar, entries) => entries,
@@ -224,11 +229,39 @@ export class NotificationTriggers {
       this.#outcomes.delete(id);
       this.retract(priorOutcome.id);
     }
+    const pending = this.#kinds.get(id);
+    const resolved = (pending === "permission" && !entry.permissions) ||
+      (pending === "question" && !entry.questions);
+    const remaining = resolved
+      ? entry.permissions
+        ? "permission"
+        : entry.questions
+        ? "question"
+        : undefined
+      : undefined;
+    // Retire the old input before its root ID can acquire a completion owner.
+    if (resolved && !remaining) {
+      this.#kinds.delete(id);
+      this.retract(id);
+    }
     const publishOutcome = (note: Note) => {
       const previous = this.#outcomes.get(id);
+      const beforeCause = previous &&
+        notificationFailure(previous)?.value.diagnosticID;
+      const cause = notificationFailure(note)?.value.diagnosticID;
+      const distinct = beforeCause && cause && beforeCause !== cause ||
+        priorFinish?.terminal !== undefined && completedAt !== undefined &&
+          completedAt > priorFinish.terminal;
+      if (
+        !distinct && previous &&
+        JSON.stringify(previous) === JSON.stringify(note)
+      ) return;
       if (previous && previous.id !== note.id) this.retract(previous.id);
       this.#outcomes.set(id, note);
-      this.emit(note);
+      this.emit(
+        note,
+        previous?.id === note.id && !distinct ? previous : undefined,
+      );
     };
     // Failure facts and failed completion are updates to the same session
     // outcome, not independent notification producers. This also enriches a
@@ -306,16 +339,6 @@ export class NotificationTriggers {
         });
       }
     }
-    const pending = this.#kinds.get(id);
-    const resolved = (pending === "permission" && !entry.permissions) ||
-      (pending === "question" && !entry.questions);
-    const remaining = resolved
-      ? entry.permissions
-        ? "permission"
-        : entry.questions
-        ? "question"
-        : undefined
-      : undefined;
     const kind: Note["kind"] | undefined = entry.permissions > old.permissions
       ? "permission"
       : entry.questions > old.questions
@@ -343,9 +366,6 @@ export class NotificationTriggers {
           }],
         },
       );
-    } else if (resolved) {
-      this.#kinds.delete(id);
-      this.retract(id);
     }
   }
 }

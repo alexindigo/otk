@@ -35,6 +35,151 @@ const note = (change: Partial<Note> = {}): Note => ({
   actions: [{ label: "Open", command: "open", default: true }],
   ...change,
 });
+for (const factsFirst of [true, false]) {
+  Deno.test(`failure enrichment keeps one fresh sound and updates persistent delivery: factsFirst=${factsFirst}`, () => {
+    let sounds = 0, persistent = 0, revision = 1;
+    const receipts = new Map<string, Note>();
+    const hub = new NotificationHub(
+      (_note, _available, fresh) => ({
+        channels: fresh ? ["sound", "persistent"] : ["persistent"],
+      }),
+      async () => {},
+      () => {},
+    );
+    for (const channel of ["sound", "persistent"]) {
+      hub.registerChannel({
+        id: channel,
+        available: () => true,
+        deliver: () => {
+          if (channel === "sound") sounds++;
+          else persistent++;
+        },
+        retract() {},
+      });
+    }
+    const triggers = new NotificationTriggers((incoming, previous?: Note) => {
+      const old = receipts.get(incoming.id);
+      const next = previous
+        ? old && hub.replace(old, incoming)
+        : hub.publish(incoming);
+      if (next) receipts.set(incoming.id, next);
+    }, (id) => {
+      receipts.delete(id);
+      hub.retract(id);
+    });
+    const failed = (terminal: boolean, diagnostic?: string) =>
+      entry("a", {
+        status: terminal ? "idle" : "busy",
+        ...(terminal
+          ? { activity: { terminal: 2, outcome: "failed" as const } }
+          : {}),
+        attention: {
+          ...entry().attention,
+          ...(diagnostic
+            ? {
+              error: "Provider limit",
+              errorState: {
+                revision: 1,
+                observations: [{
+                  id: diagnostic,
+                  source: "event" as const,
+                  message: "Provider limit",
+                }],
+              },
+            }
+            : {}),
+        },
+      });
+    const send = (value: IndexEntry) =>
+      triggers.receive("s", {
+        t: "index.patch",
+        rev: ++revision,
+        ops: [{ op: "upsert", entry: value }],
+      });
+    try {
+      triggers.receive("s", {
+        t: "index.snapshot",
+        rev: revision,
+        entries: [entry("a", { status: "busy" })],
+      });
+      send(failed(!factsFirst, factsFirst ? "enrichment-one" : undefined));
+      send(failed(true, "enrichment-one"));
+      send(failed(true, "enrichment-one"));
+      assertEquals(
+        sounds,
+        1,
+        "A retained failure enrichment is not a fresh alert",
+      );
+      assertEquals(
+        persistent,
+        factsFirst ? 1 : 2,
+        "Unchanged facts skip delivery; changed facts update quietly",
+      );
+      send(failed(true, "enrichment-two"));
+      assertEquals(sounds, 2, "A genuinely different failure still alerts");
+    } finally {
+      hub.stop();
+    }
+  });
+}
+for (const kind of ["permissions", "questions"] as const) {
+  Deno.test(`completion replacing resolved ${kind} retains its root delivery`, () => {
+    const receipts = new Map<string, Note>();
+    const hub = new NotificationHub(
+      () => ({ channels: ["persistent"] }),
+      async () => {},
+      () => {},
+    );
+    hub.registerChannel({
+      id: "persistent",
+      available: () => true,
+      deliver() {},
+      retract() {},
+    });
+    const triggers = new NotificationTriggers((n) => {
+      receipts.set(n.id, hub.publish(n));
+    }, (id) => {
+      receipts.delete(id);
+      hub.retract(id);
+    });
+    try {
+      triggers.receive("s", {
+        t: "index.snapshot",
+        rev: 1,
+        entries: [entry("a", { status: "busy" })],
+      });
+      triggers.receive("s", {
+        t: "index.patch",
+        rev: 2,
+        ops: [{
+          op: "upsert",
+          entry: entry("a", {
+            status: "busy",
+            attention: { ...entry().attention, [kind]: 1 },
+          }),
+        }],
+      });
+      triggers.receive("s", {
+        t: "index.patch",
+        rev: 3,
+        ops: [{
+          op: "upsert",
+          entry: entry("a", {
+            activity: { terminal: 3, outcome: "succeeded" },
+          }),
+        }],
+      });
+      const completed = receipts.get("s/a");
+      assertEquals(completed?.kind, "done");
+      assert(
+        completed && hub.current(completed),
+        "Old input cleanup cannot retract its replacement completion",
+      );
+    } finally {
+      hub.stop();
+    }
+  });
+}
 Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
