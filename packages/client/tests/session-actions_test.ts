@@ -28,8 +28,14 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
       },
     },
   });
+  const compactEntered = Promise.withResolvers<void>();
+  const compactResponse = Promise.withResolvers<null>();
   f.reply((_server, method) => {
     events.push(method);
+    if (method === "session.compact") {
+      compactEntered.resolve();
+      return compactResponse.promise;
+    }
     if (method === "tasks.create") {
       return Promise.resolve(shellTask("promoted", ["selected"]));
     }
@@ -47,7 +53,12 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
   await actions.revert(target, "boundary");
   assertEquals(events.slice(0, 2), ["session.revert", "save-branch"]);
   events.length = 0;
-  await actions.compact(target, { provider: "p", model: "m" });
+  const compact = actions.compact(target, { provider: "p", model: "m" });
+  await compactEntered.promise;
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  assertEquals(events.includes("settle"), false);
+  compactResponse.resolve(null);
+  await compact;
   assertEquals(events.slice(0, 3), ["save-draft", "session.compact", "settle"]);
   events.length = 0;
   await actions.submission(target)(() => {
