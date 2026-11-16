@@ -44,6 +44,7 @@ import {
   type FailureValue,
   failureValue,
   replyKey,
+  revertPresentation,
   sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -114,7 +115,15 @@ export default function SessionView(props: {
   const writeDraft = props.onDraft;
   const sessionPorts = useSessionPorts();
   const feedbackOwner = sessionPorts?.feedback;
-  const feedback = bindFeedback(() => feedbackOwner);
+  const requestFeedback = bindFeedback(() => feedbackOwner);
+  const rollbackPresentation = createMemo(() =>
+    revertPresentation(
+      props.rollback?.state ?? {},
+      requestFeedback(),
+      props.branchHistory?.state.error,
+    )
+  );
+  const feedback = () => rollbackPresentation().feedback;
   let noticeControl: { focus(): void } | undefined;
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
@@ -152,18 +161,7 @@ export default function SessionView(props: {
   const rollbackNotice = () =>
     !!props.strip || !!props.rollback?.state.pending ||
     !!props.rollback?.state.error;
-  const rollbackState = () => {
-    const state = props.rollback?.state ?? {}, shown = feedback();
-    const sameRequest = shown?.identity && state.key === shown.identity;
-    const sameFailure = shown?.diagnosticID &&
-      state.failure?.diagnosticID === shown.diagnosticID;
-    const branchFailure = props.branchHistory?.state.error;
-    const sameBranchFailure = branchFailure && branchFailure.diagnosticID &&
-      state.failure?.diagnosticID === branchFailure.diagnosticID;
-    return sameRequest || sameFailure || sameBranchFailure
-      ? { ...state, pending: undefined, error: undefined }
-      : state;
-  };
+  const rollbackState = () => rollbackPresentation().state;
   const savedNotice = () =>
     !!props.branchHistory &&
     (!!props.branchHistory.state.branches.length ||

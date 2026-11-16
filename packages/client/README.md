@@ -259,6 +259,14 @@ diagnostic identities, never render calls or replay deliveries. Resources and
 views retain `Feedback` instead of passing its rendered text. Local exceptions
 remain diagnostic-only; feature-selected public reasons stay separate.
 
+`commandFailureFacts({id,title})` snapshots a command's opaque identity and
+feature-authored public wording into separate facts. Command surfaces capture
+their invocation descriptor before awaiting execution, including projected
+context titles. Notifications borrow their originating frozen action descriptor.
+Registry replacement cannot rename an earlier failure; missing public wording
+stays generic rather than displaying an ID. Original failure facts and existing
+feedback ownership still take precedence over surface context.
+
 Recovery is a specific next step supplied in `FailureFacts.recovery` by the
 plugin, auth, command or other action/cause owner. The presenter never guesses
 advice from retry policy or outcome. Missing/blank recovery creates no line in
@@ -284,6 +292,16 @@ does not choose cross-session grouping or a new persistence lifetime.
 
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
+
+Native Source previews have one transcript-owned per-reference resource.
+`nativeSource(ref)` returns its plain state/subscribe owner; an open fold calls
+`retain()` and releases that lease on close. Mounting a row or a closed fold
+does not read. Accepted changes invalidate the matching structural owner without
+decoding plugin references; open demand refreshes automatically and coalesces
+pending replacements. Obsolete results cannot publish. Unchanged remounts and
+themes reuse both successful and failed outcomes; Retry explicitly refreshes.
+The existing 64-entry reuse cache never evicts retained folds. Body removal,
+cooling and stop retire source values and pending reads.
 
 ## Public API
 
@@ -443,6 +461,18 @@ missing baseline uses existing recovery. It never exhausts an older cursor.
 Cancellation releases only the caller's wait, not canonical recovery or other
 consumers. Readiness also requires the serving transport's current `connected`
 fact and a linked native source; retained bodies do not certify either link.
+
+`snapshotPage(target,before?,signal?)` uses that canonical transcript's bounded
+admission queue for retained `history.messages` pages, without reducing them
+into the live view or opening Source folds. Native continuations distinguish
+retained archive reads from visible pages. BranchHistory owns one keyed,
+cancellable background capture after reversible Revert; its page-local
+source/prompt workers use configured message concurrency and preserve exact
+payload order. Every committing submission and Compact joins preservation before
+native admission. Restore does not wait for capture and fences late saves. A
+staged session after reload reacquires its missing browser copy before
+committing. Failed saves retain FP1 action, target, reason and recovery by
+target across selection changes.
 
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its

@@ -71,6 +71,7 @@ const scenes = {
   failures: () => import("./failures.tsx"),
   "settlement-conflicts": () => import("./settlement-conflicts.tsx"),
   "feedback-stability": () => import("./feedback-stability.tsx"),
+  "command-failures": () => import("./command-failures.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

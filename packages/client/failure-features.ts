@@ -116,6 +116,15 @@ export function createFailurePresenter(): FailurePresenter {
   return presenter;
 }
 const shipped = createFailurePresenter();
+/** Snapshot the invoking owner's public wording separately from its opaque ID. */
+export function commandFailureFacts(
+  command: { readonly id?: string; readonly title?: string },
+): FailureFacts {
+  return {
+    ...(command.id ? { action: command.id } : {}),
+    ...(command.title?.trim() ? { actionLabel: command.title } : {}),
+  };
+}
 export type FailureValue = Feedback | "";
 export function failureValue(
   cause: unknown,

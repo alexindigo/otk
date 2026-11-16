@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { isRealPrompt, sourceAt } from "@otk/protocol";
 import { deriveMessage, derivePart, mapMessage, mapPart } from "../map.ts";
 import { reachable } from "./source-support.ts";
@@ -27,6 +27,19 @@ const text = (synthetic: boolean): RawPart => ({
   type: "text",
   text: "**kept**",
   synthetic,
+});
+Deno.test("Source proof rejects a reachable path with the wrong native owner", () => {
+  const raw = text(true), loaded = mapPart(raw), derived = derivePart(raw);
+  assertThrows(() =>
+    reachable(loaded, derived, { origin: "message", id: "wrong-owner" })
+  );
+  assertThrows(() =>
+    reachable(loaded, derived, { origin: "record", id: raw.messageID })
+  );
+  assert(
+    reachable(loaded, derived, { origin: "message", id: raw.messageID }).preview
+      .includes("kept"),
+  );
 });
 Deno.test("V1 content establishes prompt identity; synthetic-only and empty headers never anchor", () => {
   assertEquals(isRealPrompt(mapMessage(info)), false);
@@ -74,7 +87,10 @@ Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown ident
     assert(part.activity);
     // Bookkeeping is not copy content: only its reference is loaded.
     assertEquals(part.source?.payload, undefined);
-    assert(reachable(part, derivePart(raw)).preview.includes('"hash":"h"'));
+    assert(
+      reachable(part, derivePart(raw), { origin: "message", id: raw.messageID })
+        .preview.includes('"hash":"h"'),
+    );
     assertEquals(part.name, `opencode-v1/${type}`);
     assertEquals(part.content, undefined);
   }
@@ -85,7 +101,10 @@ Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown ident
   };
   const part = mapPart(large);
   assert(part.kind === "external");
-  const view = reachable(part, derivePart(large));
+  const view = reachable(part, derivePart(large), {
+    origin: "message",
+    id: large.messageID,
+  });
   assertEquals(view.truncated, true);
   assert(view.bytes > 70_000);
 });
@@ -187,7 +206,10 @@ Deno.test("V1 failed task result and independent assistant failure retain both e
   const result = mapMessage(info, envelopeParts);
   assertEquals(result.role, "context");
   assert(
-    reachable(result, deriveMessage(info, envelopeParts)).preview.includes(
+    reachable(result, deriveMessage(info, envelopeParts), {
+      origin: "message",
+      id: info.id,
+    }).preview.includes(
       '"id":"m"',
     ),
   );
@@ -223,7 +245,12 @@ Deno.test("V1 malformed task envelopes preserve complete outgoing context withou
       id: info.id,
       path: "",
     });
-    assertEquals(JSON.parse(reachable(message, derived).preview), info);
+    assertEquals(
+      JSON.parse(
+        reachable(message, derived, { origin: "message", id: info.id }).preview,
+      ),
+      info,
+    );
     assertEquals(derived.source?.payload, envelope);
     const part = message.parts[0];
     assert(part.kind === "external");

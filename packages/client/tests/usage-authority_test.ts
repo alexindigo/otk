@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import {
+  type IndexEntry,
+  knownDerived,
   type TranscriptVersion,
   type TurnUsageDetail,
   UsageLedger,
@@ -8,6 +10,7 @@ import {
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import type { SidecarConnection } from "../connection.ts";
 import { createSessionUsage } from "../session-usage.ts";
+import { shellEntry } from "./shell-fixture.ts";
 
 const target = { sidecarId: "server", sessionID: "s", turnID: "turn" };
 const flush = async () => {
@@ -27,7 +30,7 @@ function detail(version: TranscriptVersion, input = 7): TurnUsageDetail {
     clock: { epoch: "usage", seq: 0 },
   };
 }
-function fixture() {
+function fixture(entry?: IndexEntry) {
   const reads: {
     result: PromiseWithResolvers<TurnUsageDetail>;
     signal: AbortSignal;
@@ -46,7 +49,11 @@ function fixture() {
       },
     },
   } as unknown as SidecarConnection;
-  const owner = createSessionUsage(() => connection);
+  const owner = createSessionUsage(
+    () => connection,
+    undefined,
+    entry ? () => entry : undefined,
+  );
   const release = owner.retain(target);
   return {
     owner,
@@ -153,3 +160,95 @@ Deno.test("persistent stale usage authority retries once immediately then backs 
     f.stop();
   }
 });
+
+Deno.test("covered refresh demands join one held usage request", async () => {
+  const f = fixture(), version = { generation: 2, revision: 3 };
+  try {
+    const pending = f.owner.load(target);
+    await flush();
+    assertStrictEquals(f.owner.load(target, true), pending);
+    assertStrictEquals(f.owner.load(target, true), pending);
+    assertEquals(f.reads.length, 1);
+    f.reads[0].result.resolve(detail(version));
+    await pending;
+    await flush();
+    assertEquals(f.reads.length, 1);
+    assertEquals(f.owner.get(target)?.summary.tokens.input, 7);
+  } finally {
+    f.stop();
+  }
+});
+
+for (const change of ["revision", "source"] as const) {
+  Deno.test(`a newer usage ${change} during a held request schedules exactly one follow-up`, async () => {
+    const entry = shellEntry("s"), version = { generation: 2, revision: 3 };
+    const value = detail(version);
+    entry.digest.turns.turn = knownDerived(value.summary, "source", 1);
+    const f = fixture(entry);
+    try {
+      const pending = f.owner.load(target);
+      await flush();
+      entry.digest.turns.turn = knownDerived(
+        value.summary,
+        change === "source" ? "replacement" : "source",
+        change === "revision" ? 2 : 1,
+      );
+      for (let rev = 1; rev <= 2; rev++) {
+        f.owner.receive("server", { t: "index.patch", rev, ops: [] });
+        assertStrictEquals(f.owner.load(target, true), pending);
+      }
+      assertEquals(f.reads.length, 1);
+      f.reads[0].result.resolve(value);
+      await pending;
+      await flush();
+      assertEquals(f.reads.length, 2);
+      const successor = f.owner.load(target);
+      assertStrictEquals(f.owner.load(target, true), successor);
+      f.reads[1].result.resolve(value);
+      await successor;
+      await flush();
+      assertEquals(f.reads.length, 2);
+      assertEquals(f.owner.get(target)?.summary.tokens.input, 7);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+for (const covered of [true, false]) {
+  Deno.test(`same-source summary publication ${covered ? "covered by" : "newer than"} a held usage result ${covered ? "joins" : "refreshes"} it`, async () => {
+    const entry = shellEntry("s"), version = { generation: 2, revision: 3 };
+    entry.digest.turns.turn = knownDerived(
+      detail(version, 1).summary,
+      "source",
+      1,
+    );
+    const f = fixture(entry);
+    try {
+      const pending = f.owner.load(target);
+      await flush();
+      entry.digest.turns.turn = knownDerived(
+        detail(version).summary,
+        "source",
+        1,
+      );
+      for (let rev = 1; rev <= 2; rev++) {
+        f.owner.receive("server", { t: "index.patch", rev, ops: [] });
+      }
+      f.reads[0].result.resolve(detail(version, covered ? 7 : 1));
+      await pending;
+      await flush();
+      assertEquals(f.reads.length, covered ? 1 : 2);
+      if (!covered) {
+        const successor = f.owner.load(target);
+        f.reads[1].result.resolve(detail(version));
+        await successor;
+      }
+      await flush();
+      assertEquals(f.reads.length, covered ? 1 : 2);
+      assertEquals(f.owner.get(target)?.summary.tokens.input, 7);
+    } finally {
+      f.stop();
+    }
+  });
+}

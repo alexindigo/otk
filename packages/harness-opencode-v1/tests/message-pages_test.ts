@@ -440,6 +440,48 @@ Deno.test("rollback boundary resolution uses the authoritative page directory an
   await f.adapter.core.stop();
 });
 
+Deno.test("retained archive pages include staged V1 history without moving live prompt or cursor authority", async () => {
+  const f = fixture();
+  f.cutoff("m10");
+  try {
+    const live = await f.adapter.core.listMessages("opcv1-s", {});
+    f.reads.length = 0;
+    const saved = await f.adapter.core.snapshotMessages!("opcv1-s", {});
+    assertEquals(
+      saved.items.map((m) => m.id),
+      Array.from({ length: 10 }, (_, i) => `m${i + 10}`),
+    );
+    assertEquals(saved.prompt, undefined);
+    const older = await f.adapter.core.snapshotMessages!("opcv1-s", {
+      before: saved.older!,
+    });
+    assertEquals(
+      older.items.map((m) => m.id),
+      Array.from({ length: 10 }, (_, i) => `m0${i}`),
+    );
+    assertEquals(older.older, null);
+    assertEquals(
+      f.reads.filter((url) => url.pathname.endsWith("/message")).every((url) =>
+        url.searchParams.get("limit") === "10"
+      ),
+      true,
+    );
+    await assertRejects(() =>
+      f.adapter.core.listMessages("opcv1-s", { before: saved.older! })
+    );
+    const current = await f.adapter.core.listMessages("opcv1-s", {});
+    assertEquals(current.items, live.items);
+    assertEquals(current.prompt, live.prompt);
+    const controller = new AbortController();
+    controller.abort();
+    await assertRejects(() =>
+      f.adapter.core.snapshotMessages!("opcv1-s", {}, controller.signal)
+    );
+  } finally {
+    await f.adapter.core.stop();
+  }
+});
+
 Deno.test("concurrent initial viewers share one raw session read and one caller cannot cancel another", async () => {
   const settings = cfg();
   const held = Promise.withResolvers<Session>();

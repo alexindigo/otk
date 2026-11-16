@@ -251,6 +251,11 @@ reconstruct historical pending inputs. Stock V2 leaves that journal empty by
 default. Reply placement honors the causal prompt without moving preceding
 native controls. A snapshot needs no second read to recover the failure.
 
+Read-only archive pages share that normalized failure construction without
+writing retention or announcing live content. Their bounded native/retained
+merge keeps one identity, preferring an existing retained failure's facts and
+position.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank
@@ -261,6 +266,14 @@ sequence evidence the record is placed by its native clock. The projected order
 `after + rank/(rank+1)` lies strictly between native sequences. Pages honour the
 staged revert cutoff; a committed revert retires observations at or after its
 boundary, matching native message and inbox deletion.
+
+Assistant causal context belongs to that same transcript owner. Explicit native
+message parent metadata, accepted scalar message context and the native open
+prompt admit a step into its turn. Scalar prompt facts are accepted before page
+replay: an early live header without replyTo cannot overwrite that proven
+context in the snapshot or catchup and create another reply/usage footer.
+Historical per-message context does not borrow a newer prompt, and no UI
+inference or extra body read supplies the association.
 
 `tool-interpretation.ts` owns current and migrated tool aliases, argument and
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper

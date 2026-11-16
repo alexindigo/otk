@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import type { Harness } from "@otk/harness";
 import {
   Finishes,
@@ -356,6 +356,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "source.get",
     "history.list",
     "history.prompt",
+    "history.messages",
     "history.attachments",
     "catalogs.watch",
     "catalogs.demand",
@@ -401,7 +402,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 29, // Project defaults share one cancellable read; catalogs retain their demand lane.
+      read: 30, // Retained archive pages have an independent cancellable read.
       native: 19,
       local: 10,
       "prepared-local": 6,
@@ -409,6 +410,71 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     });
   } finally {
     approvals.close();
+    f.inbox.close();
+    f.db.close();
+  }
+});
+
+test("retained history RPC delegates an opaque page and rejects invalid or unsupported reads without live fallback", async () => {
+  const f = await composition();
+  const page = {
+    sessionID: "tstv1-one",
+    items: [],
+    older: null,
+    clock: { epoch: "archive", seq: 1 },
+    from: { epoch: "archive", seq: 1 },
+    version: { generation: 1, revision: 1 },
+    session: {
+      id: "tstv1-one",
+      directory: "/p",
+      projectID: "p",
+      title: "Earlier",
+      time: { created: 1, updated: 1 },
+      archived: false,
+    },
+    turns: {},
+    helpers: {},
+    recovering: [],
+    catchup: [],
+  };
+  const calls: unknown[] = [];
+  const harness: Harness = {
+    ...f.registry.context.harness,
+    core: {
+      ...f.registry.context.harness.core,
+      snapshotMessages: (id, input, signal) => {
+        calls.push([id, input, signal]);
+        return Promise.resolve(page);
+      },
+    },
+  };
+  const rpc = new RpcRegistry(harness, f.db);
+  Core.registerSessions(rpc, harness);
+  try {
+    assertEquals(
+      await rpc.dispatch("history.messages", {
+        sessionID: "tstv1-one",
+        before: "opaque",
+      }),
+      page,
+    );
+    assertEquals(calls, [["tstv1-one", { before: "opaque" }, undefined]]);
+    for (
+      const params of [{ sessionID: "tstv1-one", before: "" }, {
+        sessionID: "tstv1-one",
+        before: "x".repeat(4097),
+      }, { sessionID: "tstv1-one", limit: 999 }]
+    ) {
+      await assertRejects(() => rpc.dispatch("history.messages", params));
+    }
+    assertEquals(calls.length, 1);
+    const unsupported = new RpcRegistry(f.registry.context.harness, f.db);
+    Core.registerSessions(unsupported, f.registry.context.harness);
+    await assertRejects(() =>
+      unsupported.dispatch("history.messages", { sessionID: "tstv1-one" })
+    );
+    assertEquals(calls.length, 1);
+  } finally {
     f.inbox.close();
     f.db.close();
   }
