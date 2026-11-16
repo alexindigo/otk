@@ -42,6 +42,7 @@ function fixture(
   rows = newest,
   source = "sql:fixture:1",
   replyTo?: string,
+  olderRows = older,
 ) {
   let bodies = 0, scalars = 0, coverage = 0;
   const speculative: { optional?: boolean; priority?: string }[] = [];
@@ -64,7 +65,7 @@ function fixture(
         bodies++;
         if (input.cursor) assertEquals(input.order, undefined);
         return Promise.resolve({
-          data: [...(input.cursor ? older : rows)].reverse(),
+          data: [...(input.cursor ? olderRows : rows)].reverse(),
           cursor: input.cursor ? {} : { next: "older" },
         });
       },
@@ -86,7 +87,7 @@ function fixture(
         const input = _input as { messages: string[] };
         return Promise.resolve({
           ...facts(
-            [...rows, ...older].filter((row) =>
+            [...rows, ...olderRows].filter((row) =>
               input.messages.includes(row.id)
             ),
           ),
@@ -165,6 +166,49 @@ for (const origin of ["composer", "session"] as const) {
       await f.value.stop();
     }
   });
+}
+for (const source of ["sql:fixture:1", "api:fixture:1"]) {
+  for (const archive of [false, true]) {
+    Deno.test(`all-failed native pages advance without repeated retained failures: ${source} archive=${archive}`, async () => {
+      const rows = newest.map((
+        r,
+      ) => ({
+        id: r.id,
+        type: "idle",
+        outcome: "failed",
+        error: { type: "APIError", message: "Provider limit" },
+        time: r.time,
+      } as NativeMessage));
+      const f = fixture(undefined, undefined, rows, source);
+      const messages: string[] = [];
+      let before: string | undefined;
+      try {
+        for (let i = 0; i < 6; i++) {
+          const page = archive
+            ? await f.value.snapshot(id, before)
+            : await f.value.page(id, before);
+          assert(page.items.length <= 10);
+          for (const m of page.items) {
+            assert(!messages.includes(m.id), `Repeated ${m.id}`);
+            messages.push(m.id);
+          }
+          before = page.older ?? undefined;
+          if (!before) {
+            break;
+          }
+        }
+        assertEquals(before, undefined, "Consumed pages must reach exhaustion");
+        assertEquals(messages.length, 12);
+        assert(messages.includes("msg_8") && messages.includes("msg_9"));
+        assertEquals(
+          messages.filter((id) => id.startsWith("request:failure:")).length,
+          10,
+        );
+      } finally {
+        await f.value.stop();
+      }
+    });
+  }
 }
 Deno.test("V2 failed-idle snapshots and later live delivery share one retained failure", async () => {
   const error = { type: "APIError", message: "Provider limit", status: 403 };

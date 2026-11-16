@@ -6,6 +6,12 @@ available and later facts enrich it without adding a second toast. Transcript
 reply groups cannot precede their known causal prompt, including inbox prompts
 whose acquired source position follows an early selection failure.
 
+Outcome enrichment carries its prior notification identity to quiet channel
+replacement; unchanged facts do not redeliver, and distinct failure diagnostics
+still alert. Input retirement precedes root-ID completion publication. Reply
+group ordering uses the canonical first message's sort change, not the aggregate
+display clock; causal dependents are reinserted on prompt removal too.
+
 ProgressEstimate derives EWMA completion rate and variance-aware ETA from worker
 active-work facts, resetting at scope/generation replacement. createProgress
 owns the coalesced one-second publication clock, stopping it when work is ready

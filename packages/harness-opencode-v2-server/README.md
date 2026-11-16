@@ -256,6 +256,12 @@ writing retention or announcing live content. Their bounded native/retained
 merge keeps one identity, preferring an existing retained failure's facts and
 position.
 
+Live pages use that same normalized failure row before deriving continuation
+edges, so a full page of failed idles advances without replaying retained rows.
+Historical pending-input reconstruction prefers the journal at the requested
+boundary. An empty stock journal permits current-inbox fallback only at the
+current native edge; later inbox state cannot rewrite an older failure.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank

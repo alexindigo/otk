@@ -22,6 +22,57 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
+Deno.test("first-message reorder uses its canonical clock, not the aggregate last clock", () => {
+  const projection = createTranscriptProjection();
+  const a = step("a", "prompt", 2), b = step("b", "prompt", 5);
+  const control: Message = {
+    id: "control",
+    sessionID: a.sessionID,
+    role: "context",
+    time: { created: 3 },
+    parts: [],
+  };
+  projection.replace([a, control, b]);
+  const moved = { ...a, time: { created: 5, completed: 6 } };
+  projection.apply({ op: "message.upsert", message: moved });
+  const replacement = createTranscriptProjection();
+  replacement.replace([moved, control, b]);
+  assertEquals(projection.state.replyIDs, ["control", "reply:prompt"]);
+  assertEquals(projection.state.replyIDs, replacement.state.replyIDs);
+});
+Deno.test("removing a causal prompt reorders only its dependent reply before subsequent insertions", () => {
+  const projection = createTranscriptProjection();
+  const prompt: Message = {
+    id: "prompt",
+    sessionID: "tstv1-s",
+    role: "user",
+    time: { created: 4 },
+    parts: [],
+  };
+  const failure: Message = {
+    id: "failure",
+    sessionID: prompt.sessionID,
+    role: "context",
+    replyTo: prompt.id,
+    time: { created: 2 },
+    parts: [],
+  };
+  const control: Message = {
+    id: "control",
+    sessionID: prompt.sessionID,
+    role: "context",
+    time: { created: 3 },
+    parts: [],
+  };
+  projection.replace([failure, control, prompt]);
+  projection.apply({ op: "message.remove", messageID: prompt.id });
+  assertEquals(projection.state.replyIDs, ["reply:prompt", "control"]);
+  const next = { ...control, id: "next", time: { created: 2.5 } };
+  projection.apply({ op: "message.upsert", message: next });
+  const replacement = createTranscriptProjection();
+  replacement.replace([failure, control, next]);
+  assertEquals(projection.state.replyIDs, replacement.state.replyIDs);
+});
 Deno.test("causal replies follow their prompt even when queued source order follows the failure", () => {
   const projection = createTranscriptProjection();
   const control: Message = {
