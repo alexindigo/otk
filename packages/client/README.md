@@ -305,12 +305,16 @@ Framework-free OTK networking, RPC and state. Production code depends only on
 Native Source previews have one transcript-owned per-reference resource.
 `nativeSource(ref)` returns its plain state/subscribe owner; an open fold calls
 `retain()` and releases that lease on close. Mounting a row or a closed fold
-does not read. Accepted changes invalidate the matching structural owner without
-decoding plugin references; open demand refreshes automatically and coalesces
-pending replacements. Obsolete results cannot publish. Unchanged remounts and
-themes reuse both successful and failed outcomes; Retry explicitly refreshes.
-The existing 64-entry reuse cache never evicts retained folds. Body removal,
-cooling and stop retire source values and pending reads.
+does not read. Structural ownership follows the current path when an opaque
+reference moves. Accepted changes invalidate the matching structural owner
+without decoding plugin references; open demand refreshes automatically and
+coalesces pending replacements. Obsolete results cannot publish. Unchanged
+remounts and themes reuse both successful and failed outcomes; Retry explicitly
+refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
+removal, cooling and stop retire source values and pending reads.
+
+Usage refreshes during a held read retain only the latest demand, clearing an
+obsolete successor when demand returns to its admitted witness.
 
 ## Public API
 

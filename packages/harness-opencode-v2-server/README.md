@@ -281,6 +281,12 @@ context in the snapshot or catchup and create another reply/usage footer.
 Historical per-message context does not borrow a newer prompt, and no UI
 inference or extra body read supplies the association.
 
+Explicit native-parent provenance stays with baseline/live message context and
+outranks later scalar prompt fallback through page, archive and live replay.
+Recovering Source reads preserve a longer exact native checkpoint rather than
+substituting a shorter retained prefix; terminal native source remains
+authority.
+
 `tool-interpretation.ts` owns current and migrated tool aliases, argument and
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,

@@ -256,10 +256,14 @@ export class StreamBuffers {
     partID: string,
     sessionID: string,
     messageID: string,
+    checkpoint?: string,
   ): string | undefined {
     const active = this.#parts.get(partID);
     return active?.sessionID === sessionID && active.messageID === messageID
-      ? active.stream.text
+      ? active.recovering && checkpoint !== undefined &&
+          checkpoint.length > active.stream.text.length
+        ? checkpoint
+        : active.stream.text
       : undefined;
   }
   replay(sessionID: string, emit: Emit): void {

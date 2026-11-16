@@ -403,16 +403,18 @@ export class Transcript {
             : shell?.raw ?? await this.reader.get(id, value.id, signal);
           if (raw.type === "assistant") {
             const ordinals = { text: 0, reasoning: 0 };
+            const terminal = raw.time.completed != null;
             raw = {
               ...raw,
               content: raw.content.map((part) => {
                 if (
-                  part.type !== "text" && part.type !== "reasoning"
+                  part.type !== "text" && part.type !== "reasoning" || terminal
                 ) return part;
                 const acquired = this.buffers.source(
                   partID(raw.id, part.type, ordinals[part.type]++),
                   id,
                   raw.id,
+                  part.text,
                 );
                 return acquired === undefined
                   ? part
@@ -457,9 +459,18 @@ export class Transcript {
     admitting = false,
   ): MessageContext {
     const baseline = this.#baselines.get(id);
-    const replyTo = parentID ?? baseline?.contexts.get(messageID)?.replyTo ??
+    const accepted = baseline?.contexts.get(messageID);
+    const nativeParent = parentID ?? context.nativeParent ??
+      this.#live.get(messageID)?.context.nativeParent ?? accepted?.nativeParent;
+    const replyTo = nativeParent ?? accepted?.replyTo ??
       context.replyTo ?? (admitting ? baseline?.prompt?.id : undefined);
-    return replyTo === context.replyTo ? context : { ...context, replyTo };
+    const result = {
+      ...context,
+      replyTo,
+      ...(nativeParent ? { nativeParent } : {}),
+    };
+    if (nativeParent) baseline?.contexts.set(messageID, result);
+    return result;
   }
   #causalEvent(id: string, event: ContentOp): ContentOp {
     if (event.op !== "message.upsert" || event.message.role !== "assistant") {
@@ -559,10 +570,19 @@ export class Transcript {
     // A live step can have arrived while this first capture was still reading.
     baseline.prompt = facts.metadata.prompt;
     for (const [id, context] of Object.entries(facts.contexts)) {
-      baseline.contexts.set(id, context);
       const live = this.#live.get(id);
-      if (live && context.replyTo && !live.context.replyTo) {
-        live.context = { ...live.context, replyTo: context.replyTo };
+      const nativeParent = baseline.contexts.get(id)?.nativeParent ??
+        live?.context.nativeParent;
+      const accepted = nativeParent
+        ? { ...context, replyTo: nativeParent, nativeParent }
+        : context;
+      baseline.contexts.set(id, accepted);
+      if (live && accepted.replyTo && (!live.context.replyTo || nativeParent)) {
+        live.context = {
+          ...live.context,
+          replyTo: accepted.replyTo,
+          ...(nativeParent ? { nativeParent } : {}),
+        };
       }
     }
   }

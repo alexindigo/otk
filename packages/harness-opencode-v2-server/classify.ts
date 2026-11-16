@@ -111,6 +111,8 @@ export interface MessageContext {
   terminal?: boolean;
   order: number;
   replyTo?: string;
+  /** Explicit native message/step parent, never a newer prompt fallback. */
+  nativeParent?: string;
   agent?: string;
   model?: { providerID: string; id: string; variant?: string };
 }
@@ -259,7 +261,8 @@ export function mapMessage(
       ),
       agent: raw.agent,
       model: { provider: raw.model.providerID, model: raw.model.id },
-      replyTo: context.replyTo,
+      replyTo: text(record(raw.metadata).parentID) ?? context.nativeParent ??
+        context.replyTo,
       cost: reported(raw.cost),
       tokens: tokens(raw.tokens),
       interrupted,
