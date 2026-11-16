@@ -6,6 +6,10 @@ import { factsFrom, scalarMessage } from "../transcript-reads.ts";
 import { Messages, type NativeMessage } from "../messages.ts";
 import { MessagePrefetchCache } from "../prefetch.ts";
 import { Transcript } from "../transcript.ts";
+import {
+  requestFailureFacts,
+  requestFailureRecord,
+} from "../request-failure.ts";
 import type { V2Client } from "../client.ts";
 import { opencodeV2SessionID as ids } from "../ids.ts";
 import { createTranscriptProjection, emptyContent, reduce } from "@otk/client";
@@ -40,6 +44,101 @@ const user = (key: string): NativeMessage => ({
   id: key,
   text: key,
   time: { created: 1 },
+});
+Deno.test("V2 Source follows acquired live tool progress without a persisted message read", async () => {
+  const updates: ContentOp[] = [];
+  const transcript = new Transcript({
+    client: () => {
+      throw new Error("No persisted read for acquired live source");
+    },
+    policy,
+    content: (_id, op) => updates.push(op),
+    diagnostic() {},
+    invalidated() {},
+  });
+  transcript.subscriptions(id, 1);
+  try {
+    await transcript.event({
+      type: "session.step.started",
+      created: 1,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        agent: "build",
+        model: { id: "model", providerID: "test" },
+      },
+    });
+    const data = {
+      sessionID: "ses_fixture",
+      assistantMessageID: "msg",
+      id: "tool",
+    };
+    await transcript.event({
+      type: "session.tool.input.started",
+      created: 2,
+      data: { ...data, name: "bash" },
+    });
+    await transcript.event({
+      type: "session.tool.called",
+      created: 3,
+      data: { ...data, input: { command: "pwd" } },
+    });
+    const source = () => {
+      const op = updates.filter((op) =>
+        op.op === "part.upsert" && op.part.kind === "tool"
+      ).at(-1);
+      assert(op?.op === "part.upsert" && op.part.kind === "tool");
+      return op.part.call.source!.ref!;
+    };
+    const ref = source();
+    assert(
+      (await transcript.source(id, ref, new AbortController().signal)).preview
+        .includes('"command":"pwd"'),
+    );
+    await transcript.event({
+      type: "session.tool.success",
+      created: 4,
+      data: { ...data, content: [{ type: "text", text: "exact output" }] },
+    });
+    assertEquals(source(), ref);
+    assert(
+      (await transcript.source(id, ref, new AbortController().signal)).preview
+        .includes("exact output"),
+    );
+    await transcript.event({
+      type: "session.text.started",
+      created: 5,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        ordinal: 0,
+      },
+    });
+    await transcript.event({
+      type: "session.text.delta",
+      created: 6,
+      data: {
+        sessionID: "ses_fixture",
+        assistantMessageID: "msg",
+        ordinal: 0,
+        delta: "unpersisted append",
+      },
+    });
+    const header = updates.find((op) => op.op === "message.upsert");
+    assert(header?.op === "message.upsert");
+    assert(
+      (await transcript.source(
+        id,
+        header.message.source!.ref!,
+        new AbortController().signal,
+      )).preview.includes("unpersisted append"),
+    );
+    await assertRejects(() =>
+      transcript.source(ids.encode("other"), ref, new AbortController().signal)
+    );
+  } finally {
+    await transcript.stop();
+  }
 });
 Deno.test("V2 live historical tools and snapshot checkpoints use the same interpretation", async () => {
   const updates: ContentOp[] = [];
@@ -928,3 +1027,176 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
     await t.stop();
   }
 });
+
+for (const failure of ["none", "hidden", "retained"] as const) {
+  Deno.test(`V2 retained archive pages include hidden native and request rows without changing live authority: ${failure}`, async () => {
+    const rows: NativeMessage[] = Array.from(
+      { length: 21 },
+      (_, i) => ({
+        ...user(`msg_${String(i).padStart(2, "0")}`),
+        time: { created: i + 1 },
+      }),
+    );
+    const nativeError = {
+      type: "APIError",
+      message: "Hidden provider limit",
+      status: 403,
+    };
+    if (failure !== "none") {
+      rows[20] = {
+        id: "msg_20",
+        type: "idle",
+        outcome: "failed",
+        error: nativeError,
+        time: { created: 21 },
+      } as NativeMessage;
+    }
+    const reads: { limit: number; cursor?: string }[] = [],
+      updates: ContentOp[] = [];
+    const api = {
+      session: {
+        inbox: { list: () => Promise.resolve([]) },
+        get: () =>
+          Promise.resolve({
+            id: "ses_fixture",
+            projectID: "p",
+            location: { directory: "/project" },
+            time: { created: 1, updated: 30 },
+            revert: { messageID: "msg_10", files: [] },
+          }),
+      },
+      message: {
+        list: (input: { limit: number; cursor?: string }) => {
+          reads.push(input);
+          const before = input.cursor
+            ? JSON.parse(
+              atob(input.cursor.replaceAll("-", "+").replaceAll("_", "/")),
+            ).id
+            : undefined;
+          const candidates = rows.filter((r) => !before || r.id < before)
+            .reverse();
+          const data = candidates.slice(0, input.limit);
+          const next = data.length === input.limit
+            ? btoa(JSON.stringify({ id: data.at(-1)!.id }))
+            : undefined;
+          return Promise.resolve({ data, cursor: { next } });
+        },
+      },
+    };
+    const client = {
+      service: { version: "2.2.6" },
+      failureFacts: requestFailureFacts,
+      read: <T>(run: (api: unknown) => Promise<T>) => run(api),
+    } as unknown as V2Client;
+    const t = new Transcript({
+      client: () => client,
+      policy: { ...policy, prefetchbytes: 0 },
+      facts: (input) =>
+        Promise.resolve({
+          ...factsFrom(
+            rows.map((r, i) => scalarMessage(r, i + 1)),
+            input.messages,
+            input.cutoff,
+          ),
+          source: "sql",
+        }),
+      content: (_id, op) => updates.push(op),
+      diagnostic() {},
+      invalidated() {},
+    });
+    try {
+      t.subscriptions(id, 1);
+      const failureKey = "failure:execution:evt_20";
+      if (failure === "retained") {
+        await t.requests.put({
+          id: failureKey,
+          sessionID: id,
+          position: { after: 20, rank: 1, basis: "stream" },
+          outcome: requestFailureRecord(
+            id,
+            {
+              code: "native.execution",
+              retry: "none",
+              diagnosticID: "execution:evt_20",
+              facts: {
+                ...requestFailureFacts(nativeError),
+                actionLabel: "Running session",
+                outcome: "rejected",
+              },
+            },
+            21,
+            "msg_19",
+          ),
+        });
+      }
+      await t.requests.put({
+        id: "hidden",
+        sessionID: id,
+        position: { after: 19, rank: 1, basis: "stream" },
+        outcome: {
+          id: "request:hidden",
+          sessionID: id,
+          role: "user",
+          time: { created: 20 },
+          parts: [],
+        },
+      });
+      const live = await t.page(id);
+      assert(live.items.every((m) => m.id < "msg_10"));
+      reads.length = 0;
+      const start = t.replay.clock(id), events = updates.length;
+      const retainedBefore = await t.requests.page(id, undefined, 100);
+      let page = await t.snapshot(id);
+      const continuation = page.older!;
+      const saved = [...page.items];
+      while (page.older) {
+        page = await t.snapshot(id, page.older);
+        saved.push(...page.items);
+      }
+      assertEquals(new Set(saved.map((m) => m.id)).size, 22);
+      assert(
+        saved.some((m) =>
+          m.id ===
+            (failure === "none" ? "msg_20" : "request:failure:execution:evt_20")
+        ),
+      );
+      if (failure !== "none") {
+        const failures = saved.filter((m) =>
+          m.parts.some((p) =>
+            p.kind === "external" &&
+            (p.failure || p.activity?.title === "Execution failed")
+          )
+        );
+        assertEquals(
+          failures.length,
+          1,
+          "Archive uses the same single normalized failure as the live transcript",
+        );
+        assert(JSON.stringify(failures[0]).includes("Hidden provider limit"));
+        assert(failures[0].role === "context");
+        assertEquals(failures[0].replyTo, "msg_19");
+      }
+      assert(saved.some((m) => m.id === "request:hidden"));
+      assert(
+        reads.every((r) => r.limit === 10),
+        "Archive must not trigger an unbounded preview or global prompt scan",
+      );
+      assertEquals(updates.length, events);
+      assertEquals(t.replay.clock(id), start);
+      assertEquals(
+        await t.requests.page(id, undefined, 100),
+        retainedBefore,
+        "Archive reads never mutate retained live authority",
+      );
+      await assertRejects(() => t.page(id, continuation));
+      const current = await t.page(id);
+      assertEquals(current.prompt, live.prompt);
+      assertEquals(current.items, live.items);
+      const controller = new AbortController();
+      controller.abort();
+      await assertRejects(() => t.snapshot(id, undefined, controller.signal));
+    } finally {
+      await t.stop();
+    }
+  });
+}

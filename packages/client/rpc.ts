@@ -69,13 +69,9 @@ export class Rpc {
   /** Only an installed target sink with this exact diagnostic owns presentation. */
   ownsFailure(cause: unknown): boolean {
     return cause instanceof RequestFailure &&
-      this.requests.operations().some((operation) => {
-        const state = operation.state;
-        return !!state.owner &&
-          state.error?.diagnosticID === cause.failure.diagnosticID &&
-          this.#feedback.get(state.owner)?.current()?.diagnosticID ===
-            cause.failure.diagnosticID;
-      });
+      [...this.#feedback.values()].some((sink) =>
+        sink.current()?.diagnosticID === cause.failure.diagnosticID
+      );
   }
   feedback(owner: string): FeedbackOwner {
     let feedback = this.#feedback.get(owner);

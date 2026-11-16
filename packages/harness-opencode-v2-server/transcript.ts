@@ -39,6 +39,7 @@ import {
   inboxMessage,
   lifecycleRecord,
   mapMessage,
+  mapSession,
   type MessageContext,
   millis,
   partID,
@@ -91,6 +92,7 @@ interface Cursor {
   source: string;
   retained?: { created: number; id: string; order?: number };
   reuse?: boolean;
+  snapshot?: true;
 }
 interface LiveShell {
   session: string;
@@ -145,12 +147,14 @@ function decode(token: string): Cursor {
           "source",
           "retained",
           "reuse",
+          "snapshot",
         ].includes(key)
       ) ||
       v.v !== 2 || typeof v.session !== "string" ||
       typeof v.epoch !== "string" || typeof v.native !== "string" ||
       (!v.native && !v.retained) || typeof v.source !== "string" || !v.source ||
       (v.reuse !== undefined && typeof v.reuse !== "boolean") ||
+      (v.snapshot !== undefined && v.snapshot !== true) ||
       (v.retained !== undefined &&
         (!Number.isFinite(v.retained.created) ||
           typeof v.retained.id !== "string" ||
@@ -390,10 +394,38 @@ export class Transcript {
             { order: 0 },
           );
         } else {
+          const live = this.#live.get(value.id);
+          const shell = [...this.#shells.values()].find((owner) =>
+            owner.session === id && owner.raw.id === value.id
+          );
+          let raw = live?.session === id
+            ? live.raw
+            : shell?.raw ?? await this.reader.get(id, value.id, signal);
+          if (raw.type === "assistant") {
+            const ordinals = { text: 0, reasoning: 0 };
+            raw = {
+              ...raw,
+              content: raw.content.map((part) => {
+                if (
+                  part.type !== "text" && part.type !== "reasoning"
+                ) return part;
+                const acquired = this.buffers.source(
+                  partID(raw.id, part.type, ordinals[part.type]++),
+                  id,
+                  raw.id,
+                );
+                return acquired === undefined
+                  ? part
+                  : { ...part, text: acquired };
+              }),
+            };
+          }
           derived = mapMessage(
-            await this.reader.get(id, value.id, signal),
+            raw,
             id,
-            { order: 0 },
+            live?.session === id
+              ? live.context
+              : shell?.context ?? { order: 0 },
           );
         }
       } catch (error) {
@@ -417,8 +449,35 @@ export class Transcript {
     if (!view) throw sourceFailure("item");
     return view;
   }
+  #assistantContext(
+    id: string,
+    messageID: string,
+    context: MessageContext,
+    parentID?: string,
+    admitting = false,
+  ): MessageContext {
+    const baseline = this.#baselines.get(id);
+    const replyTo = parentID ?? baseline?.contexts.get(messageID)?.replyTo ??
+      context.replyTo ?? (admitting ? baseline?.prompt?.id : undefined);
+    return replyTo === context.replyTo ? context : { ...context, replyTo };
+  }
+  #causalEvent(id: string, event: ContentOp): ContentOp {
+    if (event.op !== "message.upsert" || event.message.role !== "assistant") {
+      return event;
+    }
+    const message = event.message;
+    const context = this.#assistantContext(id, message.id, {
+      order: message.sourceOrder ?? message.time.created,
+      replyTo: message.replyTo,
+    });
+    return context.replyTo === message.replyTo ? event : {
+      ...event,
+      message: { ...message, replyTo: context.replyTo },
+    };
+  }
   #publish(id: string, event: ContentOp): void {
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
+      event = this.#causalEvent(id, event);
       if (event.op === "message.upsert") {
         event = {
           ...event,
@@ -496,8 +555,15 @@ export class Transcript {
         if (facts.cutoffOrder !== undefined) facts.cutoffOrder += shift;
       }
     }
+    // Scalar native context is authoritative before the page/replay is sealed.
+    // A live step can have arrived while this first capture was still reading.
+    baseline.prompt = facts.metadata.prompt;
     for (const [id, context] of Object.entries(facts.contexts)) {
       baseline.contexts.set(id, context);
+      const live = this.#live.get(id);
+      if (live && context.replyTo && !live.context.replyTo) {
+        live.context = { ...live.context, replyTo: context.replyTo };
+      }
     }
   }
   changed(id?: string): void {
@@ -834,6 +900,14 @@ export class Transcript {
         };
       }
     }
+    if (raw.type === "assistant") {
+      context = this.#assistantContext(
+        id,
+        raw.id,
+        context,
+        text(record(raw.metadata).parentID),
+      );
+    }
     let mapped = mapMessage(raw, id, context);
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
@@ -899,11 +973,19 @@ export class Transcript {
   ): Promise<MessagePage> {
     return this.#own(this.#page(id, before, signal, publish));
   }
+  snapshot(
+    id: string,
+    before?: string,
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<MessagePage> {
+    return this.#own(this.#page(id, before, signal, undefined, true));
+  }
   async #page(
     id: string,
     before?: string,
     signal: AbortSignal = new AbortController().signal,
     publish?: (page: MessagePage) => void,
+    snapshot = false,
   ): Promise<MessagePage> {
     ids.decode(id);
     signal.throwIfAborted();
@@ -911,10 +993,10 @@ export class Transcript {
     let baseline = this.#baselines.get(id);
     if (
       token &&
-      (!baseline || token.session !== id ||
+      (!baseline || !!token.snapshot !== snapshot || token.session !== id ||
         token.epoch !== this.replay.clock(id).epoch ||
         token.cutoff !== (baseline.raw.revert?.messageID ?? null) ||
-        token.source !== baseline.source)
+        (!snapshot && token.source !== baseline.source))
     ) {
       throw new HarnessError(
         "cursor-stale",
@@ -930,16 +1012,17 @@ export class Transcript {
         owner.controller.signal,
         this.#lifetime.signal,
       ]);
-      const cutoff = owner.raw.revert?.messageID,
+      const boundary = owner.raw.revert?.messageID,
+        cutoff = snapshot ? undefined : boundary,
         compatible =
           (this.#client ?? this.options.client()).service.version === "2.2.6",
         native = token
           ? token.native || undefined
           : (cutoff && compatible ? nativeCursor(cutoff) : undefined);
-      const cached = native
+      const cached = !snapshot && native
         ? this.#cache?.get(this.#key(id, owner, native))
         : undefined;
-      if (!cached && native) {
+      if (!snapshot && !cached && native) {
         const key = this.#key(id, owner, native),
           work = this.#prefetch.get(key);
         if (work) {
@@ -960,12 +1043,20 @@ export class Transcript {
         messages: page.items.map((m) => m.id),
         cutoff,
       }, signal);
-      this.#acceptFacts(owner, facts);
-      // A native snapshot can see its failed idle before the SSE observer has
-      // processed it. Both routes materialize the same retained failure first.
+      if (snapshot) {
+        if (token && token.source !== facts.source) {
+          throw new HarnessError(
+            "cursor-stale",
+            "History source changed during archive capture",
+          );
+        }
+      } else this.#acceptFacts(owner, facts);
+      // Normalize native failures once for both read-only archives and live
+      // materialization. Only the live owner may retain or announce the result.
+      const failures = new Map<string, Message>();
       for (const raw of page.items) {
         if (raw.type === "idle" && raw.outcome === "failed") {
-          await this.#executionFailure(
+          const args = [
             id,
             raw.id,
             raw.error,
@@ -975,7 +1066,17 @@ export class Transcript {
             facts.source.startsWith("sql")
               ? facts.contexts[raw.id]?.order
               : undefined,
-          );
+          ] as const;
+          if (snapshot) {
+            const value = await this.#executionFailureValue(...args);
+            const order = value.position && positionOrder(value.position);
+            failures.set(
+              raw.id,
+              order === undefined
+                ? value.message
+                : { ...value.message, sourceOrder: order },
+            );
+          } else await this.#executionFailure(...args);
           signal.throwIfAborted();
         }
       }
@@ -990,10 +1091,12 @@ export class Transcript {
         // Reconnect can discover an in-flight compaction without its start
         // event. A page may seed an absent owner, never replace a live one.
         if (
-          raw.type === "compaction" && raw.status === "running" &&
+          !snapshot && raw.type === "compaction" && raw.status === "running" &&
           !this.#compactions.has(id)
         ) this.#compactions.set(id, structuredClone(raw));
-        const mapped = this.#map(raw, id, context);
+        const mapped = snapshot
+          ? failures.get(raw.id) ?? mapMessage(raw, id, context)
+          : this.#map(raw, id, context);
         return mapped ? [mapped] : [];
       }).sort(compareMessages);
       const sequence = facts.source.startsWith("sql");
@@ -1046,12 +1149,12 @@ export class Transcript {
           MESSAGE_PAGE_SIZE + 1,
           "timeline",
         );
-      if (sequence && facts.cutoffOrder !== undefined) {
+      if (!snapshot && sequence && facts.cutoffOrder !== undefined) {
         this.requests.cutoff(id, facts.cutoffOrder);
       }
       signal.throwIfAborted();
       const nativeItems = items;
-      const candidates = [
+      const candidates = [...new Map([
         ...items.filter((m) =>
           !token?.reuse || !upper || compareEdge(m, upper) < 0
         ),
@@ -1081,10 +1184,82 @@ export class Transcript {
             };
           },
         ),
-      ].sort((a, b) => compareEdge(a, edge(b)));
+      ].map((m) => [m.id, m])).values()].sort((a, b) =>
+        compareEdge(a, edge(b))
+      );
       const overflow = candidates.length > MESSAGE_PAGE_SIZE;
       const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
       items = selected.sort(compareMessages);
+      const older = overflow
+        ? encode({
+          v: 2,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: native ?? "",
+          reuse: true,
+          source: facts.source,
+          retained: edge(
+            selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
+          ),
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : page.next
+        ? encode({
+          v: 2,
+          session: id,
+          epoch: owner.epoch,
+          cutoff: boundary ?? null,
+          native: page.next,
+          source: facts.source,
+          ...(lower ? { retained: lower } : {}),
+          ...(snapshot ? { snapshot: true as const } : {}),
+        })
+        : null;
+      if (snapshot) {
+        const session = mapSession(owner.raw);
+        signal.throwIfAborted();
+        if (
+          owner !== this.#baselines.get(id) ||
+          owner.epoch !== this.replay.clock(id).epoch
+        ) {
+          throw new HarnessError(
+            "cursor-stale",
+            "History baseline was replaced",
+          );
+        }
+        const sealed = capture.seal();
+        if (sealed.clock.seq !== capture.from.seq) {
+          throw new HarnessError(
+            "capture-stale",
+            "History changed during archive capture",
+          );
+        }
+        const turnIDs = [
+          ...new Set(
+            items.filter((m) => m.role === "assistant").map((m) =>
+              m.role === "assistant" ? m.replyTo ?? m.id : m.id
+            ),
+          ),
+        ];
+        return {
+          sessionID: id,
+          version: this.replay.version(id),
+          from: capture.from,
+          clock: sealed.clock,
+          session,
+          items,
+          older,
+          helpers: {},
+          recovering: [],
+          catchup: [],
+          turns: Object.fromEntries(turnIDs.map((turnID) => [turnID, {
+            boundary: facts.metadata.boundaries.find((b) =>
+              b.turnID === turnID
+            ) ?? { turnID, complete: false },
+          }])),
+        };
+      }
       this.buffers.epoch(id, owner.epoch);
       this.buffers.checkpoint(id, (sid, op) => this.#publish(sid, op));
       items = items.map((m) => this.buffers.overlay(m));
@@ -1143,6 +1318,9 @@ export class Transcript {
           generation: event.stream.generation,
         });
         return false;
+      }).map((value) => {
+        const event = this.#causalEvent(id, value.event);
+        return event === value.event ? value : { ...value, event };
       });
       if (this.recovery.scoped(id)) {
         for (const m of items) {
@@ -1190,30 +1368,7 @@ export class Transcript {
         clock: sealed.clock,
         session: owner.presentation,
         items,
-        older: overflow
-          ? encode({
-            v: 2,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: native ?? "",
-            source: facts.source,
-            reuse: true,
-            retained: edge(
-              selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
-            ),
-          })
-          : page.next
-          ? encode({
-            v: 2,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: page.next,
-            source: facts.source,
-            ...(lower ? { retained: lower } : {}),
-          })
-          : null,
+        older,
         prompt: facts.metadata.prompt,
         catchup,
         helpers: {},
@@ -1489,12 +1644,50 @@ export class Transcript {
     label?: string,
     nativeOrder?: number,
   ): Promise<Message> {
+    const value = await this.#executionFailureValue(
+      id,
+      nativeID,
+      error,
+      created,
+      context,
+      label,
+      nativeOrder,
+    );
+    if (!value.previous?.outcome) {
+      await this.#observe(
+        id,
+        value.key,
+        value.message,
+        value.previous,
+        value.position,
+      );
+    }
+    return value.message;
+  }
+  /** Construction may read existing identity/position, but never acquires live
+   * publication, retention, watermarks or a sequence probe for an archive. */
+  async #executionFailureValue(
+    id: string,
+    nativeID: string | undefined,
+    error: unknown,
+    created: number,
+    context: MessageContext | undefined,
+    label?: string,
+    nativeOrder?: number,
+  ) {
     const diagnosticID = nativeID
       ? `execution:${nativeID.replace(/^msg_/, "evt_")}`
       : crypto.randomUUID();
     const key = `failure:${diagnosticID}`;
     const previous = await this.requests.get(id, key);
-    if (previous?.outcome) return previous.outcome;
+    if (previous?.outcome) {
+      return {
+        key,
+        previous,
+        message: previous.outcome,
+        position: previous.position,
+      };
+    }
     const message = requestFailureRecord(
       id,
       {
@@ -1512,18 +1705,16 @@ export class Transcript {
       context?.replyTo,
     );
     const after = nativeOrder === undefined ? undefined : nativeOrder - 1;
-    await this.#observe(
-      id,
+    return {
       key,
-      message,
       previous,
-      after === undefined ? undefined : {
+      message,
+      position: after === undefined ? undefined : {
         after,
         rank: this.requests.rank(id, after),
-        basis: "stream",
+        basis: "stream" as const,
       },
-    );
-    return message;
+    };
   }
   async #observe(
     id: string,
@@ -2076,15 +2267,24 @@ export class Transcript {
       };
       const baseline = this.#baselines.get(id),
         context = {
-          ...(existing?.context ?? baseline?.contexts.get(messageID) ?? {
-            order: baseline?.source?.startsWith("api")
-              ? Math.max(
-                0,
-                ...[...baseline.contexts.values()].map((c) => c.order),
-              ) + 1
-              : event.durable?.seq ?? ++this.#revisions,
-            replyTo: baseline?.prompt?.id,
-          }),
+          ...this.#assistantContext(
+            id,
+            messageID,
+            existing?.context ?? baseline?.contexts.get(messageID) ?? {
+              order: baseline?.source?.startsWith("api")
+                ? Math.max(
+                  0,
+                  ...[...baseline.contexts.values()].map((c) => c.order),
+                ) + 1
+                : event.durable?.seq ?? ++this.#revisions,
+            },
+            text(d.parentID) ??
+              text(
+                record("metadata" in event ? event.metadata : undefined)
+                  .parentID,
+              ),
+            true,
+          ),
           terminal: undefined,
         };
       baseline?.contexts.set(messageID, context);

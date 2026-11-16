@@ -101,6 +101,13 @@ export interface HarnessCore {
     opts: { before?: MessageCursor; publish?(page: MessagePage): void },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
+  /** Bounded retained history, including rows hidden by a reversible stage.
+   * This read must not publish bodies or change live transcript state. */
+  snapshotMessages?(
+    id: string,
+    opts: { before?: MessageCursor },
+    signal?: AbortSignal,
+  ): Promise<MessagePage>;
   createSession(
     input: { directory: string; title?: string; parentID?: string },
     operation?: OperationContext,

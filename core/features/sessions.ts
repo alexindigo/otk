@@ -355,6 +355,41 @@ export function register(
       }
     },
   });
+  rpc.register("history.messages", {
+    execution: readExecution((p: { sessionID: string }) => ({
+      sessionID: p.sessionID,
+    })),
+    params(p) {
+      if (
+        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+      ) {
+        throw new HarnessError("params", "Unknown history page parameter");
+      }
+      const before = text(p, "before", true);
+      if (
+        before !== undefined &&
+        (!before.length || before.length > MAX_MESSAGE_CURSOR_LENGTH)
+      ) {
+        throw new HarnessError("params", "Invalid history cursor length");
+      }
+      return { sessionID: sessionID(p)!, before };
+    },
+    handler(ctx, p) {
+      const read = ctx.harness.core.snapshotMessages;
+      if (!read) {
+        throw new HarnessError(
+          "unsupported",
+          "Retained history is unavailable",
+        );
+      }
+      return read.call(
+        ctx.harness.core,
+        p.sessionID,
+        { before: p.before },
+        ctx.execution?.signal,
+      );
+    },
+  });
   rpc.register("session.create", {
     execution: {
       ...nativeExecution(

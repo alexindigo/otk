@@ -363,14 +363,16 @@ through the chosen reply with an empty composer; their files are shared with the
 original. Revert rolls back files and conversation using opencode's native
 semantics, without confirmation. The joined composer strip lists rolled-back
 prompts and files and offers Restore before the next native commit; Compact also
-commits the rollback. When the server provides prompt history, before staging a
-revert OTK saves the earlier displayed branch, exact prompts/attachments and
-draft in this browser's localStorage. Unrevert stays available after sending and
-opens that read-only earlier branch inside the session, with prompt reuse and
-explicit Delete. It survives reloads in this browser, not clearing browser data
-or changing origin. Native deleted messages and files are not restored. Storage
-is about 5 MB per origin; a failed save reports what was not saved and prevents
-native dispatch, without deleting older branches. A server without prompt
+commits the rollback. When the server provides prompt history, Revert stages
+immediately and OTK prepares the retained earlier branch, exact
+prompts/attachments and draft in bounded background pages. The next committing
+action waits for the copy in this browser's localStorage. Unrevert stays
+available after sending and opens that read-only earlier branch inside the
+session, with prompt reuse and explicit Delete. It survives reloads in this
+browser, not clearing browser data or changing origin. Native deleted messages
+and files are not restored. Storage is about 5 MB per origin; a failed save
+reports what was not saved and prevents the committing action, not reversible
+Revert or Restore, without deleting older branches. A server without prompt
 history still supports Revert and Send; the rollback strip warns before sending
 that this earlier branch cannot be kept. Edited drafts are retained alongside
 saved drafts with an explicit choice before replacement. Undo previous prompt
