@@ -16,6 +16,8 @@ import {
   type Message,
   MESSAGE_PAGE_SIZE,
   type MessagePage,
+  sessionErrorMessage,
+  type SessionErrorState,
   type TranscriptInvalidation,
   withHelperProgress,
 } from "@otk/protocol";
@@ -142,6 +144,8 @@ export class Transcript {
       ): Promise<PrefetchPage>;
       raw(id: string, signal?: AbortSignal): Promise<Session>;
       info(raw: Session, signal?: AbortSignal): Promise<ContentSession>;
+      /** Current observations are not cached with the native/revert baseline. */
+      errorState?(id: string): SessionErrorState;
       metadata?(
         id: string,
         turns: readonly string[],
@@ -170,6 +174,16 @@ export class Transcript {
     },
   ) {
     if (options.policy) this.#cache = new MessagePrefetchCache(options.policy);
+  }
+  async #info(baseline: Baseline): Promise<ContentSession> {
+    const info = await (baseline.info ??= this.options.info(
+      baseline.raw,
+      baseline.controller.signal,
+    ));
+    const errorState = this.options.errorState?.(info.id);
+    return errorState
+      ? { ...info, errorState, error: sessionErrorMessage(errorState) }
+      : info;
   }
   /** Mutations retire cached payloads without replacing the body epoch. */
   changed(id?: string): void {
@@ -371,10 +385,7 @@ export class Transcript {
             baseline = this.#baselines.get(id)!;
           }
         }
-        const result = await (baseline.info ??= this.options.info(
-          baseline.raw,
-          baseline.controller.signal,
-        ));
+        const result = await this.#info(baseline);
         signal?.throwIfAborted();
         if (baseline !== this.#baselines.get(id)) continue;
         return result;
@@ -608,10 +619,7 @@ export class Transcript {
       if (!publish) await acquireMetadata();
       const session = snapshot
         ? mapSession(owner.raw)
-        : await (owner.info ??= this.options.info(
-          owner.raw,
-          owner.controller.signal,
-        ));
+        : await this.#info(owner);
       signal.throwIfAborted();
       if (
         owner !== this.#baselines.get(id) ||

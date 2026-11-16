@@ -299,6 +299,11 @@ renders full facts. `sessionFailure` never drops an observation for presentation
 reasons. Group counts and diagnostic identity stay with the same owner; this
 does not choose cross-session grouping or a new persistence lifetime.
 
+Session composer feedback projects current retained composer failures into the
+same value the notice actually renders. Local feedback wins, cleared or foreign
+observations cannot occupy the view, and the session indicator budgets only that
+displayed pointer.
+
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
 
@@ -486,6 +491,14 @@ native admission. Restore does not wait for capture and fences late saves. A
 staged session after reload reacquires its missing browser copy before
 committing. Failed saves retain FP1 action, target, reason and recovery by
 target across selection changes.
+
+Archive updates load the current stored branch after asynchronous reads before
+merging drafts or native bookkeeping. Reuse and explicit draft choices made
+during those reads survive; deletion retires the archive identity.
+`browserStorage()` resolves the fallible browser property once in shell
+composition. Explicit null disables sidecar persistence, not local connectivity;
+committing branch preservation still refuses visibly when storage is
+unavailable.
 
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its

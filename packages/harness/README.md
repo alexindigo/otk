@@ -16,6 +16,10 @@ Session references use the protocol's qualified-ID grammar. An adapter owns its
 native codec and validates its own provider at the boundary; the shared harness
 contracts never infer a provider from a bare native identity.
 
+SessionErrors owns HTTP/native observation lifetimes and diagnostic-bound origin
+enrichment. Recovery can fill an active observation's missing origin, never
+replace existing provenance or recreate cleared/deleted observations.
+
 `ProjectSeed.identities` supplies native source/repository identity, canonical
 locator, recorded checkout boundary and complete or unavailable inventory. Every
 native owner survives grouped reads, including owners sharing a directory. The

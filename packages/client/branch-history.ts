@@ -123,10 +123,12 @@ function decode(raw: string): SavedBranch {
 /** Staging is reversible; one background capture gates every committing path.
  * Archive pages include native retained history hidden from the live view. */
 export function createBranchHistory(options: {
-  storage: Pick<
-    Storage,
-    "getItem" | "setItem" | "removeItem" | "key" | "length"
-  >;
+  storage:
+    | Pick<
+      Storage,
+      "getItem" | "setItem" | "removeItem" | "key" | "length"
+    >
+    | null;
   server(target: Selection): string;
   supportsHistory?(target: Selection): boolean;
   title?(target: Selection): string | undefined;
@@ -211,6 +213,7 @@ export function createBranchHistory(options: {
     return error;
   };
   const load = (t: Selection): SavedBranch[] => {
+    if (!options.storage) return [];
     try {
       const result: SavedBranch[] = [], start = prefix(t);
       for (let i = 0; i < options.storage.length; i++) {
@@ -256,6 +259,9 @@ export function createBranchHistory(options: {
       raw = encode(branch);
     } while (branch.bytes !== 2 * (key.length + raw.length));
     try {
+      if (!options.storage) {
+        throw new Error("Browser persistence is unavailable");
+      }
       // Explicit deletion retires the archive lifetime. A late attachment read
       // or native settlement may not recreate that deleted copy.
       if (!fresh && options.storage.getItem(key) === null) {
@@ -312,9 +318,22 @@ export function createBranchHistory(options: {
       });
     }
     try {
+      if (!options.storage) {
+        throw fail(
+          t,
+          "The earlier branch and draft were not saved: browser localStorage is unavailable. The replacement was not sent.",
+          "Restore browser storage access, then retry Send or restore the conversation.",
+        );
+      }
+      // Session acquisition can yield to reuse or native settlement. Never use
+      // a pre-await archive snapshot to decide or overwrite pending ownership.
+      const session = load(t).some((b) => b.pending)
+        ? await options.session(t)
+        : undefined;
+      signal.throwIfAborted();
       const existing = load(t);
       const pending = existing.find((b) => b.pending);
-      if (pending && (await options.session(t)).revert) return;
+      if (pending && session?.revert) return;
       for (const previous of existing.filter((b) => b.pending)) {
         previous.pending = false;
         save(t, previous);
@@ -607,8 +626,9 @@ export function createBranchHistory(options: {
         t.sidecarId,
       );
       value.chips = value.chips.map((c, i) => ({ ...c, part: parts[i] }));
-      retain(branch, label, value);
-      if (!save(t, branch)) {
+      const current = load(t).find((b) => b.id === branch!.id);
+      if (current) retain(current, label, value);
+      if (!current || !save(t, current)) {
         throw fail(
           t,
           "The earlier branch was deleted while preparing the replacement. The replacement was not sent.",
@@ -633,7 +653,7 @@ export function createBranchHistory(options: {
       // Bookkeeping after native dispatch must never make an admitted send look
       // unsent. The complete pre-action archive already remains durable.
       try {
-        const branch = load(t).find((b) => b.pending);
+        let branch = load(t).find((b) => b.pending);
         if (!branch) {
           const transaction = options.drafts.reverts.get(draftKey(t));
           const boundary = previous?.boundary ?? transaction?.boundary;
@@ -655,6 +675,13 @@ export function createBranchHistory(options: {
           return;
         }
         if (!restored && (await options.session(t)).revert) return;
+        // Merge bookkeeping into the current stored copy, including any drafts
+        // retained by reuse/choose while the session read was pending.
+        branch = load(t).find((b) => b.id === branch!.id);
+        if (!branch) {
+          refresh(t);
+          return;
+        }
         if (restored) {
           retain(
             branch,
@@ -726,6 +753,9 @@ export function createBranchHistory(options: {
     delete(id) {
       if (!selected) return;
       try {
+        if (!options.storage) {
+          throw new Error("Browser persistence is unavailable");
+        }
         options.storage.removeItem(prefix(selected) + id);
       } catch {
         throw fail(
@@ -760,10 +790,12 @@ export function savedPromptDraft(entry: HistoryEntry): Draft {
 /** Production composition stays in the client; shell bindings inject owners,
  * never acquire transcript bodies or select RPC operations themselves. */
 export function connectBranchHistory(options: {
-  storage: Pick<
-    Storage,
-    "getItem" | "setItem" | "removeItem" | "key" | "length"
-  >;
+  storage:
+    | Pick<
+      Storage,
+      "getItem" | "setItem" | "removeItem" | "key" | "length"
+    >
+    | null;
   api: URL;
   resources: ServerResources;
   transcripts: TranscriptsOwner;

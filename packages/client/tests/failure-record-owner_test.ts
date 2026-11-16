@@ -5,6 +5,7 @@ import {
   composerPointer,
   createFailurePresenter,
   notificationFailure,
+  sessionComposerFeedback,
   sessionFailure,
 } from "../failure-features.ts";
 import { NotificationTriggers } from "../notification-triggers.ts";
@@ -27,6 +28,48 @@ const value: PublicFailure = {
     },
   },
 };
+Deno.test("retained composer feedback is a displayed current target projection, never a phantom or replacement for local feedback", () => {
+  const view = { sidecarId: "server", sessionID: "opcv1-ses_one" };
+  const observation = {
+    id: "other-client",
+    source: "event" as const,
+    message: "Rejected input",
+    failure: value,
+  };
+  const state = { revision: 1, observations: [observation] };
+  const shown = sessionComposerFeedback(state, view);
+  assertEquals(shown?.failure?.reference?.messageID, "record-one");
+  assertEquals(shown?.failure?.value.facts?.target?.sidecarId, "server");
+  const local = { kind: "pending" as const, text: "Current local action" };
+  assert(sessionComposerFeedback(state, view, local) === local);
+  assertEquals(
+    sessionComposerFeedback({
+      revision: 2,
+      observations: [{ ...observation, cleared: true }],
+    }, view),
+    undefined,
+  );
+  assertEquals(
+    sessionComposerFeedback(state, { ...view, sessionID: "other" }),
+    undefined,
+  );
+  assertEquals(
+    sessionComposerFeedback({
+      revision: 1,
+      observations: [{
+        ...observation,
+        failure: {
+          ...value,
+          facts: {
+            ...value.facts,
+            target: { ...value.facts!.target, sidecarId: "foreign" },
+          },
+        },
+      }],
+    }, view),
+    undefined,
+  );
+});
 Deno.test("FP1 scopes retained-record pointers to inline surfaces in the matching session view", () => {
   const presenter = createFailurePresenter();
   const feedback = presenter.describe(value);

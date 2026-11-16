@@ -28,7 +28,7 @@ import {
   SessionIndex,
 } from "@otk/harness";
 import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
-import { SessionErrors } from "./errors.ts";
+import { type ErrorRequest, SessionErrors } from "./errors.ts";
 import { FailureAttempts } from "./failure-attempts.ts";
 import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
@@ -480,15 +480,13 @@ export class OpencodeV1Adapter implements Harness {
           { query: { directory: this.#directory(id) }, signal },
         ),
       info: async (raw, signal) => {
-        const revert = await this.#revertInfo(raw, signal),
-          errorState = this.#errors.snapshot(ids.encode(raw.id));
+        const revert = await this.#revertInfo(raw, signal);
         return {
           ...mapSession(raw),
           revert,
-          error: sessionErrorMessage(errorState),
-          errorState,
         };
       },
+      errorState: (id) => this.#errors.snapshot(id),
       metadata: digest
         ? (id, turns, signal, cutoff, boundary) =>
           digest.transcriptMetadata(id, turns, signal, cutoff, boundary)
@@ -633,6 +631,11 @@ export class OpencodeV1Adapter implements Harness {
             this.#failureAttempts.retire(input.sessionID);
             const turn = this.#failureTurns.get(input.sessionID);
             this.#failureTurns.set(input.sessionID, { created: turn?.created });
+            const token = this.#errors.begin(
+              input.sessionID,
+              undefined,
+              operation?.key.key,
+            );
             try {
               await capability.prompt(input, operation);
             } catch (error) {
@@ -643,9 +646,12 @@ export class OpencodeV1Adapter implements Harness {
                   error,
                   undefined,
                   operation?.key.origin,
+                  token,
                 );
               }
               throw error;
+            } finally {
+              this.#errors.settled(token);
             }
           },
         };
@@ -678,6 +684,8 @@ export class OpencodeV1Adapter implements Harness {
                   error,
                   undefined,
                   operation?.key.origin,
+                  undefined,
+                  operation?.key.key,
                 );
               }
               throw error;
@@ -1203,6 +1211,8 @@ export class OpencodeV1Adapter implements Harness {
     error: unknown,
     recordID?: string,
     origin?: import("@otk/protocol").RequestOrigin,
+    request?: ErrorRequest,
+    requestID?: string,
   ): void {
     if (!this.#errors.accepts(sessionID)) return;
     if (
@@ -1277,6 +1287,26 @@ export class OpencodeV1Adapter implements Harness {
     if (this.buffers.subscribed(sessionID)) {
       this.#sink.content(sessionID, { op: "message.upsert", message });
     }
+    // Retained failure and inline observation borrow one diagnostic. Launch
+    // failures consume their existing token; preparation failures have no launch.
+    const token = request ?? this.#errors.begin(
+      sessionID,
+      action === "shell" || action === "command" || action === "compact"
+        ? action
+        : undefined,
+      requestID,
+    );
+    const cause = error instanceof NativeRequestFailure
+      ? error.original
+      : error;
+    this.#errors.http(token, {
+      ...(cause instanceof HttpFailure
+        ? { ...cause.detail, status: cause.status }
+        : { message: errorMessage(error), kind: normalizeError(error).name }),
+      ...(message.parts[0].kind === "external"
+        ? { failure: message.parts[0].failure }
+        : {}),
+    });
   }
   #launch(
     sessionID: string,
@@ -1313,6 +1343,7 @@ export class OpencodeV1Adapter implements Harness {
             error,
             failureAttempt.recordID,
             options?.operation?.key.origin,
+            token,
           );
           const cause = error instanceof NativeRequestFailure
             ? error.original

@@ -129,6 +129,10 @@ session error indicator borrows FP1's same origin-aware placement and reveal
 callback; cross-session notification surfaces still carry the full failure
 facts.
 
+SessionView renders retained composer feedback in that same ComposerNotice
+before passing it as the session indicator's pointer occupant. SessionError
+cannot reserve an invisible composer pointer of its own.
+
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use
@@ -243,6 +247,12 @@ truncation and bounded source text mount only while that nested fold is open. An
 expanded record does not repeat a state label already shown by its heading or a
 parameter. Parameter values, plain or navigable, share one value primitive, so
 they align to the same column edge and baseline.
+
+Saved-branch rows borrow current reply membership through the same guarded keyed
+row contract as live SessionView. A cached excluded key cannot dereference a
+replacement branch. Notification composition distinguishes the live transcript
+from independently visible request docks, so reading a saved branch does not
+consume unseen live completion/error alerts or duplicate visible request alerts.
 
 The Source fold borrows the transcript's per-reference preview resource while
 open; it retains no second preview or pending-read authority. Reference changes

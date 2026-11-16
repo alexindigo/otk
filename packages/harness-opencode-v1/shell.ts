@@ -10,7 +10,7 @@ export interface NativeLaunch {
 }
 export type Launch = (
   sessionID: string,
-  operation: ErrorRequest["operation"],
+  operation: NonNullable<ErrorRequest["operation"]>,
   path: string,
   options: Parameters<Client["request"]>[1],
 ) => NativeLaunch | void;

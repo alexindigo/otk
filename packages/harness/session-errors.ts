@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ErrorObservation, SessionErrorState } from "@otk/protocol";
+import type {
+  ErrorObservation,
+  PublicFailure,
+  SessionErrorState,
+} from "@otk/protocol";
 
 export interface ErrorRequest {
   id: string;
   sessionID: string;
-  operation: NonNullable<ErrorObservation["operation"]>;
+  operation: ErrorObservation["operation"];
 }
 type Detail = Pick<
   ErrorObservation,
@@ -115,6 +119,33 @@ export class SessionErrors {
         ...(eventID ? { eventID } : {}),
       },
     ]);
+  }
+  /** Enrich only the same still-current failure; recovery never recreates a note. */
+  enrich(sessionID: string, failure: PublicFailure): void {
+    if (this.#removed.has(sessionID) || !failure.facts?.origin) return;
+    const current = this.#states.get(sessionID) ?? this.baseline(sessionID);
+    let changed = false;
+    const observations = current?.observations.map((observation) => {
+      if (
+        observation.cleared ||
+        observation.failure?.diagnosticID !== failure.diagnosticID ||
+        observation.failure.facts?.origin
+      ) return observation;
+      changed = true;
+      return {
+        ...observation,
+        failure: {
+          ...observation.failure,
+          facts: {
+            ...observation.failure.facts,
+            origin: failure.facts!.origin,
+          },
+        },
+      };
+    });
+    if (changed && observations) {
+      this.#update(sessionID, observations, current?.currentRequestID);
+    }
   }
   clear(sessionID: string): void {
     if (!this.#removed.has(sessionID)) {

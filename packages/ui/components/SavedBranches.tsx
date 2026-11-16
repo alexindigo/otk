@@ -221,48 +221,51 @@ export default function SavedBranches(
                 }]}
                 role={() => "reply"}
                 overscan={0}
-                render={(id) => {
-                  const reply = () => projection().repliesByID[id];
-                  const prompt = () =>
-                    saved().prompts.find((p) =>
-                      p.messageID === reply().message.id
-                    );
-                  return (
-                    <div class="otk-saved-message">
-                      <Message
-                        message={reply().message}
-                        segments={reply().segments}
-                        prefs={props.prefs}
-                        directory={saved().session.directory}
-                        permissions={[]}
-                        onOpenChild={props.onOpenChild}
-                        queued={false}
-                        readOnly
-                        presentation={projection().presentations[id]}
-                      />
-                      <Show when={prompt()}>
-                        {(p) => (
-                          <div class="otk-saved-reuse">
-                            <button
-                              type="button"
-                              class="otk-pill"
-                              onClick={() =>
-                                perform(() =>
-                                  props.owner.reuse(
-                                    saved().id,
-                                    savedPromptDraft(p().entry),
-                                    branchDraftLabels.savedPrompt,
-                                  )
-                                )}
-                            >
-                              Reuse prompt
-                            </button>
-                          </div>
-                        )}
-                      </Show>
-                    </div>
-                  );
-                }}
+                render={(id) => (
+                  <Show when={projection().repliesByID[id]}>
+                    {(reply) => {
+                      const prompt = () =>
+                        saved().prompts.find((p) =>
+                          p.messageID === reply().message.id
+                        );
+                      return (
+                        <div class="otk-saved-message">
+                          <Message
+                            message={reply().message}
+                            segments={reply().segments}
+                            prefs={props.prefs}
+                            directory={saved().session.directory}
+                            permissions={[]}
+                            onOpenChild={props.onOpenChild}
+                            queued={false}
+                            readOnly
+                            presentation={projection().presentations[id]}
+                          />
+                          <Show when={prompt()}>
+                            {(p) => (
+                              <div class="otk-saved-reuse">
+                                <button
+                                  type="button"
+                                  class="otk-pill"
+                                  onClick={() =>
+                                    perform(() =>
+                                      props.owner.reuse(
+                                        saved().id,
+                                        savedPromptDraft(p().entry),
+                                        branchDraftLabels.savedPrompt,
+                                      )
+                                    )}
+                                >
+                                  Reuse prompt
+                                </button>
+                              </div>
+                            )}
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </Show>
+                )}
               />
             </div>
           </section>
