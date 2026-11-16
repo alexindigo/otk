@@ -189,7 +189,12 @@ export function createNativeSources(options: {
         } else {
           const previous = location(entry.message, ref);
           entry.message = message;
-          if (JSON.stringify(next.owner) !== JSON.stringify(previous?.owner)) {
+          const moved = entry.path !== next.path;
+          entry.path = next.path;
+          if (
+            moved ||
+            JSON.stringify(next.owner) !== JSON.stringify(previous?.owner)
+          ) {
             entry.invalidate();
           }
         }

@@ -227,7 +227,12 @@ export function createTranscriptProjection(): TranscriptProjection {
     keys.splice(low, 0, key);
     state.replyIDs = keys;
   };
-  const group = (key: string, ids: string[], changed?: Message) => {
+  const group = (
+    key: string,
+    ids: string[],
+    changed?: Message,
+    reordered = false,
+  ) => {
     const previous = state.repliesByID[key];
     if (!ids.length) {
       const turn = previous?.message.role === "assistant"
@@ -313,7 +318,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     };
     if (
       !previous || previous.messageIDs[0] !== ids[0] ||
-      changed?.id === ids[0] && compare(previous.message, changed) !== 0
+      changed?.id === ids[0] && reordered
     ) orderGroup(key);
   };
   const queues = () => {
@@ -393,6 +398,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         ? ids
         : insert(ids.filter((id) => id !== message.id), message.id, read),
       message,
+      reordered,
     );
     // An earlier failure may already refer to this still-queued prompt. Only
     // reposition its one reply group, never traverse historical messages.
@@ -404,6 +410,13 @@ export function createTranscriptProjection(): TranscriptProjection {
     if (!previous) return;
     header(previous, undefined);
     const key = replyKey(previous);
+    const causalKey =
+      previous.role === "user" && state.repliesByID[`reply:${id}`]
+        ? `reply:${id}`
+        : undefined;
+    if (causalKey) {
+      state.replyIDs = state.replyIDs.filter((key) => key !== causalKey);
+    }
     delete state.messagesByID[id];
     parts.delete(id);
     clearHelper(id);
@@ -411,6 +424,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     locations.delete(id);
     state.messageIDs = state.messageIDs.filter((key) => key !== id);
     group(key, state.repliesByID[key].messageIDs.filter((key) => key !== id));
+    if (causalKey) orderGroup(causalKey);
     detached = undefined;
   };
   const owner = {

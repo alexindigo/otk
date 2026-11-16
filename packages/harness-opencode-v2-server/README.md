@@ -251,6 +251,17 @@ reconstruct historical pending inputs. Stock V2 leaves that journal empty by
 default. Reply placement honors the causal prompt without moving preceding
 native controls. A snapshot needs no second read to recover the failure.
 
+Read-only archive pages share that normalized failure construction without
+writing retention or announcing live content. Their bounded native/retained
+merge keeps one identity, preferring an existing retained failure's facts and
+position.
+
+Live pages use that same normalized failure row before deriving continuation
+edges, so a full page of failed idles advances without replaying retained rows.
+Historical pending-input reconstruction prefers the journal at the requested
+boundary. An empty stock journal permits current-inbox fallback only at the
+current native edge; later inbox state cannot rewrite an older failure.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank
@@ -269,6 +280,12 @@ replay: an early live header without replyTo cannot overwrite that proven
 context in the snapshot or catchup and create another reply/usage footer.
 Historical per-message context does not borrow a newer prompt, and no UI
 inference or extra body read supplies the association.
+
+Explicit native-parent provenance stays with baseline/live message context and
+outranks later scalar prompt fallback through page, archive and live replay.
+Recovering Source reads preserve a longer exact native checkpoint rather than
+substituting a shorter retained prefix; terminal native source remains
+authority.
 
 `tool-interpretation.ts` owns current and migrated tool aliases, argument and
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper

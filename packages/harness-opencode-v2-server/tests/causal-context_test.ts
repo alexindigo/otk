@@ -117,8 +117,67 @@ function fixture(
       model: { providerID: "fake", id: "scripted" },
       ...extra,
     }));
-  return { value, updates, entered, gate, facts, start, event };
+  return { value, updates, entered, gate, facts, start, event, raw };
 }
+
+Deno.test("V2 causal context: native parent survives scalar fallback in page, live and sealed replay", async () => {
+  const f = fixture({ latest: "msg_fallback", unfinished: true });
+  f.raw.metadata = { parentID: "msg_native_parent" };
+  f.facts.contexts[finalID].replyTo = "msg_fallback";
+  try {
+    const page = await f.value.page(sessionID);
+    assertEquals(page.items.find((m) => m.id === finalID)?.role, "assistant");
+    const archived = (await f.value.snapshot(sessionID)).items.find((m) =>
+      m.id === finalID
+    );
+    assert(archived?.role === "assistant");
+    assertEquals(archived.replyTo, "msg_native_parent");
+    for (const type of ["step.streamed", "step.ended"]) {
+      await f.value.event(f.event(type));
+    }
+    const headers = f.updates.filter((op) =>
+      op.op === "message.upsert" && op.message.id === finalID
+    );
+    assert(headers.length > 0);
+    assert(
+      headers.every((op) =>
+        op.op === "message.upsert" && op.message.role === "assistant" &&
+        op.message.replyTo === "msg_native_parent"
+      ),
+    );
+    const next = await f.value.page(sessionID);
+    const projection = createTranscriptProjection();
+    projection.replace(next.items);
+    for (const { event } of next.catchup) projection.apply(event);
+    const mapped = projection.messages().find((m) => m.id === finalID);
+    assert(mapped?.role === "assistant");
+    assertEquals(mapped.replyTo, "msg_native_parent");
+  } finally {
+    await f.value.stop();
+  }
+});
+Deno.test("V2 Source recovery keeps a longer native checkpoint instead of substituting its short retained prefix", async () => {
+  const f = fixture({ unfinished: true });
+  try {
+    const page = await f.value.page(sessionID),
+      message = page.items.find((m) => m.id === finalID)!;
+    f.value.buffers.upsert(sessionID, finalID, {
+      id: `${finalID}:text:0`,
+      kind: "text",
+      blocks: [],
+      synthetic: false,
+    }, "Projection");
+    f.value.buffers.rebind(() => "recovery");
+    const source = await f.value.source(
+      sessionID,
+      message.source!.ref!,
+      new AbortController().signal,
+    );
+    assert(source.preview.includes("Projection step 101."), source.preview);
+  } finally {
+    await f.value.stop();
+  }
+});
 
 Deno.test("V2 causal context: captured 102-call final headers cannot split first-page replay", async () => {
   const f = fixture({ hold: true });

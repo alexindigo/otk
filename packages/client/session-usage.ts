@@ -243,10 +243,12 @@ export function createSessionUsage(
     if (resource.pending) {
       if (refresh) {
         const requested = demand(target);
-        if (
-          requested.summary !== resource.pendingDemand?.summary ||
-          requested.witness !== resource.pendingDemand?.witness
-        ) resource.refreshDemand = requested;
+        resource.refreshDemand = (
+            requested.summary !== resource.pendingDemand?.summary ||
+            requested.witness !== resource.pendingDemand?.witness
+          )
+          ? requested
+          : undefined;
       }
       return resource.pending;
     }
@@ -420,10 +422,8 @@ export function createSessionUsage(
           const changed = resource.summary !== requested.summary;
           resource.summary = requested.summary;
           if (
-            (changed &&
-              JSON.stringify(resource.value?.summary) !== requested.summary) ||
-            (resource.pending &&
-              requested.witness !== resource.pendingDemand?.witness)
+            resource.pending || (changed &&
+              JSON.stringify(resource.value?.summary) !== requested.summary)
           ) {
             void load(resource.target, true);
           }

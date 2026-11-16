@@ -178,6 +178,32 @@ Deno.test("covered refresh demands join one held usage request", async () => {
     f.stop();
   }
 });
+Deno.test("held usage demand A to B to A retires the obsolete successor", async () => {
+  const entry = shellEntry("s"),
+    version = { generation: 2, revision: 3 },
+    value = detail(version);
+  entry.digest.turns.turn = knownDerived(value.summary, "A", 1);
+  const f = fixture(entry);
+  try {
+    const pending = f.owner.load(target);
+    await flush();
+    entry.digest.turns.turn = knownDerived(value.summary, "B", 1);
+    f.owner.receive("server", { t: "index.patch", rev: 1, ops: [] });
+    entry.digest.turns.turn = knownDerived(value.summary, "A", 1);
+    f.owner.receive("server", { t: "index.patch", rev: 2, ops: [] });
+    f.reads[0].result.resolve(value);
+    await pending;
+    await flush();
+    assertEquals(
+      f.reads.length,
+      1,
+      "Only the latest uncovered demand may schedule a successor",
+    );
+    assertEquals(f.owner.get(target)?.summary.tokens.input, 7);
+  } finally {
+    f.stop();
+  }
+});
 
 for (const change of ["revision", "source"] as const) {
   Deno.test(`a newer usage ${change} during a held request schedules exactly one follow-up`, async () => {

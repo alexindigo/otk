@@ -71,6 +71,42 @@ Deno.test("closing Source before queued admission performs no read", async () =>
   reopen();
   f.owner.stop();
 });
+Deno.test("Source ownership follows a moved opaque reference and later native-only part changes", async () => {
+  const f = fixture(), owner = f.owner.get("opaque"), release = owner.retain();
+  try {
+    await turns();
+    f.reads[0].resolve(view("original"));
+    await turns();
+    f.messages.message = {
+      ...f.messages.message,
+      parts: f.messages.message.parts.map((p) => ({ ...p, id: "moved" })),
+    };
+    f.owner.sync();
+    await turns();
+    assertEquals(f.reads.length, 2);
+    f.reads[1].resolve(view("moved"));
+    await turns();
+    f.owner.changed("message", "part");
+    await turns();
+    assertEquals(f.reads.length, 2, "The old path no longer owns this Source");
+    f.owner.changed("message", "moved");
+    await turns();
+    assertEquals(
+      f.reads.length,
+      3,
+      "Native-only changes follow the current structural path",
+    );
+    f.reads[2].resolve(view("native-only moved update"));
+    await turns();
+    assertEquals(owner.state, {
+      state: "ready",
+      value: view("native-only moved update"),
+    });
+  } finally {
+    release();
+    f.owner.stop();
+  }
+});
 Deno.test("Source demand is shared, lazy, and retains unchanged successful and failed outcomes", async () => {
   const f = fixture();
   const a = f.owner.get("opaque");

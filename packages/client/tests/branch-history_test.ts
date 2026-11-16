@@ -128,7 +128,7 @@ function fixture() {
     calls: () => calls,
   };
 }
-Deno.test("branch history saves complete pages before native stage and checkpoints edited draft before commit", async () => {
+Deno.test("branch history saves complete retained pages and checkpoints edited draft before commit", async () => {
   const f = fixture();
   f.drafts.writer("server/a")({
     ...emptyDraft(),
@@ -215,7 +215,7 @@ Deno.test("a failed advertised prompt-history reader is not a no-history degrada
   await assertRejects(
     () => f.owner.prepare(target, "2"),
     Error,
-    "Exact prompt read failed",
+    "The earlier branch could not be saved",
   );
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.preservationWarning(), undefined);
@@ -389,4 +389,63 @@ Deno.test("explicit Delete fences a late native settlement and cannot resurrect 
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.state.branches, []);
   assertEquals(f.owner.state.choice, undefined);
+});
+
+Deno.test("archive materialization admits bounded parallel reads within each page and keeps exact order", async () => {
+  const f = fixture(), gate = Promise.withResolvers<void>();
+  let active = 0, maximum = 0, entered = 0, pages = 0;
+  const full = Promise.withResolvers<void>();
+  const owner = createBranchHistory({
+    ...f.options,
+    concurrency: () => 2,
+    page: async (t, before) => {
+      pages++;
+      const result = await f.options.page(t, before);
+      result.items = before
+        ? [message("1")]
+        : Array.from({ length: 10 }, (_, i) => message(String(i + 2)));
+      return result;
+    },
+    source: async (_t, ref) => {
+      active++;
+      maximum = Math.max(active, maximum);
+      if (++entered === 2) full.resolve();
+      try {
+        await gate.promise;
+        return {
+          kind: "fixture",
+          preview: ref,
+          bytes: ref.length,
+          truncated: false,
+        };
+      } finally {
+        active--;
+      }
+    },
+  });
+  owner.select(target);
+  const capture = owner.prepare(target, "2");
+  await full.promise;
+  assertEquals(
+    pages,
+    1,
+    "No next page until its current materialization finishes",
+  );
+  assertEquals(
+    maximum,
+    2,
+    "Independent reads overlap without an unbounded flood",
+  );
+  gate.resolve();
+  await capture;
+  assertEquals(maximum, 2);
+  assertEquals(pages, 3);
+  assertEquals(
+    owner.state.branches[0].messages.map((m) => m.id),
+    Array.from({ length: 11 }, (_, i) => String(i + 1)),
+  );
+  assertEquals(
+    owner.state.branches[0].messages.map((m) => m.source?.preview),
+    Array.from({ length: 11 }, (_, i) => `source:${i + 1}`),
+  );
 });
