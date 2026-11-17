@@ -9,6 +9,7 @@ import { PartRegistry } from "../registries/renderers.ts";
 import { messageFrames } from "../components/work-log.ts";
 import { createMessageLayout } from "../components/message-layout.ts";
 import {
+  unknownPartHasPreview,
   unknownPartPresentation,
   unknownPartPreview,
 } from "../components/parts/unknown-part.ts";
@@ -131,4 +132,31 @@ Deno.test("unknown parts show bounded data and preserve the producer's truncatio
     }),
     { text: "prefix", bytes: 99, truncated: true },
   );
+});
+
+Deno.test("fallback inspection availability preserves defined empty previews without encoding", () => {
+  const encode = TextEncoder.prototype.encode;
+  let encoded = 0;
+  TextEncoder.prototype.encode = function (text) {
+    encoded++;
+    return encode.call(this, text);
+  };
+  try {
+    assertEquals(unknownPartHasPreview(part), false);
+    assertEquals(unknownPartHasPreview({ ...part, data: "" }), true);
+    assertEquals(
+      unknownPartHasPreview({ ...part, data: "large".repeat(20_000) }),
+      true,
+    );
+    assertEquals(
+      unknownPartHasPreview({
+        ...part,
+        source: { kind: "empty", preview: "", bytes: 99, truncated: true },
+      }),
+      true,
+    );
+    assertEquals(encoded, 0);
+  } finally {
+    TextEncoder.prototype.encode = encode;
+  }
 });

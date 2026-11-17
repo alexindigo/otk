@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../tools/ToolFrame.css" with { type: "text" };
 import "./UnknownPart.css" with { type: "text" };
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import type { ChildRef } from "@otk/protocol";
 import type { PartProps, PartRegistry } from "../../registries/renderers.ts";
 import { retainedDisclosure } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
 import { ChevronIcon } from "../ChromeIcons.tsx";
-import { unknownPartPresentation, unknownPartPreview } from "./unknown-part.ts";
+import {
+  unknownPartHasPreview,
+  unknownPartPresentation,
+  unknownPartPreview,
+} from "./unknown-part.ts";
 
 function UnknownPart(props: PartProps): import("solid-js").Element {
   const [expanded, setExpanded] = retainedDisclosure("activity");
   const activity = () =>
     props.part.kind === "external" ? props.part.activity : undefined;
-  const preview = () => unknownPartPreview(props.part);
+  const preview = createMemo(() =>
+    expanded() ? unknownPartPreview(props.part) : undefined
+  );
   const name = () =>
     props.part.kind === "external"
       ? props.part.name
@@ -22,7 +28,7 @@ function UnknownPart(props: PartProps): import("solid-js").Element {
       : props.part.kind;
   const details = () =>
     !!(activity()?.state || activity()?.body?.length ||
-      activity()?.parameters?.length || preview());
+      activity()?.parameters?.length || unknownPartHasPreview(props.part));
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
   const child = (ref: ChildRef) => (
     <button
