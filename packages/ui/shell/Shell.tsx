@@ -58,7 +58,11 @@ import { attentionPresentation } from "../state/attention-grace.ts";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
-  props: { theme: ThemeEngine; api: URL },
+  props: {
+    theme: ThemeEngine;
+    api: URL;
+    policy?: import("@otk/protocol").ClientRequestPolicy;
+  },
 ): import("solid-js").Element {
   const {
     resources,
@@ -73,7 +77,7 @@ export default function Shell(
     listInteraction,
     interact,
     confirmCommand,
-  } = createShellState({ api: props.api });
+  } = createShellState({ api: props.api, policy: props.policy });
   const {
     sidecars,
     inbox,
@@ -835,6 +839,8 @@ export default function Shell(
                   }
                   sidecars={sidecars.state.list}
                   discovery={sidecars.state.discovery}
+                  addition={sidecars.state.addition}
+                  onEditAdd={sidecars.editAdd}
                   onCancelAdd={sidecars.cancelAdd}
                   onAdd={(url, label) =>
                     resources.add(url, label).then(() => {

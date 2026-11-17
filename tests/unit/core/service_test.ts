@@ -17,6 +17,7 @@ import {
 } from "../../../core/mod.ts";
 import { PROTOCOL_VERSION, type ServerFrame } from "@otk/protocol";
 import { cfg, fixture } from "./support.ts";
+import { clientRequestPolicy } from "../../../core/config/schema.ts";
 
 test("core service with a composed backend/assets discovers HTTP routes and advertises capabilities to an actual WS consumer", async () => {
   const root = await fixture(), settings = cfg();
@@ -91,7 +92,9 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     assertEquals(spa.headers.get("cache-control"), "no-cache");
     assertEquals(
       await spa.text(),
-      '<head><base href="../"></head><p>Caller assets</p>',
+      '<head><base href="../"><script type="application/json" id="otk-bootstrap">' +
+        JSON.stringify({ policy: clientRequestPolicy(settings) }) +
+        "</script></head><p>Caller assets</p>",
     );
     const missingApi = await fetch(base + "/api/missing");
     assertEquals(missingApi.status, 404);

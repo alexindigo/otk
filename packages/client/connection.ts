@@ -37,6 +37,8 @@ export interface ConnectionSink {
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
+  /** Application-supplied policy before this server returns its own authority. */
+  policy?: ClientRequestPolicy;
   /** UI adapters acknowledge accepted state after its render opportunity. */
   afterRender?(accepted: () => void): void;
   attachments?: import("@otk/protocol").AttachmentPolicy;
@@ -46,6 +48,10 @@ export interface ConnectionOptions {
   fetcher?: typeof fetch;
   requests?: Omit<RequestTrackerOptions, "send" | "server" | "available">;
 }
+export type ConnectionAttempt =
+  | { kind: "checked"; auth: AuthStatus }
+  | { kind: "failed"; cause: unknown }
+  | { kind: "superseded" };
 function browserStorage(server: string): RequestTrackerOptions["storage"] {
   if (
     typeof globalThis.document === "undefined" ||
@@ -137,6 +143,7 @@ export class SidecarConnection {
     readonly options: ConnectionOptions = {},
   ) {
     this.base = options.api ?? apiBase(baseUrl);
+    this.#policy = options.policy && clientRequestPolicyFrom(options.policy);
     const metadata = createRequestMetadata();
     this.requests = new RequestTracker({
       ...options.requests,
@@ -155,6 +162,7 @@ export class SidecarConnection {
       base: this.base,
       tracker: this.requests,
       fetcher: options.fetcher,
+      policy: this.#policy,
     });
   }
   #bootstrap(control: RequestControl): boolean {
@@ -205,8 +213,8 @@ export class SidecarConnection {
       this.send({ t: enabled ? "subscribe" : "unsubscribe", sessionID });
     }
   }
-  async connect(discovered?: AuthStatus): Promise<void> {
-    if (this.#stopped) return;
+  async connect(discovered?: AuthStatus): Promise<ConnectionAttempt> {
+    if (this.#stopped) return { kind: "superseded" };
     this.#retire();
     const controller = this.#controller = new AbortController();
     const current = () =>
@@ -221,7 +229,7 @@ export class SidecarConnection {
         }),
         this.base.href,
       );
-      if (!current()) return;
+      if (!current()) return { kind: "superseded" };
       this.#auth = auth;
       const defaults = publicDefaultsFrom(auth.defaults);
       if (defaults) this.sink.defaults?.(defaults);
@@ -234,7 +242,7 @@ export class SidecarConnection {
           undefined,
           auth.authType,
         );
-        return;
+        return { kind: "checked", auth: this.#auth };
       }
       const url = new URL("ws", this.base);
       url.protocol =
@@ -320,6 +328,7 @@ export class SidecarConnection {
           this.#schedule();
         }
       };
+      return { kind: "checked", auth: this.#auth };
     } catch (cause) {
       if (current() && !(cause instanceof RequestReleased)) {
         this.#retire();
@@ -336,7 +345,9 @@ export class SidecarConnection {
             ),
           )?.text,
         );
+        return { kind: "failed", cause };
       }
+      return { kind: "superseded" };
     }
   }
   #schedule(): void {
@@ -379,8 +390,10 @@ export class SidecarConnection {
   }
   async login(input: { username: string; password: string }): Promise<void> {
     await this.http.start("login", input, { owner: "login" }).result;
-    await this.connect();
-    if (this.#auth && !this.#auth.authenticated && !this.#auth.setupRequired) {
+    const attempt = await this.connect();
+    if (attempt.kind === "failed") throw attempt.cause;
+    if (attempt.kind === "superseded") return;
+    if (!attempt.auth.authenticated && !attempt.auth.setupRequired) {
       const failure = discoveryFailure(
         this.base.href,
         "OTK accepted sign-in, but this page is still not authenticated",
@@ -390,7 +403,7 @@ export class SidecarConnection {
       this.sink.status(
         "login required",
         actionFeedback(failure)?.text,
-        this.#auth.authType,
+        attempt.auth.authType,
       );
       throw failure;
     }
@@ -399,7 +412,8 @@ export class SidecarConnection {
     input: { type: string; username: string; password: string },
   ): Promise<void> {
     await this.http.start("setup", input, { owner: "setup" }).result;
-    await this.connect();
+    const attempt = await this.connect();
+    if (attempt.kind === "failed") throw attempt.cause;
   }
   stop(): void {
     this.#stopped = true;

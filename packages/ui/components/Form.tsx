@@ -29,6 +29,8 @@ export default function Form(
     title: string;
     submitLabel: string;
     pendingLabel?: string;
+    /** Borrow an operation whose lifetime is longer than this mounted form. */
+    pending?: boolean;
     /** Read-only probes capture a value but do not lock the user's next edit. */
     editableWhilePending?: boolean;
     feedback?: Feedback | null;
@@ -52,7 +54,7 @@ export default function Form(
     revision();
     return intent.state;
   };
-  const pending = () => state().pending;
+  const pending = () => props.pending ?? state().pending;
   const feedback = () =>
     props.feedback === undefined
       ? state().feedback
@@ -72,6 +74,7 @@ export default function Form(
   });
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
+    if (pending()) return;
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const focus = event.submitter === document.activeElement;
     try {

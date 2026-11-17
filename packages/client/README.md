@@ -223,6 +223,14 @@ the editable next input separate from the captured attempt. Client-owned
 `FeedbackFailure` passes classified action/target/reason/recovery copy through
 the existing failure feedback path, never arbitrary transport exception prose.
 
+The collection retains the editable next input in `state.addition` through
+`editAdd(patch)`, independently of discovery's captured target and label.
+Closing a presentation does not cancel discovery or reset those fields.
+Independent collections without add-server UI may omit this optional
+state/method contract; `createSidecars` supplies both. Explicit cancellation
+joins the actual transport and retains the edited draft. Installation uses the
+captured attempt, never a later input edit.
+
 `FailurePresenter` is an empty feature-extensible registry for safe `Feedback`.
 Unknown failures use fixed copy. `RequestFailure` carries structured public
 facts and a fixed message; `localFailure` reports its original cause to an
@@ -418,6 +426,20 @@ accepts storage and local connection options; non-browser callers usually
 compose one `SidecarConnection` directly. Navigation accepts an injected
 history/location environment, so its accepted-route model is usable without
 browser globals.
+
+`ConnectionOptions.policy` injects application-owned initial request policy for
+first contact, including a failed very first session read. Checked session and
+welcome policy replace it with target-server authority. `createSidecars`
+forwards that common policy and after-render port to saved remotes, but not the
+local API base or request storage. Independent callers without initial policy
+retain the explicit-policy requirement; there is no library fallback table.
+
+`connect()` returns `ConnectionAttempt`: `checked` with this attempt's auth,
+`failed` with its original cause, or `superseded`. Last-good resources/auth
+remain retained but cannot certify a new attempt. Login and setup propagate
+failed follow-up checks. Cookie advice requires a fresh checked unauthenticated
+result, never a retained earlier sign-in requirement or a reported connection
+failure.
 
 Session routes validate `isSessionID` from the protocol for both session and
 optional root segments. Bare legacy links select no session and the shell

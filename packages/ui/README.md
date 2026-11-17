@@ -51,6 +51,14 @@ Form fills its owning body; AuthColumn and Dialog's `form` role share
 without dispatching IDs. Editor content flexes inside that viewport-bounded
 frame.
 
+Form's optional `pending` input borrows an operation that outlives a mounted
+form; when absent, its local client FormIntent remains authoritative. Busy
+semantics, field locks, action slots and cancellation consume that same input.
+Settings borrows discovery's retained pending value and receives the next
+URL/label draft plus edit callbacks from its consumer. It neither owns discovery
+cancellation on unmount nor imports its consumer. Reopening keeps the captured
+operation and editable next input separate, including a working Cancel action.
+
 `OverflowRow` receives keyed data, required/preferred identities, noninteractive
 measurement content, live content and one overflow-menu callback. Its ordered
 item frames and controls stay mounted in source order; omitted rows are hidden
@@ -677,9 +685,9 @@ selection; activating one atomically selects and opens that panel through
 `onLayout`. Its selected content unmounts when collapsed; retained interaction
 belongs to the feature's framework-free scope owner.
 
-`Shell({ theme, api })` binds `createShellState({api})` and composes the
-reusable three-region shell with selected UI registrations. The thin Solid
-binding constructs client resource, session-action, input-guard and
+`Shell({ theme, api, policy? })` binds `createShellState({api, policy?})` and
+composes the reusable three-region shell with selected UI registrations. The
+thin Solid binding constructs client resource, session-action, input-guard and
 shell-navigation owners, injects browser confirmation/presence and installs
 split view/tab effects. Shell registers commands, observes frames and renders
 chrome through those ports. `ProjectInbox` renders the shared client projection

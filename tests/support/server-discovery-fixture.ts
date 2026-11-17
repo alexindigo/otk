@@ -33,16 +33,26 @@ await withResources("server discovery browser peers", async () => {
         headers: { "Access-Control-Allow-Origin": "*" },
       }),
   );
+  let heldReads = 0, aborted = 0;
+  const counters = serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    () => Response.json({ held: heldReads, aborted }),
+  );
   const held = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
-    (req) =>
-      new Promise<Response>((resolve) =>
+    (req) => {
+      heldReads++;
+      return new Promise<Response>((resolve) =>
         req.signal.addEventListener(
           "abort",
-          () => resolve(new Response(null, { status: 499 })),
+          () => {
+            aborted++;
+            resolve(new Response(null, { status: 499 }));
+          },
           { once: true },
         )
-      ),
+      );
+    },
   );
   console.log(
     "SD3 " + JSON.stringify({
@@ -55,6 +65,7 @@ await withResources("server discovery browser peers", async () => {
       refused: `http://127.0.0.1:${await freePort()}`,
       foreign: `http://127.0.0.1:${(foreign.addr as Deno.NetAddr).port}`,
       held: `http://127.0.0.1:${(held.addr as Deno.NetAddr).port}`,
+      counters: `http://127.0.0.1:${(counters.addr as Deno.NetAddr).port}`,
     }),
   );
   // The browser fixture closes stdin after its pages; resource cleanup joins every peer.

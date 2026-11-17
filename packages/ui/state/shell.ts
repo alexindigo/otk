@@ -47,14 +47,16 @@ export interface ShellState {
   interact(): void;
 }
 /** Browser capabilities and split reactive effects bind the framework-free owners. */
-export function createShellState(o: { api: URL }): ShellState {
+export function createShellState(
+  o: { api: URL; policy?: import("@otk/protocol").ClientRequestPolicy },
+): ShellState {
   const index = createIndex();
   const resources = createServerResources({
     index,
     factory: solidState,
     error: (error) => navigation.fail(error),
     sidecars: (receive) =>
-      createSidecars(receive, { connection: { api: o.api } }),
+      createSidecars(receive, { connection: { api: o.api, policy: o.policy } }),
   });
   const { sidecars, entry } = resources;
   const listScopes = createListScopes();

@@ -4,11 +4,9 @@ import { createInterface } from "node:readline";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "../../fixtures/evidence.ts";
+import type { TestInfo } from "@playwright/test";
 
-test("transport.server-discovery-outcomes-and-cancel", {
-  tag: ["@transport", "@isolated"],
-}, async ({ page }, info) => {
-  test.setTimeout(240_000);
+async function startPeers(info: TestInfo) {
   const version = String(
     info.project.metadata.nativeVersion ??
       info.project.name.replace(/^oc-/, ""),
@@ -53,8 +51,22 @@ test("transport.server-discovery-outcomes-and-cancel", {
       no,
     );
   });
+  return {
+    endpoints: await ready,
+    async close() {
+      child.stdin.end();
+      expect(await closed, log).toBe(0);
+    },
+  };
+}
+
+test("transport.server-discovery-outcomes-and-cancel", {
+  tag: ["@transport", "@isolated"],
+}, async ({ page }, info) => {
+  test.setTimeout(240_000);
+  const peers = await startPeers(info);
   try {
-    const endpoints = await ready;
+    const endpoints = peers.endpoints;
     await page.goto(endpoints.local);
     await expect(page.locator(".otk-welcome")).toBeVisible();
     await page.locator(".otk-settings-entry").click();
@@ -216,7 +228,186 @@ test("transport.server-discovery-outcomes-and-cancel", {
     );
   } finally {
     await page.close();
-    child.stdin.end();
-    expect(await closed, log).toBe(0);
+    await peers.close();
   }
 });
+
+test(
+  "transport.discovery-remount-borrows-pending-cancel-and-retains-edited-fields",
+  {
+    tag: ["@transport", "@isolated"],
+  },
+  async ({ page }, info) => {
+    test.setTimeout(180_000);
+    const peers = await startPeers(info), e = peers.endpoints;
+    try {
+      await page.goto(e.local);
+      await expect(page.locator(".otk-welcome")).toBeVisible();
+      await page.locator(".otk-settings-entry").click();
+      const settings = page.locator(".otk-settings"),
+        url = settings.getByLabel("Base URL", { exact: true }),
+        label = settings.getByLabel("Label", { exact: true });
+      const counters = async () =>
+        await (await page.request.get(e.counters)).json() as {
+          held: number;
+          aborted: number;
+        };
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        await url.fill(e.held);
+        await label.fill("Captured target " + attempt);
+        await settings.getByRole("button", { name: "Add server", exact: true })
+          .click();
+        await expect.poll(async () => (await counters()).held).toBe(attempt);
+        await url.fill(e.allowed);
+        await label.fill("Retained next input " + attempt);
+        await settings.getByRole("button", {
+          name: "Close settings",
+          exact: true,
+        }).click();
+        await page.locator(".otk-settings-entry").click();
+        await expect(settings.getByRole("list", { name: "Server discovery" }))
+          .toContainText("Connecting");
+        await expect(settings).toContainText("Checking OTK at " + e.held);
+        await expect(url).toHaveValue(e.allowed);
+        await expect(label).toHaveValue("Retained next input " + attempt);
+        const cancel = settings.getByRole("button", {
+          name: "Cancel",
+          exact: true,
+        });
+        await expect(cancel).toBeEnabled();
+        await cancel.click();
+        await expect.poll(async () => (await counters()).aborted).toBe(attempt);
+        await expect(settings.getByRole("list", { name: "Server discovery" }))
+          .toContainText("was cancelled");
+        await expect(url).toHaveValue(e.allowed);
+        await expect(label).toHaveValue("Retained next input " + attempt);
+      }
+    } finally {
+      await page.close();
+      await peers.close();
+    }
+  },
+);
+
+test(
+  "transport.saved-remote-first-contact-failure-recovers-before-receiving-remote-policy",
+  {
+    tag: ["@transport", "@isolated"],
+  },
+  async ({ page }, info) => {
+    test.setTimeout(180_000);
+    const peers = await startPeers(info), e = peers.endpoints;
+    let reads = 0;
+    try {
+      await page.addInitScript((baseUrl) =>
+        localStorage.setItem(
+          "otk.sidecars",
+          JSON.stringify([{ id: "saved", baseUrl, label: "Saved remote" }]),
+        ), e.allowed);
+      await page.route(e.allowed + "/api/session", async (route) => {
+        reads++;
+        if (reads === 1) {
+          await route.abort("connectionrefused");
+        } else await route.continue();
+      });
+      await page.goto(e.local);
+      await expect(page.locator(".otk-welcome")).toBeVisible();
+      await page.locator(".otk-settings-entry").click();
+      const card = page.locator(".otk-sidecar-card").filter({
+        has: page.getByRole("heading", { name: "Saved remote", exact: true }),
+      });
+      await expect(card.locator("[data-connection]")).toHaveText("connected");
+      expect(reads).toBeGreaterThanOrEqual(2);
+    } finally {
+      await page.close();
+      await peers.close();
+    }
+  },
+);
+
+test(
+  "transport.failed-login-session-check-retains-reconnect-not-a-stale-cookie-diagnosis",
+  {
+    tag: ["@transport", "@isolated"],
+  },
+  async ({ page }, info) => {
+    test.setTimeout(180_000);
+    const peers = await startPeers(info), e = peers.endpoints;
+    let fail = false, failed = 0;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => release = resolve);
+    try {
+      await page.goto(e.local);
+      await expect(page.locator(".otk-welcome")).toBeVisible();
+      await page.locator(".otk-settings-entry").click();
+      const settings = page.locator(".otk-settings");
+      await settings.getByLabel("Base URL", { exact: true }).fill(e.password);
+      await settings.getByLabel("Label", { exact: true }).fill(
+        "Follow-up failure",
+      );
+      await settings.getByRole("button", { name: "Add server", exact: true })
+        .click();
+      const card = settings.locator(".otk-sidecar-card").filter({
+        has: page.getByRole("heading", {
+          name: "Follow-up failure",
+          exact: true,
+        }),
+      });
+      await expect(card.locator("[data-connection]")).toHaveText(
+        "login required",
+      );
+      await page.route(e.password + "/api/session", async (route) => {
+        if (!fail) return await route.continue();
+        if (++failed === 1) return await route.abort("connectionrefused");
+        await released;
+        await route.continue();
+      });
+      fail = true;
+      await card.evaluate((node) => {
+        const trace: string[] = [];
+        const observer = new MutationObserver(() =>
+          trace.push(node.textContent ?? "")
+        );
+        observer.observe(node, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+        (window as unknown as {
+          loginTrace: { trace: string[]; observer: MutationObserver };
+        }).loginTrace = { trace, observer };
+      });
+      await card.getByLabel("Username", { exact: true }).fill("tester");
+      await card.getByLabel("Password", { exact: true }).fill("secret");
+      await card.getByRole("button", { name: "Log in", exact: true }).click();
+      // Retry entry proves the failed attempt's continuations and feedback have
+      // drained, rather than sampling the transient reconnect before login resumes.
+      await expect.poll(() => failed).toBeGreaterThanOrEqual(2);
+      const trace = await page.evaluate(() => {
+        const value = (window as unknown as {
+          loginTrace: { trace: string[]; observer: MutationObserver };
+        }).loginTrace;
+        value.observer.disconnect();
+        return value.trace;
+      });
+      expect(trace.join("\n")).not.toContain(
+        "OTK accepted sign-in, but this page is still not authenticated",
+      );
+      expect(trace.join("\n")).not.toContain("cookie settings");
+      await expect(card.locator("[data-connection]")).toHaveText(
+        "reconnecting",
+      );
+      await expect(card).not.toContainText(
+        "OTK accepted sign-in, but this page is still not authenticated",
+      );
+      await expect(card).not.toContainText("cookie settings");
+      fail = false;
+      release();
+      await expect(card.locator("[data-connection]")).toHaveText("connected");
+    } finally {
+      release();
+      await page.close();
+      await peers.close();
+    }
+  },
+);

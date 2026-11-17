@@ -127,6 +127,15 @@ upgrade instructions.
 
 ## Public discovery
 
+Served HTML extends the existing mount-relative base transform with one inert
+`otk-bootstrap` JSON value containing only `clientRequestPolicy(cfg)`. This safe
+numeric projection supplies the application's initial connection policy before
+any local or saved remote session read succeeds. It never serializes operator
+config, auth credentials or backend identity. The browser composition validates
+it and injects it into the shell; reusable client/UI packages do not read HTML
+or invent defaults. A remote's checked session and welcome replace this initial
+policy with that remote's authority. Static-only callers may omit config.
+
 The existing plain and tracked `/api/session` responses also carry `defaults`,
 an allowlisted `{ defaultPort }` projection from the shipped
 `defaults/otk.toml`. It never projects resolved operator/auth configuration.

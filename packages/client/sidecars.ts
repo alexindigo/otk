@@ -88,6 +88,7 @@ export interface SidecarsOptions {
 export interface SidecarsState {
   list: SidecarState[];
   discovery?: DiscoveryState;
+  addition?: { url: string; label: string };
 }
 export interface ClientSidecars {
   state: SidecarsState;
@@ -96,6 +97,7 @@ export interface ClientSidecars {
   start(): void;
   stop(): void;
   add(value: string, label: string): Promise<string>;
+  editAdd?(patch: Partial<NonNullable<SidecarsState["addition"]>>): void;
   cancelAdd?(): Promise<void>;
   remove(id: string): void;
 }
@@ -107,6 +109,7 @@ export function createSidecars(
   const storage = options.storage ?? globalThis.localStorage;
   const initial = readSidecars(storage, options.diagnostic);
   const { state, update: setState, subscribe } = factory<SidecarsState>({
+    addition: { url: "", label: "" },
     list: initial.map((item) => ({
       ...item,
       status: "connecting",
@@ -188,9 +191,10 @@ export function createSidecars(
           return onFrame(spec.id, frame);
         },
       },
-      spec.id === LOCAL_SIDECAR
-        ? options.connection
-        : { afterRender: options.connection?.afterRender },
+      spec.id === LOCAL_SIDECAR ? options.connection : {
+        afterRender: options.connection?.afterRender,
+        policy: options.connection?.policy,
+      },
     );
     connections.set(spec.id, connection);
   };
@@ -213,6 +217,9 @@ export function createSidecars(
       for (const connection of connections.values()) connection.stop();
     },
     add(value: string, label: string): Promise<string> {
+      setState((draft) => {
+        draft.addition = { url: value, label };
+      });
       if (stopped) {
         return rejected(
           "the entered address",
@@ -297,6 +304,11 @@ export function createSidecars(
       });
       void work.then(deferred.resolve, deferred.reject);
       return deferred.promise;
+    },
+    editAdd(patch) {
+      setState((draft) => {
+        draft.addition = { ...draft.addition!, ...patch };
+      });
     },
     async cancelAdd() {
       const owner = currentDiscovery;
