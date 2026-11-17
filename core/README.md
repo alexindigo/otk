@@ -16,6 +16,15 @@ Insufficient root evidence remains unresolved instead of merging a removed
 nested checkout into the canonical root. Grouped scalar reads remain bounded;
 identity does not require a session catalog or transcript scan.
 
+Positive scope-owner sets and active native sources survive restart
+independently of history and availability. Identity learns and recorded-root
+observations use one atomic acceptance boundary, returning affected
+repositories/directories and advancing its projection revision only after
+persistence. Summary sessions retain their actual contribution leaf; both seed
+and recorded-root reconciliation move all affected contributions and republish
+retained empty siblings. Stored exact policy scopes remain unchanged and resolve
+to retained presentation leaves.
+
 ## Session hierarchy
 
 `IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only

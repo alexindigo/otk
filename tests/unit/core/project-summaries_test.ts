@@ -399,3 +399,118 @@ Deno.test("failed identity persistence cannot retire summary contributions or de
   assertEquals(owner.values.get("/tree")?.status, "working");
   assertEquals(owner.values.get("/tree")?.sessionCount, 1);
 });
+
+Deno.test("canonical relocation republishes retained empty siblings with their new topology", () => {
+  const wire = new Map<string, ProjectSummary>();
+  const owner = new ProjectSummaries(
+    () => ({ seen: 0, finish: 0 }),
+    (row) => wire.set(row.directory, structuredClone(row)),
+    (directory) => wire.delete(directory),
+  );
+  owner.retain(["/repo", "/one", "/two"]);
+  const seed = (directory: string, canonicalRoot: string) => ({
+    directory,
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current" as const,
+    identities: [{
+      source: "fixture",
+      repoID: "p",
+      canonicalRoot,
+      recordedRoot: directory,
+      inventory: [{ directory, kind: "worktree" as const }],
+    }],
+  });
+  owner.seed([seed("/one", "/repo"), seed("/two", "/repo")]);
+  assertEquals(wire.get("/two")?.topology?.parentDirectory, "/repo");
+  owner.seed([seed("/one", "/moved")]);
+  assertEquals(wire.get("/two")?.topology?.parentDirectory, "/moved");
+  assertEquals(wire.get("/two")?.scopes, ["/two"]);
+  assertEquals(wire.get("/repo")?.topology?.parentDirectory, undefined);
+});
+
+Deno.test("late recorded roots migrate all retained contributions and exact seed scopes before mark or removal", () => {
+  let seen = 0;
+  const owner = new ProjectSummaries(() => ({ seen, finish: 10 }), () => {});
+  owner.seed([{
+    directory: "/tree/sub",
+    hasSessions: true,
+    sessionCount: 2,
+    lastActivity: 2,
+    authority: "current",
+    identities: [{
+      source: "fixture",
+      repoID: "p",
+      canonicalRoot: "/repo",
+      recordedRoot: null,
+      inventory: [],
+    }],
+  }]);
+  owner.ensure("/tree/sub");
+  owner.authority("current");
+  const a = {
+    ...entry("a"),
+    directory: "/tree/sub",
+    activity: { work: { keys: ["a"], fresh: true } },
+  };
+  owner.entry(a);
+  owner.entry({ ...entry("b"), directory: "/tree/sub", checkoutRoot: "/tree" });
+  assertEquals(
+    owner.values.has("/tree/sub"),
+    false,
+    "resolved stored policy is not an obsolete flat row",
+  );
+  assertEquals(owner.values.get("/tree")?.status, "finished");
+  assertEquals(owner.values.get("/tree")?.unseenCount, 2);
+  assertEquals(owner.values.get("/tree")?.sessionCount, 2);
+  assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/sub"]);
+  seen = 10;
+  owner.mark("a");
+  assertEquals(owner.values.get("/tree")?.unseenCount, 1);
+  owner.remove("b");
+  assertEquals(owner.values.get("/tree")?.status, "working");
+  assertEquals(owner.values.get("/tree")?.unseenCount, 0);
+  owner.remove("a");
+  assertEquals(owner.values.get("/tree")?.status, "none");
+  assertEquals(owner.values.get("/repo")?.status, "none");
+});
+
+Deno.test("recorded root migration retains deleted routing metadata without a phantom contribution", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 10 }), () => {});
+  owner.ensure("/repo");
+  owner.authority("current");
+  owner.seed([{
+    directory: "/tree/sub",
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+    identities: [{
+      source: "fixture",
+      repoID: "p",
+      canonicalRoot: "/repo",
+      recordedRoot: null,
+      inventory: [],
+    }],
+  }]);
+  owner.entry({
+    ...entry("deleted"),
+    directory: "/tree/sub",
+    deleted: { at: 1, how: "provider" },
+  });
+  owner.entry({
+    ...entry("live"),
+    directory: "/tree/sub",
+    checkoutRoot: "/tree",
+  });
+  owner.remove("live");
+  owner.mark("deleted");
+  assertEquals(owner.values.get("/tree")?.hasSessions, false);
+  assertEquals(owner.values.get("/tree")?.unseenCount, 0);
+  assertEquals(owner.values.get("/tree")?.status, "none");
+  assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/sub"]);
+  assertEquals(owner.values.has("/tree/sub"), false);
+  owner.remove("deleted");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 0);
+});

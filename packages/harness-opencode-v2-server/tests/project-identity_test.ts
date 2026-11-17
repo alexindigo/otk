@@ -242,3 +242,148 @@ Deno.test("positive native ownership revisions select current scope ownership wi
   assertEquals(owner.memberships("/tree").length, 0);
   assertEquals(owner.memberships("/tree/src")[0].repoID, "new-repo");
 });
+
+for (const replacement of ["scope", "source"] as const) {
+  Deno.test(`durable ${replacement} authority does not revive old owners when inventory is unavailable after restart`, () => {
+    const directory = Deno.makeTempDirSync({ prefix: "checkout-authority-" });
+    let db: OtkDb | undefined;
+    try {
+      db = new OtkDb(directory, [checkoutsMigrations], { busyms: 0 });
+      const owner = new ProjectIdentity(new Checkouts(db));
+      const first = seed("/tree/src/lib", "/tree", ["/tree"]);
+      owner.learn([first]);
+      owner.learn([{
+        ...first,
+        identities: [{
+          ...first.identities![0],
+          source: replacement === "source" ? "new-source" : "fixture",
+          repoID: "new-repo",
+          canonicalRoot: "/new",
+          recordedRoot: "/tree/src",
+          inventory: [{ directory: "/tree/src", kind: "checkout" }],
+        }],
+      }]);
+      const memberships = owner.memberships("/tree/src").map((
+        { source, repoID, directory, leafDirectory },
+      ) => ({ source, repoID, directory, leafDirectory }));
+      db.close();
+      db = new OtkDb(directory, [checkoutsMigrations], { busyms: 0 });
+      const restarted = new ProjectIdentity(new Checkouts(db));
+      assertEquals(restarted.records().length, 2, "history is preserved");
+      assertEquals(restarted.leaf("/tree/src/lib"), "/tree/src");
+      assertEquals(restarted.memberships("/tree"), []);
+      assertEquals(
+        restarted.memberships("/tree/src").map((
+          { source, repoID, directory, leafDirectory },
+        ) => ({ source, repoID, directory, leafDirectory })),
+        memberships,
+      );
+      assertEquals(restarted.availability("/tree/src"), "unknown");
+    } finally {
+      db?.close();
+      Deno.removeSync(directory, { recursive: true });
+    }
+  });
+}
+
+Deno.test("authority-only persistence failures cannot change the live owner or defeat retry", () => {
+  let fail = false;
+  const owner = new ProjectIdentity({
+    list: () => [],
+    save: () => {
+      if (fail) throw new Error("authority unavailable");
+    },
+  });
+  const first = seed("/shared", "/shared", ["/shared"]);
+  const second = {
+    ...first,
+    identities: [{
+      ...first.identities![0],
+      repoID: "other",
+      canonicalRoot: "/other",
+    }],
+  };
+  owner.learn([first, second]);
+  assertEquals(owner.topology("/shared"), undefined);
+  fail = true;
+  assertThrows(() => owner.learn([first]), Error, "authority unavailable");
+  assertEquals(owner.topology("/shared"), undefined);
+  assertEquals(owner.memberships("/shared").length, 2);
+  fail = false;
+  owner.learn([first]);
+  assertEquals(owner.topology("/shared")?.repoID, "repo");
+  assertEquals(owner.memberships("/shared").length, 1);
+});
+
+Deno.test("checkout v1 upgrades preserve history without inventing authority and atomically persist the next positive owner", () => {
+  const directory = Deno.makeTempDirSync({ prefix: "checkout-upgrade-" });
+  let db: OtkDb | undefined;
+  try {
+    db = new OtkDb(directory, [{
+      ...checkoutsMigrations,
+      migrations: checkoutsMigrations.migrations.slice(0, 1),
+    }], { busyms: 0 });
+    db.connection.prepare(
+      "INSERT INTO checkout_history VALUES(?,?,?,?,?,?,?,?)",
+    ).run(
+      "fixture",
+      "repo",
+      "/tree/src",
+      "/repo",
+      "/tree",
+      "worktree",
+      "present",
+      1,
+    );
+    db.close();
+    db = new OtkDb(directory, [checkoutsMigrations], { busyms: 0 });
+    const store = new Checkouts(db);
+    assertEquals(
+      store.authority(),
+      undefined,
+      "upgrade has no fabricated positive observation",
+    );
+    const owner = new ProjectIdentity(store);
+    assertEquals(owner.leaf("/tree/src"), "/tree");
+    const first = seed("/tree/src", "/tree", ["/tree"]);
+    owner.learn([first]);
+    const revision = owner.revision,
+      records = owner.records(),
+      authority = store.authority();
+    db.connection.exec(
+      "CREATE TRIGGER reject_authority BEFORE UPDATE ON checkout_authority BEGIN SELECT RAISE(ABORT,'authority rejected'); END",
+    );
+    assertThrows(
+      () =>
+        owner.learn([{
+          ...first,
+          identities: [{ ...first.identities![0], canonicalRoot: "/moved" }],
+        }]),
+      Error,
+      "authority rejected",
+    );
+    assertEquals(owner.records(), records);
+    assertEquals(owner.revision, revision);
+    assertEquals(store.authority(), authority);
+    assertEquals(
+      store.list()[0].canonicalRoot,
+      "/repo",
+      "history and authority roll back together",
+    );
+    db.connection.exec("DROP TRIGGER reject_authority");
+    owner.learn([{
+      ...first,
+      identities: [{ ...first.identities![0], canonicalRoot: "/moved" }],
+    }]);
+    assertEquals(owner.topology("/tree")?.parentDirectory, "/moved");
+    db.close();
+    db = new OtkDb(directory, [checkoutsMigrations], { busyms: 0 });
+    assertEquals(
+      new ProjectIdentity(new Checkouts(db)).topology("/tree")?.parentDirectory,
+      "/moved",
+    );
+  } finally {
+    db?.close();
+    Deno.removeSync(directory, { recursive: true });
+  }
+});

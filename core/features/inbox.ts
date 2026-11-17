@@ -400,7 +400,10 @@ export class InboxFeature implements FrameSource {
         ) return;
         this.#observe(entry, previous);
         const { digest: _digest, ...metadata } = entry;
-        this.summaries.entry(metadata);
+        for (const affected of this.summaries.entry(metadata)) {
+          // The same activity now belongs to its revised checkout projection.
+          this.#observe(affected, affected);
+        }
         if (previous && entry.parentID !== previous.parentID) {
           this.summaries.refresh();
         }
