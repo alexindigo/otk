@@ -30,7 +30,10 @@ export function attentionPresentation(
               server,
               id,
               entry.deleted
-                ? { permissions: { keys: [], fresh: true } }
+                ? {
+                  permissions: { keys: [], fresh: true },
+                  inputs: { keys: [], fresh: true },
+                }
                 : entry.activity,
             );
           }
@@ -42,6 +45,11 @@ export function attentionPresentation(
           grace.permission(server, request.sessionID, request.id);
         } else if (frame.event.op === "permission.remove") {
           grace.settled(server, frame.event.requestID);
+        } else if (
+          frame.event.op === "question.remove" ||
+          frame.event.op === "form.remove"
+        ) {
+          grace.inputSettled(server, frame.event.requestID);
         }
       }
     },

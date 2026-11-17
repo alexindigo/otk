@@ -31,6 +31,7 @@ export function createMessageLayout() {
   };
   let preference: string | undefined, previousRole = "", copyable = 0;
   let order: string[] = [];
+  let waits: Part[] = [];
   const segments = new Map<string, { parts: Part[]; rows: Descriptor[] }>();
   const parts = new Map<string, Descriptor>();
   const slots = new Map<
@@ -84,11 +85,17 @@ export function createMessageLayout() {
       }
       preference = version;
       previousRole = role;
+      const waitsChanged = replacements.some(({ before, after }) =>
+        before.value.timing?.waitsForUser || after.value.timing?.waitsForUser
+      );
       if (structural) {
         const rows = input.flatMap((segment) =>
           segments.get(segment.messageID)!.rows
         );
         const retained = new Set(rows.map((row) => row.part.id));
+        waits = rows.filter((row) => row.value.timing?.waitsForUser).map((
+          row,
+        ) => row.part);
         for (const key of parts.keys()) {
           if (!retained.has(key)) parts.delete(key);
         }
@@ -110,6 +117,7 @@ export function createMessageLayout() {
           const groups = partGroups(
             frame.parts,
             (part) => role === "assistant" ? parts.get(part.id)!.value : {},
+            waits,
           );
           // Prepending a work prefix keeps an already-known fold's identity.
           for (const group of groups) {
@@ -155,9 +163,28 @@ export function createMessageLayout() {
         };
         return state;
       }
+      if (waitsChanged) {
+        waits = [...parts.values()].filter((row) =>
+          row.value.timing?.waitsForUser
+        ).map((row) => row.part);
+      }
       let frames = state.frames;
       const changedFrames = new Set<number>(),
         changedGroups = new Set<string>();
+      const writable = (f: number, g: number) => {
+        if (frames === state.frames) frames = [...frames];
+        if (!changedFrames.has(f)) {
+          frames[f] = { ...frames[f], groups: [...frames[f].groups] };
+          changedFrames.add(f);
+        }
+        const key = `${f}:${g}`;
+        if (!changedGroups.has(key)) {
+          const group = frames[f].groups[g];
+          frames[f].groups[g] = { ...group, parts: [...group.parts] };
+          changedGroups.add(key);
+        }
+        return frames[f].groups[g];
+      };
       for (const { before, after } of replacements) {
         copyable += Number(after.copyable) - Number(before.copyable);
         const slot = slots.get(after.part.id);
@@ -166,21 +193,7 @@ export function createMessageLayout() {
           before.part === after.part &&
             before.value.timing === after.value.timing
         ) continue;
-        if (frames === state.frames) frames = [...frames];
-        if (!changedFrames.has(slot.frame)) {
-          frames[slot.frame] = {
-            ...frames[slot.frame],
-            groups: [...frames[slot.frame].groups],
-          };
-          changedFrames.add(slot.frame);
-        }
-        const key = `${slot.frame}:${slot.group}`, frame = frames[slot.frame];
-        if (!changedGroups.has(key)) {
-          const group = frame.groups[slot.group];
-          frame.groups[slot.group] = { ...group, parts: [...group.parts] };
-          changedGroups.add(key);
-        }
-        frame.groups[slot.group].parts[slot.index] = after.part;
+        writable(slot.frame, slot.group).parts[slot.index] = after.part;
       }
       for (const key of changedGroups) {
         const [f, g] = key.split(":").map(Number);
@@ -189,7 +202,24 @@ export function createMessageLayout() {
           group.workingMs = segmentWorkingTime(
             group.parts,
             (part) => parts.get(part.id)!.value,
+            waits,
           );
+        }
+      }
+      if (waitsChanged) {
+        for (let f = 0; f < frames.length; f++) {
+          for (let g = 0; g < frames[f].groups.length; g++) {
+            const group = frames[f].groups[g];
+            if (!group.work || changedGroups.has(`${f}:${g}`)) continue;
+            const workingMs = segmentWorkingTime(
+              group.parts,
+              (part) => parts.get(part.id)!.value,
+              waits,
+            );
+            if (workingMs !== group.workingMs) {
+              writable(f, g).workingMs = workingMs;
+            }
+          }
         }
       }
       if (frames !== state.frames || state.copyable !== (copyable > 0)) {

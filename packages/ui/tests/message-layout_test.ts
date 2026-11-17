@@ -7,6 +7,70 @@ import {
   messageLayoutRole,
 } from "../components/work-log.ts";
 
+Deno.test("hidden wait replacement invalidates dependent segment timing without remounting unrelated groups", () => {
+  const owner = createMessageLayout();
+  const busy: Part = {
+    kind: "reasoning",
+    id: "work",
+    blocks: [],
+    time: { start: 1000, end: 2200 },
+  };
+  const earlier: Part = {
+    kind: "reasoning",
+    id: "earlier",
+    blocks: [],
+    time: { start: 0, end: 700 },
+  };
+  const text: Part = { kind: "meta", id: "text" };
+  const wait = (end?: number): Part => ({
+    kind: "reasoning",
+    id: "question",
+    blocks: [],
+    time: { start: 1200, end },
+  });
+  const present = (part: Part) =>
+    part.id === "question" && part.kind === "reasoning"
+      ? { hidden: true, timing: { ...part.time, waitsForUser: true } }
+      : part.kind === "reasoning"
+      ? { work: part.time, timing: part.time }
+      : {};
+  const update = (question?: Part) =>
+    owner.update(
+      "reply",
+      "assistant",
+      [{
+        messageID: "source",
+        parts: [earlier, text, busy, ...(question ? [question] : [])],
+      }],
+      "prefs",
+      present,
+    );
+  const first = update(wait(1500)), stable = first.frames[0].groups[0];
+  assertEquals(first.frames[0].groups.map((group) => group.workingMs), [
+    700,
+    undefined,
+    900,
+  ]);
+  const next = update(wait(1600));
+  assertEquals(next.frames[0].groups.map((group) => group.workingMs), [
+    700,
+    undefined,
+    800,
+  ]);
+  assertStrictEquals(next.frames[0].groups[0], stable);
+  assertEquals(next.frames[0].groups[2].id, first.frames[0].groups[2].id);
+  assertEquals(
+    update(wait()).frames[0].groups.map((group) => group.workingMs),
+    [undefined, undefined, undefined],
+    "incomplete waits are not known zero",
+  );
+  assertEquals(update().frames[0].groups.map((group) => group.workingMs), [
+    700,
+    undefined,
+    1200,
+  ]);
+});
+
 Deno.test("segment timing follows cached part evidence across clock updates and unknown endpoints", () => {
   const owner = createMessageLayout();
   let presented = 0;

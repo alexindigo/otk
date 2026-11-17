@@ -78,6 +78,7 @@ interface InboxPublication {
   value: InboxOp;
   directory?: string;
   sessionID?: string;
+  taskID?: string;
 }
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
@@ -164,50 +165,67 @@ export class InboxFeature implements FrameSource {
   ): FrameSource {
     const listeners = new Set<(frame: ServerFrame) => void>();
     let revision = 0;
-    let taskScopes = new Set<string>();
-    const currentTaskScopes = () => {
+    let deliveredTasks = new Map<string, TaskRecord>();
+    type Facts = {
+      seen?: number;
+      finish?: number;
+      supervision?: Supervision;
+    };
+    let delivered: Map<string, Facts> | undefined;
+    const facts = (id: string): Facts => ({
+      seen: this.#seen.get(this.user)?.get(id),
+      finish: this.#finishes.get(id),
+      supervision: this.#supervision.get(id),
+    });
+    const reconcile = (): InboxOp[] => {
+      if (!delivered) return [];
+      const leased = entries(), ops: InboxOp[] = [];
+      for (const id of delivered.keys()) {
+        if (!leased.has(id)) delivered.delete(id);
+      }
+      for (const id of leased) {
+        const before = delivered.get(id), current = facts(id);
+        if (current.seen !== undefined && current.seen !== before?.seen) {
+          ops.push({ op: "seen", sessionID: id, time: current.seen });
+        }
+        if (current.finish !== undefined && current.finish !== before?.finish) {
+          ops.push({ op: "finish", sessionID: id, time: current.finish });
+        }
+        if (
+          JSON.stringify(current.supervision) !==
+            JSON.stringify(before?.supervision)
+        ) {
+          ops.push({
+            op: "supervision",
+            sessionID: id,
+            value: current.supervision ?? null,
+          });
+        }
+        delivered.set(id, current);
+      }
       const scope = view(), directory = this.#directory(scope);
-      return new Set(
-        directory && scope.tasksFollowParent
-          ? this.#projectTasks(directory, true).map((task) => task.directory)
-          : [],
+      const tasks = new Map(
+        (directory
+          ? this.#projectTasks(directory, scope.tasksFollowParent)
+          : []).map((task) => [task.id, task]),
       );
+      for (const id of deliveredTasks.keys()) {
+        if (!tasks.has(id)) ops.push({ op: "task.remove", id });
+      }
+      for (const [id, task] of tasks) {
+        if (JSON.stringify(deliveredTasks.get(id)) !== JSON.stringify(task)) {
+          ops.push({ op: "task.upsert", task: structuredClone(task) });
+        }
+      }
+      deliveredTasks = new Map(
+        [...tasks].map(([id, task]) => [id, structuredClone(task)]),
+      );
+      return ops;
     };
     const emit = (frame: ServerFrame) => {
       for (const listener of listeners) listener(frame);
     };
-    const baseline = (): InboxBaseline => {
-      this.#flush();
-      taskScopes = currentTaskScopes();
-      return {
-        generation: this.#generation,
-        revision,
-        epoch: view().epoch,
-        summaryRevision: this.#summaryRevision,
-        inbox: this.get(view(), entries()),
-      };
-    };
-    this.#views.set(id, baseline);
-    const stop = this.listen((frame) => {
-      if (frame.t !== "inbox.patch") emit(frame);
-    });
-    const publish = (changes: readonly InboxPublication[]) => {
-      const scope = view(),
-        directory = this.#directory(scope),
-        leased = entries();
-      const nextTaskScopes = currentTaskScopes();
-      const ops = changes.filter((change) =>
-        change.directory !== undefined
-          ? directory !== undefined &&
-            ((this.summaries.values.get(directory)?.scopes ?? [directory])
-              .includes(change.directory) ||
-              taskScopes.has(change.directory) ||
-              nextTaskScopes.has(change.directory))
-          : change.sessionID !== undefined
-          ? leased.has(change.sessionID)
-          : true
-      ).map((change) => change.value);
-      taskScopes = nextTaskScopes;
+    const emitOps = (ops: InboxOp[]) => {
       if (!ops.length) return;
       const from = revision;
       revision += ops.length;
@@ -219,7 +237,55 @@ export class InboxFeature implements FrameSource {
         ops,
       });
     };
+    const baseline = (): InboxBaseline => {
+      this.#flush();
+      const inbox = this.get(view(), entries());
+      deliveredTasks = new Map(
+        inbox.tasks.map((task) => [task.id, structuredClone(task)]),
+      );
+      delivered = new Map([...entries()].map((id) => [id, {
+        seen: inbox.seen[id],
+        finish: inbox.finishes[id],
+        supervision: inbox.supervision?.[id],
+      }]));
+      return {
+        generation: this.#generation,
+        revision,
+        epoch: view().epoch,
+        summaryRevision: this.#summaryRevision,
+        inbox,
+      };
+    };
+    this.#views.set(id, baseline);
+    const stop = this.listen((frame) => {
+      if (frame.t !== "inbox.patch") emit(frame);
+    });
+    const publish = (changes: readonly InboxPublication[]) => {
+      if (!delivered) return;
+      const scope = view(),
+        directory = this.#directory(scope);
+      const ops = changes.filter((change) =>
+        change.sessionID === undefined && change.taskID === undefined
+      )
+        .filter((change) =>
+          change.directory !== undefined
+            ? directory !== undefined &&
+              (this.summaries.values.get(directory)?.scopes ?? [directory])
+                .includes(change.directory)
+            : true
+        ).map((change) => change.value);
+      emitOps([...ops, ...reconcile()]);
+    };
     this.#publications.add(publish);
+    let entriesScheduled = false;
+    const entriesChanged = () => {
+      if (entriesScheduled || !delivered) return;
+      entriesScheduled = true;
+      queueMicrotask(() => {
+        entriesScheduled = false;
+        if (this.#views.has(id)) emitOps(reconcile());
+      });
+    };
     let rowsScheduled = false;
     const rowsChanged = () => {
       if (rowsScheduled) return;
@@ -236,13 +302,27 @@ export class InboxFeature implements FrameSource {
       });
     };
     const stopRows = this.index.observe((entry, previous, delta) => {
+      if (delta) return;
+      const directory = this.#directory(view());
+      const scopes = this.summaries.values.get(directory ?? "")?.scopes ??
+        (directory ? [directory] : []);
+      const local = scopes.some((scope) =>
+        entry.directory === scope || previous?.directory === scope
+      );
       if (
-        delta ||
-        !(this.summaries.values.get(this.#directory(view()) ?? "")?.scopes ??
-          [this.#directory(view())]).some((scope) =>
-            entry.directory === scope || previous?.directory === scope
-          )
-      ) return;
+        (!previous || entry.parentID !== previous.parentID ||
+          entry.directory !== previous.directory ||
+          entry.projectID !== previous.projectID ||
+          JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)) &&
+        (local ||
+          view().tasksFollowParent &&
+            scopes.some((scope) =>
+              this.index.catalog(scope).some((row) =>
+                this.index.hierarchy.ancestors(row.id).includes(entry.id)
+              )
+            ))
+      ) entriesChanged();
+      if (!local) return;
       if (
         !previous || entry.title !== previous.title ||
         entry.parentID !== previous.parentID ||
@@ -251,7 +331,10 @@ export class InboxFeature implements FrameSource {
         JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)
       ) rowsChanged();
     });
-    const stopRemoval = this.index.observeRemoval(rowsChanged);
+    const stopRemoval = this.index.observeRemoval(() => {
+      entriesChanged();
+      rowsChanged();
+    });
     // Cached page structures carry task ownership too. Reproject a demanded
     // page after membership changes, through the existing list resource owner.
     const stopTasks = this.stores.tasks.listen(rowsChanged);
@@ -268,6 +351,8 @@ export class InboxFeature implements FrameSource {
       if (keys.length) await this.hydrate?.(keys, signal);
     };
     return {
+      entriesChanged,
+      viewChanged: entriesChanged,
       snapshot: async (signal) => {
         await hydrate(signal);
         const value = baseline();
@@ -280,6 +365,8 @@ export class InboxFeature implements FrameSource {
         };
       },
       close: () => {
+        delivered = undefined;
+        deliveredTasks.clear();
         stop();
         this.#publications.delete(publish);
         stopRows();
@@ -407,7 +494,10 @@ export class InboxFeature implements FrameSource {
         ) return;
         this.#observe(entry, previous);
         const { digest: _digest, ...metadata } = entry;
-        this.summaries.entry(metadata);
+        for (const affected of this.summaries.entry(metadata)) {
+          // The same activity now belongs to its revised checkout projection.
+          this.#observe(affected, affected);
+        }
         if (previous && entry.parentID !== previous.parentID) {
           this.summaries.refresh();
         }
@@ -503,6 +593,7 @@ export class InboxFeature implements FrameSource {
           this.#capture("tasks", task.id);
           this.#queue(`task:${task.id}`, { op: "task.upsert", task }, {
             directory: task.directory,
+            taskID: task.id,
           });
         }
         for (const id of change.remove) {
@@ -512,6 +603,7 @@ export class InboxFeature implements FrameSource {
           this.#capture("tasks", id);
           this.#queue(`task:${id}`, { op: "task.remove", id }, {
             directory: task?.directory ?? "",
+            taskID: id,
           });
         }
       }),

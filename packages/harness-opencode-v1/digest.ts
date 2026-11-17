@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { runningDirectories } from "./db-hints.ts";
 import {
+  emptyProjectSeed,
   projectFileMatches,
   projectSeeds,
-  projectTopologyAt,
 } from "./project-seeds.ts";
 import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
@@ -876,50 +876,22 @@ export class OpencodeV1DigestSink implements DigestSink {
           for (const root of [project.worktree, ...project.sandboxes ?? []]) {
             if (known.has(root)) continue;
             known.add(root);
-            const empty: import("@otk/harness").ProjectSeed = {
-              directory: root,
-              hasSessions: false,
-              sessionCount: 0,
-              lastActivity: null,
-              authority: "current",
-              identities: [{
-                source: "opencode-v1:" + native.file,
-                repoID: project.id,
-                canonicalRoot: project.worktree,
-                recordedRoot: root,
-                inventory: [
-                  { directory: project.worktree, kind: "checkout" },
-                  ...(project.sandboxes ?? []).map((directory) => ({
-                    directory,
-                    kind: "unknown" as const,
-                  })),
-                ],
-              }],
-              topology: {
-                repoID: project.id,
-                canonicalRoot: project.worktree,
-                leafDirectory: root,
-                ...(root !== project.worktree
-                  ? { parentDirectory: project.worktree }
-                  : {}),
-              },
-            };
+            const empty = emptyProjectSeed(
+              root,
+              reported,
+              "opencode-v1:" + native.file,
+            );
             projects.push(empty);
             await publish?.([empty]);
           }
         }
       }
       if (directory !== undefined && !projects.length) {
-        const empty: import("@otk/harness").ProjectSeed = {
+        const empty = emptyProjectSeed(
           directory,
-          hasSessions: false,
-          sessionCount: 0,
-          lastActivity: null,
-          authority: "current",
-          // No population repo ID remains: exact inventory proves a relationship,
-          // but an unregistered nested scope is unknown, not an authoritative clear.
-          topology: projectTopologyAt(reported, directory) ?? undefined,
-        };
+          reported,
+          "opencode-v1:" + native.file,
+        );
         projects.push(empty);
         await publish?.([empty]);
       }
@@ -949,11 +921,24 @@ export class OpencodeV1DigestSink implements DigestSink {
       return { entries: [], complete: this.#projectVerified };
     }
     const revision = this.#discoveryRevision;
+    const connection = this.#connection, native = this.#native;
+    const current = () => {
+      signal.throwIfAborted();
+      if (
+        this.#closed || connection !== this.#connection ||
+        native !== this.#native || revision !== this.#discoveryRevision
+      ) {
+        throw new Error("Discovery source generation changed");
+      }
+    };
     const directories = [...this.#activeDirectories].filter((directory) =>
       !this.#excludedDirectories.has(directory)
     );
     if (!directories.length) return { entries: [], complete: true };
-    let rows: SessionMetadata[], complete: boolean;
+    let rows: SessionMetadata[],
+      complete: boolean,
+      nextCursor: string | undefined;
+    const sql = this.#projectVerified && !!this.#native;
     if (this.#projectVerified && this.#native) {
       if (this.#native.fileIdentity() !== this.#native.identity) {
         throw new Error("Discovery source generation changed");
@@ -979,28 +964,37 @@ export class OpencodeV1DigestSink implements DigestSink {
         mapIndex,
       );
       complete = !next;
-      if (revision === this.#discoveryRevision) {
-        this.#discoveryAPICursor = next;
-        this.#discoveryAPIComplete = complete;
-      }
+      nextCursor = next;
     }
+    current();
     const discovered: DigestPublication[] = [];
     this.storage.transaction(() => {
       for (const metadata of rows) {
-        if (this.storage.read(metadata.id)) continue;
-        const delta = emptyDelta();
-        this.storage.write(metadata, delta);
+        const previous = this.storage.read(metadata.id);
+        if (previous?.deleted) continue;
+        const delta = previous
+          ? {
+            ...emptyDelta(previous.summary.revision),
+            summary: previous.summary,
+          }
+          : emptyDelta();
+        if (!previous) this.storage.write(metadata, delta);
         discovered.push({
           sessionID: metadata.id,
-          revision: 0,
+          revision: delta.summary.revision,
           delta,
-          metadata,
+          metadata: previous?.metadata ?? metadata,
         });
       }
     });
     await this.#publishAll(discovered);
+    current();
+    if (!sql) {
+      this.#discoveryAPICursor = nextCursor;
+      this.#discoveryAPIComplete = complete;
+    }
     const last = rows.at(-1);
-    if (last && revision === this.#discoveryRevision) {
+    if (last && sql) {
       this.#discoveryPosition = {
         updated: last.timeUpdated,
         id: ids.decode(last.id),

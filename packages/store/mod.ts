@@ -29,6 +29,7 @@ export type {
 } from "./digest.ts";
 export { sessionReferenceMigrations } from "./features/session-references.ts";
 export {
+  type CheckoutAuthority,
   type CheckoutRecord,
   Checkouts,
   checkoutsMigrations,

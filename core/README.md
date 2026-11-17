@@ -16,6 +16,15 @@ Insufficient root evidence remains unresolved instead of merging a removed
 nested checkout into the canonical root. Grouped scalar reads remain bounded;
 identity does not require a session catalog or transcript scan.
 
+Positive scope-owner sets and active native sources survive restart
+independently of history and availability. Identity learns and recorded-root
+observations use one atomic acceptance boundary, returning affected
+repositories/directories and advancing its projection revision only after
+persistence. Summary sessions retain their actual contribution leaf; both seed
+and recorded-root reconciliation move all affected contributions and republish
+retained empty siblings. Stored exact policy scopes remain unchanged and resolve
+to retained presentation leaves.
+
 ## Session hierarchy
 
 `IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only
@@ -34,6 +43,14 @@ child keeps its own phantom and lamp; viewing a child selects its checkout-local
 display root or owning task. Foreign parents remain breadcrumb links. The open
 session's name is independent of the root/task label and lamp. Child pagination
 is parent-scoped, not checkout-scoped, on V1 and V2.
+
+Hierarchy node caches consume the ProjectIdentity revision even when no session
+field changes. Bounded ancestry reads retain acquisition-local admission sets:
+newer keyed publications, removals and resets retire stale read results. The
+current row, not the awaited response, governs continued ancestry traversal.
+Connection task projections replay admitted existing records and retire departed
+ones through the same recipient reconciliation as scalar facts. Relevant foreign
+ancestor changes and view replacement do not require a later task mutation.
 
 ## Evidence-based session supervision
 
@@ -86,6 +103,14 @@ Index publication has one outstanding bounded chunk per socket. `index.applied`
 returns credit only after client reduction. Updates coalesce by key while credit
 is held. A replacement epoch replays unacknowledged keys from current authority;
 its `from` revision rebases local sequencing without a full resnapshot.
+
+After index publication, the optional feature-owned `entriesChanged` hook
+reconciles recipient membership. Inbox replays known seen, finish and
+supervision facts for newly admitted IDs, sharing one delivered scalar
+projection with live updates. Its coalesced microtask follows any enclosing
+inbox publication so task admission cannot invert recipient revisions. It
+performs no native read, list refresh or global broadcast; baseline replacement
+and close own its lifetime.
 
 RequestAttention contributes a feature-owned lease for pending manual
 permissions and questions on every connected server. Outside the ordinary view
@@ -688,13 +713,16 @@ Catalog metadata uses attention priority; rebuildable replay uses background.
 Committed bounded publications inherit their producer's rank and drain as
 finishing continuations, preserving ordering even under interactive pressure.
 Cached replay instead parks between credited chunks. An essential successor
-donates its rank and readiness only along its identity's predecessor chain;
+donates its rank and readiness through every predecessor of a shared active
+publication. Retired reservations relay only identity-local successor demand;
 unrelated replay remains parked, and canceled successors withdraw their
-donation. Row/time quotas and measured serving reduction costs share the duty
-budget. Adaptive row quotas retain a floor of `ceil(digest.batch / 8)` (at least
-one); the same floor applies when a native keyset stops at its time boundary.
-This limits time-budget subdivision to eight slices instead of per-row native
-reads.
+donation. Discovery replays stored nondeleted metadata and its unchanged scalar
+summary through publication credit before committing source cursor/completion.
+Storage presence alone never proves delivery. Row/time quotas and measured
+serving reduction costs share the duty budget. Adaptive row quotas retain a
+floor of `ceil(digest.batch / 8)` (at least one); the same floor applies when a
+native keyset stops at its time boundary. This limits time-budget subdivision to
+eight slices instead of per-row native reads.
 
 The worker's incremental DigestProgress owns scalar scope generations, bounded
 enumeration denominators, completion/queue/chunk/message counts, active work

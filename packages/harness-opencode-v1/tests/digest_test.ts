@@ -11,6 +11,7 @@ import {
   OpencodeV1DigestSink,
 } from "@otk/harness-opencode-v1";
 import type { DigestDelta, SessionMetadata } from "@otk/protocol";
+import type { DigestPublication } from "@otk/harness";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 
 const policy = {
@@ -26,6 +27,93 @@ const policy = {
   retryms: 10,
   busyms: 100,
 };
+
+for (const authority of ["sql", "api"] as const) {
+  const admit = async (
+    f: Awaited<ReturnType<typeof fixture>>,
+    signal: AbortSignal,
+  ) => {
+    if (authority === "sql") {
+      const projects = await f.sink.projects(signal);
+      assertEquals(projects.projects.map((project) => project.directory), [
+        "/p",
+      ]);
+    } else {
+      f.discoveryPages();
+      f.sink.discoveryProject("/p", true);
+    }
+  };
+  test(`${authority} discovery retries committed metadata after publication failure before advancing its cursor`, async () => {
+    const f = await fixture(), signal = new AbortController().signal;
+    try {
+      f.native.exec(
+        "INSERT INTO session VALUES('ses_two',NULL,'/p','p','Two',2,2,NULL),('ses_three',NULL,'/p','p','Three',3,2,NULL)",
+      );
+      await admit(f, signal);
+      f.failNextPublication();
+      await assertRejects(
+        () => f.sink.discover(signal),
+        Error,
+        "injected publication failure",
+      );
+      assertEquals(
+        f.values.size,
+        2,
+        "the failed credit follows durable row commit",
+      );
+      assertEquals(f.delivered.length, 0);
+      const retry = await f.sink.discover(signal);
+      assertEquals(
+        retry.entries.length,
+        2,
+        "stored rows still need delivery to their metadata consumer",
+      );
+      assertEquals(retry.complete, false);
+      assertEquals(
+        f.delivered.map((value) => value.metadata!.id).sort(),
+        retry.entries.map((entry) => entry.id).sort(),
+      );
+      const next = await f.sink.discover(signal);
+      assertEquals(next.entries.length, 1);
+      assertEquals(next.complete, authority === "api");
+      if (authority === "sql") {
+        assertEquals(await f.sink.discover(signal), {
+          entries: [],
+          complete: true,
+        });
+      }
+      assertEquals(
+        new Set(f.delivered.map((value) => value.metadata!.id)).size,
+        3,
+      );
+      if (authority === "api") {
+        assertEquals(f.discoveryCursors, [null, null, "page:2"]);
+      }
+    } finally {
+      f.close();
+    }
+  });
+  test(`${authority} discovery restart replays existing rows without rewriting a ready scalar summary`, async () => {
+    const f = await fixture(), signal = new AbortController().signal;
+    try {
+      f.seed("answer", .75, 10);
+      await f.sink.catalog(signal);
+      const ready = structuredClone(await f.scan());
+      assertEquals(ready.summary.state, "ready");
+      f.restart();
+      await admit(f, signal);
+      f.delivered.length = 0;
+      const page = await f.sink.discover(signal);
+      assertEquals(page.entries.map((entry) => entry.id), ["opcv1-ses_one"]);
+      assertEquals(f.delivered.length, 1);
+      assertEquals(f.delivered[0].metadata, ready.metadata);
+      assertEquals(f.delivered[0].delta.summary, ready.summary);
+      assertEquals(f.values.get(ready.metadata.id), ready);
+    } finally {
+      f.close();
+    }
+  });
+}
 test("identity reads require fresh provider reachability after a verified catalog and never scan headers", async () => {
   const f = await fixture();
   try {
@@ -344,6 +432,9 @@ async function fixture(
   native.exec(
     "ALTER TABLE message ADD COLUMN time_created INTEGER GENERATED ALWAYS AS (CASE WHEN json_valid(data) THEN json_extract(data,'$.time.created') ELSE 0 END) VIRTUAL; CREATE INDEX message_order ON message(session_id,time_created,id)",
   );
+  native.exec(
+    "CREATE TABLE project(id TEXT PRIMARY KEY,worktree TEXT); INSERT INTO project VALUES('p','/p')",
+  );
   const derived = new DatabaseSync(":memory:");
   for (const migration of opencodeV1DigestMigrations.migrations) {
     derived.exec(Deno.readTextFileSync(migration.sql));
@@ -353,7 +444,14 @@ async function fixture(
     DigestSnapshot & { turns: DigestDelta["turns"]["upsert"] }
   >();
   const publications: DigestDelta[] = [];
+  const delivered: DigestPublication[] = [];
+  let failPublication = false, discoveryPaging = false;
+  const discoveryCursors: (string | null)[] = [];
   let apiCatalog = true;
+  let projectInventory: import("../project-seeds.ts").NativeProjectRoot[] = [{
+    id: "p",
+    worktree: "/p",
+  }];
   let catalogHook: (() => void | Promise<void>) | undefined;
   let failWrite = false;
   let sqlUnavailable = false;
@@ -370,149 +468,186 @@ async function fixture(
       return super.replacements(...args);
     }
   }
-  const sink = new OpencodeV1DigestSink(
-    {
-      harness: {
-        url: "http://fixture",
-        db: path,
-        username: "",
-        password: "",
-        heartbeattimeout: 25,
-        reconnectmax: 30,
-        requestms: 60000,
+  const create = () =>
+    new OpencodeV1DigestSink(
+      {
+        harness: {
+          url: "http://fixture",
+          db: path,
+          username: "",
+          password: "",
+          heartbeattimeout: 25,
+          reconnectmax: 30,
+          requestms: 60000,
+        },
+        index: { days: 30 },
+        attachments: cfg().attachments,
       },
-      index: { days: 30 },
-      attachments: cfg().attachments,
-    },
-    policy,
-    {
-      sql: derived,
-      transaction(run) {
-        derived.exec("BEGIN IMMEDIATE");
-        const before = structuredClone(values);
-        try {
-          const result = run();
-          derived.exec("COMMIT");
-          return result;
-        } catch (error) {
-          derived.exec("ROLLBACK");
-          values.clear();
-          for (const [id, value] of before) values.set(id, value);
-          throw error;
-        }
+      policy,
+      {
+        sql: derived,
+        transaction(run) {
+          derived.exec("BEGIN IMMEDIATE");
+          const before = structuredClone(values);
+          try {
+            const result = run();
+            derived.exec("COMMIT");
+            return result;
+          } catch (error) {
+            derived.exec("ROLLBACK");
+            values.clear();
+            for (const [id, value] of before) values.set(id, value);
+            throw error;
+          }
+        },
+        read: (id) => values.get(id),
+        known: () => values.values(),
+        turn: (id, turn) => values.get(id)?.turns[turn],
+        write(metadata: SessionMetadata, delta: DigestDelta) {
+          if (failWrite) {
+            failWrite = false;
+            throw new Error("injected commit failure");
+          }
+          const turns = {
+            ...values.get(metadata.id)?.turns,
+            ...delta.turns.upsert,
+          };
+          for (const id of delta.turns.remove) delete turns[id];
+          values.set(
+            metadata.id,
+            structuredClone({
+              metadata,
+              summary: delta.summary,
+              deleted: delta.deleted,
+              turns,
+            }),
+          );
+        },
+        publish: (value) => {
+          if (failPublication) {
+            failPublication = false;
+            throw new Error("injected publication failure");
+          }
+          publications.push(structuredClone(value.delta));
+          delivered.push(structuredClone(value));
+        },
+        diagnostic: () => {},
       },
-      read: (id) => values.get(id),
-      known: () => values.values(),
-      turn: (id, turn) => values.get(id)?.turns[turn],
-      write(metadata: SessionMetadata, delta: DigestDelta) {
-        if (failWrite) {
-          failWrite = false;
-          throw new Error("injected commit failure");
-        }
-        const turns = {
-          ...values.get(metadata.id)?.turns,
-          ...delta.turns.upsert,
-        };
-        for (const id of delta.turns.remove) delete turns[id];
-        values.set(
-          metadata.id,
-          structuredClone({
-            metadata,
-            summary: delta.summary,
-            deleted: delta.deleted,
-            turns,
-          }),
-        );
-      },
-      publish: ({ delta }) => {
-        publications.push(structuredClone(delta));
-      },
-      diagnostic: () => {},
-    },
-    (async (url: URL | string | Request) => {
-      const path = new URL(String(url)).pathname;
-      if (path === "/global/health") {
-        return Promise.resolve(
-          Response.json({ healthy: apiCatalog }),
-        );
-      }
-      if (path === "/experimental/session") {
-        const hook = catalogHook;
-        catalogHook = undefined;
-        await hook?.();
-        if (!apiCatalog) {
+      (async (url: URL | string | Request) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/project") return Response.json(projectInventory);
+        if (path === "/global/health") {
           return Promise.resolve(
-            new Response("unavailable", { status: 503 }),
+            Response.json({ healthy: apiCatalog }),
           );
         }
-        return Promise.resolve(
-          Response.json(
-            native.prepare(
-              "SELECT * FROM session ORDER BY time_created DESC,id DESC LIMIT ?",
-            ).all(Number(new URL(String(url)).searchParams.get("limit") ?? 200))
-              .map((row) => ({
+        if (path === "/experimental/session") {
+          const hook = catalogHook;
+          catalogHook = undefined;
+          await hook?.();
+          if (!apiCatalog) {
+            return Promise.resolve(
+              new Response("unavailable", { status: 503 }),
+            );
+          }
+          if (discoveryPaging) {
+            const query = new URL(String(url)).searchParams,
+              cursor = query.get("cursor");
+            discoveryCursors.push(cursor);
+            const offset = cursor ? Number(cursor.split(":")[1]) : 0;
+            const limit = Number(query.get("limit"));
+            const all = native.prepare(
+              "SELECT * FROM session ORDER BY time_created DESC,id DESC",
+            ).all();
+            return Response.json(
+              all.slice(offset, offset + limit).map((row) => ({
                 id: row.id,
                 projectID: "p",
                 title: row.title,
                 directory: "/p",
-                time: { created: 1, updated: 2 },
+                time: {
+                  created: Number(row.time_created),
+                  updated: Number(row.time_updated),
+                },
               })),
-          ),
-        );
-      }
-      if (path === "/session/ses_one") {
-        return Response.json({ id: "ses_one", directory: "/p" });
-      }
-      if (path === "/session/ses_one/message" && sqlUnavailable) {
-        const query = new URL(String(url)).searchParams;
-        const before = query.get("before");
-        apiPages.push(before);
-        const all = native.prepare(
-          "SELECT id,data FROM message ORDER BY time_created DESC,id DESC",
-        ).all();
-        const offset = !before
-          ? 0
-          : before.startsWith("api:")
-          ? Number(before.slice(4))
-          : (() => {
-            const cursor = JSON.parse(
-              atob(before.replaceAll("-", "+").replaceAll("_", "/")),
+              {
+                headers: offset + limit < all.length
+                  ? { "x-next-cursor": `page:${offset + limit}` }
+                  : {},
+              },
             );
-            if (
-              typeof cursor.time !== "number" || typeof cursor.id !== "string"
-            ) throw new Error("SQL key leaked into API cursor");
-            return all.findIndex((row) => row.id === cursor.id) + 1;
-          })();
-        const limit = Number(query.get("limit"));
-        return Response.json(
-          all.slice(offset, offset + limit).reverse().map((row) => ({
-            info: {
-              ...JSON.parse(String(row.data)),
-              id: row.id,
-              sessionID: "ses_one",
-            },
-            parts: JSON.parse(String(row.data)).role === "user"
-              ? [{
-                id: `p${row.id}`,
+          }
+          return Promise.resolve(
+            Response.json(
+              native.prepare(
+                "SELECT * FROM session ORDER BY time_created DESC,id DESC LIMIT ?",
+              ).all(
+                Number(new URL(String(url)).searchParams.get("limit") ?? 200),
+              )
+                .map((row) => ({
+                  id: row.id,
+                  projectID: "p",
+                  title: row.title,
+                  directory: "/p",
+                  time: { created: 1, updated: 2 },
+                })),
+            ),
+          );
+        }
+        if (path === "/session/ses_one") {
+          return Response.json({ id: "ses_one", directory: "/p" });
+        }
+        if (path === "/session/ses_one/message" && sqlUnavailable) {
+          const query = new URL(String(url)).searchParams;
+          const before = query.get("before");
+          apiPages.push(before);
+          const all = native.prepare(
+            "SELECT id,data FROM message ORDER BY time_created DESC,id DESC",
+          ).all();
+          const offset = !before
+            ? 0
+            : before.startsWith("api:")
+            ? Number(before.slice(4))
+            : (() => {
+              const cursor = JSON.parse(
+                atob(before.replaceAll("-", "+").replaceAll("_", "/")),
+              );
+              if (
+                typeof cursor.time !== "number" || typeof cursor.id !== "string"
+              ) throw new Error("SQL key leaked into API cursor");
+              return all.findIndex((row) => row.id === cursor.id) + 1;
+            })();
+          const limit = Number(query.get("limit"));
+          return Response.json(
+            all.slice(offset, offset + limit).reverse().map((row) => ({
+              info: {
+                ...JSON.parse(String(row.data)),
+                id: row.id,
                 sessionID: "ses_one",
-                messageID: row.id,
-                type: "text",
-                text: "Real prompt",
-              }]
-              : [],
-          })),
-          {
-            headers: offset + limit < all.length
-              ? { "x-next-cursor": `api:${offset + limit}` }
-              : {},
-          },
-        );
-      }
-      throw new Error(`Unexpected native request ${path}`);
-    }) as typeof fetch,
-    (path) => new CountedDb(path),
-    { wait, admission },
-  );
+              },
+              parts: JSON.parse(String(row.data)).role === "user"
+                ? [{
+                  id: `p${row.id}`,
+                  sessionID: "ses_one",
+                  messageID: row.id,
+                  type: "text",
+                  text: "Real prompt",
+                }]
+                : [],
+            })),
+            {
+              headers: offset + limit < all.length
+                ? { "x-next-cursor": `api:${offset + limit}` }
+                : {},
+            },
+          );
+        }
+        throw new Error(`Unexpected native request ${path}`);
+      }) as typeof fetch,
+      (path) => new CountedDb(path),
+      { wait, admission },
+    );
+  let sink = create();
   const seed = (
     id: string,
     cost: number | null,
@@ -557,16 +692,42 @@ async function fixture(
     return values.get(job.sessionID)!;
   };
   return {
-    sink,
+    get sink() {
+      return sink;
+    },
     nativePath: path,
     native,
     derived,
     values,
     publications,
+    delivered,
+    discoveryCursors,
+    discoveryPages() {
+      discoveryPaging = true;
+    },
+    failNextPublication() {
+      failPublication = true;
+    },
+    restart() {
+      sink.close();
+      sink = create();
+    },
     seed,
     scan,
     queries,
     apiPages,
+    projects(value: typeof projectInventory) {
+      projectInventory = value;
+      native.exec(
+        "CREATE TABLE IF NOT EXISTS project(id TEXT PRIMARY KEY,worktree TEXT); DELETE FROM project",
+      );
+      for (const row of value) {
+        native.prepare("INSERT INTO project VALUES(?,?)").run(
+          row.id,
+          row.worktree,
+        );
+      }
+    },
     loseSQL: () => {
       sqlUnavailable = true;
     },
@@ -588,6 +749,41 @@ async function fixture(
       derived.close();
     },
   };
+}
+
+for (const target of [undefined, "/shared"]) {
+  test(`V1 ${target ? "targeted" : "full"} empty inventory publishes every exact registered owner`, async () => {
+    const f = await fixture();
+    try {
+      f.projects([{ id: "one", worktree: "/one", sandboxes: ["/shared"] }, {
+        id: "two",
+        worktree: "/two",
+        sandboxes: ["/shared"],
+      }]);
+      const emitted: import("@otk/harness").ProjectSeed[] = [];
+      const result = await f.sink.projects(
+        new AbortController().signal,
+        (page) => {
+          emitted.push(...page);
+          return Promise.resolve();
+        },
+        target,
+      );
+      const rows = emitted.filter((row) => row.directory === "/shared");
+      assertEquals(rows.length, 1, "one grouped seed per exact root");
+      assertEquals(rows[0].identities?.map((row) => row.repoID).sort(), [
+        "one",
+        "two",
+      ]);
+      assertEquals(
+        result.projects.find((row) => row.directory === "/shared"),
+        rows[0],
+      );
+      assertEquals(rows[0].sessionCount, 0);
+    } finally {
+      f.close();
+    }
+  });
 }
 
 test("a descending SQL checkpoint restarts in the opaque API domain without double-counting retained totals", async () => {

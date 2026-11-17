@@ -18,6 +18,7 @@ export interface AttentionGrace {
   ): void;
   permission(server: string, session: string, id: string): boolean;
   settled(server: string, id: string): void;
+  inputSettled(server: string, id: string): void;
   light(
     scope: string,
     state: InboxStatus,
@@ -53,7 +54,10 @@ export function createAttentionGrace(o: {
     /** A fresh native inventory no longer lists it; content removal settles it. */
     absent: boolean;
   }>();
-  const inputs = new Map<string, { server: string; session: string }>();
+  const inputs = new Map<
+    string,
+    { server: string; session: string; id: string }
+  >();
   const previous = new Map<string, { server: string; state: InboxStatus }>();
   const key = (server: string, id: string) => JSON.stringify([server, id]);
   let timer: unknown, stopped = false;
@@ -113,10 +117,18 @@ export function createAttentionGrace(o: {
       if (evidence?.permissions?.fresh) {
         for (const id of ids) arrive(server, session, id);
       }
-      const k = key(server, session);
-      if (evidence?.inputs?.fresh && evidence.inputs.keys.length) {
-        inputs.set(k, { server, session });
-      } else inputs.delete(k);
+      if (evidence?.inputs?.fresh) {
+        const current = new Set(evidence.inputs.keys);
+        for (const [k, input] of inputs) {
+          if (
+            input.server === server && input.session === session &&
+            !current.has(input.id)
+          ) inputs.delete(k);
+        }
+        for (const id of current) {
+          inputs.set(key(server, id), { server, session, id });
+        }
+      }
       schedule();
       publish();
     },
@@ -131,6 +143,9 @@ export function createAttentionGrace(o: {
       if (stopped || !pending.delete(key(server, id))) return;
       schedule();
       publish();
+    },
+    inputSettled(server: string, id: string) {
+      if (!stopped && inputs.delete(key(server, id))) publish();
     },
     light(
       scope: string,

@@ -55,6 +55,11 @@ retained scroll anchors. Query replacement and reconnect fence retired request
 identities, epochs and revisions. Child navigation follows the same bounded list
 cursor.
 
+Changing tasksFollowParent sends the new view before refreshing hierarchy list
+owners. Active lists replace their reads; inactive cached lists become dirty
+without I/O and refresh on reactivation. Existing cancellation still fences late
+results from retired reads.
+
 After synchronous consumer acceptance, SidecarConnection acknowledges the index
 epoch/revision. Consumers return `false` for rejected frames. Epoch replacement
 patches rebase from the last acknowledged revision and correct unacknowledged
@@ -208,6 +213,17 @@ repeated identical call from any caller, remounted view or notification joins
 the same operation, a different answer for the same request fails as a conflict,
 and a success stays admitted while the removal event is in transit. Only a
 failure, or a release before submission, frees the request for a new attempt.
+The reservation captures canonical input and intent before failure-feedback
+cleanup or tracker publication can call back synchronously. Reentry lazily joins
+the tracker's same real Operation; initialization failure retires only its own
+reservation. No duplicate frame or reentrant caller can replace the captured
+intent. Initialization borrows the tracker's registered real Operation for
+terminal and pre-aborted callbacks, even after canonical input is retired. Its
+one retirement subscription preserves successful/active admission through a
+throwing cleanup; failed or unsubmitted released attempts still permit a fresh
+retry. Conflict feedback borrows a passive captured/admitted target projection;
+reading its facts cannot initialize native work through the equal-join operation
+getter.
 
 `Rpc.ownsFailure(cause)` identifies a structured failure only when that exact
 diagnostic belongs to an installed target feedback sink. Transient command
@@ -1104,6 +1120,12 @@ cannot steal a newer selection. `belongsToTab(tabID, sessionID)` borrows the
 exact supervision membership for lamp presentation: a task's owned sessions, or
 a phantom's own session. Consumers do not reconstruct it from raw ancestry.
 
+Directly selecting a validated phantom preserves that exact tab and viewed
+session across metadata updates. Helper preview/navigation still uses its local
+display root or owning task. Breadcrumbs borrow complete ancestry context and
+insert foreign links relative to their displayed ancestors and descendants,
+preserving explicit local member order even when intermediate links are quiet.
+
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
 remain available.
@@ -1309,6 +1331,13 @@ but keeps its one deadline until the content removal settles it, so a reply's
 index update cannot hide and re-present the takeover. Questions remain
 immediate. Supervision, mandatory visibility, notification routing, badges and
 sound do not consume this presentation delay.
+
+Known question/form inputs retain their server/request identities across stale
+or absent evidence. Only a fresh per-session inventory, exact inputSettled call,
+session deletion or server retirement removes them. The UI binding forwards
+accepted question/form removals; permission settlement remains independent.
+Retained inputs bypass concurrent permission grace but never create blocked
+activity when upstream supervision has already cleared it.
 
 `createApprovals(rpc, lookup, factory?)` is a per-sidecar authoritative policy
 and activity resource. Welcome invalidates older operations; `approvals` frames

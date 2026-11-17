@@ -24,6 +24,7 @@ const ranks: DigestPriority[] = [
 /** Source-free identity ordering and dependency-local priority donation. */
 export class DigestPublicationOrder {
   #tails = new Map<string, Node>();
+  #groups = new Set<Node[]>();
   constructor(
     readonly wait: <T>(readiness: Promise<T>) => Promise<T>,
     readonly schedule: <T>(
@@ -33,19 +34,40 @@ export class DigestPublicationOrder {
     ) => Promise<T> = (_signal, publish) => publish(),
     readonly changed: () => void = () => {},
   ) {}
-  #refresh(identity: string): void {
-    let donation: DigestPriority | undefined;
-    for (let node = this.#tails.get(identity); node; node = node.previous) {
-      if (
-        !node.retired && !node.optional &&
-        (donation === undefined ||
-          ranks.indexOf(node.priority) < ranks.indexOf(donation))
-      ) donation = node.priority;
-      node.required = !node.optional || donation !== undefined;
-      node.effective = donation !== undefined &&
-          ranks.indexOf(donation) < ranks.indexOf(node.priority)
-        ? donation
-        : node.priority;
+  #refresh(): void {
+    const groups = [...this.#groups];
+    for (const nodes of groups) {
+      for (const node of nodes) {
+        node.required = !node.retired && !node.optional;
+        node.effective = node.priority;
+      }
+    }
+    // Reservation order is a dependency DAG: every predecessor is older.
+    for (const nodes of groups.reverse()) {
+      if (nodes.some((node) => !node.retired)) {
+        const required = nodes.some((node) => node.required);
+        const effective = nodes.reduce(
+          (best, node) =>
+            ranks.indexOf(node.effective) < ranks.indexOf(best)
+              ? node.effective
+              : best,
+          nodes[0].priority,
+        );
+        for (const node of nodes) {
+          node.required = required;
+          node.effective = effective;
+        }
+      }
+      // Retired members no longer join identities, but still relay their own
+      // successor's demand across the retained identity ordering fence.
+      for (const node of nodes) {
+        const previous = node.previous;
+        if (!node.required || !previous) continue;
+        previous.required = true;
+        if (ranks.indexOf(node.effective) < ranks.indexOf(previous.effective)) {
+          previous.effective = node.effective;
+        }
+      }
     }
     this.changed();
   }
@@ -78,22 +100,27 @@ export class DigestPublicationOrder {
         required: !optional,
       };
       this.#tails.set(identity, node);
-      this.#refresh(identity);
       return { identity, previous, done, tail, node };
     });
+    const nodes = parts.map(({ node }) => node);
+    this.#groups.add(nodes);
+    this.#refresh();
     let started = false;
     const release = () => {
       for (const { identity, done, tail, node } of parts) {
         if (node.retired) continue;
         node.retired = true;
         done.resolve();
-        this.#refresh(identity);
         // A canceled middle node cannot sever its predecessor's ordering fence.
         void tail.then(() => {
           if (this.#tails.get(identity) === node) this.#tails.delete(identity);
         });
       }
+      this.#refresh();
     };
+    void Promise.all(parts.map(({ tail }) => tail)).then(() => {
+      this.#groups.delete(nodes);
+    });
     const reservation: DigestPublicationReservation = {
       release,
       priority: () =>

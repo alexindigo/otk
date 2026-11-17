@@ -221,7 +221,11 @@ I/O slice while retaining its durable reconciliation cursor. Cleanup uses
 `execution.join(readiness)` to join actual I/O settlement before releasing
 permission. No SQLite transaction crosses a wait. Duty accounting excludes
 waiting time; its timer is outside the executing slot. Producers must use these
-ports for asynchronous readiness.
+ports for asynchronous readiness. `execution.workms` includes the current
+running interval as well as released work, never queued or waiting time.
+Observing it before release does not charge that interval twice. `charge`
+remains the explicit external-work input; ordinary executing work needs no
+external charge to adapt row quotas.
 
 Ready requested turns precede idle batches and continuations even when an idle
 entry has an attention hint and the requested read has visible priority. The

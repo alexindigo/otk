@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProjectSeed } from "@otk/harness";
 import type { ProjectTopology } from "@otk/protocol";
-import type { CheckoutRecord } from "@otk/store";
+import type { CheckoutAuthority, CheckoutRecord } from "@otk/store";
 
 const key = (r: Pick<CheckoutRecord, "source" | "repoID" | "scope">) =>
   JSON.stringify([r.source, r.repoID, r.scope]);
@@ -9,38 +9,73 @@ const within = (directory: string, root: string) =>
   directory === root ||
   directory.startsWith(root.endsWith("/") ? root : root + "/");
 
+export interface IdentityChange {
+  repos: ReadonlySet<string>;
+  directories: ReadonlySet<string>;
+}
+const unchanged = (): IdentityChange => ({
+  repos: new Set(),
+  directories: new Set(),
+});
+const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
+  a.size === b.size && [...a].every((v) => b.has(v));
 /** Sole owner of native repository membership and historical checkout boundaries. */
 export class ProjectIdentity {
+  #revision = 0;
+  get revision(): number {
+    return this.#revision;
+  }
   #records = new Map<string, CheckoutRecord>();
   #scopes = new Map<string, CheckoutRecord[]>();
   #leaves = new Map<string, CheckoutRecord[]>();
   #sources = new Set<string>();
   #current = new Map<string, ReadonlySet<string>>();
+  #authoritative = false;
   constructor(
     readonly history?: {
       list(): CheckoutRecord[];
-      save(rows: readonly CheckoutRecord[]): void;
+      authority?(): CheckoutAuthority | undefined;
+      save(
+        rows: readonly CheckoutRecord[],
+        authority?: CheckoutAuthority,
+      ): void;
     },
   ) {
     for (const r of history?.list() ?? []) {
       this.#records.set(key(r), { ...r, availability: "unknown" });
       this.#sources.add(r.source);
     }
-    this.learn([]);
+    const authority = history?.authority?.();
+    if (authority) {
+      this.#sources = new Set(authority.sources);
+      this.#current = new Map(
+        authority.scopes.map((
+          { source, scope, owners },
+        ) => [JSON.stringify([source, scope]), new Set(owners)]),
+      );
+      this.#authoritative = true;
+    }
+    this.#index();
   }
   records(): CheckoutRecord[] {
     return structuredClone([...this.#records.values()]);
   }
-  remember(directory: string, repoID: string, recordedRoot?: string): void {
+  remember(
+    directory: string,
+    repoID: string,
+    recordedRoot?: string,
+  ): IdentityChange {
     const rows = [...this.#records.values()].filter((r) =>
       this.#sources.has(r.source) && r.repoID === repoID
     );
-    if (!rows.length || new Set(rows.map((r) => r.source)).size !== 1) return;
+    if (!rows.length || new Set(rows.map((r) => r.source)).size !== 1) {
+      return unchanged();
+    }
     const previous = rows.find((r) => r.scope === directory);
     if (
       previous &&
       (recordedRoot === undefined || previous.leafDirectory === recordedRoot)
-    ) return;
+    ) return unchanged();
     const leafDirectory = recordedRoot ?? this.leaf(directory, repoID);
     const known = rows.find((r) => r.leafDirectory === leafDirectory);
     const record: CheckoutRecord = {
@@ -51,11 +86,16 @@ export class ProjectIdentity {
       kind: known?.kind ?? "unknown",
       availability: known?.availability ?? "unknown",
     };
-    this.history?.save([record]);
-    this.#records.set(key(record), record);
-    this.learn([]);
+    const records = new Map(this.#records);
+    records.set(key(record), record);
+    return this.#accept(
+      records,
+      this.#sources,
+      this.#current,
+      this.#authoritative,
+    );
   }
-  learn(seeds: readonly ProjectSeed[]): void {
+  learn(seeds: readonly ProjectSeed[]): IdentityChange {
     const records = new Map(this.#records);
     const current = new Map(this.#current);
     const reported = new Map<string, Set<string>>();
@@ -70,7 +110,6 @@ export class ProjectIdentity {
     // A positive grouped native population can prove an ownership revision.
     // Mere inventory disappearance cannot: empty/unavailable facts retain history.
     for (const [scope, owners] of reported) current.set(scope, owners);
-    const changed = new Map<string, CheckoutRecord>();
     const sources = new Set(
       seeds.flatMap((seed) =>
         seed.identities?.map((fact) => fact.source) ?? []
@@ -81,7 +120,6 @@ export class ProjectIdentity {
       const k = key(r);
       if (JSON.stringify(records.get(k)) === JSON.stringify(r)) return;
       records.set(k, r);
-      changed.set(k, r);
     };
     for (const seed of seeds) {
       const facts = seed.identities ??
@@ -169,10 +207,64 @@ export class ProjectIdentity {
         }
       }
     }
-    if (changed.size) this.history?.save([...changed.values()]);
+    return this.#accept(
+      records,
+      selected,
+      current,
+      this.#authoritative || reported.size > 0,
+    );
+  }
+  #accept(
+    records: Map<string, CheckoutRecord>,
+    sources: ReadonlySet<string>,
+    current: Map<string, ReadonlySet<string>>,
+    authoritative: boolean,
+  ): IdentityChange {
+    const repos = new Set<string>(), directories = new Set<string>();
+    const changed = [...records].filter(([k, r]) =>
+      JSON.stringify(this.#records.get(k)) !== JSON.stringify(r)
+    );
+    const sourceChanged = !sameSet(this.#sources, sources);
+    const scopeChanges = [...current].filter(([scope, owners]) =>
+      !this.#current.has(scope) || !sameSet(this.#current.get(scope)!, owners)
+    );
+    const affectedScopes = new Set(scopeChanges.map(([scope]) => scope));
+    const affectedRecords = new Set(changed.map(([k]) => k));
+    for (const r of [...this.#records.values(), ...records.values()]) {
+      if (
+        !sourceChanged && !affectedRecords.has(key(r)) &&
+        !affectedScopes.has(JSON.stringify([r.source, r.scope]))
+      ) continue;
+      repos.add(r.repoID);
+      for (const directory of [r.scope, r.leafDirectory, r.canonicalRoot]) {
+        if (directory) directories.add(directory);
+      }
+    }
+    if (
+      !changed.length && !scopeChanges.length && !sourceChanged &&
+      authoritative === this.#authoritative
+    ) return unchanged();
+    this.history?.save(
+      changed.map(([, row]) => row),
+      authoritative
+        ? {
+          sources: [...sources],
+          scopes: scopeChanges.map(([k, owners]) => {
+            const [source, scope] = JSON.parse(k);
+            return { source, scope, owners: [...owners] };
+          }),
+        }
+        : undefined,
+    );
     this.#records = records;
-    this.#sources = selected;
+    this.#sources = new Set(sources);
     this.#current = current;
+    this.#authoritative = authoritative;
+    this.#revision++;
+    this.#index();
+    return { repos, directories };
+  }
+  #index(): void {
     this.#scopes.clear();
     this.#leaves.clear();
     for (const r of this.#records.values()) {

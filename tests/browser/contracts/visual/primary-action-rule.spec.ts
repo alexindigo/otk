@@ -2,7 +2,11 @@
 // UI rule 3 exempts only the declared primary action, never a secondary control.
 import { expect, test } from "../../fixtures/evidence.ts";
 import { uiRuleFailures } from "../../pages/ui-rules.ts";
-import { expectRuleThree } from "../../pages/primary-action.ts";
+import {
+  expectRuleThree,
+  primaryViolations,
+  readPrimary,
+} from "../../pages/primary-action.ts";
 
 const send = (attributes = 'aria-description="Write a message"') =>
   `<button type="submit" data-primary-action="true" disabled ${attributes}>Send</button>`;
@@ -54,5 +58,29 @@ test(
     await expectRuleThree(page);
     // One visible primary per visible surface still holds in the takeover.
     expect(await rule3(takeover(allow + allow))).toHaveLength(2);
+    // Every presented host owns one primary, including an empty host root.
+    for (const html of [composer(""), takeover("")]) {
+      expect.soft(await rule3(html)).toEqual([
+        { region: "primary", rule: 3, value: { primary: "0 in one host" } },
+      ]);
+      expect.soft(await expectRuleThree(page).then(() => false, () => true))
+        .toBe(true);
+      const host = page.locator(
+        html === composer("") ? ".otk-prompt" : ".otk-takeover",
+      );
+      expect.soft(primaryViolations(await readPrimary(host))).toEqual([{
+        primary: "0 in one host",
+      }]);
+    }
+    // Availability never permits a primary to disappear; reasons apply only
+    // while disabled. Check the enabled-hidden branch independently.
+    expect.soft(
+      await rule3(composer("<button data-primary-action hidden>Send</button>")),
+    ).toEqual([
+      { region: "primary", rule: 3, value: { primary: "hidden" } },
+    ]);
+    expect.soft(
+      await rule3(composer("<button data-primary-action>Send</button>")),
+    ).toEqual([]);
   },
 );

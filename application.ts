@@ -103,6 +103,7 @@ export async function startApplication(
   try {
     options.signal?.throwIfAborted();
     await options.upgrade?.(store);
+    options.signal?.throwIfAborted();
     backend.storage?.(new PluginStore(store).scope(backend.core.kind));
     options.signal?.throwIfAborted();
     const prefs = new Prefs(store, prefsOptions);
