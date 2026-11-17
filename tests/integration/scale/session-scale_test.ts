@@ -239,10 +239,8 @@ test("real-version scale summaries match independent totals with bounded serving
     (behind) => behind.length === 0,
     30_000,
   );
-  await Deno.writeTextFile(
-    join(root, "serving-samples.json"),
-    JSON.stringify({ counts: SCALE, samples: probe.samples }, null, 2),
-  );
+  // Keep mutable wire/index comparison in the convergence observation turn.
+  // Evidence export may yield only after every synchronous assertion below.
   console.info(
     "Scale timer maximum",
     probe.samples.reduce((maximum, sample) => Math.max(maximum, sample.ms), 0),
@@ -318,6 +316,10 @@ test("real-version scale summaries match independent totals with bounded serving
     }
   }
   digestDb.close();
+  await Deno.writeTextFile(
+    join(root, "serving-samples.json"),
+    JSON.stringify({ counts: SCALE, samples: probe.samples }, null, 2),
+  );
   await client.close();
   await app.stop();
 });
