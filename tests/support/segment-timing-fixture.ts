@@ -56,6 +56,12 @@ export function segmentTimingFixture(
     return { kind: "tool", id, call };
   };
   const parts: Part[] = [
+    {
+      kind: "reasoning",
+      id: "segment-reasoning-a",
+      blocks: [],
+      time: { start, end: start + 700 },
+    },
     tool("segment-read-a", 0, 400),
     tool("segment-read-b", 200, 700),
     {
@@ -70,6 +76,12 @@ export function segmentTimingFixture(
             "The first work log contains overlapping reads. The next work log excludes the recorded question wait. Each header measures only its own segment.",
         }],
       }],
+    },
+    {
+      kind: "reasoning",
+      id: "segment-reasoning-c",
+      blocks: [],
+      time: { start: start + 1000, end: start + 2200 },
     },
     tool("segment-read-c", 1000, 2200),
     tool("segment-question", 1200, 1500, true),

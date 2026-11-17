@@ -921,11 +921,24 @@ export class OpencodeV1DigestSink implements DigestSink {
       return { entries: [], complete: this.#projectVerified };
     }
     const revision = this.#discoveryRevision;
+    const connection = this.#connection, native = this.#native;
+    const current = () => {
+      signal.throwIfAborted();
+      if (
+        this.#closed || connection !== this.#connection ||
+        native !== this.#native || revision !== this.#discoveryRevision
+      ) {
+        throw new Error("Discovery source generation changed");
+      }
+    };
     const directories = [...this.#activeDirectories].filter((directory) =>
       !this.#excludedDirectories.has(directory)
     );
     if (!directories.length) return { entries: [], complete: true };
-    let rows: SessionMetadata[], complete: boolean;
+    let rows: SessionMetadata[],
+      complete: boolean,
+      nextCursor: string | undefined;
+    const sql = this.#projectVerified && !!this.#native;
     if (this.#projectVerified && this.#native) {
       if (this.#native.fileIdentity() !== this.#native.identity) {
         throw new Error("Discovery source generation changed");
@@ -951,28 +964,37 @@ export class OpencodeV1DigestSink implements DigestSink {
         mapIndex,
       );
       complete = !next;
-      if (revision === this.#discoveryRevision) {
-        this.#discoveryAPICursor = next;
-        this.#discoveryAPIComplete = complete;
-      }
+      nextCursor = next;
     }
+    current();
     const discovered: DigestPublication[] = [];
     this.storage.transaction(() => {
       for (const metadata of rows) {
-        if (this.storage.read(metadata.id)) continue;
-        const delta = emptyDelta();
-        this.storage.write(metadata, delta);
+        const previous = this.storage.read(metadata.id);
+        if (previous?.deleted) continue;
+        const delta = previous
+          ? {
+            ...emptyDelta(previous.summary.revision),
+            summary: previous.summary,
+          }
+          : emptyDelta();
+        if (!previous) this.storage.write(metadata, delta);
         discovered.push({
           sessionID: metadata.id,
-          revision: 0,
+          revision: delta.summary.revision,
           delta,
-          metadata,
+          metadata: previous?.metadata ?? metadata,
         });
       }
     });
     await this.#publishAll(discovered);
+    current();
+    if (!sql) {
+      this.#discoveryAPICursor = nextCursor;
+      this.#discoveryAPIComplete = complete;
+    }
     const last = rows.at(-1);
-    if (last && revision === this.#discoveryRevision) {
+    if (last && sql) {
       this.#discoveryPosition = {
         updated: last.timeUpdated,
         id: ids.decode(last.id),

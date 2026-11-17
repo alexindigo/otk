@@ -7,6 +7,47 @@ import { partFrames, partGroups } from "../components/work-log.ts";
 import { relativeTarget } from "../components/tools/paths.ts";
 import { blocksText } from "../components/parts/text.ts";
 
+for (const hidden of [false, true]) {
+  Deno.test(`segment busy evidence includes separate hidden=${hidden} reply wait witnesses`, () => {
+    const part = (id: string): Part => ({ kind: "meta", id });
+    const input = [
+      part("first"),
+      part("text"),
+      part("second"),
+      part("question"),
+      part("split"),
+      part("unknown"),
+    ];
+    const present = (value: Part) =>
+      value.id === "first"
+        ? { work: { start: 0, end: 700 }, timing: { start: 0, end: 700 } }
+        : value.id === "second"
+        ? {
+          work: { start: 1000, end: 2200 },
+          timing: { start: 1000, end: 2200 },
+        }
+        : value.id === "question"
+        ? { hidden, timing: { start: 1200, end: 1500, waitsForUser: true } }
+        : value.id === "unknown"
+        ? { work: {} }
+        : {};
+    assertEquals(
+      partGroups(input, present).filter((group) => group.work).map((group) =>
+        group.workingMs
+      ),
+      [700, 900, undefined],
+    );
+    assertEquals(input.map((part) => part.id), [
+      "first",
+      "text",
+      "second",
+      "question",
+      "split",
+      "unknown",
+    ]);
+  });
+}
+
 Deno.test("work groups preserve ordering, external ownership, missing clocks and consumer isolation", () => {
   const registry = new PartRegistry(), other = new PartRegistry();
   registry.register(

@@ -350,7 +350,9 @@ export function createSessionLists(
     },
     refresh() {
       for (const list of lists.values()) {
+        list.dirty = true;
         if (!list.active) continue;
+        list.dirty = false;
         list.pending?.abort.abort();
         list.pending = undefined;
         read(list);

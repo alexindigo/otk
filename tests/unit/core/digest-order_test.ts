@@ -3,6 +3,50 @@ import { assertEquals } from "@std/assert";
 import { DigestPublicationOrder } from "../../../core/digest/publication-order.ts";
 import { test } from "../../support/resources.ts";
 
+test("an essential successor donates through every predecessor of a shared active publication", () => {
+  const order = new DigestPublicationOrder((ready) => ready);
+  const earlier = order.reserve("b", "background", true);
+  const set = order.reserveAll(["b", "c"], "background", true);
+  const nextSet = order.reserveAll(["c", "d"], "background", true);
+  const unrelated = order.reserve("other", "background", true);
+  const essential = order.reserve("d", "interactive");
+  try {
+    for (const reservation of [earlier, set, nextSet]) {
+      assertEquals(reservation.priority(), "interactive");
+      assertEquals(reservation.required(), true);
+    }
+    assertEquals(unrelated.required(), false);
+    essential.release();
+    for (const reservation of [earlier, set, nextSet]) {
+      assertEquals(reservation.priority(), "background");
+      assertEquals(reservation.required(), false);
+    }
+  } finally {
+    for (const reservation of [essential, nextSet, set, earlier, unrelated]) {
+      reservation.release();
+    }
+  }
+});
+
+test("a canceled shared publication relays ordering demand only along its successor's identity", () => {
+  const order = new DigestPublicationOrder((ready) => ready);
+  const b = order.reserve("b", "background", true),
+    c = order.reserve("c", "background", true);
+  const set = order.reserveAll(["b", "c"], "background", true);
+  const essential = order.reserve("b", "attention");
+  try {
+    set.release();
+    assertEquals(b.priority(), "attention");
+    assertEquals(b.required(), true);
+    assertEquals(c.priority(), "background");
+    assertEquals(c.required(), false);
+    essential.release();
+    assertEquals(b.required(), false);
+  } finally {
+    for (const reservation of [essential, set, b, c]) reservation.release();
+  }
+});
+
 test("publication chunks retain one identity order while other identities continue", async () => {
   const order = new DigestPublicationOrder((readiness) => readiness);
   const held = Promise.withResolvers<void>(), seen: string[] = [];

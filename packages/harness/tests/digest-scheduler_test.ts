@@ -90,6 +90,76 @@ test("helper requests during a running pass coalesce into one follow-up without 
     await scheduler.stop();
   }
 });
+
+test("clock-measured running work adapts row quota without an explicit external charge", async () => {
+  let now = 0;
+  const rows: number[] = [];
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    now: () => now,
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+  });
+  scheduler.register({
+    identity: "clock-work",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("unused")),
+    close() {},
+    step(_job, budget, _signal, execution) {
+      rows.push(budget.rows);
+      execution.rows?.(budget.rows);
+      now += 10 * budget.rows;
+      return Promise.resolve(rows.length < 3 ? "next" : undefined);
+    },
+  });
+  scheduler.enqueue(
+    { provider: "clock-work", sessionID: "one", updated: 1 },
+    "background",
+  );
+  try {
+    while (await scheduler.tick()) { /* drain the three finite slices */ }
+    assertEquals(rows, [100, 13, 13]);
+  } finally {
+    await scheduler.stop();
+  }
+});
+
+test("live work measurement excludes a held I/O wait and is not counted twice on release", async () => {
+  let now = 0, measured = () => -1;
+  const samples: number[] = [], release = Promise.withResolvers<void>();
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    now: () => now,
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+  });
+  const pending = scheduler.execute(
+    async (_signal, execution) => {
+      measured = () => execution.workms;
+      now += 3;
+      samples.push(execution.workms);
+      await execution.wait(release.promise, "io");
+      now += 2;
+      samples.push(execution.workms);
+    },
+    new AbortController().signal,
+    "visible",
+  );
+  try {
+    await scheduler.tick();
+    now += 100;
+    release.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    while (await scheduler.tick()) {
+      /* resume the ready admitted continuation */
+    }
+    await pending;
+    assertEquals(samples, [3, 5]);
+    assertEquals(measured(), 5);
+  } finally {
+    release.resolve();
+    await scheduler.stop();
+    await Promise.allSettled([pending]);
+  }
+});
 test("requested visible reads precede optional attention batches after idle opens", async () => {
   const seen: string[] = [];
   const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
