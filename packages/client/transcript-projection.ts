@@ -31,6 +31,13 @@ export const replyKey = (message: Message): string =>
     : message.id;
 const compare = compareMessages;
 const dictionary = <T>(): Record<string, T> => Object.create(null);
+/** Explicit neutral activity facts, shared by queue admission and presentation. */
+export function hasActiveRecord(message: Message): boolean {
+  return message.role === "context" &&
+    message.parts.some((part) =>
+      part.kind === "external" && part.activity?.state?.facts.active === true
+    );
+}
 function insert(
   ids: string[],
   id: string,
@@ -146,10 +153,10 @@ export function createTranscriptProjection(): TranscriptProjection {
       ? previous.replyTo
       : undefined;
     const newTurn = next?.role === "assistant" ? next.replyTo : undefined;
-    const oldUnfinished = previous?.role === "assistant" &&
-      !isAssistantTerminal(previous);
-    const newUnfinished = next?.role === "assistant" &&
-      !isAssistantTerminal(next);
+    const oldUnfinished = previous && ((previous.role === "assistant" &&
+      !isAssistantTerminal(previous)) || hasActiveRecord(previous));
+    const newUnfinished = next && ((next.role === "assistant" &&
+      !isAssistantTerminal(next)) || hasActiveRecord(next));
     if (
       previous?.role === next?.role &&
       previous?.time.created === next?.time.created &&
@@ -509,7 +516,7 @@ export function createTranscriptProjection(): TranscriptProjection {
           op.op === "part.blocks" || op.op === "task.progress" ||
             (op.op === "part.upsert" && slot !== undefined && slot >= 0),
         );
-        if (op.op === "message.upsert") queues();
+        queues();
       }
       return true;
     },

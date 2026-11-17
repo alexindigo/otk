@@ -4,10 +4,16 @@ import {
   type ContextMessage,
   DEFAULT_PREFS,
   type ExternalPart,
+  type Message,
   type Part,
 } from "@otk/protocol";
+import { createTranscriptProjection } from "@otk/client";
 import { PartRegistry } from "../registries/renderers.ts";
-import { hasActiveRecord, messageFrames } from "../components/work-log.ts";
+import {
+  activeProgressRecord,
+  hasActiveRecord,
+  messageFrames,
+} from "../components/work-log.ts";
 import { createMessageLayout } from "../components/message-layout.ts";
 import {
   unknownPartPresentation,
@@ -240,4 +246,88 @@ Deno.test("only a plugin-reported running record is active work", () => {
   // Unknown is never treated as running.
   assertEquals(hasActiveRecord(record(null)), false);
   assertEquals(hasActiveRecord(record(false)), false);
+});
+
+Deno.test("active record progress skips queued users but respects actual turn and reply ownership", () => {
+  const prompt: Message = {
+    id: "prompt",
+    sessionID: "acmv1-session",
+    role: "user",
+    time: { created: 1 },
+    parts: [],
+  };
+  const running: ExternalPart = {
+    ...part,
+    activity: {
+      ...part.activity!,
+      state: {
+        key: "running",
+        label: "Running",
+        facts: { active: true, terminal: false },
+      },
+    },
+  };
+  const record: ContextMessage = {
+    id: "record",
+    sessionID: "acmv1-session",
+    role: "context",
+    time: { created: 2 },
+    parts: [running],
+  };
+  const queued: Message = { ...prompt, id: "queued", time: { created: 3 } };
+  const owner = createTranscriptProjection();
+  owner.replace([prompt, record, queued]);
+  owner.busy(true);
+  assertEquals([...owner.state.queuedIDs], ["queued"]);
+  assertEquals(activeProgressRecord(owner.state), "record");
+  owner.apply({
+    op: "part.upsert",
+    messageID: "record",
+    part: {
+      ...running,
+      activity: {
+        ...part.activity!,
+        state: {
+          key: "done",
+          label: "Done",
+          facts: { active: false, terminal: true },
+        },
+      },
+    },
+  });
+  assertEquals([...owner.state.queuedIDs], []);
+  assertEquals(activeProgressRecord(owner.state), undefined);
+  owner.replace([prompt, record, queued]);
+  assertEquals(activeProgressRecord(owner.state), "record");
+  const assistant: Message = {
+    id: "assistant",
+    sessionID: "acmv1-session",
+    role: "assistant",
+    replyTo: "prompt",
+    agent: "build",
+    model: { provider: "fake", model: "scripted" },
+    tokens: {
+      input: null,
+      output: null,
+      reasoning: null,
+      cache: { read: null, write: null },
+    },
+    cost: null,
+    time: { created: 1.5 },
+    interrupted: false,
+    parts: [],
+  };
+  owner.merge([assistant]);
+  assertEquals(
+    activeProgressRecord(owner.state),
+    undefined,
+    "unfinished assistant owns the one indicator",
+  );
+  owner.busy(false);
+  assertEquals([...owner.state.queuedIDs], []);
+  assertEquals(
+    activeProgressRecord(owner.state),
+    undefined,
+    "real user boundary stops the scan",
+  );
 });

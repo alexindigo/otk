@@ -615,6 +615,11 @@ session resource, independently of acquired first/last native action boundaries.
 compatibility helpers over those same primitives, including session
 partitioning. Shipped rendering borrows the resource projection instead of
 invoking those whole-list helpers on live frames.
+
+Queued users follow the current active boundary, including native context
+records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
+that shared classification to queue admission and UI presentation. Part-owned
+record settlement updates the same queue; no component owns a second queue.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.

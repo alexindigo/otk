@@ -443,6 +443,19 @@ export function shellRun(
     : `[data-tool=bash][data-tool-status=${status}]`;
 }
 
+/** Only rendered output, never the command header, parameters or Source fold. */
+export function shellOutput(
+  state: TestState,
+  page: Page,
+  status: "running" | "completed",
+): Locator {
+  return page.locator(shellRun(state, status)).locator(
+    v2(state)
+      ? ":scope > .otk-tool-body > .otk-text"
+      : ":scope > .otk-tool-body > .otk-tool-output",
+  );
+}
+
 /** Open a native record's own disclosure the user's way: reveal the record,
  * then use its header toggle (never its nested Source fold). */
 export async function openRecord(page: Page, selector: string) {

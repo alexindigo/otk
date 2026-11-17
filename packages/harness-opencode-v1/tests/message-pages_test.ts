@@ -7,10 +7,126 @@ import { Transcript } from "../transcript.ts";
 import { ContentReplay } from "@otk/harness";
 import { Messages } from "../messages.ts";
 import { Client } from "../client.ts";
-import { mapSession } from "../map.ts";
+import { mapMessage, mapSession } from "../map.ts";
 import type { Session } from "../types.ts";
 import type { PrefetchPage } from "../message-prefetch.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
+
+for (const update of ["body", "selection"] as const) {
+  Deno.test(`V1 cached prompt ${update} catchup retains worker selection authority`, async () => {
+    const settings = cfg(), id = "opcv1-s";
+    const replay = new ContentReplay({
+      ...settings.messages,
+      nonce: () => crypto.randomUUID(),
+      emit() {},
+    });
+    const raw: Session = {
+      id: "s",
+      directory: "/p",
+      projectID: "p",
+      title: "S",
+      time: { created: 1, updated: 1 },
+    };
+    const info = {
+      id: "anchor",
+      sessionID: "s",
+      role: "user" as const,
+      agent: "plan",
+      model: { providerID: "fake", modelID: "old" },
+      time: { created: 1 },
+    };
+    const row = {
+      info,
+      parts: [{
+        id: "text",
+        messageID: "anchor",
+        sessionID: "s",
+        type: "text",
+        text: "Original prompt",
+        synthetic: false,
+      }],
+    };
+    let selected = "build", bodies = 0, metadata = 0, armed = false;
+    const selection = () => ({
+      id: "anchor",
+      agent: selected,
+      model: { provider: "fake", model: "current" },
+      variant: "high",
+    });
+    const reader = new Messages(
+      new Client(
+        settings.harness,
+        () => Promise.reject(new Error("Unexpected HTTP")),
+      ),
+      () => "/p",
+    );
+    reader.page = () => {
+      bodies++;
+      return Promise.resolve({ items: [row], next: "older" });
+    };
+    const transcript = new Transcript({
+      replay,
+      reader,
+      buffers: new StreamBuffers(),
+      policy: settings.messages,
+      raw: () => Promise.resolve(raw),
+      info: (value) => Promise.resolve(mapSession(value)),
+      decorate: (message, native) => {
+        if (armed && native.info.id === "anchor") {
+          armed = false;
+          replay.publish(id, {
+            op: "message.upsert",
+            message: mapMessage(info, [{
+              ...row.parts[0],
+              text: "Refreshed prompt",
+            }]),
+          });
+        }
+        return message;
+      },
+      summaries: () => ({}),
+      metadata: () => {
+        metadata++;
+        return Promise.resolve({ boundaries: [], prompt: selection() });
+      },
+      prefetch: () =>
+        Promise.resolve({
+          page: { items: [row] },
+          metadata: { boundaries: [], prompt: selection() },
+        }),
+    });
+    try {
+      const first = await transcript.page(id);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      if (update === "selection") selected = "review";
+      armed = true;
+      let published: import("@otk/protocol").MessagePage | undefined;
+      const page = await transcript.page(
+        id,
+        first.older!,
+        undefined,
+        (value) => published = structuredClone(value),
+      );
+      assertEquals(page.prompt, selection());
+      assertEquals(
+        published?.prompt,
+        { ...selection(), agent: "build" },
+        "body publication retains last-good worker selection until coverage settles",
+      );
+      assertEquals(
+        JSON.stringify(page.items[0].parts).includes("Refreshed prompt"),
+        true,
+      );
+      assertEquals(
+        [bodies, metadata],
+        [1, 2],
+        "only invalidated scalar metadata is reacquired",
+      );
+    } finally {
+      transcript.release();
+    }
+  });
+}
 
 Deno.test("@load @messages standalone demanded miss joins canceled speculative I/O settlement", async () => {
   const settings = cfg();

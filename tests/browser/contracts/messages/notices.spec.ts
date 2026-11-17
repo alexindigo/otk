@@ -4,6 +4,41 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 test.describe("V1 records", () => {
   test.use({ profile: "contract-messages-v1-notices" });
+  test("messages.running-record-progress-survives-queued-prompt", {
+    tag: ["@messages", "@contracts"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openSession(state, page, "tstv1-atmosphera");
+    await expect(
+      page.locator('[data-message="queued-prompt"] .otk-user-bubble'),
+    ).toHaveText("Queued next prompt");
+    const progress = page.locator(
+      '[data-message="running-record"] .otk-response-progress',
+    );
+    await expect(progress).toBeVisible();
+    await expect(page.locator(".otk-response-progress")).toHaveCount(1);
+    await page.reload();
+    await expect(progress).toBeVisible();
+    const screenshot = info.outputPath("running-record-progress.png");
+    await page.screenshot({ path: screenshot });
+    await info.attach("running-record-progress", {
+      path: screenshot,
+      contentType: "image/png",
+    });
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "release",
+    });
+    await expect(page.locator(".otk-response-progress")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('[data-message="running-record"]')).toContainText(
+      "Native work finished",
+    );
+    await expect(page.locator(".otk-response-progress")).toHaveCount(0);
+    await expect(
+      page.locator('[data-message="queued-prompt"] .otk-user-bubble'),
+    ).toHaveText("Queued next prompt");
+  });
   test("messages.v1-context-expansions-task-failure-and-summary", {
     tag: ["@messages", "@contracts"],
   }, async ({ isolatedState: state, page }) => {

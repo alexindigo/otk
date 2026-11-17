@@ -241,6 +241,11 @@ off preference replace the shimmer with quiet “response in progress” text
 between flowing rules. The same named status remains available to assistive
 technology in either mode.
 
+The plain `activeProgressRecord` projection borrows canonical `queuedIDs`, so
+queued input cannot hide the active record. Real user boundaries, missing source
+and unfinished assistant ownership still fence the scan; SessionView only binds
+its result. The neutral active-record predicate belongs to the client owner.
+
 Missing-seed recovery is separate plain in-flow text beside the logical reply:
 “Refreshing response…” while source is unaligned, or an unavailable message and
 available Retry response callback after a checkpoint failure. The canonical

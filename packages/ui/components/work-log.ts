@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, Part, TurnTiming } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
-import { duration } from "@otk/client";
+import { isAssistantTerminal } from "@otk/protocol";
+import {
+  duration,
+  hasActiveRecord,
+  type TranscriptProjectionState,
+} from "@otk/client";
+export { hasActiveRecord } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
 import type { PartPresentation } from "../registries/renderers.ts";
@@ -130,10 +136,25 @@ export const timingExplanation = (timing: TurnTiming | undefined) =>
   timing?.state === "unknown"
     ? timing.explanation ?? "The recorded timing evidence is incomplete."
     : undefined;
-/** A plugin-reported running record: neutral facts, never a native state name. */
-export function hasActiveRecord(message: Message): boolean {
-  return message.role === "context" &&
-    message.parts.some((part) =>
-      part.kind === "external" && part.activity?.state?.facts.active === true
-    );
+/** One progress owner for the active turn, borrowing canonical queue membership. */
+export function activeProgressRecord(
+  { messageIDs, messagesByID, queuedIDs }: Pick<
+    TranscriptProjectionState,
+    "messageIDs" | "messagesByID" | "queuedIDs"
+  >,
+): string | undefined {
+  let record: string | undefined;
+  for (let i = messageIDs.length - 1; i >= 0; i--) {
+    const message = messagesByID[messageIDs[i]];
+    if (!message) break;
+    if (message.role === "user") {
+      if (queuedIDs.has(message.id)) continue;
+      break;
+    }
+    if (message.role === "assistant" && !isAssistantTerminal(message)) {
+      return undefined;
+    }
+    if (!record && hasActiveRecord(message)) record = message.id;
+  }
+  return record;
 }
