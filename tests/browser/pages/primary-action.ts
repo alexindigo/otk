@@ -22,30 +22,51 @@ export function primaryFacts(
 ): PrimaryFact[] {
   const rendered = (el: Element) =>
     el.getClientRects().length > 0 && !el.closest("[hidden],[inert]");
+  const presented = [
+    ...(root instanceof Element && root.matches(hosts) ? [root] : []),
+    ...Array.from(root.querySelectorAll(hosts)),
+  ].filter(rendered);
+  const owner = (el: Element) => el.closest(hosts) ?? el.parentElement!;
+  const markers = [
+    ...(root instanceof HTMLElement && root.matches(marker) ? [root] : []),
+    ...Array.from(root.querySelectorAll<HTMLElement>(marker)),
+  ];
   // A host the shell is not presenting (the composer under a takeover) offers
   // no primary; an unrendered primary inside a presented host still fails.
-  return Array.from(root.querySelectorAll<HTMLElement>(marker)).filter((el) =>
-    rendered(el.closest(hosts) ?? el.parentElement!)
-  ).map((el) => {
+  const facts = markers.filter((el) => rendered(owner(el))).map((el) => {
     const r = el.getBoundingClientRect(), c = getComputedStyle(el);
-    const host = el.closest(hosts) ?? el.parentElement!;
+    const host = owner(el);
     return {
       visible: r.width > 0 && r.height > 0 && c.visibility !== "hidden" &&
         !el.closest("[hidden],[inert]"),
       disabled: el.matches(":disabled,[aria-disabled=true]"),
       reason: (el.getAttribute("aria-description") ?? "").trim(),
-      siblings: host.querySelectorAll(marker).length,
+      siblings: Array.from(host.querySelectorAll(marker)).filter((candidate) =>
+        owner(candidate) === host
+      ).length,
     };
   });
+  for (const host of presented) {
+    if (
+      !Array.from(host.querySelectorAll(marker)).some((candidate) =>
+        owner(candidate) === host
+      )
+    ) {
+      facts.push({ visible: false, disabled: false, reason: "", siblings: 0 });
+    }
+  }
+  return facts;
 }
 /** Violations of the primary-action exception itself, never exempted. */
 export function primaryViolations(
   facts: readonly PrimaryFact[],
 ): { primary: string }[] {
   return facts.flatMap((fact) => [
-    ...(fact.siblings > 1 ? [{ primary: `${fact.siblings} in one host` }] : []),
-    ...(fact.disabled && !fact.visible
-      ? [{ primary: "disabled and hidden" }]
+    ...(fact.siblings !== 1
+      ? [{ primary: `${fact.siblings} in one host` }]
+      : []),
+    ...(fact.siblings > 0 && !fact.visible
+      ? [{ primary: fact.disabled ? "disabled and hidden" : "hidden" }]
       : []),
     ...(fact.disabled && !fact.reason
       ? [{ primary: "disabled without reason" }]
