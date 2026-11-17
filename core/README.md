@@ -45,6 +45,14 @@ returns credit only after client reduction. Updates coalesce by key while credit
 is held. A replacement epoch replays unacknowledged keys from current authority;
 its `from` revision rebases local sequencing without a full resnapshot.
 
+After index publication, the optional feature-owned `entriesChanged` hook
+reconciles recipient membership. Inbox replays known seen, finish and
+supervision facts for newly admitted IDs, sharing one delivered scalar
+projection with live updates. Its coalesced microtask follows any enclosing
+inbox publication so task admission cannot invert recipient revisions. It
+performs no native read, list refresh or global broadcast; baseline replacement
+and close own its lifetime.
+
 RequestAttention contributes a feature-owned lease for pending manual
 permissions and questions on every connected server. Outside the ordinary view
 it publishes only routing identities, titles, project/parent links and pending
