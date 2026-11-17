@@ -114,10 +114,12 @@ export class Rpc {
         ? fields.directory
         : undefined);
     options = { ...options, owner };
-    if (owner && this.metadata.get(method)?.kind === "mutation") {
-      this.requests.forgetFailures(owner, method);
-      this.#feedback.get(owner)?.clear();
-    }
+    const clearFailure = () => {
+      if (owner && this.metadata.get(method)?.kind === "mutation") {
+        this.requests.forgetFailures(owner, method);
+        this.#feedback.get(owner)?.clear();
+      }
+    };
     const intent = options.intent ?? this.intent();
     let captured: RpcParams<M>, canonical: string;
     try {
@@ -155,10 +157,14 @@ export class Rpc {
       throw failure;
     }
     const settles = this.metadata.get(method)?.settles;
-    const subject = settles && typeof fields.requestID === "string"
-      ? JSON.stringify([settles, fields.requestID])
+    const capturedFields = captured && typeof captured === "object"
+      ? captured as Record<string, unknown>
+      : {};
+    const subject = settles && typeof capturedFields.requestID === "string"
+      ? JSON.stringify([settles, capturedFields.requestID])
       : undefined;
     if (subject === undefined) {
+      clearFailure();
       return this.requests.start(method, captured, { ...options, intent });
     }
     // Any caller, view lifetime or remount joins the request's one settlement.
@@ -173,13 +179,22 @@ export class Rpc {
         diagnosticID: crypto.randomUUID(),
       });
     }
-    const operation = this.requests.start(method, captured, {
-      ...options,
-      intent,
-    });
-    const record = { method, canonical, operation };
+    const start = () =>
+      this.requests.start(method, captured, {
+        ...options,
+        intent,
+      });
+    let initialized: Operation<RpcResult<M>> | undefined;
+    let initializing = false, linked = false, stop = () => {};
+    const tracker = this.requests;
+    const registered = () =>
+      this.requests.operations().find((operation) =>
+        operation.state.ref.clientID === intent.clientID &&
+        operation.state.ref.key === intent.key &&
+        operation.state.method === method
+      ) as Operation<RpcResult<M>> | undefined;
     const retire = () => {
-      const phase = operation.state.phase;
+      const phase = initialized?.state.phase;
       if (phase === "succeeded") return stop();
       if (phase !== "failed" && phase !== "released") return;
       stop();
@@ -187,10 +202,51 @@ export class Rpc {
         this.#settlements.delete(subject);
       }
     };
-    const stop = operation.subscribe(retire);
+    const adopt = (
+      operation: Operation<RpcResult<M>>,
+    ): Operation<RpcResult<M>> => {
+      initialized ??= operation;
+      if (!linked) {
+        linked = true;
+        stop = initialized.subscribe(retire);
+        retire();
+      }
+      return initialized;
+    };
+    const record = {
+      method,
+      canonical,
+      get operation(): Operation<RpcResult<M>> {
+        if (initialized) return initialized;
+        // A terminal callback may have retired the tracker's canonical input.
+        // Join its registered Operation, never recapture that terminal request.
+        if (initializing) {
+          const operation = registered();
+          if (operation) return adopt(operation);
+        }
+        initializing = true;
+        const observe = tracker.subscribe(() => {
+          const operation = registered();
+          if (operation) adopt(operation);
+        });
+        try {
+          return adopt(start());
+        } finally {
+          initializing = false;
+          observe();
+        }
+      },
+    };
     this.#settlements.set(subject, record);
-    retire();
-    return operation;
+    try {
+      clearFailure();
+      return record.operation;
+    } catch (cause) {
+      if (!initialized && this.#settlements.get(subject) === record) {
+        this.#settlements.delete(subject);
+      }
+      throw cause;
+    }
   }
   call<M extends RpcMethod>(
     method: M,

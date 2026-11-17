@@ -1,11 +1,35 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects, assertStrictEquals } from "@std/assert";
-import { RequestTracker, Rpc } from "../mod.ts";
+import {
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+  assertThrows,
+} from "@std/assert";
+import { RequestFailure, RequestTracker, Rpc } from "../mod.ts";
 import type { RequestControl } from "@otk/protocol";
 
-function connection() {
+function connection(terminal?: "succeeded" | "failed") {
   const sent: RequestControl[] = [];
-  const tracker = new RequestTracker({ send: (frame) => sent.push(frame) });
+  const tracker = new RequestTracker({
+    send: (frame) => {
+      sent.push(frame);
+      if (frame.t === "request" && terminal) {
+        rpc.receive({
+          t: "request.result",
+          ref: frame.ref,
+          seq: 1,
+          outcome: terminal === "succeeded" ? { ok: true, result: null } : {
+            ok: false,
+            error: {
+              code: "native.failed",
+              retry: "new-intent",
+              diagnosticID: "synchronous",
+            },
+          },
+        });
+      }
+    },
+  });
   tracker.connect(
     { id: crypto.randomUUID(), expiresAt: Date.now() + 10000 },
     2,
@@ -23,6 +47,153 @@ const permission = {
   sessionID: "s",
   reply: "once",
 } as const;
+
+for (const admitted of [false, true]) {
+  Deno.test(`throwing cleanup admitted=${admitted} cannot lose a real settlement or retain an uninitialized reservation`, async () => {
+    const { rpc, tracker, requests } = connection();
+    let armed = true, joined: ReturnType<typeof rpc.start> | undefined;
+    const cleanup = new Error("cleanup failed");
+    const stop = rpc.feedback("s").subscribe(() => {
+      if (!armed) return;
+      armed = false;
+      if (admitted) joined = rpc.start("permission.reply", permission);
+      throw cleanup;
+    });
+    try {
+      assertStrictEquals(
+        assertThrows(() => rpc.start("permission.reply", permission)),
+        cleanup,
+      );
+      const retry = rpc.start("permission.reply", permission);
+      if (admitted) assertStrictEquals(retry, joined);
+      assertEquals(
+        requests().length,
+        1,
+        "cleanup failure cannot admit the same native request twice",
+      );
+      rpc.receive({
+        t: "request.result",
+        ref: retry.state.ref,
+        seq: 1,
+        outcome: { ok: true, result: null },
+      });
+      assertEquals(await retry.result, null);
+    } finally {
+      stop();
+      tracker.stop();
+    }
+  });
+}
+
+for (const terminal of ["released", "succeeded", "failed"] as const) {
+  Deno.test(`native settlement reentry joins its real operation during synchronous ${terminal} initialization`, async () => {
+    const { rpc, tracker, requests } = connection(
+      terminal === "released" ? undefined : terminal,
+    );
+    let joined: ReturnType<typeof rpc.start> | undefined, entered = false;
+    const stop = tracker.subscribe(() => {
+      if (entered) return;
+      entered = true;
+      joined = rpc.start("permission.reply", permission);
+    });
+    const controller = new AbortController();
+    if (terminal === "released") controller.abort();
+    try {
+      const first = rpc.start("permission.reply", permission, {
+        signal: controller.signal,
+      });
+      assertEquals(entered, true);
+      assertStrictEquals(joined, first);
+      assertEquals(first.state.phase, terminal);
+      assertEquals(requests().length, terminal === "released" ? 0 : 1);
+      if (terminal === "succeeded") {
+        assertEquals(await first.result, null);
+        assertStrictEquals(rpc.start("permission.reply", permission), first);
+        assertEquals(requests().length, 1);
+      } else {
+        await assertRejects(() => first.result);
+        const retry = rpc.start("permission.reply", permission);
+        assertEquals(retry === first, false);
+        assertEquals(requests().length, terminal === "released" ? 1 : 2);
+        if (terminal === "failed") await assertRejects(() => retry.result);
+      }
+    } finally {
+      stop();
+      tracker.stop();
+    }
+  });
+}
+
+for (const boundary of ["tracker publication", "failure cleanup"] as const) {
+  Deno.test(`native settlement reserves its operation and captured intent before ${boundary} reentry`, async () => {
+    const { rpc, tracker, requests } = connection();
+    let stop = () => {}, entered = false;
+    let joined: ReturnType<typeof rpc.start> | undefined, conflict: unknown;
+    try {
+      if (boundary === "failure cleanup") {
+        const failed = rpc.start("permission.reply", permission);
+        rpc.receive({
+          t: "request.result",
+          ref: failed.state.ref,
+          seq: 1,
+          outcome: {
+            ok: false,
+            error: {
+              code: "native.failed",
+              retry: "new-intent",
+              diagnosticID: "prior",
+            },
+          },
+        });
+        await assertRejects(() => failed.result);
+      }
+      const feedback = rpc.feedback("s"), before = requests().length;
+      if (boundary === "failure cleanup") {
+        assertEquals(feedback.current()?.kind, "error");
+      }
+      const intent = rpc.intent();
+      const reenter = () => {
+        if (entered) return;
+        entered = true;
+        joined = rpc.start("permission.reply", { ...permission });
+        try {
+          rpc.start("permission.reply", { ...permission, reply: "reject" });
+        } catch (cause) {
+          conflict = cause;
+        }
+      };
+      stop = boundary === "tracker publication"
+        ? tracker.subscribe(reenter)
+        : feedback.subscribe(reenter);
+      const first = rpc.start("permission.reply", permission, { intent });
+      assertEquals(entered, true);
+      assertStrictEquals(joined, first);
+      assertEquals(
+        first.state.ref.key,
+        intent.key,
+        "cleanup cannot replace the caller's captured intent",
+      );
+      assertEquals(requests().length, before + 1);
+      assertEquals(requests().at(-1)!.params, permission);
+      assertEquals(
+        conflict instanceof RequestFailure ? conflict.failure.code : undefined,
+        "request.conflict",
+      );
+      rpc.receive({
+        t: "request.result",
+        ref: first.state.ref,
+        seq: 1,
+        outcome: { ok: true, result: null },
+      });
+      assertEquals(await first.result, null);
+      assertStrictEquals(rpc.start("permission.reply", permission), first);
+      assertEquals(requests().length, before + 1);
+    } finally {
+      stop();
+      tracker.stop();
+    }
+  });
+}
 
 Deno.test("one native permission admits one settlement across independent callers", async () => {
   const { rpc, tracker, requests } = connection();

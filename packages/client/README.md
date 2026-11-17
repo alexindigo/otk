@@ -193,6 +193,15 @@ repeated identical call from any caller, remounted view or notification joins
 the same operation, a different answer for the same request fails as a conflict,
 and a success stays admitted while the removal event is in transit. Only a
 failure, or a release before submission, frees the request for a new attempt.
+The reservation captures canonical input and intent before failure-feedback
+cleanup or tracker publication can call back synchronously. Reentry lazily joins
+the tracker's same real Operation; initialization failure retires only its own
+reservation. No duplicate frame or reentrant caller can replace the captured
+intent. Initialization borrows the tracker's registered real Operation for
+terminal and pre-aborted callbacks, even after canonical input is retired. Its
+one retirement subscription preserves successful/active admission through a
+throwing cleanup; failed or unsubmitted released attempts still permit a fresh
+retry.
 
 `Rpc.ownsFailure(cause)` identifies a structured failure only when that exact
 diagnostic belongs to an installed target feedback sink. Transient command
