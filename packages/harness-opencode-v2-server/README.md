@@ -75,6 +75,18 @@ appear through registered global surfaces with project attention. They never
 acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
+Each successful kind/location inventory owns only its own absence facts. Failed
+inventories retain known unresolved identities and payloads for still-loaded
+directories but stale identities never drive needs-you. Failures publish safe
+background-error feedback independently of session errors. A successful
+inventory or reconnect seeding restores fresh pending keys only for
+still-pending requests. A complete loaded-location inventory removes dropped
+directories from both projections and capability payloads, including global
+forms, without settlement tombstones. Reappearing locations may therefore report
+the same unresolved IDs. Explicit settlement and successful empty kind
+inventories retain their existing replay barriers. Metadata-read failure cannot
+prevent an already-known session's request projection from converging.
+
 `V2Stream` owns one subscribed SSE generation. It waits for `server.connected`
 before snapshot reads, stages events under the injected operation/byte budgets,
 deduplicates durable positions and IDs, and pauses its 45-second byte watchdog

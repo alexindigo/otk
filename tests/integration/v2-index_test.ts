@@ -18,6 +18,7 @@ import { cfg } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { SessionSupervision } from "../../core/index/supervision.ts";
 import type { InboxBaseline, SessionListPage } from "@otk/protocol";
 
 Deno.test({
@@ -884,6 +885,12 @@ Deno.test({
         "a complete permission inventory is independent of an unavailable form inventory",
       );
       assertEquals(index.getMetadata(target.id)?.activityAuthority, "unknown");
+      assertEquals(
+        new SessionSupervision().session(index.getMetadata(target.id)!, 0)
+          .state,
+        "none",
+        "Unavailable form inventory cannot promote old evidence into needs-you",
+      );
       await native.api.session.form.reply({
         sessionID: target.nativeID,
         formID: form.id,

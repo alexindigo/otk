@@ -261,9 +261,36 @@ export class V2Pending {
     if (this.#settled.size > 4096) {
       this.#settled.delete(this.#settled.values().next().value!);
     }
+    this.#remove(kind, id);
+  }
+  /** Loaded-directory absence retires routing ownership, not native settlement.
+   * A reloaded directory may report the same still-unresolved request later. */
+  retainLocations(directories: ReadonlySet<string>): void {
+    for (const [id, pending] of this.#permissions) {
+      if (!directories.has(pending.location.directory)) {
+        this.#remove("permission", id);
+      }
+    }
+    for (const [id, pending] of this.#forms) {
+      if (!directories.has(pending.location.directory)) {
+        this.#remove("form", id);
+      }
+    }
+  }
+  /** Retain form payload and renderer identity, not fresh attention authority. */
+  uncertain(): void {
+    let changed = false;
+    for (const pending of this.#forms.values()) {
+      if (pending.request.fresh === false) continue;
+      pending.request = { ...pending.request, fresh: false };
+      changed = true;
+    }
+    if (changed) this.#notify();
+  }
+  #remove(kind: "permission" | "form", id: string): void {
     if (kind === "permission") {
       const pending = this.#permissions.get(id);
-      if (!pending || ids.decode(pending.request.sessionID) !== native) return;
+      if (!pending) return;
       this.#permissions.delete(id);
       this.changed(pending.request.sessionID, {
         op: "permission.remove",
@@ -273,7 +300,7 @@ export class V2Pending {
       return;
     }
     const pending = this.#forms.get(id);
-    if (!pending || pending.native !== native) return;
+    if (!pending) return;
     this.#forms.delete(id);
     if (pending.request.owner.kind === "session") {
       this.changed(pending.request.owner.sessionID, {

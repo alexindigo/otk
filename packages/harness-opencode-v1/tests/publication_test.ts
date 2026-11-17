@@ -5,7 +5,10 @@ import { connectionPublication } from "../publication.ts";
 
 Deno.test("connection publication ports permanently drop every publication after their own abort", () => {
   const calls: string[] = [], controller = new AbortController();
-  const target: HarnessSink = {
+  const target: HarnessSink & {
+    error(value: { code: string; message: string }): void;
+  } = {
+    error: () => calls.push("error"),
     connection: () => calls.push("connection"),
     indexReset: () => calls.push("reset"),
     indexUpsert: () => calls.push("upsert"),
@@ -38,18 +41,22 @@ Deno.test("connection publication ports permanently drop every publication after
     sink.content("s", { op: "todo.set", items: [] });
     sink.bootstrapComplete();
     sink.invalidate({ version: { generation: 1, revision: 0 } });
+    (sink as typeof target).error?.({
+      code: "inventory",
+      message: "Safe inventory failure",
+    });
   };
   publish(old);
-  assertEquals(calls.length, 7);
+  assertEquals(calls.length, 8);
   controller.abort();
   const replacement = connectionPublication(
     target,
     new AbortController().signal,
   );
   publish(old);
-  assertEquals(calls.length, 7);
+  assertEquals(calls.length, 8);
   publish(replacement);
-  assertEquals(calls.length, 14);
+  assertEquals(calls.length, 16);
   publish(old);
-  assertEquals(calls.length, 14);
+  assertEquals(calls.length, 16);
 });

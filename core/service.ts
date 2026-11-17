@@ -52,6 +52,7 @@ function startBackend(
   return backend.core.start({
     index,
     retainedSessions: sources.flatMap((source) => source.retained?.() ?? []),
+    error: (value) => connections.broadcast({ t: "error", ...value }),
     connection: (state) => {
       if (state !== "connected") index.projectAuthority("stale");
       connections.connection(state);

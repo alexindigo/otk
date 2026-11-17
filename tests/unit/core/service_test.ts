@@ -37,11 +37,13 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     time: { created: 1, updated: 1 },
     archived: false,
   };
+  let report: (value: { code: string; message: string }) => void = () => {};
   const harness: Harness = {
     core: {
       kind: "external",
       version: "1",
       start: (sink) => {
+        report = (value) => sink.error?.(value);
         sink.connection("connected");
         return Promise.resolve();
       },
@@ -127,6 +129,12 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     const welcome = await wait((frame) => frame.t === "welcome");
     assert(welcome.t === "welcome");
     assertEquals(welcome.sidecar.harness.capabilities, []);
+    report({ code: "inventory.activity", message: "Safe inventory feedback" });
+    assertEquals(await wait((frame) => frame.t === "error"), {
+      t: "error",
+      code: "inventory.activity",
+      message: "Safe inventory feedback",
+    });
     const owned = {
       id: crypto.randomUUID(),
       key: crypto.randomUUID(),

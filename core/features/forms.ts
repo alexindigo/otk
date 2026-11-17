@@ -44,7 +44,7 @@ export class FormsFeature implements FrameSource {
   locations(): Record<string, number> {
     const result: Record<string, number> = {};
     for (const request of this.#requests) {
-      if (request.owner.kind === "location") {
+      if (request.owner.kind === "location" && request.fresh !== false) {
         result[request.directory] = (result[request.directory] ?? 0) + 1;
       }
     }

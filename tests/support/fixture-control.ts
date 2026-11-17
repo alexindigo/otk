@@ -138,6 +138,7 @@ export const profiles = {
   "contract-messages-recorded-files": "v1",
   "contract-messages-recorded-tools": "v1",
   "contract-messages-clock": "neutral",
+  "contract-messages-pending-inventory": "neutral",
   "contract-reconnect": "neutral",
   "contract-initial-question": "neutral",
   "contract-permission-feedback": "neutral",

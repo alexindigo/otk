@@ -37,6 +37,9 @@ export interface HarnessSink {
   /** Persisted unseen identities, not the retained population. */
   readonly retainedSessions?: readonly string[];
   connection(state: HarnessState): void;
+  /** Background failure with producer-selected safe copy; never a session error.
+   * Original causes remain at the producer's diagnostic port. */
+  error?(value: { code: string; message: string }): void;
   indexReset(entries: SessionMetadata[]): void;
   indexUpsert(entry: SessionMetadata): void;
   indexRemove(sessionID: string): void;

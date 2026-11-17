@@ -113,7 +113,11 @@ advertisement and client/UI availability then share the same typed name.
 The core owns lifecycle; call `stop()` to release its streams and outstanding
 operations. A sink receives connection state, index snapshots/updates/removals,
 content operations, bootstrap completion and versioned transcript invalidation.
-Capabilities do not own the sink. `SessionIndex` owns session metadata. A
+Its optional `error({code,message})` port reports background failures with safe,
+producer-selected copy through the existing server-error notification path.
+Original causes remain diagnostic; this port never changes session errors or
+supervision freshness. Publications must obey the same connection lifetime
+fence. Capabilities do not own the sink. `SessionIndex` owns session metadata. A
 consumer can supply that owner as `HarnessSink.index`, with index callbacks
 writing it; the native connector reads the same owner instead of retaining a
 second copy. Omitting it preserves the standalone sink API. The application

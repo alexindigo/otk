@@ -367,6 +367,7 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
     db.close();
     const started = new Set<string>();
     const index = new SessionIndex();
+    const inventoryErrors: { code: string; message: string }[] = [];
     let stream!: ReadableStreamDefaultController<Uint8Array>,
       round = 0,
       resets = 0,
@@ -438,6 +439,7 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
     try {
       await adapter.core.start({
         index,
+        error: (value) => inventoryErrors.push(value),
         connection(state) {
           if (state === "connected") ready++;
         },
@@ -493,6 +495,15 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
         "Failed project blocked healthy reconciliation",
       );
       assertEquals(ready, 1, "Directory failure replaced the connection");
+      assertEquals(inventoryErrors, [{
+        code: "inventory.activity",
+        message: "Could not refresh session activity and pending requests.",
+      }]);
+      assertEquals(
+        index.getMetadata("opcv1-s0")?.activity?.inputs?.fresh,
+        false,
+      );
+      assertEquals(index.getMetadata("opcv1-s0")?.attention.error, undefined);
     } finally {
       for (const gate of gates) gate.resolve();
       await adapter.core.stop();

@@ -135,6 +135,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         },
         disconnected: (generation) => {
           this.#activityCurrent = false;
+          this.pending.uncertain();
           this.transcript.disconnect();
           this.#generation = generation;
           this.#lists.reset();
@@ -852,13 +853,16 @@ export class OpencodeV2ServerAdapter implements Harness {
     );
     const previousShells = new Set(this.#shells.sessions());
     const shells = await this.#shells.snapshot(client, locations, signal);
+    const directories = new Set(
+      locations.map((location) => location.directory),
+    );
     const pending = new Map<string, Pending>(
-      [...this.#pending].map(([key, row]) =>
-        [key, { ...row, stale: true }] as const
-      ),
+      [...this.#pending].filter(([, row]) => directories.has(row.directory))
+        .map(([key, row]) => [key, { ...row, stale: true }] as const),
     );
     const projects = await this.digest?.projects?.(generation, signal);
     const inventories: (() => void)[] = [];
+    const errors: { code: string; message: string }[] = [];
     const owners = new Set([
       ...Object.keys(active),
       ...this.#running.keys(),
@@ -924,6 +928,12 @@ export class OpencodeV2ServerAdapter implements Harness {
         } catch (error) {
           signal.throwIfAborted();
           this.diagnostic(error);
+          errors.push({
+            code: `inventory.${kind}`,
+            message: kind === "permission"
+              ? "Could not refresh pending permissions."
+              : "Could not refresh pending forms.",
+          });
         }
       }
     }
@@ -970,6 +980,14 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#generation = generation;
       this.#activityCurrent = true;
       this.#shells.replace(shells);
+      const changedOwners = new Set(
+        [...this.#pending.values(), ...pending.values()]
+          .filter((row) => row.sessionID !== "global").map((row) =>
+            ids.encode(row.sessionID)
+          ),
+      );
+      this.pending.retainLocations(directories);
+      this.pending.uncertain();
       this.#pending = pending;
       for (const [key, row] of this.#pending) {
         if (this.pending.settled(row.kind, row.id)) this.#pending.delete(key);
@@ -1021,6 +1039,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           });
         }
       }
+      // Request ownership still changes when its session metadata read is
+      // unavailable or its native location disappears from the loaded inventory.
+      for (const id of changedOwners) this.#refreshAttention(id);
+      for (const error of errors) this.#sink?.error?.(error);
     };
   }
   async #refreshProjects(

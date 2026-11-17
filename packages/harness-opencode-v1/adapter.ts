@@ -1463,6 +1463,10 @@ export class OpencodeV1Adapter implements Harness {
           `bootstrap directory ${JSON.stringify(directory)}`,
           error,
         );
+        sink.error?.({
+          code: "inventory.activity",
+          message: "Could not refresh session activity and pending requests.",
+        });
         // A failed inventory is not evidence that previous work/input ended.
         await each(byDirectory.get(directory) ?? [], (entry) => {
           entry.activityAuthority = "stale";
