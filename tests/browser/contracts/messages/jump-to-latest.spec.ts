@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
+import {
+  captureParagraph,
+  paragraphTop,
+} from "../../pages/paragraph-source.ts";
 
 test(
   "messages.jump-to-latest-reaches-native-tail-and-resumes-follow-on-every-surface",
@@ -231,32 +235,8 @@ test(
       frames.received.filter((frame) => frame.t === "welcome").length
     ).toBeGreaterThan(welcomes);
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
-    const source = await pane.evaluate((p) => {
-      const bounds = p.getBoundingClientRect();
-      const node = Array.from(p.querySelectorAll(".otk-text p")).find((e) => {
-        const r = e.getBoundingClientRect();
-        return r.top >= bounds.top && r.bottom <= bounds.bottom;
-      })!;
-      return {
-        message: node.closest("[data-message]")!.getAttribute("data-message"),
-        key: node.closest("[data-virtual-key]")!.getAttribute(
-          "data-virtual-key",
-        ),
-        top: node.getBoundingClientRect().top - bounds.top,
-      };
-    });
-    const sourceTop = () =>
-      pane.evaluate((p, source) => {
-        const node = Array.from(p.querySelectorAll(".otk-text p")).find((e) =>
-          e.closest("[data-message]")?.getAttribute("data-message") ===
-            source.message &&
-          e.closest("[data-virtual-key]")?.getAttribute("data-virtual-key") ===
-            source.key
-        );
-        return node
-          ? node.getBoundingClientRect().top - p.getBoundingClientRect().top
-          : -Infinity;
-      }, source);
+    const source = await captureParagraph(pane);
+    const sourceTop = () => paragraphTop(pane, source);
     const requests =
       frames.sent.filter(({ frame }) => frame.method === "session.messages")
         .length;

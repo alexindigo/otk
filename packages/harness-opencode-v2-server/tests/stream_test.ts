@@ -9,7 +9,10 @@ import {
   V2Stream,
 } from "../stream.ts";
 
-function setup(overrides: Partial<StreamPorts> = {}) {
+function setup(
+  overrides: Partial<StreamPorts> = {},
+  budgets: { replayops?: number; replaybytes?: number } = {},
+) {
   const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
   const applied: V2Event[] = [],
     order: string[] = [],
@@ -47,6 +50,7 @@ function setup(overrides: Partial<StreamPorts> = {}) {
       heartbeattimeout: 45,
       replayops: 2,
       replaybytes: 1024,
+      ...budgets,
     },
     (_input, options) =>
       Promise.resolve(
@@ -66,7 +70,7 @@ function setup(overrides: Partial<StreamPorts> = {}) {
                 } catch { /* already retired */ }
               }, { once: true });
             },
-          }),
+          }, { highWaterMark: 0 }),
           { headers: { "content-type": "text/event-stream" } },
         ),
       ),
@@ -84,6 +88,81 @@ async function until(check: () => boolean) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }
+Deno.test("V2 backpressured dispatch owns exactly one next transport chunk and preserves event order", async () => {
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>();
+  const delivered: number[] = [];
+  const x = setup({
+    event: async (event) => {
+      delivered.push(Number(event.data.order));
+      if (event.data.order === 0) {
+        entered.resolve();
+        await release.promise;
+      }
+    },
+  });
+  try {
+    await x.stream.start();
+    x.send({
+      type: "session.execution.started",
+      data: { sessionID: "ses_1", order: 0 },
+    });
+    await entered.promise;
+    for (let i = 1; i <= 20; i++) {
+      x.send({
+        id: String(i),
+        type: "session.execution.started",
+        data: { sessionID: "ses_1", order: i },
+      });
+    }
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assertEquals(delivered, [0], "Parser dispatch remains serial");
+    assertEquals(
+      x.controllers[0].desiredSize,
+      -19,
+      "Only one of twenty later chunks can be read while dispatch is held",
+    );
+    release.resolve();
+    await until(() => delivered.length === 21);
+    assertEquals(delivered, Array.from({ length: 21 }, (_, i) => i));
+  } finally {
+    release.resolve();
+    await x.stream.stop();
+  }
+});
+
+Deno.test("V2 bootstrap byte admission remains backpressured with transport read-ahead", async () => {
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>();
+  const x = setup({
+    resync: async () => {
+      entered.resolve();
+      await release.promise;
+      return () => {};
+    },
+  }, { replayops: 100, replaybytes: 64 });
+  const starting = x.stream.start();
+  try {
+    await entered.promise;
+    for (let i = 0; i < 3; i++) {
+      x.send({
+        id: String(i),
+        type: "session.execution.started",
+        data: { sessionID: "ses_1", order: i, payload: "x".repeat(100) },
+      });
+    }
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assertEquals(x.applied, []);
+    assertEquals(x.order.includes("ready"), false);
+    release.resolve();
+    await starting;
+    await until(() => x.applied.length === 3);
+    assertEquals(x.applied.map((event) => event.data.order), [0, 1, 2]);
+  } finally {
+    release.resolve();
+    await x.stream.stop();
+  }
+});
 Deno.test("V2 stream subscribes before snapshot and replays bounded bootstrap in order", async () => {
   const gate = Promise.withResolvers<void>();
   let snapshots = 0;

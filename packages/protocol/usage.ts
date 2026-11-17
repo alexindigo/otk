@@ -227,26 +227,36 @@ export class UsageLedger {
     if (previous?.completed && !message.completed && !restart) {
       return this.#change();
     }
+    // Omitted metadata can describe the previous call only within its run.
+    const retained = !restart && previous?.turnID === message.turnID &&
+      (message.time === undefined || previous.time?.start === undefined ||
+        previous.time.start === message.time.start);
+    const time = message.time ?? (retained ? previous?.time : undefined);
+    const timing = message.timing ??
+      (retained && previous?.completed === message.completed &&
+          previous.time?.start === time?.start &&
+          previous.time?.end === time?.end
+        ? previous.timing
+        : undefined);
+    const tools = message.tools ?? (retained ? previous?.tools : undefined) ??
+      [];
     const nextValues = values(message);
     if (
-      previous && previous.turnID === message.turnID &&
+      !restart && previous && previous.turnID === message.turnID &&
       previous.sourceOrder === message.sourceOrder &&
       previous.completed === message.completed &&
-      JSON.stringify(previous.timing) ===
-        JSON.stringify(message.timing ?? previous.timing) &&
+      JSON.stringify(previous.timing) === JSON.stringify(timing) &&
       previous.model.provider === message.model.provider &&
       previous.model.model === message.model.model &&
       values(previous).every((value, i) => value === nextValues[i]) &&
-      (!message.time ||
-        (previous.time?.start === message.time.start &&
-          previous.time?.end === message.time.end)) &&
-      (message.tools === undefined ||
-        ((previous.tools?.length ?? 0) === message.tools.length &&
-          message.tools.every((tool, i) => {
-            const old = previous.tools![i];
-            return old.id === tool.id && old.name === tool.name &&
-              old.summary === tool.summary;
-          })))
+      previous.time?.start === time?.start &&
+      previous.time?.end === time?.end &&
+      ((previous.tools?.length ?? 0) === tools.length &&
+        tools.every((tool, i) => {
+          const old = previous.tools![i];
+          return old.id === tool.id && old.name === tool.name &&
+            old.summary === tool.summary;
+        }))
     ) return this.#change();
     const next = {
       id: message.id,
@@ -257,11 +267,9 @@ export class UsageLedger {
       model: { provider: message.model.provider, model: message.model.model },
       cost: message.cost,
       completed: message.completed,
-      time: message.time ? { ...message.time } : previous?.time,
-      ...((message.timing ?? previous?.timing)
-        ? { timing: message.timing ?? previous?.timing }
-        : {}),
-      tools: (message.tools ?? previous?.tools ?? []).map((tool) => ({
+      time: time ? { ...time } : undefined,
+      ...(timing ? { timing } : {}),
+      tools: tools.map((tool) => ({
         ...tool,
       })),
       tokens: {

@@ -84,13 +84,19 @@ interface Baseline {
   presentation?: import("@otk/protocol").ContentSession;
 }
 interface Cursor {
-  v: 2;
+  v: 3;
   session: string;
   epoch: string;
   cutoff: string | null;
   native: string;
   source: string;
   retained?: { created: number; id: string; order?: number };
+  revision: number;
+  unanchored?: {
+    before?: { created: number; id: string };
+    pending: string[];
+    exhausted: boolean;
+  };
   reuse?: boolean;
   snapshot?: true;
 }
@@ -129,6 +135,15 @@ const encode = (value: Cursor) =>
     /=+$/,
     "",
   );
+function cursorEdge(value: unknown, sequence: boolean): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const edge = value as Record<string, unknown>;
+  return Object.keys(edge).every((key) =>
+    ["created", "id", ...(sequence ? ["order"] : [])].includes(key)
+  ) &&
+    Number.isFinite(edge.created) && typeof edge.id === "string" &&
+    (edge.order === undefined || Number.isFinite(edge.order));
+}
 function decode(token: string): Cursor {
   try {
     if (
@@ -146,20 +161,38 @@ function decode(token: string): Cursor {
           "native",
           "source",
           "retained",
+          "revision",
+          "unanchored",
           "reuse",
           "snapshot",
         ].includes(key)
       ) ||
-      v.v !== 2 || typeof v.session !== "string" ||
+      v.v !== 3 || typeof v.session !== "string" ||
       typeof v.epoch !== "string" || typeof v.native !== "string" ||
-      (!v.native && !v.retained) || typeof v.source !== "string" || !v.source ||
+      (!v.native && !v.retained && !v.unanchored) ||
+      typeof v.source !== "string" || !v.source ||
+      !Number.isSafeInteger(v.revision) || v.revision < 0 ||
       (v.reuse !== undefined && typeof v.reuse !== "boolean") ||
       (v.snapshot !== undefined && v.snapshot !== true) ||
       (v.retained !== undefined &&
-        (!Number.isFinite(v.retained.created) ||
-          typeof v.retained.id !== "string" ||
-          (v.retained.order !== undefined &&
-            !Number.isFinite(v.retained.order)))) ||
+        !cursorEdge(v.retained, true)) ||
+      (v.unanchored !== undefined && (
+        !v.unanchored || typeof v.unanchored !== "object" ||
+        Array.isArray(v.unanchored) ||
+        Object.keys(v.unanchored).some((key) =>
+          !["before", "pending", "exhausted"].includes(key)
+        ) ||
+        typeof v.unanchored.exhausted !== "boolean" ||
+        !Array.isArray(v.unanchored.pending) ||
+        v.unanchored.pending.length > MESSAGE_PAGE_SIZE ||
+        v.unanchored.pending.some((id: unknown) =>
+          typeof id !== "string" || !id
+        ) ||
+        new Set(v.unanchored.pending).size !== v.unanchored.pending.length ||
+        (v.unanchored.before !== undefined &&
+          !cursorEdge(v.unanchored.before, false))
+      )) ||
+      (v.source.startsWith("sql") !== (v.unanchored !== undefined)) ||
       v.source.length > 512 ||
       (v.cutoff !== null && typeof v.cutoff !== "string")
     ) throw new Error();
@@ -895,7 +928,8 @@ export class Transcript {
       }
     }
     const settled = raw.type === "assistant" &&
-      (terminal || context.terminal === true || assistantSettled(raw));
+      (terminal || context.terminal === true || assistantSettled(raw) ||
+        this.#finished.get(id)?.has(raw.id) === true);
     if (raw.type === "assistant" && !settled) {
       const current = this.#live.get(raw.id);
       if (current) {
@@ -1015,13 +1049,15 @@ export class Transcript {
     ids.decode(id);
     signal.throwIfAborted();
     const token = before === undefined ? undefined : decode(before);
+    const revision = this.requests.revision(id);
     let baseline = this.#baselines.get(id);
     if (
       token &&
       (!baseline || !!token.snapshot !== snapshot || token.session !== id ||
         token.epoch !== this.replay.clock(id).epoch ||
         token.cutoff !== (baseline.raw.revert?.messageID ?? null) ||
-        (!snapshot && token.source !== baseline.source))
+        (!snapshot && token.source !== baseline.source) ||
+        token.revision !== revision)
     ) {
       throw new HarnessError(
         "cursor-stale",
@@ -1092,8 +1128,8 @@ export class Transcript {
               ? facts.contexts[raw.id]?.order
               : undefined,
           ] as const;
-          if (!snapshot) await this.#executionFailure(...args);
-          const value = await this.#executionFailureValue(...args);
+          if (!snapshot) await this.#executionFailure(...args, signal);
+          const value = await this.#executionFailureValue(...args, signal);
           const order = value.position && positionOrder(value.position);
           failures.set(
             raw.id,
@@ -1151,23 +1187,55 @@ export class Transcript {
       const lower = page.next && items.length
         ? edge(items.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b))
         : undefined;
-      // Sequence authority: observations anchored to native sequence, plus
-      // those without sequence evidence placed by their native clock.
+      // Each acquisition frontier belongs to its physical index. In particular,
+      // interpolation below cannot certify either a native or a clock prefix.
+      const sequenced = sequence
+        ? await this.requests.page(id, upper, MESSAGE_PAGE_SIZE + 1, "sequence")
+        : [];
+      const unanchored = sequence
+        ? token?.unanchored
+          ? { ...token.unanchored, pending: [...token.unanchored.pending] }
+          : {
+            before: upper && { created: upper.created, id: upper.id },
+            pending: [] as string[],
+            exhausted: false,
+          }
+        : undefined;
+      let clockRows: Message[] = [];
+      if (unanchored) {
+        if (unanchored.pending.length) {
+          clockRows = await Promise.all(unanchored.pending.map(async (key) => {
+            const value = await this.requests.get(
+              id,
+              key.replace(/^request:/, ""),
+            );
+            if (!value?.outcome) {
+              throw new HarnessError(
+                "cursor-stale",
+                "Retained message placement changed. Refresh messages.",
+              );
+            }
+            return value.outcome;
+          }));
+        } else if (!unanchored.exhausted) {
+          clockRows = [
+            ...await this.requests.page(
+              id,
+              unanchored.before,
+              MESSAGE_PAGE_SIZE,
+              "unanchored",
+            ),
+          ];
+          unanchored.exhausted = clockRows.length < MESSAGE_PAGE_SIZE;
+          const last = clockRows.at(-1);
+          if (last) {
+            unanchored.before = { created: last.time.created, id: last.id };
+          }
+          unanchored.pending = clockRows.map((m) => m.id);
+        }
+      }
       const retained = sequence
-        ? [
-          ...await this.requests.page(
-            id,
-            upper,
-            MESSAGE_PAGE_SIZE + 1,
-            "sequence",
-          ),
-          ...await this.requests.page(
-            id,
-            upper,
-            MESSAGE_PAGE_SIZE + 1,
-            "unanchored",
-          ),
-        ]
+        ? [...sequenced, ...clockRows]
         : await this.requests.page(
           id,
           upper,
@@ -1219,30 +1287,37 @@ export class Transcript {
       );
       const overflow = candidates.length > MESSAGE_PAGE_SIZE;
       const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
+      if (unanchored) {
+        const consumed = new Set(selected.map((m) => m.id));
+        unanchored.pending = unanchored.pending.filter((key) =>
+          !consumed.has(key)
+        );
+      }
+      const refill = unanchored && !unanchored.pending.length &&
+        !unanchored.exhausted;
+      const reuse = overflow || !!refill;
+      const proven = new Set([...nativeItems, ...sequenced].map((m) => m.id));
+      const consumed = sequence
+        ? selected.filter((m) => proven.has(m.id))
+        : selected;
+      const nextUpper = reuse
+        ? consumed.length
+          ? edge(consumed.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b))
+          : upper
+        : lower;
       items = selected.sort(compareMessages);
-      const older = overflow
+      const older = reuse || page.next
         ? encode({
-          v: 2,
+          v: 3,
           session: id,
           epoch: owner.epoch,
           cutoff: boundary ?? null,
-          native: native ?? "",
-          reuse: true,
+          native: (reuse ? native : page.next) ?? "",
           source: facts.source,
-          retained: edge(
-            selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
-          ),
-          ...(snapshot ? { snapshot: true as const } : {}),
-        })
-        : page.next
-        ? encode({
-          v: 2,
-          session: id,
-          epoch: owner.epoch,
-          cutoff: boundary ?? null,
-          native: page.next,
-          source: facts.source,
-          ...(lower ? { retained: lower } : {}),
+          revision,
+          ...(reuse ? { reuse: true } : {}),
+          ...(nextUpper ? { retained: nextUpper } : {}),
+          ...(unanchored ? { unanchored } : {}),
           ...(snapshot ? { snapshot: true as const } : {}),
         })
         : null;
@@ -1251,7 +1326,8 @@ export class Transcript {
         signal.throwIfAborted();
         if (
           owner !== this.#baselines.get(id) ||
-          owner.epoch !== this.replay.clock(id).epoch
+          owner.epoch !== this.replay.clock(id).epoch ||
+          revision !== this.requests.revision(id)
         ) {
           throw new HarnessError(
             "cursor-stale",
@@ -1319,7 +1395,8 @@ export class Transcript {
       signal.throwIfAborted();
       if (
         owner !== this.#baselines.get(id) ||
-        owner.epoch !== this.replay.clock(id).epoch
+        owner.epoch !== this.replay.clock(id).epoch ||
+        revision !== this.requests.revision(id)
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
       owner.presentation ??= await revertSession(
         this.reader.client(),
@@ -1327,6 +1404,12 @@ export class Transcript {
         signal,
       );
       signal.throwIfAborted();
+      if (revision !== this.requests.revision(id)) {
+        throw new HarnessError(
+          "cursor-stale",
+          "Retained message placement changed. Refresh messages.",
+        );
+      }
       const sealed = capture.seal(), recovering = this.recovery.snapshot(id);
       const replacements = new Map<string, number>();
       sealed.events.forEach(({ event }, index) => {
@@ -1594,10 +1677,21 @@ export class Transcript {
   }
   /** Submission failures have no native message; reuse plugin-owned retention,
    * page merging and live publication rather than a second session error store. */
-  async failure(message: Message): Promise<void> {
+  async failure(
+    message: Message,
+    signal: AbortSignal = this.#lifetime.signal,
+  ): Promise<void> {
     const key = message.id.replace(/^request:/, "");
     const previous = await this.requests.get(message.sessionID, key);
-    await this.#observe(message.sessionID, key, message, previous);
+    signal.throwIfAborted();
+    await this.#observe(
+      message.sessionID,
+      key,
+      message,
+      previous,
+      undefined,
+      signal,
+    );
   }
   async submission(
     sessionID: string,
@@ -1615,11 +1709,14 @@ export class Transcript {
   async executionFailure(
     event: V2Event,
     label?: string,
+    parent: AbortSignal = this.#lifetime.signal,
   ): Promise<import("@otk/protocol").PublicFailure | undefined> {
     if (
       event.type !== "session.execution.failed" ||
       typeof event.data.sessionID !== "string"
     ) return;
+    const signal = AbortSignal.any([parent, this.#lifetime.signal]);
+    signal.throwIfAborted();
     const id = ids.encode(event.data.sessionID);
     const nativeID = event.id?.replace(/^evt_/, "msg_");
     let context: MessageContext | undefined;
@@ -1628,17 +1725,19 @@ export class Transcript {
       try {
         const facts = await this.#facts(
           { sessionID: id, messages: [nativeID!] },
-          this.#lifetime.signal,
+          signal,
         );
+        signal.throwIfAborted();
         context = facts.contexts[nativeID!];
         if (facts.source.startsWith("sql")) nativeOrder = context?.order;
       } catch (error) {
-        this.#lifetime.signal.throwIfAborted();
+        signal.throwIfAborted();
         this.options.diagnostic(error);
       }
     }
     // Resolve the native turn before the first publication, so the same failure
     // never has a transient standalone and then a turn-attached identity.
+    signal.throwIfAborted();
     const message = await this.#executionFailure(
       id,
       nativeID,
@@ -1647,6 +1746,7 @@ export class Transcript {
       context,
       label,
       nativeOrder,
+      signal,
     );
     const part = message.parts[0];
     return part.kind === "external" ? part.failure : undefined;
@@ -1659,13 +1759,15 @@ export class Transcript {
     context: MessageContext | undefined,
     label?: string,
     nativeOrder?: number,
+    signal = this.#lifetime.signal,
   ): Promise<Message> {
+    signal.throwIfAborted();
     const key = `${id}/${nativeID ?? crypto.randomUUID()}`;
     const pending = this.#executionFailures.get(key);
     if (pending) {
       if (!context?.replyTo) return pending;
       return pending.then(() => {
-        this.#lifetime.signal.throwIfAborted();
+        signal.throwIfAborted();
         return this.#executionFailure(
           id,
           nativeID,
@@ -1674,6 +1776,7 @@ export class Transcript {
           context,
           label,
           nativeOrder,
+          signal,
         );
       });
     }
@@ -1685,6 +1788,7 @@ export class Transcript {
       context,
       label,
       nativeOrder,
+      signal,
     )
       .finally(() => this.#executionFailures.delete(key));
     this.#executionFailures.set(key, work);
@@ -1698,6 +1802,7 @@ export class Transcript {
     context: MessageContext | undefined,
     label?: string,
     nativeOrder?: number,
+    signal = this.#lifetime.signal,
   ): Promise<Message> {
     const value = await this.#executionFailureValue(
       id,
@@ -1707,6 +1812,7 @@ export class Transcript {
       context,
       label,
       nativeOrder,
+      signal,
     );
     if (value.message !== value.previous?.outcome) {
       await this.#observe(
@@ -1715,6 +1821,7 @@ export class Transcript {
         value.message,
         value.previous,
         value.position,
+        signal,
       );
       if (value.previous?.outcome) {
         const part = value.message.parts.find((part) =>
@@ -1737,18 +1844,22 @@ export class Transcript {
     context: MessageContext | undefined,
     label?: string,
     nativeOrder?: number,
+    signal = this.#lifetime.signal,
   ) {
+    signal.throwIfAborted();
     const diagnosticID = nativeID
       ? `execution:${nativeID.replace(/^msg_/, "evt_")}`
       : crypto.randomUUID();
     const key = `failure:${diagnosticID}`;
     const previous = await this.requests.get(id, key);
+    signal.throwIfAborted();
     const parent =
       previous?.outcome?.role === "context" && previous.outcome.replyTo ||
       context?.replyTo;
     const submission = parent
       ? await this.requests.get(id, `submission:${parent}`)
       : undefined;
+    signal.throwIfAborted();
     const origin = submission?.request?.origin as
       | import("@otk/protocol").RequestOrigin
       | undefined;
@@ -1825,7 +1936,9 @@ export class Transcript {
     outcome: Message,
     previous: import("./request-retention.ts").RetainedRequest | undefined,
     nativePosition?: RequestPosition,
+    signal = this.#lifetime.signal,
   ): Promise<void> {
+    signal.throwIfAborted();
     const value = { ...previous, id: requestID, sessionID: id, outcome };
     const settled = previous?.outcome && previous.position &&
       previous.position.basis !== "pending";
@@ -1838,6 +1951,7 @@ export class Transcript {
         basis: "stream" as const,
       };
       await this.requests.put({ ...value, position });
+      signal.throwIfAborted();
       this.#announce(id, outcome, position);
       return;
     }
@@ -1848,16 +1962,17 @@ export class Transcript {
     });
     let seq: number | undefined;
     try {
-      seq = await this.#sequence(id);
+      seq = await this.#sequence(id, undefined, signal);
     } catch (error) {
-      this.#lifetime.signal.throwIfAborted();
+      signal.throwIfAborted();
       this.options.diagnostic(error);
     }
-    this.#lifetime.signal.throwIfAborted();
+    signal.throwIfAborted();
     const position: RequestPosition = seq === undefined
       ? { after: null, rank: 0, basis: "clock" }
       : { after: seq, rank: this.requests.rank(id, seq), basis: "lookup" };
     await this.requests.put({ ...value, position });
+    signal.throwIfAborted();
     const pending = this.#anchors.get(id) ?? [];
     this.#anchors.set(id, [...pending, requestID]);
     this.#announce(id, outcome, position);
@@ -1887,16 +2002,21 @@ export class Transcript {
       this.requests.cutoff(id, null);
     }
   }
-  async #sequence(id: string, messageID?: string): Promise<number | undefined> {
+  async #sequence(
+    id: string,
+    messageID?: string,
+    signal = this.#lifetime.signal,
+  ): Promise<number | undefined> {
+    signal.throwIfAborted();
     const input = { sessionID: id, ...(messageID ? { messageID } : {}) };
     if (this.options.sequence) {
-      return await this.options.sequence(input, this.#lifetime.signal);
+      return await this.options.sequence(input, signal);
     }
     if (!this.options.digest) return;
     return (await this.options.digest.read("opcv2.request.anchor", input, {
       owner: `v2-request-anchor:${id}`,
       priority: "attention",
-      signal: this.#lifetime.signal,
+      signal,
     })).seq;
   }
   #announce(id: string, outcome: Message, position: RequestPosition): void {

@@ -26,6 +26,7 @@ import {
   createPreferences,
   DEFAULT_PREFS,
   errorMessage,
+  type ExternalPart,
   type InboxSnapshot,
   type Message as RecordMessage,
   type NativeSourceView,
@@ -77,6 +78,148 @@ import {
   UiProvider,
   VisualSettings,
 } from "@otk/ui";
+
+export function LazyPreview(): Element {
+  const prefix = "OTK_LAZY_PREVIEW_";
+  const payload = "  exact <source>**payload**</source>\n";
+  const ui = createUiRegistries();
+  registerUnknownPart(ui.parts);
+  const [generation, setGeneration] = createSignal(0);
+  const [mounted, setMounted] = createSignal(true);
+  const [copied, setCopied] = createSignal("");
+  const parts = (): ExternalPart[] => [
+    {
+      kind: "external",
+      id: "legacy",
+      name: "legacy",
+      data: prefix + "legacy" + generation() + ":" + "\u20ac".repeat(20_000),
+    },
+    {
+      kind: "external",
+      id: "explicit",
+      name: "explicit",
+      content: true,
+      data: prefix + "unused:" + "x".repeat(60_000),
+      source: {
+        kind: "explicit",
+        preview: prefix + "explicit:",
+        bytes: 90_000,
+        truncated: true,
+        payload,
+      },
+    },
+    {
+      kind: "external",
+      id: "empty",
+      name: "empty",
+      data: prefix + "unused-empty:" + "x".repeat(60_000),
+      source: { kind: "empty", preview: "", bytes: 7, truncated: true },
+    },
+    { kind: "external", id: "absent", name: "absent" },
+  ];
+  return (
+    <CommandProvider commands={new CommandHub()}>
+      <UiProvider registries={ui}>
+        <button
+          type="button"
+          data-update-preview
+          onClick={() => setGeneration((n) => n + 1)}
+        >
+          Update legacy
+        </button>
+        <button
+          type="button"
+          data-mount-preview
+          onClick={() => setMounted((v) => !v)}
+        >
+          Toggle mounting
+        </button>
+        <button
+          type="button"
+          data-source-preview
+          onClick={() =>
+            setCopied(
+              ui.parts.presentation(parts()[1], DEFAULT_PREFS).text ?? "",
+            )}
+        >
+          Read exact source
+        </button>
+        <output data-copied-preview>{copied()}</output>
+        <output data-preview-generation>{generation()}</output>
+        <TranscriptContext>
+          <Show when={mounted()}>
+            <Message
+              message={{
+                id: "preview",
+                sessionID: "consumer",
+                role: "context",
+                time: { created: 1 },
+                parts: parts(),
+              }}
+              prefs={{ ...DEFAULT_PREFS, expandSource: true }}
+              permissions={[]}
+              queued={false}
+              onOpenChild={() => {}}
+            />
+          </Show>
+        </TranscriptContext>
+      </UiProvider>
+    </CommandProvider>
+  );
+}
+
+export function PickerLifetime(): Element {
+  const [items, setItems] = createSignal([
+    { key: "alpha", value: "exact alpha", label: "Alpha choice" },
+    { key: "beta", value: "exact beta", label: "Beta choice" },
+  ]);
+  const [picked, setPicked] = createSignal("");
+  const search = new URL(location.href).searchParams.has("search");
+  return (
+    <CommandProvider commands={new CommandHub()}>
+      <UiProvider registries={createUiRegistries()}>
+        <button
+          type="button"
+          data-remove-picker
+          onClick={() =>
+            setItems((list) => list.filter((item) => item.key !== "alpha"))}
+        >
+          Remove alpha
+        </button>
+        <button type="button" data-empty-picker onClick={() => setItems([])}>
+          Empty catalog
+        </button>
+        <button
+          type="button"
+          data-update-picker
+          onClick={() =>
+            setItems((list) =>
+              [...list].reverse().map((item) =>
+                item.key === "beta"
+                  ? { ...item, label: "Beta updated", value: "updated beta" }
+                  : item
+              )
+            )}
+        >
+          Update surviving choice
+        </button>
+        <output data-picked>{picked()}</output>
+        <ListPicker
+          label="Live catalog"
+          trigger="Choose"
+          search={search ? "Search live catalog" : undefined}
+          groups={[{
+            key: "catalog",
+            label: "Current catalog",
+            items: items(),
+          }]}
+          onPick={setPicked}
+          focusAfterPick={() => {}}
+        />
+      </UiProvider>
+    </CommandProvider>
+  );
+}
 
 export function LayoutTabs(props: { onTheme(id: string): void }): Element {
   const commands = new CommandHub();

@@ -17,6 +17,7 @@ import {
 } from "../../../core/mod.ts";
 import { PROTOCOL_VERSION, type ServerFrame } from "@otk/protocol";
 import { cfg, fixture } from "./support.ts";
+import { clientRequestPolicy } from "../../../core/config/schema.ts";
 
 test("core service with a composed backend/assets discovers HTTP routes and advertises capabilities to an actual WS consumer", async () => {
   const root = await fixture(), settings = cfg();
@@ -37,11 +38,13 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     time: { created: 1, updated: 1 },
     archived: false,
   };
+  let report: (value: { code: string; message: string }) => void = () => {};
   const harness: Harness = {
     core: {
       kind: "external",
       version: "1",
       start: (sink) => {
+        report = (value) => sink.error?.(value);
         sink.connection("connected");
         return Promise.resolve();
       },
@@ -91,7 +94,9 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     assertEquals(spa.headers.get("cache-control"), "no-cache");
     assertEquals(
       await spa.text(),
-      '<head><base href="../"></head><p>Caller assets</p>',
+      '<head><base href="../"><script type="application/json" id="otk-bootstrap">' +
+        JSON.stringify({ policy: clientRequestPolicy(settings) }) +
+        "</script></head><p>Caller assets</p>",
     );
     const missingApi = await fetch(base + "/api/missing");
     assertEquals(missingApi.status, 404);
@@ -127,6 +132,12 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     const welcome = await wait((frame) => frame.t === "welcome");
     assert(welcome.t === "welcome");
     assertEquals(welcome.sidecar.harness.capabilities, []);
+    report({ code: "inventory.activity", message: "Safe inventory feedback" });
+    assertEquals(await wait((frame) => frame.t === "error"), {
+      t: "error",
+      code: "inventory.activity",
+      message: "Safe inventory feedback",
+    });
     const owned = {
       id: crypto.randomUUID(),
       key: crypto.randomUUID(),

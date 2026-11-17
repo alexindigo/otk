@@ -36,9 +36,12 @@ type DetailOp = { message: UsageMessage; restart?: boolean } | {
 } | { messageID: string; removeTool: string };
 function detailOp(event: ContentOp, turnID: string): DetailOp | undefined {
   if (
-    event.op === "message.upsert" && event.message.role === "assistant" &&
-    (event.message.replyTo ?? event.message.id) === turnID
-  ) return { message: usageHeader(event.message), restart: event.restart };
+    event.op === "message.upsert" && event.message.role === "assistant"
+  ) {
+    return (event.message.replyTo ?? event.message.id) === turnID
+      ? { message: usageHeader(event.message), restart: event.restart }
+      : { remove: event.message.id };
+  }
   if (event.op === "message.remove") return { remove: event.messageID };
   if (event.op === "part.upsert") {
     const tool = usageTool(event.part);
@@ -169,18 +172,27 @@ export function createSessionUsage(
     const change = apply(resource.ledger, event);
     if (!change?.turns.length) return;
     const calls = [...resource.value.calls];
+    // Native aggregate timing is a witness over these accepted calls, not a
+    // resource-lifetime decoration. Metadata-only refreshes do not change it.
+    let timingChanged = "message" in event && event.restart === true;
+    const evidence = (call: UsageMessage) =>
+      JSON.stringify([call.turnID, call.completed, call.time, call.timing]);
     const reindex = () => {
       resource.positions = new Map(calls.map((call, i) => [call.id, i]));
     };
     for (const id of change.calls.remove) {
       const at = resource.positions.get(id);
       if (at !== undefined) {
+        timingChanged = true;
         calls.splice(at, 1);
         reindex();
       }
     }
     for (const call of change.calls.upsert) {
       const at = resource.positions.get(call.id);
+      if (at === undefined || evidence(calls[at]) !== evidence(call)) {
+        timingChanged = true;
+      }
       if (at !== undefined && calls[at].time?.start === call.time?.start) {
         calls[at] = call;
         continue;
@@ -210,7 +222,7 @@ export function createSessionUsage(
           ).detail(
             resource.target.turnID,
           ).summary),
-        ...(resource.value.summary.timing
+        ...(!timingChanged && resource.value.summary.timing
           ? { timing: resource.value.summary.timing }
           : {}),
       },

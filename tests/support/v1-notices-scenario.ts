@@ -10,6 +10,7 @@ import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { WsClient } from "./ws-client.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
+import type { Message } from "@otk/protocol";
 
 export async function v1NoticesScenario() {
   const root = await fixture(), sessionID = "tstv1-otk";
@@ -134,7 +135,67 @@ export async function v1NoticesScenario() {
       },
     }),
   ].map((message) => ({ ...message, sessionID })));
-  const f = await inboxBrowserFixture(root, [], { [sessionID]: messages });
+  const progressID = "tstv1-atmosphera";
+  const progress: Message[] = [
+    {
+      id: "active-prompt",
+      sessionID: progressID,
+      role: "user",
+      time: { created: 1 },
+      parts: [{
+        kind: "text",
+        id: "active-text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{ i: "text", text: "Keep the native work running" }],
+        }],
+      }],
+    },
+    {
+      id: "running-record",
+      sessionID: progressID,
+      role: "context",
+      time: { created: 2 },
+      parts: [{
+        kind: "external",
+        id: "running-part",
+        name: "fixture/running",
+        activity: {
+          kindLabel: "Native work",
+          title: "Running native work",
+          tone: "normal",
+          category: "record",
+          layout: "row",
+          state: {
+            key: "running",
+            label: "Running",
+            facts: { active: true, terminal: false },
+          },
+        },
+      }],
+    },
+    {
+      id: "queued-prompt",
+      sessionID: progressID,
+      role: "user",
+      time: { created: 3 },
+      parts: [{
+        kind: "text",
+        id: "queued-text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{ i: "text", text: "Queued next prompt" }],
+        }],
+      }],
+    },
+  ];
+  const f = await inboxBrowserFixture(root, [], {
+    [sessionID]: messages,
+    [progressID]: progress,
+  });
+  f.update(progressID, { status: "busy" });
   const client = new WsClient(f.url);
   await client.connect(f.entries[0].directory);
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
@@ -168,6 +229,31 @@ export async function v1NoticesScenario() {
           return { frames: client.frames };
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
+        case "scenario":
+          if (frame.params.action !== "release") {
+            throw new Error("Unknown progress transition");
+          }
+          progress[1] = {
+            ...progress[1],
+            parts: progress[1].parts.map((part) =>
+              part.kind === "external"
+                ? {
+                  ...part,
+                  activity: {
+                    ...part.activity!,
+                    title: "Native work finished",
+                    state: {
+                      key: "done",
+                      label: "Done",
+                      facts: { active: false, terminal: true },
+                    },
+                  },
+                }
+                : part
+            ),
+          };
+          f.update(progressID, { status: "idle" });
+          return null;
         case "stop":
           await client.close();
           await f.app.stop();

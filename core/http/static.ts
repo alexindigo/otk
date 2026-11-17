@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { extname, join, normalize } from "@std/path";
+import { clientRequestPolicy, type ServiceConfig } from "../config/schema.ts";
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -25,7 +26,10 @@ async function staticFile(
 }
 export async function staticResponse(
   path: string,
-  app: { staticRoot: string },
+  app: {
+    staticRoot: string;
+    cfg?: Pick<ServiceConfig, "requests" | "connection">;
+  },
 ): Promise<Response> {
   if (path === "/api" || path.startsWith("/api/")) {
     return Response.json({ code: "not_found" }, { status: 404 });
@@ -47,9 +51,14 @@ export async function staticResponse(
     const depth = safe.split("/").filter(Boolean).length -
       (safe.endsWith("/") ? 0 : 1);
     const base = depth > 0 ? "../".repeat(depth) : "./";
+    const bootstrap = app.cfg
+      ? `<script type="application/json" id="otk-bootstrap">${
+        JSON.stringify({ policy: clientRequestPolicy(app.cfg) })
+      }</script>`
+      : "";
     const text = new TextDecoder().decode(bytes).replace(
       "<head>",
-      `<head><base href="${base}">`,
+      `<head><base href="${base}">${bootstrap}`,
     );
     return new Response(text, {
       headers: {

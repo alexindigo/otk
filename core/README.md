@@ -59,8 +59,13 @@ supply fresh work and pending-input identities plus monotone proven terminal
 tokens. Neither legacy status transitions nor digest/population readiness create
 evidence. The per-user inbox projection carries
 `needsYou | working | finishedUnseen | none`. `none` renders grey with "No known
-activity"; stale inventories no longer count. Rollups include children, but each
-session's lamp describes only that session.
+activity"; stale inventories no longer count. Failed inventory refreshes publish
+safe background-error feedback, never a session error. Fresh successful
+inventory or reconnect seeding restores needs-you only for still-pending
+requests. Payload retention does not establish fresh attention or settlement.
+Complete loaded-location inventories retire dropped routing without inventing
+settlement. Rollups include children, but each session's lamp describes only
+that session.
 
 `sessions.seen` acknowledges the captured displayed terminal, never server time.
 Seen/finish feature v2 retains terminal tokens separately from legacy
@@ -151,6 +156,15 @@ reference migration requires a consistent pre-upgrade state backup; see the root
 upgrade instructions.
 
 ## Public discovery
+
+Served HTML extends the existing mount-relative base transform with one inert
+`otk-bootstrap` JSON value containing only `clientRequestPolicy(cfg)`. This safe
+numeric projection supplies the application's initial connection policy before
+any local or saved remote session read succeeds. It never serializes operator
+config, auth credentials or backend identity. The browser composition validates
+it and injects it into the shell; reusable client/UI packages do not read HTML
+or invent defaults. A remote's checked session and welcome replace this initial
+policy with that remote's authority. Static-only callers may omit config.
 
 The existing plain and tracked `/api/session` responses also carry `defaults`,
 an allowlisted `{ defaultPort }` projection from the shipped
@@ -660,8 +674,8 @@ recency. Metadata/SSE and committed marks update contributions; digest-only
 changes do no summary work. Inbox baselines include `summaries` and their
 independent revision; additive `inbox.summaries` frames publish changed
 projects. Automatic-permission coverage borrows the existing policy owner.
-Population authority is independent of supervision. Stale live evidence stops
-counting. No row requires session metadata to render its lamp or counts.
+Population authority is independent of supervision. Stale activity evidence
+stops counting. No row requires session metadata to render its lamp or counts.
 
 Optional seed topology adds worktree leaves beneath their canonical repo. The
 summary owner preserves direct-checkout counts and deduplicates repo rollups;

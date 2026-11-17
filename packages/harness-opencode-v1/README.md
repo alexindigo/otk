@@ -60,6 +60,12 @@ continuation retains its own captured attempt key, so an older settlement cannot
 consume a newer attempt. Native prompt identity and retained chronological
 records remain separate from this ephemeral correlation lifecycle.
 
+Prompt, shell and command admission share one causal-association reset,
+retaining only the creation watermark. Only newly observed native prompt facts
+may attach the new failure to a turn. Failure cleanup borrows the event's
+normalized session identity, including session deletion's `info.id`, so replay
+identities and old prompt associations cannot survive that native lifetime.
+
 The public `Client` also supports explicit
 `classification: read | effect |
 stream` and optional neutral `operation`
@@ -463,9 +469,16 @@ native page through the existing idle-gated provider-read scheduler. One
 adapter-wide memory-only FIFO cache holds raw bodies plus scalar transcript
 metadata, charged by complete encoded key/payload bytes. `messages.prefetchms`
 expires entries from insertion and `messages.prefetchbytes` bounds their total;
-oversized entries are not retained. Hits skip both body and metadata source
-reads and seal fresh replay clocks. Mutation, metadata replacement, cutoff,
-epoch retirement, source reset and stop retire cached/in-flight authority.
+oversized entries are not retained. Clean hits skip both body and metadata
+source reads and seal fresh replay clocks. Mutation, metadata replacement,
+cutoff, epoch retirement, source reset and stop retire cached/in-flight
+authority.
+
+Captured user-header changes invalidate borrowed selection metadata, not cached
+bodies. Worker metadata remains authoritative for agent/model/variant after a
+native handoff, including same-ID body refreshes. Atomic body publication keeps
+last-good worker selection until refreshed scalar coverage settles. Standalone
+consumers without that port retain their bounded native-header fallback.
 
 Pages and turn detail also carry an ordered `{generation, revision}` version.
 When a caller supplies the page-publication port, a complete clocked body page

@@ -53,6 +53,12 @@ Deno.test("V2 terminal page without an end releases streams and requires a fresh
     const text = page.items[0].parts.find((part) => part.kind === "text");
     assert(text?.kind === "text");
     assertEquals(text.stream, undefined);
+    raw.error = undefined;
+    const refreshed = await transcript.page(id);
+    assertEquals(isAssistantTerminal(refreshed.items[0]), true);
+    assert(refreshed.items[0].role === "assistant");
+    assertEquals(refreshed.items[0].time.completed, undefined);
+    assertEquals(transcript.buffers.snapshot(text.id, id, raw.id), undefined);
     const count = updates.length,
       data = {
         sessionID: "ses_clock",

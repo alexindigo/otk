@@ -7,7 +7,12 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
-import { revealTool, shellRun } from "../../pages/transcript.ts";
+import {
+  openRecord,
+  revealTool,
+  shellOutput,
+  shellRun,
+} from "../../pages/transcript.ts";
 import {
   composerError,
   rejectedComposerInput,
@@ -56,8 +61,24 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Enter");
   // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
   await revealTool(page, shellRun(state, "completed"));
-  await expect(page.locator(shellRun(state, "completed")))
-    .toContainText("otk");
+  await openRecord(page, shellRun(state, "completed"));
+  const output = shellOutput(state, page, "completed");
+  await expect(output).toContainText("otk");
+  // Negative oracle control: keep the echoed command, remove only its output.
+  const body = output;
+  const saved = await body.evaluate((element) => {
+    const html = element.innerHTML;
+    element.replaceChildren();
+    return html;
+  });
+  try {
+    await expect(page.locator(shellRun(state, "completed"))).toContainText(
+      "echo otk",
+    );
+    await expect(output).not.toContainText("otk");
+  } finally {
+    await body.evaluate((element, html) => element.innerHTML = html, saved);
+  }
   await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await prompt(page).press("!");
@@ -73,8 +94,23 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await expect(page.locator(".otk-composer-dock [role=alert]")).toHaveCount(0);
   // The running command holds the one send intent; Send says so.
   await expectPrimaryBlocked(composerSend(page), "Sending");
+  const completedRun = page.locator(shellRun(state, "completed")).filter({
+    hasText: "long-shell-finished",
+  });
+  await expect(completedRun).toBeVisible({ timeout: 60_000 });
+  const completedSource = await completedRun.evaluate((element, selector) => {
+    const message = element.closest("[data-message]")!,
+      row = element.closest("[data-virtual-key]")!;
+    return `[data-message=${
+      JSON.stringify(message.getAttribute("data-message"))
+    }] ` +
+      `[data-virtual-key=${
+        JSON.stringify(row.getAttribute("data-virtual-key"))
+      }] ${selector}`;
+  }, shellRun(state, "completed"));
+  await openRecord(page, completedSource);
   await expect(
-    page.locator(shellRun(state, "completed")).filter({
+    shellOutput(state, page, "completed").filter({
       hasText: "long-shell-finished",
     }),
   ).toBeVisible({ timeout: 60_000 });

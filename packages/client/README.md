@@ -318,7 +318,13 @@ does not choose cross-session grouping or a new persistence lifetime.
 Session composer feedback projects current retained composer failures into the
 same value the notice actually renders. Local feedback wins, cleared or foreign
 observations cannot occupy the view, and the session indicator budgets only that
-displayed pointer.
+displayed pointer. The collection retains the editable next input in
+`state.addition` through `editAdd(patch)`, independently of discovery's captured
+target and label. Closing a presentation does not cancel discovery or reset
+those fields. Independent collections without add-server UI may omit this
+optional state/method contract; `createSidecars` supplies both. Explicit
+cancellation joins the actual transport and retains the edited draft.
+Installation uses the captured attempt, never a later input edit.
 
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
@@ -544,6 +550,20 @@ compose one `SidecarConnection` directly. Navigation accepts an injected
 history/location environment, so its accepted-route model is usable without
 browser globals.
 
+`ConnectionOptions.policy` injects application-owned initial request policy for
+first contact, including a failed very first session read. Checked session and
+welcome policy replace it with target-server authority. `createSidecars`
+forwards that common policy and after-render port to saved remotes, but not the
+local API base or request storage. Independent callers without initial policy
+retain the explicit-policy requirement; there is no library fallback table.
+
+`connect()` returns `ConnectionAttempt`: `checked` with this attempt's auth,
+`failed` with its original cause, or `superseded`. Last-good resources/auth
+remain retained but cannot certify a new attempt. Login and setup propagate
+failed follow-up checks. Cookie advice requires a fresh checked unauthenticated
+result, never a retained earlier sign-in requirement or a reported connection
+failure.
+
 Session routes validate `isSessionID` from the protocol for both session and
 optional root segments. Bare legacy links select no session and the shell
 navigation owner presents the compatibility notice, without native reads.
@@ -715,6 +735,16 @@ session resource, independently of acquired first/last native action boundaries.
 compatibility helpers over those same primitives, including session
 partitioning. Shipped rendering borrows the resource projection instead of
 invoking those whole-list helpers on live frames.
+
+Queued users follow the current active boundary, including native context
+records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
+that shared classification to queue admission and UI presentation. Part-owned
+record settlement updates the same queue; no component owns a second queue.
+Mixed replies retain assistant metadata independently of final source position.
+Context records before or after an assistant remain ordered source segments,
+without replacing its usage, terminal state or action eligibility. Removing the
+last assistant retires that turn's pending membership; context-only groups stay
+context. Ordinary part updates reuse the indexed assistant header.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.
@@ -1226,6 +1256,10 @@ clears them. Removed identities advance their disclosure generation, so an old
 handle cannot change a replacement. `ensure(id, signal?)` supports a view's
 reveal lifetime without creating another body owner or cancelling other
 consumers.
+
+Exhausted `ensure` acquisition reports its known missing-message condition as
+feature-authored feedback, not arbitrary exception prose. A retained reference
+can acquire unloaded source through that same cursor owner.
 
 `interaction.defaultFor(category, prefs)` resolves the neutral category's
 starting state. A disclosure's `expanded(category, prefs, required?)` resolves

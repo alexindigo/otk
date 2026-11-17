@@ -7,8 +7,11 @@ import { messageReadingScenario } from "./message-reading-scenario.ts";
 import { migratedHistoryScenario } from "./migrated-history-scenario.ts";
 import { v1NoticesScenario } from "./v1-notices-scenario.ts";
 import { noticesScenario } from "./notices-scenario.ts";
+import { failureOwnershipScenario } from "./failure-ownership-scenario.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
 import { recordedMessageScenario } from "./recorded-message-scenario.ts";
+import { pendingInventoryScenario } from "./pending-inventory-scenario.ts";
+import { returnAnchorScenario } from "./return-anchor-scenario.ts";
 import { coreBackendFixture } from "./core-backend.ts";
 import { WsClient } from "./ws-client.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -33,10 +36,19 @@ import type {
 
 /** External-backend message contracts retain their original real core/UI owner. */
 export async function messagesScenario(profile: Profile) {
+  if (profile === "contract-messages-failure-ownership") {
+    return await failureOwnershipScenario();
+  }
   if (profile === "contract-messages-v1-notices") {
     return await v1NoticesScenario();
   }
   if (profile === "contract-messages-notices") return await noticesScenario();
+  if (profile === "contract-messages-pending-inventory") {
+    return await pendingInventoryScenario();
+  }
+  if (profile === "contract-messages-return-anchor") {
+    return await returnAnchorScenario();
+  }
   if (profile === "contract-messages-migrated-history") {
     return await migratedHistoryScenario();
   }

@@ -7,7 +7,7 @@ import { Transcript } from "../transcript.ts";
 import { ContentReplay } from "@otk/harness";
 import { Messages } from "../messages.ts";
 import { Client } from "../client.ts";
-import { mapSession } from "../map.ts";
+import { mapMessage, mapPart, mapSession } from "../map.ts";
 import type { Session } from "../types.ts";
 import type { PrefetchPage } from "../message-prefetch.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
@@ -91,6 +91,250 @@ Deno.test("V1 warm point and page metadata borrow current errors without reacqui
     transcript.release();
   }
 });
+
+for (
+  const change of ["text", "reasoning", "remove", "tool", "restart"] as const
+) {
+  Deno.test(`V1 terminal page capture admits ${change} only through its owning authority`, async () => {
+    const settings = cfg(), id = "opcv1-s";
+    const held = Promise.withResolvers<void>(),
+      entered = Promise.withResolvers<void>();
+    const replay = new ContentReplay({
+      ...settings.messages,
+      nonce: () => crypto.randomUUID(),
+      emit() {},
+    });
+    const buffers = new StreamBuffers();
+    const raw: Session = {
+      id: "s",
+      directory: "/p",
+      projectID: "p",
+      title: "S",
+      time: { created: 1, updated: 2 },
+    };
+    const info = {
+      id: "m",
+      sessionID: "s",
+      role: "assistant" as const,
+      parentID: "u",
+      agent: "build",
+      providerID: "p",
+      modelID: "m",
+      time: { created: 1, completed: 2 },
+      finish: "stop",
+    };
+    const transcript = new Transcript({
+      replay,
+      buffers,
+      reader: new Messages(
+        new Client(settings.harness, () =>
+          Promise.resolve(Response.json([{
+            info,
+            parts: [
+              { id: "text", type: "text", text: "Final text." },
+              {
+                id: "reasoning",
+                type: "reasoning",
+                text: "Final reasoning.",
+                time: { start: 1, end: 2 },
+              },
+            ],
+          }]))),
+        () => "/p",
+      ),
+      raw: () => Promise.resolve(raw),
+      info: async (value) => {
+        entered.resolve();
+        await held.promise;
+        return mapSession(value);
+      },
+      decorate: (message) => message,
+      summaries: () => ({}),
+    });
+    const pending = transcript.page(id);
+    await entered.promise;
+    if (change === "remove") {
+      replay.publish(id, { op: "part.remove", messageID: "m", partID: "text" });
+    } else if (change === "tool") {
+      replay.publish(id, {
+        op: "part.upsert",
+        messageID: "m",
+        part: mapPart({
+          id: "tool",
+          sessionID: "s",
+          messageID: "m",
+          type: "tool",
+          tool: "read",
+          callID: "c",
+          state: {
+            status: "completed",
+            input: { filePath: "a" },
+            time: { start: 1, end: 2 },
+          },
+        }),
+      });
+    } else {
+      if (change === "restart") {
+        replay.publish(id, {
+          op: "message.upsert",
+          restart: true,
+          message: mapMessage({
+            ...info,
+            time: { created: 3 },
+            finish: undefined,
+          }, []),
+        });
+      }
+      const part = mapPart({
+        id: change === "reasoning" ? "reasoning" : "text",
+        sessionID: "s",
+        messageID: "m",
+        type: change === "reasoning" ? "reasoning" : "text",
+        text: "Stale stream.",
+        time: { start: 1 },
+      });
+      if (part.kind === "text" || part.kind === "reasoning") {
+        part.stream = buffers.replacement(id, 13);
+      }
+      replay.publish(id, { op: "part.upsert", messageID: "m", part });
+    }
+    held.resolve();
+    const page = await pending, message = page.items[0];
+    if (change === "remove") {
+      assertEquals(message.parts.some((p) => p.id === "text"), false);
+    } else if (change === "tool") {
+      assertEquals(message.parts.some((p) => p.id === "tool"), true);
+    } else {
+      const part = message.parts.find((p) =>
+        p.id === (change === "reasoning" ? "reasoning" : "text")
+      );
+      assertEquals(
+        part && "stream" in part ? part.stream !== undefined : false,
+        change === "restart",
+      );
+      assertEquals(
+        JSON.stringify(part).includes("Stale stream."),
+        change === "restart",
+      );
+    }
+  });
+}
+
+for (const update of ["body", "selection"] as const) {
+  Deno.test(`V1 cached prompt ${update} catchup retains worker selection authority`, async () => {
+    const settings = cfg(), id = "opcv1-s";
+    const replay = new ContentReplay({
+      ...settings.messages,
+      nonce: () => crypto.randomUUID(),
+      emit() {},
+    });
+    const raw: Session = {
+      id: "s",
+      directory: "/p",
+      projectID: "p",
+      title: "S",
+      time: { created: 1, updated: 1 },
+    };
+    const info = {
+      id: "anchor",
+      sessionID: "s",
+      role: "user" as const,
+      agent: "plan",
+      model: { providerID: "fake", modelID: "old" },
+      time: { created: 1 },
+    };
+    const row = {
+      info,
+      parts: [{
+        id: "text",
+        messageID: "anchor",
+        sessionID: "s",
+        type: "text",
+        text: "Original prompt",
+        synthetic: false,
+      }],
+    };
+    let selected = "build", bodies = 0, metadata = 0, armed = false;
+    const selection = () => ({
+      id: "anchor",
+      agent: selected,
+      model: { provider: "fake", model: "current" },
+      variant: "high",
+    });
+    const reader = new Messages(
+      new Client(
+        settings.harness,
+        () => Promise.reject(new Error("Unexpected HTTP")),
+      ),
+      () => "/p",
+    );
+    reader.page = () => {
+      bodies++;
+      return Promise.resolve({ items: [row], next: "older" });
+    };
+    const transcript = new Transcript({
+      replay,
+      reader,
+      buffers: new StreamBuffers(),
+      policy: settings.messages,
+      raw: () => Promise.resolve(raw),
+      info: (value) => Promise.resolve(mapSession(value)),
+      decorate: (message, native) => {
+        if (armed && native.info.id === "anchor") {
+          armed = false;
+          replay.publish(id, {
+            op: "message.upsert",
+            message: mapMessage(info, [{
+              ...row.parts[0],
+              text: "Refreshed prompt",
+            }]),
+          });
+        }
+        return message;
+      },
+      summaries: () => ({}),
+      metadata: () => {
+        metadata++;
+        return Promise.resolve({ boundaries: [], prompt: selection() });
+      },
+      prefetch: () =>
+        Promise.resolve({
+          page: { items: [row] },
+          metadata: { boundaries: [], prompt: selection() },
+        }),
+    });
+    try {
+      const first = await transcript.page(id);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      if (update === "selection") selected = "review";
+      armed = true;
+      let published: import("@otk/protocol").MessagePage | undefined;
+      const page = await transcript.page(
+        id,
+        first.older!,
+        undefined,
+        (value) => published = structuredClone(value),
+      );
+      assertEquals(page.prompt, selection());
+      assertEquals(
+        published?.prompt,
+        { ...selection(), agent: "build" },
+        "body publication retains last-good worker selection until coverage settles",
+      );
+      assertEquals(
+        JSON.stringify(page.items[0].parts).includes("Refreshed prompt"),
+        true,
+      );
+      assertEquals(
+        [bodies, metadata],
+        [1, 2],
+        "only invalidated scalar metadata is reacquired",
+      );
+    } finally {
+      transcript.release();
+    }
+  });
+}
 
 Deno.test("@load @messages standalone demanded miss joins canceled speculative I/O settlement", async () => {
   const settings = cfg();

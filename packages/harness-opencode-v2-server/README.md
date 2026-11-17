@@ -80,6 +80,18 @@ appear through registered global surfaces with project attention. They never
 acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
+Each successful kind/location inventory owns only its own absence facts. Failed
+inventories retain known unresolved identities and payloads for still-loaded
+directories but stale identities never drive needs-you. Failures publish safe
+background-error feedback independently of session errors. A successful
+inventory or reconnect seeding restores fresh pending keys only for
+still-pending requests. A complete loaded-location inventory removes dropped
+directories from both projections and capability payloads, including global
+forms, without settlement tombstones. Reappearing locations may therefore report
+the same unresolved IDs. Explicit settlement and successful empty kind
+inventories retain their existing replay barriers. Metadata-read failure cannot
+prevent an already-known session's request projection from converging.
+
 `V2Stream` owns one subscribed SSE generation. It waits for `server.connected`
 before snapshot reads, stages events under the injected operation/byte budgets,
 deduplicates durable positions and IDs, and pauses its 45-second byte watchdog
@@ -87,6 +99,15 @@ only for owned parser backpressure. Reconnect re-discovers credentials and
 resyncs before readiness. Snapshot acquisition returns a fenced commit; abort
 joins acquisition and event work before closing. Execution facts survive
 decodable frames whose unrelated fields drift. The SDK event queue is unused.
+
+The byte reader owns one outstanding next-chunk read while ordered dispatch is
+backpressured, allowing real HTTP EOF/read failure to retire that generation. It
+does not drain more chunks or parse events concurrently; bootstrap event/byte
+admission is unchanged. Body cancellation joins the owned read before releasing
+its lock. Execution-failure facts and anchor reads borrow that generation's
+signal as well as transcript lifetime, so teardown cannot wait on a read whose
+cancellation was dropped. Ordinary source failures still retain their diagnostic
+and failure record; cancellation does not become a new failure.
 
 The adapter composes scalar connection/index facts with qualified catalog
 capabilities. The worker's `core/digest/providers.ts` selects native codecs,
@@ -266,7 +287,25 @@ Live pages use that same normalized failure row before deriving continuation
 edges, so a full page of failed idles advances without replaying retained rows.
 Historical pending-input reconstruction prefers the journal at the requested
 boundary. An empty stock journal permits current-inbox fallback only at the
-current native edge; later inbox state cannot rewrite an older failure.
+current native edge; later inbox state cannot rewrite an older failure. SQL
+continuations keep native/anchored sequence and unanchored clock acquisition in
+separate domains. The clock scan carries its own physical edge, exhaustion fact
+and at most ten unconsumed request identities. One ten-row batch is fetched only
+after the prior batch drains; reused native pages rehydrate only that bounded
+identity set. Nonprefix presentation selection removes exact qualified
+identities, never a clock prefix guessed from a selected sequence winner.
+Clock-only interpolation remains presentation, never native sequence evidence.
+API fallback continues using its physical timeline index.
+
+The private cursor version binds to session, epoch, cutoff, source and retained
+placement revision. Replacing an existing record's physical index keys advances
+that revision atomically in the same plugin namespace, including
+reclassification and retirement. Body-only updates, new records and unchanged
+evidence do not. This fences both outstanding and in-flight captures without
+retaining history or adding native reads. Revision survives reopen alongside
+indexed records. Cursor validation retains the neutral length bound and rejects
+bodies, duplicate or oversized pending sets and sequence data in clock-only
+edges.
 
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session

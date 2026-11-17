@@ -287,7 +287,7 @@ Deno.test({
           `requests/identity/${encodeURIComponent(target.id)}/${
             encodeURIComponent(form.id)
           }`,
-        ), (row) => !!row && !!JSON.parse(String(row.value)).outcome);
+        ), (row) => !!row && settledRequest(JSON.parse(String(row.value))));
       const page = await ws.rpc<MessagePage>("session.messages", {
         sessionID: target.id,
       });
@@ -317,6 +317,13 @@ Deno.test({
       }
     }),
 });
+// Outcome retention precedes asynchronous placement. Settled-history setup must
+// observe both without acquiring transcript demand or overlapping that change.
+function settledRequest(
+  row: { outcome?: unknown; position?: { basis: string } } | undefined,
+): boolean {
+  return !!row?.outcome && !!row.position && row.position.basis !== "pending";
+}
 /** Read-only view of the plugin's own stored record; never transcript demand. */
 function storedRequest(file: string, sessionID: string, requestID: string) {
   const db = new DatabaseSync(file, { readOnly: true });
@@ -398,10 +405,7 @@ Deno.test({
           Promise.resolve(
             forms.map((id) => storedRequest(state + "/otk.db", target.id, id)),
           ),
-        (rows) =>
-          rows.every((row) =>
-            row?.outcome && row.position?.basis !== "pending"
-          ),
+        (rows) => rows.every(settledRequest),
       );
       const positions = forms.map((id) =>
         storedRequest(state + "/otk.db", target.id, id).position
@@ -461,7 +465,7 @@ Deno.test({
         });
         await waitFor(
           () => Promise.resolve(storedRequest(file, target.id, form.id)),
-          (row) => !!row?.outcome,
+          settledRequest,
         );
         return form.id;
       };

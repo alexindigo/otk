@@ -2,7 +2,7 @@
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
-import { isAssistantTerminal, isCancellation } from "@otk/protocol";
+import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
   createMemo,
@@ -21,7 +21,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
-import { hasActiveRecord } from "./work-log.ts";
+import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
@@ -44,6 +44,7 @@ import {
   type FailureValue,
   failureValue,
   replyKey,
+  RequestFailure,
   revertPresentation,
   sessionComposerFeedback,
   sessionResult,
@@ -154,19 +155,7 @@ export default function SessionView(props: {
   const count = () => projection().messageIDs.length;
   // One in-flow progress per active turn: an unfinished reply owns it;
   // otherwise the turn's newest active native record does.
-  const progressRecord = createMemo(() => {
-    const { messageIDs, messagesByID } = projection();
-    let record: string | undefined;
-    for (let i = messageIDs.length - 1; i >= 0; i--) {
-      const message = messagesByID[messageIDs[i]];
-      if (!message || message.role === "user") break;
-      if (message.role === "assistant" && !isAssistantTerminal(message)) {
-        return undefined;
-      }
-      if (!record && hasActiveRecord(message)) record = message.id;
-    }
-    return record;
-  });
+  const progressRecord = createMemo(() => activeProgressRecord(projection()));
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
@@ -280,20 +269,32 @@ export default function SessionView(props: {
       properties: { messageID: { type: "string" } },
     },
     enabled: (_ctx, target?: { messageID: string }) =>
-      !props.branchHistory?.state.opened && !!target &&
-      !!projection().messagesByID[target.messageID],
+      !props.branchHistory?.state.opened && !!target?.messageID &&
+      (!!projection().messagesByID[target.messageID] || !!props.transcript),
     run: async (_ctx, target: { messageID: string }) => {
       setRevealError(undefined);
       following?.pause();
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
       const message = projection().messagesByID[target.messageID];
-      if (!message) throw new Error("Message is no longer available");
+      if (!message) {
+        throw new RequestFailure({
+          code: "message.missing",
+          retry: "none",
+          diagnosticID: crypto.randomUUID(),
+        });
+      }
       const key = replyKey(message), reply = projection().repliesByID[key];
       await window?.reveal(key, {
         align: "center",
         focus: () => {
           const control = controls.get(reply?.message.id ?? target.messageID);
-          if (!control) throw new Error("Message is no longer available");
+          if (!control) {
+            throw new RequestFailure({
+              code: "message.missing",
+              retry: "none",
+              diagnosticID: crypto.randomUUID(),
+            });
+          }
           control.reveal();
         },
       });
@@ -338,12 +339,14 @@ export default function SessionView(props: {
         region.release = source.attach(element, region.id);
       }
       if (returnAnchor?.messageID && props.transcript) {
-        void props.transcript.ensure(
-          returnAnchor.messageID,
-          lifetime.signal,
-        ).then(async () => {
+        const transcript = props.transcript, follower = following;
+        void follower.restore((signal) =>
+          transcript.ensure(
+            returnAnchor.messageID!,
+            AbortSignal.any([signal, lifetime.signal]),
+          ), async () => {
           lifetime.signal.throwIfAborted();
-          following?.pause();
+          follower.pause();
           await window?.restore(returnAnchor);
         }).catch((error) => {
           if (!isCancellation(error)) {

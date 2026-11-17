@@ -91,6 +91,7 @@ export interface SidecarsOptions {
 export interface SidecarsState {
   list: SidecarState[];
   discovery?: DiscoveryState;
+  addition?: { url: string; label: string };
 }
 export interface ClientSidecars {
   state: SidecarsState;
@@ -99,6 +100,7 @@ export interface ClientSidecars {
   start(): void;
   stop(): void;
   add(value: string, label: string): Promise<string>;
+  editAdd?(patch: Partial<NonNullable<SidecarsState["addition"]>>): void;
   cancelAdd?(): Promise<void>;
   remove(id: string): void;
 }
@@ -112,6 +114,7 @@ export function createSidecars(
     : options.storage;
   const initial = readSidecars(storage, options.diagnostic);
   const { state, update: setState, subscribe } = factory<SidecarsState>({
+    addition: { url: "", label: "" },
     list: initial.map((item) => ({
       ...item,
       status: "connecting",
@@ -205,6 +208,7 @@ export function createSidecars(
         }
         : {
           afterRender: options.connection?.afterRender,
+          policy: options.connection?.policy,
           requests: {
             sidecarId: spec.id,
             serverLabel: spec.label,
@@ -233,6 +237,9 @@ export function createSidecars(
       for (const connection of connections.values()) connection.stop();
     },
     add(value: string, label: string): Promise<string> {
+      setState((draft) => {
+        draft.addition = { url: value, label };
+      });
       if (stopped) {
         return rejected(
           "the entered address",
@@ -317,6 +324,11 @@ export function createSidecars(
       });
       void work.then(deferred.resolve, deferred.reject);
       return deferred.promise;
+    },
+    editAdd(patch) {
+      setState((draft) => {
+        draft.addition = { ...draft.addition!, ...patch };
+      });
     },
     async cancelAdd() {
       const owner = currentDiscovery;

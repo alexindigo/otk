@@ -21,7 +21,11 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
   const state = join(oc.root, "auto-sidecar-state");
   const options = {
     state: { path: state },
-    harness: { url: `http://127.0.0.1:${proxy.port}`, db: oc.db },
+    harness: {
+      url: `http://127.0.0.1:${proxy.port}`,
+      db: oc.db,
+      heartbeattimeout: 180,
+    },
   };
   let server: SidecarTest | undefined, client: WsClient | undefined;
   const connect = async () => {
@@ -140,6 +144,9 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       (rows) => rows.some((row) => row.sessionID === other.nativeID),
       60_000,
     );
+    // Exercise a valid slow boundary beyond the ordinary 25-second byte watchdog.
+    // Traffic must stay frozen through connect and the empty-inventory check.
+    await new Promise((resolve) => setTimeout(resolve, 30_000));
     assertEquals(
       await Deno.stat(join(oc.directory, "unrelated-waits.txt")).then(
         () => true,
@@ -231,6 +238,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     );
     const disconnectedAt = client.frames.length;
     proxy.freeze();
+    proxy.disconnect();
     await waitFor(
       () => client!.frames.slice(disconnectedAt),
       (frames) =>
