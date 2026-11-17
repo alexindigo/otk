@@ -51,6 +51,7 @@ import SharedControls, {
   InteractionFailures,
   LayoutControls,
   LayoutTabs,
+  LazyPreview,
   MetadataPolicy,
   PickerLifetime,
   SecondaryFailures,
@@ -467,6 +468,8 @@ function Consumer(): Element {
 render(
   new URL(location.href).searchParams.has("picker-lifetime")
     ? PickerLifetime
+    : new URL(location.href).searchParams.has("lazy-preview")
+    ? LazyPreview
     : new URL(location.href).searchParams.has("layout-tabs")
     ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("layout-controls")

@@ -15,10 +15,17 @@ export function unknownPartPresentation(part: Part): PartPresentation {
 
 /** Inspection is bounded independently of whether an older producer bounded data. */
 const PREVIEW_BYTES = 16 * 1024;
+function previewText(part: Part) {
+  const source = "source" in part ? part.source : undefined;
+  return source?.preview ?? (part.kind === "external" ? part.data : undefined);
+}
+/** Disclosure availability never materializes or encodes inspection content. */
+export function unknownPartHasPreview(part: Part): boolean {
+  return previewText(part) !== undefined;
+}
 export function unknownPartPreview(part: Part) {
   const source = "source" in part ? part.source : undefined;
-  const text = source?.preview ??
-    (part.kind === "external" ? part.data : undefined);
+  const text = previewText(part);
   if (text === undefined) return;
   const encoded = new TextEncoder().encode(text);
   let end = Math.min(encoded.length, PREVIEW_BYTES);

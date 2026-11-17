@@ -2,6 +2,111 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "contract-messages-public-ui" });
+
+for (const scenario of ["lifetime", "source"] as const) {
+  test(`messages.lazy-preview-${scenario}`, {
+    tag: ["@messages", "@contracts"],
+  }, async ({ isolatedState: state, page }) => {
+    await page.addInitScript(() => {
+      const counts: Record<string, number> = {};
+      Object.assign(window, { previewEncodes: counts });
+      const encode = TextEncoder.prototype.encode;
+      TextEncoder.prototype.encode = function (text) {
+        if (text?.startsWith("OTK_LAZY_PREVIEW_")) {
+          const key = text.slice(17).split(":", 1)[0];
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+        return encode.call(this, text);
+      };
+    });
+    const url = new URL(state.url);
+    url.searchParams.set("lazy-preview", "");
+    await page.goto(url.href);
+    const row = (name: string) =>
+      page.locator(`[data-native-record="${name}"]`);
+    const counts = () =>
+      page.evaluate(() =>
+        (window as unknown as { previewEncodes: Record<string, number> })
+          .previewEncodes
+      );
+    await expect(row("legacy").getByRole("button")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(await counts()).toEqual({});
+    await expect(row("absent").getByRole("button")).toHaveCount(0);
+    if (scenario === "source") {
+      await row("explicit").getByRole("button").click();
+      await expect(row("explicit").locator("pre")).toHaveText(
+        "OTK_LAZY_PREVIEW_explicit:",
+      );
+      await expect(row("explicit")).toContainText(
+        "90000 bytes - Preview truncated",
+      );
+      expect(await counts()).toEqual({ explicit: 1 });
+      await row("empty").getByRole("button").click();
+      await expect(row("empty").locator("pre")).toHaveJSProperty(
+        "textContent",
+        "",
+      );
+      await expect(row("empty")).toContainText("7 bytes - Preview truncated");
+      await page.locator("[data-source-preview]").click();
+      await expect(page.locator("[data-copied-preview]")).toHaveJSProperty(
+        "textContent",
+        "  exact <source>**payload**</source>\n",
+      );
+      expect(await counts()).toEqual({ explicit: 1 });
+      return;
+    }
+    await page.locator("[data-update-preview]").click();
+    await expect(page.locator("[data-preview-generation]")).toHaveText("1");
+    expect(await counts()).toEqual({});
+    await page.locator("[data-mount-preview]").click();
+    await expect(row("legacy")).toHaveCount(0);
+    await page.locator("[data-mount-preview]").click();
+    await expect(row("legacy").getByRole("button")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(await counts()).toEqual({});
+    await row("legacy").getByRole("button").click();
+    const prefix = "OTK_LAZY_PREVIEW_legacy1:";
+    const expected = prefix +
+      "\u20ac".repeat(Math.floor((16384 - prefix.length) / 3));
+    await expect(row("legacy").locator("pre")).toHaveJSProperty(
+      "textContent",
+      expected,
+    );
+    await expect(row("legacy")).toContainText(
+      `${prefix.length + 60000} bytes - Preview truncated`,
+    );
+    expect(await counts()).toEqual({ legacy1: 1 });
+    await row("legacy").getByRole("button").click();
+    await expect(row("legacy").locator("pre")).toHaveCount(0);
+    expect(await counts()).toEqual({ legacy1: 1 });
+    await page.locator("[data-mount-preview]").click();
+    await expect(row("legacy")).toHaveCount(0);
+    await page.locator("[data-mount-preview]").click();
+    await expect(row("legacy").getByRole("button")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(await counts()).toEqual({ legacy1: 1 });
+    await page.locator("[data-update-preview]").click();
+    await expect(page.locator("[data-preview-generation]")).toHaveText("2");
+    expect(await counts()).toEqual({ legacy1: 1 });
+    await row("legacy").getByRole("button").click();
+    await expect(row("legacy").locator("pre")).toContainText(
+      "OTK_LAZY_PREVIEW_legacy2:",
+    );
+    expect(await counts()).toEqual({ legacy1: 1, legacy2: 1 });
+    await row("legacy").getByRole("button").click();
+    await row("legacy").getByRole("button").click();
+    await expect(row("legacy").locator("pre")).toBeVisible();
+    expect(await counts()).toEqual({ legacy1: 1, legacy2: 2 });
+  });
+}
+
 test("messages.public-ui-external-tools-callbacks-isolation", {
   tag: ["@messages", "@contracts", "@composer"],
 }, async ({ isolatedState: state, page }) => {
