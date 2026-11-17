@@ -697,7 +697,8 @@ export class Transcript {
       }
     }
     const settled = raw.type === "assistant" &&
-      (terminal || context.terminal === true || assistantSettled(raw));
+      (terminal || context.terminal === true || assistantSettled(raw) ||
+        this.#finished.get(id)?.has(raw.id) === true);
     if (raw.type === "assistant" && !settled) {
       const current = this.#live.get(raw.id);
       if (current) {

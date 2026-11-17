@@ -7,10 +7,138 @@ import { Transcript } from "../transcript.ts";
 import { ContentReplay } from "@otk/harness";
 import { Messages } from "../messages.ts";
 import { Client } from "../client.ts";
-import { mapSession } from "../map.ts";
+import { mapMessage, mapPart, mapSession } from "../map.ts";
 import type { Session } from "../types.ts";
 import type { PrefetchPage } from "../message-prefetch.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
+
+for (
+  const change of ["text", "reasoning", "remove", "tool", "restart"] as const
+) {
+  Deno.test(`V1 terminal page capture admits ${change} only through its owning authority`, async () => {
+    const settings = cfg(), id = "opcv1-s";
+    const held = Promise.withResolvers<void>(),
+      entered = Promise.withResolvers<void>();
+    const replay = new ContentReplay({
+      ...settings.messages,
+      nonce: () => crypto.randomUUID(),
+      emit() {},
+    });
+    const buffers = new StreamBuffers();
+    const raw: Session = {
+      id: "s",
+      directory: "/p",
+      projectID: "p",
+      title: "S",
+      time: { created: 1, updated: 2 },
+    };
+    const info = {
+      id: "m",
+      sessionID: "s",
+      role: "assistant" as const,
+      parentID: "u",
+      agent: "build",
+      providerID: "p",
+      modelID: "m",
+      time: { created: 1, completed: 2 },
+      finish: "stop",
+    };
+    const transcript = new Transcript({
+      replay,
+      buffers,
+      reader: new Messages(
+        new Client(settings.harness, () =>
+          Promise.resolve(Response.json([{
+            info,
+            parts: [
+              { id: "text", type: "text", text: "Final text." },
+              {
+                id: "reasoning",
+                type: "reasoning",
+                text: "Final reasoning.",
+                time: { start: 1, end: 2 },
+              },
+            ],
+          }]))),
+        () => "/p",
+      ),
+      raw: () => Promise.resolve(raw),
+      info: async (value) => {
+        entered.resolve();
+        await held.promise;
+        return mapSession(value);
+      },
+      decorate: (message) => message,
+      summaries: () => ({}),
+    });
+    const pending = transcript.page(id);
+    await entered.promise;
+    if (change === "remove") {
+      replay.publish(id, { op: "part.remove", messageID: "m", partID: "text" });
+    } else if (change === "tool") {
+      replay.publish(id, {
+        op: "part.upsert",
+        messageID: "m",
+        part: mapPart({
+          id: "tool",
+          sessionID: "s",
+          messageID: "m",
+          type: "tool",
+          tool: "read",
+          callID: "c",
+          state: {
+            status: "completed",
+            input: { filePath: "a" },
+            time: { start: 1, end: 2 },
+          },
+        }),
+      });
+    } else {
+      if (change === "restart") {
+        replay.publish(id, {
+          op: "message.upsert",
+          restart: true,
+          message: mapMessage({
+            ...info,
+            time: { created: 3 },
+            finish: undefined,
+          }, []),
+        });
+      }
+      const part = mapPart({
+        id: change === "reasoning" ? "reasoning" : "text",
+        sessionID: "s",
+        messageID: "m",
+        type: change === "reasoning" ? "reasoning" : "text",
+        text: "Stale stream.",
+        time: { start: 1 },
+      });
+      if (part.kind === "text" || part.kind === "reasoning") {
+        part.stream = buffers.replacement(id, 13);
+      }
+      replay.publish(id, { op: "part.upsert", messageID: "m", part });
+    }
+    held.resolve();
+    const page = await pending, message = page.items[0];
+    if (change === "remove") {
+      assertEquals(message.parts.some((p) => p.id === "text"), false);
+    } else if (change === "tool") {
+      assertEquals(message.parts.some((p) => p.id === "tool"), true);
+    } else {
+      const part = message.parts.find((p) =>
+        p.id === (change === "reasoning" ? "reasoning" : "text")
+      );
+      assertEquals(
+        part && "stream" in part ? part.stream !== undefined : false,
+        change === "restart",
+      );
+      assertEquals(
+        JSON.stringify(part).includes("Stale stream."),
+        change === "restart",
+      );
+    }
+  });
+}
 
 Deno.test("@load @messages standalone demanded miss joins canceled speculative I/O settlement", async () => {
   const settings = cfg();

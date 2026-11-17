@@ -2555,6 +2555,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     const metadata = saved.metadata;
     const settled = this.#turnTerminal(id, turnID);
     const ledger = new UsageLedger(id);
+    const detailTiming = new TurnTimingAccumulator();
     const consume = (row: DigestHeader): UsageMessage | undefined => {
       row = header(row);
       if (
@@ -2564,18 +2565,18 @@ export class OpencodeV1DigestSink implements DigestSink {
         throw new Error("Detailed usage model is unavailable");
       }
       const timing = new TurnTimingAccumulator();
-      timing.add(
-        timingEvidence(
-          {
-            time: {
-              created: row.time_created,
-              completed: row.time_completed ?? undefined,
-            },
+      const evidence = timingEvidence(
+        {
+          time: {
+            created: row.time_created,
+            completed: row.time_completed ?? undefined,
           },
-          row.timing_json ? JSON.parse(row.timing_json) : [],
-          settled || !!row.terminal || row.time_completed !== null,
-        ),
+        },
+        row.timing_json ? JSON.parse(row.timing_json) : [],
+        settled || !!row.terminal || row.time_completed !== null,
       );
+      timing.add(evidence);
+      detailTiming.add(evidence);
       return {
         id: row.message_id,
         turnID: row.turn_id ?? row.message_id,
@@ -2652,7 +2653,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         }
       }}
     const detail = ledger.detail(turnID, saved.summary.revision);
-    detail.summary.timing = derivedValue(this.storage.turn(id, turnID))?.timing;
+    detail.summary.timing = detailTiming.result();
     return detail;
   }
   close(): void {

@@ -730,6 +730,11 @@ function overlay(items: Message[], event: ContentOp): Message[] {
         parts: message.parts.filter((p) => p.id !== event.partID),
       };
     }
+    if (
+      message.role === "assistant" && isAssistantTerminal(message) &&
+      (event.part.kind === "text" || event.part.kind === "reasoning") &&
+      event.part.stream
+    ) return message;
     const parts = message.parts.filter((p) => p.id !== event.part.id);
     parts.push(event.part);
     return { ...message, parts };
