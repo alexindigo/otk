@@ -4,17 +4,63 @@ import {
   type ContextMessage,
   DEFAULT_PREFS,
   type ExternalPart,
+  type Message,
   type Part,
 } from "@otk/protocol";
+import { createTranscriptProjection } from "@otk/client";
 import { PartRegistry } from "../registries/renderers.ts";
-import { hasActiveRecord, messageFrames } from "../components/work-log.ts";
+import {
+  activeProgressRecord,
+  hasActiveRecord,
+  messageFrames,
+} from "../components/work-log.ts";
 import { createMessageLayout } from "../components/message-layout.ts";
 import {
   unknownPartFailure,
+  unknownPartHasPreview,
   unknownPartPresentation,
   unknownPartPreview,
 } from "../components/parts/unknown-part.ts";
 import { createFailurePresenter } from "@otk/client";
+
+Deno.test("fallback inspection availability preserves empty previews and reference ownership without encoding", () => {
+  const encode = TextEncoder.prototype.encode;
+  let encoded = 0;
+  TextEncoder.prototype.encode = function (text) {
+    encoded++;
+    return encode.call(this, text);
+  };
+  try {
+    const part: ExternalPart = {
+      kind: "external",
+      id: "legacy",
+      name: "legacy",
+    };
+    assertEquals(unknownPartHasPreview(part), false);
+    assertEquals(unknownPartHasPreview({ ...part, data: "" }), true);
+    assertEquals(
+      unknownPartHasPreview({ ...part, data: "large".repeat(20_000) }),
+      true,
+    );
+    assertEquals(
+      unknownPartHasPreview({
+        ...part,
+        source: { kind: "empty", preview: "", bytes: 99, truncated: true },
+      }),
+      true,
+    );
+    const referenced = {
+      ...part,
+      data: "legacy",
+      source: { kind: "ref", ref: "owned-reference" },
+    };
+    assertEquals(unknownPartHasPreview(referenced), false);
+    assertEquals(unknownPartPreview(referenced), undefined);
+    assertEquals(encoded, 0);
+  } finally {
+    TextEncoder.prototype.encode = encode;
+  }
+});
 
 Deno.test("failure fallback borrows its remote origin and keeps captured native target facts", () => {
   const part: ExternalPart = {
@@ -271,4 +317,88 @@ Deno.test("only a plugin-reported running record is active work", () => {
   // Unknown is never treated as running.
   assertEquals(hasActiveRecord(record(null)), false);
   assertEquals(hasActiveRecord(record(false)), false);
+});
+
+Deno.test("active record progress skips queued users but respects actual turn and reply ownership", () => {
+  const prompt: Message = {
+    id: "prompt",
+    sessionID: "acmv1-session",
+    role: "user",
+    time: { created: 1 },
+    parts: [],
+  };
+  const running: ExternalPart = {
+    ...part,
+    activity: {
+      ...part.activity!,
+      state: {
+        key: "running",
+        label: "Running",
+        facts: { active: true, terminal: false },
+      },
+    },
+  };
+  const record: ContextMessage = {
+    id: "record",
+    sessionID: "acmv1-session",
+    role: "context",
+    time: { created: 2 },
+    parts: [running],
+  };
+  const queued: Message = { ...prompt, id: "queued", time: { created: 3 } };
+  const owner = createTranscriptProjection();
+  owner.replace([prompt, record, queued]);
+  owner.busy(true);
+  assertEquals([...owner.state.queuedIDs], ["queued"]);
+  assertEquals(activeProgressRecord(owner.state), "record");
+  owner.apply({
+    op: "part.upsert",
+    messageID: "record",
+    part: {
+      ...running,
+      activity: {
+        ...part.activity!,
+        state: {
+          key: "done",
+          label: "Done",
+          facts: { active: false, terminal: true },
+        },
+      },
+    },
+  });
+  assertEquals([...owner.state.queuedIDs], []);
+  assertEquals(activeProgressRecord(owner.state), undefined);
+  owner.replace([prompt, record, queued]);
+  assertEquals(activeProgressRecord(owner.state), "record");
+  const assistant: Message = {
+    id: "assistant",
+    sessionID: "acmv1-session",
+    role: "assistant",
+    replyTo: "prompt",
+    agent: "build",
+    model: { provider: "fake", model: "scripted" },
+    tokens: {
+      input: null,
+      output: null,
+      reasoning: null,
+      cache: { read: null, write: null },
+    },
+    cost: null,
+    time: { created: 1.5 },
+    interrupted: false,
+    parts: [],
+  };
+  owner.merge([assistant]);
+  assertEquals(
+    activeProgressRecord(owner.state),
+    undefined,
+    "unfinished assistant owns the one indicator",
+  );
+  owner.busy(false);
+  assertEquals([...owner.state.queuedIDs], []);
+  assertEquals(
+    activeProgressRecord(owner.state),
+    undefined,
+    "real user boundary stops the scan",
+  );
 });

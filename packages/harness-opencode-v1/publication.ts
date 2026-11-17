@@ -9,6 +9,9 @@ export function connectionPublication(
   return {
     index: sink.index,
     retainedSessions: sink.retainedSessions,
+    error: (value) => {
+      if (!signal.aborted) sink.error?.(value);
+    },
     projectSeeds: (values) => {
       if (!signal.aborted) sink.projectSeeds?.(values);
     },

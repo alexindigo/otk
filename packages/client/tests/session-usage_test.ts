@@ -108,6 +108,157 @@ Deno.test("usage resource merges buffered tool labels, header-only updates and r
   owner.stop();
 });
 const target = { sidecarId: "local", sessionID: "s", turnID: "user" };
+
+Deno.test("detail aggregate timing follows admitted call evidence, not resource lifetime", async () => {
+  const timing = { state: "known", start: 10, end: 20, workingMs: 10 } as const;
+  for (
+    const mutation of [
+      "tokens",
+      "tool",
+      "same",
+      "stale",
+      "restart",
+      "end",
+      "start",
+      "add",
+      "remove",
+      "move",
+    ] as const
+  ) {
+    const first = { ...header(10, true), time: { start: 10, end: 20 }, timing };
+    const base = snapshot(new UsageLedger("s", [first]));
+    base.summary.timing = timing;
+    const owner = createSessionUsage(() =>
+      ({
+        supports: () => true,
+        messages: policy,
+        rpc: { call: () => Promise.resolve(structuredClone(base)) },
+      }) as unknown as SidecarConnection
+    );
+    try {
+      await owner.load(target);
+      assertEquals(owner.priced(target)?.timing, timing);
+      if (mutation === "remove") {
+        owner.receive("local", {
+          t: "content",
+          sessionID: "s",
+          event: { op: "message.remove", messageID: "step" },
+        });
+      } else if (mutation === "tool") {
+        owner.receive("local", {
+          t: "content",
+          sessionID: "s",
+          event: {
+            op: "part.upsert",
+            messageID: "step",
+            part: {
+              kind: "tool",
+              id: "t",
+              call: {
+                tool: "read",
+                callID: "c",
+                status: "completed",
+                path: "a",
+                loaded: [],
+                time: {},
+              },
+            },
+          },
+        });
+      } else {owner.receive("local", {
+          t: "content",
+          sessionID: "s",
+          event: {
+            op: "message.upsert",
+            restart: mutation === "restart",
+            message: {
+              id: mutation === "add" ? "new" : "step",
+              sessionID: "s",
+              role: "assistant",
+              replyTo: mutation === "move" ? "other" : "user",
+              model: first.model,
+              agent: "build",
+              interrupted: false,
+              parts: [],
+              cost: first.cost,
+              tokens: mutation === "tokens" ? header(20).tokens : first.tokens,
+              time: {
+                created: mutation === "start" ? 5 : 10,
+                ...(mutation === "stale"
+                  ? {}
+                  : { completed: mutation === "end" ? 30 : 20 }),
+              },
+            },
+          },
+        });}
+      const retained = mutation === "tokens" || mutation === "tool" ||
+        mutation === "same" || mutation === "stale";
+      assertEquals(
+        owner.get(target)?.summary.timing,
+        retained ? timing : undefined,
+        mutation,
+      );
+      assertEquals(
+        owner.priced(target)?.timing,
+        retained ? timing : undefined,
+        mutation,
+      );
+      if (mutation === "move") assertEquals(owner.get(target)?.calls, []);
+    } finally {
+      owner.stop();
+    }
+  }
+});
+Deno.test("usage detail replay invalidates timing after an admitted buffered restart", async () => {
+  const timing = { state: "known", start: 10, end: 20, workingMs: 10 } as const;
+  const first = { ...header(10, true), time: { start: 10, end: 20 }, timing };
+  const base = snapshot(new UsageLedger("s", [first]));
+  base.summary.timing = timing;
+  const gate = Promise.withResolvers<TurnUsageDetail>();
+  const owner = createSessionUsage(() =>
+    ({
+      supports: () => true,
+      messages: policy,
+      rpc: { call: () => gate.promise },
+    }) as unknown as SidecarConnection
+  );
+  try {
+    const pending = owner.load(target);
+    await Promise.resolve();
+    owner.receive("local", {
+      t: "content",
+      sessionID: "s",
+      event: {
+        op: "message.upsert",
+        restart: true,
+        message: {
+          id: "step",
+          sessionID: "s",
+          role: "assistant",
+          replyTo: "user",
+          agent: "build",
+          model: first.model,
+          tokens: first.tokens,
+          cost: first.cost,
+          time: { created: 30 },
+          interrupted: false,
+          parts: [],
+        },
+      },
+    });
+    gate.resolve(base);
+    await pending;
+    assertEquals(owner.get(target)?.summary.timing, undefined);
+    assertEquals(owner.get(target)?.calls[0].timing, undefined);
+    assertEquals(owner.priced(target)?.timing, undefined);
+    assertEquals(owner.get(target)?.calls[0].time, {
+      start: 30,
+      end: undefined,
+    });
+  } finally {
+    owner.stop();
+  }
+});
 Deno.test("open detail refreshes only for a newer digest revision, never a status upsert or stale digest", async () => {
   const entry = shellEntry("s");
   entry.digest.revision = 7;

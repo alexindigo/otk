@@ -17,6 +17,8 @@ import { ownedAction } from "../keyboard/context.tsx";
 export default function Settings(props: {
   sidecars: SidecarState[];
   discovery?: DiscoveryState;
+  addition?: { url: string; label: string };
+  onEditAdd?(patch: { url?: string; label?: string }): void;
   onCancelAdd?(): Promise<void>;
   onAdd(url: string, label: string): Promise<void>;
   onRemove(id: string): void;
@@ -137,6 +139,7 @@ export default function Settings(props: {
             title="Add server"
             submitLabel="Add server"
             pendingLabel="Checking server…"
+            pending={props.discovery?.pending}
             editableWhilePending
             feedback={props.discovery ? null : undefined}
             onCancel={props.onCancelAdd}
@@ -151,6 +154,9 @@ export default function Settings(props: {
               Base URL<FormInput
                 name="url"
                 type="url"
+                value={props.addition?.url}
+                onInput={(event) =>
+                  props.onEditAdd?.({ url: event.currentTarget.value })}
                 placeholder={defaults()
                   ? `http://computer:${defaults()!.defaultPort}`
                   : undefined}
@@ -158,7 +164,13 @@ export default function Settings(props: {
               />
             </label>
             <label>
-              Label<FormInput name="label" placeholder="Optional name" />
+              Label<FormInput
+                name="label"
+                placeholder="Optional name"
+                value={props.addition?.label}
+                onInput={(event) =>
+                  props.onEditAdd?.({ label: event.currentTarget.value })}
+              />
             </label>
             <Show when={props.discovery}>
               <p>

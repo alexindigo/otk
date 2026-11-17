@@ -563,8 +563,8 @@ export class Transcript {
           ),
         ),
       ];
-      const acquireMetadata = async () => {
-        if (cached?.metadata) return;
+      const acquireMetadata = async (invalidated = false) => {
+        if (cached?.metadata && !invalidated) return;
         if (this.options.metadata) {
           const oldest = page.items.reduce<NativeMessage | undefined>(
             (oldest, row) =>
@@ -733,10 +733,20 @@ export class Transcript {
         });
         return false;
       });
+      let selectionChanged = false;
       for (const { event } of catchup) {
         items = overlay(items, event);
         if (
           event.op === "message.upsert" && event.message.role === "user" &&
+          this.options.metadata
+        ) {
+          // A content header is not the worker's latest selection authority:
+          // native handoffs can carry that selection under another identity.
+          selectionChanged = true;
+        }
+        if (
+          event.op === "message.upsert" && event.message.role === "user" &&
+          !this.options.metadata &&
           (!metadata?.prompt || event.message.id >= metadata.prompt.id)
         ) {
           metadata = {
@@ -752,6 +762,19 @@ export class Transcript {
           throw new HarnessError(
             "capture-stale",
             "Latest prompt changed during page capture",
+          );
+        }
+      }
+      if (!publish && selectionChanged) {
+        await acquireMetadata(true);
+        signal.throwIfAborted();
+        if (
+          owner !== this.#baselines.get(id) ||
+          owner.epoch !== replay.clock(id).epoch
+        ) {
+          throw new HarnessError(
+            "cursor-stale",
+            "Message baseline was replaced",
           );
         }
       }
@@ -801,7 +824,7 @@ export class Transcript {
       if (publish) {
         signal.throwIfAborted();
         publish(result);
-        await acquireMetadata();
+        await acquireMetadata(selectionChanged);
         signal.throwIfAborted();
         if (
           owner !== this.#baselines.get(id) ||
@@ -871,6 +894,11 @@ function overlay(items: Message[], event: ContentOp): Message[] {
         parts: message.parts.filter((p) => p.id !== event.partID),
       };
     }
+    if (
+      message.role === "assistant" && isAssistantTerminal(message) &&
+      (event.part.kind === "text" || event.part.kind === "reasoning") &&
+      event.part.stream
+    ) return message;
     const parts = message.parts.filter((p) => p.id !== event.part.id);
     parts.push(event.part);
     return { ...message, parts };

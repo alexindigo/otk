@@ -60,6 +60,9 @@ export type FormField =
   };
 export interface FormRequest {
   id: string;
+  /** False retains the payload without current user-attention authority.
+   * Omission preserves producers with an authoritative pending list. */
+  fresh?: boolean;
   /** Stable renderer ownership for a form also projected through the question port. */
   presentation?: "question";
   owner: FormOwner;

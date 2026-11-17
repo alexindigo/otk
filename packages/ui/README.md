@@ -51,6 +51,14 @@ Form fills its owning body; AuthColumn and Dialog's `form` role share
 without dispatching IDs. Editor content flexes inside that viewport-bounded
 frame.
 
+Form's optional `pending` input borrows an operation that outlives a mounted
+form; when absent, its local client FormIntent remains authoritative. Busy
+semantics, field locks, action slots and cancellation consume that same input.
+Settings borrows discovery's retained pending value and receives the next
+URL/label draft plus edit callbacks from its consumer. It neither owns discovery
+cancellation on unmount nor imports its consumer. Reopening keeps the captured
+operation and editable next input separate, including a working Cancel action.
+
 `OverflowRow` receives keyed data, required/preferred identities, noninteractive
 measurement content, live content and one overflow-menu callback. Its ordered
 item frames and controls stay mounted in source order; omitted rows are hidden
@@ -132,6 +140,11 @@ facts.
 SessionView renders retained composer feedback in that same ComposerNotice
 before passing it as the session indicator's pointer occupant. SessionError
 cannot reserve an invisible composer pointer of its own.
+
+Reveal availability includes the selected transcript's acquisition port, not
+only already-loaded membership. Missing retained source reports the owner's
+known absence without dropping the draft; acquired source is focused through the
+same MessageControl API.
 
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
@@ -270,6 +283,11 @@ turn's newest active record does. OS reduced motion and the persisted Animations
 off preference replace the shimmer with quiet “response in progress” text
 between flowing rules. The same named status remains available to assistive
 technology in either mode.
+
+The plain `activeProgressRecord` projection borrows canonical `queuedIDs`, so
+queued input cannot hide the active record. Real user boundaries, missing source
+and unfinished assistant ownership still fence the scan; SessionView only binds
+its result. The neutral active-record predicate belongs to the client owner.
 
 Missing-seed recovery is separate plain in-flow text beside the logical reply:
 “Refreshing response…” while source is unaligned, or an unavailable message and
@@ -682,6 +700,14 @@ it through. The existing icon button borrows menu/popover background, border,
 foreground and shadow tokens, so its raised surface separates the arrow from
 underlying text without introducing paint tokens or changing its geometry.
 
+The same viewport intent owner admits return-anchor acquisition through
+`restore(ready, apply)`. Later latest/reveal/input or retirement aborts its
+signal and fences the continuation before it can pause follow or restore an old
+source. SessionView borrows that contract while ensuring an unloaded return
+message; there is no separate component navigation generation or detached
+restore promise. Once accepted, the existing measured window restoration owns
+positioning.
+
 New or changed visible rows hold temporary measurement leases through their
 ancestor windows. The lease ends only after actual DOM size has been recorded,
 so a large code/diff body cannot be recycled using its earlier estimate while
@@ -697,7 +723,12 @@ frames do not establish readiness. An anchor is an intersecting measured leaf
 row, retained together with its enclosing row chain. Estimated spacers locate
 mounting work but never become anchors; entering one retains the adjacent
 measured source until the new content is measured. Solid's flush/settled
-boundary joins its deferred DOM reconciliation to the same geometry commit.
+boundary joins its deferred DOM reconciliation to the same geometry commit. The
+root's shared flow observer also commits DOM-content mutations outside window
+rows, such as loading/control replacement, before another task can observe an
+uncompensated flow. It shares flow leases and the same position application;
+ResizeObserver retains font/CSS size ownership. Neither observer changes reader
+intent or bypasses pending measurement leases.
 
 Reader displacement marks source transfer pending even when the target rows have
 not materialized and no measurement barrier has started yet. The old attachment
@@ -754,9 +785,9 @@ selection; activating one atomically selects and opens that panel through
 `onLayout`. Its selected content unmounts when collapsed; retained interaction
 belongs to the feature's framework-free scope owner.
 
-`Shell({ theme, api })` binds `createShellState({api})` and composes the
-reusable three-region shell with selected UI registrations. The thin Solid
-binding constructs client resource, session-action, input-guard and
+`Shell({ theme, api, policy? })` binds `createShellState({api, policy?})` and
+composes the reusable three-region shell with selected UI registrations. The
+thin Solid binding constructs client resource, session-action, input-guard and
 shell-navigation owners, injects browser confirmation/presence and installs
 split view/tab effects. Shell registers commands, observes frames and renders
 chrome through those ports. `ProjectInbox` renders the shared client projection

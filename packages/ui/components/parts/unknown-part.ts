@@ -38,16 +38,24 @@ export function unknownPartPresentation(part: Part): PartPresentation {
   };
 }
 
+function previewText(part: Part) {
+  const source = "source" in part ? part.source : undefined;
+  if (source?.ref !== undefined) return;
+  return source?.preview ??
+    (part.kind === "external" ? part.data : undefined);
+}
+/** Availability does not encode legacy data or read a plugin Source reference. */
+export function unknownPartHasPreview(part: Part): boolean {
+  return previewText(part) !== undefined;
+}
 /** A producer that predates source references still shows its bounded data. */
 export function unknownPartPreview(part: Part) {
   const source = "source" in part ? part.source : undefined;
-  if (source?.ref !== undefined) return;
-  const text = source?.preview ??
-    (part.kind === "external" ? part.data : undefined);
+  const text = previewText(part);
   if (text === undefined) return;
   return sourcePreview({
     preview: text,
-    bytes: source?.bytes ?? new TextEncoder().encode(text).length,
+    bytes: source?.bytes,
     truncated: !!source?.truncated,
   });
 }

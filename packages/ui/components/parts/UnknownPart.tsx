@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../tools/ToolFrame.css" with { type: "text" };
 import "./UnknownPart.css" with { type: "text" };
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import type { ChildRef } from "@otk/protocol";
 import type { PartProps, PartRegistry } from "../../registries/renderers.ts";
 import {
@@ -13,6 +13,7 @@ import { ChevronIcon } from "../ChromeIcons.tsx";
 import Icon from "../Icon.tsx";
 import {
   unknownPartFailure,
+  unknownPartHasPreview,
   unknownPartPresentation,
   unknownPartPreview,
   unknownPartSource,
@@ -34,7 +35,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     () => activity()?.category ?? "record",
     () => props.prefs,
   );
-  const preview = () => unknownPartPreview(props.part);
+  const preview = createMemo(() =>
+    expanded() ? unknownPartPreview(props.part) : undefined
+  );
   const reference = () => unknownPartSource(props.part);
   const name = () =>
     props.part.kind === "external"
@@ -44,7 +47,8 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       : props.part.kind;
   const details = () =>
     !!(activity()?.state || activity()?.body?.length ||
-      activity()?.parameters?.length || preview() || reference());
+      activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
+      reference());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {

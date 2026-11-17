@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import type { MessagePolicy } from "@otk/protocol";
 import type { V2Client } from "../client.ts";
 import { sourceRef } from "../native-source.ts";
@@ -46,6 +46,11 @@ for (const kind of ["question", "permission"] as const) {
       ? "Keep this question from the inventory"
       : "Keep this permission from the inventory";
     try {
+      await transcript.event({
+        type: "session.step.started",
+        durable: { seq: 20, aggregateID: "ses_fixture" },
+        data: { sessionID: "ses_fixture" },
+      });
       // No live ask: the inventory is the only observation before settlement.
       if (kind === "question") {
         pending.replaceForms(
@@ -99,7 +104,50 @@ for (const kind of ["question", "permission"] as const) {
         new AbortController().signal,
       );
       assert(view.preview.includes(text), view.preview);
-      // A late inventory or ask cannot replace the settled outcome.
+      const requestID = kind === "question" ? "frm_1" : "per_1";
+      const settled = structuredClone(await requests.get(sid, requestID));
+      assert(settled?.outcome);
+      assertEquals(settled.position, { after: 20, rank: 1, basis: "stream" });
+      const positioned = await requests.page(sid, undefined, 10, "sequence");
+      assertEquals(positioned.map((row) => [row.id, row.sourceOrder]), [
+        [`request:${requestID}`, 20.5],
+      ]);
+      // Exercise the real event dispatcher, not just the retention leaf.
+      for (const duplicate of [1, 2]) {
+        const request = {
+          ...settled.request,
+          id: requestID,
+          sessionID: "ses_fixture",
+          late: duplicate,
+        };
+        await transcript.event(
+          kind === "question"
+            ? { type: "form.created", created: 50, data: { form: request } }
+            : { type: "permission.asked", created: 50, data: request },
+        );
+        assertEquals(
+          await requests.get(sid, requestID),
+          settled,
+          "Late native facts cannot replace settled outcome, facts or position",
+        );
+        assertEquals(
+          await requests.page(sid, undefined, 10, "sequence"),
+          positioned,
+        );
+        assertEquals(
+          await transcript.source(
+            sid,
+            sourceRef({
+              origin: "request",
+              id: requestID,
+              path: "",
+            }),
+            new AbortController().signal,
+          ),
+          view,
+        );
+      }
+      // The inventory admission leaf shares that same settled barrier.
       await requests.observe({
         id: kind === "question" ? "frm_1" : "per_1",
         sessionID: sid,
@@ -111,6 +159,44 @@ for (const kind of ["question", "permission"] as const) {
       );
       assert(after?.outcome);
       assert(!JSON.stringify(after.request).includes("late"));
+    } finally {
+      await transcript.stop();
+    }
+  });
+
+  Deno.test(`V2 ${kind} native facts refresh before settlement and admit a distinct identity`, async () => {
+    const requests = new V2RequestRetention();
+    const transcript = new Transcript({
+      requests,
+      client: () => {
+        throw new Error("No native body read expected");
+      },
+      policy,
+      content() {},
+      diagnostic() {},
+      invalidated() {},
+    });
+    try {
+      const requestID = kind === "question" ? "frm_pending" : "per_pending";
+      for (const revision of [1, 2]) {
+        const request = { id: requestID, sessionID: "ses_fixture", revision };
+        await transcript.event(
+          kind === "question"
+            ? { type: "form.created", data: { form: request } }
+            : { type: "permission.asked", data: request },
+        );
+        const stored = await requests.get(sid, requestID);
+        assertEquals(stored?.request, request);
+        assertEquals(stored?.outcome, undefined);
+      }
+      const request = { id: requestID + "_new", sessionID: "ses_fixture" };
+      await transcript.event(
+        kind === "question"
+          ? { type: "form.created", data: { form: request } }
+          : { type: "permission.asked", data: request },
+      );
+      assertEquals((await requests.get(sid, request.id))?.request, request);
+      assertEquals((await requests.get(sid, requestID))?.request?.revision, 2);
     } finally {
       await transcript.stop();
     }

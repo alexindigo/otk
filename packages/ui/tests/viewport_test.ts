@@ -1,6 +1,136 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
+
+Deno.test("current return-source acquisition retains ordinary measured restoration", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    try {
+      let applied = false;
+      const work = owner.restore(async () => {}, async () => {
+        applied = true;
+        owner.keepAnchor();
+        await owner.navigate(
+          () => ({ start: 200, end: 250, measured: true }),
+          "start",
+        );
+      });
+      await Promise.resolve();
+      flush();
+      await work;
+      assertEquals(applied, true);
+      assertEquals(pane.scrollTop, 200);
+      assertEquals(owner.following(), false);
+    } finally {
+      lease.release();
+    }
+  });
+});
+
+for (const order of ["latest-first", "acquisition-first"]) {
+  Deno.test(`pending return-source acquisition is superseded by latest: ${order}`, async () => {
+    await viewportFixture(async ({ pane, flush }) => {
+      const lease = acquireViewport(pane), owner = lease.owner;
+      const prepare = Promise.withResolvers<void>(),
+        ready = Promise.withResolvers<void>();
+      let signal!: AbortSignal, restored = 0;
+      const restore = (owner as typeof owner & {
+        restore?(
+          ready: (signal: AbortSignal) => Promise<void>,
+          apply: () => Promise<void>,
+        ): Promise<void>;
+      }).restore;
+      try {
+        assert(
+          restore,
+          "The viewport intent owner must arbitrate restoration acquisition",
+        );
+        const pending = restore((value) => {
+          signal = value;
+          return prepare.promise;
+        }, () => {
+          restored++;
+          owner.keepAnchor();
+          pane.scrollTop = 200;
+          return Promise.resolve();
+        });
+        const latest = owner.latest(() => ready.promise);
+        assertEquals(signal.aborted, true);
+        if (order === "acquisition-first") {
+          prepare.resolve();
+          await pending;
+        }
+        ready.resolve();
+        await Promise.resolve();
+        flush();
+        await latest;
+        prepare.resolve();
+        await pending;
+        flush();
+        assertEquals(
+          restored,
+          0,
+          "An older continuation cannot pause follow or restore a source",
+        );
+        assertEquals(owner.following(), true);
+        assertEquals(pane.scrollTop, 900);
+      } finally {
+        prepare.resolve();
+        ready.resolve();
+        lease.release();
+      }
+    });
+  });
+}
+
+for (const supersede of ["input", "retire", "navigation"]) {
+  Deno.test(`return-source acquisition is retired by ${supersede}`, async () => {
+    await viewportFixture(async ({ pane, flush }) => {
+      const lease = acquireViewport(pane),
+        owner = lease.owner,
+        prepare = Promise.withResolvers<void>();
+      let applied = false, signal!: AbortSignal;
+      const restore = (owner as typeof owner & {
+        restore?(
+          ready: (signal: AbortSignal) => Promise<void>,
+          apply: () => Promise<void>,
+        ): Promise<void>;
+      }).restore;
+      try {
+        assert(restore);
+        const work = restore((value) => {
+          signal = value;
+          return prepare.promise;
+        }, () => {
+          applied = true;
+          return Promise.resolve();
+        });
+        let navigation: Promise<void> | undefined;
+        if (supersede === "retire") lease.release();
+        else if (supersede === "navigation") {
+          navigation = owner.navigate(() => ({
+            start: 300,
+            end: 400,
+            measured: true,
+          }));
+        } else {
+          const event = new Event("wheel");
+          Object.defineProperty(event, "deltaY", { value: -48 });
+          pane.dispatchEvent(event);
+        }
+        assertEquals(signal.aborted, true);
+        prepare.resolve();
+        await work;
+        flush();
+        await navigation;
+        assertEquals(applied, false);
+      } finally {
+        prepare.resolve();
+        lease.release();
+      }
+    }, { tail: false });
+  });
+}
 
 Deno.test("large native input keeps its displacement when no new measured source is mounted yet", () => {
   viewportFixture(({ pane, height, flush }) => {
@@ -429,6 +559,7 @@ function viewportFixture(
     "requestAnimationFrame",
     "cancelAnimationFrame",
     "ResizeObserver",
+    "MutationObserver",
     "Element",
   ] as const;
   const saved = names.map((name) =>
@@ -475,6 +606,10 @@ function viewportFixture(
       constructor(callback: () => void) {
         resize = callback;
       }
+      observe() {}
+      disconnect() {}
+    },
+    class {
       observe() {}
       disconnect() {}
     },

@@ -8,6 +8,69 @@ import {
   V2RequestRetention,
 } from "../request-retention.ts";
 
+test("V2 placement revision is durable and changes only when an existing index position changes", async () => {
+  const root = await tempDir("v2-request-revision-"), sid = "revision/session";
+  let db = new OtkDb(root, [pluginStorageMigrations], { busyms: 1000 });
+  const revision = (owner: V2RequestRetention) =>
+    (owner as V2RequestRetention & { revision?(id: string): number })
+      .revision?.(sid);
+  try {
+    const own = new PluginStore(db).scope("opencode-v2-server"),
+      owner = new V2RequestRetention();
+    owner.bind(own);
+    assertEquals(revision(owner), 0);
+    const value = {
+      id: "one",
+      sessionID: sid,
+      outcome: {
+        id: "request:one",
+        sessionID: sid,
+        role: "context" as const,
+        time: { created: 50 },
+        parts: [],
+      },
+      position: { after: null, rank: 0, basis: "pending" as const },
+    };
+    await owner.put(value);
+    assertEquals(revision(owner), 0, "Insertion needs no placement reset");
+    await owner.put({
+      ...value,
+      request: { title: "Body only" },
+      position: { after: null, rank: 0, basis: "clock" },
+    });
+    assertEquals(
+      revision(owner),
+      0,
+      "An unchanged physical index remains usable",
+    );
+    await owner.put({
+      ...value,
+      position: { after: 7, rank: 1, basis: "lookup" },
+    });
+    assertEquals(revision(owner), 1);
+    await owner.put({
+      ...value,
+      position: { after: 7, rank: 1, basis: "stream" },
+    });
+    assertEquals(
+      revision(owner),
+      1,
+      "Evidence strengthening does not move a position",
+    );
+    await owner.close();
+    db.close();
+    db = new OtkDb(root, [pluginStorageMigrations], { busyms: 1000 });
+    const reopened = new V2RequestRetention();
+    reopened.bind(new PluginStore(db).scope("opencode-v2-server"));
+    assertEquals(revision(reopened), 1);
+    await reopened.retire(sid, 7);
+    assertEquals(revision(reopened), 2);
+    await reopened.close();
+  } finally {
+    db.close();
+  }
+});
+
 test("V2 request schema survives SQLite reopen and identical hostile-plugin names remain isolated", async () => {
   const root = await tempDir("v2-request-retention-");
   let db = new OtkDb(root, [pluginStorageMigrations], { busyms: 1000 });

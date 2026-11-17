@@ -39,6 +39,8 @@ export type RequestIndex = "timeline" | "sequence" | "unanchored";
 /** V2 owns the record schema, migrations and position indexes. */
 export interface RequestRetention {
   bind(storage: PluginStorage): void;
+  /** Existing index positions replaced since initial insertion, per session. */
+  revision(sessionID: string): number;
   get(sessionID: string, id: string): Promise<RetainedRequest | undefined>;
   put(value: RetainedRequest): Promise<void>;
   /** Pending request facts from any transport; a settled outcome is kept. */
@@ -167,6 +169,16 @@ export class V2RequestRetention implements RequestRetention {
     return keys;
   }
   #replace(previous: RetainedRequest | undefined, value?: RetainedRequest) {
+    if (
+      previous?.outcome &&
+      JSON.stringify(this.#keys(previous).map(([key]) => key)) !==
+        JSON.stringify(value ? this.#keys(value).map(([key]) => key) : [])
+    ) {
+      this.#set(
+        prefix(previous.sessionID, "placement").slice(0, -1),
+        String(this.revision(previous.sessionID) + 1),
+      );
+    }
     if (previous) {
       for (const [key] of this.#keys(previous)) {
         this.#delete(key);
@@ -216,6 +228,9 @@ export class V2RequestRetention implements RequestRetention {
     } catch (error) {
       return Promise.reject(error);
     }
+  }
+  revision(sessionID: string): number {
+    return Number(this.#get(prefix(sessionID, "placement").slice(0, -1)) ?? 0);
   }
   rank(sessionID: string, after: number): number {
     const key = prefix(sessionID, "sequence") + descending(after) + "/",
@@ -276,10 +291,17 @@ export class V2RequestRetention implements RequestRetention {
   }
   remove(sessionID: string): Promise<void> {
     for (
-      const kind of ["identity", "timeline", "sequence", "unanchored", "cutoff"]
+      const kind of [
+        "identity",
+        "timeline",
+        "sequence",
+        "unanchored",
+        "cutoff",
+        "placement",
+      ]
     ) {
       for (;;) {
-        const rows = kind === "cutoff"
+        const rows = kind === "cutoff" || kind === "placement"
           ? [prefix(sessionID, kind).slice(0, -1)].filter((k) =>
             this.#get(k) !== undefined
           ).map((key) => ({ key }))

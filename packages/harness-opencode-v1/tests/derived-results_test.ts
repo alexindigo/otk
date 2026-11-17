@@ -219,6 +219,57 @@ Deno.test("V1 covered turn and opened detail share working time, excluding resum
   }
 });
 
+Deno.test("V1 opened detail derives timing from its admitted fresh calls, not an older turn summary", async () => {
+  const f = await fixture();
+  try {
+    f.seed("a", 1000, {
+      providerID: "p",
+      modelID: "m",
+      time: { created: 1000, completed: 1500 },
+    });
+    await f.scan();
+    const stored = structuredClone(f.turns.u);
+    f.rows[0].info.time = { created: 1000, completed: 4000 };
+    f.rows[0].parts.push({
+      id: "q",
+      type: "tool",
+      tool: "question",
+      state: {
+        status: "completed",
+        time: { start: 2000, end: 3000 },
+      },
+    });
+    f.seed("b", 1500, {
+      providerID: "p",
+      modelID: "m",
+      time: { created: 1500, completed: 3500 },
+    });
+    const detail = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(detail.calls.length, 2);
+    assertEquals(detail.summary.timing, {
+      state: "known",
+      start: 1000,
+      end: 4000,
+      workingMs: 1500,
+    });
+    assertEquals(
+      f.turns.u,
+      stored,
+      "detail must not mutate committed coverage",
+    );
+    f.rows[0].info.time = { created: 1000 };
+    const unknown = await f.sink.detail(id, "u", new AbortController().signal);
+    assertEquals(unknown.summary.timing, {
+      state: "unknown",
+      start: 1000,
+      terminal: true,
+      reason: "missing-end",
+    });
+  } finally {
+    f.close();
+  }
+});
+
 Deno.test("V1 source-only rebuild renews every retained turn witness across pages", async () => {
   const f = await fixture();
   try {
