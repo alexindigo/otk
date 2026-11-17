@@ -927,8 +927,21 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
       1,
       "admitted chunk drains; its successor waits for idle",
     );
+    const successorStarted = performance.now(),
+      requiredWindowMs = native.settings.digest.idlems + 50;
     native.release();
     await parked;
+    await waitFor(
+      () => performance.now() - successorStarted,
+      (elapsed) => elapsed >= requiredWindowMs,
+    );
+    const successorWindowMs = performance.now() - successorStarted;
+    assert(
+      successorWindowMs >= requiredWindowMs,
+      `successor ingress observation ended before its idle boundary: ${
+        JSON.stringify({ successorWindowMs, requiredWindowMs })
+      }`,
+    );
     await stopIngress();
     await waitFor(
       () => [...app.index.values()].every((e) => e.digest.state === "ready"),
@@ -939,6 +952,8 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
       activeRequests: responses.length + 1,
       optionalDuringRequests: 0,
       firstChunkReads: 1,
+      successorWindowMs,
+      requiredWindowMs,
       finalReads: native.reads(),
       parallel: native.settings.digest.parallel,
     });
