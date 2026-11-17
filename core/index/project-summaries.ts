@@ -7,12 +7,12 @@ import {
   type ProjectTopology,
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
-import { ProjectIdentity } from "./project-identity.ts";
+import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
   readonly values = new Map<string, ProjectSummary>();
-  #sessions = new Map<string, IndexMetadata>();
+  #sessions = new Map<string, { entry: IndexMetadata; leaf: string }>();
   #repoSessions = new Map<string, Set<string>>();
   #projects = new Map<string, Map<string, IndexMetadata>>();
   #facts = new Map<
@@ -44,6 +44,7 @@ export class ProjectSummaries {
   #authority: ProjectSummary["authority"] = "unknown";
   #catalog = false;
   #known = new Set<string>();
+  #retained = new Set<string>();
   #seeds = new Map<string, import("@otk/harness").ProjectSeed>();
   #leafSeeds = new Map<
     string,
@@ -63,48 +64,52 @@ export class ProjectSummaries {
   seed(
     values: readonly import("@otk/harness").ProjectSeed[],
   ): readonly IndexMetadata[] {
-    const repos = new Set<string>(), dirty = new Set<string>();
-    for (const value of values) {
-      const before = this.#seeds.get(value.directory);
-      if (
-        JSON.stringify(before?.identities) !== JSON.stringify(value.identities)
-      ) {
-        for (
-          const fact of [...before?.identities ?? [], ...value.identities ?? []]
-        ) repos.add(fact.repoID);
-      }
-      dirty.add(this.leaf(value.directory));
-      if (JSON.stringify(before?.topology) !== JSON.stringify(value.topology)) {
-        for (const topology of [before?.topology, value.topology]) {
-          if (!topology) continue;
-          repos.add(topology.repoID);
-          dirty.add(topology.canonicalRoot);
-          dirty.add(topology.leafDirectory);
-        }
-      }
-    }
-    const affected = [...repos].flatMap((
-      repo,
-    ) => [...this.#repoSessions.get(repo) ?? []]);
-    const previousLeaves = new Map(affected.map((id) => {
-      const entry = this.#sessions.get(id)!;
-      return [id, this.leaf(entry.directory, entry.projectID)];
-    }));
-    this.identity.learn(values);
+    const dirty = new Set(values.map((value) => this.leaf(value.directory)));
+    const change = this.identity.learn(values);
     this.#seeded = true;
-    for (const id of affected) {
-      const entry = this.#sessions.get(id)!;
-      const directory = previousLeaves.get(id)!;
-      this.#contribute(entry, -1, directory);
-      this.#projects.get(directory)?.delete(id);
-      dirty.add(directory);
-    }
     for (const value of values) {
       this.#seeds.set(value.directory, {
         ...value,
         hasSessions: value.hasSessions ??
           this.#seeds.get(value.directory)?.hasSessions,
       });
+    }
+    const affected = this.#reconcile(change, dirty);
+    for (const seed of values) dirty.add(this.leaf(seed.directory));
+    this.#flush(dirty);
+    this.retain(this.#known);
+    return affected;
+  }
+  /** Both native seeds and recorded roots revise the same shared projection. */
+  #reconcile(change: IdentityChange, dirty: Set<string>): IndexMetadata[] {
+    for (const directory of change.directories) dirty.add(directory);
+    const affected = new Set(
+      [...change.repos].flatMap((
+        repo,
+      ) => [...this.#repoSessions.get(repo) ?? []]),
+    );
+    for (const id of affected) {
+      const row = this.#sessions.get(id)!;
+      const leaf = this.leaf(row.entry.directory, row.entry.projectID);
+      if (leaf === row.leaf) continue;
+      this.#contribute(row.entry, -1, row.leaf);
+      this.#projects.get(row.leaf)?.delete(id);
+      dirty.add(row.leaf);
+      row.leaf = leaf;
+      const entries = this.#projects.get(leaf) ?? new Map();
+      entries.set(id, row.entry);
+      this.#projects.set(leaf, entries);
+      this.#contribute(row.entry, 1, leaf);
+      dirty.add(leaf);
+    }
+    for (const [leaf, seeds] of this.#leafSeeds) {
+      for (const scope of seeds.keys()) {
+        const next = this.leaf(scope);
+        if (next !== leaf) {
+          dirty.add(leaf);
+          dirty.add(next);
+        }
+      }
     }
     this.#topology.clear();
     for (const topology of this.identity.topologies()) {
@@ -130,28 +135,23 @@ export class ProjectSummaries {
         });
       }
     }
-    // Reparent only affected repos; count-only seeds never traverse sessions.
-    // Session/task identities and persisted marks retain their exact scope.
-    for (const id of affected) {
-      const entry = this.#sessions.get(id)!;
-      const directory = this.leaf(entry.directory, entry.projectID);
-      const project = this.#projects.get(directory) ?? new Map();
-      project.set(entry.id, entry);
-      this.#projects.set(directory, project);
-      this.#contribute(entry, 1);
-      dirty.add(directory);
-    }
-    for (const seed of values) {
-      dirty.add(this.leaf(seed.directory));
+    this.#retained = new Set(
+      [...this.#known].map((directory) => this.leaf(directory)),
+    );
+    return [...affected].map((id) => this.#sessions.get(id)!.entry);
+  }
+  #flush(dirty: Set<string>): void {
+    for (const directory of dirty) {
+      const parent = this.#topology.get(directory)?.parentDirectory;
+      if (parent) dirty.add(parent);
     }
     for (const directory of dirty) {
       if (!this.#projects.has(directory)) {
         this.#projects.set(directory, new Map());
       }
-      this.#update(directory);
+      this.#update(directory, false);
     }
-    this.retain(this.#known);
-    return affected.map((id) => this.#sessions.get(id)!);
+    for (const directory of dirty) this.#publish(directory);
   }
   constructor(
     readonly marks: (id: string) => { seen: number; finish: number },
@@ -163,6 +163,7 @@ export class ProjectSummaries {
   ensure(directory: string): void {
     this.#known.add(directory);
     directory = this.leaf(directory);
+    this.#retained.add(directory);
     if (!this.#projects.has(directory)) {
       this.#projects.set(directory, new Map());
     }
@@ -170,10 +171,13 @@ export class ProjectSummaries {
   }
   retain(directories: Iterable<string>): void {
     this.#known = new Set(directories);
+    this.#retained = new Set(
+      [...this.#known].map((directory) => this.leaf(directory)),
+    );
     for (const directory of this.#known) this.ensure(directory);
     for (const [directory, entries] of this.#projects) {
       if (
-        entries.size || this.#known.has(directory) ||
+        entries.size || this.#retained.has(directory) ||
         this.#leafSeeds.has(directory) || this.#leaves.has(directory) ||
         this.#locationForms[directory]
       ) {
@@ -193,54 +197,53 @@ export class ProjectSummaries {
     if (value !== "stale") this.#catalog = true;
     this.refresh();
   }
-  entry(entry: IndexMetadata): void {
+  entry(entry: IndexMetadata): readonly IndexMetadata[] {
     const before = this.#sessions.get(entry.id);
-    if (JSON.stringify(before) === JSON.stringify(entry)) return;
-    const previousLeaf = before &&
-      this.leaf(before.directory, before.projectID);
-    this.identity.remember(
+    if (JSON.stringify(before?.entry) === JSON.stringify(entry)) return [];
+    const change = this.identity.remember(
       entry.directory,
       entry.projectID,
       entry.checkoutRoot,
     );
     if (before) {
-      this.#repoSessions.get(before.projectID)?.delete(entry.id);
-      this.#contribute(before, -1, previousLeaf);
-      this.#projects.get(previousLeaf!)?.delete(
+      this.#repoSessions.get(before.entry.projectID)?.delete(entry.id);
+      this.#contribute(before.entry, -1, before.leaf);
+      this.#projects.get(before.leaf)?.delete(
         entry.id,
       );
     }
-    this.#sessions.set(entry.id, entry);
+    const directory = this.leaf(entry.directory, entry.projectID);
+    this.#sessions.set(entry.id, { entry, leaf: directory });
     const repo = this.#repoSessions.get(entry.projectID) ?? new Set();
     repo.add(entry.id);
     this.#repoSessions.set(entry.projectID, repo);
-    const directory = this.leaf(entry.directory, entry.projectID);
     const project = this.#projects.get(directory) ?? new Map();
     project.set(entry.id, entry);
     this.#projects.set(directory, project);
-    this.#contribute(entry, 1);
-    if (previousLeaf && previousLeaf !== directory) {
-      this.#update(previousLeaf);
-    }
-    this.#update(directory);
+    this.#contribute(entry, 1, directory);
+    const dirty = new Set([directory, ...before ? [before.leaf] : []]);
+    const affected = change.repos.size ? this.#reconcile(change, dirty) : [];
+    this.#flush(dirty);
+    if (change.repos.size) this.retain(this.#known);
+    return affected;
   }
   remove(id: string): void {
     const before = this.#sessions.get(id);
     if (!before) return;
-    this.#contribute(before, -1);
+    this.#contribute(before.entry, -1, before.leaf);
     this.#sessions.delete(id);
-    this.#repoSessions.get(before.projectID)?.delete(id);
-    const directory = this.leaf(before.directory, before.projectID);
+    this.#repoSessions.get(before.entry.projectID)?.delete(id);
+    const directory = before.leaf;
     this.#projects.get(directory)?.delete(id);
     this.#update(directory);
     this.retain(this.#known);
   }
   mark(id: string): void {
-    const entry = this.#sessions.get(id);
-    if (entry) {
-      this.#contribute(entry, -1);
-      this.#contribute(entry, 1);
-      this.#update(this.leaf(entry.directory, entry.projectID));
+    const row = this.#sessions.get(id);
+    if (row) {
+      this.#contribute(row.entry, -1, row.leaf);
+      this.#contribute(row.entry, 1, row.leaf);
+      this.#update(row.leaf);
     }
   }
   permissions(lookup: (id: string) => number): void {
@@ -248,16 +251,14 @@ export class ProjectSummaries {
     this.refresh();
   }
   refresh(): void {
-    for (const entry of this.#sessions.values()) {
-      this.#contribute(entry, -1);
-      this.#contribute(entry, 1);
+    for (const row of this.#sessions.values()) {
+      this.#contribute(row.entry, -1, row.leaf);
+      this.#contribute(row.entry, 1, row.leaf);
     }
     for (const directory of this.#projects.keys()) this.#update(directory);
   }
-  #contribute(entry: IndexMetadata, sign: 1 | -1, previousLeaf?: string): void {
+  #contribute(entry: IndexMetadata, sign: 1 | -1, directory: string): void {
     if (entry.deleted) return;
-    const directory = previousLeaf ??
-      this.leaf(entry.directory, entry.projectID);
     let totals = this.#totals.get(directory);
     if (!totals) {
       totals = {
@@ -300,7 +301,7 @@ export class ProjectSummaries {
       this.#facts.delete(entry.id);
     }
   }
-  #update(directory: string): void {
+  #update(directory: string, publish = true): void {
     const topology = this.identity.topology(directory);
     if (topology) {
       this.#topology.set(directory, topology);
@@ -317,7 +318,7 @@ export class ProjectSummaries {
           parentDirectory: undefined,
         });
         this.#projects.set(topology.canonicalRoot, new Map());
-        this.#update(topology.canonicalRoot);
+        this.#update(topology.canonicalRoot, publish);
       }
     }
     const entries = this.#projects.get(directory)!;
@@ -398,6 +399,7 @@ export class ProjectSummaries {
         : {}),
     };
     this.#direct.set(directory, summary);
+    if (!publish) return;
     this.#publish(directory);
     const parent = summary.topology?.parentDirectory;
     if (parent) this.#publish(parent);
@@ -451,8 +453,7 @@ export class ProjectSummaries {
     if (
       this.#seeded && summary.hasSessions === false &&
       !summary.locationForms &&
-      !this.#known.has(directory) &&
-      !summary.scopes?.some((scope) => this.#known.has(scope)) &&
+      !this.#retained.has(directory) &&
       !this.#projects.get(directory)?.size
     ) {
       if (this.values.delete(directory)) this.retire(directory);

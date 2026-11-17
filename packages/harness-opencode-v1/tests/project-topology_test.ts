@@ -70,3 +70,29 @@ Deno.test("grouped V1 reads retain distinct native owners sharing a path", () =>
     db.close();
   }
 });
+
+Deno.test("populated exact inventory roots retain registered owners without sessions but nested scopes do not infer them", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(
+      "CREATE TABLE session(project_id TEXT,directory TEXT,time_updated INTEGER); INSERT INTO session VALUES('one','/shared',1),('one','/shared/src',2)",
+    );
+    const rows = projectSeeds(db, "", 10, undefined, [{
+      id: "one",
+      worktree: "/one",
+      sandboxes: ["/shared"],
+    }, { id: "two", worktree: "/two", sandboxes: ["/shared"] }]);
+    assertEquals(rows[0].identities?.map((r) => r.repoID).sort(), [
+      "one",
+      "two",
+    ]);
+    assertEquals(
+      rows[0].identities?.find((r) => r.repoID === "one")?.recordedRoot,
+      null,
+      "native NULL evidence remains native",
+    );
+    assertEquals(rows[1].identities?.map((r) => r.repoID), ["one"]);
+  } finally {
+    db.close();
+  }
+});
