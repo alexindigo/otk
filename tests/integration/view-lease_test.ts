@@ -6,6 +6,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
+import { createInbox, Rpc } from "@otk/client";
 
 test("@load @attention attention leases contain only pending user requests and routing metadata when unrelated population doubles", async () => {
   const permission = {
@@ -382,3 +383,157 @@ test("@load @transport view leases exclude unrelated sessions and fence replacem
     await app.app.stop();
   }
 });
+
+for (const admission of ["attention", "task"]) {
+  test(`late index admission through ${admission} replays known facts without a later mutation or recovery`, async () => {
+    const app = await coreBackendFixture(await fixture());
+    const recovery: unknown[] = [];
+    const client = new WsClient(app.url),
+      rpc = new Rpc((frame) => recovery.push(frame)),
+      consumer = createInbox(rpc);
+    const send = client.send.bind(client), held: unknown[] = [];
+    let hold = true;
+    client.send = (frame) => {
+      if (hold && (frame as { t?: string }).t === "index.applied") {
+        held.push(frame);
+      } else send(frame);
+    };
+    const receive = (data: { toString(): string }) =>
+      consumer.receive(JSON.parse(data.toString()));
+    client.ws.on("message", receive);
+    try {
+      const seed = app.app.index.getMetadata("tstv1-core")!;
+      const child = {
+        ...seed,
+        id: "tstv1-late-known",
+        title: "Late known facts",
+        status: "idle" as const,
+        activity: {
+          terminal: 0,
+          work: { keys: [], fresh: true },
+          inputs: { keys: [], fresh: true },
+          permissions: { keys: [], fresh: true },
+        },
+      };
+      app.app.index.upsertMetadata(child);
+      const unrelated = {
+        ...child,
+        id: "tstv1-unrelated-known",
+        directory: "/outside-scope",
+        activity: {
+          ...child.activity,
+          terminal: 200,
+          inputs: { keys: ["unrelated-question"], fresh: true },
+        },
+      };
+      app.app.index.upsertMetadata(unrelated);
+      app.app.backend.core.identities = (ids) =>
+        Promise.resolve(
+          ids.flatMap((id) => app.app.index.getMetadata(id) ?? []),
+        );
+      await client.connect(seed.directory, seed.id);
+      await client.wait((frame) => frame.t === "inbox.snapshot");
+      assert(held.length > 0, "the initial index chunk must still own credit");
+      assertEquals(consumer.state.inbox.supervision?.[child.id], undefined);
+      const active = {
+        ...child,
+        activity: {
+          ...child.activity,
+          terminal: 100,
+          inputs: {
+            keys: admission === "attention" ? ["known-question"] : [],
+            fresh: true,
+          },
+        },
+      };
+      app.app.index.upsertMetadata(active);
+      await client.rpc("sessions.seen", { sessionID: child.id, terminal: 100 });
+      await client.rpc("prefs.get", {});
+      assertEquals(
+        client.frames.some((frame) =>
+          frame.t === "index.patch" &&
+          frame.ops.some((op) => op.op === "upsert" && op.entry.id === child.id)
+        ),
+        false,
+      );
+      hold = false;
+      for (const frame of held.splice(0)) send(frame);
+      if (admission === "task") {
+        await client.rpc("tasks.create", {
+          directory: child.directory,
+          name: "Known session task",
+          sessions: [child.id],
+        });
+      }
+      await client.wait((frame) =>
+        frame.t === "index.patch" &&
+        frame.ops.some((op) => op.op === "upsert" && op.entry.id === child.id)
+      );
+      await client.rpc("prefs.get", {});
+      assertEquals(consumer.state.inbox.finishes[child.id], 100);
+      assertEquals(consumer.state.inbox.seen[child.id], 100);
+      assertEquals(consumer.state.inbox.supervision?.[child.id], {
+        state: admission === "attention" ? "needsYou" : "none",
+        terminal: 100,
+      });
+      if (admission === "task") {
+        assertEquals(
+          consumer.state.inbox.tasks.some((task) =>
+            task.sessions.includes(child.id)
+          ),
+          true,
+        );
+      }
+      assertEquals(consumer.state.inbox.finishes[unrelated.id], undefined);
+      assertEquals(consumer.state.inbox.supervision?.[unrelated.id], undefined);
+      const at = client.frames.length;
+      app.app.index.upsertMetadata({
+        ...active,
+        title: "Same known facts, changed title",
+      });
+      await client.wait((frame) =>
+        frame.t === "index.patch" &&
+        frame.ops.some((op) =>
+          op.op === "upsert" &&
+          op.entry.title === "Same known facts, changed title"
+        )
+      );
+      await client.rpc("prefs.get", {});
+      assertEquals(
+        client.frames.slice(at).flatMap((frame) =>
+          frame.t === "inbox.patch"
+            ? frame.ops.filter((op) =>
+              "sessionID" in op && op.sessionID === child.id
+            )
+            : []
+        ),
+        [],
+        "unchanged admitted facts must not replay twice",
+      );
+      let revision = 0;
+      for (const frame of client.frames) {
+        if (frame.t === "inbox.snapshot") revision = frame.revision;
+        if (frame.t === "inbox.patch") {
+          assertEquals(
+            frame.from,
+            revision,
+            "recipient publications must stay contiguous",
+          );
+          assertEquals(frame.revision, frame.from + frame.ops.length);
+          revision = frame.revision;
+        }
+      }
+      assertEquals(
+        recovery,
+        [],
+        "admission must not rely on inbox.get recovery",
+      );
+    } finally {
+      client.ws.off("message", receive);
+      consumer.stop();
+      rpc.close();
+      await client.close();
+      await app.app.stop();
+    }
+  });
+}
