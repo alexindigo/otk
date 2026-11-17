@@ -2,6 +2,8 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import * as client from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
+import { fixtureRequests } from "../../../tests/support/request-wire.ts";
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import {
   shellEntry,
   shellFixture,
@@ -119,6 +121,7 @@ Deno.test("default requests capture the clicked project before deferred UI state
 function fixture(
   hash = "#/local/tstv1-selected",
   factory?: client.StateFactory,
+  preferencesReady = true,
 ) {
   const f = shellFixture({
       selected: "tstv1-selected",
@@ -180,7 +183,9 @@ function fixture(
       return consent;
     },
   });
-  f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+  if (preferencesReady) {
+    f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+  }
   navigation.start();
   f.calls.length = 0;
   return {
@@ -201,6 +206,20 @@ function fixture(
       location.hash = next;
       listener?.();
     },
+    welcome(server = "local", reconnect = true) {
+      const item = f.servers.state.list.find((item) => item.id === server)!;
+      if (reconnect) item.connectionVersion = (item.connectionVersion ?? 0) + 1;
+      f.resources.receive(server, {
+        t: "welcome",
+        protocol: 17,
+        requests: fixtureRequests(),
+        messages: fixtureMessagePolicy,
+        sidecar: {
+          version: "test",
+          harness: { kind: "test", version: "1", url: "http://127.0.0.1" },
+        },
+      });
+    },
     stop() {
       navigation.stop();
       f.resources.stop();
@@ -208,6 +227,219 @@ function fixture(
     },
   };
 }
+
+Deno.test("failed project default retries on welcome without a new navigation intent", async () => {
+  const f = fixture(), held = Promise.withResolvers<string | undefined>();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return reads === 1 ? held.promise : Promise.resolve("tstv1-other");
+  };
+  try {
+    f.external("#project/local/%2Fp");
+    f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+    assertEquals(reads, 1, "a pending attempt is joined");
+    held.reject(new Error("disconnected default"));
+    await settled();
+    f.welcome();
+    await settled();
+    assertEquals(reads, 2);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    assertEquals(f.navigation.state.error, "");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("completed empty project defaults are not replayed by view observations or welcomes", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return Promise.resolve(undefined);
+  };
+  try {
+    f.external("#project/local/%2Fp");
+    await settled();
+    for (let i = 0; i < 3; i++) {
+      f.navigation.observeView({
+        directory: "/p",
+        loading: false,
+        settings: false,
+        connected: true,
+        finish: 0,
+      });
+      await settled();
+    }
+    f.welcome();
+    await settled();
+    assertEquals(reads, 1, "successful empty lookup consumes this intent");
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(reads, 2, "an explicit click starts a new intent");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("failed project defaults wait for their own connection advance, not ordinary view or unrelated welcome", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return reads === 1
+      ? Promise.reject(new Error("held generation failed"))
+      : Promise.resolve(undefined);
+  };
+  try {
+    f.external("#project/local/%2Fp");
+    await settled();
+    assert(f.navigation.state.error);
+    f.navigation.observeView({
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    await settled();
+    assertEquals(
+      reads,
+      1,
+      "a failed attempt is not a view-triggered retry loop",
+    );
+    f.welcome("remote");
+    await settled();
+    assertEquals(reads, 1, "another server cannot retry this default");
+    f.welcome("local", false);
+    await settled();
+    assertEquals(reads, 1, "duplicate welcome is not another connection");
+    f.welcome();
+    await settled();
+    assertEquals(reads, 2);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("successful empty project default recovery clears its old lookup failure", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return reads === 1
+      ? Promise.reject(new Error("default lookup failed"))
+      : Promise.resolve(undefined);
+  };
+  try {
+    f.external("#project/local/%2Fp");
+    await settled();
+    assert(f.navigation.state.error);
+    f.welcome();
+    await settled();
+    assertEquals(reads, 2);
+    assertEquals(f.navigation.state.error, "", "empty success is recovery too");
+    assertEquals(f.session.state.selection, undefined);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("connection advance during a pending default is joined once if that lookup then fails", async () => {
+  const f = fixture(), held = Promise.withResolvers<string | undefined>();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return reads === 1 ? held.promise : Promise.resolve("tstv1-other");
+  };
+  try {
+    f.external("#project/local/%2Fp");
+    f.welcome();
+    assertEquals(reads, 1, "pending lookup remains joined");
+    held.reject(new Error("old pending lookup failed"));
+    await settled();
+    assertEquals(reads, 2, "failure observes the already advanced connection");
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    assertEquals(f.navigation.state.error, "");
+    f.welcome();
+    await settled();
+    assertEquals(reads, 2);
+  } finally {
+    f.stop();
+  }
+});
+
+for (const superseded of [false, true]) {
+  for (const deferred of [false, true]) {
+    Deno.test(`same-project default intent waits for preferences${superseded ? " and respects a newer route" : ""}${deferred ? " with deferred view state" : ""}`, async () => {
+      const f = fixture(
+        undefined,
+        deferred
+          ? (initial) => ({ ...client.createState(initial), update() {} })
+          : undefined,
+        false,
+      );
+      const targets: unknown[] = [];
+      f.resources.projectSession = (target) => {
+        targets.push({ ...target });
+        return Promise.resolve("tstv1-other");
+      };
+      try {
+        f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+        assertEquals(targets, []);
+        if (superseded) {
+          f.navigation.navigate({
+            sidecarId: "local",
+            sessionID: "tstv1-selected",
+          });
+        }
+        f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+        await settled();
+        assertEquals(
+          targets,
+          superseded ? [] : [{ sidecarId: "local", directory: "/p" }],
+        );
+        assertEquals(
+          f.session.state.selection?.sessionID,
+          superseded ? "tstv1-selected" : "tstv1-other",
+        );
+      } finally {
+        f.stop();
+      }
+    });
+  }
+}
+
+Deno.test("a resolved project intent cannot replay a declined navigation guard on later frames", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.resources.projectSession = () => {
+    reads++;
+    return Promise.resolve("tstv1-other");
+  };
+  try {
+    f.guard.mark("permissions", true);
+    f.consent(false);
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(reads, 1);
+    assertEquals(f.messages.length, 1);
+    f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+    await settled();
+    assertEquals(reads, 1, "a completed lookup consumes the captured intent");
+    assertEquals(f.messages.length, 1, "declining is not an automatic retry");
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
+    assertEquals(f.guard.dirty("permissions"), true);
+    f.consent(true);
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(reads, 2, "a later explicit click is a new intent");
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("removing a direct-route server detaches even while its project metadata is unknown", () => {
   const f = fixture("#/remote/tstv1-loading");

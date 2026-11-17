@@ -71,7 +71,7 @@ function fixture() {
     entries: (directory) => rows.filter((row) => row.directory === directory),
     status: (id) => states.get(id) ?? "none",
   });
-  return { resolver, core, states, rows, reads };
+  return { resolver, core, states, rows, reads, hierarchy };
 }
 
 Deno.test("navigation default uses existing urgency before exact child memory, then newest root across scopes", async () => {
@@ -121,3 +121,28 @@ Deno.test("navigation default rejects missing, foreign and deleted memories, exc
     "tstv1-new",
   );
 });
+
+for (const change of ["deleted", "moved", "parented"] as const) {
+  Deno.test(`navigation default revalidates ${change} roots after later scope reads`, async () => {
+    const f = fixture(),
+      reached = Promise.withResolvers<void>(),
+      release = Promise.withResolvers<void>();
+    f.rows[0].timeUpdated = 100;
+    const list = f.core.listSessions.bind(f.core);
+    f.core.listSessions = async (input, signal) => {
+      if (input.directory === "/repo/src") {
+        reached.resolve();
+        await release.promise;
+      }
+      return await list(input, signal);
+    };
+    const pending = f.resolver.resolve(f.core, { directory: "/repo" });
+    await reached.promise;
+    if (change === "deleted") f.rows[0].deleted = { at: 10, how: "otk" };
+    else if (change === "moved") f.rows[0].directory = "/away";
+    else f.rows[0].parentID = "tstv1-new";
+    f.hierarchy.entry(f.rows[0]);
+    release.resolve();
+    assertEquals(await pending, "tstv1-new");
+  });
+}
