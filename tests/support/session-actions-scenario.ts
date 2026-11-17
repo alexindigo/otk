@@ -181,6 +181,25 @@ export async function sessionActionsScenario(history = true) {
       ),
       version: replay.version(id),
     });
+  if (history) {
+    f.app.backend.core.snapshotMessages = (target, options, signal) => {
+      signal?.throwIfAborted();
+      if (target !== id) {
+        return Promise.reject(new Error("Unknown scene session"));
+      }
+      calls.push(["history.messages", target, options.before]);
+      return Promise.resolve({
+        ...fixturePage(
+          id,
+          options.before ? [] : messages,
+          undefined,
+          session,
+          replay.clock(id),
+        ),
+        version: replay.version(id),
+      });
+    };
+  }
   const client = new WsClient(f.url);
   await client.connect(root, id);
   resources().defer("V4 menu client", () => client.close());
