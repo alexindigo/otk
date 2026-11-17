@@ -75,6 +75,59 @@ import {
   VisualSettings,
 } from "@otk/ui";
 
+export function PickerLifetime(): Element {
+  const [items, setItems] = createSignal([
+    { key: "alpha", value: "exact alpha", label: "Alpha choice" },
+    { key: "beta", value: "exact beta", label: "Beta choice" },
+  ]);
+  const [picked, setPicked] = createSignal("");
+  const search = new URL(location.href).searchParams.has("search");
+  return (
+    <CommandProvider commands={new CommandHub()}>
+      <UiProvider registries={createUiRegistries()}>
+        <button
+          type="button"
+          data-remove-picker
+          onClick={() =>
+            setItems((list) => list.filter((item) => item.key !== "alpha"))}
+        >
+          Remove alpha
+        </button>
+        <button type="button" data-empty-picker onClick={() => setItems([])}>
+          Empty catalog
+        </button>
+        <button
+          type="button"
+          data-update-picker
+          onClick={() =>
+            setItems((list) =>
+              [...list].reverse().map((item) =>
+                item.key === "beta"
+                  ? { ...item, label: "Beta updated", value: "updated beta" }
+                  : item
+              )
+            )}
+        >
+          Update surviving choice
+        </button>
+        <output data-picked>{picked()}</output>
+        <ListPicker
+          label="Live catalog"
+          trigger="Choose"
+          search={search ? "Search live catalog" : undefined}
+          groups={[{
+            key: "catalog",
+            label: "Current catalog",
+            items: items(),
+          }]}
+          onPick={setPicked}
+          focusAfterPick={() => {}}
+        />
+      </UiProvider>
+    </CommandProvider>
+  );
+}
+
 export function LayoutTabs(props: { onTheme(id: string): void }): Element {
   const commands = new CommandHub();
   const entries: MergedEntry[] = Array.from({ length: 12 }, (_, i) => ({

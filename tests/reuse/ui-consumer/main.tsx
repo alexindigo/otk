@@ -52,6 +52,7 @@ import SharedControls, {
   LayoutControls,
   LayoutTabs,
   MetadataPolicy,
+  PickerLifetime,
   SecondaryFailures,
 } from "./shared-controls.tsx";
 
@@ -464,7 +465,9 @@ function Consumer(): Element {
   );
 }
 render(
-  new URL(location.href).searchParams.has("layout-tabs")
+  new URL(location.href).searchParams.has("picker-lifetime")
+    ? PickerLifetime
+    : new URL(location.href).searchParams.has("layout-tabs")
     ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("layout-controls")
     ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
