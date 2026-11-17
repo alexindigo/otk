@@ -93,6 +93,11 @@ export interface ViewportPosition {
   history(value: ViewportHistory): void;
   /** Acquire the authoritative live tail, then follow measured root geometry. */
   latest(ready: (signal: AbortSignal) => Promise<void>): Promise<void>;
+  /** Acquire a return source only while this remains the current navigation. */
+  restore(
+    ready: (signal: AbortSignal) => Promise<void>,
+    apply: () => Promise<void>,
+  ): Promise<void>;
   follow(): void;
   keepAnchor(): void;
   layout(): void;
@@ -194,6 +199,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     resolve(): void;
     reject(error: Error): void;
   } | undefined;
+  let restoration: AbortController | undefined;
   const clamp = (top: number) =>
     Math.max(
       0,
@@ -296,6 +302,9 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (next === "follow") capture();
   };
   const cancelNavigation = (reason = "Viewport intent superseded") => {
+    const previous = restoration;
+    restoration = undefined;
+    previous?.abort(new DOMException(reason, "AbortError"));
     const old = navigation;
     navigation = undefined;
     old?.reject(new DOMException(reason, "AbortError"));
@@ -610,6 +619,26 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       });
       return pending.promise;
     },
+    async restore(ready, apply) {
+      if (disposed) return;
+      cancelNavigation();
+      cancelLatest();
+      const controller = restoration = new AbortController();
+      try {
+        await ready(controller.signal);
+        if (
+          restoration !== controller || controller.signal.aborted || disposed
+        ) return;
+        // Normal measured navigation inside apply owns its own cancellation.
+        // It must not retire the acquisition that has just completed itself.
+        restoration = undefined;
+        await apply();
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        if (restoration === controller) restoration = undefined;
+      }
+    },
     follow() {
       cancelNavigation();
       cancelLatest();
@@ -767,6 +796,7 @@ export function followViewport(
     subscribeSnapshot: owner.subscribeSnapshot,
     history: owner.history,
     latest: owner.latest,
+    restore: owner.restore,
     pause: owner.keepAnchor,
     reset: owner.follow,
     update(_paging: boolean) {

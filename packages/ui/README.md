@@ -612,6 +612,14 @@ it through. The existing icon button borrows menu/popover background, border,
 foreground and shadow tokens, so its raised surface separates the arrow from
 underlying text without introducing paint tokens or changing its geometry.
 
+The same viewport intent owner admits return-anchor acquisition through
+`restore(ready, apply)`. Later latest/reveal/input or retirement aborts its
+signal and fences the continuation before it can pause follow or restore an old
+source. SessionView borrows that contract while ensuring an unloaded return
+message; there is no separate component navigation generation or detached
+restore promise. Once accepted, the existing measured window restoration owns
+positioning.
+
 New or changed visible rows hold temporary measurement leases through their
 ancestor windows. The lease ends only after actual DOM size has been recorded,
 so a large code/diff body cannot be recycled using its earlier estimate while

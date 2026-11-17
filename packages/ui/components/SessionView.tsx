@@ -271,12 +271,14 @@ export default function SessionView(props: {
       region.release = source.attach(element, region.id);
     }
     if (returnAnchor?.messageID && props.transcript) {
-      void props.transcript.ensure(
-        returnAnchor.messageID,
-        revealLifetime.signal,
-      ).then(async () => {
+      const transcript = props.transcript, follower = following;
+      void follower.restore((signal) =>
+        transcript.ensure(
+          returnAnchor.messageID!,
+          AbortSignal.any([signal, revealLifetime.signal]),
+        ), async () => {
         revealLifetime.signal.throwIfAborted();
-        following?.pause();
+        follower.pause();
         await window?.restore(returnAnchor);
       }).catch((error) => {
         if (!isCancellation(error)) {
