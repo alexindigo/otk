@@ -676,13 +676,16 @@ Catalog metadata uses attention priority; rebuildable replay uses background.
 Committed bounded publications inherit their producer's rank and drain as
 finishing continuations, preserving ordering even under interactive pressure.
 Cached replay instead parks between credited chunks. An essential successor
-donates its rank and readiness only along its identity's predecessor chain;
+donates its rank and readiness through every predecessor of a shared active
+publication. Retired reservations relay only identity-local successor demand;
 unrelated replay remains parked, and canceled successors withdraw their
-donation. Row/time quotas and measured serving reduction costs share the duty
-budget. Adaptive row quotas retain a floor of `ceil(digest.batch / 8)` (at least
-one); the same floor applies when a native keyset stops at its time boundary.
-This limits time-budget subdivision to eight slices instead of per-row native
-reads.
+donation. Discovery replays stored nondeleted metadata and its unchanged scalar
+summary through publication credit before committing source cursor/completion.
+Storage presence alone never proves delivery. Row/time quotas and measured
+serving reduction costs share the duty budget. Adaptive row quotas retain a
+floor of `ceil(digest.batch / 8)` (at least one); the same floor applies when a
+native keyset stops at its time boundary. This limits time-budget subdivision to
+eight slices instead of per-row native reads.
 
 The worker's incremental DigestProgress owns scalar scope generations, bounded
 enumeration denominators, completion/queue/chunk/message counts, active work

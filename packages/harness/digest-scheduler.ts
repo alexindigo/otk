@@ -632,6 +632,8 @@ export class DigestScheduler {
       if ("error" in outcome) throw outcome.error;
       return outcome.value;
     };
+    const measuredWork = () =>
+      workms + (phase === "running" ? Math.max(0, this.#now() - at) : 0);
     const execution: DigestExecution = {
       get priority() {
         return (Object.keys(rank) as DigestPriority[]).find((value) =>
@@ -639,7 +641,7 @@ export class DigestScheduler {
         )!;
       },
       get workms() {
-        return workms;
+        return measuredWork();
       },
       get examined() {
         return rows;
