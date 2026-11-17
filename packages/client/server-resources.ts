@@ -732,6 +732,7 @@ export function createServerResources(o: {
         state.revision++;
       });
       sendView();
+      for (const owner of listOwners.values()) owner.refresh();
     }
     approvals(id).receive(frame);
     if (frame.t === "forms.pending") {

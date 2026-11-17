@@ -358,3 +358,53 @@ Deno.test("rename and pin share captured-name promotion without selecting a late
   assertEquals(failed.tabs().map((tab) => tab.kind), ["phantom"]);
   failed.stop();
 });
+
+Deno.test("direct child phantom selection remains exact across ordinary metadata updates", () => {
+  const root = entry("root"), child = entry("child", 2, root.id);
+  child.attention.questions = 1;
+  const tabs = model(),
+    input = { directory: "/p", entries: [root, child], inbox: inbox() };
+  try {
+    tabs.update(input);
+    tabs.select({ kind: "session", id: child.id });
+    assertEquals(tabs.state.selected, { kind: "session", id: child.id });
+    assertEquals(tabs.state.sessionID, child.id);
+    assertEquals(tabs.tabs().map((row) => row.id), [child.id]);
+    child.title = "Updated title";
+    tabs.update(input);
+    assertEquals(tabs.state.selected, { kind: "session", id: child.id });
+    assertEquals(tabs.state.sessionID, child.id);
+    assertEquals(tabs.tabs().map((row) => row.id), [child.id]);
+  } finally {
+    tabs.stop();
+  }
+});
+
+for (const followParent of [true, false]) {
+  Deno.test(`crumbs preserve quiet cross-checkout ancestry and member order followParent=${followParent}`, () => {
+    const a = entry("a"),
+      b = { ...entry("b", 2, a.id), directory: "/other" },
+      c = entry("c", 3, b.id);
+    c.status = "busy";
+    const meta = inbox([task("task", followParent ? [a.id] : [a.id, c.id])]);
+    const tabs = model();
+    try {
+      tabs.update({
+        directory: "/p",
+        entries: [a, c],
+        context: [a, b, c],
+        followParent,
+        inbox: meta,
+      });
+      tabs.select({ kind: "task", id: "task" }, c.id);
+      assertEquals(tabs.crumbs().map((crumb) => crumb.id), [a.id, b.id, c.id]);
+      assertEquals(
+        tabs.crumbs().find((crumb) => crumb.id === b.id)?.external,
+        true,
+      );
+      assertEquals(tabs.state.sessionID, c.id);
+    } finally {
+      tabs.stop();
+    }
+  });
+}

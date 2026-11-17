@@ -3,6 +3,7 @@ import { assertEquals } from "@std/assert";
 import { SessionHierarchy } from "../../../core/index/session-hierarchy.ts";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import type { TaskRecord } from "@otk/protocol";
+import type { SessionIdentity } from "@otk/harness";
 
 Deno.test("hierarchy separates global families, local anchors and nearest task ownership", () => {
   const owner = new SessionHierarchy(), identity = new ProjectIdentity();
@@ -124,3 +125,74 @@ Deno.test("a keyed move cannot retain a repository identity from the old directo
   assertEquals(owner.node("child")?.rootID, "root");
   assertEquals(owner.node("child")?.anchorID, "child");
 });
+
+for (const input of ["learn", "remember"] as const) {
+  Deno.test(`hierarchy consumes the identity revision after direct ${input} without another entry publication`, () => {
+    const owner = new SessionHierarchy(), identity = new ProjectIdentity();
+    identity.learn([{
+      directory: "/repo",
+      sessionCount: 1,
+      lastActivity: 1,
+      authority: "current",
+      identities: [{
+        source: "native",
+        repoID: "p",
+        canonicalRoot: "/repo",
+        recordedRoot: "/repo",
+      }],
+    }]);
+    owner.configure(identity, () => [], () => false);
+    owner.reset([{ id: "root", directory: "/tree", projectID: "p" }, {
+      id: "child",
+      directory: "/tree/src",
+      projectID: "p",
+      parentID: "root",
+    }]);
+    assertEquals(owner.node("child")?.projectDirectory, "/tree/src");
+    assertEquals(owner.node("child")?.anchorID, "child");
+    if (input === "remember") identity.remember("/tree/src", "p", "/tree");
+    else {identity.learn([{
+        directory: "/tree/src",
+        sessionCount: 1,
+        lastActivity: 1,
+        authority: "current",
+        identities: [{
+          source: "native",
+          repoID: "p",
+          canonicalRoot: "/repo",
+          recordedRoot: "/tree",
+        }],
+      }]);}
+    assertEquals(owner.project("/tree/src", "p"), "/tree");
+    assertEquals(owner.node("child")?.projectDirectory, "/tree");
+    assertEquals(owner.node("child")?.anchorID, "root");
+  });
+}
+
+for (const publication of ["replacement", "removal", "reset"] as const) {
+  Deno.test(`bounded ancestry cannot overwrite a newer ${publication}`, async () => {
+    const owner = new SessionHierarchy();
+    const child = { id: "child", directory: "/tree", parentID: "parent" };
+    const held = Promise.withResolvers<SessionIdentity[]>();
+    const reads: string[][] = [];
+    const pending = owner.prepare([child], (ids) => {
+      reads.push([...ids]);
+      return held.promise;
+    });
+    assertEquals(reads, [["parent"]]);
+    if (publication === "replacement") {
+      owner.entry({ id: "parent", directory: "/new" });
+    } else if (publication === "removal") owner.remove("parent");
+    else owner.reset([child]);
+    held.resolve([{ id: "parent", directory: "/obsolete" }]);
+    await pending;
+    assertEquals(
+      owner.node("parent")?.projectDirectory,
+      publication === "replacement" ? "/new" : undefined,
+    );
+    assertEquals(
+      owner.node("child")?.ancestry,
+      publication === "replacement" ? "complete" : "unresolved",
+    );
+  });
+}

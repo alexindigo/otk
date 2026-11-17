@@ -43,6 +43,11 @@ retained scroll anchors. Query replacement and reconnect fence retired request
 identities, epochs and revisions. Child navigation follows the same bounded list
 cursor.
 
+Changing tasksFollowParent sends the new view before refreshing hierarchy list
+owners. Active lists replace their reads; inactive cached lists become dirty
+without I/O and refresh on reactivation. Existing cancellation still fences late
+results from retired reads.
+
 After synchronous consumer acceptance, SidecarConnection acknowledges the index
 epoch/revision. Consumers return `false` for rejected frames. Epoch replacement
 patches rebase from the last acknowledged revision and correct unacknowledged
@@ -917,6 +922,12 @@ disappear when a preview is replaced; an idle/seen selected phantom remains
 until selection leaves. Inputs remain owned by their index/metadata models, and
 tabs never delete sessions. Concurrent pins share promotion; late completion
 cannot steal a newer selection.
+
+Directly selecting a validated phantom preserves that exact tab and viewed
+session across metadata updates. Helper preview/navigation still uses its local
+display root or owning task. Breadcrumbs borrow complete ancestry context and
+insert foreign links relative to their displayed ancestors and descendants,
+preserving explicit local member order even when intermediate links are quiet.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters

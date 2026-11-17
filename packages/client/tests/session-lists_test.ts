@@ -193,3 +193,106 @@ Deno.test("@sessions page replacement preserves the acquired window and retained
     rpc.close();
   }
 });
+
+Deno.test("hierarchy refresh invalidates inactive cached lists without I/O until reactivation", async () => {
+  const rpc = new Rpc(() => {});
+  const reads: {
+    input: SessionListInput;
+    intent: IntentIdentity;
+    resolve(page: SessionListPage): void;
+  }[] = [];
+  rpc.call = (_method, input, options) =>
+    new Promise((resolve) => {
+      reads.push({
+        input: input as SessionListInput,
+        intent: (options as { intent: IntentIdentity }).intent,
+        resolve: resolve as never,
+      });
+    }) as never;
+  const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
+  const finish = (at: number, title: string) =>
+    reads[at].resolve({
+      items: [{ id: "child", directory: input.directory, title }],
+      older: null,
+      load: {
+        id: reads[at].intent.key,
+        scope: { kind: "project-sessions", directory: input.directory },
+        boundary: { kind: "page", limit: 20 },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    const list = owner.get(input);
+    finish(0, "Old hierarchy");
+    await tick();
+    owner.activate({ directory: "/other" });
+    owner.refresh();
+    assertEquals(reads.length, 1, "hidden cache invalidation performs no read");
+    assertStrictEquals(owner.get(input), list);
+    assertEquals(
+      reads.length,
+      2,
+      "reactivation must replace the old hierarchy",
+    );
+    finish(1, "Current hierarchy");
+    await tick();
+    assertEquals(list.items[0].title, "Current hierarchy");
+  } finally {
+    owner.stop();
+    rpc.close();
+  }
+});
+
+Deno.test("reactivating an invalidated inactive list cannot join its old in-flight hierarchy read", async () => {
+  const rpc = new Rpc(() => {});
+  const reads: {
+    intent: IntentIdentity;
+    resolve(page: SessionListPage): void;
+  }[] = [];
+  rpc.call = (_method, _input, options) =>
+    new Promise((resolve) => {
+      reads.push({
+        intent: (options as { intent: IntentIdentity }).intent,
+        resolve: resolve as never,
+      });
+    }) as never;
+  const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
+  const finish = (at: number, title: string) =>
+    reads[at].resolve({
+      items: [{ id: "child", directory: input.directory, title }],
+      older: null,
+      load: {
+        id: reads[at].intent.key,
+        scope: { kind: "project-sessions", directory: input.directory },
+        boundary: { kind: "page", limit: 20 },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    const list = owner.get(input);
+    owner.activate({ directory: "/other" });
+    owner.refresh();
+    assertEquals(reads.length, 1, "inactive invalidation starts no I/O");
+    assertStrictEquals(owner.get(input), list);
+    assertEquals(
+      reads.length,
+      2,
+      "reactivation must not wait for an obsolete read",
+    );
+    finish(0, "Obsolete hierarchy");
+    await tick();
+    assertEquals(list.items, []);
+    finish(1, "Current hierarchy");
+    await tick();
+    assertEquals(list.items[0].title, "Current hierarchy");
+  } finally {
+    owner.stop();
+    rpc.close();
+  }
+});

@@ -65,6 +65,132 @@ Deno.test("hierarchy preference reaches every server view before deferred bindin
     f.resources.stop();
   }
 });
+
+Deno.test("turning parent-task inheritance off refreshes native hierarchy before a visible child can disappear", async () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  const connection = f.connections.get("local")!;
+  const originalView = connection.view.bind(connection);
+  let current = false;
+  connection.view = (view) => {
+    current = view.tasksFollowParent ?? false;
+    originalView(view);
+  };
+  const originalCall = connection.rpc.call.bind(connection.rpc),
+    readPreferences: boolean[] = [];
+  connection.rpc.call = (method, params, options) => {
+    if (method === "sessions.list") readPreferences.push(current);
+    if (method === "session.get") {
+      return Promise.resolve({
+        ...entry((params as { sessionID: string }).sessionID, "/foreign"),
+        status: "idle",
+        attention: {
+          permissions: 0,
+          questions: 0,
+          childPermissions: 0,
+          childQuestions: 0,
+        },
+      }) as never;
+    }
+    return originalCall(method, params, options);
+  };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const meta = metadata();
+  meta.tasks = [{
+    id: "foreign",
+    directory: "/foreign",
+    name: "Foreign task",
+    sessions: ["root"],
+    order: 0,
+  }];
+  meta.supervision = {};
+  const baseline = () =>
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "hierarchy",
+      revision: 0,
+      epoch: connection.viewEpoch,
+      inbox: meta,
+    });
+  const reply = (at: number, inherited: boolean) => {
+    const read = f.listReads[at];
+    read.resolve({
+      items: [{
+        id: "child",
+        parentID: "root",
+        directory: project.directory,
+        title: "Child",
+        hierarchy: {
+          familyID: "root",
+          rootID: "root",
+          ancestry: "complete",
+          anchorID: "child",
+          projectDirectory: project.directory,
+          mandatory: false,
+          followParent: inherited,
+          ...(inherited
+            ? { taskID: "foreign", taskDirectory: "/foreign" }
+            : {}),
+        },
+      }],
+      older: null,
+      load: {
+        id: read.intent!.key,
+        scope: {
+          kind: "project-sessions",
+          directory: project.directory,
+          query: "",
+        },
+        boundary: { kind: "page", limit: 20 },
+        generation: "native",
+        revision: 1,
+        state: "complete",
+      },
+    });
+  };
+  try {
+    f.receive("local", {
+      t: "prefs",
+      prefs: { ...DEFAULT_PREFS, tasksFollowParent: true },
+    });
+    f.resources.scope(project);
+    baseline();
+    f.resources.sessionRows(project);
+    assertEquals(f.listReads.length, 1);
+    reply(0, true);
+    await tick();
+    assertEquals(
+      f.resources.sessionRows(project).filter((row) => row.kind === "session")
+        .map((row) => row.id),
+      ["child"],
+    );
+    f.receive("local", {
+      t: "prefs",
+      prefs: { ...DEFAULT_PREFS, tasksFollowParent: false },
+    });
+    assertEquals(
+      current,
+      false,
+      "the new view must precede the hierarchy read",
+    );
+    assertEquals(
+      f.listReads.length,
+      2,
+      "preference changes replace active cached hierarchy",
+    );
+    assertEquals(readPreferences, [true, false]);
+    meta.tasks = [];
+    baseline();
+    reply(1, false);
+    await tick();
+    assertEquals(
+      f.resources.sessionRows(project).filter((row) => row.kind === "session")
+        .map((row) => [row.id, row.group]),
+      [["child", ""]],
+    );
+  } finally {
+    f.resources.stop();
+  }
+});
 function metadata(): InboxSnapshot {
   return {
     projects: [{

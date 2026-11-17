@@ -331,10 +331,7 @@ export function createTabs(
       const local = task
         ? taskBreadcrumbs(
           task,
-          [...new Map([
-            ...entries,
-            ...task.sessions.flatMap((id) => byID.get(id) ?? []),
-          ].map((entry) => [entry.id, entry])).values()],
+          [...byID.values()],
           tasks,
           undefined,
           input.inbox,
@@ -353,13 +350,24 @@ export function createTabs(
           })
         : [];
       const foreign = new Set(external);
-      return cachedCrumbs = [
-        ...external.filter((id) => !local.some((crumb) => crumb.id === id))
-          .map((id) => ({ id, helper: false, depth: 0, external: true })),
-        ...local.map((crumb) =>
-          foreign.has(crumb.id) ? { ...crumb, external: true } : crumb
-        ),
-      ];
+      const result = local.map((crumb) =>
+        foreign.has(crumb.id) ? { ...crumb, external: true } : crumb
+      );
+      for (const id of external) {
+        if (result.some((crumb) => crumb.id === id)) continue;
+        let at = result.findIndex((crumb) =>
+          sessionAncestors(crumb.id, (id) => byID.get(id)).includes(id)
+        );
+        if (at < 0) {
+          const ancestor = sessionAncestors(id, (id) => byID.get(id))
+            .find((id) => result.some((crumb) => crumb.id === id));
+          at = ancestor === undefined
+            ? result.length
+            : result.findIndex((crumb) => crumb.id === ancestor) + 1;
+        }
+        result.splice(at, 0, { id, helper: false, depth: 0, external: true });
+      }
+      return cachedCrumbs = result;
     },
     sessionFor,
     update(next: TabInput): void {
@@ -399,7 +407,10 @@ export function createTabs(
           const task = taskFor(id);
           draft.selected = {
             kind: task ? "task" : "session",
-            id: task?.id ?? rootFor(id),
+            id: task?.id ??
+              (draft.selected?.kind === "session" && draft.selected.id === id
+                ? id
+                : rootFor(id)),
           };
           if (task) {
             remembered.set(task.id, id);
@@ -471,10 +482,7 @@ export function createTabs(
       if (task && selectedID) remembered.set(task.id, selectedID);
       selectionRevision++;
       store.update((draft) => {
-        draft.selected = selection.kind === "task" ? { ...selection } : {
-          kind: "session",
-          id: rootFor(selectedID ?? selection.id),
-        };
+        draft.selected = { ...selection };
         draft.sessionID = selectedID;
         draft.closed = draft.closed?.filter((id) => id !== selectedID);
         delete draft.preview;

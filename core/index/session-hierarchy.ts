@@ -19,6 +19,8 @@ export class SessionHierarchy {
   #tasks: () => readonly TaskRecord[] = () => [];
   #mandatory: (id: string) => boolean = () => false;
   #identity = new ProjectIdentity();
+  #identityRevision = -1;
+  #admissions = new Set<Set<string>>();
   configure(
     identity: ProjectIdentity,
     tasks: () => readonly TaskRecord[],
@@ -36,6 +38,7 @@ export class SessionHierarchy {
     return this.#identity.leaf(directory, repoID);
   }
   entry(entry: HierarchySession): void {
+    for (const admission of this.#admissions) admission.delete(entry.id);
     const before = this.#entries.get(entry.id);
     const projectID = entry.projectID ??
       (before?.directory === entry.directory ? before.projectID : undefined);
@@ -52,11 +55,13 @@ export class SessionHierarchy {
     this.invalidate();
   }
   reset(entries: readonly HierarchySession[]): void {
+    for (const admission of this.#admissions) admission.clear();
     this.#entries.clear();
     this.invalidate();
     for (const entry of entries) this.entry(entry);
   }
   remove(id: string): void {
+    for (const admission of this.#admissions) admission.delete(id);
     this.#entries.delete(id);
     this.invalidate();
   }
@@ -67,6 +72,10 @@ export class SessionHierarchy {
     return autoApproveOwner(id, [...enabled], (id) => this.#entries.get(id));
   }
   node(id: string, followParent = false): SessionHierarchyNode | undefined {
+    if (this.#identityRevision !== this.#identity.revision) {
+      this.#identityRevision = this.#identity.revision;
+      this.invalidate();
+    }
     let nodes = this.#projections.get(followParent);
     if (!nodes) {
       nodes = projectSessionHierarchy(
@@ -107,14 +116,20 @@ export class SessionHierarchy {
       }
       const ids = [...missing];
       for (let i = 0; i < ids.length; i += MAX_SESSION_LIST_SIZE) {
-        const found = await read(
-          ids.slice(i, i + MAX_SESSION_LIST_SIZE),
-          signal,
-        );
-        signal?.throwIfAborted();
-        for (const row of found) {
-          this.entry(row);
-          next.push(row.id);
+        const requested = ids.slice(i, i + MAX_SESSION_LIST_SIZE);
+        const admission = new Set(requested);
+        this.#admissions.add(admission);
+        try {
+          const found = await read(requested, signal);
+          signal?.throwIfAborted();
+          for (const row of found) {
+            if (admission.has(row.id)) this.entry(row);
+          }
+          for (const id of requested) {
+            if (this.#entries.has(id)) next.push(id);
+          }
+        } finally {
+          this.#admissions.delete(admission);
         }
       }
       frontier = next;

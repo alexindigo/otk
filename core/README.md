@@ -44,6 +44,14 @@ display root or owning task. Foreign parents remain breadcrumb links. The open
 session's name is independent of the root/task label and lamp. Child pagination
 is parent-scoped, not checkout-scoped, on V1 and V2.
 
+Hierarchy node caches consume the ProjectIdentity revision even when no session
+field changes. Bounded ancestry reads retain acquisition-local admission sets:
+newer keyed publications, removals and resets retire stale read results. The
+current row, not the awaited response, governs continued ancestry traversal.
+Connection task projections replay admitted existing records and retire departed
+ones through the same recipient reconciliation as scalar facts. Relevant foreign
+ancestor changes and view replacement do not require a later task mutation.
+
 ## Evidence-based session supervision
 
 `InboxFeature` composes one `SessionSupervision` beside the index. Adapters
