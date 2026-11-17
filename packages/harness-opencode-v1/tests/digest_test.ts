@@ -354,6 +354,7 @@ async function fixture(
   >();
   const publications: DigestDelta[] = [];
   let apiCatalog = true;
+  let projectInventory: import("../project-seeds.ts").NativeProjectRoot[] = [];
   let catalogHook: (() => void | Promise<void>) | undefined;
   let failWrite = false;
   let sqlUnavailable = false;
@@ -431,6 +432,7 @@ async function fixture(
     },
     (async (url: URL | string | Request) => {
       const path = new URL(String(url)).pathname;
+      if (path === "/project") return Response.json(projectInventory);
       if (path === "/global/health") {
         return Promise.resolve(
           Response.json({ healthy: apiCatalog }),
@@ -567,6 +569,18 @@ async function fixture(
     scan,
     queries,
     apiPages,
+    projects(value: typeof projectInventory) {
+      projectInventory = value;
+      native.exec(
+        "CREATE TABLE IF NOT EXISTS project(id TEXT PRIMARY KEY,worktree TEXT); DELETE FROM project",
+      );
+      for (const row of value) {
+        native.prepare("INSERT INTO project VALUES(?,?)").run(
+          row.id,
+          row.worktree,
+        );
+      }
+    },
     loseSQL: () => {
       sqlUnavailable = true;
     },
@@ -588,6 +602,41 @@ async function fixture(
       derived.close();
     },
   };
+}
+
+for (const target of [undefined, "/shared"]) {
+  test(`V1 ${target ? "targeted" : "full"} empty inventory publishes every exact registered owner`, async () => {
+    const f = await fixture();
+    try {
+      f.projects([{ id: "one", worktree: "/one", sandboxes: ["/shared"] }, {
+        id: "two",
+        worktree: "/two",
+        sandboxes: ["/shared"],
+      }]);
+      const emitted: import("@otk/harness").ProjectSeed[] = [];
+      const result = await f.sink.projects(
+        new AbortController().signal,
+        (page) => {
+          emitted.push(...page);
+          return Promise.resolve();
+        },
+        target,
+      );
+      const rows = emitted.filter((row) => row.directory === "/shared");
+      assertEquals(rows.length, 1, "one grouped seed per exact root");
+      assertEquals(rows[0].identities?.map((row) => row.repoID).sort(), [
+        "one",
+        "two",
+      ]);
+      assertEquals(
+        result.projects.find((row) => row.directory === "/shared"),
+        rows[0],
+      );
+      assertEquals(rows[0].sessionCount, 0);
+    } finally {
+      f.close();
+    }
+  });
 }
 
 test("a descending SQL checkpoint restarts in the opaque API domain without double-counting retained totals", async () => {

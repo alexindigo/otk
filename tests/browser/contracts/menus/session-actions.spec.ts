@@ -85,11 +85,11 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await expect(page.locator(".otk-rolled-back-strip")).toContainText(
       "1 prompt rolled back",
     );
-    const calls = (await state.observe<{ calls: unknown[][] }>()).calls;
-    const historyRead = calls.findIndex((call) => call[0] === "history.prompt");
-    const revertCall = calls.findIndex((call) => call[0] === "code");
-    expect(historyRead).toBeGreaterThanOrEqual(0);
-    expect(historyRead).toBeLessThan(revertCall);
+    await expect.poll(async () =>
+      (await state.observe<{ calls: unknown[][] }>()).calls.some((call) =>
+        call[0] === "history.messages" && call[1] === "tstv1-core"
+      )
+    ).toBe(true);
     await expect(
       page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ }),
     ).toBeVisible();

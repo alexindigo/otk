@@ -17,6 +17,11 @@ exact scope and checkout boundary in `otk.db`. Availability is stored separately
 from membership; removing native inventory never deletes history or changes user
 inactivity policy. A source replacement cannot borrow another source's
 boundaries. This is durable identity metadata, not rebuildable digest data.
+Feature v2 separately persists active sources and positive complete scope-owner
+sets. `authority()` returns no positive observation for an upgraded v1 store.
+`save(records, authority?)` commits changed history and changed complete scope
+sets with active source selection atomically; it never deletes affiliation
+history or backfills authority from availability.
 
 ```ts
 import {

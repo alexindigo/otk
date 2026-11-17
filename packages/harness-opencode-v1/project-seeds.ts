@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DatabaseSync } from "node:sqlite";
-import type { ProjectSeed } from "@otk/harness";
+import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
 import type { ProjectTopology } from "@otk/protocol";
 
 export interface NativeProjectRoot {
@@ -56,6 +56,59 @@ export function projectFileMatches(
     );
 }
 
+/** Exact inventory owners supplement population, never another owner's prefix. */
+export function projectOwnerFacts(
+  directory: string,
+  projects: readonly NativeProjectRoot[],
+  source: string,
+  population: readonly { repoID: string; root: string | null }[] = [],
+): ProjectIdentityFact[] {
+  const owners = new Map(population.map((row) => [row.repoID, row.root]));
+  for (const project of projects) {
+    if (project.id === "global" || project.worktree === "/") continue;
+    if (
+      (project.worktree === directory ||
+        project.sandboxes?.includes(directory)) && !owners.has(project.id)
+    ) owners.set(project.id, directory);
+  }
+  return [...owners].map(([repoID, root]) => {
+    const project = projects.find((p) => p.id === repoID);
+    if (repoID === "global" || project?.worktree === "/") {
+      return { source, repoID, recordedRoot: null };
+    }
+    if (!project) return { source, repoID, recordedRoot: root };
+    return {
+      source,
+      repoID,
+      canonicalRoot: project.worktree,
+      recordedRoot: root,
+      inventory: [
+        { directory: project.worktree, kind: "checkout" },
+        ...(project.sandboxes ?? []).map((directory) => ({
+          directory,
+          kind: "unknown" as const,
+        })),
+      ],
+    };
+  });
+}
+export function emptyProjectSeed(
+  directory: string,
+  projects: readonly NativeProjectRoot[],
+  source: string,
+): ProjectSeed {
+  const identities = projectOwnerFacts(directory, projects, source);
+  return {
+    directory,
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current",
+    ...(identities.length ? { identities } : {}),
+    topology: projectTopologyAt(projects, directory) ?? undefined,
+  };
+}
+
 /** Grouped scalar rows only: no session catalog, header or helper acquisition. */
 export function projectSeeds(
   db: DatabaseSync,
@@ -77,45 +130,27 @@ export function projectSeeds(
     } GROUP BY s.project_id,s.directory) GROUP BY directory ORDER BY directory LIMIT ?`,
   ).all(
     ...(directory === undefined ? [after, limit] : [after, directory, limit]),
-  ).map((row) => ({
-    directory: String(row.directory),
-    hasSessions: Number(row.count) > 0,
-    sessionCount: Number(row.count),
-    lastActivity: Number(row.latest),
-    authority: "current",
-    identities: (JSON.parse(String(row.owners)) as {
-      repoID: string;
-      root: string | null;
-    }[]).flatMap((owner) => {
-      const project = projects.find((p) => p.id === owner.repoID);
-      if (owner.repoID === "global" || project?.worktree === "/") {
-        return [{ source, repoID: owner.repoID, recordedRoot: null }];
-      }
-      if (!project) {
-        return [{ source, repoID: owner.repoID, recordedRoot: owner.root }];
-      }
-      return [{
-        source,
-        repoID: project.id,
-        canonicalRoot: project.worktree,
-        recordedRoot: owner.root,
-        inventory: [
-          { directory: project.worktree, kind: "checkout" as const },
-          ...(project.sandboxes ?? []).map((directory) => ({
-            directory,
-            // V1's sandbox list also contains independent clones. It proves
-            // registration, not Git-worktree kind.
-            kind: "unknown" as const,
-          })),
-        ],
-      }];
-    }),
-    topology: Number(row.repos) === 1
-      ? projectTopology(
-        projects,
-        String(row.project_id),
-        String(row.directory),
-      ) ?? null
-      : null,
-  }));
+  ).map((row) => {
+    const identities = projectOwnerFacts(
+      String(row.directory),
+      projects,
+      source,
+      JSON.parse(String(row.owners)),
+    );
+    return {
+      directory: String(row.directory),
+      hasSessions: Number(row.count) > 0,
+      sessionCount: Number(row.count),
+      lastActivity: Number(row.latest),
+      authority: "current",
+      identities,
+      topology: identities.length === 1
+        ? projectTopology(
+          projects,
+          identities[0].repoID,
+          String(row.directory),
+        ) ?? null
+        : null,
+    };
+  });
 }

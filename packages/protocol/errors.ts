@@ -72,7 +72,11 @@ export function sessionErrorObservation(
 export function sessionErrorMessage(
   state: SessionErrorState,
 ): string | undefined {
-  const active = state.observations.filter((item) => !item.cleared);
+  // Composer failures keep their retained record and composer-owned pointer.
+  // They are not session-level error text, regardless of transport or arrival.
+  const active = state.observations.filter((item) =>
+    !item.cleared && item.failure?.facts?.origin !== "composer"
+  );
   const native = active.find((item) => item.source === "event");
   const current = active.find((item) =>
     item.source === "http" && item.requestID === state.currentRequestID

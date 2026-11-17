@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import type { PublicFailure } from "@otk/protocol";
+import { type PublicFailure, sessionErrorMessage } from "@otk/protocol";
 import { SessionErrors } from "../session-errors.ts";
 
 Deno.test("recovered origin enriches only its existing active diagnostic and preserves provenance and retirement", () => {
@@ -66,4 +66,74 @@ Deno.test("recovered origin enriches only its existing active diagnostic and pre
   owner.enrich("s", enriched);
   assertEquals(published, retired);
   assertEquals(owner.snapshot("s").observations, []);
+});
+
+for (const source of ["http", "event"] as const) {
+  Deno.test(`${source} composer observations retain their record without setting session-level error text`, () => {
+    const owner = new SessionErrors(() => {});
+    const failure: PublicFailure = {
+      code: "command",
+      retry: "new-intent",
+      diagnosticID: "composer-rejected",
+      facts: {
+        origin: "composer",
+        reason: "That command is no longer available",
+        record: { messageID: "retained-rejection", label: "See above" },
+      },
+    };
+    const current = owner.begin("s", "command", "composer-call");
+    if (source === "http") {
+      owner.http(current, {
+        message: "The operation has not completed",
+        status: 400,
+        failure,
+      });
+    } else {owner.native(
+        "s",
+        { message: "Composer execution failed", failure },
+        "native-composer",
+      );}
+    const retained = owner.snapshot("s");
+    assertEquals(retained.observations[0].failure, failure);
+    assertEquals(sessionErrorMessage(retained), undefined);
+    owner.native(
+      "s",
+      { message: "Independent native failure" },
+      "independent-native",
+    );
+    assertEquals(
+      sessionErrorMessage(owner.snapshot("s")),
+      "Independent native failure",
+    );
+    owner.settled(current);
+  });
+}
+
+Deno.test("late composer origin enrichment changes only the session-level projection, not the retained diagnostic", () => {
+  const owner = new SessionErrors(() => {});
+  const failure: PublicFailure = {
+    code: "command",
+    retry: "new-intent",
+    diagnosticID: "retained",
+    facts: { record: { messageID: "retained", label: "See above" } },
+  };
+  const current = owner.begin("s", "command", "request");
+  owner.http(current, { message: "Rejected command", failure });
+  assertEquals(sessionErrorMessage(owner.snapshot("s")), "Rejected command");
+  owner.enrich("s", {
+    ...failure,
+    facts: { ...failure.facts, origin: "composer" },
+  });
+  assertEquals(owner.snapshot("s").observations.length, 1);
+  assertEquals(
+    owner.snapshot("s").observations[0].failure?.facts?.record,
+    failure.facts!.record,
+  );
+  assertEquals(sessionErrorMessage(owner.snapshot("s")), undefined);
+  const next = owner.begin("s", "command", "api-request");
+  owner.http(next, {
+    message: "API command failed",
+    failure: { ...failure, facts: { ...failure.facts, origin: "api" } },
+  });
+  assertEquals(sessionErrorMessage(owner.snapshot("s")), "API command failed");
 });

@@ -564,6 +564,12 @@ borrow the same acquisition owner.
 
 ### Reusable digest sink
 
+Grouped population, full empty inventory and targeted empty inventory share
+exact native owner projection. Every owner registered at an exact root is
+retained, including owners with no sessions there. Native population NULL root
+evidence is preserved; another owner's nested scope is never inferred from a
+path prefix.
+
 Unfinished native text/reasoning uses `mapStreamingShell` for identity/time
 metadata and the event-owned parser checkpoint for its blocks. Active page parts
 borrow that checkpoint before mapping HTTP source. Recovery headers and optional

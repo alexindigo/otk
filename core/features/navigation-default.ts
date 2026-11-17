@@ -29,6 +29,10 @@ export class NavigationDefault {
     const entries = () => scopes.flatMap((scope) => this.source.entries(scope));
     const belongs = (row: { id: string }) =>
       hierarchy.node(row.id)?.projectDirectory === directory;
+    const current = <T extends { id: string }>(row: T) =>
+      entries().find((entry) => entry.id === row.id) ?? row;
+    const eligible = (row: { id: string; deleted?: unknown }) =>
+      belongs(row) && !current(row).deleted;
     const recent = (
       a: Pick<SessionMetadata, "id" | "timeUpdated">,
       b: Pick<SessionMetadata, "id" | "timeUpdated">,
@@ -54,10 +58,7 @@ export class NavigationDefault {
       const urgent = attention();
       if (urgent) return urgent;
       if (
-        rows.some((row) =>
-          row.id === input.preferred && belongs(row) &&
-          !entries().some((entry) => entry.id === row.id && entry.deleted)
-        )
+        rows.some((row) => row.id === input.preferred && eligible(row))
       ) return input.preferred;
     }
     const candidates: SessionMetadata[] = [];
@@ -73,13 +74,13 @@ export class NavigationDefault {
         signal,
       );
       candidates.push(
-        ...page.items.filter((row) =>
-          !row.parentID && belongs(row) &&
-          !entries().some((entry) => entry.id === row.id && entry.deleted)
-        ),
+        ...page.items.filter((row) => !current(row).parentID && eligible(row)),
       );
     }
     signal?.throwIfAborted();
-    return attention() ?? candidates.sort(recent)[0]?.id ?? null;
+    return attention() ??
+      candidates.map(current).filter((row) => !row.parentID && eligible(row))
+        .sort(recent)[0]?.id ??
+      null;
   }
 }

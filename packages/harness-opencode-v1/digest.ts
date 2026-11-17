@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { runningDirectories } from "./db-hints.ts";
 import {
+  emptyProjectSeed,
   projectFileMatches,
   projectSeeds,
-  projectTopologyAt,
 } from "./project-seeds.ts";
 import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
@@ -876,50 +876,22 @@ export class OpencodeV1DigestSink implements DigestSink {
           for (const root of [project.worktree, ...project.sandboxes ?? []]) {
             if (known.has(root)) continue;
             known.add(root);
-            const empty: import("@otk/harness").ProjectSeed = {
-              directory: root,
-              hasSessions: false,
-              sessionCount: 0,
-              lastActivity: null,
-              authority: "current",
-              identities: [{
-                source: "opencode-v1:" + native.file,
-                repoID: project.id,
-                canonicalRoot: project.worktree,
-                recordedRoot: root,
-                inventory: [
-                  { directory: project.worktree, kind: "checkout" },
-                  ...(project.sandboxes ?? []).map((directory) => ({
-                    directory,
-                    kind: "unknown" as const,
-                  })),
-                ],
-              }],
-              topology: {
-                repoID: project.id,
-                canonicalRoot: project.worktree,
-                leafDirectory: root,
-                ...(root !== project.worktree
-                  ? { parentDirectory: project.worktree }
-                  : {}),
-              },
-            };
+            const empty = emptyProjectSeed(
+              root,
+              reported,
+              "opencode-v1:" + native.file,
+            );
             projects.push(empty);
             await publish?.([empty]);
           }
         }
       }
       if (directory !== undefined && !projects.length) {
-        const empty: import("@otk/harness").ProjectSeed = {
+        const empty = emptyProjectSeed(
           directory,
-          hasSessions: false,
-          sessionCount: 0,
-          lastActivity: null,
-          authority: "current",
-          // No population repo ID remains: exact inventory proves a relationship,
-          // but an unregistered nested scope is unknown, not an authoritative clear.
-          topology: projectTopologyAt(reported, directory) ?? undefined,
-        };
+          reported,
+          "opencode-v1:" + native.file,
+        );
         projects.push(empty);
         await publish?.([empty]);
       }

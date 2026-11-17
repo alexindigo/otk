@@ -99,7 +99,13 @@ export function createShellNavigation(o: {
       draft.error = "";
     });
   let locations: readonly ProjectLocation[] = [];
-  let locationsReady = false, resolving = -1;
+  let locationsReady = false;
+  let resolution: {
+    at: number;
+    connection: number;
+    outcome: "pending" | "failed" | "complete";
+  } | undefined;
+  let projectIntent: { at: number; target: ProjectSelection } | undefined;
   const presentation = (
     p: ProjectSelection,
     repoID?: string,
@@ -239,24 +245,46 @@ export function createShellNavigation(o: {
     return true;
   };
   const resolveProject = (input?: ProjectSelection): void => {
-    const value = input ?? store.state.project;
+    if (input) projectIntent = { at: revision, target: { ...input } };
+    const value = projectIntent?.at === revision
+      ? projectIntent.target
+      : projectDefault
+      ? store.state.project
+      : undefined;
     const target = value &&
       { sidecarId: value.sidecarId, directory: value.directory };
     if (
-      (!input && !projectDefault) || !target || !locationsReady ||
+      !target || !locationsReady ||
       (!input && store.state.settings) ||
-      !resources.connected(target.sidecarId) || resolving === revision
+      !resources.connected(target.sidecarId)
     ) return;
-    const at = revision;
-    resolving = at;
+    const connection = resources.server(target.sidecarId)?.connectionVersion ??
+      0;
+    if (
+      resolution?.at === revision &&
+      (resolution.outcome !== "failed" || resolution.connection === connection)
+    ) return;
+    const attempt: NonNullable<typeof resolution> = {
+      at: revision,
+      connection,
+      outcome: "pending",
+    };
+    resolution = attempt;
     void resources.projectSession(target, lastLocation(target)?.sessionID).then(
       (id) => {
-        if (id && revision === at) {
-          navigate({ sidecarId: target.sidecarId, sessionID: id });
+        attempt.outcome = "complete";
+        if (revision === attempt.at) {
+          clearError();
+          if (id) navigate({ sidecarId: target.sidecarId, sessionID: id });
         }
       },
     ).catch((error) => {
-      if (revision === at) fail(error);
+      attempt.outcome = "failed";
+      if (revision === attempt.at) {
+        fail(error);
+        // A reconnect may have arrived while this older lookup was pending.
+        resolveProject();
+      }
     });
   };
   // Home/close are explicit project-page intents, not default-selection intents.
@@ -267,6 +295,7 @@ export function createShellNavigation(o: {
     } finally {
       projectPageOnly = false;
       projectDefault = false;
+      projectIntent = undefined;
     }
   };
   const createIn = async (
