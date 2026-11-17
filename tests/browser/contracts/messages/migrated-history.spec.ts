@@ -60,6 +60,17 @@ test("messages.work-log-segments-have-own-times-and-footer-keeps-turn-total", {
   await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
   await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
   await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  for (const detail of [false, true]) {
+    await state.product("prefs.set", { key: "toolDetails", value: detail });
+    await expect(headers).toHaveCount(2);
+    await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
+    await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+    await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+    await page.reload();
+    await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
+    await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+    await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  }
   await page.reload();
   await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
   await expect(headers.nth(1)).toHaveText("Worked for 0.9s");

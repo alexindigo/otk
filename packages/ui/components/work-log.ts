@@ -85,6 +85,7 @@ export function messageFrames(
 export function partGroups(
   parts: Part[],
   presentation: (part: Part) => PartPresentation,
+  timingParts: readonly Part[] = parts,
 ): PartGroup[] {
   const groups: PartGroup[] = [];
   for (const part of parts) {
@@ -103,7 +104,11 @@ export function partGroups(
   }
   for (const group of groups) {
     if (group.work) {
-      const workingMs = segmentWorkingTime(group.parts, presentation);
+      const workingMs = segmentWorkingTime(
+        group.parts,
+        presentation,
+        timingParts,
+      );
       if (workingMs !== undefined) group.workingMs = workingMs;
     }
   }
@@ -111,13 +116,23 @@ export function partGroups(
 }
 export const elapsed = (start: number, end: number) => duration(end - start);
 export const segmentWorkingTime = (
-  parts: Part[],
+  parts: readonly Part[],
   presentation: (part: Part) => PartPresentation,
-) =>
-  TurnTimingAccumulator.segment(parts.flatMap((part) => {
+  timingParts: readonly Part[] = parts,
+) => {
+  const own = parts.flatMap((part) => {
     const timing = presentation(part).timing;
     return timing ? [timing] : [];
-  }));
+  });
+  if (!own.length) return;
+  return TurnTimingAccumulator.segment([
+    ...own.filter((timing) => !timing.waitsForUser),
+    ...timingParts.flatMap((part) => {
+      const timing = presentation(part).timing;
+      return timing?.waitsForUser ? [timing] : [];
+    }),
+  ]);
+};
 export const workingTime = (timing: TurnTiming | number | undefined) =>
   typeof timing === "number"
     ? `Worked for ${duration(timing)}`
