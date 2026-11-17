@@ -204,6 +204,25 @@ sequence, not copied clocks; the API fallback uses the existing clock-based
 source authority. Requests remain context records, never prompts or duplicated
 tool outcomes.
 
+SQL continuations keep native/anchored sequence and unanchored clock acquisition
+in separate domains. The clock scan carries its own physical edge, exhaustion
+fact and at most ten unconsumed request identities. One ten-row batch is fetched
+only after the prior batch drains; reused native pages rehydrate only that
+bounded identity set. Nonprefix presentation selection removes exact qualified
+identities, never a clock prefix guessed from a selected sequence winner.
+Clock-only interpolation remains presentation, never native sequence evidence.
+API fallback continues using its physical timeline index.
+
+The private cursor version binds to session, epoch, cutoff, source and retained
+placement revision. Replacing an existing record's physical index keys advances
+that revision atomically in the same plugin namespace, including
+reclassification and retirement. Body-only updates, new records and unchanged
+evidence do not. This fences both outstanding and in-flight captures without
+retaining history or adding native reads. Revision survives reopen alongside
+indexed records. Cursor validation retains the neutral length bound and rejects
+bodies, duplicate or oversized pending sets and sequence data in clock-only
+edges.
+
 Settlements are ephemeral native events without a sequence, so each stored
 outcome carries a plugin position `{after, rank, basis}`: the session
 aggregate's last durable sequence delivered before it, and its delivery rank

@@ -72,13 +72,19 @@ interface Baseline {
   presentation?: import("@otk/protocol").ContentSession;
 }
 interface Cursor {
-  v: 2;
+  v: 3;
   session: string;
   epoch: string;
   cutoff: string | null;
   native: string;
   source: string;
   retained?: { created: number; id: string; order?: number };
+  revision: number;
+  unanchored?: {
+    before?: { created: number; id: string };
+    pending: string[];
+    exhausted: boolean;
+  };
   reuse?: boolean;
 }
 interface LiveShell {
@@ -116,6 +122,15 @@ const encode = (value: Cursor) =>
     /=+$/,
     "",
   );
+function cursorEdge(value: unknown, sequence: boolean): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const edge = value as Record<string, unknown>;
+  return Object.keys(edge).every((key) =>
+    ["created", "id", ...(sequence ? ["order"] : [])].includes(key)
+  ) &&
+    Number.isFinite(edge.created) && typeof edge.id === "string" &&
+    (edge.order === undefined || Number.isFinite(edge.order));
+}
 function decode(token: string): Cursor {
   try {
     if (
@@ -133,18 +148,36 @@ function decode(token: string): Cursor {
           "native",
           "source",
           "retained",
+          "revision",
+          "unanchored",
           "reuse",
         ].includes(key)
       ) ||
-      v.v !== 2 || typeof v.session !== "string" ||
+      v.v !== 3 || typeof v.session !== "string" ||
       typeof v.epoch !== "string" || typeof v.native !== "string" ||
-      (!v.native && !v.retained) || typeof v.source !== "string" || !v.source ||
+      (!v.native && !v.retained && !v.unanchored) ||
+      typeof v.source !== "string" || !v.source ||
+      !Number.isSafeInteger(v.revision) || v.revision < 0 ||
       (v.reuse !== undefined && typeof v.reuse !== "boolean") ||
       (v.retained !== undefined &&
-        (!Number.isFinite(v.retained.created) ||
-          typeof v.retained.id !== "string" ||
-          (v.retained.order !== undefined &&
-            !Number.isFinite(v.retained.order)))) ||
+        !cursorEdge(v.retained, true)) ||
+      (v.unanchored !== undefined && (
+        !v.unanchored || typeof v.unanchored !== "object" ||
+        Array.isArray(v.unanchored) ||
+        Object.keys(v.unanchored).some((key) =>
+          !["before", "pending", "exhausted"].includes(key)
+        ) ||
+        typeof v.unanchored.exhausted !== "boolean" ||
+        !Array.isArray(v.unanchored.pending) ||
+        v.unanchored.pending.length > MESSAGE_PAGE_SIZE ||
+        v.unanchored.pending.some((id: unknown) =>
+          typeof id !== "string" || !id
+        ) ||
+        new Set(v.unanchored.pending).size !== v.unanchored.pending.length ||
+        (v.unanchored.before !== undefined &&
+          !cursorEdge(v.unanchored.before, false))
+      )) ||
+      (v.source.startsWith("sql") !== (v.unanchored !== undefined)) ||
       v.source.length > 512 ||
       (v.cutoff !== null && typeof v.cutoff !== "string")
     ) throw new Error();
@@ -857,13 +890,14 @@ export class Transcript {
     ids.decode(id);
     signal.throwIfAborted();
     const token = before === undefined ? undefined : decode(before);
+    const revision = this.requests.revision(id);
     let baseline = this.#baselines.get(id);
     if (
       token &&
       (!baseline || token.session !== id ||
         token.epoch !== this.replay.clock(id).epoch ||
         token.cutoff !== (baseline.raw.revert?.messageID ?? null) ||
-        token.source !== baseline.source)
+        token.source !== baseline.source || token.revision !== revision)
     ) {
       throw new HarnessError(
         "cursor-stale",
@@ -948,23 +982,54 @@ export class Transcript {
       const lower = page.next && items.length
         ? edge(items.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b))
         : undefined;
-      // Sequence authority: observations anchored to native sequence, plus
-      // those without sequence evidence placed by their native clock.
+      // Each acquisition frontier belongs to its physical index. In particular,
+      // interpolation below cannot certify either a native or a clock prefix.
+      const sequenced = sequence
+        ? await this.requests.page(id, upper, MESSAGE_PAGE_SIZE + 1, "sequence")
+        : [];
+      const unanchored = sequence
+        ? token?.unanchored
+          ? { ...token.unanchored, pending: [...token.unanchored.pending] }
+          : {
+            before: upper && { created: upper.created, id: upper.id },
+            pending: [] as string[],
+            exhausted: false,
+          }
+        : undefined;
+      let clockRows: Message[] = [];
+      if (unanchored) {
+        if (unanchored.pending.length) {
+          clockRows = await Promise.all(unanchored.pending.map(async (key) => {
+            const value = await this.requests.get(id, key);
+            if (!value?.outcome) {
+              throw new HarnessError(
+                "cursor-stale",
+                "Retained message placement changed. Refresh messages.",
+              );
+            }
+            return value.outcome;
+          }));
+        } else if (!unanchored.exhausted) {
+          clockRows = [
+            ...await this.requests.page(
+              id,
+              unanchored.before,
+              MESSAGE_PAGE_SIZE,
+              "unanchored",
+            ),
+          ];
+          unanchored.exhausted = clockRows.length < MESSAGE_PAGE_SIZE;
+          const last = clockRows.at(-1);
+          if (last) {
+            unanchored.before = { created: last.time.created, id: last.id };
+          }
+          unanchored.pending = clockRows.map((m) =>
+            m.id.replace(/^request:/, "")
+          );
+        }
+      }
       const retained = sequence
-        ? [
-          ...await this.requests.page(
-            id,
-            upper,
-            MESSAGE_PAGE_SIZE + 1,
-            "sequence",
-          ),
-          ...await this.requests.page(
-            id,
-            upper,
-            MESSAGE_PAGE_SIZE + 1,
-            "unanchored",
-          ),
-        ]
+        ? [...sequenced, ...clockRows]
         : await this.requests.page(
           id,
           upper,
@@ -1009,6 +1074,24 @@ export class Transcript {
       ].sort((a, b) => compareEdge(a, edge(b)));
       const overflow = candidates.length > MESSAGE_PAGE_SIZE;
       const selected = candidates.slice(-MESSAGE_PAGE_SIZE);
+      if (unanchored) {
+        const consumed = new Set(selected.map((m) => m.id));
+        unanchored.pending = unanchored.pending.filter((key) =>
+          !consumed.has(`request:${key}`)
+        );
+      }
+      const refill = unanchored && !unanchored.pending.length &&
+        !unanchored.exhausted;
+      const reuse = overflow || !!refill;
+      const proven = new Set([...nativeItems, ...sequenced].map((m) => m.id));
+      const consumed = sequence
+        ? selected.filter((m) => proven.has(m.id))
+        : selected;
+      const nextUpper = reuse
+        ? consumed.length
+          ? edge(consumed.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b))
+          : upper
+        : lower;
       items = selected.sort(compareMessages);
       this.buffers.epoch(id, owner.epoch);
       this.buffers.checkpoint(id, (sid, op) => this.#publish(sid, op));
@@ -1038,7 +1121,8 @@ export class Transcript {
       signal.throwIfAborted();
       if (
         owner !== this.#baselines.get(id) ||
-        owner.epoch !== this.replay.clock(id).epoch
+        owner.epoch !== this.replay.clock(id).epoch ||
+        revision !== this.requests.revision(id)
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
       owner.presentation ??= await revertSession(
         this.reader.client(),
@@ -1046,6 +1130,12 @@ export class Transcript {
         signal,
       );
       signal.throwIfAborted();
+      if (revision !== this.requests.revision(id)) {
+        throw new HarnessError(
+          "cursor-stale",
+          "Retained message placement changed. Refresh messages.",
+        );
+      }
       const sealed = capture.seal(), recovering = this.recovery.snapshot(id);
       const replacements = new Map<string, number>();
       sealed.events.forEach(({ event }, index) => {
@@ -1115,28 +1205,18 @@ export class Transcript {
         clock: sealed.clock,
         session: owner.presentation,
         items,
-        older: overflow
+        older: reuse || page.next
           ? encode({
-            v: 2,
+            v: 3,
             session: id,
             epoch: owner.epoch,
             cutoff: cutoff ?? null,
-            native: native ?? "",
+            native: (reuse ? native : page.next) ?? "",
             source: facts.source,
-            reuse: true,
-            retained: edge(
-              selected.reduce((a, b) => compareEdge(a, edge(b)) < 0 ? a : b),
-            ),
-          })
-          : page.next
-          ? encode({
-            v: 2,
-            session: id,
-            epoch: owner.epoch,
-            cutoff: cutoff ?? null,
-            native: page.next,
-            source: facts.source,
-            ...(lower ? { retained: lower } : {}),
+            revision,
+            ...(reuse ? { reuse: true } : {}),
+            ...(nextUpper ? { retained: nextUpper } : {}),
+            ...(unanchored ? { unanchored } : {}),
           })
           : null,
         prompt: facts.metadata.prompt,
