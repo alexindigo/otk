@@ -262,3 +262,109 @@ Deno.test("automatic permissions cannot release manual lamp grace; questions rem
   );
   owner.stop();
 });
+
+for (const inventory of ["stale", "absent"] as const) {
+  Deno.test(`${inventory} input evidence cannot retire a known question during concurrent permission grace`, () => {
+    const time = clock(), owner = createAttentionGrace({ clock: time });
+    try {
+      owner.observe("a", "question-session", {
+        inputs: { keys: ["question-one"], fresh: true },
+        permissions: { keys: ["permission-two"], fresh: true },
+      });
+      owner.observe("a", "permission-session", {
+        permissions: { keys: ["permission-one"], fresh: true },
+      });
+      owner.observe(
+        "a",
+        "question-session",
+        inventory === "stale"
+          ? { inputs: { keys: [], fresh: false } }
+          : undefined,
+      );
+      for (const scope of ["session", "family", "project"]) {
+        const contains = (session: string) =>
+          scope === "session"
+            ? session === "question-session"
+            : session === "question-session" ||
+              session === "permission-session";
+        assertEquals(
+          owner.light(`known-${scope}`, "blocked", "a", contains, true),
+          "blocked",
+        );
+      }
+      assertEquals(
+        owner.light("upstream-none", "none", "a", () => true, true),
+        "none",
+        "retained identity cannot invent activity",
+      );
+      owner.observe("a", "question-session", {
+        inputs: { keys: [], fresh: true },
+      });
+      assertEquals(
+        owner.light("fresh-empty", "blocked", "a", () => true, true),
+        "none",
+        "fresh empty input evidence retires the bypass",
+      );
+      owner.observe("b", "question-session", {
+        permissions: { keys: ["permission-one"], fresh: true },
+      });
+      assertEquals(
+        owner.light("other-server", "blocked", "b", () => true, true),
+        "none",
+      );
+      time.tick(500);
+      assertEquals(
+        owner.light("elapsed", "blocked", "a", () => true, true),
+        "blocked",
+      );
+    } finally {
+      owner.stop();
+    }
+  });
+}
+
+Deno.test("input settlement retires only its request identity, independently of permission and server identities", () => {
+  const time = clock(), owner = createAttentionGrace({ clock: time });
+  // Optional lookup keeps the unchanged owner executable for the red control.
+  const settle = Reflect.get(owner, "inputSettled") as
+    | ((server: string, id: string) => void)
+    | undefined;
+  try {
+    for (const server of ["a", "b"]) {
+      owner.observe(server, "session", {
+        inputs: { keys: ["one", "two"], fresh: true },
+        permissions: { keys: ["one"], fresh: true },
+      });
+    }
+    settle?.("a", "one");
+    assertEquals(
+      owner.light("one-remains", "blocked", "a", () => true, true),
+      "blocked",
+    );
+    settle?.("a", "two");
+    assertEquals(
+      owner.light("all-settled", "blocked", "a", () => true, true),
+      "none",
+      "settled inputs no longer bypass the independent permission grace",
+    );
+    assertEquals(
+      owner.light("other-server", "blocked", "b", () => true, true),
+      "blocked",
+    );
+    owner.removeServer("b");
+    owner.observe("b", "session", {
+      permissions: { keys: ["new"], fresh: true },
+    });
+    assertEquals(
+      owner.light("removed-server", "blocked", "b", () => true, true),
+      "none",
+    );
+    time.tick(500);
+    assertEquals(
+      owner.light("permission-retained", "blocked", "a", () => true, true),
+      "blocked",
+    );
+  } finally {
+    owner.stop();
+  }
+});

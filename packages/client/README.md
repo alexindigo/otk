@@ -1124,6 +1124,13 @@ mounts, duplicates and preference changes never start another grace. Questions
 remain immediate. Supervision, mandatory visibility, notification routing,
 badges and sound do not consume this presentation delay.
 
+Known question/form inputs retain their server/request identities across stale
+or absent evidence. Only a fresh per-session inventory, exact inputSettled call,
+session deletion or server retirement removes them. The UI binding forwards
+accepted question/form removals; permission settlement remains independent.
+Retained inputs bypass concurrent permission grace but never create blocked
+activity when upstream supervision has already cleared it.
+
 `createApprovals(rpc, lookup, factory?)` is a per-sidecar authoritative policy
 and activity resource. Welcome invalidates older operations; `approvals` frames
 own explicit enabled IDs and revisions. `owner(sessionID)` uses the shared
