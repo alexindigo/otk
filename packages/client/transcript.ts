@@ -13,6 +13,7 @@ import {
   type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { RequestFailure } from "./failures.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
 import {
   type FailureValue,
@@ -1080,7 +1081,11 @@ export function createTranscript(
             });
           });
         } else if (state.exhausted) {
-          throw new Error("Message is no longer available");
+          throw new RequestFailure({
+            code: "message.missing",
+            retry: "none",
+            diagnosticID: crypto.randomUUID(),
+          });
         } else await owner.older();
         if (state.pageError) throw feedbackError(state.pageError);
       }

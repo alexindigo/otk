@@ -126,6 +126,11 @@ the source and reveals/focuses the message through its public control. No native
 anchor scroll or cross-component DOM lookup is introduced. Only the retained
 record renderer asks FP1 for the full presentation.
 
+Reveal availability includes the selected transcript's acquisition port, not
+only already-loaded membership. Missing retained source reports the owner's
+known absence without dropping the draft; acquired source is focused through the
+same MessageControl API.
+
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use

@@ -88,6 +88,15 @@ resyncs before readiness. Snapshot acquisition returns a fenced commit; abort
 joins acquisition and event work before closing. Execution facts survive
 decodable frames whose unrelated fields drift. The SDK event queue is unused.
 
+The byte reader owns one outstanding next-chunk read while ordered dispatch is
+backpressured, allowing real HTTP EOF/read failure to retire that generation. It
+does not drain more chunks or parse events concurrently; bootstrap event/byte
+admission is unchanged. Body cancellation joins the owned read before releasing
+its lock. Execution-failure facts and anchor reads borrow that generation's
+signal as well as transcript lifetime, so teardown cannot wait on a read whose
+cancellation was dropped. Ordinary source failures still retain their diagnostic
+and failure record; cancellation does not become a new failure.
+
 The adapter composes scalar connection/index facts with qualified catalog
 capabilities. The worker's `core/digest/providers.ts` selects native codecs,
 private migrations and sink construction without changing scheduling or SQLite

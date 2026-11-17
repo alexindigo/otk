@@ -140,6 +140,7 @@ export const profiles = {
   "contract-messages-migrated-history": "neutral",
   "contract-messages-v1-notices": "neutral",
   "contract-messages-notices": "neutral",
+  "contract-messages-failure-ownership": "neutral",
   "contract-messages-public-ui": "neutral",
   "contract-messages-recorded-files": "v1",
   "contract-messages-recorded-tools": "v1",

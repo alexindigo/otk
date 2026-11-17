@@ -652,6 +652,12 @@ session resource, independently of acquired first/last native action boundaries.
 compatibility helpers over those same primitives, including session
 partitioning. Shipped rendering borrows the resource projection instead of
 invoking those whole-list helpers on live frames.
+
+Mixed replies retain assistant metadata independently of final source position.
+Context records before or after an assistant remain ordered source segments,
+without replacing its usage, terminal state or action eligibility. Removing the
+last assistant retires that turn's pending membership; context-only groups stay
+context. Ordinary part updates reuse the indexed assistant header.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.
@@ -1121,6 +1127,10 @@ clears them. Removed identities advance their disclosure generation, so an old
 handle cannot change a replacement. `ensure(id, signal?)` supports a view's
 reveal lifetime without creating another body owner or cancelling other
 consumers.
+
+Exhausted `ensure` acquisition reports its known missing-message condition as
+feature-authored feedback, not arbitrary exception prose. A retained reference
+can acquire unloaded source through that same cursor owner.
 
 `interaction.defaultFor(category, prefs)` resolves the neutral category's
 starting state. A disclosure's `expanded(category, prefs, required?)` resolves

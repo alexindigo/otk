@@ -50,6 +50,12 @@ continuation retains its own captured attempt key, so an older settlement cannot
 consume a newer attempt. Native prompt identity and retained chronological
 records remain separate from this ephemeral correlation lifecycle.
 
+Prompt, shell and command admission share one causal-association reset,
+retaining only the creation watermark. Only newly observed native prompt facts
+may attach the new failure to a turn. Failure cleanup borrows the event's
+normalized session identity, including session deletion's `info.id`, so replay
+identities and old prompt associations cannot survive that native lifetime.
+
 The public `Client` also supports explicit
 `classification: read | effect |
 stream` and optional neutral `operation`

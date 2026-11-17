@@ -7,6 +7,7 @@ import { messageReadingScenario } from "./message-reading-scenario.ts";
 import { migratedHistoryScenario } from "./migrated-history-scenario.ts";
 import { v1NoticesScenario } from "./v1-notices-scenario.ts";
 import { noticesScenario } from "./notices-scenario.ts";
+import { failureOwnershipScenario } from "./failure-ownership-scenario.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
 import { recordedMessageScenario } from "./recorded-message-scenario.ts";
 import { coreBackendFixture } from "./core-backend.ts";
@@ -33,6 +34,9 @@ import type {
 
 /** External-backend message contracts retain their original real core/UI owner. */
 export async function messagesScenario(profile: Profile) {
+  if (profile === "contract-messages-failure-ownership") {
+    return await failureOwnershipScenario();
+  }
   if (profile === "contract-messages-v1-notices") {
     return await v1NoticesScenario();
   }

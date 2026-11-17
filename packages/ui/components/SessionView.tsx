@@ -43,6 +43,7 @@ import {
   type FailureValue,
   failureValue,
   replyKey,
+  RequestFailure,
   sessionResult,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -245,19 +246,32 @@ export default function SessionView(props: {
       properties: { messageID: { type: "string" } },
     },
     enabled: (_ctx, target?: { messageID: string }) =>
-      !!target && !!projection().messagesByID[target.messageID],
+      !!target?.messageID &&
+      (!!projection().messagesByID[target.messageID] || !!props.transcript),
     run: async (_ctx, target: { messageID: string }) => {
       setRevealError(undefined);
       following?.pause();
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
       const message = projection().messagesByID[target.messageID];
-      if (!message) throw new Error("Message is no longer available");
+      if (!message) {
+        throw new RequestFailure({
+          code: "message.missing",
+          retry: "none",
+          diagnosticID: crypto.randomUUID(),
+        });
+      }
       const key = replyKey(message), reply = projection().repliesByID[key];
       await window?.reveal(key, {
         align: "center",
         focus: () => {
           const control = controls.get(reply?.message.id ?? target.messageID);
-          if (!control) throw new Error("Message is no longer available");
+          if (!control) {
+            throw new RequestFailure({
+              code: "message.missing",
+              retry: "none",
+              diagnosticID: crypto.randomUUID(),
+            });
+          }
           control.reveal();
         },
       });

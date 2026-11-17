@@ -1460,21 +1460,28 @@ export class Transcript {
   }
   /** Submission failures have no native message; reuse plugin-owned retention,
    * page merging and live publication rather than a second session error store. */
-  async failure(message: Message): Promise<void> {
+  async failure(
+    message: Message,
+    signal: AbortSignal = this.#lifetime.signal,
+  ): Promise<void> {
     const key = message.id.replace(/^request:/, "");
     const previous = await this.requests.get(message.sessionID, key);
-    await this.#observe(message.sessionID, key, message, previous);
+    signal.throwIfAborted();
+    await this.#observe(message.sessionID, key, message, previous, signal);
   }
   /** Execution errors can precede any assistant. Their native idle boundary
    * supplies the exact preceding prompt through the existing scalar facts owner. */
   async executionFailure(
     event: V2Event,
     label?: string,
+    parent: AbortSignal = this.#lifetime.signal,
   ): Promise<import("@otk/protocol").PublicFailure | undefined> {
     if (
       event.type !== "session.execution.failed" ||
       typeof event.data.sessionID !== "string"
     ) return;
+    const signal = AbortSignal.any([parent, this.#lifetime.signal]);
+    signal.throwIfAborted();
     const id = ids.encode(event.data.sessionID);
     const failure = {
       code: "native.execution",
@@ -1497,20 +1504,22 @@ export class Transcript {
         const nativeID = event.id.replace(/^evt_/, "msg_");
         const facts = await this.#facts(
           { sessionID: id, messages: [nativeID] },
-          this.#lifetime.signal,
+          signal,
         );
+        signal.throwIfAborted();
         const replyTo = facts.contexts[nativeID]?.replyTo;
         if (replyTo) {
           message = { ...message, replyTo };
         }
       } catch (error) {
-        this.#lifetime.signal.throwIfAborted();
+        signal.throwIfAborted();
         this.options.diagnostic(error);
       }
     }
     // Resolve the native turn before the first publication, so the same failure
     // never has a transient standalone and then a turn-attached identity.
-    await this.failure(message);
+    signal.throwIfAborted();
+    await this.failure(message, signal);
     const part = message.parts[0];
     return part.kind === "external" ? part.failure : undefined;
   }
@@ -1519,7 +1528,9 @@ export class Transcript {
     requestID: string,
     outcome: Message,
     previous: import("./request-retention.ts").RetainedRequest | undefined,
+    signal = this.#lifetime.signal,
   ): Promise<void> {
+    signal.throwIfAborted();
     const value = { ...previous, id: requestID, sessionID: id, outcome };
     const settled = previous?.outcome && previous.position &&
       previous.position.basis !== "pending";
@@ -1532,6 +1543,7 @@ export class Transcript {
         basis: "stream" as const,
       };
       await this.requests.put({ ...value, position });
+      signal.throwIfAborted();
       this.#announce(id, outcome, position);
       return;
     }
@@ -1542,16 +1554,17 @@ export class Transcript {
     });
     let seq: number | undefined;
     try {
-      seq = await this.#sequence(id);
+      seq = await this.#sequence(id, undefined, signal);
     } catch (error) {
-      this.#lifetime.signal.throwIfAborted();
+      signal.throwIfAborted();
       this.options.diagnostic(error);
     }
-    this.#lifetime.signal.throwIfAborted();
+    signal.throwIfAborted();
     const position: RequestPosition = seq === undefined
       ? { after: null, rank: 0, basis: "clock" }
       : { after: seq, rank: this.requests.rank(id, seq), basis: "lookup" };
     await this.requests.put({ ...value, position });
+    signal.throwIfAborted();
     const pending = this.#anchors.get(id) ?? [];
     this.#anchors.set(id, [...pending, requestID]);
     this.#announce(id, outcome, position);
@@ -1581,16 +1594,21 @@ export class Transcript {
       this.requests.cutoff(id, null);
     }
   }
-  async #sequence(id: string, messageID?: string): Promise<number | undefined> {
+  async #sequence(
+    id: string,
+    messageID?: string,
+    signal = this.#lifetime.signal,
+  ): Promise<number | undefined> {
+    signal.throwIfAborted();
     const input = { sessionID: id, ...(messageID ? { messageID } : {}) };
     if (this.options.sequence) {
-      return await this.options.sequence(input, this.#lifetime.signal);
+      return await this.options.sequence(input, signal);
     }
     if (!this.options.digest) return;
     return (await this.options.digest.read("opcv2.request.anchor", input, {
       owner: `v2-request-anchor:${id}`,
       priority: "attention",
-      signal: this.#lifetime.signal,
+      signal,
     })).seq;
   }
   #announce(id: string, outcome: Message, position: RequestPosition): void {

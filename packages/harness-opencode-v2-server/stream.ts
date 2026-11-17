@@ -288,6 +288,7 @@ export class V2Stream {
     };
     touch();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let nextRead: Promise<ReadableStreamReadResult<Uint8Array>> | undefined;
     let cancelReader: (() => Promise<void>) | undefined;
     const cancelBody = () => {
       void cancelReader?.();
@@ -329,6 +330,20 @@ export class V2Stream {
         () => owner.abort(new Error("Opencode V2 stream closed")),
         (error) => owner.abort(error),
       );
+      // One transport read can observe EOF/failure while ordered event work is
+      // backpressured. Never drain another chunk until the parser consumes this
+      // one; bootstrap event/byte admission remains at accept().
+      const readAhead = () => {
+        const pending = ownedReader.read();
+        void pending.then(
+          (chunk) => {
+            if (chunk.done) owner.abort(new Error("Opencode V2 stream closed"));
+          },
+          (error) => owner.abort(error),
+        );
+        return pending;
+      };
+      nextRead = readAhead();
       const decoder = new TextDecoder();
       let fragments: string[] = [], data: string[] = [], skipLF = false;
       const line = async (text: string) => {
@@ -343,8 +358,9 @@ export class V2Stream {
         }
       };
       while (true) {
-        const chunk = await reader.read();
+        const chunk = await nextRead;
         if (chunk.done) break;
+        nextRead = readAhead();
         touch(); // Includes comments, including split UTF-8/CRLF frames.
         const text = decoder.decode(chunk.value, { stream: true });
         let start = skipLF && text[0] === "\n" ? 1 : 0;
@@ -368,6 +384,7 @@ export class V2Stream {
       pause();
       signal.removeEventListener("abort", cancelBody);
       await cancelReader?.();
+      await nextRead?.catch(() => {});
       reader?.releaseLock();
       await bootstrap?.catch(() => {});
     }

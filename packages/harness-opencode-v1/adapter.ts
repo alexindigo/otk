@@ -617,9 +617,7 @@ export class OpencodeV1Adapter implements Harness {
             input: Parameters<typeof capability.prompt>[0],
             operation?: Parameters<typeof capability.prompt>[1],
           ) => {
-            this.#failureAttempts.retire(input.sessionID);
-            const turn = this.#failureTurns.get(input.sessionID);
-            this.#failureTurns.set(input.sessionID, { created: turn?.created });
+            this.#admitFailureTurn(input.sessionID);
             try {
               await capability.prompt(input, operation);
             } catch (error) {
@@ -1252,6 +1250,12 @@ export class OpencodeV1Adapter implements Harness {
       this.#sink.content(sessionID, { op: "message.upsert", message });
     }
   }
+  /** An admitted operation cannot borrow a previous prompt's causal anchor. */
+  #admitFailureTurn(sessionID: string): void {
+    this.#failureAttempts.retire(sessionID);
+    const turn = this.#failureTurns.get(sessionID);
+    this.#failureTurns.set(sessionID, { created: turn?.created });
+  }
   #launch(
     sessionID: string,
     operation: Parameters<Launch>[1],
@@ -1259,6 +1263,7 @@ export class OpencodeV1Adapter implements Harness {
     options: Parameters<Client["request"]>[1],
   ): ReturnType<Launch> {
     if (this.#stopped) throw new HarnessError("stopped", "Harness is stopped");
+    this.#admitFailureTurn(sessionID);
     const controller = new AbortController();
     const token = this.#errors.begin(
       sessionID,
@@ -2134,8 +2139,7 @@ export class OpencodeV1Adapter implements Harness {
     }
     const info = p.info as Info | undefined;
     const raw = p.part as RawPart | undefined;
-    const identity = p.sessionID ?? info?.sessionID ?? raw?.sessionID;
-    const sessionID = typeof identity === "string" ? ids.encode(identity) : "";
+    const sessionID = typeof nativeID === "string" ? ids.encode(nativeID) : "";
     if (sessionID) {
       const turn = this.#failureTurns.get(sessionID) ?? {};
       if (info?.time?.created !== undefined) {

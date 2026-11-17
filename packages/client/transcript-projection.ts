@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentOp, Message, Part, ReplyBoundary } from "@otk/protocol";
+import type {
+  AssistantMessage,
+  ContentOp,
+  Message,
+  Part,
+  ReplyBoundary,
+} from "@otk/protocol";
 import {
   compareMessages,
   isAssistantTerminal,
@@ -104,6 +110,7 @@ export function createTranscriptProjection(): TranscriptProjection {
   };
   const boundaries = new Map<string, ReplyBoundary>();
   const lastHeaders = new Map<string, Message>();
+  const assistantHeaders = new Map<string, AssistantMessage>();
   const segmentByID = new Map<string, TranscriptReply["segments"][number]>();
   const locations = new Map<string, { key: string; index: number }>();
   const partReads = new Map<string, () => Part[]>();
@@ -210,6 +217,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         : undefined;
       if (turn !== undefined && pendingTurns.delete(turn)) touched.add(turn);
       lastHeaders.delete(key);
+      assistantHeaders.delete(key);
       partReads.delete(key);
       delete state.repliesByID[key];
       state.replyIDs = state.replyIDs.filter((id) => id !== key);
@@ -223,6 +231,30 @@ export function createTranscriptProjection(): TranscriptProjection {
         ? lastHeaders.get(key)!
         : read(ids.at(-1)!);
     lastHeaders.set(key, last);
+    // Source position and assistant reply authority are independent. Membership
+    // changes may inspect this group; ordinary parts retain the indexed header.
+    let assistant = assistantHeaders.get(key);
+    if (
+      !previous || previous.messageIDs !== ids ||
+      (changed?.id === assistant?.id && changed?.role !== "assistant")
+    ) {
+      assistant = undefined;
+      for (let i = ids.length - 1; i >= 0; i--) {
+        const member = read(ids[i]);
+        if (member.role === "assistant") {
+          assistant = member;
+          break;
+        }
+      }
+    } else if (
+      changed?.role === "assistant" &&
+      (!assistant || changed.id === assistant.id ||
+        compare(assistant, changed) < 0)
+    ) {
+      assistant = changed;
+    }
+    if (assistant) assistantHeaders.set(key, assistant);
+    else assistantHeaders.delete(key);
     let segments: TranscriptReply["segments"];
     const location = changed && locations.get(changed.id);
     if (previous?.messageIDs === ids && changed && location?.key === key) {
@@ -246,15 +278,24 @@ export function createTranscriptProjection(): TranscriptProjection {
       partReads.set(key, readParts);
     }
     const partsForReply = readParts;
+    const authority = assistant ?? last;
     const message: Message = {
-      ...last,
+      ...authority,
       id: first.id,
       sourceOrder: first.sourceOrder,
-      time: { ...last.time },
+      time: { ...authority.time },
       get parts() {
         return partsForReply();
       },
     };
+    const oldTurn = previous?.message.role === "assistant"
+      ? previous.message.replyTo
+      : undefined;
+    const newTurn = message.role === "assistant" ? message.replyTo : undefined;
+    if (
+      oldTurn !== undefined && oldTurn !== newTurn &&
+      pendingTurns.delete(oldTurn)
+    ) touched.add(oldTurn);
     if (message.role === "assistant") {
       message.interrupted = !!(previous?.message.role === "assistant" &&
         previous.message.interrupted) || message.interrupted;
@@ -408,6 +449,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       helperChildren.clear();
       boundaries.clear();
       lastHeaders.clear();
+      assistantHeaders.clear();
       segmentByID.clear();
       locations.clear();
       partReads.clear();

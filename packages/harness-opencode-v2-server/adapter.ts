@@ -1209,7 +1209,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       typeof event.data.sessionID === "string"
         ? this.#index.getMetadata(ids.encode(event.data.sessionID))?.title
         : undefined,
+      signal,
     );
+    signal.throwIfAborted();
+    if (generation !== this.#generation) return;
     await this.transcript.event(event);
     const shell = this.#shells.event(event);
     if (shell) {
