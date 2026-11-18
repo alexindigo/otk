@@ -51,6 +51,21 @@ for (const status of [404, 405, 501]) {
   });
 }
 
+test("V2 older transcript pages retain the first page's unsupported queue notice", async () => {
+  const f = await pendingInventoryFixture(await tempDir("older-inbox-notice-"));
+  f.control.inboxStatus = 404;
+  f.control.transcriptRows = 15;
+  await f.start();
+  const first = await f.adapter.core.listMessages("opcv2-ses_form", {});
+  assertEquals(typeof first.older, "string");
+  const older = await f.adapter.core.listMessages("opcv2-ses_form", {
+    before: first.older!,
+  });
+  assertEquals(older.items.length, 5);
+  assertEquals(older.session.notices, first.session.notices);
+  assertEquals(f.reads.filter((path) => path.endsWith("/inbox")).length, 1);
+});
+
 test("V2 unavailable inbox is not misreported as an unsupported capability", async () => {
   const f = await pendingInventoryFixture(await tempDir("unavailable-inbox-"));
   f.control.inboxStatus = 503;
