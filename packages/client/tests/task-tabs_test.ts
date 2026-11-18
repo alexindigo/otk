@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { createTabs as canonicalTabs } from "@otk/client";
 import {
   createTabs,
@@ -359,7 +359,7 @@ Deno.test("rename and pin share captured-name promotion without selecting a late
   failed.stop();
 });
 
-Deno.test("direct child phantom selection remains exact across ordinary metadata updates", () => {
+Deno.test("direct child phantom selection views the child under its root's selected tab across metadata updates", () => {
   const root = entry("root"), child = entry("child", 2, root.id);
   child.attention.questions = 1;
   const tabs = model(),
@@ -367,14 +367,14 @@ Deno.test("direct child phantom selection remains exact across ordinary metadata
   try {
     tabs.update(input);
     tabs.select({ kind: "session", id: child.id });
-    assertEquals(tabs.state.selected, { kind: "session", id: child.id });
-    assertEquals(tabs.state.sessionID, child.id);
-    assertEquals(tabs.tabs().map((row) => row.id), [child.id]);
-    child.title = "Updated title";
-    tabs.update(input);
-    assertEquals(tabs.state.selected, { kind: "session", id: child.id });
-    assertEquals(tabs.state.sessionID, child.id);
-    assertEquals(tabs.tabs().map((row) => row.id), [child.id]);
+    // Decision 3: the open session's root has the selected top-line tab.
+    for (let pass = 0; pass < 2; pass++) {
+      assertEquals(tabs.state.selected, { kind: "session", id: root.id });
+      assertEquals(tabs.state.sessionID, child.id);
+      assert(tabs.tabs().some((row) => row.id === root.id));
+      child.title = "Updated title";
+      tabs.update(input);
+    }
   } finally {
     tabs.stop();
   }

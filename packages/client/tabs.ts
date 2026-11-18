@@ -428,10 +428,9 @@ export function createTabs(
           const task = taskFor(id);
           draft.selected = {
             kind: task ? "task" : "session",
-            id: task?.id ??
-              (draft.selected?.kind === "session" && draft.selected.id === id
-                ? id
-                : rootFor(id)),
+            // Decision 3: the open session's root holds the selected tab in
+            // the top line; a child is the viewed session beneath it.
+            id: task?.id ?? rootFor(id),
           };
           if (task) {
             remembered.set(task.id, id);
@@ -503,7 +502,10 @@ export function createTabs(
       if (task && selectedID) remembered.set(task.id, selectedID);
       selectionRevision++;
       store.update((draft) => {
-        draft.selected = { ...selection };
+        draft.selected = selection.kind === "task" ? { ...selection } : {
+          kind: "session",
+          id: rootFor(selectedID ?? selection.id),
+        };
         draft.sessionID = selectedID;
         draft.closed = draft.closed?.filter((id) => id !== selectedID);
         delete draft.preview;

@@ -27,7 +27,9 @@ export class IndexView {
     readonly index: IndexStore,
     readonly view: () => ViewLease,
     readonly keys: (view: ViewLease) => readonly string[],
-    readonly send: (frame: ServerFrame) => void,
+    /** `rows` names the identities a patch admits to or retires from this
+     * lease; a snapshot replaces the whole lease and names none. */
+    readonly send: (frame: ServerFrame, rows?: readonly string[]) => void,
     readonly project: (entry: IndexEntry, view: ViewLease) => IndexEntry = (
       entry,
     ) => entry,
@@ -192,7 +194,7 @@ export class IndexView {
     // One bounded chunk can be outstanding. Pending updates retain one value
     // per identity; repeated deltas become one authoritative upsert.
     const chunk: IndexOp[] = [];
-    const keys: string[] = [];
+    const keys: string[] = [], moved: string[] = [];
     for (const id of ops.keys()) {
       if (!this.#pending.has(id)) this.#pending.set(id, undefined);
     }
@@ -206,8 +208,10 @@ export class IndexView {
       keys.push(id);
       bytes += size;
       this.#pending.delete(id);
+      const leased = this.#ids.has(id);
       if (wanted.has(id) && this.index.snapshotEntry(id)) this.#ids.add(id);
       else this.#ids.delete(id);
+      if (leased !== this.#ids.has(id)) moved.push(id);
     }
     for (const [id] of this.#pending) {
       if (!wanted.has(id) && !this.#ids.has(id)) this.#pending.delete(id);
@@ -225,6 +229,6 @@ export class IndexView {
       rev: this.#rev,
       epoch: this.view().epoch,
       ops: chunk,
-    });
+    }, moved);
   }
 }
