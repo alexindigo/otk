@@ -1499,7 +1499,17 @@ export class Transcript {
         clock: sealed.clock,
         session: {
           ...owner.presentation,
-          ...(owner.notices ? { notices: owner.notices } : {}),
+          ...(owner.notices
+            ? {
+              notices: owner.notices.map((notice) => ({
+                ...notice,
+                facts: {
+                  ...notice.facts,
+                  target: { ...notice.facts?.target, label: owner.raw.title },
+                },
+              })),
+            }
+            : {}),
         },
         items,
         older,
