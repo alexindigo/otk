@@ -594,11 +594,14 @@ before backend startup. Automatic scans retain dirty owners while disconnected
 and run on connection readiness, not on a metadata publication that may precede
 the native client. Connection edges fence in-flight scans independently of index
 replacement. Proven-not-dispatched unavailable replies finish their journal
-intent and become eligible only on the next connected edge. Actual refusals stay
-memoized by request fingerprint across connection edges; uncertain dispatched
-replies stay unconfirmed and cannot be resent. Unrelated index updates cannot
-repeat a failed attempt or journal row. Policy revisions and affected-family
-activity invalidations are separate feature-owned frames.
+intent and become eligible on the next connected edge. Explicit index
+replacement (`index.snapshot`) also clears failed-request memoization and
+re-enqueues enabled sessions, allowing unavailable replies to be retried without
+another connected edge. Actual refusals stay memoized by request fingerprint
+across connection edges; uncertain dispatched replies stay unconfirmed and
+cannot be resent. Unrelated index updates cannot repeat a failed attempt or
+journal row. Policy revisions and affected-family activity invalidations are
+separate feature-owned frames.
 
 Permission activity stores application-selected `PublicFailure` facts separately
 from legacy diagnostic error text. The existing activity row shows its safe
