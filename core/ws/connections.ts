@@ -48,7 +48,9 @@ export interface FrameSource {
   retained?(): readonly string[];
   /** Refresh connection-owned demand before admitting work for a changed view. */
   viewChanged?(): void;
-  entriesChanged?(): void;
+  /** Lease membership changed: `rows` names the admitted or retired
+   * identities; without it the whole lease was replaced. */
+  entriesChanged?(rows?: readonly string[]): void;
   /** Feature-owned connection projection, with its own local revisions. */
   open?(
     view: () => ViewLease,
@@ -194,9 +196,9 @@ export class Connections {
       this.index,
       () => c.view,
       (view) => this.sources.flatMap((source) => source.keys?.(view) ?? []),
-      (frame) => {
+      (frame, rows) => {
         this.#send(c, frame);
-        for (const source of c.sources) source.entriesChanged?.();
+        for (const source of c.sources) source.entriesChanged?.(rows);
       },
       (entry, view) =>
         this.sources.reduce(

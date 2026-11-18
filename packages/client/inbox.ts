@@ -323,6 +323,8 @@ export interface InboxState {
 }
 export interface InboxChanges {
   baseline: boolean;
+  /** Known facts for sessions newly in the view, not new events. */
+  admitted?: boolean;
   projects: readonly string[];
   sessions: readonly string[];
   tasks: boolean;
@@ -648,6 +650,7 @@ export function createInbox(
         }
         publish({
           baseline: false,
+          ...(frame.admitted ? { admitted: true } : {}),
           projects: [...projects],
           sessions: [...sessions],
           tasks,

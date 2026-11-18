@@ -83,6 +83,9 @@ type ServerMessage =
     from: number;
     revision: number;
     ops: InboxOp[];
+    /** The ops replay already-known facts for rows newly in this view's
+     * lease; consumers treat them as baseline state, not new events. */
+    admitted?: true;
   }
   | { t: "catalog.snapshot"; catalog: DirectoryCatalog }
   | CatalogChunk

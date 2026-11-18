@@ -632,7 +632,8 @@ export function createServerResources(o: {
             owner.finished(
               session,
               time,
-              changes.baseline,
+              // A replayed known finish sets the clock without a completion.
+              changes.baseline || !!changes.admitted,
               supervision?.terminal === time ? supervision.outcome : undefined,
             );
           }

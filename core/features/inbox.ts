@@ -177,13 +177,19 @@ export class InboxFeature implements FrameSource {
       finish: this.#finishes.get(id),
       supervision: this.#supervision.get(id),
     });
-    const reconcile = (): InboxOp[] => {
+    // Facts follow lease admission. Each pass compares only the sessions it
+    // names, so work stays proportional to changed rows, not to the lease.
+    const reconcileSessions = (
+      ids: Iterable<string>,
+      leased: ReadonlySet<string>,
+    ): InboxOp[] => {
       if (!delivered) return [];
-      const leased = entries(), ops: InboxOp[] = [];
-      for (const id of delivered.keys()) {
-        if (!leased.has(id)) delivered.delete(id);
-      }
-      for (const id of leased) {
+      const ops: InboxOp[] = [];
+      for (const id of ids) {
+        if (!leased.has(id)) {
+          delivered.delete(id);
+          continue;
+        }
         const before = delivered.get(id), current = facts(id);
         if (current.seen !== undefined && current.seen !== before?.seen) {
           ops.push({ op: "seen", sessionID: id, time: current.seen });
@@ -203,6 +209,11 @@ export class InboxFeature implements FrameSource {
         }
         delivered.set(id, current);
       }
+      return ops;
+    };
+    const reconcileTasks = (): InboxOp[] => {
+      if (!delivered) return [];
+      const ops: InboxOp[] = [];
       const scope = view(), directory = this.#directory(scope);
       const tasks = new Map(
         (directory
@@ -225,7 +236,7 @@ export class InboxFeature implements FrameSource {
     const emit = (frame: ServerFrame) => {
       for (const listener of listeners) listener(frame);
     };
-    const emitOps = (ops: InboxOp[]) => {
+    const emitOps = (ops: InboxOp[], admitted = false) => {
       if (!ops.length) return;
       const from = revision;
       revision += ops.length;
@@ -235,6 +246,7 @@ export class InboxFeature implements FrameSource {
         from,
         revision,
         ops,
+        ...(admitted ? { admitted: true as const } : {}),
       });
     };
     const baseline = (): InboxBaseline => {
@@ -274,17 +286,59 @@ export class InboxFeature implements FrameSource {
                 .includes(change.directory)
             : true
         ).map((change) => change.value);
-      emitOps([...ops, ...reconcile()]);
+      const sessions = new Set(
+        changes.flatMap((change) =>
+          change.sessionID === undefined ? [] : [change.sessionID]
+        ),
+      );
+      // Task projection can scan the scope's catalog, so it runs only when a
+      // task itself changed, never for every publication.
+      emitOps([
+        ...ops,
+        ...reconcileSessions(sessions, entries()),
+        ...(changes.some((change) => change.taskID !== undefined)
+          ? reconcileTasks()
+          : []),
+      ]);
     };
     this.#publications.add(publish);
-    let entriesScheduled = false;
-    const entriesChanged = () => {
-      if (entriesScheduled || !delivered) return;
+    // One coalesced pass per microtask, sized to what changed: the index view
+    // names the rows a patch admits or retires, view and topology changes
+    // re-project tasks, and only a lease snapshot reconciles the whole lease.
+    let entriesScheduled = false, wholeLease = false, taskTopology = false;
+    const named = new Set<string>();
+    const schedule = () => {
+      if (entriesScheduled) return;
       entriesScheduled = true;
       queueMicrotask(() => {
         entriesScheduled = false;
-        if (this.#views.has(id)) emitOps(reconcile());
+        const whole = wholeLease, tasksOnly = taskTopology, ids = [...named];
+        wholeLease = taskTopology = false;
+        named.clear();
+        if (!this.#views.has(id)) return;
+        // Facts for newly leased rows are known state, not new events.
+        if (whole) {
+          const leased = entries();
+          for (const id of delivered?.keys() ?? []) {
+            if (!leased.has(id)) delivered?.delete(id);
+          }
+          emitOps(reconcileSessions(leased, leased), true);
+        } else emitOps(reconcileSessions(ids, entries()), true);
+        if (whole || tasksOnly) emitOps(reconcileTasks());
       });
+    };
+    const entriesChanged = (rows?: readonly string[]) => {
+      if (!delivered) return;
+      if (rows) {
+        if (!rows.length) return;
+        for (const row of rows) named.add(row);
+      } else wholeLease = true;
+      schedule();
+    };
+    const topologyChanged = () => {
+      if (!delivered) return;
+      taskTopology = true;
+      schedule();
     };
     let rowsScheduled = false;
     const rowsChanged = () => {
@@ -309,19 +363,15 @@ export class InboxFeature implements FrameSource {
       const local = scopes.some((scope) =>
         entry.directory === scope || previous?.directory === scope
       );
+      // Lease membership arrives as index frames. Only a parent link or a
+      // moved, re-projected or deleted row can move inherited task
+      // membership; those re-project tasks without scanning the lease.
       if (
-        (!previous || entry.parentID !== previous.parentID ||
+        (!previous ? !!entry.parentID : entry.parentID !== previous.parentID ||
           entry.directory !== previous.directory ||
           entry.projectID !== previous.projectID ||
-          JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)) &&
-        (local ||
-          view().tasksFollowParent &&
-            scopes.some((scope) =>
-              this.index.catalog(scope).some((row) =>
-                this.index.hierarchy.ancestors(row.id).includes(entry.id)
-              )
-            ))
-      ) entriesChanged();
+          JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted))
+      ) topologyChanged();
       if (!local) return;
       if (
         !previous || entry.title !== previous.title ||
@@ -332,7 +382,7 @@ export class InboxFeature implements FrameSource {
       ) rowsChanged();
     });
     const stopRemoval = this.index.observeRemoval(() => {
-      entriesChanged();
+      topologyChanged();
       rowsChanged();
     });
     // Cached page structures carry task ownership too. Reproject a demanded
@@ -352,7 +402,8 @@ export class InboxFeature implements FrameSource {
     };
     return {
       entriesChanged,
-      viewChanged: entriesChanged,
+      // A view change re-projects tasks; rows it admits arrive as frames.
+      viewChanged: topologyChanged,
       snapshot: async (signal) => {
         await hydrate(signal);
         const value = baseline();
