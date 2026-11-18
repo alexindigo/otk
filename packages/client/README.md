@@ -281,8 +281,11 @@ server-scoped failures without replacing session titles or project targets.
 Feature contributions enrich that common path; unknown codes need no
 registration. It owns the grouping key (currently per session) and counts unique
 diagnostic identities, never render calls or replay deliveries. Resources and
-views retain `Feedback` instead of passing its rendered text. Local exceptions
-remain diagnostic-only; feature-selected public reasons stay separate.
+views retain `Feedback` instead of passing its rendered text. Informational
+contributions retain the same target and grouping owner but use the info tone
+and plain reason, without claiming an action failed. Unknown/unavailable
+outcomes still take precedence as pending. Local exceptions remain
+diagnostic-only; feature-selected public reasons stay separate.
 
 `commandFailureFacts({id,title})` snapshots a command's opaque identity and
 feature-authored public wording into separate facts. Command surfaces capture

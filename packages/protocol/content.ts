@@ -446,6 +446,8 @@ export interface ContentSession {
   revert?: RevertInfo;
   error?: string;
   errorState?: SessionErrorState;
+  /** Optional read failures that do not invalidate the session or transcript. */
+  notices?: import("./requests.ts").PublicFailure[];
 }
 export interface RevertedPrompt {
   messageID: string;

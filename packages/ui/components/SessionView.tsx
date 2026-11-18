@@ -8,6 +8,7 @@ import {
   createMemo,
   createSignal,
   type Element,
+  For,
   onCleanup,
   onSettled,
   Show,
@@ -34,15 +35,18 @@ import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import PaneState from "./PaneState.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
+  contextualFailure,
   createTranscriptProjection,
   errorFeedback,
   type FailureValue,
   failureValue,
+  placeFailure,
   replyKey,
   RequestFailure,
   revertPresentation,
@@ -472,7 +476,8 @@ export default function SessionView(props: {
                       </Show>
                       <Show
                         when={!props.loading && !count() && !props.error &&
-                          !props.sessionError && props.continuity !== "missing"}
+                          !props.sessionError && !props.info?.notices?.length &&
+                          props.continuity !== "missing"}
                       >
                         <PaneState>
                           <EmptyState>Start a conversation below.</EmptyState>
@@ -543,6 +548,19 @@ export default function SessionView(props: {
                               setRevealError(failureValue(cause))
                             )}
                         />
+                        <For each={props.info?.notices}>
+                          {(failure) => (
+                            <FeedbackStatus
+                              class="otk-session-notice"
+                              feedback={placeFailure(
+                                contextualFailure(failure, {
+                                  target: failureTarget(),
+                                }),
+                                { surface: "session", view: failureTarget() },
+                              )}
+                            />
+                          )}
+                        </For>
                         <Show when={props.retryState}>
                           {(retry) => (
                             <div class="otk-retry-banner" role="status">

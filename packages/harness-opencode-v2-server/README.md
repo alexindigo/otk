@@ -350,15 +350,27 @@ inventing an endpoint; replay barriers keep a distinct optional clock and permit
 only a fresh start to reopen.
 
 History pages contain at most ten native/retained rows, current queued items,
-session metadata, real-prompt/reply context and an event-aligned replay clock.
-Cursor continuations omit native `order` and bind to session, epoch, cutoff and
-source identity. Reconnect stages demanded running-turn backfill and checkpoints
-retained streams before new deltas. Missing seeds use bounded replacement-only
-recovery; HTTP snapshots never become append seeds. Unsubscribe, cutoff,
-reconnect and stop fence late pages, recoveries, shell output and speculation.
-Already acquired in-flight append source survives viewer replacement until its
-native terminal edge, as in V1. Retention acquires no unviewed body or recovery
-read and does not retain completed transcripts.
+and optional session notices through FP1. The inbox reader distinguishes an
+available empty list from an unsupported route (404/405/501), remembering
+absence for that endpoint generation. Unsupported queues cannot reject
+transcript acquisition or trigger recovery reads; Source reports its own
+unavailable read. Transport, authentication and missing-session failures retain
+their existing classification. Reconnect replaces the endpoint generation and
+can discover new support. The notice supplies action, captured session target
+and reason without inventing retry advice or changing session error/supervision
+state. FP1 classifies missing queued-message support as an informational notice,
+without failed-action wording or an action to take.
+
+History pages also contain session metadata, real-prompt/reply context and an
+event-aligned replay clock. Cursor continuations omit native `order` and bind to
+session, epoch, cutoff and source identity. Reconnect stages demanded
+running-turn backfill and checkpoints retained streams before new deltas.
+Missing seeds use bounded replacement-only recovery; HTTP snapshots never become
+append seeds. Unsubscribe, cutoff, reconnect and stop fence late pages,
+recoveries, shell output and speculation. Already acquired in-flight append
+source survives viewer replacement until its native terminal edge, as in V1.
+Retention acquires no unviewed body or recovery read and does not retain
+completed transcripts.
 
 `OpencodeV2TranscriptDigestSink` is the transcript contribution composed by the
 selected `OpencodeV2DigestSink`. It borrows that scheduler, credited read

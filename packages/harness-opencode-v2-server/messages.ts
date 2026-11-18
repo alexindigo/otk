@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { HarnessError } from "@otk/harness";
+import { OperationFailure } from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
 export type NativeMessage = Awaited<
@@ -172,18 +173,67 @@ export function nativeForwardCursor(id: string): string {
   return btoa(JSON.stringify({ id, order: "asc", direction: "next" }))
     .replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+type InboxRead =
+  | {
+    state: "available";
+    items: Awaited<ReturnType<OpenCodeClient["session"]["inbox"]["list"]>>;
+  }
+  | { state: "unsupported"; diagnosticID: string };
 /** One bounded native collection reader. Cursor requests NEVER include order. */
 export class Messages {
+  /** Capability absence belongs to one endpoint generation, not one page. */
+  #unsupportedInbox = new WeakMap<V2Client, OperationFailure>();
+  #inboxProbe = new WeakMap<V2Client, Promise<void>>();
   constructor(readonly client: () => V2Client) {}
-  inbox(
+  async inbox(
     id: string,
     signal: AbortSignal,
-  ): ReturnType<OpenCodeClient["session"]["inbox"]["list"]> {
-    return this.client().read(
-      (api) =>
-        api.session.inbox.list({ sessionID: ids.decode(id) }, { signal }),
-      signal,
-    );
+  ): Promise<InboxRead> {
+    ids.decode(id);
+    signal.throwIfAborted();
+    const client = this.client();
+    // Concurrent session acquisitions share capability discovery, never bodies.
+    const pending = this.#inboxProbe.get(client);
+    if (pending) await client.wait(pending);
+    signal.throwIfAborted();
+    const unsupported = this.#unsupportedInbox.get(client);
+    if (unsupported) {
+      client.signal.throwIfAborted();
+      return { state: "unsupported", diagnosticID: unsupported.diagnosticID };
+    }
+    const reading = this.#inbox(id, signal, client);
+    const probe = reading.then(() => {}, () => {});
+    this.#inboxProbe.set(client, probe);
+    try {
+      return await reading;
+    } finally {
+      if (this.#inboxProbe.get(client) === probe) {
+        this.#inboxProbe.delete(client);
+      }
+    }
+  }
+  async #inbox(
+    id: string,
+    signal: AbortSignal,
+    client: V2Client,
+  ): Promise<InboxRead> {
+    try {
+      const items = await client.read(
+        (api) =>
+          api.session.inbox.list({ sessionID: ids.decode(id) }, { signal }),
+        signal,
+      );
+      return { state: "available", items };
+    } catch (cause) {
+      // Native missing-session tags are classified separately by V2Client. Only
+      // an absent/unsupported route proves this optional capability unavailable.
+      if (
+        !(cause instanceof OperationFailure) ||
+        ![404, 405, 501].includes(cause.facts?.status ?? 0)
+      ) throw cause;
+      this.#unsupportedInbox.set(client, cause);
+      return { state: "unsupported", diagnosticID: cause.diagnosticID };
+    }
   }
   async forward(
     id: string,

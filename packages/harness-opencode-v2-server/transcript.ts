@@ -420,9 +420,9 @@ export class Transcript {
     } else {
       try {
         if (value.origin === "inbox") {
-          const row = (await this.reader.inbox(id, signal)).find((row) =>
-            row.id === value.id
-          );
+          const inbox = await this.reader.inbox(id, signal);
+          if (inbox.state === "unsupported") throw sourceFailure("inbox");
+          const row = inbox.items.find((row) => row.id === value.id);
           if (!row) throw sourceFailure("inbox");
           derived = deriveInboxMessage(
             row.id,
@@ -1370,9 +1370,24 @@ export class Transcript {
       this.buffers.checkpoint(id, (sid, op) => this.#publish(sid, op));
       items = items.map((m) => this.buffers.overlay(m));
       const covered = new Set(items.map((m) => m.id));
+      let notices: import("@otk/protocol").PublicFailure[] | undefined;
       if (!token) {
-        const queued = await this.reader.inbox(id, signal);
+        const inbox = await this.reader.inbox(id, signal);
         signal.throwIfAborted();
+        if (inbox.state === "unsupported") {
+          notices = [{
+            code: "queued-messages.unsupported",
+            retry: "none",
+            diagnosticID: inbox.diagnosticID,
+            facts: {
+              actionLabel: "Loading queued messages",
+              target: { sessionID: id, label: owner.raw.title },
+              reason: "Queued messages aren't available on this server.",
+              origin: "session",
+            },
+          }];
+        }
+        const queued = inbox.state === "available" ? inbox.items : [];
         const nextOrder = Math.max(0, ...items.map((m) => m.sourceOrder ?? 0));
         for (
           const message of [
@@ -1479,7 +1494,7 @@ export class Transcript {
         version: this.replay.version(id),
         from: capture.from,
         clock: sealed.clock,
-        session: owner.presentation,
+        session: { ...owner.presentation, ...(notices ? { notices } : {}) },
         items,
         older,
         prompt: facts.metadata.prompt,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { SessionSupervision } from "../../core/index/supervision.ts";
 import { FormsFeature } from "../../core/features/forms.ts";
 import { pendingInventoryFixture } from "../support/pending-inventory.ts";
@@ -15,6 +15,52 @@ test("V2 pending inventory fixture serves empty transcript and native inbox", as
     assertEquals(page.items, []);
     assertEquals(f.reads.includes(`/api/session/${session.id}/inbox`), true);
   }
+});
+
+for (const status of [404, 405, 501]) {
+  test(`V2 unsupported inbox (${status}) preserves the transcript and one session notice without repeated reads`, async () => {
+    const f = await pendingInventoryFixture(
+      await tempDir("unsupported-inbox-"),
+    );
+    f.control.inboxStatus = status;
+    await f.start();
+    const id = "opcv2-ses_form";
+    const [first, sibling] = await Promise.all([
+      f.adapter.core.listMessages(id, {}),
+      f.adapter.core.listMessages("opcv2-ses_permission", {}),
+    ]);
+    assertEquals(sibling.session.notices?.length, 1);
+    assertEquals(first.items.map((m) => m.id), ["msg_transcript"]);
+    assertEquals(first.session.notices?.length, 1);
+    const notice = first.session.notices![0];
+    assertEquals(notice.facts?.actionLabel, "Loading queued messages");
+    assertEquals(notice.facts?.target?.sessionID, id);
+    assertEquals(
+      notice.facts?.reason,
+      "Queued messages aren't available on this server.",
+    );
+    assertEquals(notice.facts?.recovery, undefined);
+    for (const session of [id, id, "opcv2-ses_permission"]) {
+      const page = await f.adapter.core.listMessages(session, {});
+      assertEquals(page.items.map((m) => m.id), ["msg_transcript"]);
+      assertEquals(page.session.notices?.length, 1);
+      assertEquals(page.session.notices![0].diagnosticID, notice.diagnosticID);
+      assertEquals(page.session.notices![0].facts?.target?.sessionID, session);
+    }
+    assertEquals(f.reads.filter((path) => path.endsWith("/inbox")).length, 1);
+  });
+}
+
+test("V2 unavailable inbox is not misreported as an unsupported capability", async () => {
+  const f = await pendingInventoryFixture(await tempDir("unavailable-inbox-"));
+  f.control.inboxStatus = 503;
+  await f.start();
+  await assertRejects(() => f.adapter.core.listMessages("opcv2-ses_form", {}));
+  f.control.inboxStatus = 200;
+  assertEquals(
+    (await f.adapter.core.listMessages("opcv2-ses_form", {})).session.notices,
+    undefined,
+  );
 });
 
 for (const kind of ["permission", "form"] as const) {
