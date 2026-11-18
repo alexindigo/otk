@@ -84,8 +84,13 @@ export function userSnapshot(db: Pick<OtkDb, "connection">): UserManifest {
     ),
   );
 }
-export function upgradedManifest(before: UserManifest): UserManifest {
+export function schemaUpgradedManifest(before: UserManifest): UserManifest {
   const result = structuredClone(before);
+  for (const row of result.permission_activity) row.failure = null;
+  return result;
+}
+export function upgradedManifest(before: UserManifest): UserManifest {
+  const result = schemaUpgradedManifest(before);
   const qualify = (value: unknown) =>
     typeof value === "string" && value.startsWith("ses_")
       ? `opcv1-${value}`
