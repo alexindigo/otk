@@ -8,6 +8,47 @@ const service = {
   pid: 42,
 };
 
+Deno.test("V2 shared inbox probe releases an aborted waiter without cancelling its owner", async () => {
+  const gate = Promise.withResolvers<Response>();
+  const entered = Promise.withResolvers<void>();
+  const caller = new AbortController();
+  let requests = 0;
+  const client = new V2Client(
+    service,
+    1000,
+    new AbortController().signal,
+    () => {
+      requests++;
+      entered.resolve();
+      return gate.promise;
+    },
+  );
+  const messages = new Messages(() => client);
+  const first = messages.inbox("opcv2-ses_one", new AbortController().signal);
+  await entered.promise;
+  const second = messages.inbox("opcv2-ses_two", caller.signal);
+  const reason = new DOMException("Caller left", "AbortError");
+  let outcome: unknown;
+  const settled = second.then(
+    () => outcome = "resolved",
+    (error) => outcome = error,
+  );
+  caller.abort(reason);
+  try {
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    assertEquals(
+      outcome,
+      reason,
+      "Waiter cancellation cannot wait for the shared probe",
+    );
+    assertEquals(requests, 1);
+  } finally {
+    gate.resolve(new Response(null, { status: 404 }));
+    await settled;
+    assertEquals((await first).state, "unsupported");
+  }
+});
+
 Deno.test("V2 inbox capability discovery joins concurrent sessions, fences cancellation and resets with the endpoint generation", async () => {
   const gate = Promise.withResolvers<Response>(),
     entered = Promise.withResolvers<void>();

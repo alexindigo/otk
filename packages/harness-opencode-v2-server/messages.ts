@@ -194,7 +194,20 @@ export class Messages {
     const client = this.client();
     // Concurrent session acquisitions share capability discovery, never bodies.
     const pending = this.#inboxProbe.get(client);
-    if (pending) await client.wait(pending);
+    if (pending) {
+      let abort!: () => void;
+      const waiting = new Promise<void>((resolve, reject) => {
+        abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        if (signal.aborted) abort();
+        pending.then(resolve, reject);
+      });
+      try {
+        await client.wait(waiting);
+      } finally {
+        signal.removeEventListener("abort", abort);
+      }
+    }
     signal.throwIfAborted();
     const unsupported = this.#unsupportedInbox.get(client);
     if (unsupported) {

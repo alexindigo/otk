@@ -82,6 +82,7 @@ interface Baseline {
   contexts: Map<string, MessageContext>;
   source?: string;
   presentation?: import("@otk/protocol").ContentSession;
+  notices?: import("@otk/protocol").PublicFailure[];
 }
 interface Cursor {
   v: 3;
@@ -1413,6 +1414,8 @@ export class Transcript {
         owner.epoch !== this.replay.clock(id).epoch ||
         revision !== this.requests.revision(id)
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
+      // Session notices belong to the baseline, not only its newest page.
+      if (!token) owner.notices = notices;
       owner.presentation ??= await revertSession(
         this.reader.client(),
         owner.raw,
@@ -1494,7 +1497,10 @@ export class Transcript {
         version: this.replay.version(id),
         from: capture.from,
         clock: sealed.clock,
-        session: { ...owner.presentation, ...(notices ? { notices } : {}) },
+        session: {
+          ...owner.presentation,
+          ...(owner.notices ? { notices: owner.notices } : {}),
+        },
         items,
         older,
         prompt: facts.metadata.prompt,
