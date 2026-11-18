@@ -984,6 +984,7 @@ export class OpencodeV1DigestSink implements DigestSink {
           revision: delta.summary.revision,
           delta,
           metadata: previous?.metadata ?? metadata,
+          ...(previous ? { replay: true } : {}),
         });
       }
     });

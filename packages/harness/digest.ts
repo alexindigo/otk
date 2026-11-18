@@ -166,4 +166,7 @@ export interface DigestPublication {
   delta: DigestDelta;
   /** A newly retained identity must be seeded before its first digest delta. */
   metadata?: SessionMetadata;
+  /** Re-delivery of already committed state. The publication owner sends it
+   * only if that revision has not been delivered, so replays stay quiet. */
+  replay?: boolean;
 }

@@ -242,9 +242,13 @@ async function publishAll(
     values.map((value) => value.sessionID),
     context?.turn.priority ?? "attention",
   ).run(signal, async () => {
-    const current = values.filter((value) =>
-      value.revision >= (publishedRevisions.get(value.sessionID) ?? -1)
-    );
+    // Publish only on change: a replay of committed state that this worker
+    // already delivered at its revision is accounted for, not resent.
+    const current = values.filter((value) => {
+      const published = publishedRevisions.get(value.sessionID) ?? -1;
+      return value.revision > published ||
+        value.revision === published && !value.replay;
+    });
     const entries = current.flatMap((value) =>
       value.metadata ? [value.metadata] : []
     );
