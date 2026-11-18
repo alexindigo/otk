@@ -15,6 +15,7 @@ export async function pendingInventoryFixture(root: string) {
     empty: new Set<"permission" | "form">(),
     locations: [directory, dropped],
     metadataFailure: false,
+    inboxStatus: 200,
   };
   const sessions = [
     ["ses_permission", directory, "Permission inventory"],
@@ -120,10 +121,19 @@ export async function pendingInventoryFixture(root: string) {
       }
       if (
         sessions.some((row) => path === `/api/session/${row.id}/inbox`)
-      ) return Response.json({ data: [] });
+      ) {
+        return control.inboxStatus === 200
+          ? Response.json({ data: [] })
+          : new Response(null, { status: control.inboxStatus });
+      }
       if (path.endsWith("/message")) {
         return Response.json({
-          data: [],
+          data: control.inboxStatus === 200 ? [] : [{
+            id: "msg_transcript",
+            type: "user",
+            text: "The transcript is still available.",
+            time: { created: 1 },
+          }],
           cursor: {},
         });
       }

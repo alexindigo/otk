@@ -62,6 +62,11 @@ export function createFailurePresenter(): FailurePresenter {
     "native.unknown",
     () => ({ kind: "pending", text: "Checking whether this finished" }),
   );
+  presenter.register("queued-messages.unsupported", (notice) => ({
+    kind: "info",
+    text: notice.facts?.reason ??
+      "This feature isn't available on this server.",
+  }));
   const contribute = (codes: string[], text: string, field?: string) => {
     for (const code of codes) {
       presenter.register(code, () => ({ kind: "error", text, field }));

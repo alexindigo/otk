@@ -13,17 +13,19 @@ export default function FailureContent(
         when={props.failure.reference}
         fallback={
           <>
-            <span>
-              {props.failure.heading} for{" "}
-              <Show
-                when={props.failure.target.href}
-                fallback={<span>{props.failure.target.label}</span>}
-              >
-                <a href={props.failure.target.href}>
-                  {props.failure.target.label}
-                </a>
-              </Show>.
-            </span>
+            <Show when={props.failure.tone !== "info"}>
+              <span>
+                {props.failure.heading} for{" "}
+                <Show
+                  when={props.failure.target.href}
+                  fallback={<span>{props.failure.target.label}</span>}
+                >
+                  <a href={props.failure.target.href}>
+                    {props.failure.target.label}
+                  </a>
+                </Show>.
+              </span>
+            </Show>
             <span>{props.failure.reason}</span>
             <Show when={props.failure.recovery}>
               {(recovery) => (
@@ -31,7 +33,10 @@ export default function FailureContent(
               )}
             </Show>
             <Show when={props.failure.count > 1}>
-              <span>{props.failure.count} identical failures</span>
+              <span>
+                {props.failure.count} identical{" "}
+                {props.failure.tone === "info" ? "notices" : "failures"}
+              </span>
             </Show>
             <Show when={props.failure.generic}>
               <span class="otk-failure-details">

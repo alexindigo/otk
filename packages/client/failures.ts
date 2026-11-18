@@ -7,6 +7,8 @@ import type {
 } from "@otk/protocol";
 export interface FailurePresentation {
   value: PublicFailure;
+  /** An unavailable optional feature is information, not a failed action. */
+  tone?: "info";
   action: string;
   heading: string;
   target: { label: string; href?: string };
@@ -121,8 +123,11 @@ export class FailurePresenter {
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
     const pending = facts.outcome === "unknown" ||
       facts.outcome === "unavailable" || enrichment?.kind === "pending";
+    const informational = !pending && enrichment?.kind === "info";
     const heading = pending
       ? `Checking whether ${action} finished`
+      : informational
+      ? action
       : `${action} failed`;
     // Retry policy classifies execution, not advice. Only an owner that knows
     // this action and cause can supply a useful next step.
@@ -136,6 +141,7 @@ export class FailurePresenter {
       recovery,
       count: 1,
       occurrences: [failure.diagnosticID],
+      ...(informational ? { tone: "info" as const } : {}),
       ...(known ? {} : { generic: true }),
       ...(facts.record && reference
         ? {
@@ -150,9 +156,11 @@ export class FailurePresenter {
     };
     return {
       ...enrichment,
-      kind: pending ? "pending" : "error",
+      kind: pending ? "pending" : informational ? "info" : "error",
       text: presentation.reference?.label ?? [
-        `${heading} for ${target.label}: ${presentation.reason}`,
+        informational
+          ? presentation.reason
+          : `${heading} for ${target.label}: ${presentation.reason}`,
         ...recovery ? [recovery] : [],
       ].map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`)
         .join(" "),

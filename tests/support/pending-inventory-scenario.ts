@@ -68,10 +68,18 @@ export async function pendingInventoryScenario() {
             form: "opcv2-ses_form",
             permission: "opcv2-ses_permission",
             drop: "opcv2-ses_dropped",
+            inboxReads:
+              f.reads.filter((path) => path.endsWith("/inbox")).length,
           };
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
         case "scenario":
+          if (frame.params.action === "fail") {
+            f.control.inboxStatus = 404;
+            f.control.empty = new Set(["permission", "form"]);
+            await f.reconnect();
+            return null;
+          }
           if (
             frame.params.action === "hold" || frame.params.action === "freeze"
           ) {
