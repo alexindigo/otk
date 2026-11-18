@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import type { ContentOp, Message, Part } from "@otk/protocol";
 import { StreamingMarkdown } from "./stream.ts";
 
@@ -30,7 +31,7 @@ export class StreamBuffers {
     sourceLength?: number,
   ): import("@otk/protocol").StreamStamp {
     let epoch = this.#epochs.get(sessionID);
-    if (!epoch) this.#epochs.set(sessionID, epoch = crypto.randomUUID());
+    if (!epoch) this.#epochs.set(sessionID, epoch = randomID());
     return {
       epoch,
       generation: ++this.#generation,
@@ -50,7 +51,7 @@ export class StreamBuffers {
   }
   #stamp(active: ActivePart): import("@otk/protocol").StreamStamp {
     let epoch = this.#epochs.get(active.sessionID);
-    if (!epoch) this.#epochs.set(active.sessionID, epoch = crypto.randomUUID());
+    if (!epoch) this.#epochs.set(active.sessionID, epoch = randomID());
     return {
       epoch,
       generation: active.generation,

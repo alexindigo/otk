@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 // Browser history is owned here: cancelling traversal returns to the accepted
 // entry, without replacing (and losing) the destination in the history stack.
 interface Position {
@@ -105,7 +106,7 @@ export function createNavigation(
     open,
     start(): void {
       const previous = position(history);
-      owner = previous?.owner ?? crypto.randomUUID();
+      owner = previous?.owner ?? randomID();
       at = previous?.position ?? 0;
       current = location.hash;
       history.replaceState(state(at), "");

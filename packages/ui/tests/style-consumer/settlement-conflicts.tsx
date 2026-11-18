@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { createSignal, onCleanup, Show } from "solid-js";
 import { RequestTracker, Rpc } from "@otk/client";
 import {
@@ -31,7 +32,7 @@ export default function SettlementConflicts() {
     sessionTitle: () => "Reply target",
   });
   tracker.connect(
-    { id: crypto.randomUUID(), expiresAt: Date.now() + 60000 },
+    { id: randomID(), expiresAt: Date.now() + 60000 },
     4,
   );
   const rpc = new Rpc(() => {}, tracker);

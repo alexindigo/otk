@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { MAX_UPLOAD_BYTES, uploadSize } from "@otk/protocol";
 import { RequestFailure } from "./failures.ts";
 import type {
@@ -30,7 +31,7 @@ export async function prepareAttachments(
       throw new RequestFailure({
         code: "attachment.upload-size",
         retry: "new-intent",
-        diagnosticID: crypto.randomUUID(),
+        diagnosticID: randomID(),
       });
     }
     if (!Number.isSafeInteger(size) || size < 0) {
@@ -98,7 +99,7 @@ export async function prepareAttachments(
     throw new RequestFailure({
       code: "attachment.upload-size",
       retry: "new-intent",
-      diagnosticID: crypto.randomUUID(),
+      diagnosticID: randomID(),
     });
   }
   if (actual.reduce((a, b) => a + b, 0) > policy.maxbytes) {

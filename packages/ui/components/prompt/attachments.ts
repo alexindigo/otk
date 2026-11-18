@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { MAX_UPLOAD_BYTES, type PromptPart } from "@otk/protocol";
 import { RequestFailure } from "@otk/client";
 export async function upload(
@@ -8,7 +9,7 @@ export async function upload(
     throw new RequestFailure({
       code: "attachment.upload-size",
       retry: "new-intent",
-      diagnosticID: crypto.randomUUID(),
+      diagnosticID: randomID(),
     });
   }
   const data = new Uint8Array(await file.arrayBuffer());

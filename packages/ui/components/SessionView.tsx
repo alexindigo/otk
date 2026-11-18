@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
@@ -284,7 +285,7 @@ export default function SessionView(props: {
         throw new RequestFailure({
           code: "message.missing",
           retry: "none",
-          diagnosticID: crypto.randomUUID(),
+          diagnosticID: randomID(),
         });
       }
       const key = replyKey(message), reply = projection().repliesByID[key];
@@ -296,7 +297,7 @@ export default function SessionView(props: {
             throw new RequestFailure({
               code: "message.missing",
               retry: "none",
-              diagnosticID: crypto.randomUUID(),
+              diagnosticID: randomID(),
             });
           }
           control.reveal();

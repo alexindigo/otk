@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub, ContextTarget } from "@otk/client";
+import { copyText } from "../clipboard.ts";
 
 interface TextTarget {
   text: string;
@@ -66,8 +67,7 @@ export function registerBrowserContextCommands(
   commands: CommandHub,
 ): () => void {
   const releases: (() => void)[] = [];
-  const copy = (target: TextTarget) =>
-    navigator.clipboard.writeText(target.text);
+  const copy = (target: TextTarget) => copyText(target.text);
   releases.push(commands.register({
     id: "context.selection.copy",
     title: "Copy",

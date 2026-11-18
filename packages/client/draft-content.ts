@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import type { PromptPart } from "@otk/protocol";
 import { type Chip, type Draft, replaceDraftContent } from "./drafts.ts";
 import { countLabel } from "./count.ts";
@@ -16,7 +17,7 @@ export function attachChip(
 ): Draft {
   return {
     ...draft,
-    chips: [...draft.chips, { id: crypto.randomUUID(), label, part }],
+    chips: [...draft.chips, { id: randomID(), label, part }],
   };
 }
 export function removeChip(draft: Draft, id: string): Draft {
@@ -72,7 +73,7 @@ export function insertChip(
   return {
     ...next,
     chips: [...next.chips, {
-      id: crypto.randomUUID(),
+      id: randomID(),
       label,
       part,
       start,

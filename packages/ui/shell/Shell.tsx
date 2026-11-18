@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { copyText } from "../clipboard.ts";
 import { errorFeedback } from "@otk/client";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import PaneState from "../components/PaneState.tsx";
@@ -356,8 +357,7 @@ export default function Shell(
         actions.eligibility(target).live ? "Copy session title" : "Copy title",
     },
     enabled: (_ctx, target?: SessionContextTarget) => !!target,
-    run: (_ctx, target: SessionContextTarget) =>
-      navigator.clipboard.writeText(target.title),
+    run: (_ctx, target: SessionContextTarget) => copyText(target.title),
   }));
   onCleanup(commands.register({
     id: "session.task.remove",

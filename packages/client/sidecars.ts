@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import {
   type CapabilityName,
@@ -298,7 +299,7 @@ export function createSidecars(
         }
         if (stopped) throw new Error("Sidecar collection is stopped");
         const spec = {
-          id: crypto.randomUUID(),
+          id: randomID(),
           baseUrl,
           label: label.trim() || new URL(baseUrl).host,
         };

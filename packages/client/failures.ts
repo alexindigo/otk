@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import type {
   FailureFacts,
   FailureTarget,
@@ -227,7 +228,7 @@ export class FailurePresenter {
     const key = this.groupingKey(failure);
     let group = this.#groups.get(key);
     if (!group) {
-      group = { identity: crypto.randomUUID(), occurrences: new Set() };
+      group = { identity: randomID(), occurrences: new Set() };
       this.#groups.set(key, group);
     }
     group.occurrences.add(failure.diagnosticID);
@@ -273,7 +274,7 @@ export function localFailure(
   diagnostic: (id: string, cause: unknown) => void,
   facts?: FailureFacts,
 ): PublicFailure {
-  const diagnosticID = crypto.randomUUID();
+  const diagnosticID = randomID();
   try {
     diagnostic(diagnosticID, cause);
   } catch { /* Diagnostics do not replace failure facts. */ }
