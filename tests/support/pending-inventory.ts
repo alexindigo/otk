@@ -16,6 +16,7 @@ export async function pendingInventoryFixture(root: string) {
     locations: [directory, dropped],
     metadataFailure: false,
     inboxStatus: 200,
+    transcriptRows: 1,
   };
   const sessions = [
     ["ses_permission", directory, "Permission inventory"],
@@ -127,14 +128,23 @@ export async function pendingInventoryFixture(root: string) {
           : new Response(null, { status: control.inboxStatus });
       }
       if (path.endsWith("/message")) {
+        const offset = Number(url.searchParams.get("cursor") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? 200);
         return Response.json({
-          data: control.inboxStatus === 200 ? [] : [{
-            id: "msg_transcript",
+          data: control.inboxStatus === 200 ? [] : Array.from({
+            length: control.transcriptRows,
+          }, (_, index) => ({
+            id: index === 0 ? "msg_transcript" : `msg_transcript_${index}`,
             type: "user",
             text: "The transcript is still available.",
-            time: { created: 1 },
-          }],
-          cursor: {},
+            time: { created: index + 1 },
+          })).reverse().slice(
+            offset,
+            offset + limit,
+          ),
+          cursor: control.transcriptRows > offset + limit
+            ? { next: String(offset + limit) }
+            : {},
         });
       }
       if (path === "/api/session") {

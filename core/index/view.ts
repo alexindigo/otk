@@ -17,6 +17,7 @@ export class IndexView {
   #flight?: { epoch: number; rev: number; keys: string[] };
   #selected?: string;
   #pending = new Map<string, DigestIndexDelta | undefined>();
+  #replayedAdmissions = new Set<string>();
   #hierarchies = new Map<string, string>();
   #stops: (() => void)[];
   #turnLease?: { id: string; release(): void };
@@ -73,6 +74,7 @@ export class IndexView {
     for (const stop of this.#stops) stop();
     this.#pending.clear();
     this.#hierarchies.clear();
+    this.#replayedAdmissions.clear();
     this.#flight = undefined;
   }
   /** Only consumer acceptance advances credit; socket send is not delivery. */
@@ -108,6 +110,7 @@ export class IndexView {
     this.#selected = this.view().selected;
     this.#pending.clear();
     this.#epoch = this.view().epoch;
+    this.#replayedAdmissions.clear();
     this.#flight = {
       epoch: this.#epoch,
       rev: this.#rev,
@@ -132,6 +135,7 @@ export class IndexView {
       // current authority, including evictions, without resnapshotting the view.
       for (const id of this.#flight?.keys ?? []) {
         this.#pending.set(id, undefined);
+        if (!this.#ids.has(id)) this.#replayedAdmissions.add(id);
         this.#ids.add(id);
       }
       this.#flight = undefined;
@@ -211,7 +215,11 @@ export class IndexView {
       const leased = this.#ids.has(id);
       if (wanted.has(id) && this.index.snapshotEntry(id)) this.#ids.add(id);
       else this.#ids.delete(id);
-      if (leased !== this.#ids.has(id)) moved.push(id);
+      if (
+        leased !== this.#ids.has(id) ||
+        this.#replayedAdmissions.has(id) && this.#ids.has(id)
+      ) moved.push(id);
+      this.#replayedAdmissions.delete(id);
     }
     for (const [id] of this.#pending) {
       if (!wanted.has(id) && !this.#ids.has(id)) this.#pending.delete(id);

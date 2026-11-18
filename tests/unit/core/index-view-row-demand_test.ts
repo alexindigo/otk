@@ -51,6 +51,40 @@ function entry(id: string, directory: string, parentID?: string): IndexEntry {
   };
 }
 
+Deno.test("index epoch replay reports restored admissions but not content-only updates", () => {
+  const index = new IndexStore(), row = entry("tstv1-restored", "/p");
+  index.upsert(row);
+  index.flush();
+  let scope: ViewLease = { epoch: 0, rows: [row.id], crumbs: [] };
+  const frames: { frame: ServerFrame; moved?: readonly string[] }[] = [];
+  const lease = new IndexView(index, () => scope, () => [], (frame, moved) => {
+    frames.push({ frame, moved });
+  });
+  const stop = index.listen((frame) => lease.refresh(frame));
+  try {
+    lease.snapshot();
+    lease.applied(0, 0);
+    scope = { ...scope, epoch: 1, rows: [] };
+    lease.refresh();
+    assertEquals(frames.at(-1)?.moved, [row.id]);
+    // The eviction reached the inbox owner, but its credit has not returned.
+    scope = { ...scope, epoch: 2, rows: [row.id] };
+    lease.refresh();
+    assertEquals(frames.at(-1)?.moved, [row.id]);
+    const replay = frames.at(-1)!.frame;
+    if (replay.t !== "index.patch") throw new Error("Expected replay patch");
+    assertEquals(replay.ops.map((op) => op.op), ["upsert"]);
+    lease.applied(2, replay.rev);
+    index.upsertMetadata({ ...row, title: "Changed content" });
+    index.flush();
+    lease.refresh();
+    assertEquals(frames.at(-1)?.moved, []);
+  } finally {
+    stop();
+    lease.close();
+  }
+});
+
 for (const selected of [false, true]) {
   Deno.test(`index view retains explicit foreign-checkout rows through publication and release (selected: ${selected})`, () => {
     const index = new IndexStore(), client = createIndex();

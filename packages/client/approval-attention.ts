@@ -34,6 +34,8 @@ export interface AttentionProjection {
     baseline?: boolean,
     outcome?: TerminalOutcome,
   ): void;
+  /** Admission replays known state, even when it advances an older clock. */
+  admitFinished(id: string, time: number, outcome?: TerminalOutcome): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
   reset(): void;
   stop(): void;
@@ -188,6 +190,26 @@ export function createAttentionProjection(o: {
       for (const listener of listeners) listener(event);
     }
   };
+  const finished = (
+    id: string,
+    time: number,
+    baseline = false,
+    outcome?: TerminalOutcome,
+    admitted = false,
+  ) => {
+    const previous = finishClocks.get(id);
+    if (
+      stopped || previous !== undefined &&
+        (time < (previous.terminal ?? 0) ||
+          time === previous.terminal &&
+            (!outcome || outcome === previous.outcome))
+    ) return;
+    const value = { terminal: time, ...(outcome ? { outcome } : {}) };
+    finishClocks.set(id, value);
+    if (admitted || baseline && previous === undefined) return;
+    completed.set(id, value);
+    update([id], false, false, true);
+  };
   return {
     get(id) {
       void clock.state.keys[id];
@@ -207,19 +229,9 @@ export function createAttentionProjection(o: {
       else update(dirty, false, true);
     },
     update,
-    finished(id, time, baseline = false, outcome) {
-      const previous = finishClocks.get(id);
-      if (
-        stopped || previous !== undefined &&
-          (time < (previous.terminal ?? 0) ||
-            time === previous.terminal &&
-              (!outcome || outcome === previous.outcome))
-      ) return;
-      const value = { terminal: time, ...(outcome ? { outcome } : {}) };
-      finishClocks.set(id, value);
-      if (baseline && previous === undefined) return;
-      completed.set(id, value);
-      update([id], false, false, true);
+    finished,
+    admitFinished(id, time, outcome) {
+      finished(id, time, false, outcome, true);
     },
     subscribe(listener) {
       if (stopped) return () => {};
