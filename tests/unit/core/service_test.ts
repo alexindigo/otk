@@ -71,6 +71,7 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);
   registerPrefs(rpc, harness, prefs);
+  const nativeStates: string[] = [];
   const app = await startCore({
     cfg: settings,
     backend: harness,
@@ -78,10 +79,15 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     prefs,
     rpc,
     staticRoot: root,
+    sources: [{
+      connection: (state) => nativeStates.push(state),
+      listen: () => () => {},
+    }],
   });
   const base = `http://127.0.0.1:${app.server.addr.port}`;
   let ws: WebSocket | undefined;
   try {
+    assertEquals(nativeStates, ["connecting", "connected"]);
     const staticPage = await fetch(base + "/");
     assert((await staticPage.text()).includes("Caller assets"));
     const asset = await fetch(base + "/assets/app.js");

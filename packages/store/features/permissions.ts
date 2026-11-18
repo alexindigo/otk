@@ -8,6 +8,9 @@ export const permissionMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/permissions/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/permissions/002.sql", import.meta.url),
   }],
 };
 /** Scalars/JSON are injected by the application; storage knows no wire schema. */
@@ -23,6 +26,8 @@ export interface PermissionRecord {
   time: number;
   outcome: "started" | "confirmed" | "failed";
   error?: string;
+  /** Application-owned public failure JSON, never inferred from old diagnostics. */
+  failure?: string;
 }
 export type PermissionChange = {
   kind: "policy";
@@ -117,7 +122,10 @@ export class PermissionStore extends MetadataChanges<PermissionChange> {
     );
   }
   start(
-    input: Omit<PermissionRecord, "id" | "time" | "outcome" | "error">,
+    input: Omit<
+      PermissionRecord,
+      "id" | "time" | "outcome" | "error" | "failure"
+    >,
     ancestors: string[] = [],
     tx?: StoreWrite,
   ): number {
@@ -154,15 +162,20 @@ export class PermissionStore extends MetadataChanges<PermissionChange> {
   }
   finish(
     id: number,
-    result: { outcome: "confirmed" } | { outcome: "failed"; error: string },
+    result: { outcome: "confirmed" } | {
+      outcome: "failed";
+      error: string;
+      failure?: string;
+    },
     tx?: StoreWrite,
   ): void {
     this.db.write((scope) => {
       const update = this.db.connection.prepare(
-        "UPDATE permission_activity SET outcome=?,error=? WHERE id=? AND outcome='started'",
+        "UPDATE permission_activity SET outcome=?,error=?,failure=? WHERE id=? AND outcome='started'",
       ).run(
         result.outcome,
         result.outcome === "failed" ? result.error : null,
+        result.outcome === "failed" ? result.failure ?? null : null,
         id,
       );
       if (update.changes) {
@@ -208,6 +221,7 @@ export class PermissionStore extends MetadataChanges<PermissionChange> {
         time: Number(r.time),
         outcome: r.outcome as PermissionRecord["outcome"],
         error: r.error === null ? undefined : String(r.error),
+        ...(r.failure === null ? {} : { failure: String(r.failure) }),
       }));
   }
 }

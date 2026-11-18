@@ -588,11 +588,23 @@ validates the session through the existing backend lookup. Enabling validates
 root-only eligibility on authoritative backend metadata; helpers inherit and
 cannot acquire an explicit policy by direct RPC. Explicit index removals delete
 stored policy, including IDs outside the current window; snapshot window
-eviction alone does not. Failed automatic requests are memoized by normalized
-request fingerprint until it changes or a successful index snapshot starts
-another connection generation. Unrelated index updates cannot repeat a failed
-attempt or journal row. Policy revisions and affected-family activity
-invalidations are separate feature-owned frames.
+eviction alone does not. Connections forwards native lifecycle through the
+optional `FrameSource.connection` hook, including the initial connecting state
+before backend startup. Automatic scans retain dirty owners while disconnected
+and run on connection readiness, not on a metadata publication that may precede
+the native client. Connection edges fence in-flight scans independently of index
+replacement. Proven-not-dispatched unavailable replies finish their journal
+intent and become eligible only on the next connected edge. Actual refusals stay
+memoized by request fingerprint across connection edges; uncertain dispatched
+replies stay unconfirmed and cannot be resent. Unrelated index updates cannot
+repeat a failed attempt or journal row. Policy revisions and affected-family
+activity invalidations are separate feature-owned frames.
+
+Permission activity stores application-selected `PublicFailure` facts separately
+from legacy diagnostic error text. The existing activity row shows its safe
+reason and recovery beside the request's action and session target; old
+diagnostics are not interpreted as public copy. The additive permission-store
+migration preserves existing policy and journal rows.
 
 Policy IDs hydrate once into an enabled set and typed committed policy changes
 maintain it. The existing MetadataChanges owner coalesces final policy keys and

@@ -5,12 +5,14 @@ import {
   type ApprovalSnapshot,
   autoApproveOwner,
   canAutoApprove,
+  type HarnessState,
   isSessionID,
   type OperationContext,
   type PermissionActivityPage,
   type PermissionReply,
   type PermissionRequest,
   type PermissionsCapability,
+  type PublicFailure,
   type ServerFrame,
   type ViewLease,
 } from "@otk/protocol";
@@ -52,6 +54,22 @@ function rejectedReply(message: string, operation?: OperationContext): Error {
 
 /** Server-owned approvals, independent of browser connections/subscriptions. */
 export class PermissionFeature implements FrameSource {
+  // Standalone feature consumers supply an already-usable capability. Application
+  // composition supplies the initial connecting state before starting the native.
+  #nativeReady = true;
+  #unavailable = new Set<string>();
+  connection(state: HarnessState): void {
+    const ready = state === "connected";
+    if (this.#closed || ready === this.#nativeReady) return;
+    this.#nativeReady = ready;
+    this.#generation++;
+    if (!ready) return;
+    // Only proven-not-dispatched replies are eligible again. Native refusals and
+    // uncertain delivery keep their existing suppression/journal authority.
+    for (const key of this.#unavailable) this.#failed.delete(key);
+    this.#unavailable.clear();
+    for (const id of this.#enabled) this.#enqueue(id);
+  }
   #inView(id: string, view: ViewLease): boolean {
     if (
       id === view.selected || view.crumbs.includes(id) || view.rows.includes(id)
@@ -151,6 +169,7 @@ export class PermissionFeature implements FrameSource {
         if (frame.t === "index.snapshot") {
           this.#generation++;
           this.#failed.clear();
+          this.#unavailable.clear();
           this.#journal.clear();
           this.#pending.clear();
           for (const id of this.#enabled) this.#enqueue(id);
@@ -202,6 +221,7 @@ export class PermissionFeature implements FrameSource {
     for (const stop of this.#stops) stop();
     this.#listeners.clear();
     this.#failed.clear();
+    this.#unavailable.clear();
     this.#dirty.clear();
     this.#journal.clear();
     this.#pending.clear();
@@ -219,11 +239,11 @@ export class PermissionFeature implements FrameSource {
   #enqueue(owner?: string): void {
     if (!owner || !this.#enabled.has(owner)) return;
     this.#dirty.add(owner);
-    if (this.#closed || this.#scheduled) return;
+    if (this.#closed || !this.#nativeReady || this.#scheduled) return;
     this.#scheduled = true;
     queueMicrotask(() => {
       this.#scheduled = false;
-      if (this.#closed) return;
+      if (this.#closed || !this.#nativeReady) return;
       const owners = [...this.#dirty];
       this.#dirty.clear();
       for (const owner of owners) this.#scan(owner);
@@ -239,10 +259,13 @@ export class PermissionFeature implements FrameSource {
     this.#scans.set(root, state);
     void (async () => {
       try {
-        while (state.again && !this.#closed) {
+        while (state.again && !this.#closed && this.#nativeReady) {
           state.again = false;
           const generation = this.#generation;
-          const requests = await this.capability.listPermissions(root);
+          const requests = await this.capability.listPermissions(
+            root,
+            this.#controller.signal,
+          );
           if (this.#closed || generation !== this.#generation) {
             state.again = !this.#closed;
             continue;
@@ -261,6 +284,7 @@ export class PermissionFeature implements FrameSource {
             ) continue;
             this.#journal.delete(key);
             this.#failed.delete(key);
+            this.#unavailable.delete(key);
           }
           const unknown = requests.filter((request) =>
             !this.#journal.has(JSON.stringify([request.sessionID, request.id]))
@@ -297,8 +321,11 @@ export class PermissionFeature implements FrameSource {
                 reply: "once",
               }, owner);
             } catch (error) {
-              if (generation === this.#generation) {
+              const unavailable = error instanceof OperationFailure &&
+                error.outcome === "unavailable";
+              if (!unavailable || generation === this.#generation) {
                 this.#failed.set(key, fingerprint);
+                if (unavailable) this.#unavailable.add(key);
               }
               if (!this.#closed) console.error("permission auto reply:", error);
             }
@@ -308,6 +335,9 @@ export class PermissionFeature implements FrameSource {
         if (!this.#closed) console.error("permission auto list:", error);
       } finally {
         this.#scans.delete(root);
+        if (state.again && !this.#closed && this.#nativeReady) {
+          this.#enqueue(root);
+        }
       }
     })();
   }
@@ -337,6 +367,7 @@ export class PermissionFeature implements FrameSource {
     if (this.#closed) {
       throw rejectedReply("Server is stopping", operation);
     }
+    this.#checkNative();
     if (
       this.#flights.has(key) ||
       this.store.confirmed(request.sessionID, request.id)
@@ -366,11 +397,16 @@ export class PermissionFeature implements FrameSource {
         signal: this.#controller.signal,
         progress() {},
         beforeEffect: () => {
+          this.#checkNative();
           if (this.#closed || this.owner(request.sessionID) !== owner) {
             throw new OperationFailure(
               "rejected",
               "permission.policy-off",
               new Error("Automatic policy changed before dispatch"),
+              {
+                reason:
+                  "Automatic approval was disabled before the reply was sent.",
+              },
             );
           }
           return Promise.resolve();
@@ -396,11 +432,50 @@ export class PermissionFeature implements FrameSource {
       if (
         !this.#closed && journal !== undefined &&
         (!context ||
-          error instanceof OperationFailure && error.outcome === "rejected")
+          error instanceof OperationFailure && error.outcome !== "unknown")
       ) {
         this.store.finish(journal, {
           outcome: "failed",
-          error: error instanceof Error
+          failure: JSON.stringify(
+            {
+              code: error instanceof OperationFailure
+                ? error.code
+                : "permission.reply",
+              retry: error instanceof OperationFailure &&
+                  error.outcome === "unavailable"
+                ? "same-intent"
+                : "new-intent",
+              diagnosticID: error instanceof OperationFailure
+                ? error.diagnosticID
+                : crypto.randomUUID(),
+              facts: {
+                ...(error instanceof OperationFailure ? error.facts : {}),
+                action: "permission.reply",
+                actionLabel: owner
+                  ? "Automatic permission reply"
+                  : "Permission reply",
+                target: {
+                  label: this.index.getMetadata(request.sessionID)?.title,
+                },
+                reason: error instanceof OperationFailure
+                  ? error.facts?.reason ??
+                    (error.outcome === "unavailable"
+                      ? "The native connection is not ready. The reply was not sent."
+                      : "The native refused this reply.")
+                  : "The permission reply failed.",
+                recovery: owner && error instanceof OperationFailure &&
+                    error.outcome === "unavailable"
+                  ? "OTK will retry when the native connection is ready."
+                  : "Review this request before trying again.",
+              },
+            } satisfies PublicFailure,
+          ),
+          error: error instanceof OperationFailure
+            ? error.facts?.reason ??
+              (error.outcome === "unavailable"
+                ? "The native connection is not ready. The reply was not sent."
+                : "The native refused this reply.")
+            : error instanceof Error
             ? error.message
             : typeof error === "string"
             ? error
@@ -410,6 +485,18 @@ export class PermissionFeature implements FrameSource {
       throw error;
     } finally {
       this.#flights.delete(key);
+    }
+  }
+  #checkNative(): void {
+    if (!this.#nativeReady) {
+      throw new OperationFailure(
+        "unavailable",
+        "native.unavailable",
+        new Error("Native connection is not ready"),
+        {
+          reason: "The native connection is not ready. The reply was not sent.",
+        },
+      );
     }
   }
   register(rpc: RpcRegistry): void {
@@ -517,6 +604,9 @@ export class PermissionFeature implements FrameSource {
           time: row.time,
           outcome: row.outcome,
           error: row.error,
+          ...(row.failure
+            ? { failure: JSON.parse(row.failure) as PublicFailure }
+            : {}),
         }));
         return {
           entries,

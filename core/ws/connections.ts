@@ -45,6 +45,8 @@ interface Connection {
   close(): void;
 }
 export interface FrameSource {
+  /** Native lifecycle, independent of browser connections and index publication. */
+  connection?(state: HarnessState): void;
   retained?(): readonly string[];
   /** Refresh connection-owned demand before admitting work for a changed view. */
   viewChanged?(): void;
@@ -99,6 +101,7 @@ export class Connections {
         prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
       );
       for (const source of sources) {
+        source.connection?.(this.harnessState);
         if (source.open) continue;
         this.#stops.push(source.listen((frame) => this.broadcast(frame)));
       }
@@ -151,6 +154,7 @@ export class Connections {
   }
   connection(state: HarnessState): void {
     this.harnessState = state;
+    for (const source of this.sources) source.connection?.(state);
     this.broadcast({ t: "harness", state });
   }
   content(sessionID: string, event: ContentOp, clock?: ContentClock): void {

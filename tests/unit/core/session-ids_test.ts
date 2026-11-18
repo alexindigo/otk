@@ -27,8 +27,8 @@ function seed(db: OtkDb) {
     INSERT INTO session_seen(user,session,time) VALUES ('alice','ses_one',4),('alice','opcv1-ses_one',8),('bob','ses_one',6);
     INSERT INTO session_finishes(session,time) VALUES ('ses_one',5),('opcv1-ses_one',3);
     INSERT INTO permission_auto VALUES ('ses_one'),('opcv1-ses_one');
-    INSERT INTO permission_activity VALUES (42,'ses_one','per_1','{"sessionID":"ses_one","patterns":["ses_one"],"extra":true}','once','auto','ses_other','keep message',17,'confirmed',NULL);
-    INSERT INTO permission_activity VALUES (43,'ses_one','per_2','{invalid','reject','manual',NULL,NULL,18,'failed','keep error');
+    INSERT INTO permission_activity(id,session,request_id,request,reply,source,owner,message,time,outcome,error) VALUES (42,'ses_one','per_1','{"sessionID":"ses_one","patterns":["ses_one"],"extra":true}','once','auto','ses_other','keep message',17,'confirmed',NULL);
+    INSERT INTO permission_activity(id,session,request_id,request,reply,source,owner,message,time,outcome,error) VALUES (43,'ses_one','per_2','{invalid','reject','manual',NULL,NULL,18,'failed','keep error');
     INSERT INTO permission_activity_family VALUES ('ses_one',42),('opcv1-ses_one',42),('ses_other',42);
     INSERT INTO prefs VALUES ('shellLayout','{"projectLocations":[{"sidecarId":"remote","directory":"/project","sessionID":"ses_one","extra":3}],"extra":{"keep":true}}',123);
     INSERT INTO prefs VALUES ('other','{"sessionID":"ses_one"}',456);
