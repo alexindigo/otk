@@ -18,6 +18,78 @@ import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
 
+Deno.test("inbox admission reconciliation flushes queued live finishes before replay", async () => {
+  const path = await Deno.makeTempDir();
+  const db = new OtkDb(path, [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const id = "tstv1-live";
+  index.upsertMetadata({
+    id,
+    directory: "/p",
+    projectID: "p",
+    title: id,
+    timeCreated: 1,
+    timeUpdated: 1,
+    archived: false,
+    status: "idle",
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  });
+  stores.finishes.observe(id, 10);
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "local",
+    () => Promise.resolve([]),
+  );
+  const projection = feature.open(
+    () => ({ epoch: 1, directory: "/p", rows: [id], crumbs: [] }),
+    "connection",
+    () => new Set([id]),
+  );
+  const frames: ServerFrame[] = [];
+  const stop = projection.listen((frame) => frames.push(frame));
+  try {
+    await projection.snapshot!();
+    projection.entriesChanged?.();
+    stores.finishes.observe(id, 20);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const finishes = frames.filter((frame) => frame.t === "inbox.patch")
+      .flatMap((frame) =>
+        frame.ops.filter((op) => op.op === "finish" && op.time === 20)
+          .map(() => ({ admitted: !!frame.admitted }))
+      );
+    assertEquals(
+      finishes,
+      [{ admitted: false }],
+      "Live finishes cannot be consumed as admission facts",
+    );
+  } finally {
+    stop();
+    projection.close?.();
+    feature.close();
+    db.close();
+    await Deno.remove(path, { recursive: true });
+  }
+});
+
 Deno.test("inbox maintains committed keys without baseline SQL or unrelated payloads", async () => {
   const path = await Deno.makeTempDir();
   const db = new OtkDb(path, [

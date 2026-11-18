@@ -39,6 +39,79 @@ function entry(id = "session", directory = "/p"): IndexEntry {
   };
 }
 
+Deno.test("admitted finishes advance an existing clock silently while live and baseline recovery still complete", () => {
+  const f = fixture();
+  const completions: number[] = [];
+  const stop = f.resources.observeEntries("local", (event) => {
+    for (const change of event.changes) {
+      if (change.completedAt) completions.push(change.completedAt);
+    }
+  });
+  try {
+    f.receive("local", { t: "index.snapshot", rev: 0, entries: [entry()] });
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "finishes",
+      revision: 0,
+      inbox: { ...metadata(), finishes: { session: 10 } },
+    });
+    f.receive("local", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{ op: "evict", id: "session" }],
+    });
+    f.receive("local", {
+      t: "index.patch",
+      rev: 2,
+      ops: [{ op: "upsert", entry: entry() }],
+    });
+    completions.length = 0;
+    f.receive("local", {
+      t: "inbox.patch",
+      generation: "finishes",
+      from: 0,
+      revision: 1,
+      admitted: true,
+      ops: [{ op: "finish", sessionID: "session", time: 20 }],
+    });
+    assertEquals(completions, [], "Lease replay is not a new completion");
+    f.receive("local", {
+      t: "inbox.patch",
+      generation: "finishes",
+      from: 1,
+      revision: 2,
+      ops: [{ op: "finish", sessionID: "session", time: 20 }],
+    });
+    assertEquals(
+      completions,
+      [],
+      "The silent clock still deduplicates the known finish",
+    );
+    f.receive("local", {
+      t: "inbox.patch",
+      generation: "finishes",
+      from: 2,
+      revision: 3,
+      ops: [{ op: "finish", sessionID: "session", time: 30 }],
+    });
+    assertEquals(completions, [30]);
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "finishes",
+      revision: 4,
+      inbox: { ...metadata(), finishes: { session: 40 } },
+    });
+    assertEquals(
+      completions,
+      [30, 40],
+      "Baseline recovery retains its existing behavior",
+    );
+  } finally {
+    stop();
+    f.resources.stop();
+  }
+});
+
 Deno.test("hierarchy preference reaches every server view before deferred bindings paint", () => {
   const f = fixture((initial) => ({ ...createState(initial), update() {} }));
   const views: { tasksFollowParent?: boolean }[] = [];

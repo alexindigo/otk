@@ -629,13 +629,11 @@ export function createServerResources(o: {
           if (changes.baseline || finishes[session] !== undefined) {
             const time = finishes[session] ?? 0;
             const supervision = current.state.inbox.supervision?.[session];
-            owner.finished(
-              session,
-              time,
-              // A replayed known finish sets the clock without a completion.
-              changes.baseline || !!changes.admitted,
-              supervision?.terminal === time ? supervision.outcome : undefined,
-            );
+            const outcome = supervision?.terminal === time
+              ? supervision.outcome
+              : undefined;
+            if (changes.admitted) owner.admitFinished(session, time, outcome);
+            else owner.finished(session, time, changes.baseline, outcome);
           }
         }
       });

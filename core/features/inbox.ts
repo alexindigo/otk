@@ -316,6 +316,8 @@ export class InboxFeature implements FrameSource {
         wholeLease = taskTopology = false;
         named.clear();
         if (!this.#views.has(id)) return;
+        // Publish queued live changes before reading known admission facts.
+        this.#flush();
         // Facts for newly leased rows are known state, not new events.
         if (whole) {
           const leased = entries();
