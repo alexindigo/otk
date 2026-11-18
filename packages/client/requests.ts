@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   canonicalRequest,
   isSessionID,
@@ -122,7 +123,7 @@ export class RequestTracker {
       (saved?.version === 1 && saved.server === (options.server ?? "")
         ? saved.clientID
         : undefined) ??
-      crypto.randomUUID();
+      randomID();
     // Validate persisted metadata independently; payloads are never restored.
     if (
       saved?.version === 1 && saved.server === (options.server ?? "") &&
@@ -358,10 +359,10 @@ export class RequestTracker {
       ...(options.intent ??
         {
           clientID: this.clientID,
-          key: crypto.randomUUID(),
+          key: randomID(),
           window: this.#window?.id ?? "",
         }),
-      id: crypto.randomUUID(),
+      id: randomID(),
       ...(options.intent?.origin ?? options.origin
         ? { origin: options.intent?.origin ?? options.origin }
         : {}),
@@ -378,7 +379,7 @@ export class RequestTracker {
       const failure: PublicFailure = {
         code: "request.conflict",
         retry: "none",
-        diagnosticID: crypto.randomUUID(),
+        diagnosticID: randomID(),
         facts: this.failureFacts(method, params, options),
       };
       const result = Promise.reject(new RequestFailure(failure));
@@ -461,7 +462,7 @@ export class RequestTracker {
     for (const item of pending) {
       item.state = {
         ...item.state,
-        ref: { ...item.state.ref, id: crypto.randomUUID() },
+        ref: { ...item.state.ref, id: randomID() },
         connection: "connected",
       };
       this.#publish(item);
@@ -630,7 +631,7 @@ export class RequestTracker {
   intent(): IntentIdentity {
     return {
       clientID: this.clientID,
-      key: crypto.randomUUID(),
+      key: randomID(),
       window: this.#window?.id ?? "",
     };
   }
@@ -663,7 +664,7 @@ export class IntentGroup {
   step(name: string): IntentIdentity {
     let step = this.#steps.get(name);
     if (!step) {
-      step = { ...this.identity, key: crypto.randomUUID() };
+      step = { ...this.identity, key: randomID() };
       this.#steps.set(name, step);
     }
     return step;
@@ -782,7 +783,7 @@ export function createFormIntent<T, R>(options: {
         listener();
       } catch (cause) {
         try {
-          options.diagnostic?.(crypto.randomUUID(), cause);
+          options.diagnostic?.(randomID(), cause);
         } catch { /* Observer diagnostics cannot change the intent outcome. */ }
       }
     }
@@ -802,7 +803,7 @@ export function createFormIntent<T, R>(options: {
       const deferred = Promise.withResolvers<R>();
       active = deferred.promise;
       void active.catch(() => {});
-      state = { pending: true, key: crypto.randomUUID() };
+      state = { pending: true, key: randomID() };
       let captured: T;
       const fail = (cause: unknown) => {
         state = {

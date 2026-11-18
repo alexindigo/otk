@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { compareMessages, isRealPrompt } from "@otk/protocol";
 import type {
   ContentSession,
@@ -191,7 +192,7 @@ export function createBranchHistory(options: {
     const error = new RequestFailure({
       code: "branch-history.storage",
       retry: "new-intent",
-      diagnosticID: crypto.randomUUID(),
+      diagnosticID: randomID(),
       facts: {
         actionLabel,
         target: {
@@ -465,7 +466,7 @@ export function createBranchHistory(options: {
       };
       const original = drafts.original;
       const branch: SavedBranch = {
-        id: crypto.randomUUID(),
+        id: randomID(),
         boundary,
         created: Date.now(),
         session: initial!.session,

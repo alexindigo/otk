@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import { render } from "@solidjs/web";
 import { CommandHub } from "@otk/client";
 import { CommandProvider } from "../../keyboard/context.tsx";
@@ -32,10 +33,10 @@ render(() => (
     />
   </CommandProvider>
 ), document.getElementById("app")!);
-const name = crypto.randomUUID();
+const name = randomID();
 // Register after consumers exist, with no slash/palette opt-in metadata.
 commands.register({
-  id: crypto.randomUUID(),
+  id: randomID(),
   name,
   title: name,
   category: "Sentinel",

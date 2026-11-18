@@ -39,3 +39,5 @@ export * from "./failures.ts";
 export * from "./failure-snapshot.ts";
 export * from "./progress.ts";
 export * from "./forms.ts";
+export * from "./identity.ts";
+export * from "./hash.ts";

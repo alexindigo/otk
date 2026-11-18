@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   autoApproveOwner,
   type IndexEntry,
@@ -60,7 +61,7 @@ export function createAttentionProjection(o: {
     linked = false,
     initialized = false,
     stopped = false;
-  let generation = crypto.randomUUID(), revision = 0;
+  let generation = randomID(), revision = 0;
   let waitingCache = new Map<string, string | undefined>();
   const waiting = (id: string) => {
     if (!linked) return true;
@@ -232,7 +233,7 @@ export function createAttentionProjection(o: {
       initialized = false;
       finishClocks.clear();
       completed.clear();
-      generation = crypto.randomUUID();
+      generation = randomID();
       revision = 0;
     },
     stop() {

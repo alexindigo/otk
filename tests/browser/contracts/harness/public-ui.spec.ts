@@ -39,6 +39,7 @@ for (const draft of [false, true]) {
             writeText: () => Promise.reject(new Error("Clipboard refused")),
           },
         });
+        document.execCommand = () => false;
       });
       await page.locator("[data-dark]").click();
       if (draft) {
@@ -48,7 +49,10 @@ for (const draft of [false, true]) {
       }
       await page.locator(".otk-copy-message").click();
       await expect(page.locator(".otk-message [role=alert]")).toHaveText(
-        /OTK has no further details/,
+        /The browser refused access to the clipboard/,
+      );
+      await expect(page.locator(".otk-message [role=alert]")).toContainText(
+        "Ctrl+C",
       );
       await expect(page.locator("body")).toContainText(
         "Keep this reply available",

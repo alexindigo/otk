@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sha256 } from "./hash.ts";
 import type { InboxRequestReceipts } from "./inbox.ts";
 import type { PreferencesRequestReceipts } from "./prefs.ts";
 import type { FrecencyRequestReceipts } from "./frecency.ts";
@@ -261,12 +262,5 @@ export function canonicalRequest(value: unknown): string {
   return encode(value);
 }
 export async function requestFingerprint(canonical: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(canonical),
-  );
-  return Array.from(
-    new Uint8Array(hash),
-    (byte) => byte.toString(16).padStart(2, "0"),
-  ).join("");
+  return await sha256(canonical);
 }

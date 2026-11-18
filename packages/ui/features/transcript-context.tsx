@@ -15,10 +15,11 @@ import {
   type TranscriptInteraction,
 } from "@otk/client";
 import type { DisclosureCategory, Preferences } from "@otk/protocol";
+import { copyText } from "../clipboard.ts";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
-  return navigator.clipboard.writeText(value);
+  return copyText(value);
 }
 
 /** Shared target data is extensible without importing a message or tool view. */

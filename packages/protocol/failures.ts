@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "./identity.ts";
 import type { FailureFacts } from "./requests.ts";
 /** Summary-only projection. Credential-bearing prose stays diagnostic; no raw view is introduced. */
 export function publicFailureReason(
@@ -36,8 +37,6 @@ export class OperationFailure extends Error {
   ) {
     super("The operation has not completed", { cause });
     this.diagnosticID = diagnosticID ??
-      (cause instanceof OperationFailure
-        ? cause.diagnosticID
-        : crypto.randomUUID());
+      (cause instanceof OperationFailure ? cause.diagnosticID : randomID());
   }
 }

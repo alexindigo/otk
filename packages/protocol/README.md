@@ -1,5 +1,14 @@
 # @otk/protocol
 
+`randomID()` is the shared RFC 4122 v4 identity owner for browser code. It uses
+`crypto.getRandomValues`, available on plain HTTP as well as HTTPS. `sha256()`
+owns UTF-8 SHA-256 with a dependency-free fallback when Web Crypto is absent.
+Request fingerprints retain their exact stored/equality format. Highlighting
+also borrows SHA-256, retaining the same local cache keys rather than
+introducing a second hashing algorithm. The browser-capabilities architecture
+gate follows the browser import/worker graph and prevents direct secure-only API
+access.
+
 `PROMPT_HISTORY_LIMIT` owns the global recall candidate/retention window.
 `MAX_UPLOAD_BYTES` owns the immutable per-upload limit; `AttachmentPolicy`
 describes injected aggregate reference/byte/concurrency admission. Recall and

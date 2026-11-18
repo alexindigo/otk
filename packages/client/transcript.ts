@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   type ClockedContent,
   compareTranscriptVersion,
@@ -1101,7 +1102,7 @@ export function createTranscript(
           throw new RequestFailure({
             code: "message.missing",
             retry: "none",
-            diagnosticID: crypto.randomUUID(),
+            diagnosticID: randomID(),
           });
         } else await owner.older();
         if (state.pageError) throw feedbackError(state.pageError);

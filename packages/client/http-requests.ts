@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import type {
   ClientRequestPolicy,
   IntentIdentity,
@@ -157,7 +158,7 @@ export class HttpRequests {
     const ref = options.intent ??
       {
         clientID: this.tracker.clientID,
-        key: crypto.randomUUID(),
+        key: randomID(),
         window: "bootstrap",
       };
     if (!this.#deliveries.has(ref.key)) {
@@ -351,7 +352,7 @@ export class HttpRequests {
           this.#policy.retrybase * 2 ** Math.min(delivery.attempt++, 30),
         );
         delivery.retry = setTimeout(
-          () => this.#run(key, crypto.randomUUID()),
+          () => this.#run(key, randomID()),
           delay,
         );
       }
@@ -359,7 +360,7 @@ export class HttpRequests {
       delivery.work = undefined;
       if (delivery.again && !delivery.stopped) {
         delivery.again = false;
-        this.#run(key, crypto.randomUUID());
+        this.#run(key, randomID());
       }
     });
   }

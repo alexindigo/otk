@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   type HistoryEntry,
   PROMPT_HISTORY_LIMIT,
@@ -58,7 +59,7 @@ export function historyDraft(entry: HistoryEntry): Draft {
       (part.source === "upload" || part.source === "history") &&
       part.mime.startsWith("image/") && !draft.input.includes(token)
     ) {
-      draft.chips.push({ id: crypto.randomUUID(), label: token, part });
+      draft.chips.push({ id: randomID(), label: token, part });
       continue;
     }
     let start = draft.input.indexOf(token, cursor);
@@ -70,7 +71,7 @@ export function historyDraft(entry: HistoryEntry): Draft {
     }
     const end = start + token.length;
     draft.chips.push({
-      id: crypto.randomUUID(),
+      id: randomID(),
       label: token,
       start,
       end,

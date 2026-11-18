@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   contextualFailure,
   failureFeedback,
@@ -159,7 +160,7 @@ export function feedbackError(value: Feedback): RequestFailure {
       {
         code: "action.local",
         retry: "new-intent",
-        diagnosticID: value.diagnosticID ?? crypto.randomUUID(),
+        diagnosticID: value.diagnosticID ?? randomID(),
       },
   );
 }

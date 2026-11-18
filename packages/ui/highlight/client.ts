@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { normalizeError } from "@otk/protocol";
+import { normalizeError, sha256 } from "@otk/protocol";
 import type {
   HighlightChunk,
   HighlightCompletion,
@@ -160,17 +160,14 @@ function key(
     current.leases.add(lease);
     return current.promise;
   }
-  const promise = crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text),
-  ).then((digest) =>
-    lang + ":" +
-    Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, "0"))
-      .join("")
-  ).finally(() => {
-    if (keys.get(text)?.promise === promise) keys.delete(text);
-    if (!keys.size && pendingKeys.get(lang) === keys) pendingKeys.delete(lang);
-  });
+  const promise = sha256(text).then((digest) => lang + ":" + digest).finally(
+    () => {
+      if (keys.get(text)?.promise === promise) keys.delete(text);
+      if (!keys.size && pendingKeys.get(lang) === keys) {
+        pendingKeys.delete(lang);
+      }
+    },
+  );
   keys.set(text, { promise, leases: new Set([lease]) });
   pendingKeys.set(lang, keys);
   return promise;

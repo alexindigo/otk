@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
 import {
   canonicalRequest,
   checkClientFrameSize,
@@ -135,7 +136,7 @@ export class Rpc {
       const failure = new RequestFailure({
         code: "request.params",
         retry: "new-intent",
-        diagnosticID: crypto.randomUUID(),
+        diagnosticID: randomID(),
         facts: this.requests.failureFacts(method, params, options),
       });
       failure.cause = cause;
@@ -147,8 +148,8 @@ export class Rpc {
           t: "request",
           ref: {
             ...intent,
-            window: intent.window || crypto.randomUUID(),
-            id: crypto.randomUUID(),
+            window: intent.window || randomID(),
+            id: randomID(),
           },
           method,
           params: captured,
@@ -158,7 +159,7 @@ export class Rpc {
       const failure = new RequestFailure({
         code: "request.capacity",
         retry: "new-intent",
-        diagnosticID: crypto.randomUUID(),
+        diagnosticID: randomID(),
         facts: this.requests.failureFacts(method, params, options),
       });
       failure.cause = cause;
@@ -189,7 +190,7 @@ export class Rpc {
       throw new RequestFailure({
         code: "request.conflict",
         retry: "none",
-        diagnosticID: crypto.randomUUID(),
+        diagnosticID: randomID(),
         facts: {
           ...facts,
           reason: "A different response was already sent for this request",
