@@ -58,11 +58,48 @@ test("V2 older transcript pages retain the first page's unsupported queue notice
   await f.start();
   const first = await f.adapter.core.listMessages("opcv2-ses_form", {});
   assertEquals(typeof first.older, "string");
+  assertEquals(first.session.notices?.map((notice) => notice.code), [
+    "queued-messages.unsupported",
+  ]);
   const older = await f.adapter.core.listMessages("opcv2-ses_form", {
     before: first.older!,
   });
   assertEquals(older.items.length, 5);
   assertEquals(older.session.notices, first.session.notices);
+  assertEquals(f.reads.filter((path) => path.endsWith("/inbox")).length, 1);
+});
+
+test("V2 retained queue notices use the current session title on older pages", async () => {
+  const f = await pendingInventoryFixture(
+    await tempDir("renamed-inbox-notice-"),
+  );
+  f.control.inboxStatus = 404;
+  f.control.transcriptRows = 15;
+  const session = f.sessions.find((row) => row.id === "ses_form")!;
+  session.title = "Draft";
+  await f.start();
+  const first = await f.adapter.core.listMessages("opcv2-ses_form", {});
+  assertEquals(typeof first.older, "string");
+  assertEquals(first.session.notices?.length, 1);
+  assertEquals(first.session.notices![0].facts?.target?.label, "Draft");
+  f.adapter.transcript.observe({
+    ...session,
+    title: "Final",
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  });
+  const older = await f.adapter.core.listMessages("opcv2-ses_form", {
+    before: first.older!,
+  });
+  assertEquals(older.items.length, 5);
+  assertEquals(older.session.title, "Final");
+  assertEquals(older.session.notices?.length, 1);
+  assertEquals(older.session.notices![0].facts?.target?.label, "Final");
+  assertEquals(
+    older.session.notices![0].diagnosticID,
+    first.session.notices![0].diagnosticID,
+  );
+  assertEquals(first.session.notices![0].facts?.target?.label, "Draft");
   assertEquals(f.reads.filter((path) => path.endsWith("/inbox")).length, 1);
 });
 
