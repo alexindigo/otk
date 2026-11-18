@@ -311,7 +311,7 @@ test(
     await page.reload();
     await expect(rows).toHaveCount(5);
     await expect(activity.locator(".otk-error")).toContainText(
-      "The response could not be sent. Review this request before trying again",
+      "Native policy refused the permission reply. Review this request before trying again.",
     );
     await expect(activity.locator(".otk-error")).not.toContainText(
       "Stored failure fixture",

@@ -30,7 +30,195 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
 });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
-test("automatic failure is attempted once across unrelated index changes; request and connection generations permit retry", async () => {
+test("startup pending permission waits for native readiness and is answered exactly once", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
+  const store = new PermissionStore(db), index = new IndexStore();
+  const request: PermissionRequest = {
+    id: "startup",
+    sessionID: "tstv1-root",
+    kind: "edit",
+    title: "Edit",
+    time: 1,
+    patterns: ["file.ts"],
+    alwaysPatterns: [],
+    detail: { kind: "generic", summary: "file.ts" },
+  };
+  let ready = false, attempts = 0, lists = 0;
+  const feature = new PermissionFeature(store, index, {
+    listPermissions: () => {
+      lists++;
+      return Promise.resolve([request]);
+    },
+    replyPermission: () => {
+      attempts++;
+      return ready ? Promise.resolve() : Promise.reject(
+        new OperationFailure(
+          "unavailable",
+          "native.unavailable",
+          new Error("Not connected yet"),
+        ),
+      );
+    },
+  });
+  try {
+    feature.connection("connecting");
+    store.setAuto("tstv1-root", true);
+    index.reset([entry("tstv1-root")]);
+    await tick();
+    assertEquals([
+      lists,
+      attempts,
+      store.list([request.sessionID], undefined, 100).length,
+    ], [0, 0, 0]);
+    ready = true;
+    feature.connection("connected");
+    await waitFor(
+      () => store.confirmed(request.sessionID, request.id),
+      Boolean,
+    );
+    feature.connection("connected");
+    index.upsert(entry("tstv1-root"));
+    await tick();
+    assertEquals(attempts, 1);
+    assertEquals(
+      store.list([request.sessionID], undefined, 100).map((row) => row.outcome),
+      ["confirmed"],
+    );
+  } finally {
+    feature.close();
+    db.close();
+  }
+});
+
+test("unavailable auto replies retry only after connection readiness; real refusals stay failed once", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
+  const store = new PermissionStore(db), index = new IndexStore();
+  const request: PermissionRequest = {
+    id: "retry",
+    sessionID: "tstv1-root",
+    kind: "edit",
+    title: "Edit",
+    time: 1,
+    patterns: ["file.ts"],
+    alwaysPatterns: [],
+    detail: { kind: "generic", summary: "file.ts" },
+  };
+  let attempts = 0;
+  const feature = new PermissionFeature(store, index, {
+    listPermissions: () => Promise.resolve([request]),
+    replyPermission: () => {
+      attempts++;
+      return Promise.reject(
+        new OperationFailure(
+          attempts === 1 ? "unavailable" : "rejected",
+          attempts === 1 ? "native.unavailable" : "native.rejected",
+          new Error("diagnostic only"),
+          {
+            reason: attempts === 1
+              ? "Native connection lost before dispatch"
+              : "Policy refused this reply",
+            status: 403,
+          },
+        ),
+      );
+    },
+  });
+  try {
+    store.setAuto(request.sessionID, true);
+    index.reset([entry(request.sessionID)]);
+    await waitFor(() => attempts, (n) => n === 1);
+    await tick();
+    assertEquals(store.unconfirmed(request.sessionID, request.id), false);
+    for (let n = 0; n < 4; n++) {
+      index.upsert(entry(request.sessionID));
+      await tick();
+    }
+    assertEquals(attempts, 1);
+    feature.connection("reconnecting");
+    feature.connection("connected");
+    await waitFor(() => attempts, (n) => n === 2);
+    await tick();
+    for (let n = 0; n < 4; n++) {
+      feature.connection("reconnecting");
+      feature.connection("connected");
+      index.upsert(entry(request.sessionID));
+      await tick();
+    }
+    assertEquals(attempts, 2);
+    const records = store.list([request.sessionID], undefined, 100);
+    assertEquals(records.map((row) => row.outcome), ["failed", "failed"]);
+    assertEquals(records[0].error, "Policy refused this reply");
+    const failure = JSON.parse(records[0].failure!);
+    assertEquals(failure.facts.reason, "Policy refused this reply");
+    assertEquals(failure.facts.action, "permission.reply");
+    assertEquals(
+      failure.facts.recovery,
+      "Review this request before trying again.",
+    );
+    assertEquals(failure.retry, "new-intent");
+  } finally {
+    feature.close();
+    db.close();
+  }
+});
+
+test("uncertain automatic delivery is never retried after reconnect", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
+  const store = new PermissionStore(db), index = new IndexStore();
+  const request: PermissionRequest = {
+    id: "unknown",
+    sessionID: "tstv1-root",
+    kind: "edit",
+    title: "Edit",
+    time: 1,
+    patterns: ["file.ts"],
+    alwaysPatterns: [],
+    detail: { kind: "generic", summary: "file.ts" },
+  };
+  let attempts = 0;
+  const feature = new PermissionFeature(store, index, {
+    listPermissions: () => Promise.resolve([request]),
+    replyPermission: () => {
+      attempts++;
+      return Promise.reject(
+        new OperationFailure(
+          "unknown",
+          "native.unknown",
+          new Error("Lost after dispatch"),
+        ),
+      );
+    },
+  });
+  try {
+    store.setAuto(request.sessionID, true);
+    index.reset([entry(request.sessionID)]);
+    await waitFor(() => attempts, (n) => n === 1);
+    await tick();
+    for (let n = 0; n < 4; n++) {
+      feature.connection("reconnecting");
+      feature.connection("connected");
+      index.upsert(entry(request.sessionID));
+      await tick();
+    }
+    assertEquals(attempts, 1);
+    assertEquals(store.unconfirmed(request.sessionID, request.id), true);
+    assertEquals(
+      store.list([request.sessionID], undefined, 100).map((row) => row.outcome),
+      ["started"],
+    );
+  } finally {
+    feature.close();
+    db.close();
+  }
+});
+
+test("automatic refusal is attempted once across unrelated changes; changed requests and explicit index replacements permit retry", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations], {
     busyms: 5000,
   });

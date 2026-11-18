@@ -38,6 +38,7 @@
     ],
     "revert": ["session_actions_test.ts", "history_test.ts"],
     "attention": [
+      "approval-startup_test.ts",
       "supervision-native_test.ts",
       "permissions_test.ts",
       "questions_test.ts",
@@ -47,6 +48,7 @@
     "menus": ["commands_test.ts", "prefs_test.ts"],
     "visual": ["prefs_test.ts", "compiled-static_test.ts"],
     "transport": [
+      "approval-startup_test.ts",
       "first-page_test.ts",
       "background-viewers_test.ts",
       "view-lease_test.ts",

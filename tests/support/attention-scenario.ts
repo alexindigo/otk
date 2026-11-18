@@ -415,7 +415,24 @@ async function nativeAttention(profile: Profile) {
                   source: "auto",
                   owner: session,
                 });
-                if (error) records.finish(record, { outcome: "failed", error });
+                if (error) {
+                  records.finish(record, {
+                    outcome: "failed",
+                    error,
+                    failure: JSON.stringify({
+                      code: "native.rejected",
+                      retry: "new-intent",
+                      diagnosticID: "permission-refusal-fixture",
+                      facts: {
+                        action: "permission.reply",
+                        actionLabel: "Automatic permission reply",
+                        target: { sessionID: session },
+                        reason: "Native policy refused the permission reply.",
+                        recovery: "Review this request before trying again.",
+                      },
+                    }),
+                  });
+                }
               }
             } finally {
               db.close();

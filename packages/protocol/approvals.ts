@@ -10,6 +10,7 @@ export const approvalsRequestMetadata: Readonly<
 import type { PermissionReply } from "./rpc.ts";
 import type { PermissionRequest } from "./content.ts";
 import type { SessionLookup } from "./session-tree.ts";
+import type { PublicFailure } from "./requests.ts";
 
 /** Explicit session policies only; descendants inherit through the session index. */
 export interface ApprovalSnapshot {
@@ -29,6 +30,8 @@ export interface PermissionActivity {
   time: number;
   outcome: "started" | "confirmed" | "failed";
   error?: string;
+  /** Producer-selected public facts; error remains a legacy diagnostic field. */
+  failure?: PublicFailure;
 }
 export interface PermissionActivityPage {
   entries: PermissionActivity[];
