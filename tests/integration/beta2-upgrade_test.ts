@@ -6,6 +6,7 @@ import { createSessionReferenceUpgrade } from "../../core/features/session-ids.t
 import {
   beta1State,
   beta2Migrations,
+  schemaUpgradedManifest,
   upgradedManifest,
 } from "../support/beta1-state.ts";
 import { RemainingMeasurements } from "../support/remaining-measurements.ts";
@@ -84,7 +85,7 @@ for (
         Error,
         "owned upgrade fault",
       );
-      assertEquals(snapshot(db), before);
+      assertEquals(snapshot(db), schemaUpgradedManifest(before));
       db.close();
       db = new OtkDb(root, beta2Migrations, { busyms: 5000 });
       createSessionReferenceUpgrade(opencodeV1SessionID.legacy)(db);
@@ -123,7 +124,10 @@ for (const feature of ["tasks", "session-reference-upgrade", "requests"]) {
       );
       let db = new OtkDb(root, [], { busyms: 5000 });
       try {
-        assertEquals(snapshot(db), before);
+        assertEquals(
+          snapshot(db),
+          feature === "tasks" ? before : schemaUpgradedManifest(before),
+        );
         db.close();
         db = new OtkDb(root, beta2Migrations, { busyms: 5000 });
         createSessionReferenceUpgrade(opencodeV1SessionID.legacy)(db);
