@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HarnessCore } from "@otk/harness";
 import {
-  urgentStatus,
   type IndexMetadata,
   type ProjectStatus,
   type SessionMetadata,
+  urgentStatus,
 } from "@otk/protocol";
 import type { SessionHierarchy } from "../index/session-hierarchy.ts";
 

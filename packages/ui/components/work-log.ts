@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { AssistantMessage, Message, Part, TurnTiming } from "@otk/protocol";
+import type {
+  AssistantMessage,
+  Message,
+  Part,
+  TurnTiming,
+} from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import { isAssistantTerminal } from "@otk/protocol";
 import {

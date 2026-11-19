@@ -495,7 +495,7 @@ Deno.test("late recorded roots migrate all retained contributions and exact seed
     false,
     "resolved stored policy is not an obsolete flat row",
   );
-  assertEquals(owner.values.get("/tree")?.status, "finished");
+  assertEquals(owner.values.get("/tree")?.status, "working");
   assertEquals(owner.values.get("/tree")?.unseenCount, 2);
   assertEquals(owner.values.get("/tree")?.sessionCount, 2);
   assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/sub"]);

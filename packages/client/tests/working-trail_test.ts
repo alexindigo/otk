@@ -3,7 +3,11 @@ import { assertEquals } from "@std/assert";
 import { createTabs, runningWork } from "@otk/client";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 
-const entry = (id: string, timeCreated: number, parentID?: string): IndexEntry => ({
+const entry = (
+  id: string,
+  timeCreated: number,
+  parentID?: string,
+): IndexEntry => ({
   id,
   title: id,
   parentID,
@@ -33,7 +37,13 @@ for (const grouped of [true, false]) {
     const entries = [root, late, nested, early, finished, unrelated];
     const inbox: InboxSnapshot = {
       tasks: grouped
-        ? [{ id: "task", directory: "/p", name: "Task", order: 0, sessions: [root.id] }]
+        ? [{
+          id: "task",
+          directory: "/p",
+          name: "Task",
+          order: 0,
+          sessions: [root.id],
+        }]
         : [],
       projects: [],
       pathTemplates: [],
@@ -50,36 +60,69 @@ for (const grouped of [true, false]) {
     };
     const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
     let connected = true;
-    const update = () => tabs.update({ directory: "/p", entries, inbox, connected });
-    const helpers = () => runningWork({
-      tabs,
-      inbox,
-      sessionID: tabs.state.sessionID!,
-      entry: (id) => entries.find((entry) => entry.id === id),
-      messages: [],
-      connected,
-    }).filter((item) => item.kind === "helper").map((item) => item.sessionID);
+    const update = () =>
+      tabs.update({ directory: "/p", entries, inbox, connected });
+    const helpers = () =>
+      runningWork({
+        tabs,
+        inbox,
+        sessionID: tabs.state.sessionID!,
+        entry: (id) => entries.find((entry) => entry.id === id),
+        messages: [],
+        connected,
+      }).filter((item) => item.kind === "helper").map((item) => item.sessionID);
     update();
     tabs.preview(root.id);
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["root", "early", "nested", "late"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+      "late",
+    ]);
     assertEquals(helpers(), ["early", "nested", "late"]);
     tabs.preview(nested.id);
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["root", "early", "nested", "late"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+      "late",
+    ]);
     for (const id of ["early", "nested", "late"]) {
       inbox.supervision![id] = { state: "finishedUnseen", terminal: 60 };
     }
     update();
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["root", "early", "nested"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+    ]);
     assertEquals(helpers(), []);
+    inbox.supervision!.early = { state: "none", terminal: 60 };
+    inbox.supervision!.nested = { state: "none", terminal: 60 };
+    update();
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+    ]);
     // A rerun reappears; a blocked or stale helper is not working.
     inbox.supervision!.late = { state: "working", terminal: 60 };
     inbox.supervision!.finished = { state: "needsYou", terminal: 50 };
     update();
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["root", "early", "nested", "late"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+      "late",
+    ]);
     assertEquals(helpers(), ["late"]);
     connected = false;
     update();
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["root", "early", "nested"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+      "root",
+      "early",
+      "nested",
+    ]);
     assertEquals(helpers(), []);
     tabs.stop();
   });

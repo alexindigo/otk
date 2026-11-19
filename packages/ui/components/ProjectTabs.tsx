@@ -380,7 +380,9 @@ export default function ProjectTabs(props: {
         <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
       <div class="otk-task-strip">
-        {props.projectChip ?? <ProjectChip directory={props.project.directory} />}
+        {props.projectChip ?? (
+          <ProjectChip directory={props.project.directory} />
+        )}
         <EdgeTriangle
           direction="previous"
           visible={edges().previous}
@@ -757,12 +759,10 @@ export default function ProjectTabs(props: {
         </output>
       </div>
       <Show
-        when={crumbs().some((crumb) =>
-          props.rename?.matches({
-            sidecarId: props.project.sidecarId,
-            sessionID: crumb.id,
-          }, "chip")
-        )}
+        when={crumbs().some((crumb) => props.rename?.matches({
+          sidecarId: props.project.sidecarId,
+          sessionID: crumb.id,
+        }, "chip"))}
       >
         <div class="otk-crumb-feedback">
           <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />

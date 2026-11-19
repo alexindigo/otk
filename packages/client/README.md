@@ -747,10 +747,10 @@ Mixed replies retain assistant metadata independently of final source position.
 Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay
-context. Ordinary part updates reuse the indexed assistant header.
-Each borrowed assistant segment also retains its own agent and native clock;
-metadata-only clock updates replace only that source segment. Reply grouping,
-source order and canonical action boundaries remain unchanged.
+context. Ordinary part updates reuse the indexed assistant header. Each borrowed
+assistant segment also retains its own agent and native clock; metadata-only
+clock updates replace only that source segment. Reply grouping, source order and
+canonical action boundaries remain unchanged.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.
@@ -1118,16 +1118,15 @@ template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
 population counts, so hydrating an existing session cannot increment them. Every
 project row has a light. The protocol's `ROLLUP_PRIORITY` / `rollupStatus` own
-aggregate lamp display: needs you, working, finished but unseen, none. Navigation
-instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished but unseen,
-working, none. Never use display order to choose the most urgent session, or
-urgency to paint a rollup. Project and task lights consume
+aggregate lamp display: needs you, working, finished but unseen, none.
+Navigation instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished
+but unseen, working, none. Never use display order to choose the most urgent
+session, or urgency to paint a rollup. Project and task lights consume
 supervision; presentation does not rank states. Finished children retain unseen
 attention until acknowledged. Task tabs sort by attention urgency, not their
-aggregate lamp colour, then newest
-family `timeUpdated`, with identity as a stable tie-break. Stored task order
-remains available for future pinning; it does not drive the strip. Discovery
-retains its recency/name order.
+aggregate lamp colour, then newest family `timeUpdated`, with identity as a
+stable tie-break. Stored task order remains available for future pinning; it
+does not drive the strip. Discovery retains its recency/name order.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
@@ -1165,6 +1164,15 @@ session across metadata updates. Helper preview/navigation still uses its local
 display root or owning task. Breadcrumbs borrow complete ancestry context and
 insert foreign links relative to their displayed ancestors and descendants,
 preserving explicit local member order even when intermediate links are quiet.
+
+`crumbs()` presents the complete path to the open session followed by working
+helpers of its task, in session start order, without duplicate path identities.
+`working()` exposes the same helper selection to `runningWork` for the composer;
+both borrow the live-work owner and current supervision, never raw native
+status. Finished, failed, cancelled, blocked and disconnected work leaves the
+suffix. The open session and its ancestors remain regardless of activity.
+`family()` retains the broader task membership independently of that visible
+suffix.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters

@@ -179,14 +179,18 @@ export default function SessionView(props: {
             open={openGroups().has(key)}
             onToggle={() => toggleGroup(key)}
             body={() => (
-              <For each={group().children} keyed={(child) => child.key}>
+              <For
+                each={group().children}
+                keyed={(child) => child.key}
+              >
                 {(child) => (
                   <Show when={child().count} fallback={one(child().key)}>
                     <ActivityGroup
                       group={child()}
                       onOpenChild={props.onOpenChild}
                       open={openGroups().has(`records:${child().key}`)}
-                      onToggle={() => toggleGroup(`records:${child().key}`)}
+                      onToggle={() =>
+                        toggleGroup(`records:${child().key}`)}
                       body={() => <For each={child().members}>{one}</For>}
                     />
                   </Show>
@@ -674,8 +678,12 @@ export default function SessionView(props: {
                                 onPins={(keys) =>
                                   props.transcript?.pin(
                                     keys.flatMap((key) =>
-                                      (recordGroups().groups[key]?.members ?? [key])
-                                        .flatMap((member) => projection().repliesByID[member]?.messageIDs ?? [])
+                                      (recordGroups().groups[key]?.members ??
+                                        [key])
+                                        .flatMap((member) =>
+                                          projection().repliesByID[member]
+                                            ?.messageIDs ?? []
+                                        )
                                     ),
                                   )}
                                 render={(key) =>
