@@ -16,6 +16,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 import { rollupStatus, type OperationAttention } from "./inbox.ts";
+import { workingHelpers } from "./live-work.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -31,6 +32,8 @@ export interface InboxTab {
 export interface TabInput {
   /** Invalidation identity for source-free handles from the project projection. */
   version?: number;
+  /** Fresh work is only presented while the serving native link is connected. */
+  connected?: boolean;
   directory: string;
   /** Resolved checkout membership supplied by the shared project owner. */
   directories?: readonly string[];
@@ -66,6 +69,8 @@ export interface ClientTabs {
   crumbs(): TaskCrumb[];
   /** Every session of the open task family, for the running-helpers list. */
   family(): TaskCrumb[];
+  /** Canonical running helpers shared by the breadcrumb trail and composer. */
+  working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
   /** The same session membership used by this tab's supervision lamp. */
@@ -133,6 +138,7 @@ export function createTabs(
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
   let cachedCrumbs: TaskCrumb[] = [],
     cachedFamily: TaskCrumb[] = [],
+    cachedWorking: TaskCrumb[] = [],
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
@@ -352,7 +358,7 @@ export function createTabs(
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      const key = `${id}/${store.state.sessionID}`;
+      const key = `${id}/${store.state.sessionID}/${input.connected !== false}`;
       if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
       crumbTabs = rows;
       crumbID = key;
@@ -399,19 +405,36 @@ export function createTabs(
         }
         result.splice(at, 0, { id, helper: false, depth: 0, external: true });
       }
-      // Decision 3: the trail is the path to the open session (its
-      // ancestors and itself), not every session of the task family.
+      // Keep the open-session path, then the same working helpers the composer
+      // presents. Finished helpers remain in the family, never in this suffix.
       const path = current
-        ? new Set([current, ...sessionAncestors(current, (id) => byID.get(id))])
+        ? [...sessionAncestors(current, (id) => byID.get(id)).toReversed(), current]
         : undefined;
       cachedFamily = result;
-      return cachedCrumbs = path
-        ? result.filter((crumb) => path.has(crumb.id))
+      cachedWorking = input.connected === false || !result.length
+        ? []
+        : workingHelpers(result, lookup, input.inbox);
+      const indexed = new Map(result.map((crumb) => [crumb.id, crumb]));
+      const trail = path
+        ? path.map((id, depth) => indexed.get(id) ?? {
+          id,
+          helper: !!byID.get(id)?.parentID,
+          depth,
+          external: foreign.has(id),
+        })
         : result;
+      return cachedCrumbs = [
+        ...trail,
+        ...cachedWorking.filter((crumb) => !trail.some((c) => c.id === crumb.id)),
+      ];
     },
     family() {
       this.crumbs();
       return cachedFamily;
+    },
+    working() {
+      this.crumbs();
+      return cachedWorking;
     },
     sessionFor,
     update(next: TabInput): void {
