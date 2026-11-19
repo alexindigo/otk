@@ -1242,8 +1242,6 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
     f.resources.projected("local", "root")!.attention.childPermissions,
     1,
   );
-  assertEquals(notes, []);
-  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes, ["permission"]);
   const count = changes.length;
   f.receive("local", {

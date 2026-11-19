@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import type { HarnessCore } from "@otk/harness";
 import type { IndexMetadata, ProjectStatus } from "@otk/protocol";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
@@ -84,15 +84,11 @@ Deno.test("navigation default resolves urgency and child memory to human roots, 
   assertEquals(await f.resolver.resolve(f.core, input), "tstv1-new");
   f.states.delete("tstv1-new");
   assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
-  assertEquals(
-    f.reads,
-    [["tstv1-child"], ["tstv1-new"], ["tstv1-old"]],
-    "attention resolves keyed ancestry without scanning a native catalog",
-  );
+  assertEquals(f.reads, [], "proven attention ancestry needs no native read");
   f.reads.length = 0;
   f.states.clear();
   assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
-  assertEquals(f.reads, [["tstv1-child"], ["tstv1-child"]]);
+  assertEquals(f.reads, [["tstv1-child"]]);
   f.reads.length = 0;
   assertEquals(
     await f.resolver.resolve(f.core, { directory: "/repo" }),
@@ -142,8 +138,8 @@ Deno.test("navigation urgency still chooses finished over working despite the wo
   );
   assertEquals(
     f.reads,
-    [["tstv1-new"], ["tstv1-old"]],
-    "urgency validates keyed identities, never scans a native catalog",
+    [],
+    "urgency consumes complete hierarchy proof without redundant native reads",
   );
 });
 
@@ -168,6 +164,103 @@ for (const change of ["deleted", "moved", "parented"] as const) {
     else f.rows[0].parentID = "tstv1-new";
     f.hierarchy.entry(f.rows[0]);
     release.resolve();
+    assertEquals(await pending, "tstv1-new");
+  });
+}
+
+for (const ancestry of ["missing", "cyclic"] as const) {
+  for (const candidate of ["attention", "remembered"] as const) {
+    Deno.test(`navigation rejects ${ancestry} ${candidate} ancestry and opens newest proven root`, async () => {
+      const f = fixture();
+      f.rows[2].parentID = ancestry === "missing"
+        ? "tstv1-absent"
+        : f.rows[2].id;
+      f.hierarchy.entry(f.rows[2]);
+      if (candidate === "attention") f.states.set(f.rows[2].id, "blocked");
+      assertEquals(
+        await f.resolver.resolve(f.core, {
+          directory: "/repo",
+          preferred: f.rows[2].id,
+        }),
+        "tstv1-new",
+      );
+    });
+  }
+}
+
+Deno.test("navigation with no proven human root returns no default, never a helper", async () => {
+  const f = fixture();
+  for (const row of f.rows.filter((row) => row.directory !== "/away")) {
+    row.parentID = row.id;
+    f.hierarchy.entry(row);
+  }
+  f.states.set("tstv1-child", "blocked");
+  assertEquals(
+    await f.resolver.resolve(f.core, {
+      directory: "/repo",
+      preferred: "tstv1-child",
+    }),
+    null,
+  );
+});
+
+Deno.test("navigation revalidates cancellation before returning a cached proven root", async () => {
+  const f = fixture(), controller = new AbortController();
+  f.states.set("tstv1-child", "blocked");
+  const pending = f.resolver.resolve(
+    f.core,
+    { directory: "/repo" },
+    controller.signal,
+  );
+  controller.abort();
+  await assertRejects(() => pending, DOMException);
+});
+
+Deno.test("navigation uses late proven ancestry rather than returning an unresolved helper", async () => {
+  const f = fixture();
+  f.rows[2].parentID = "tstv1-late";
+  f.hierarchy.entry(f.rows[2]);
+  const identities = f.core.identities.bind(f.core);
+  f.core.identities = async (ids, signal) => {
+    if (ids.includes("tstv1-late")) {
+      return [{ id: "tstv1-late", directory: "/repo" }];
+    }
+    return await identities(ids, signal);
+  };
+  assertEquals(
+    await f.resolver.resolve(f.core, {
+      directory: "/repo",
+      preferred: f.rows[2].id,
+    }),
+    "tstv1-late",
+  );
+});
+
+for (const change of ["deleted", "moved", "cyclic"] as const) {
+  Deno.test(`navigation revalidates ${change} attention after ancestry acquisition`, async () => {
+    const f = fixture(),
+      held = Promise.withResolvers<void>(),
+      reached = Promise.withResolvers<void>();
+    const child = f.rows[2];
+    child.parentID = "tstv1-late";
+    f.hierarchy.entry(child);
+    f.states.set(child.id, "blocked");
+    const identities = f.core.identities.bind(f.core);
+    f.core.identities = async (ids, signal) => {
+      if (ids.includes("tstv1-late")) {
+        reached.resolve();
+        await held.promise;
+        return [{ id: "tstv1-late", directory: "/repo" }];
+      }
+      return await identities(ids, signal);
+    };
+    const pending = f.resolver.resolve(f.core, { directory: "/repo" });
+    await reached.promise;
+    if (change === "deleted") child.deleted = { at: 10, how: "otk" };
+    else if (change === "moved") child.directory = "/away";
+    else child.parentID = child.id;
+    f.hierarchy.entry(child);
+    held.resolve();
     assertEquals(await pending, "tstv1-new");
   });
 }

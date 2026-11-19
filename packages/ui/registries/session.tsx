@@ -3,9 +3,12 @@ import { createContext, type Element, useContext } from "solid-js";
 import type {
   ApprovalModel,
   DirectoryCatalogLease,
+  EntityFacts,
+  EntityIdentity,
   FeedbackOwner,
   FrecencyCatalogLease,
   InboxRpc,
+  LiveWorkOwner,
   ModelCatalogOwner,
   RunningWork,
   SessionSubmission,
@@ -41,16 +44,19 @@ export interface SessionPorts {
   failureTarget?(): import("@otk/protocol").FailureTarget;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
+  entityFacts?(identity: EntityIdentity): EntityFacts;
   status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
   /** Borrowed family and active shell projection; no UI-owned activity store. */
   runningWork?(): readonly RunningWork[];
+  liveWork?: LiveWorkOwner;
   stopHelper?(id: string): Promise<void>;
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];
   forms?(): readonly import("@otk/protocol").FormRequest[];
+  requests?: import("@otk/client").RequestLifetimes;
   prefs(): Preferences;
   dirty(owner: string, value: boolean, input?: string): void;
   act<T>(action: () => Promise<T>): Promise<T>;
@@ -60,12 +66,18 @@ export interface SessionPorts {
   attachments(parts: PromptPart[]): Promise<PromptPart[]>;
   compact?(model: ModelRef): Promise<void>;
 }
-const Context = createContext<SessionPorts>();
+const Context = createContext<SessionPorts | null>(null);
 export function SessionProvider(
   props: { ports: SessionPorts; children: Element },
 ): Element {
   return <Context value={props.ports}>{props.children}</Context>;
 }
 export function useSessionPorts(): SessionPorts {
-  return useContext(Context);
+  const ports = useContext(Context);
+  if (!ports) throw new Error("Session provider required");
+  return ports;
+}
+/** Reusable renderers can present explicit facts outside a session surface. */
+export function useOptionalSessionPorts(): SessionPorts | undefined {
+  return useContext(Context) ?? undefined;
 }

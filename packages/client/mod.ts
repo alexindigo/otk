@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { supervisionStatus } from "./inbox.ts";
 export {
+  type EntityFact,
+  type EntityFacts,
+  entityFacts,
+  type EntityFactSources,
+  type EntityIdentity,
+} from "./entity-facts.ts";
+export {
+  createLiveWork,
+  type LiveWorkOwner,
   type RunningWork,
   runningWork,
   runningWorkElapsed,
@@ -143,3 +153,4 @@ export * from "./failure-features.ts";
 export * from "./http-requests.ts";
 export { createSessionTree, type SessionListRow } from "./session-tree.ts";
 export * from "./forms.ts";
+export * from "./request-lifetime.ts";

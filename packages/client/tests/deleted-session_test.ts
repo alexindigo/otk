@@ -6,6 +6,7 @@ import type { SidecarConnection } from "../connection.ts";
 import { shellEntry } from "./shell-fixture.ts";
 import { createInputGuard } from "../input-guard.ts";
 import { createDrafts } from "../drafts.ts";
+import { RequestLifetimes } from "../request-lifetime.ts";
 // Q5 page reads carry a reserved intent and its cancellation in RequestOptions.
 const intent = () => ({
   key: crypto.randomUUID(),
@@ -17,6 +18,7 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
   entry.deleted = { at: 1, how: "provider" };
   const calls: unknown[] = [];
   const c = {
+    attention: new RequestLifetimes(),
     messages: fixtureMessagePolicy,
     subscribe: (...args: unknown[]) => calls.push(args),
     supports: () => false,
@@ -82,6 +84,7 @@ Deno.test("deleted attention input survives view release until the normal guard 
 Deno.test("removing a server retires its catalog readiness before a new direct selection", () => {
   const calls: string[] = [];
   const c = {
+    attention: new RequestLifetimes(),
     messages: fixtureMessagePolicy,
     subscribe() {},
     supports: () => false,

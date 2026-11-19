@@ -302,7 +302,15 @@ export function createTranscripts(o: {
       resource(target).snapshotPage(before, signal),
     receive(server, frame, accepted) {
       if (stopped || !accepted) return;
+      const requests = o.connection(server).attention;
+      if (frame.t === "content" && isAttentionOp(frame.event)) {
+        requests.receive(frame.event);
+      }
+      if (frame.t === "forms.pending") requests.replace("form", frame.requests);
       const indexed = frame.t === "index.snapshot" || frame.t === "index.patch";
+      if (indexed) {
+        requests.retireSessions((id) => !!o.entry(server, id)?.deleted);
+      }
       const reduced = indexed ? o.changes?.(server) : undefined;
       const changes = indexed && reduced?.revision === frame.rev
         ? reduced

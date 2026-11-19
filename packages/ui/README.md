@@ -312,12 +312,14 @@ treatment. Blocks owns paragraph, heading and compact list rhythm across virtual
 wrappers.
 
 Agent labels share `EntityPill` across reply sources, delegate tools and
-activity records/groups. Producers identify the entity at the start of a record
-title; views never parse native agent parameters. Pills borrow session facts
-through the common session ports and receive navigation callbacks. Hover/focus
-detail, click pinning, anchoring and dismissal belong to Popover, not the pill.
-Available session/model/status/time facts appear without placeholders; a session
-click uses the same guarded navigation as the existing Open task action.
+activity records/groups. Producers carry the entity and remaining title
+separately; views never slice titles or parse native agent parameters. Pills
+receive scoped client facts and navigation callbacks, and perform no session
+lookups. This reply uses canonical working time and completed endpoints; Session
+now is explicitly the live session's supervision. Unknown timing stays unknown.
+Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
+not the pill. Available session/model facts retain their scope; a session click
+uses the same guarded navigation as the existing Open task action.
 
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn
@@ -494,6 +496,11 @@ agent/model, matching its wire projection. Unknown catalog metadata preserves
 and displays a restored variant rather than silently dropping it. Palette-native
 slash execution shares the same readiness and projection.
 
+`ChoiceFrame` in FormField owns the bordered label/detail frame for ordinary,
+custom-answer and typed-form choices. It imports its own paint, binds selection
+through the shared state class, and accepts an editor and a trailing accessory.
+QuestionDock supplies behaviour only; it no longer activates option styling.
+
 `ListPicker` is the shared, data-injected interaction component inside
 `Popover`: typed groups/items/values, selected key, optional
 search/status/header/item action, `onPick`, `onOpen` and `focusAfterPick`. Its
@@ -608,6 +615,15 @@ the hub's opaque detail port. A permission-owned adapter supplies injected toast
 content; the generic hub and toast host know no permission schema. Permission
 and question owners preserve dirty state through reconnects. The legacy `Docks`
 API remains independently reusable for existing consumers.
+
+The connection's client `RequestLifetimes` owner joins permission, question and
+typed-form identities, native retirement and retained drafts. Transcripts and
+global form surfaces borrow its projections; a question-compatible form has one
+lifetime, not two pending records. Local Dismiss and Escape release presentation
+without a native reply, including offline or while a response is pending. The
+composer retains a Reopen action and server attention stays pending. Explicit
+Skip/Reject/Cancel execution remain native actions. Session deletion and native
+retirement remove every projection and fence late results and inventories.
 
 `dialogs.register({ id, title, size?, component })` installs feature-owned
 dialog content. A single `DialogHost` handles `dialog.open({ id, input? })`
@@ -1054,8 +1070,8 @@ including prompt input commands; unbound actions have no shortcut hint. Dialog
 and Editor contain no static surface hints. Permission's 1/2/3 keys are fixed
 widget data shared by its local dispatch and titles, active only on non-text
 controls in normal mode. Question's fixed Escape layer first leaves an answer
-field; with question controls focused it skips. These widget/layer interactions
-are separate from remappable command bindings.
+field; with question controls focused it dismisses locally without answering.
+These widget/layer interactions are separate from remappable command bindings.
 
 ## Context menus
 
@@ -1335,11 +1351,12 @@ mapping instead of maintaining a second inventory.
 
 The shell's `AttentionProvider` binds the shared client grace owner to accepted
 permission evidence/content and system reduced motion plus Animations off.
-Composer permission takeovers wait 500 ms; scoped session, family and project
-lamps stay immediate unless reduced motion is active, when they retain their
-previous state until that same request deadline. Other input stays immediate.
-Neither takeovers nor lamps install grace timers. `presentedOnScreen` keeps
-reserving the request for its one presentation throughout grace.
+Composer permission takeovers and permission notifications wait 500 ms; scoped
+session, family and project lamps retain their previous state until that same
+request deadline, regardless of motion. Other input stays immediate.
+Notifications borrow the same owner's request eligibility and subscription; no
+surface installs grace timers. `presentedOnScreen` keeps reserving the request
+for its one presentation throughout grace.
 
 Connection health uses `ConnectionLight` and its own connected, connecting,
 reconnecting, disconnected and error states. Its pure `connectionState`

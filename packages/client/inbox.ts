@@ -48,15 +48,22 @@ export function sessionAttentionStates(
 ): readonly (InboxStatus | undefined)[] {
   // Tombstones retain historical metadata, never authority for live attention.
   if (entry.deleted) return ["none"];
-  const state = inbox.supervision?.[entry.id]?.state;
   return [
     entry.operationStatus,
-    state === "needsYou"
-      ? "blocked"
-      : state === "finishedUnseen"
-      ? "finished"
-      : state ?? "none",
+    supervisionStatus(entry.id, inbox),
   ];
+}
+/** Live supervision does not require a concurrently leased index entry. */
+export function supervisionStatus(
+  id: string,
+  inbox: Pick<InboxSnapshot, "supervision">,
+): InboxStatus {
+  const state = inbox.supervision?.[id]?.state;
+  return state === "needsYou"
+    ? "blocked"
+    : state === "finishedUnseen"
+    ? "finished"
+    : state ?? "none";
 }
 export function rollup(
   entries: readonly (IndexMetadata & OperationAttention)[],

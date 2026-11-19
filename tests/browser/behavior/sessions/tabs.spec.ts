@@ -35,7 +35,7 @@ test.describe("task tabs", () => {
         "page",
       );
       await expect(page.locator("[data-crumb=tstv1-helper][data-helper=true]"))
-        .toHaveCount(0);
+        .toBeVisible();
       await expect(page.locator(".otk-context-meter")).toHaveAttribute(
         "data-tokens",
         "2670",
@@ -48,7 +48,7 @@ test.describe("task tabs", () => {
       await expect(page.locator(".otk-context-bar")).toHaveCount(0);
       await page.locator('[data-session="tstv1-helper"]').click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-helper$/);
-      await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveCount(0);
+      await expect(page.locator("[data-crumb=tstv1-nested]")).toBeVisible();
       await page.locator('[data-session="tstv1-nested"]').click();
       await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveAttribute(
         "data-depth",
@@ -113,13 +113,16 @@ test.describe("task tabs", () => {
       ).toEqual([exec.id, plan.id]);
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // The trail is only the open path. The session list retains both unseen
-      // helper finishes, while their task retains its aggregate lamp.
+      // Unseen helpers remain in both the mandatory trail and Sessions until
+      // acknowledged; the task keeps its aggregate lamp.
       const helpers = page.locator(
         "[data-session=tstv1-helper], [data-session=tstv1-nested]",
       );
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(2);
+      await expect(page.locator(
+        "[data-crumb=tstv1-helper] .otk-status-light[data-state=finished], [data-crumb=tstv1-nested] .otk-status-light[data-state=finished]",
+      )).toHaveCount(2);
       const finishes = await state.product("sessions.finishes", {});
       for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
         await state.product("sessions.seen", {
@@ -138,10 +141,9 @@ test.describe("task tabs", () => {
         .toHaveCount(0);
       await page.locator(".otk-new-session").click();
       await expect(page.locator("[data-crumb]")).toHaveCount(1);
-      expect(
+      await expect.poll(async () =>
         (await state.product("tasks.list", { directory: state.directory }))
-          .find((t) => t.id === exec.id)!
-          .sessions,
+          .find((t) => t.id === exec.id)!.sessions
       ).toHaveLength(3);
       await page.reload();
       await expect(page.locator(".otk-tab-open").first()).toHaveAttribute(

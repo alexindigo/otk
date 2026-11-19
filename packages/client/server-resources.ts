@@ -173,9 +173,23 @@ export function createServerResources(o: {
   ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
-  const pendingForms = factory<
-    { servers: Record<string, import("@otk/protocol").FormRequest[]> }
-  >({ servers: {} });
+  const lifetimeClock = factory({ revision: 0 });
+  const requestSubscriptions = new Map<string, () => void>();
+  const requests = (id: string) => {
+    void lifetimeClock.state.revision;
+    const owner = sidecars.connection(id).attention;
+    if (!requestSubscriptions.has(id)) {
+      requestSubscriptions.set(
+        id,
+        owner.subscribe(() => {
+          lifetimeClock.update((s) => {
+            s.revision++;
+          });
+        }),
+      );
+    }
+    return owner;
+  };
   const hierarchyClock = factory({ revision: 0 });
   const tabContextClock = factory({ keys: {} as Record<string, number> });
   const invalidateTabContext = (cache: { key: string; dirty: boolean }) => {
@@ -755,15 +769,17 @@ export function createServerResources(o: {
     }
     approvals(id).receive(frame);
     if (frame.t === "forms.pending") {
-      pendingForms.update((s) => {
-        s.servers[id] = frame.requests;
-      });
+      requests(id).replace("form", frame.requests);
     }
+    if (frame.t === "content") requests(id).receive(frame.event);
     let accepted = true;
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
       accepted = o.index.receive(id, frame);
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
       else {
+        requests(id).retireSessions((session) =>
+          !!o.index.get(id, session)?.deleted
+        );
         const previous = operationCache.get(id);
         if (o.index.changes(id)!.metadata.length) operationCache.delete(id);
         projection(id).update(
@@ -909,7 +925,7 @@ export function createServerResources(o: {
       return frecencyOwner(id).acquire(directory);
     },
     approvals,
-    forms: (id) => pendingForms.state.servers[id] ?? [],
+    forms: (id) => requests(id).forms(),
     tabs,
     entry,
     server,
@@ -1081,6 +1097,8 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      requestSubscriptions.get(id)?.();
+      requestSubscriptions.delete(id);
       listOwners.get(id)?.stop();
       listOwners.delete(id);
       inboxDirectories.delete(id);
@@ -1139,6 +1157,8 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      for (const release of requestSubscriptions.values()) release();
+      requestSubscriptions.clear();
       if (stopped) return;
       stopped = true;
       for (const owner of listOwners.values()) owner.stop();

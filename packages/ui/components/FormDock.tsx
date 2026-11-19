@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  createEffect,
   createSignal,
   type Element as SolidElement,
   For,
@@ -21,6 +20,8 @@ import type { FormAnswer, FormRequest } from "@otk/protocol";
 import { solidState } from "../state/binding.ts";
 import Takeover from "./surface/Takeover.tsx";
 import TakeoverHeader from "./TakeoverHeader.tsx";
+import RequestDismiss from "./RequestDismiss.tsx";
+import { bindDirtyInput } from "../state/dirty-input.ts";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import FormField from "./FormField.tsx";
 import { useShellPorts } from "../shell/context.tsx";
@@ -46,39 +47,72 @@ export function registerGlobalForms(
         <div class="otk-global-forms">
           <For each={shell.servers()} keyed={(server) => server.id}>
             {(server) => (
-              <For
-                each={shell.forms?.(server().id).filter((f) =>
-                  f.owner.kind === "location"
-                ).slice(0, 1) ?? []}
-                keyed={(f) => f.id}
-              >
-                {(request) => (
-                  <FormDock
-                    connected={server().status === "connected" &&
-                      server().harness === "connected"}
-                    request={request()}
-                    failureTarget={{
-                      sidecarId: server().id,
-                      ...(request().owner.kind === "location"
-                        ? {
-                          directory: (request().owner as { directory: string })
-                            .directory,
-                        }
-                        : {}),
-                    }}
-                    onReply={(answer) =>
-                      shell.connection(server().id).rpc.call("form.reply", {
-                        requestID: request().id,
-                        answer,
-                      }).then(() => {})}
-                    onCancel={(message) =>
-                      shell.connection(server().id).rpc.call("form.cancel", {
-                        requestID: request().id,
-                        ...(message === undefined ? {} : { message }),
-                      }).then(() => {})}
-                  />
-                )}
-              </For>
+              <>
+                <For
+                  each={shell.forms?.(server().id).filter((f) =>
+                    f.owner.kind === "location" &&
+                    shell.connection(server().id).attention.get("form", f.id)
+                      ?.dismissed
+                  ) ?? []}
+                  keyed={(f) => f.id}
+                >
+                  {(request) => (
+                    <button
+                      type="button"
+                      class="otk-pill"
+                      onClick={() =>
+                        shell.connection(server().id).attention.show(
+                          "form",
+                          request().id,
+                        )}
+                    >
+                      Pending form: reopen
+                    </button>
+                  )}
+                </For>
+                <For
+                  each={shell.forms?.(server().id).filter((f) =>
+                    f.owner.kind === "location" &&
+                    !shell.connection(server().id).attention.get("form", f.id)
+                      ?.dismissed
+                  ).slice(0, 1) ?? []}
+                  keyed={(f) => f.id}
+                >
+                  {(request) => (
+                    <FormDock
+                      connected={server().status === "connected" &&
+                        server().harness === "connected"}
+                      request={request()}
+                      retention={shell.connection(server().id).attention}
+                      onDismiss={() =>
+                        shell.connection(server().id).attention.dismiss(
+                          "form",
+                          request().id,
+                        )}
+                      failureTarget={{
+                        sidecarId: server().id,
+                        ...(request().owner.kind === "location"
+                          ? {
+                            directory:
+                              (request().owner as { directory: string })
+                                .directory,
+                          }
+                          : {}),
+                      }}
+                      onReply={(answer) =>
+                        shell.connection(server().id).rpc.call("form.reply", {
+                          requestID: request().id,
+                          answer,
+                        }).then(() => {})}
+                      onCancel={(message) =>
+                        shell.connection(server().id).rpc.call("form.cancel", {
+                          requestID: request().id,
+                          ...(message === undefined ? {} : { message }),
+                        }).then(() => {})}
+                    />
+                  )}
+                </For>
+              </>
             )}
           </For>
         </div>
@@ -118,6 +152,10 @@ export function registerFormTakeover(
               <FormDock
                 connected={session.connected?.() ?? true}
                 request={request()}
+                retention={session.requests}
+                onDismiss={session.requests && (() => {
+                  session.requests!.dismiss("form", request().id);
+                })}
                 failureTarget={target()}
                 onDirty={(value, text) => session.dirty("forms", value, text)}
                 onReply={(answer) =>
@@ -150,9 +188,11 @@ export default function FormDock(
     onReply(answer: FormAnswer): Promise<void>;
     onCancel(message?: string): Promise<void>;
     onDirty?(dirty: boolean, text?: string): void;
+    onDismiss?(): void;
+    retention?: import("@otk/client").RequestLifetimes;
   },
 ): SolidElement {
-  const form = createForm(props.request, solidState);
+  const form = createForm(props.request, solidState, props.retention);
   const [collapsed, collapse] = createSignal(false),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal<FailureValue>(""),
@@ -161,13 +201,12 @@ export default function FormDock(
     [message, setMessage] = createSignal("");
   let alive = true;
   const derived = () => form.derive();
+  bindDirtyInput(() => ({
+    dirty: Object.values(form.state.drafts).some((draft) => draft.touched),
+    text: JSON.stringify(derived().answer),
+  }), (dirty, text) => props.onDirty?.(dirty, text));
   onCleanup(() => {
     alive = false;
-  });
-  createEffect(() => JSON.stringify(form.state.drafts), () => {
-    if (Object.values(form.state.drafts).some((d) => d.touched)) {
-      props.onDirty?.(true, JSON.stringify(derived().answer));
-    }
   });
   const send = async (cancel = false, feedback?: string) => {
     if (pending() || !alive || props.connected === false) return;
@@ -181,8 +220,14 @@ export default function FormDock(
     try {
       if (cancel) await props.onCancel(feedback);
       else await props.onReply(derived().answer);
+      props.retention?.retire(
+        "form",
+        props.request.id,
+        "settled-locally",
+        "local response confirmed",
+      );
       forgetForm(props.request.id);
-      props.onDirty?.(false);
+      if (alive) props.onDirty?.(false);
     } catch (cause) {
       if (alive) {
         setError(
@@ -222,6 +267,13 @@ export default function FormDock(
       aria-label="Pending form"
       data-form={props.request.id}
       data-form-owner={props.request.owner.kind}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && props.onDismiss) {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onDismiss();
+        }
+      }}
     >
       <Takeover
         collapsed={collapsed()}
@@ -272,6 +324,7 @@ export default function FormDock(
                 Cancel execution
               </button>
             </Show>
+            <RequestDismiss onDismiss={props.onDismiss} />
           </div>
         )}
       >

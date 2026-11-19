@@ -29,6 +29,28 @@ test(
     await mode.getByText("Type your own answer", { exact: true }).click();
     await expect(mode.getByRole("button", { name: "Type your own answer" }))
       .toHaveAttribute("aria-pressed", "true");
+    await expect(mode.locator(".otk-choice-frame.is-selected")).toHaveCount(1);
+    const choiceGeometry = await mode.locator(".otk-choice-frame").evaluateAll(
+      (elements) =>
+        elements.map((element) => {
+          const frame = element.getBoundingClientRect();
+          const label = element.querySelector(".otk-choice-label")!
+            .getBoundingClientRect();
+          const detail = element.querySelector(".otk-choice-detail")
+            ?.getBoundingClientRect();
+          return {
+            left: frame.left,
+            right: frame.right,
+            below: !detail || detail.top >= label.bottom,
+          };
+        }),
+    );
+    expect(choiceGeometry.length).toBeGreaterThan(1);
+    for (const choice of choiceGeometry) {
+      expect(choice.below).toBe(true);
+      expect(Math.abs(choice.left - choiceGeometry[0].left)).toBeLessThan(.5);
+      expect(Math.abs(choice.right - choiceGeometry[0].right)).toBeLessThan(.5);
+    }
     await mode.getByRole("button", { name: "Deploy now", exact: true }).click();
     const enabled = dock.getByRole("switch", {
       name: "Enable deployment",
@@ -51,6 +73,14 @@ test(
       "custom-region",
     );
     await dock.getByRole("button", { name: "Add value", exact: true }).click();
+    const customChoice = dock.locator(".otk-choice-row").filter({
+      has: page.getByRole("button", {
+        name: "Remove custom-region",
+        exact: true,
+      }),
+    });
+    await expect(customChoice.locator(".otk-choice-frame"))
+      .toHaveClass(/is-selected/);
     await dock.getByRole("button", { name: "Override value" }).click();
     await dock.getByRole("textbox", { name: "Environment", exact: true }).fill(
       "production",

@@ -23,6 +23,7 @@ import { FeedbackFailure, RequestReleased } from "./failures.ts";
 import { type PublicDefaults, publicDefaultsFrom } from "./public-defaults.ts";
 import { authStatus, discoveryFailure } from "./discovery.ts";
 import { actionFeedback } from "./failure-features.ts";
+import { RequestLifetimes } from "./request-lifetime.ts";
 
 export type ConnectionState =
   | "connecting"
@@ -68,6 +69,7 @@ function browserStorage(server: string): RequestTrackerOptions["storage"] {
 }
 export class SidecarConnection {
   readonly base: URL;
+  readonly attention: RequestLifetimes = new RequestLifetimes();
   readonly rpc: Rpc;
   readonly requests: RequestTracker;
   readonly http: HttpRequests;
