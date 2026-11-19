@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import ChangeCounts from "./ChangeCounts.tsx";
 import "./Diff.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
@@ -141,8 +141,9 @@ export default function Diff(
       </Show>
       <For each={props.file.hunks} keyed={false}>
         {(hunk) => (
-          <div
-            class={[scrollRegion("x"), "otk-diff-content"]}
+          <ScrollRegion
+            axis="x"
+            class="otk-diff-content"
             ref={contextTarget(() => ({
               kind: "diff",
               data: {
@@ -211,7 +212,7 @@ export default function Diff(
                 }}
               />
             </Show>
-          </div>
+          </ScrollRegion>
         )}
       </For>
       <Diagnostics items={props.file.diagnostics || []} />

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./DeletedSession.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 /** Retained facts and local/user-metadata actions only. */
 export default function DeletedSession(props: {
@@ -15,9 +15,10 @@ export default function DeletedSession(props: {
   close?: () => void;
 }): import("solid-js").Element {
   return (
-    <section
+    <ScrollRegion
+      as="section"
       ref={props.ref}
-      class={[scrollRegion(), "otk-deleted-session"]}
+      class="otk-deleted-session"
       aria-label="Deleted session"
     >
       <h1>{props.title}</h1>
@@ -56,6 +57,6 @@ export default function DeletedSession(props: {
           </button>
         </Show>
       </div>
-    </section>
+    </ScrollRegion>
   );
 }

@@ -6,7 +6,7 @@ import type {
 } from "@otk/protocol";
 import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { errorFeedback, type FailureValue } from "@otk/client";
 
@@ -23,8 +23,9 @@ export default function PermissionActivity(props: {
   onRetry(): Promise<void>;
 }) {
   return (
-    <section
-      class={[scrollRegion(), "otk-permission-activity"]}
+    <ScrollRegion
+      as="section"
+      class="otk-permission-activity"
       aria-label="Permission activity"
     >
       <FeedbackStatus
@@ -90,6 +91,6 @@ export default function PermissionActivity(props: {
           Load earlier activity
         </button>
       </Show>
-    </section>
+    </ScrollRegion>
   );
 }

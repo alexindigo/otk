@@ -28,6 +28,7 @@ import {
   registerOtkThemes,
   registerToolPart,
   registerUnknownPart,
+  ScrollRegion,
   selection,
   SelectionContent,
   type SessionPorts,
@@ -466,8 +467,50 @@ function Consumer(): Element {
     </CommandProvider>
   );
 }
+function ScrollbarProbe(): Element {
+  const [hidden, setHidden] = createSignal(false);
+  let mounts = 0;
+  function Content() {
+    mounts++;
+    return (
+      <div
+        data-scroll-content
+        data-mounts={mounts}
+        style={{ height: "1000px", width: "600px" }}
+      >
+        Scrollable source
+      </div>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setHidden(!hidden())}>
+        Toggle region
+      </button>
+      <div
+        style={{
+          height: "200px",
+          width: "300px",
+          display: "grid",
+          "grid-template-rows": "minmax(0, 1fr)",
+        }}
+      >
+        <ScrollRegion
+          role="region"
+          aria-label="Scroll probe"
+          tabindex={0}
+          hidden={hidden()}
+        >
+          <Content />
+        </ScrollRegion>
+      </div>
+    </>
+  );
+}
 render(
-  new URL(location.href).searchParams.has("source-ownership")
+  new URL(location.href).searchParams.has("scrollbars")
+    ? ScrollbarProbe
+    : new URL(location.href).searchParams.has("source-ownership")
     ? SourceOwnership
     : new URL(location.href).searchParams.has("picker-lifetime")
     ? PickerLifetime

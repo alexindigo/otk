@@ -81,6 +81,8 @@ export interface ViewportHistory {
 }
 export interface ViewportSnapshot {
   readonly revision: number;
+  readonly scrollTop: number;
+  readonly contentHeight: number;
   readonly distanceFromBottom: number;
   readonly viewportHeight: number;
   readonly following: boolean;
@@ -88,6 +90,8 @@ export interface ViewportSnapshot {
 }
 export interface ViewportPosition {
   following(): boolean;
+  /** Explicit scrollbar input shares navigation cancellation and position application. */
+  input(top: number): void;
   snapshot(): ViewportSnapshot;
   subscribeSnapshot(change: (snapshot: ViewportSnapshot) => void): () => void;
   history(value: ViewportHistory): void;
@@ -176,6 +180,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   let history: ViewportHistory = Object.freeze({ exhausted: false });
   let snapshot: ViewportSnapshot = Object.freeze({
     revision: 0,
+    scrollTop: viewport.scrollTop,
+    contentHeight: viewport.scrollHeight,
     distanceFromBottom: Math.max(
       0,
       viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
@@ -229,11 +235,15 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
       );
       const viewportHeight = viewport.clientHeight,
+        contentHeight = viewport.scrollHeight,
+        scrollTop = viewport.scrollTop,
         following = mode === "follow";
       if (
         publishedGeometry === revision &&
         snapshot.distanceFromBottom === distanceFromBottom &&
         snapshot.viewportHeight === viewportHeight &&
+        snapshot.contentHeight === contentHeight &&
+        snapshot.scrollTop === scrollTop &&
         snapshot.following === following && snapshot.history === history
       ) return;
       publishedGeometry = revision;
@@ -241,6 +251,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         revision: snapshot.revision + 1,
         distanceFromBottom,
         viewportHeight,
+        contentHeight,
+        scrollTop,
         following,
         history,
       });
@@ -588,6 +600,22 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   document.addEventListener("touchcancel", up);
   return {
     following: () => mode === "follow",
+    input(top) {
+      away();
+      gesture = undefined;
+      dragging = false;
+      const previous = position;
+      applyPosition(top);
+      const delta = position - previous;
+      anchors = anchors.map(({ id, anchor }) => ({
+        id,
+        anchor: { key: anchor.key, offset: anchor.offset + delta },
+      }));
+      readerCapturePending = true;
+      if (!geometryPending) capture();
+      setMode(atTail() ? "follow" : "anchored");
+      layout();
+    },
     snapshot: () => snapshot,
     subscribeSnapshot(change) {
       snapshotListeners.add(change);
