@@ -325,7 +325,7 @@ Deno.test("topology outlives population-only seeds and inventory removal; empty 
     topology: null,
   }]);
   assertEquals(owner.values.get("/tree")?.topology, topology);
-  assertEquals(owner.values.get("/tree")?.availability, "removed");
+  assertEquals(owner.values.get("/tree")?.availability, "unknown");
   owner.seed([{
     directory: "/empty",
     hasSessions: false,

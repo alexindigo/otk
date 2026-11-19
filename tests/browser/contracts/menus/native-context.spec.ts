@@ -93,7 +93,7 @@ test("menus.native-text-context-trusted-pointer-and-keyboard-passthrough", {
     getSelection()!.addRange(r);
   });
   await native("#native-edit span");
-  await rightClick(page, ".otk-tabs-project");
+  await rightClick(page, ".otk-project-chip-trigger");
   await expect(contextMenu(page)).toBeVisible();
   expect(await page.evaluate("globalThis.nativeContext")).toEqual({
     prevented: true,

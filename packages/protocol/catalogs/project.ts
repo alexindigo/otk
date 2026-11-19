@@ -10,6 +10,7 @@ export interface CatalogProject {
   color?: string;
   repository?: string;
   root?: string;
+  machine?: string;
 }
 /** Current working-folder facts; absent fields are unreported, never zero. */
 export interface CatalogRepository {

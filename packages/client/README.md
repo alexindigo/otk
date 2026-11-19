@@ -1141,6 +1141,12 @@ for those exact scopes through its existing list resources; no flat nested
 project or second project projection is created. Topology changes re-route only
 affected repo membership.
 
+Server-proven archived worktrees carry `archived` separately from manual
+`inactive`. Quiet archived leaves belong to the repository's Archived section;
+working, blocked and finished-unseen leaves stay in the live list until their
+evidence settles. The snapshot and keyed projections share that contract. Manual
+activity-policy changes cannot unarchive a checkout.
+
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
 single-preview tabs. Every ungrouped mandatory session, including a child, has

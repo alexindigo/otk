@@ -13,6 +13,7 @@ import type { PopoverControl } from "./surface/Popover.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { ChevronIcon, CopyIcon } from "./ChromeIcons.tsx";
 import Icon from "./Icon.tsx";
+import ControlValue, { ControlIcon } from "./ControlValue.tsx";
 import "./ProjectChip.css" with { type: "text" };
 
 export function ProjectAvatar(
@@ -65,7 +66,6 @@ export default function ProjectChip(props: {
   directory: string;
   project?: CatalogProject;
   repository?: CatalogRepository;
-  serverLabel?: string;
   onOpen?(): void;
   feedback?: FailureValue;
 }): Element {
@@ -98,9 +98,10 @@ export default function ProjectChip(props: {
       triggerClass="otk-project-chip-menu-row otk-project-chip-submenu-trigger"
       trigger={
         <>
-          {icon}
-          <span class="otk-control-label">{label}</span>
-          <ChevronIcon />
+          <ControlIcon>{icon}</ControlIcon>
+          <ControlValue accessory={<ChevronIcon />}>
+            <span class="otk-control-label">{label}</span>
+          </ControlValue>
         </>
       }
     >
@@ -109,7 +110,9 @@ export default function ProjectChip(props: {
         class="otk-project-chip-menu-row"
         onClick={() => copy(value)}
       >
-        <CopyIcon />
+        <ControlIcon>
+          <CopyIcon />
+        </ControlIcon>
         <span class="otk-control-label">{action}</span>
       </button>
     </Menu>
@@ -137,42 +140,50 @@ export default function ProjectChip(props: {
           </Show>
         }
       >
-        <h2 class="otk-project-chip-menu-heading" title={name()}>
-          {avatar()}
-          <span class="otk-control-label">{name()}</span>
-        </h2>
-        <Show when={props.project?.repository}>
-          {(label) => (
-            <div class="otk-project-chip-menu-row">
-              <FolderIcon />
-              <span class="otk-control-label">{label()}</span>
-            </div>
-          )}
-        </Show>
-        <Show when={props.repository?.branch}>
-          {(branch) =>
-            submenu(branch(), <BranchIcon />, "Copy branch", branch())}
-        </Show>
-        <Show when={props.repository?.changes}>
-          {(changes) => (
-            <div class="otk-project-chip-menu-row">
-              <ChangesIcon />
-              <span class="otk-control-label">{changes()}</span>
-            </div>
-          )}
-        </Show>
-        <Show when={props.serverLabel}>
-          {(label) => (
-            <div class="otk-project-chip-menu-row">
-              <MachineIcon />
-              <span class="otk-control-label">{label()}</span>
-            </div>
-          )}
-        </Show>
-        <Show when={props.directory}>
-          {(directory) =>
-            submenu(directory(), <FolderIcon />, "Copy path", directory())}
-        </Show>
+        <div class="otk-project-chip-menu-content">
+          <h2 class="otk-project-chip-menu-heading" title={name()}>
+            {avatar()}
+            <span class="otk-control-label">{name()}</span>
+          </h2>
+          <Show when={props.project?.repository}>
+            {(label) => (
+              <div class="otk-project-chip-menu-row">
+                <ControlIcon>
+                  <FolderIcon />
+                </ControlIcon>
+                <span class="otk-control-label">{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={props.repository?.branch}>
+            {(branch) =>
+              submenu(branch(), <BranchIcon />, "Copy branch", branch())}
+          </Show>
+          <Show when={props.repository?.changes}>
+            {(changes) => (
+              <div class="otk-project-chip-menu-row">
+                <ControlIcon>
+                  <ChangesIcon />
+                </ControlIcon>
+                <span class="otk-control-label">{changes()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={props.project?.machine}>
+            {(label) => (
+              <div class="otk-project-chip-menu-row">
+                <ControlIcon>
+                  <MachineIcon />
+                </ControlIcon>
+                <span class="otk-control-label">{label()}</span>
+              </div>
+            )}
+          </Show>
+          <Show when={props.directory}>
+            {(directory) =>
+              submenu(directory(), <FolderIcon />, "Copy path", directory())}
+          </Show>
+        </div>
       </Menu>
     </span>
   );
