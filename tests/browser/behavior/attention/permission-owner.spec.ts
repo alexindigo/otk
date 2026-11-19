@@ -77,7 +77,12 @@ for (
     await expect(parentRow).toContainText("P 1");
     await expect(childRow).toContainText("P 1");
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    await expect(crumb).toHaveCount(0);
+    // Pending family attention remains individually visible off the open path.
+    await expect(crumb).toBeVisible();
+    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "blocked",
+    );
     await expect(childRow.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",

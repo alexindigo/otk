@@ -27,7 +27,7 @@ const entry = (
 });
 
 for (const grouped of [true, false]) {
-  Deno.test(`working trail shares composer helpers and retires terminal suffix grouped=${grouped}`, () => {
+  Deno.test(`family trail retains mandatory helpers while composer shares working subset grouped=${grouped}`, () => {
     const root = entry("root", 1),
       late = entry("late", 30, root.id),
       early = entry("early", 10, root.id),
@@ -75,9 +75,10 @@ for (const grouped of [true, false]) {
     tabs.preview(root.id);
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
+      "late",
       "early",
       "nested",
-      "late",
+      "finished",
     ]);
     assertEquals(helpers(), ["early", "nested", "late"]);
     tabs.preview(nested.id);
@@ -86,6 +87,7 @@ for (const grouped of [true, false]) {
       "early",
       "nested",
       "late",
+      "finished",
     ]);
     for (const id of ["early", "nested", "late"]) {
       inbox.supervision![id] = { state: "finishedUnseen", terminal: 60 };
@@ -95,6 +97,8 @@ for (const grouped of [true, false]) {
       "root",
       "early",
       "nested",
+      "late",
+      "finished",
     ]);
     assertEquals(helpers(), []);
     inbox.supervision!.early = { state: "none", terminal: 60 };
@@ -104,6 +108,8 @@ for (const grouped of [true, false]) {
       "root",
       "early",
       "nested",
+      "late",
+      "finished",
     ]);
     // A rerun reappears; a blocked or stale helper is not working.
     inbox.supervision!.late = { state: "working", terminal: 60 };
@@ -114,6 +120,7 @@ for (const grouped of [true, false]) {
       "early",
       "nested",
       "late",
+      "finished",
     ]);
     assertEquals(helpers(), ["late"]);
     connected = false;
@@ -122,6 +129,7 @@ for (const grouped of [true, false]) {
       "root",
       "early",
       "nested",
+      "finished",
     ]);
     assertEquals(helpers(), []);
     tabs.stop();

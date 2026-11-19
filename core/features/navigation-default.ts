@@ -44,22 +44,38 @@ export class NavigationDefault {
         const x = this.source.status(a.id), y = this.source.status(b.id);
         return x === y ? recent(a, b) : urgentStatus(x, y) === x ? -1 : 1;
       })[0]?.id;
-    // Defaults open a human (top-level) session: a helper that needs
-    // attention or was last viewed resolves to the top-level session owning it.
+    // Only the hierarchy can prove a human root. Partial/cyclic ancestry is
+    // not a navigation target, even when the unresolved helper needs attention.
+    const proven = (id: string) => {
+      signal?.throwIfAborted();
+      const node = hierarchy.node(id);
+      if (
+        node?.projectDirectory !== directory ||
+        entries().find((entry) => entry.id === id)?.deleted
+      ) return null;
+      const root = node?.ancestry === "complete" ? node.rootID : undefined;
+      return root && !entries().find((entry) => entry.id === root)?.deleted
+        ? root
+        : null;
+    };
     const human = async (id: string) => {
+      const root = proven(id);
+      if (root) return root;
       await hierarchy.prepare(
         await core.identities([id], signal),
         (ids, signal) => core.identities(ids, signal),
         signal,
       );
       signal?.throwIfAborted();
-      const chain = hierarchy.ancestors(id);
-      return chain.length ? chain[chain.length - 1] : id;
+      return proven(id);
     };
     signal?.throwIfAborted();
     const urgent = attention();
-    if (urgent) return human(urgent);
-    if (input.preferred) {
+    if (urgent) {
+      const root = await human(urgent);
+      if (root && proven(urgent) === root) return root;
+    }
+    if (!urgent && input.preferred) {
       const rows = await core.identities([input.preferred], signal);
       await hierarchy.prepare(
         rows,
@@ -68,10 +84,17 @@ export class NavigationDefault {
       );
       signal?.throwIfAborted();
       const urgent = attention();
-      if (urgent) return human(urgent);
+      if (urgent) {
+        const root = await human(urgent);
+        if (root && proven(urgent) === root) return root;
+      }
       if (
+        !urgent &&
         rows.some((row) => row.id === input.preferred && eligible(row))
-      ) return human(input.preferred);
+      ) {
+        const root = await human(input.preferred);
+        if (root && proven(input.preferred) === root) return root;
+      }
     }
     const candidates: SessionMetadata[] = [];
     for (const scope of scopes) {
@@ -91,9 +114,12 @@ export class NavigationDefault {
     }
     signal?.throwIfAborted();
     const late = attention();
-    if (late) return human(late);
+    if (late) {
+      const root = await human(late);
+      if (root && proven(late) === root) return root;
+    }
     return candidates.map(current).filter((row) =>
-      !row.parentID && eligible(row)
+      !row.parentID && eligible(row) && proven(row.id) === row.id
     )
       .sort(recent)[0]?.id ??
       null;
