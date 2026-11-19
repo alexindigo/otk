@@ -16,9 +16,18 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   const row = (directory: string) =>
     page.locator(`.otk-project-row[data-project=${JSON.stringify(directory)}]`);
   await page.goto(state.url);
-  // Decision 55: removed checkouts are archived in the Inactive section
-  // unless they are working or need the user.
-  await page.locator(".otk-inactive-toggle").click();
+  // Archive is separate from manual Inactive; all mandatory lamps stay live.
+  const archive = page.locator(".otk-archived-toggle");
+  await expect(archive).toHaveAttribute("aria-expanded", "false");
+  const liveBounds = await row(one).boundingBox();
+  const archiveBounds = await archive.boundingBox();
+  expect(liveBounds).not.toBeNull();
+  expect(archiveBounds).not.toBeNull();
+  expect(archiveBounds!.y).toBeGreaterThanOrEqual(
+    liveBounds!.y + liveBounds!.height,
+  );
+  await expect(row(two)).toHaveCount(0);
+  await archive.click();
   for (const directory of [one, two]) {
     await visibleOnScreen(row(directory));
     await expect(row(directory)).toHaveAttribute(
@@ -26,12 +35,12 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       canonical,
     );
     const rollup = await row(directory).getAttribute("data-rollup");
-    const live = rollup === "working" || rollup === "blocked";
+    const live = rollup !== "none";
     await expect(row(directory)).toHaveAttribute(
       "data-group",
-      live ? "active" : "inactive",
+      live ? "active" : "archived",
     );
-    await expect(page.locator(".otk-inactive-projects").locator(row(directory)))
+    await expect(page.locator(".otk-archived-projects").locator(row(directory)))
       .toHaveCount(live ? 0 : 1);
     await expect(row(directory)).toHaveAttribute(
       "data-project-availability",
@@ -50,9 +59,16 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   expect(summaries[two].availability).toBe("removed");
   await state.product("layout.patch", { rightCollapsed: true });
   await page.reload();
-  await page.locator(".otk-inactive-toggle").click();
+  await archive.click();
   await visibleOnScreen(row(two));
-  await expect(row(two)).toHaveAttribute("data-group", "inactive");
+  await expect(row(two)).toHaveAttribute("data-group", "archived");
+  for (const inactive of [true, false]) {
+    await state.product("projects.inactive", { directory: two, inactive });
+    await expect(row(two)).toHaveAttribute("data-group", "archived");
+    await expect(row(two)).toHaveAttribute("data-project-archived", "true");
+    await expect(page.locator(".otk-inactive-projects").locator(row(two)))
+      .toHaveCount(0);
+  }
   for (
     const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",
@@ -83,7 +99,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       animations: "disabled",
     });
   }
-  await page.locator(".otk-inactive-toggle").click();
+  await archive.click();
   await expect(row(two)).toHaveCount(0);
   await activity(state, "tstv1-worktree-1", "hold");
   await visibleOnScreen(row(two));
@@ -100,17 +116,19 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await activity(state, "tstv1-worktree-1", "freeze");
   await expect(row(two)).toHaveAttribute("data-rollup", "blocked");
   await activity(state, "tstv1-worktree-1", "release");
-  // Finished without needing the user: archived again.
-  // The collapsed rail still lists inactive projects; assert their group.
+  // An unseen finish stays live in the rail and after reload, not in archive.
   await expect(row(two)).toHaveAttribute("data-rollup", "finished");
-  await expect(row(two)).toHaveAttribute("data-group", "inactive");
+  await expect(row(two)).toHaveAttribute("data-group", "active");
   await state.product("layout.patch", { leftCollapsed: false });
   await page.reload();
-  await expect(row(two)).toHaveCount(0);
-  await page.locator(".otk-inactive-toggle").click();
   await expect(row(two)).toHaveAttribute("data-rollup", "finished");
-  await expect(row(two)).toHaveAttribute("data-group", "inactive");
+  await expect(row(two)).toHaveAttribute("data-group", "active");
   await visibleOnScreen(
     row(two).locator(".otk-status-light[data-state=finished]"),
   );
+  await row(two).locator(".otk-project-open").click();
+  await expect(row(two)).toHaveCount(0);
+  await archive.click();
+  await expect(row(two)).toHaveAttribute("data-group", "archived");
+  await expect(row(two)).toHaveAttribute("data-rollup", "none");
 });

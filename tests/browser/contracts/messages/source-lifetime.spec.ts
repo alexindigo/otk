@@ -56,7 +56,15 @@ test("messages.raw-tail-materialization-copy", {
     source,
   );
   await copySelection(page, "viewport1999");
-  await page.locator(".otk-tabs-project").click();
+  // Release native text selection on inert chrome, not the new menu button.
+  await page.locator(".otk-task-strip").click({
+    position: await page.locator(".otk-task-strip").evaluate((el) => ({
+      x: el.clientWidth / 2,
+      y: 1,
+    })),
+    timeout: 10_000,
+  });
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("");
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1999$/ }))
     .toHaveCount(1);
 });
@@ -182,7 +190,14 @@ test("messages.raw-selection-other-viewport-warms", {
     source,
   );
   await copySelection(page, "viewport0");
-  await page.locator(".otk-tabs-project").click();
+  await page.locator(".otk-task-strip").click({
+    position: await page.locator(".otk-task-strip").evaluate((el) => ({
+      x: el.clientWidth / 2,
+      y: 1,
+    })),
+    timeout: 10_000,
+  });
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("");
   await scrollTranscript(page, false);
   await expect(
     page.locator(".otk-code-group:first-child .otk-token").filter({
@@ -261,7 +276,14 @@ test("messages.atomic-append-selected-endpoints", {
       await copySelection(page, word);
     }
     if (mode === "raw") await page.evaluate("releaseTokens()");
-    await page.locator(".otk-tabs-project").click();
+    await page.locator(".otk-task-strip").click({
+      position: await page.locator(".otk-task-strip").evaluate((el) => ({
+        x: el.clientWidth / 2,
+        y: 1,
+      })),
+      timeout: 10_000,
+    });
+    expect(await page.evaluate(() => getSelection()?.toString())).toBe("");
     await expect(
       page.locator(".otk-token").filter({
         hasText: new RegExp("^" + word + "Name$"),

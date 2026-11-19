@@ -10,7 +10,7 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
+import { type InboxStatus, rollup, sessionAttentionStates } from "./inbox.ts";
 import { sortTabsByUrgency } from "./tab-urgency.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
@@ -262,11 +262,11 @@ export function createTabs(
         tab.kind === "task"
           ? [
             taskActivity?.[tab.id],
-            ...(families.get(tab.id) ?? []).map((entry) =>
-              inboxStatus(entry, inbox)
+            ...(families.get(tab.id) ?? []).flatMap((entry) =>
+              sessionAttentionStates(entry, inbox)
             ),
           ]
-          : [inboxStatus(byID.get(tab.id)!, inbox)],
+          : sessionAttentionStates(byID.get(tab.id)!, inbox),
       activity,
     );
   }

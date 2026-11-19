@@ -817,7 +817,10 @@ split view/tab effects. Shell registers commands, observes frames and renders
 chrome through those ports. `ProjectInbox` renders the shared client projection
 in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
 Tracked rows precede the persisted, initially expanded Discovered disclosure and
-Inactive section. Collapsed discovery retains working/blocked/unseen-finished
+Inactive section. Each repository's live children precede its initially
+collapsed Archived disclosure. Archive membership comes from the client
+projection, not manual Inactive policy; mandatory activity stays live in both
+column and rail. Collapsed discovery retains working/blocked/unseen-finished
 rows; the rail retains the same discovery-section geometry and mandatory
 indicators. Template-only rows reserve the same marker track without a lamp (a
 name initial identifies them in the rail). Discovered row context offers the
@@ -913,6 +916,15 @@ inputs explicitly. Recursive blocks share that root, and Code owns optional
 fence markers. WorkLog imports its own paint; view headers/empty states and
 change counts use explicitly imported shared styles. Journal-entry styling stops
 at the entry boundary, preserving PermissionSummary's file and scope lists.
+
+`ProjectChip` renders native project avatar/name and a Menu-backed location
+card. Its data-only inputs contain optional native repository, branch, change
+and machine facts; absent facts and unavailable settings actions stay absent.
+Path/branch submenus use the shared clipboard owner. The shell injects the
+catalog binding through `ProjectTabs.projectChip`; standalone tabs retain the
+same neutral initial/path chip without a backend. Project identity is demanded
+at mount. Repository state is first demanded on menu open, explicitly refreshed
+on later opens, and renewed through the same native invalidation owner.
 
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
