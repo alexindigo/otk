@@ -9,6 +9,9 @@ import {
   NotificationTriggers,
   presentedOnScreen,
 } from "@otk/client";
+import { ATTENTION_GRACE_MS } from "../attention-grace.ts";
+const grace = () =>
+  new Promise((resolve) => setTimeout(resolve, ATTENTION_GRACE_MS));
 const entry = (id = "a", change: Partial<IndexEntry> = {}): IndexEntry => ({
   id,
   directory: "/project",
@@ -209,7 +212,40 @@ Deno.test("saved transcript visibility leaves live outcomes alerting while visib
     }
   }
 });
-Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
+for (const kind of ["permissions", "questions"] as const) {
+  Deno.test(`${kind} settled inside grace never emit a notification`, async () => {
+    const emitted: Note[] = [];
+    const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
+    triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [entry()] });
+    const pending = entry("a", {
+      attention: { ...entry().attention, [kind]: 1 },
+    });
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{ op: "upsert", entry: pending }],
+    });
+    assertEquals(emitted, []);
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 2,
+      ops: [{ op: "upsert", entry: entry() }],
+    });
+    await grace();
+    assertEquals(emitted, []);
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 3,
+      ops: [{ op: "upsert", entry: pending }],
+    });
+    await grace();
+    assertEquals(emitted.map((n) => n.kind), [
+      kind === "permissions" ? "permission" : "question",
+    ]);
+    triggers.reset("s");
+  });
+}
+Deno.test("newly acquired live pending attention alerts after grace without acquiring unrelated working sessions", async () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
   triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [] });
@@ -223,12 +259,14 @@ Deno.test("newly acquired live pending attention alerts without acquiring unrela
       }),
     }],
   });
+  assertEquals(emitted, []);
+  await grace();
   assertEquals(emitted.map((n) => [n.id, n.kind]), [[
     "s/pending",
     "permission",
   ]]);
 });
-Deno.test("notification triggers baseline per connection, batched root roll-up, priority, replay and resolution", () => {
+Deno.test("notification triggers baseline per connection, batched root roll-up, priority, replay and resolution", async () => {
   const emitted: Note[] = [], removed: string[] = [];
   const triggers = new NotificationTriggers(
     (n) => emitted.push(n),
@@ -266,6 +304,8 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
     rev: 4,
     ops: [{ op: "upsert", entry: child }, { op: "upsert", entry: root }],
   });
+  assertEquals(emitted.map((n) => n.kind), ["done"]);
+  await grace();
   assertEquals(emitted.map((n) => n.kind), ["done", "permission"]);
   triggers.receive("s", {
     t: "index.snapshot",
@@ -489,7 +529,7 @@ Deno.test("delivery failure falls back at the channel consumer and release/focus
   assertEquals(received, ["toast", "badge", "-toast", "-badge"]);
   hub.stop();
 });
-Deno.test("root notification resolution retains other pending family attention instead of clearing the badge", () => {
+Deno.test("root notification resolution retains other pending family attention instead of clearing the badge", async () => {
   const emitted: Note[] = [], removed: string[] = [];
   const triggers = new NotificationTriggers(
     (n) => emitted.push(n),
@@ -506,6 +546,7 @@ Deno.test("root notification resolution retains other pending family attention i
       }),
     }],
   });
+  await grace();
   triggers.receive("s", {
     t: "index.patch",
     rev: 3,
@@ -514,6 +555,8 @@ Deno.test("root notification resolution retains other pending family attention i
       entry: entry("a", { attention: { ...entry().attention, questions: 1 } }),
     }],
   });
+  assertEquals(emitted.map((n) => n.kind), ["permission"]);
+  await grace();
   assertEquals(emitted.map((n) => n.kind), ["permission", "question"]);
   assertEquals(removed, []);
   triggers.receive("s", {
@@ -564,6 +607,8 @@ Deno.test("question edges, archive/remove and async command completion preserve 
       }),
     }],
   });
+  assertEquals(emitted, []);
+  await grace();
   assertEquals(emitted.map((n) => n.kind), ["question"]);
   triggers.receive("s", {
     t: "index.patch",
