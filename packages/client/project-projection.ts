@@ -448,12 +448,8 @@ export function createProjectProjection(o: {
       const unread = (summary?.unseenCount ?? 0) > 0 || p.unread > 0 ||
         summary?.status === "finished";
       const record = p.record;
-      // Decision 55: a removed checkout's part of the project is archived,
-      // unless it still has live evidence (working) or needs the user.
-      const archived = summary?.availability === "removed" &&
-        !!summary.topology?.parentDirectory &&
-        status !== "working" && status !== "blocked";
-      const inactive = archived || !!record?.inactive && status === "none";
+      const archived = summary?.archived === true;
+      const inactive = !!record?.inactive && status === "none";
       const hasSessions = summary?.hasSessions ??
         (summary?.sessionCount != null
           ? summary.sessionCount > 0
@@ -484,12 +480,15 @@ export function createProjectProjection(o: {
               (p.summary?.sessionCount === null && summaryReady)
             ? "index"
             : "template",
-          group: inactive
+          group: archived && status === "none"
+            ? "archived"
+            : inactive
             ? "inactive"
             : hasSessions || status !== "none"
             ? "active"
             : "discovered",
           inactive,
+          archived,
           status,
           unread,
           visitText: text,
