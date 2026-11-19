@@ -883,16 +883,17 @@ session/project/application title projection.
 Project clicks and cold/reloaded project routes call `navigation.default` on the
 selected server. One core resolver uses SessionHierarchy membership and the
 shared attention order first, then validates the exact remembered session
-(children included), then compares one newest native root per exact checkout
-scope. Explicit session links remain explicit selections, not project-default
-intents. ShellNavigation applies the result only while its captured revision is
-current; same-project clicks do not bypass resolution. Locations live in the
-existing host-sidecar `shellLayout` preference; `layout.location` merges one
-server/directory intent at the persistence owner, so concurrent project visits
-cannot overwrite one another. Pending saves bridge immediate switches;
-preference broadcasts own the saved snapshot. Current task membership resolves
-the restored session's tab, including helper ancestry. Missing, foreign or
-closed locations use the same resolver's newest-root fallback.
+(helpers resolve to their proven human root), then compares one newest native
+root per exact checkout scope. Explicit session links remain explicit
+selections, not project-default intents. ShellNavigation applies the result only
+while its captured revision is current; same-project clicks do not bypass
+resolution. Locations live in the existing host-sidecar `shellLayout`
+preference; `layout.location` merges one server/directory intent at the
+persistence owner, so concurrent project visits cannot overwrite one another.
+Pending saves bridge immediate switches; preference broadcasts own the saved
+snapshot. Current task membership resolves the restored session's tab, including
+helper ancestry. Missing, foreign or closed locations use the same resolver's
+newest-root fallback.
 
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without
@@ -1245,11 +1246,16 @@ through `ServerResources.sessionRows`. Live row facts continue to come from
 
 The same project owner supplies stable `projectMetadata` and keyed
 `metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
-`crumbs` share one keyed family/adjacency derivation; `entry` resolves crumb
-titles without a population search. `ClientIndex.partition` is cached by its
-partition clock, while `projectProgress` borrows incrementally maintained
-digest-state counts. Digest-only frames do not rebuild metadata or hierarchy
-inputs.
+`path`, `family` and `crumbs` share one keyed family/adjacency derivation.
+`path()` holds the open session and known ancestor links; `family()` carries
+explicit task members and mandatory descendants with each session's own state.
+`crumbs()` renders the path followed by off-path working, blocked and
+finished-unseen members. Settlement and acknowledgement retire only the off-path
+member, never open identity. `working()` borrows that family's working helpers
+for the composer. `entry` resolves crumb titles without a population search.
+`ClientIndex.partition` is cached by its partition clock, while
+`projectProgress` borrows incrementally maintained digest-state counts.
+Digest-only frames do not rebuild metadata or hierarchy inputs.
 
 `createWindow()` owns browser-independent measured viewport math. Supply ordered
 keys and role estimates with `update`, apply incremental sizes with `measure`,

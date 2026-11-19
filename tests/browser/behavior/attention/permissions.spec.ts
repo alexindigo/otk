@@ -208,7 +208,7 @@ test.describe("native helper lifecycle", () => {
     await crumb.click();
     await expect(page).toHaveURL(new RegExp(`${child.id}$`));
     await state.release(gate.gate);
-    await expect(crumb).toHaveCount(0);
+    await expect(crumb).toBeVisible();
     await expect(page.locator(`[data-session="${child.id}"]`)).toBeVisible();
     // The viewed finish is acknowledged; with no evidence left the lamp is grey.
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
@@ -217,7 +217,7 @@ test.describe("native helper lifecycle", () => {
     );
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await page.reload();
-    await expect(crumb).toHaveCount(0);
+    await expect(crumb).toBeVisible();
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   });

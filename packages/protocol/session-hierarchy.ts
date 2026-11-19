@@ -4,6 +4,7 @@ import type { TaskRecord } from "./inbox.ts";
 /** Native family identity and checkout-local presentation are different facts. */
 export interface SessionHierarchyNode {
   familyID: string;
+  /** Proven parentless human root; absent for unresolved or cyclic ancestry. */
   rootID?: string;
   ancestry: "complete" | "unresolved" | "cyclic";
   anchorID: string;

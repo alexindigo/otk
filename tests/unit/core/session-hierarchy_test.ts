@@ -49,6 +49,7 @@ Deno.test("missing, late, deleted and cyclic ancestry never removes a mandatory 
   const child = { id: "child", directory: "/tree", parentID: "parent" };
   owner.entry(child);
   assertEquals(owner.node("child")?.ancestry, "unresolved");
+  assertEquals(owner.node("child")?.rootID, undefined);
   assertEquals(owner.node("child")?.anchorID, "child");
   const reads: string[][] = [];
   await owner.prepare([child], (ids) => {
@@ -60,8 +61,10 @@ Deno.test("missing, late, deleted and cyclic ancestry never removes a mandatory 
   owner.remove("parent");
   assertEquals(owner.node("child")?.mandatory, true);
   assertEquals(owner.node("child")?.ancestry, "unresolved");
+  assertEquals(owner.node("child")?.rootID, undefined);
   owner.entry({ id: "parent", directory: "/tree", parentID: "child" });
   assertEquals(owner.node("child")?.ancestry, "cyclic");
+  assertEquals(owner.node("child")?.rootID, undefined);
   assertEquals(owner.node("child")?.familyID, owner.node("parent")?.familyID);
   assertEquals(owner.node("child")?.anchorID, "child");
 });

@@ -25,28 +25,23 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
     await expect(selected).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('.otk-task-list [aria-selected="true"]'))
       .toHaveCount(1);
-    const crumb = page.locator(`[data-crumb=${JSON.stringify(session)}]`);
-    const inTrail = await crumb.count() > 0;
-    const current = inTrail ? crumb : page.locator(
-      `[data-open-session=${JSON.stringify(session)}]`,
+    const current = page.locator(
+      `[data-crumb=${JSON.stringify(session)}]`,
     );
     await visibleOnScreen(current);
-    await expect(current.locator(".otk-control-label, .otk-crumb-title"))
-      .toHaveText(title);
-    if (inTrail) {
-      await expect(page.locator(".otk-open-session-title")).toHaveCount(0);
-      await expect(crumb).toHaveAttribute("aria-current", "page");
-    }
+    await expect(current.locator(".otk-crumb-title")).toHaveText(title);
+    await expect(page.locator(".otk-open-session-title")).toHaveCount(0);
+    await expect(current).toHaveAttribute("aria-current", "page");
     const geometry = await current.evaluate((node) => {
-      const strip = node.closest(".otk-task-strip, .otk-breadcrumb-row")!;
-      const active = document.querySelector(
+      const strip = node.closest(".otk-breadcrumb-row")!;
+      const active = node.closest(".otk-project-tabs")!.querySelector(
         '[role="tab"][aria-selected="true"]',
       )!;
-      const aligned = strip.querySelector(".otk-session-crumb") ?? active;
-      const a = aligned.getBoundingClientRect(),
-        n = node.getBoundingClientRect(),
+      const a = node.querySelector(".otk-status-light")!
+          .getBoundingClientRect(),
+        n = node.querySelector(".otk-crumb-title")!.getBoundingClientRect(),
         s = strip.getBoundingClientRect();
-      const label = node.querySelector(".otk-control-label, .otk-crumb-title")!;
+      const label = node.querySelector(".otk-crumb-title")!;
       return {
         fontStyle: getComputedStyle(active).fontStyle,
         currentStyle: getComputedStyle(label).fontStyle,

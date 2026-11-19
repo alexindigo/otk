@@ -277,7 +277,9 @@ export default function ProjectTabs(props: {
   });
   const required = () =>
     crumbs().filter((c) =>
-      c.helper || c.id === props.model.state.sessionID ||
+      c.helper || props.model.family().some((member) =>
+        member.id === c.id && member.status !== "none"
+      ) || c.id === props.model.state.sessionID ||
       props.rename?.matches({
         sidecarId: props.project.sidecarId,
         sessionID: c.id,
