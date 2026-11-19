@@ -37,7 +37,6 @@ import {
   inboxStatus,
   type InboxTab,
   type MergedEntry,
-  projectName,
   type ProjectSelection,
   type SessionRename,
   summaryMeter,
@@ -61,6 +60,7 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 import OverflowRow from "./OverflowRow.tsx";
 import { breadcrumbRows } from "./list-presentation.ts";
 import { nativeAttributes } from "./native-attributes.ts";
+import ProjectChip from "./ProjectChip.tsx";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -80,6 +80,7 @@ export default function ProjectTabs(props: {
   session?: ContentSession;
   rename?: SessionRename;
   displayMenu?: Element;
+  projectChip?: Element;
   /** Reserve space for consumer chrome without inspecting its class or state. */
   reserveTrailing?: boolean;
   ready: boolean;
@@ -379,12 +380,7 @@ export default function ProjectTabs(props: {
         <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
       <div class="otk-task-strip">
-        <span
-          class="otk-tabs-project otk-control-label"
-          title={props.project.directory}
-        >
-          {projectName(props.project.directory)}
-        </span>
+        {props.projectChip ?? <ProjectChip directory={props.project.directory} />}
         <EdgeTriangle
           direction="previous"
           visible={edges().previous}

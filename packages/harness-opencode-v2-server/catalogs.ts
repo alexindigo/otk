@@ -139,6 +139,8 @@ const invalidations: Record<string, readonly (keyof DirectoryCatalogKinds)[]> =
     "mcp.resources.changed": ["resources", "resourceTemplates"],
     "mcp.status.changed": ["resources", "resourceTemplates"],
     "filesystem.changed": ["files"],
+    "project.updated": ["project"],
+    "vcs.branch.updated": ["repository"],
   };
 export class V2Catalogs {
   readonly catalogs: DirectoryCatalogs;
@@ -168,6 +170,18 @@ export class V2Catalogs {
       watchFiles: true,
       diagnostic,
       contributions: {
+        project: (directory, signal, owner, intent) =>
+          source.read("catalog.project", { directory }, {
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
+          }),
+        repository: (directory, signal, owner, intent) =>
+          source.read("catalog.repository", { directory }, {
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
+          }),
         config: (directory, signal, owner, intent) =>
           source.read("catalog.config", { directory }, {
             owner,

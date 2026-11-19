@@ -9,6 +9,7 @@ import type {
   ConfigReadKinds,
   FileReadKinds,
   ModelReadKinds,
+  ProjectReadKinds,
   QuestionReadKinds,
   ResourceReadKinds,
   SkillReadKinds,
@@ -34,7 +35,8 @@ export interface ProviderReadKinds
     ResourceReadKinds,
     FileReadKinds,
     QuestionReadKinds,
-    ConfigReadKinds {
+    ConfigReadKinds,
+    ProjectReadKinds {
   /** Bounded native terminal metadata, independent of body/list/digest demand. */
   "supervision.terminals": {
     input: { after: string };

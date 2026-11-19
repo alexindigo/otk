@@ -12,6 +12,8 @@ import {
 import { messagePrefetchCodec } from "./message-prefetch.ts";
 /** Codecs matching this native sink's selected transient readers. */
 export const opencodeV1ReadCodecs: ProviderReadCodecs = {
+  "catalog.project": arrayReadCodec(),
+  "catalog.repository": arrayReadCodec(),
   "supervision.terminals": arrayReadCodec(),
   "opcv1.message.prefetch": messagePrefetchCodec,
   "identity.batch": identityReadCodec,
