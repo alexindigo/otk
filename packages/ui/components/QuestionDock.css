@@ -11,25 +11,6 @@
   font-size: var(--text-prose);
   line-height: var(--line-prose);
 }
-.otk-question-options {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-}
-.otk-question-options > .otk-question-row {
-  text-align: left;
-  padding-block: 8px;
-  cursor: pointer;
-}
-.otk-question-own {
-  flex: 1 1 100%;
-  min-height: 0;
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
-  color: var(--otk-fg);
-}
 .otk-question-peek {
   overflow: hidden;
   white-space: nowrap;
@@ -38,42 +19,9 @@
 .otk-question-submit {
   margin-left: auto;
 }
-.otk-question-content {
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.otk-question-options .otk-muted {
-  font-size: var(--text-meta);
-}
 .otk-question-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-/* Options read as separate choices: each is its own bordered box, label
-   above description, and the picked one carries the accent clearly. */
-.otk-question-row {
-  border: 1px solid var(--otk-border);
-  border-radius: var(--radius-control);
-  padding-inline: 12px;
-}
-.otk-question-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-}
-.otk-question-label {
-  color: var(--otk-fg);
-  font-weight: 600;
-}
-.otk-question-row.is-selected {
-  border-color: var(--otk-accent);
-  box-shadow: inset 0 0 0 1px var(--otk-accent);
-}
-.otk-question-row.is-selected .otk-question-label {
-  color: var(--otk-accent-text);
 }
