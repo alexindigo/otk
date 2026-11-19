@@ -731,6 +731,10 @@ export default function Shell(
                               guard,
                               prefs: () => toggles.state.prefs,
                               permissionVisible: attentionPaint.permission,
+                              tabs: () => {
+                                const owner = project();
+                                return owner ? tabsFor(owner) : undefined;
+                              },
                             })}
                           >
                             <SessionView

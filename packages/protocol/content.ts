@@ -335,6 +335,8 @@ export interface NativeSourceView {
 }
 export interface Activity {
   kindLabel: string;
+  /** Neutral live-work identity supplied by the harness, never inferred from wording. */
+  work?: { kind: "shell" };
   layout: "row" | "boundary";
   direction?: "outgoing";
   category: DisclosureCategory;

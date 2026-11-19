@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export {
+  type RunningWork,
+  runningWork,
+  runningWorkLabel,
+} from "./live-work.ts";
+export {
   createNativeSources,
   type NativeSourceOwner,
   type NativeSources,

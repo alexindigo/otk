@@ -184,9 +184,3 @@
 .otk-tab-open .otk-control-label {
   flex: 1;
 }
-.otk-running-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}

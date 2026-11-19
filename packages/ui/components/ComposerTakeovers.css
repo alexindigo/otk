@@ -28,3 +28,12 @@
 .otk-composer-body.is-noticed {
   border-top: 1px solid var(--otk-border);
 }
+.otk-composer-activity {
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  padding-block-end: 6px;
+  flex: none;
+}

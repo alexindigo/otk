@@ -7,6 +7,7 @@ import type {
   FrecencyCatalogLease,
   InboxRpc,
   ModelCatalogOwner,
+  RunningWork,
   SessionSubmission,
   ToolCompletionSource,
 } from "@otk/client";
@@ -43,6 +44,9 @@ export interface SessionPorts {
   status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
+  /** Borrowed family and active shell projection; no UI-owned activity store. */
+  runningWork?(): readonly RunningWork[];
+  stopHelper?(id: string): Promise<void>;
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];

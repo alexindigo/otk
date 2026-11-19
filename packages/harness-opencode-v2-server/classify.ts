@@ -783,6 +783,7 @@ function shellActivity(
     failed = !!cause;
   return {
     kindLabel: "Shell result",
+    work: { kind: "shell" },
     title: cause ? `Shell: ${cause}` : "Shell",
     detail: text(facts.command),
     layout: "row",

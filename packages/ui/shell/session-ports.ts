@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ClientSession,
+  type ClientTabs,
   inboxStatus,
   loadHistory,
+  runningWork,
   type Selection,
   type ServerResources,
   type SessionActions,
@@ -22,6 +24,7 @@ export function sessionPorts(o: {
   session: ClientSession;
   guard: { mark(owner: string, dirty: boolean, input?: string): void };
   prefs(): Preferences;
+  tabs?(): ClientTabs | undefined;
   permissionVisible?(sidecar: string, request: PermissionRequest): boolean;
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
@@ -54,6 +57,20 @@ export function sessionPorts(o: {
         : undefined;
     },
     location: (id) => actions.location(target, id),
+    runningWork: () => {
+      const tabs = o.tabs?.();
+      return tabs
+        ? runningWork({
+          tabs,
+          inbox: resources.inbox(target.sidecarId).state.inbox,
+          sessionID: target.sessionID,
+          entry: (id) => resources.entry(target.sidecarId, id),
+          messages: Object.values(session.transcript?.state.messagesByID ?? {}),
+          connected: resources.linked(target.sidecarId),
+        })
+        : [];
+    },
+    stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
     permissions: () => session.state.content.permissions,
     permissionVisible: o.permissionVisible
       ? (request) => o.permissionVisible!(target.sidecarId, request)
