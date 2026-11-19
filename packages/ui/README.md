@@ -216,37 +216,38 @@ other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
 `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
-contribute `{prose?, work?, text?, copyable?, hidden?, frame?}` presentation data:
-the message groups adjacent contributed work clocks into expandable folds and
-copies contributed source text without dispatching concrete part kinds or reading
-child DOM. `copyable` is cheap availability; source-bearing features can expose `text`
-as a lazy getter. Framing and live action targets do not stringify reply source.
-Copy invokes the canonical transcript source port, paging missing steps before
-the part presenters resolve the complete reply. Action ports use optional
-`ContentIdentity.ownerID` for their stable presentation lifetime; native message
-and last-step IDs remain separate action boundaries. Prepending a page cannot
-retire an existing reply's usage or disclosure port. Read, search, fetch, web
-search, skill and task bodies render their inherited native result through the
-same `ToolOutput` owner as bash. The adapter's decoded results contain user
-content and metadata, not model-facing envelopes. Unrecognized formats retain
-verbatim fallback. Headers alone summarize operations; bodies contain results,
-metadata, diagnostics and navigation/progress actions. All UI noun-count labels
-use the shared count-label helper, including tokens, reverted messages, pastes
-and favicon attention. Optional display text preserves compact/locale formatting
-while the numeric value owns inflection. Structural edit, write, patch, todo and
-question bodies keep their typed result presentation; generic output retains its
-display preference and provenance-neutral truncation notice. Unknown task agents
-have an identity-free “Unknown agent” label. Bookkeeping owners render as
-inspectable record rows in the same work fold. Reply metadata combines
-contiguous source parts for one whole-reply copy.
+contribute `{prose?, work?, text?, copyable?, hidden?, frame?}` presentation
+data: the message groups adjacent contributed work clocks into expandable folds
+and copies contributed source text without dispatching concrete part kinds or
+reading child DOM. `copyable` is cheap availability; source-bearing features can
+expose `text` as a lazy getter. Framing and live action targets do not stringify
+reply source. Copy invokes the canonical transcript source port, paging missing
+steps before the part presenters resolve the complete reply. Action ports use
+optional `ContentIdentity.ownerID` for their stable presentation lifetime;
+native message and last-step IDs remain separate action boundaries. Prepending a
+page cannot retire an existing reply's usage or disclosure port. Read, search,
+fetch, web search, skill and task bodies render their inherited native result
+through the same `ToolOutput` owner as bash. The adapter's decoded results
+contain user content and metadata, not model-facing envelopes. Unrecognized
+formats retain verbatim fallback. Headers alone summarize operations; bodies
+contain results, metadata, diagnostics and navigation/progress actions. All UI
+noun-count labels use the shared count-label helper, including tokens, reverted
+messages, pastes and favicon attention. Optional display text preserves
+compact/locale formatting while the numeric value owns inflection. Structural
+edit, write, patch, todo and question bodies keep their typed result
+presentation; generic output retains its display preference and
+provenance-neutral truncation notice. Unknown task agents have an identity-free
+“Unknown agent” label. Bookkeeping owners render as inspectable record rows in
+the same work fold. Reply metadata combines contiguous source parts for one
+whole-reply copy.
 
 `frame: "transcript"` places a contributed part outside the ordinary message
 bubble, preserving adjacent normal content in its own frame even in mixed
 messages. Compaction owns that declaration and renders a shared DividerLabel:
 "Compacting..." for a pending request and "Session compacted" afterward. The
 generic message view dispatches no concrete part kinds. Part renderers receive
-the client projection's optional `pending`
-input; the summary reply retains its normal rendering.
+the client projection's optional `pending` input; the summary reply retains its
+normal rendering.
 
 Shared message framing separates `userBubble` presentation from `prompt` action
 eligibility. Only ordinary user prompts get bubbles. Neutral `context` records
@@ -305,17 +306,18 @@ Each prose-bearing assistant source starts with one quiet agent/local-time band,
 kept in the first prose group's virtual item. Continuations within a grouped
 reply add a rule and a larger reply gap. Source clocks use their own last output
 or creation time, independent of the grouped reply's metadata. Work-only sources
-stay in their existing work groups. Work uses compact, intrinsic-width disclosure
-labels with real chevrons, not the full-width compaction boundary treatment.
-Blocks owns paragraph, heading and compact list rhythm across virtual wrappers.
+stay in their existing work groups. Work uses compact, intrinsic-width
+disclosure labels with real chevrons, not the full-width compaction boundary
+treatment. Blocks owns paragraph, heading and compact list rhythm across virtual
+wrappers.
 
-Agent labels share `EntityPill` across reply sources, delegate tools and activity
-records/groups. Producers identify the entity at the start of a record title;
-views never parse native agent parameters. Pills borrow session facts through
-the common session ports and receive navigation callbacks. Hover/focus detail,
-click pinning, anchoring and dismissal belong to Popover, not the pill. Available
-session/model/status/time facts appear without placeholders; a session click
-uses the same guarded navigation as the existing Open task action.
+Agent labels share `EntityPill` across reply sources, delegate tools and
+activity records/groups. Producers identify the entity at the start of a record
+title; views never parse native agent parameters. Pills borrow session facts
+through the common session ports and receive navigation callbacks. Hover/focus
+detail, click pinning, anchoring and dismissal belong to Popover, not the pill.
+Available session/model/status/time facts appear without placeholders; a session
+click uses the same guarded navigation as the existing Open task action.
 
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn
@@ -911,6 +913,15 @@ inputs explicitly. Recursive blocks share that root, and Code owns optional
 fence markers. WorkLog imports its own paint; view headers/empty states and
 change counts use explicitly imported shared styles. Journal-entry styling stops
 at the entry boundary, preserving PermissionSummary's file and scope lists.
+
+`ProjectChip` renders native project avatar/name and a Menu-backed location
+card. Its data-only inputs contain optional native repository, branch, change
+and machine facts; absent facts and unavailable settings actions stay absent.
+Path/branch submenus use the shared clipboard owner. The shell injects the
+catalog binding through `ProjectTabs.projectChip`; standalone tabs retain the
+same neutral initial/path chip without a backend. Project identity is demanded
+at mount. Repository state is first demanded on menu open, explicitly refreshed
+on later opens, and renewed through the same native invalidation owner.
 
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and

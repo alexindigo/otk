@@ -28,8 +28,8 @@ export default function EntityPill(props: {
   const finished = () => props.finished ?? time()?.end;
   const elapsed = () => {
     const value = time();
-    return props.duration ?? (value?.end !== undefined
-      ? value.end - value.start : undefined);
+    return props.duration ??
+      (value?.end !== undefined ? value.end - value.start : undefined);
   };
   const open = () => {
     if (props.sessionID) props.onOpen?.(props.sessionID);

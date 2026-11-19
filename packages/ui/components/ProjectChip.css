@@ -9,11 +9,11 @@
 .otk-project-chip-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   max-width: 100%;
   height: var(--control-size);
-  padding: 0 6px;
+  padding: 0 8px;
   font-weight: 500;
 }
 .otk-project-avatar {
@@ -40,10 +40,12 @@
   height: 100%;
   object-fit: contain;
 }
-.otk-project-menu {
-  width: min(320px, 100vw);
+.otk-project-chip-menu-content {
+  display: flex;
+  flex-direction: column;
+  width: min(288px, 70vw);
 }
-.otk-project-menu-heading {
+.otk-project-chip-menu-heading {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -54,22 +56,25 @@
   font-size: var(--text-ui);
   font-weight: 600;
 }
-.otk-project-menu-row {
+.otk-project-chip-menu-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
   min-height: var(--menu-row-height);
-  padding: var(--menu-block-inset) var(--menu-item-inset);
+  padding: 0;
 }
-.otk-project-menu-row > svg {
-  flex: none;
+.otk-project-chip-menu-row .otk-control-label {
+  padding-inline-end: var(--menu-item-inset);
+}
+.otk-project-chip-submenu-trigger {
+  width: 100%;
+  height: var(--menu-row-height);
+}
+button.otk-project-chip-menu-row {
+  padding: 0;
+}
+.otk-project-chip-menu-row svg {
   width: 16px;
   height: 16px;
-}
-.otk-project-submenu-trigger {
-  width: 100%;
-}
-.otk-project-submenu-trigger > .otk-control-label {
-  flex: 1;
 }
