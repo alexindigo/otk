@@ -7,7 +7,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 7px;
+  padding: 0 8px;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--otk-action-text) 10%, var(--otk-bg));
   color: var(--otk-fg);
@@ -21,8 +21,8 @@
 .otk-entity-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 12px;
-  margin: 0 0 10px;
+  gap: 8px 12px;
+  margin: 0 0 12px;
   font-size: var(--text-meta);
 }
 .otk-entity-facts dt {
@@ -35,5 +35,5 @@
 .otk-entity-status {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
