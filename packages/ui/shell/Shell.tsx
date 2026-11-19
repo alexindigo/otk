@@ -592,9 +592,22 @@ export default function Shell(
                             <ProjectTabs
                               reserveTrailing={layout().rightCollapsed}
                               project={owner}
-                              projectChip={<ProjectLocation directory={owner.directory}
-                                serverLabel={resources.server(owner.sidecarId)?.label}
-                                catalog={resources.declares(owner.sidecarId, "catalogs") ? resources.directoryCatalog(owner.sidecarId, owner.directory) : undefined} />}
+                              projectChip={
+                                <ProjectLocation
+                                  directory={owner.directory}
+                                  serverLabel={resources.server(owner.sidecarId)
+                                    ?.label}
+                                  catalog={resources.declares(
+                                      owner.sidecarId,
+                                      "catalogs",
+                                    )
+                                    ? resources.directoryCatalog(
+                                      owner.sidecarId,
+                                      owner.directory,
+                                    )
+                                    : undefined}
+                                />
+                              }
                               model={tabsFor(owner)}
                               currentEntry={(id) =>
                                 resources.entry(owner.sidecarId, id)}

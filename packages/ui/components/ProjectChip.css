@@ -40,10 +40,10 @@
   height: 100%;
   object-fit: contain;
 }
-.otk-project-menu {
+.otk-project-chip-menu {
   width: min(320px, 100vw);
 }
-.otk-project-menu-heading {
+.otk-project-chip-menu-heading {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -54,7 +54,7 @@
   font-size: var(--text-ui);
   font-weight: 600;
 }
-.otk-project-menu-row {
+.otk-project-chip-menu-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -62,14 +62,14 @@
   min-height: var(--menu-row-height);
   padding: var(--menu-block-inset) var(--menu-item-inset);
 }
-.otk-project-menu-row > svg {
+.otk-project-chip-menu-row > svg {
   flex: none;
   width: 16px;
   height: 16px;
 }
-.otk-project-submenu-trigger {
+.otk-project-chip-submenu-trigger {
   width: 100%;
 }
-.otk-project-submenu-trigger > .otk-control-label {
+.otk-project-chip-submenu-trigger > .otk-control-label {
   flex: 1;
 }
