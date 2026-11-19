@@ -494,6 +494,11 @@ agent/model, matching its wire projection. Unknown catalog metadata preserves
 and displays a restored variant rather than silently dropping it. Palette-native
 slash execution shares the same readiness and projection.
 
+`ChoiceFrame` in FormField owns the bordered label/detail frame for ordinary,
+custom-answer and typed-form choices. It imports its own paint, binds selection
+through the shared state class, and accepts an editor and a trailing accessory.
+QuestionDock supplies behaviour only; it no longer activates option styling.
+
 `ListPicker` is the shared, data-injected interaction component inside
 `Popover`: typed groups/items/values, selected key, optional
 search/status/header/item action, `onPick`, `onOpen` and `focusAfterPick`. Its

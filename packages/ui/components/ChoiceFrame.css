@@ -1,0 +1,55 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-choice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+.otk-choice-frame {
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-control);
+  padding: 8px 12px;
+  text-align: left;
+  min-width: 0;
+  cursor: pointer;
+}
+.otk-choice-content {
+  align-items: center;
+}
+.otk-choice-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.otk-choice-label {
+  color: var(--otk-fg);
+  font-weight: 600;
+}
+.otk-choice-detail {
+  display: block;
+  min-width: 0;
+}
+.otk-choice-detail.otk-muted {
+  font-size: var(--text-meta);
+}
+.otk-choice-editor {
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--otk-fg);
+}
+.otk-choice-accessory {
+  display: grid;
+  place-items: center;
+}
+.otk-choice-frame.is-selected {
+  border-color: var(--otk-accent);
+  box-shadow: inset 0 0 0 1px var(--otk-accent);
+}
+.otk-choice-frame.is-selected .otk-choice-label {
+  color: var(--otk-accent-text);
+}
