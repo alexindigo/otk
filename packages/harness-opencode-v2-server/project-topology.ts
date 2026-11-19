@@ -22,6 +22,8 @@ export function recordedCheckout(
 export interface NativeProjectTopology {
   id: string;
   canonical: string;
+  name?: string;
+  icon?: { color?: string };
   /** Undefined means inventory failed, not a complete empty inventory. */
   worktrees?: readonly { directory: string; strategy?: string }[];
 }

@@ -31,6 +31,7 @@ import type { RestoreCapabilities } from "./capabilities/restore.ts";
 import type { DigestsCapabilities } from "./capabilities/digests.ts";
 import type { CatalogsCapabilities } from "./catalogs.ts";
 import type { FormsCapabilities } from "./capabilities/forms.ts";
+import type { ProjectEditCapabilities } from "./project-edit.ts";
 import {
   legacyResourcesCapabilities,
   type ResourcesCapabilities,
@@ -68,7 +69,8 @@ export interface CapabilityContracts
     RevertCapabilities,
     RestoreCapabilities,
     DigestsCapabilities,
-    CatalogsCapabilities {}
+    CatalogsCapabilities,
+    ProjectEditCapabilities {}
 export type CapabilityName = Extract<keyof CapabilityContracts, string>;
 export type Capabilities = Partial<CapabilityContracts>;
 

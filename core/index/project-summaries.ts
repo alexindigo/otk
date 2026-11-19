@@ -362,6 +362,13 @@ export class ProjectSummaries {
       : undefined;
     const summary: ProjectSummary = {
       directory,
+      ...(seeds.length &&
+          seeds.every((seed) =>
+            seed.presentation?.id === seeds[0].presentation?.id
+          ) &&
+          seeds[0].presentation
+        ? { presentation: seeds[0].presentation }
+        : {}),
       ...(this.identity.availability(directory)
         ? {
           availability: this.identity.availability(directory),

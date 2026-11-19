@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectEditor } from "./project-edit.ts";
 import {
   type DiagnosticSink,
   errorMessage,
@@ -894,6 +895,13 @@ export class OpencodeV1Adapter implements Harness {
     registry.register(
       "restore",
       restore(this.client, directory, (id) => this.core.getSession(id)),
+    );
+    registry.register(
+      "projectEdit",
+      projectEditor(
+        this.client,
+        () => this.catalogs.invalidateAll(["project"]),
+      ),
     );
     this.capabilities = registry.capabilities;
   }
@@ -2106,6 +2114,13 @@ export class OpencodeV1Adapter implements Harness {
     const catalogKinds = this.catalogs.event(event);
     if (catalogKinds) {
       if (catalogKinds.includes("agents")) this.#colors.reset();
+      if (catalogKinds.includes("project") && this.digest?.projects) {
+        const seeds = await this.digest.projects(
+          this.#connection,
+          controller.signal,
+        );
+        if (this.#current(controller)) sink.projectSeeds?.(seeds.projects);
+      }
       return;
     }
     if (!p) throw new Error(`Malformed ${type} event: properties missing`);

@@ -596,6 +596,7 @@ export default function Shell(
                               projectChip={
                                 <ProjectLocation
                                   directory={owner.directory}
+                                  sidecarId={owner.sidecarId}
                                   catalog={resources.declares(
                                       owner.sidecarId,
                                       "catalogs",

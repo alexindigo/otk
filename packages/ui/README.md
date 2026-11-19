@@ -956,6 +956,14 @@ same neutral initial/path chip without a backend. Project identity is demanded
 at mount. Repository state is first demanded on menu open, explicitly refreshed
 on later opens, and renewed through the same native invalidation owner.
 
+Every project-menu row shares one icon/value/accessory layout, including nested
+branch/path triggers. Edit project opens registered project-settings content
+through DialogHost. Its title names the captured project; fields borrow the
+framework-free editor and Form feedback owner. Color swatches use the shared
+on/off binding. Upload/remove, name and startup text commit through Save
+changes; dirty dismissal asks before discarding. No project auto-accept field is
+shown.
+
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
 ListPicker, is the caller-owned trigger style slot. Chrome search/chevron icons,

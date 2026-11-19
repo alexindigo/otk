@@ -44,6 +44,7 @@ import {
 import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
+import { ProjectAvatar } from "./ProjectChip.tsx";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -209,7 +210,8 @@ export default function ProjectInbox(props: {
         value: !(project().inactivePolicy ?? project().inactive),
       },
     });
-    const name = () => projectName(project().directory);
+    const name = () =>
+      project().summary?.presentation?.name || projectName(project().directory);
     const duplicate = () => props.duplicateName(name());
     return (
       <div
@@ -274,6 +276,15 @@ export default function ProjectInbox(props: {
             </span>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
+                <Show
+                  when={project().summary?.presentation?.name ||
+                    project().summary?.presentation?.color}
+                >
+                  <ProjectAvatar
+                    name={name()}
+                    color={project().summary?.presentation?.color}
+                  />
+                </Show>
                 <span
                   class={`otk-project-name otk-age-${project().ageing}`}
                   data-unread={project().unread ? "true" : "false"}
