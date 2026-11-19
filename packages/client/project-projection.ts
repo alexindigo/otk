@@ -448,12 +448,19 @@ export function createProjectProjection(o: {
       const unread = (summary?.unseenCount ?? 0) > 0 || p.unread > 0 ||
         summary?.status === "finished";
       const record = p.record;
-      const inactive = !!record?.inactive && status === "none";
+      // Decision 55: a removed checkout's part of the project is archived,
+      // unless it still has live evidence (working) or needs the user.
+      const archived = summary?.availability === "removed" &&
+        !!summary.topology?.parentDirectory &&
+        status !== "working" && status !== "blocked";
+      const inactive = archived || !!record?.inactive && status === "none";
       const hasSessions = summary?.hasSessions ??
         (summary?.sessionCount != null
           ? summary.sessionCount > 0
           : p.members.size > 0 || summaryReady);
-      const time = inactive ? record?.inactiveAt ?? record!.lastVisit : now;
+      const time = inactive && record
+        ? record.inactiveAt ?? record.lastVisit
+        : now;
       const text = record ? visitTime(record.lastVisit, time) : "";
       const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
       const key = `${text}/${age}`;
