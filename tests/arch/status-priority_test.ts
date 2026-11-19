@@ -38,9 +38,11 @@ Deno.test("lamp display and attention urgency each have one definition in the sh
     await Deno.readTextFile("packages/protocol/inbox.ts"),
   );
   for (const name of ["ROLLUP_PRIORITY", "URGENCY_PRIORITY"]) {
-    assert(owner.all.some((n) =>
-      n.type === "VariableDeclarator" && owner.name(n.id) === name
-    ));
+    assert(
+      owner.all.some((n) =>
+        n.type === "VariableDeclarator" && owner.name(n.id) === name
+      ),
+    );
   }
 });
 Deno.test("priority ownership detects reordered lists and numeric rank maps without treating labels as ranks", () => {
@@ -71,13 +73,15 @@ const urgencyConsumers = new Set([
 ]);
 function crossedOwners(path: string, text: string): string[] {
   if (path === "packages/protocol/inbox.ts") return [];
-  const symbols = new Set(new Source(text).all.flatMap((node) =>
-    node.type === "Identifier"
-      ? [node.name]
-      : node.type === "StringLiteral"
-      ? [node.value]
-      : []
-  ));
+  const symbols = new Set(
+    new Source(text).all.flatMap((node) =>
+      node.type === "Identifier"
+        ? [node.name]
+        : node.type === "StringLiteral"
+        ? [node.value]
+        : []
+    ),
+  );
   return [
     ...["attentionStatus", "PROJECT_STATUS_PRIORITY", "INBOX_STATUS_PRIORITY"]
       .filter((name) => symbols.has(name)),

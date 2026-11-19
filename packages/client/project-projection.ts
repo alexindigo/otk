@@ -10,13 +10,13 @@ import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
 import {
   ageing,
-  rollupStatus,
-  ROLLUP_PRIORITY,
   type InboxChanges,
   type InboxProject,
   type InboxStatus,
   inboxStatus,
   projectDirectory,
+  ROLLUP_PRIORITY,
+  rollupStatus,
   unread,
   visitTime,
 } from "./inbox.ts";

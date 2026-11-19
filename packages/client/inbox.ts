@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  rollupStatus,
   DEFAULT_PROJECT_AGEING,
   ROLLUP_PRIORITY,
+  rollupStatus,
 } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
