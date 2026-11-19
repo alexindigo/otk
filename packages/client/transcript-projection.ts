@@ -13,6 +13,10 @@ import {
 } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
+import {
+  createRecordProjection,
+  type RecordProjection,
+} from "./activity-spans.ts";
 
 export interface TranscriptReply {
   key: string;
@@ -37,6 +41,7 @@ export interface TranscriptProjectionState {
   replyIDs: string[];
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
+  records: RecordProjection;
 }
 export const replyKey = (message: Message): string =>
   (message.role === "assistant" ||
@@ -85,12 +90,14 @@ export interface TranscriptProjection {
   usesMetadata(ids: ReadonlySet<string>): boolean;
 }
 export function createTranscriptProjection(): TranscriptProjection {
+  const records = createRecordProjection();
   const state: TranscriptProjectionState = {
     messageIDs: [],
     messagesByID: dictionary<Message>(),
     replyIDs: [],
     repliesByID: dictionary<TranscriptReply>(),
     queuedIDs: new Set(),
+    records: records.reconcile([], {}),
   };
   const parts = new Map<string, Map<string, number>>();
   const helperLinks = new Map<string, Map<string, string>>();
@@ -136,6 +143,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     touched = new Set<string>();
   let userOrder: string[] = [], unfinishedOrder: string[] = [];
   let busy = false, detached: Message[] | undefined;
+  let recordOrder: readonly string[] | undefined, recordsDirty = true;
   const read = (id: string) => state.messagesByID[id];
   const boundary = () => {
     const id = unfinishedOrder.at(-1);
@@ -371,6 +379,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       pending: previous?.pending,
       revision: (previous?.revision ?? 0) + 1,
     };
+    state.records = records.update(key, state.repliesByID[key].revision);
     if (
       !previous || previous.messageIDs[0] !== ids[0] ||
       changed?.id === ids[0] && reordered
@@ -399,12 +408,20 @@ export function createTranscriptProjection(): TranscriptProjection {
     }
     state.queuedIDs = queued;
     touched.clear();
+    if (recordsDirty || recordOrder !== state.replyIDs) {
+      state.records = records.reconcile(state.replyIDs, state.repliesByID);
+      recordOrder = state.replyIDs;
+      recordsDirty = false;
+    }
   };
   const put = (message: Message, preservePartIndex = false) => {
     const previous = read(message.id),
       oldKey = previous && replyKey(previous),
       key = replyKey(message);
     if (previous === message) return;
+    if (previous?.role === "context" || message.role === "context") {
+      recordsDirty = true;
+    }
     header(previous, message);
     state.messagesByID[message.id] = message;
     if (!preservePartIndex && previous?.parts !== message.parts) {
@@ -477,6 +494,7 @@ export function createTranscriptProjection(): TranscriptProjection {
   const remove = (id: string) => {
     const previous = read(id);
     if (!previous) return;
+    if (previous.role === "context") recordsDirty = true;
     header(previous, undefined);
     const key = replyKey(previous);
     const causalKey =
@@ -504,12 +522,18 @@ export function createTranscriptProjection(): TranscriptProjection {
       for (const id of ids) if (helperChildren.has(id)) return true;
       return false;
     },
-    clear() {
+    clear(resetRecords = true) {
       state.messageIDs = [];
       state.messagesByID = dictionary<Message>();
       state.replyIDs = [];
       state.repliesByID = dictionary<TranscriptReply>();
       state.queuedIDs = new Set();
+      if (resetRecords) {
+        records.clear();
+        state.records = records.reconcile([], {});
+      }
+      recordOrder = undefined;
+      recordsDirty = true;
       parts.clear();
       helperLinks.clear();
       helperChildren.clear();
@@ -531,7 +555,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     },
     replace(messages: readonly Message[]) {
       const previous = state.messagesByID;
-      owner.clear();
+      owner.clear(false);
       for (const message of messages) {
         put(retainStreamMessage(previous[message.id], message));
       }
@@ -594,6 +618,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         return true;
       }
       if (op.op === "message.remove") {
+        records.retire(op.messageID);
         remove(op.messageID);
         queues();
         return true;

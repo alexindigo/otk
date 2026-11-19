@@ -11,7 +11,10 @@ export interface WindowRange {
   visibleKeys: string[];
 }
 /** Prefix sums with O(log n) measurement and offset lookup. No browser state. */
-export function createWindow(measured: Map<string, number> = new Map()): {
+export function createWindow(
+  measured: Map<string, number> = new Map(),
+  measurementKey: (key: string) => string = (key) => key,
+): {
   update(keys: readonly string[], estimate: (key: string) => number): void;
   measure(key: string, size: number): boolean;
   invalidate(key: string): boolean;
@@ -33,6 +36,7 @@ export function createWindow(measured: Map<string, number> = new Map()): {
     sums: number[] = [0],
     sizes: number[] = [];
   let estimateSize: (key: string) => number = () => 1;
+  const cacheKeys = new Map<string, string>();
   const add = (i: number, delta: number) => {
     for (i++; i < sums.length; i += i & -i) sums[i] += delta;
   };
@@ -59,11 +63,14 @@ export function createWindow(measured: Map<string, number> = new Map()): {
       estimateSize = estimate;
       keys = [...next];
       positions = new Map(keys.map((key, i) => [key, i]));
+      cacheKeys.clear();
+      for (const key of keys) cacheKeys.set(key, measurementKey(key));
+      const retainedKeys = new Set(cacheKeys.values());
       for (const key of measured.keys()) {
-        if (!positions.has(key)) measured.delete(key);
+        if (!retainedKeys.has(key)) measured.delete(key);
       }
       sizes = keys.map((key) =>
-        measured.get(key) ?? Math.max(1, estimate(key))
+        measured.get(measurementKey(key)) ?? Math.max(1, estimate(key))
       );
       sums = Array(keys.length + 1).fill(0);
       // Linear Fenwick construction.
@@ -77,16 +84,23 @@ export function createWindow(measured: Map<string, number> = new Map()): {
       const i = positions.get(key);
       if (
         i === undefined || !Number.isFinite(size) || size < 0 ||
-        (sizes[i] === size && measured.has(key))
+        (sizes[i] === size && measured.has(measurementKey(key)))
       ) return false;
-      measured.set(key, size);
+      const cacheKey = measurementKey(key), previous = cacheKeys.get(key);
+      if (previous !== undefined && previous !== cacheKey) {
+        measured.delete(previous);
+      }
+      cacheKeys.set(key, cacheKey);
+      measured.set(cacheKey, size);
       add(i, size - sizes[i]);
       sizes[i] = size;
       return true;
     },
     invalidate(key) {
       const i = positions.get(key);
-      if (i === undefined || !measured.delete(key)) return false;
+      if (i === undefined || !measured.delete(measurementKey(key))) {
+        return false;
+      }
       const size = Math.max(1, estimateSize(key));
       add(i, size - sizes[i]);
       sizes[i] = size;
@@ -94,7 +108,7 @@ export function createWindow(measured: Map<string, number> = new Map()): {
     },
     offset,
     size: (key) => sizes[positions.get(key) ?? -1] ?? 0,
-    measured: (key) => positions.has(key) && measured.has(key),
+    measured: (key) => positions.has(key) && measured.has(measurementKey(key)),
     total: () => prefix(keys.length),
     anchor(top) {
       const i = Math.min(at(Math.max(0, top)), keys.length - 1);

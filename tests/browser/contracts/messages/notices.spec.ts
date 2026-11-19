@@ -44,6 +44,14 @@ test.describe("V1 records", () => {
   }, async ({ isolatedState: state, page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await openSession(state, page, "tstv1-otk");
+    // Eligible singleton records retain the same public span/fold hierarchy.
+    const openRecords = async () => {
+      const closed = page.locator(
+        '.otk-record-group-toggle[aria-expanded="false"]',
+      );
+      while (await closed.count()) await closed.first().click();
+    };
+    await openRecords();
     const standalone = page.locator('[data-message="context"]');
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(standalone.locator(".otk-user-bubble")).toHaveCount(0);
@@ -95,6 +103,7 @@ test.describe("V1 records", () => {
       retry.locator(".otk-tool-body > p").filter({ hasText: /^Retry 1$/ }),
     ).toHaveCount(0);
     await page.reload();
+    await openRecords();
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(prompt.locator(".otk-user-bubble")).toContainText(
       "Please investigate",

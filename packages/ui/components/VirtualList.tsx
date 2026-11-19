@@ -49,6 +49,7 @@ export function ContentWindow<T>(props: {
   key(value: T): string;
   label: string;
   scope?: string;
+  measurementKey?(value: T): string;
   role?: "content" | "segment" | "line" | "metadata";
   control?(control: VirtualListControl): void;
   render(value: () => T): Element;
@@ -80,6 +81,12 @@ export function ContentWindow<T>(props: {
         retainExcluded={false}
         control={props.control}
         revision={indexed()}
+        measurementKey={props.measurementKey
+          ? (key) => {
+            const value = indexed().get(key);
+            return value === undefined ? key : props.measurementKey!(value);
+          }
+          : undefined}
         render={(key) => (
           <Show when={indexed().get(key)}>
             {(value) => props.render(value)}
@@ -105,6 +112,7 @@ export default function VirtualList(props: {
   estimate?: number;
   retainExcluded?: boolean;
   measurements?(path: string): Map<string, number>;
+  measurementKey?(key: string): string;
   revision?: unknown;
   overscan?: number;
   viewport?(): HTMLElement | undefined;
@@ -138,7 +146,10 @@ export default function VirtualList(props: {
   const path = `${parent?.path ?? ""}/${
     encodeURIComponent(props.scope ?? props.label)
   }`;
-  const model = createWindow(measurements(path));
+  const model = createWindow(
+    measurements(path),
+    (key) => props.measurementKey?.(key) ?? key,
+  );
   const [top, setTop] = createSignal(0), [height, setHeight] = createSignal(0);
   const [version, setVersion] = createSignal(0),
     [ready, setReady] = createSignal(false);
@@ -318,7 +329,18 @@ export default function VirtualList(props: {
     }
     queueMeasurement();
   };
-  createEffect(() => props.revision, () => transaction(() => changing(true)));
+  createEffect(() => props.revision, () =>
+    transaction(() => {
+      // Presentation changes can revoke a measured extent without changing keys.
+      // Rebuild the index before range demand, including formerly empty rows.
+      if (currentKeys) {
+        model.update(currentKeys, (key) =>
+          estimates.get(props.role?.(key) ?? "row") ?? props.estimate ?? 1);
+        refresh();
+        sync();
+      }
+      changing(true);
+    }));
   const remember = () => {
     if (!currentKeys || restoring || disposed || !container.isConnected) return;
     props.onPosition?.({

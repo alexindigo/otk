@@ -23,3 +23,9 @@
   white-space: normal;
   overflow: visible;
 }
+.otk-feedback-status.is-single-line .otk-feedback-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}

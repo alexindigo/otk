@@ -534,12 +534,12 @@ footer gives controls their natural width and shrinks the model control only
 under actual row pressure: provider text yields first, then model text. Shared
 intrinsic sizing keeps actions on the same row without a fixed label cap. Picker
 triggers reserve their chevron and padding through a flexible-label grid; when
-the settings' intrinsic minimum and actions cannot share a row, whole controls
-flow onto the next footer line rather than paint over one another. Agent and
-variant names use display-only title case in triggers and menu rows; literal
-fallback phrases stay sentence case through the same name/fallback formatter.
-Keys and submitted values retain their exact spelling. Edit prompt uses the
-shared 28px pencil icon button with its accessible name and tooltip.
+the settings and actions share a narrow row, picker labels yield and ellipsize
+inside their own controls rather than adding a runtime-dependent footer line.
+Agent and variant names use display-only title case in triggers and menu rows;
+literal fallback phrases stay sentence case through the same name/fallback
+formatter. Keys and submitted values retain their exact spelling. Edit prompt
+uses the shared 28px pencil icon button with its accessible name and tooltip.
 
 Backend-applied composer values use the shared `is-applied` trigger state and
 `--applied-fg` theme token, with the same text and geometry. The generic trigger
@@ -561,10 +561,10 @@ loop or clears the form optimistically. Helpers remain read-only and inherit
 their session's policy. Auto policy is shown only by the composer footer, with
 no marks or accessible-name suffixes on tabs, breadcrumbs or Sessions rows. The
 shared client attention projection keeps covered pending requests quiet while
-linked: an in-flow “Auto-approving…” status accompanies the ordinary composer,
-with no takeover or manual reply actions. Losing the serving or native link
-restores user attention through the same projection used by notifications and
-chrome counts.
+linked, with no transient paragraph, takeover or manual reply actions. The
+shield and retained records remain the policy/status presentation. Losing the
+serving or native link restores user attention through the same projection used
+by notifications and chrome counts.
 
 `registerActivityPanel` contributes the session Activity view through the open
 panel registry. Its thin adapter forwards idempotent selection to the client
@@ -584,9 +584,15 @@ unmount disposes its owner so late operations cannot navigate from retired UI.
 owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
-its area. The prompt's draft survives the takeover. Read-only helper transcripts
-mount those same attention owners; only prompt submission is unavailable. With
-no active takeover, helpers mount no empty composer. That same owner provides
+its area. The prompt's draft and intrinsic track survive the takeover. Runtime
+chrome never changes the transcript rectangle: helper presence uses a reserved
+control-height track; notices and overflowing takeovers occupy independent,
+bounded layers above the unchanged prompt track. Only draft/editor growth
+changes that track. RecordList owns record spacing and the mirrored disclosure
+rail; views borrow canonical span identities and retained disclosure state
+rather than regrouping mounted neighbours. Read-only helper transcripts mount
+those same attention owners; only prompt submission is unavailable. With no
+active takeover, helpers mount no empty composer. That same owner provides
 composer availability to takeover headers, so draft-kept copy appears only when
 the open session offers a composer. Permission docks and notifications share
 RequestAge presentation and the client's requestIdle formatter/resumption

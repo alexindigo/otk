@@ -89,6 +89,7 @@ export interface TranscriptState {
   replyIDs: string[];
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
+  records: import("./activity-spans.ts").RecordProjection;
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   load?: LoadCoverage;
@@ -375,7 +376,21 @@ export function createTranscript(
           : undefined,
       );
     }
-    return projection.apply(op)
+    const recordBefore = projection.state.records;
+    const projected = projection.apply(op);
+    if (recordBefore !== projection.state.records) {
+      const before = new Set(Object.values(recordBefore.parents).flat());
+      const after = new Set(
+        Object.values(projection.state.records.parents).flat(),
+      );
+      for (const key of before) {
+        if (!after.has(key)) {
+          interaction.retire(key);
+          interaction.retireIdentity(key);
+        }
+      }
+    }
+    return projected
       ? attach(
         reduceRecovery(
           contentMetadata(content),
@@ -395,6 +410,7 @@ export function createTranscript(
     replyIDs: [],
     repliesByID: {},
     queuedIDs: new Set(),
+    records: projection.state.records,
     olderCursor: null,
     pageLoading: false,
     recovering: [],
@@ -425,6 +441,7 @@ export function createTranscript(
     state.replyIDs = projection.state.replyIDs;
     state.repliesByID = projection.state.repliesByID;
     state.queuedIDs = projection.state.queuedIDs;
+    state.records = projection.state.records;
     sources.sync();
     state.recovering = state.content.recovering ?? [];
     state.olderCursor = cursor;

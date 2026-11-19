@@ -5,10 +5,14 @@ import "./FailureContent.css" with { type: "text" };
 
 /** Every failure surface renders the owner's value, including its target link. */
 export default function FailureContent(
-  props: { failure: FailurePresentation; onReveal?(messageID: string): void },
+  props: {
+    failure: FailurePresentation;
+    onReveal?(messageID: string): void;
+    inline?: boolean;
+  },
 ) {
   return (
-    <span class="otk-failure-content">
+    <span class={["otk-failure-content", { "is-inline": props.inline }]}>
       <Show
         when={props.failure.reference}
         fallback={

@@ -17,3 +17,19 @@ Deno.test("transcript choices retain only identity and reject retired generation
   interaction.clear();
   assertEquals(interaction.anchor(), undefined);
 });
+
+Deno.test("disclosure notifications target only changed keys and reveal ancestry", () => {
+  const interaction = createTranscriptInteraction();
+  const seen: string[] = [];
+  const release = interaction.subscribe(() => seen.push("a"), "a");
+  interaction.subscribe(() => seen.push("b"), "b");
+  interaction.disclosure("a", interaction.generation("a")).set(true);
+  assertEquals(seen, ["a"]);
+  seen.length = 0;
+  interaction.reveal(["b"]);
+  assertEquals(seen, ["b"]);
+  release();
+  seen.length = 0;
+  interaction.reveal(["a"]);
+  assertEquals(seen, []);
+});
