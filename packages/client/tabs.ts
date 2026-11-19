@@ -63,6 +63,8 @@ export interface ClientTabs {
   selectedTitle(): string | undefined;
   tasks(): readonly TaskRecord[];
   crumbs(): TaskCrumb[];
+  /** Every session of the open task family, for the running-helpers list. */
+  family(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
   /** The same session membership used by this tab's supervision lamp. */
@@ -129,6 +131,7 @@ export function createTabs(
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
   let cachedCrumbs: TaskCrumb[] = [],
+    cachedFamily: TaskCrumb[] = [],
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
@@ -393,9 +396,14 @@ export function createTabs(
       const path = current
         ? new Set([current, ...sessionAncestors(current, (id) => byID.get(id))])
         : undefined;
+      cachedFamily = result;
       return cachedCrumbs = path
         ? result.filter((crumb) => path.has(crumb.id))
         : result;
+    },
+    family() {
+      this.crumbs();
+      return cachedFamily;
     },
     sessionFor,
     update(next: TabInput): void {

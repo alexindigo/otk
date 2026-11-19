@@ -274,6 +274,16 @@ export default function ProjectTabs(props: {
     tabs();
     return props.model.crumbs();
   });
+  // Helpers of the open task that are working now, outside the trail.
+  const running = createMemo(() => {
+    tabs();
+    const trail = new Set(crumbs().map((c) => c.id));
+    return props.model.family().filter((c) => {
+      const e = entry(c.id);
+      return !trail.has(c.id) && !!e &&
+        inboxStatus(e, props.inbox) === "working";
+    }).map((c) => c.id);
+  });
   const required = () =>
     crumbs().filter((c) =>
       c.helper || c.id === props.model.state.sessionID ||
@@ -700,6 +710,37 @@ export default function ProjectTabs(props: {
               );
             }}
           </OverflowRow>
+          <Show when={running().length}>
+            <Menu
+              class="otk-running-helpers"
+              triggerClass="otk-overflow-trigger otk-running-trigger"
+              label="Running helpers"
+              trigger={
+                <span class="otk-running-label">
+                  <StatusLight small state="working" />
+                  {running().length} running
+                </span>
+              }
+            >
+              <For each={running()} keyed={(id) => id}>
+                {(id) => (
+                  <button
+                    type="button"
+                    data-running-helper={id()}
+                    data-otk-selection="vertical"
+                    {...selection({ kind: "current", selected: false })}
+                    onClick={() => run(openCrumb(id()))}
+                  >
+                    <SelectionContent
+                      leading={<StatusLight small state="working" />}
+                    >
+                      {title(id())}
+                    </SelectionContent>
+                  </button>
+                )}
+              </For>
+            </Menu>
+          </Show>
           <Show when={props.ready}>
             <button
               type="button"
