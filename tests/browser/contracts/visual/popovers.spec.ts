@@ -144,7 +144,7 @@ test(
         "right:0;bottom:0",
       ]
     ) {
-      await page.locator(".otk-tabs-project").evaluate((el, edges) => {
+      await page.locator(".otk-project-chip-trigger").evaluate((el, edges) => {
         const node = el as HTMLElement;
         node.tabIndex = 0;
         node.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
@@ -153,7 +153,7 @@ test(
       await page.keyboard.press("ContextMenu");
       await expect(page.locator(menu + " [role=menuitem]").first())
         .toBeFocused();
-      g = await geometry(page, menu, ".otk-tabs-project");
+      g = await geometry(page, menu, ".otk-project-chip-trigger");
       contained(g);
       expect(g.rows.length).toBeGreaterThan(0);
       expect(g.rows.every((row) => row.visible && row.hit)).toBe(true);
