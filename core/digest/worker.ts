@@ -11,6 +11,7 @@ import {
   digestMigrations,
   DigestStore,
   digestTurnCursor,
+  processStorage,
 } from "@otk/store";
 import { selectDigestProvider, type WorkerDigestSink } from "./providers.ts";
 import type { ProviderReadCodecs } from "@otk/harness";
@@ -37,6 +38,9 @@ import { DigestProgress } from "./progress.ts";
 let progress: DigestProgress | undefined;
 let diagnostics = false;
 let progressTimer: ReturnType<typeof setInterval> | undefined;
+let storageTimer: ReturnType<typeof setInterval> | undefined;
+let storageProbePending = false;
+let stopStorage: (() => void) | undefined;
 let nativeWaiting = 0;
 let nativeUnavailable = false;
 const nativeReads: Record<string, number> = {};
@@ -638,6 +642,13 @@ async function start(
       wait,
     );
     store = new DigestStore(db);
+    // A prior owner reported failed storage. Opening an existing database is a
+    // read, so do not publish healthy until this replacement commits a probe.
+    if (message.storageRecovery) db.probe();
+    stopStorage = processStorage.listen((state) =>
+      post({ t: "storage", run: run!, id: 0, state })
+    );
+    post({ t: "storage", run: run!, id: 0, state: processStorage.status() });
     sink = create();
     connection = message.connection ?? 0;
     sink.connection(connection);
@@ -664,6 +675,22 @@ async function start(
         }),
     });
     scheduler.viewers(false);
+    storageTimer = setInterval(() => {
+      if (
+        !processStorage.status().degraded || lifetime.signal.aborted ||
+        storageProbePending
+      ) return;
+      storageProbePending = true;
+      void scheduler!.execute(
+        () => Promise.resolve(processStorage.probe()),
+        lifetime.signal,
+        "interactive",
+      ).catch((error) => {
+        if (!isCancellation(error)) console.error("Storage recovery", error);
+      }).finally(() => {
+        storageProbePending = false;
+      });
+    }, policy.retryms);
     batches = new DigestBatch({
       rows: policy.publishrows,
       signal: lifetime.signal,
@@ -811,6 +838,8 @@ async function start(
     // Retained sessions are hydrated by key, never replayed as a startup catalog.
     post({ t: "accepted", run, id: message.id });
   } catch (error) {
+    clearInterval(storageTimer);
+    stopStorage?.();
     await scheduler?.stop();
     sink?.close();
     db?.close();
@@ -820,6 +849,8 @@ async function start(
   }
 }
 async function stop(message: ToWorker): Promise<void> {
+  clearInterval(storageTimer);
+  stopStorage?.();
   clearInterval(progressTimer);
   lifetime.abort();
   for (const id of servingReads.keys()) releaseServing(id);

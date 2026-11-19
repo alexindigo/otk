@@ -68,6 +68,14 @@ export function createFailurePresenter(): FailurePresenter {
     text: notice.facts?.reason ??
       "This feature isn't available on this server.",
   }));
+  presenter.register(
+    "storage.recovered",
+    () => ({
+      kind: "info",
+      text:
+        "Storage is available again. Observation was interrupted; current state is being refreshed.",
+    }),
+  );
   const contribute = (codes: string[], text: string, field?: string) => {
     for (const code of codes) {
       presenter.register(code, () => ({ kind: "error", text, field }));
@@ -204,7 +212,9 @@ export function failureNote(
   const feedback = shipped.present(failure, { surface: "notification" });
   const target = failure.facts?.target;
   return {
-    id: `failure/${feedback.identity}`,
+    id: failure.code.startsWith("storage.")
+      ? `storage/${target?.sidecarId ?? "local"}`
+      : `failure/${feedback.identity}`,
     kind: feedback.kind === "error" ? "error" : "info",
     dismissalKey: `failure/${feedback.failure!.count}`,
     dismissOnView: false,
@@ -225,6 +235,30 @@ export function failureNote(
       }]
       : [],
   };
+}
+
+/** One replaceable server-storage failure, projected through the normal owner. */
+export function storageFailureNote(
+  sidecarId: string,
+  state: import("@otk/protocol").StorageState,
+): Note | undefined {
+  const failure = state.degraded ? state.failure : state.gap
+    ? {
+      code: "storage.recovered",
+      retry: "none" as const,
+      diagnosticID: `storage-recovered-${state.gap}`,
+    }
+    : undefined;
+  if (!failure) return;
+  const note = failureNote(new RequestFailure(failure), {
+    target: { sidecarId },
+  });
+  return note &&
+    {
+      ...note,
+      id: `storage/${sidecarId}`,
+      dismissalKey: `storage/${state.gap}`,
+    };
 }
 /** The generic notification registry carries opaque feature detail only. */
 export function notificationFailure(

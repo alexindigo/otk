@@ -51,6 +51,7 @@ export interface SessionPorts {
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];
   forms?(): readonly import("@otk/protocol").FormRequest[];
+  requests?: import("@otk/client").RequestLifetimes;
   prefs(): Preferences;
   dirty(owner: string, value: boolean, input?: string): void;
   act<T>(action: () => Promise<T>): Promise<T>;

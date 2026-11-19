@@ -152,12 +152,21 @@ Deno.test("session ports capture target once while capability and resource gette
     sessionID: "original",
     questions: [],
   }];
+  connections.get("local")!.attention.receive({
+    op: "question.upsert",
+    request: session.state.content.questions[0],
+  });
   assertEquals(ports.questions().map((request) => request.id), [
     "question-form",
   ]);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
-  // Question removal and the typed pending list settle independently.
+  // Content arrays are projections; the one request owner receives retirement.
   session.state.content.questions = [];
+  connections.get("local")!.attention.receive({
+    op: "question.remove",
+    requestID: "question-form",
+    sessionID: "original",
+  });
   assertEquals(ports.questions(), []);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
   resources.stop();

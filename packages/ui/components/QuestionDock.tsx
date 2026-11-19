@@ -27,6 +27,8 @@ import type { QuestionRequest } from "@otk/protocol";
 import { createQuestionForm, forgetQuestionForm } from "@otk/client";
 import { solidState } from "../state/binding.ts";
 import TakeoverHeader from "./TakeoverHeader.tsx";
+import RequestDismiss from "./RequestDismiss.tsx";
+import { bindDirtyInput } from "../state/dirty-input.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import type {
   SurfaceRegistry,
@@ -61,6 +63,11 @@ function QuestionTakeover(
         ? session.entry(request()?.sessionID ?? "")?.title
         : undefined}
       onDirty={(value, input) => session.dirty("questions", value, input)}
+      onDismiss={session.requests && (() => {
+        const current = request();
+        if (!current) return;
+        session.requests!.dismiss("question", current.id);
+      })}
       onReply={(requestID, answers) =>
         commands.run("question.reply", {
           requestID,
@@ -83,11 +90,18 @@ function Request(
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
+    onDismiss?(): void;
     onDirty(value: boolean, input?: string): void;
   },
 ) {
-  const form = createQuestionForm(props.request, solidState);
   const session = useSessionPorts();
+  const form = createQuestionForm(props.request, solidState, session?.requests);
+  bindDirtyInput(() => ({
+    dirty: form.state.drafts.some((draft) =>
+      !!draft.own || draft.ownChosen || draft.picked.length > 0
+    ),
+    text: form.answers().map((answer) => answer.join(", ")).join("\n"),
+  }), (dirty, text) => props.onDirty(dirty, text));
   const feedback = session?.feedback;
   const operation = bindFeedback(() => feedback);
   const [collapsed, setCollapsed] = createSignal(false),
@@ -124,8 +138,14 @@ function Request(
     setError("");
     try {
       await props.onReply(props.request.id, answers);
+      session?.requests?.retire(
+        "question",
+        props.request.id,
+        "settled-locally",
+        "local response confirmed",
+      );
       forgetQuestionForm(props.request.id);
-      props.onDirty(false);
+      if (alive) props.onDirty(false);
     } catch (failure) {
       if (feedback) feedback.fail(failure);
       else if (alive) {
@@ -146,15 +166,19 @@ function Request(
     enabled: () => !pending(),
     run: () => reply(undefined),
   });
-  // Escape goes through the keyboard layer: leave the answer field, else skip.
-  ownedCommand(ports, {
+  // Escape leaves the answer field, then dismisses locally without replying.
+  const close = ownedCommand(ports, {
     id: "question.close",
     title: "Close question layer",
     category: "Attention",
     run: () => {
-      if (document.activeElement instanceof HTMLTextAreaElement) {
+      if (
+        document.activeElement instanceof HTMLTextAreaElement &&
+        session?.connected?.() !== false
+      ) {
         focusCurrent(true);
-      } else return reject();
+      } else if (props.onDismiss) props.onDismiss();
+      else return reject();
     },
   });
   const primary = createPrimaryAction<"answer" | "submit">({
@@ -205,19 +229,12 @@ function Request(
     },
   );
   onSettled(() => {
-    const stopDirty = form.subscribe(() =>
-      props.onDirty(
-        true,
-        form.answers().map((answer) => answer.join(", ")).join("\n"),
-      )
-    );
     const release = ports.keyboard?.layer(
       "question.close",
       () => card.contains(document.activeElement),
       20,
     );
     return () => {
-      stopDirty();
       release?.();
       alive = false;
     };
@@ -231,6 +248,12 @@ function Request(
     focus(next);
   };
   const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      void close();
+      return;
+    }
     if (pending()) return;
     const typing = event.target instanceof HTMLTextAreaElement;
     const key = event.key;
@@ -337,7 +360,7 @@ function Request(
               class="otk-pill"
               hidden={pending()}
               onClick={() => void reject()}
-              title="Skip question (Esc with question controls focused)"
+              title="Reject this question without answering"
             >
               Skip question
             </button>
@@ -350,6 +373,7 @@ function Request(
             >
               Submit
             </button>
+            <RequestDismiss onDismiss={props.onDismiss} />
           </div>
         )}
       >
@@ -399,6 +423,7 @@ export default function QuestionDock(
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
+    onDismiss?(): void;
     onDirty(value: boolean, input?: string): void;
   },
 ): import("solid-js").Element {
@@ -412,6 +437,7 @@ export default function QuestionDock(
           childTitle={props.childTitle}
           where={props.where}
           onReply={props.onReply}
+          onDismiss={props.onDismiss}
           onDirty={props.onDirty}
         />
       )}

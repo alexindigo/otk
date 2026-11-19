@@ -8,6 +8,7 @@ import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
+import { RequestReopen } from "./RequestDismiss.tsx";
 export default function ComposerTakeovers(
   props: {
     children?: (active: () => boolean) => Element;
@@ -31,6 +32,7 @@ export default function ComposerTakeovers(
     <ComposerProvider available={hasComposer}>
       <Show when={hasComposer() || active() || work().length}>
         <div class="otk-composer-dock">
+          <RequestReopen />
           <Show when={work().length}>
             <div class="otk-composer-activity">
               <LiveWork

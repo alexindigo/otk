@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type DigestPort, SessionIndex } from "@otk/harness";
 import type { ContentOp, SessionMetadata } from "@otk/protocol";
 import { OpencodeV1Adapter } from "../adapter.ts";
@@ -9,6 +9,138 @@ import { test } from "../../../tests/support/resources.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 
 /** One adapter whose routing metadata is current or unavailable. */
+test("V1 storage failure cannot veto permission or question retirement", async () => {
+  const f = await routedAdapter(false);
+  const saved = new Map<string, string>();
+  let full = false;
+  f.adapter.storage({
+    get: (key) => saved.get(key),
+    set: (key, value) => {
+      if (full) throw new Error("disk full");
+      saved.set(key, value);
+    },
+    delete: (key) => {
+      saved.delete(key);
+    },
+    scan: ({ prefix, after, limit }) =>
+      [...saved].filter(([key]) =>
+        key.startsWith(prefix) && (!after || key > after)
+      ).sort(([a], [b]) => a.localeCompare(b)).slice(0, limit).map((
+        [key, value],
+      ) => ({ key, value })),
+    transaction: (run) => run(),
+  });
+  try {
+    f.emit("permission.asked", {
+      id: "permission",
+      sessionID: "child",
+      permission: "bash",
+      patterns: [],
+      always: [],
+      metadata: {},
+    });
+    f.emit("question.asked", {
+      id: "question",
+      sessionID: "child",
+      questions: [{ question: "Continue?", options: [{ label: "Yes" }] }],
+    });
+    await waitFor(
+      () => f.ops.some((op) => op.op === "question.upsert"),
+      Boolean,
+    );
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    full = true;
+    f.emit("permission.replied", {
+      requestID: "permission",
+      sessionID: "child",
+      reply: "once",
+    });
+    f.emit("question.rejected", { requestID: "question", sessionID: "child" });
+    await waitFor(
+      () =>
+        f.ops.filter((op) =>
+          op.op === "question.remove" || op.op === "permission.remove"
+        ).length,
+      (count) => count === 2,
+    );
+    assertEquals(
+      await f.adapter.capabilities.permissions!.listPermissions(f.parent.id),
+      [],
+    );
+    assertEquals(f.index.getMetadata(f.child.id)?.attention.questions, 0);
+    await waitFor(
+      () =>
+        f.index.getMetadata(f.child.id)?.attention.errorState?.observations
+          .length,
+      (count) => count === 2,
+    );
+    full = false;
+    // This fixture deliberately supplies no transcript read; local retry precedes that read.
+    await assertRejects(() => f.adapter.core.listMessages(f.child.id, {}));
+    assertEquals(
+      [...saved.keys()].filter((key) => key.startsWith("records/timeline/"))
+        .length,
+      2,
+    );
+    assertEquals(
+      f.index.getMetadata(f.child.id)?.attention.errorState?.observations
+        .length,
+      0,
+    );
+  } finally {
+    await f.adapter.core.stop();
+  }
+});
+test("digest child deletion publishes retirement to the parent's pending projections", async () => {
+  const f = await routedAdapter(false);
+  try {
+    f.emit("permission.asked", {
+      id: "permission",
+      sessionID: "child",
+      permission: "bash",
+      patterns: ["printf probe"],
+      always: [],
+      metadata: {},
+    });
+    f.emit("question.asked", {
+      id: "question",
+      sessionID: "child",
+      questions: [{ question: "Continue?", options: [{ label: "Yes" }] }],
+    });
+    await waitFor(
+      () => f.ops.some((op) => op.op === "question.upsert"),
+      Boolean,
+    );
+    f.emit("session.deleted", {
+      info: {
+        id: "child",
+        directory: "/project",
+        projectID: "p",
+        title: "Helper",
+        parentID: "parent",
+        version: "1.19.3",
+        time: { created: 1, updated: 1 },
+      },
+    });
+    await waitFor(
+      () =>
+        f.ops.filter((op) =>
+          op.op === "question.remove" || op.op === "permission.remove"
+        ).length,
+      (count) => count === 2,
+    );
+    assertEquals(
+      await f.adapter.capabilities.permissions!.listPermissions(f.parent.id),
+      [],
+    );
+    assertEquals(
+      f.index.getMetadata(f.parent.id)?.attention.childPermissions,
+      0,
+    );
+  } finally {
+    await f.adapter.core.stop();
+  }
+});
 async function routedAdapter(unavailable: boolean) {
   const index = new SessionIndex();
   const parent: SessionMetadata = {

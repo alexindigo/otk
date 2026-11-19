@@ -16,6 +16,7 @@ import {
   requestIdle,
   type Selection,
   type SidecarConnection,
+  storageFailureNote,
 } from "@otk/client";
 import type {
   FailureFacts,
@@ -280,8 +281,14 @@ export function applicationNotifications(input: {
           reason: frame.message || frame.code,
         });
       }
+      if (frame.t === "storage") {
+        const note = storageFailureNote(sidecar, frame.state);
+        if (note) hub.publish(note);
+        else hub.retract(`storage/${sidecar}`);
+      }
     },
     remove(sidecar: string) {
+      hub.retract(`storage/${sidecar}`);
       observed.get(sidecar)?.();
       observed.delete(sidecar);
       triggers.reset(sidecar);

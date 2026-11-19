@@ -70,6 +70,7 @@ const scenes = {
   "notice-lifetime": () => import("./notice-lifetime.tsx"),
   failures: () => import("./failures.tsx"),
   "settlement-conflicts": () => import("./settlement-conflicts.tsx"),
+  "request-lifetime": () => import("./request-lifetime.tsx"),
   "feedback-stability": () => import("./feedback-stability.tsx"),
   "command-failures": () => import("./command-failures.tsx"),
 };

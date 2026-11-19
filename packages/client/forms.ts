@@ -43,6 +43,20 @@ export interface FormController {
   subscribe(listener: () => void): () => void;
 }
 const kept = new Map<string, FormState>();
+export interface FormRetention {
+  getFormDraft(id: string): FormState | undefined;
+  saveFormDraft(id: string, value: FormState): void;
+  forgetFormDraft(id: string): void;
+}
+const retention: FormRetention = {
+  getFormDraft: (id) => kept.get(id),
+  saveFormDraft: (id, value) => {
+    kept.set(id, value);
+  },
+  forgetFormDraft: (id) => {
+    kept.delete(id);
+  },
+};
 const copy = (value: FormState): FormState => JSON.parse(JSON.stringify(value));
 export function forgetForm(id: string): void {
   kept.delete(id);
@@ -175,8 +189,9 @@ export function deriveForm(
 export function createForm(
   request: FormRequest,
   factory: StateFactory = createState,
+  drafts: FormRetention = retention,
 ): FormController {
-  const initial: FormState = kept.get(request.id) ?? {
+  const initial: FormState = drafts.getFormDraft(request.id) ?? {
     review: false,
     step: 0,
     drafts: Object.fromEntries(
@@ -190,6 +205,9 @@ export function createForm(
     ),
   };
   const store = factory<FormState>(copy(initial));
+  // Framework factories may commit after update() returns. Retain the committed
+  // draft, not an earlier snapshot taken by the initiating event handler.
+  store.subscribe(() => drafts.saveFormDraft(request.id, copy(store.state)));
   const edit = (key: string, change: (draft: FormDraft) => void) => {
     if (!request.fields.some((f) => f.key === key)) return;
     store.update((s) => {
@@ -197,7 +215,6 @@ export function createForm(
       change(draft);
       draft.touched = true;
     });
-    kept.set(request.id, copy(store.state));
   };
   return {
     state: store.state,
@@ -206,7 +223,6 @@ export function createForm(
       store.update((s) => {
         s.step = Math.max(0, Math.min(limit, step));
       });
-      kept.set(request.id, copy(store.state));
     },
     derive: () => deriveForm(request.fields, store.state.drafts),
     pick: (key: string, value: string) =>
@@ -259,7 +275,6 @@ export function createForm(
       store.update((s) => {
         s.review = value;
       });
-      kept.set(request.id, copy(store.state));
     },
     subscribe: (listener: () => void) => store.subscribe(listener),
   };

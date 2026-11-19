@@ -101,7 +101,10 @@ Deno.test({
         () => forms.list({ sessionID: target.id }),
         (rows) => rows.length === 1,
       );
-      assertEquals(entries.get(target.id)?.attention.questions, 1);
+      await waitFor(
+        () => entries.get(target.id)?.attention.questions,
+        (count) => count === 1,
+      );
       await assertRejects(() => forms.reply(form.id, { name: "fixture" }));
       assertEquals((await forms.list())[0].id, form.id);
       const answer: FormAnswer = {
