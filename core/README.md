@@ -710,6 +710,24 @@ or stored task identities.
 
 ## Worker-backed digest services
 
+Storage availability is process-wide and memory-only. The serving store's
+`StorageAvailability` aggregates the digest worker's status across its existing
+generation-fenced bridge. `StorageFeature` contributes a snapshot/live frame and
+a lifetime-owned bounded real-commit probe timer. The existing failure presenter
+owns one replaceable server-storage notice and a recovery notice that names the
+observation gap. Recovery re-admits known derived identities and native catalog
+reconciliation; it does not claim that missing observation was complete.
+Replacement workers inherit unresolved storage recovery and commit a real probe
+before reporting healthy; reopening alone cannot clear the parent's fault.
+
+`StorageRequests` uses volatile receipts and admission windows for reloadable
+reads, while mutations lazily persist their window and receipt atomically.
+Mutations never fall back to volatile storage. Failed local completion retains
+its durable nonterminal request without reporting success or trying to save
+another failed result. Proven storage recovery resumes that request; native
+dispatch fences still require recovery rather than redispatch. HTTP and new read
+connections therefore do not require disk writes just to observe state.
+
 Derived units carry their own pending/unavailable/known result independently of
 refresh activity. Known values retain their source witness and finality through
 store migration, bounded multipart replay, both index reducers and helper
