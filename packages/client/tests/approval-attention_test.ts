@@ -85,7 +85,7 @@ Deno.test("one waiting projection removes only covered subtree attention and res
     "native state remains available for reconnect",
   );
 });
-Deno.test("notification edges and policy/link refresh share the waiting projection", () => {
+Deno.test("notification edges and policy/link refresh share the waiting projection", async () => {
   const notes: Note[] = [], removed: string[] = [];
   let enabled = ["root"], linked = true;
   const trigger = new NotificationTriggers(
@@ -108,11 +108,14 @@ Deno.test("notification edges and policy/link refresh share the waiting projecti
   assertEquals(notes, [], "auto covered request never emits Permission needed");
   linked = false;
   trigger.refresh("s");
+  assertEquals(notes, []);
+  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes.map((n) => n.kind), ["permission"]);
   linked = true;
   trigger.refresh("s");
   assertEquals(removed, ["s/root"]);
   enabled = [];
   trigger.refresh("s");
+  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes.map((n) => n.kind), ["permission", "permission"]);
 });

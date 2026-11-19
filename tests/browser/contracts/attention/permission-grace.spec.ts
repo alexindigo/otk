@@ -80,12 +80,7 @@ for (const motion of ["on", "system", "preference"] as const) {
           ),
         ];
         for (const lamp of lamps) {
-          if (motion === "on") {
-            await expect(lamp).toHaveAttribute("data-state", "blocked");
-          } else {await expect(lamp).not.toHaveAttribute(
-              "data-state",
-              "blocked",
-            );}
+          await expect(lamp).not.toHaveAttribute("data-state", "blocked");
         }
         // The routing owner reserves this request for the open composer even
         // during grace: no duplicate toast may escape through the delay.

@@ -1180,7 +1180,7 @@ Deno.test("server resource tabs cache semantic snapshots while commands and sync
   f.resources.stop();
 });
 
-Deno.test("shared projected deltas preserve manual sibling notes and fence rejected index gaps", () => {
+Deno.test("shared projected deltas preserve manual sibling notes and fence rejected index gaps", async () => {
   const f = fixture(), notes: string[] = [], changes: string[][] = [];
   const trigger = new NotificationTriggers(
     (note) => notes.push(note.kind),
@@ -1242,6 +1242,8 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
     f.resources.projected("local", "root")!.attention.childPermissions,
     1,
   );
+  assertEquals(notes, []);
+  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes, ["permission"]);
   const count = changes.length;
   f.receive("local", {
@@ -1261,6 +1263,7 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
     f.resources.projected("local", "root")!.attention.childPermissions,
     2,
   );
+  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes, ["permission", "permission"]);
   f.store.update((state) => {
     state.list[0].harness = "connected";
