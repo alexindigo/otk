@@ -104,3 +104,9 @@
   margin-block: 8px;
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
 }
+/* Consecutive record rows (permission outcomes, lifecycle records and other
+   context records) stack as one compact list instead of paragraph rhythm. */
+.otk-message[data-role=context]:has(+ .otk-message[data-role=context]),
+.otk-virtual-item:has(.otk-message[data-role=context]):has(+ .otk-virtual-item .otk-message[data-role=context]) .otk-message[data-role=context] {
+  margin-bottom: 0;
+}

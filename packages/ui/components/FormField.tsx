@@ -65,14 +65,22 @@ export function FormChoice(props: {
             )
             : undefined}
         >
-          <span class="otk-control-label" title={props.label}>
-            {props.label}
-          </span>
-          <Show when={props.description}>
-            <span class="otk-muted otk-control-label" title={props.description}>
-              {props.description}
+          <span class="otk-question-choice">
+            <span
+              class="otk-control-label otk-question-label"
+              title={props.label}
+            >
+              {props.label}
             </span>
-          </Show>
+            <Show when={props.description}>
+              <span
+                class="otk-muted otk-control-label otk-question-description"
+                title={props.description}
+              >
+                {props.description}
+              </span>
+            </Show>
+          </span>
         </SelectionContent>
       </button>
       <Show when={props.onRemove}>
