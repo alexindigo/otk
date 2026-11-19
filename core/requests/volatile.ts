@@ -25,6 +25,19 @@ export class VolatileRequests implements RequestRepository {
     const value = this.#rows.get(key(input));
     return value ? structuredClone(value) : undefined;
   }
+  /** Retained read metadata from an older durable owner; never mutation state. */
+  retain(
+    record: RequestRecord,
+    window?: { id: string; expires_at: number },
+  ): void {
+    if (record.execution !== "read" && record.execution !== "lease") {
+      throw new TypeError("Only volatile request identities may be retained");
+    }
+    if (window) this.#windows.set(window.id, { ...window });
+    if (!this.#rows.has(key(record))) {
+      this.#rows.set(key(record), structuredClone(record));
+    }
+  }
   admit(input: RequestRecord): { inserted: boolean; record: RequestRecord } {
     const old = this.get(input);
     if (old) {
@@ -74,6 +87,17 @@ export class VolatileRequests implements RequestRepository {
       if (removed < limit && !active(row) && row.retention_until <= now) {
         this.#rows.delete(id);
         removed++;
+      }
+    }
+    let windows = 0;
+    for (const [id, window] of this.#windows) {
+      if (windows >= limit) break;
+      if (
+        id !== "bootstrap" && window.expires_at <= now &&
+        ![...this.#rows.values()].some((row) => row.window_id === id)
+      ) {
+        this.#windows.delete(id);
+        windows++;
       }
     }
     return removed;

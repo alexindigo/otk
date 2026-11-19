@@ -4,6 +4,25 @@ Every install channel ships the compiled `otk` executable and
 [`systemd/otk.service`](./systemd/otk.service). Deno is a build dependency, not
 a runtime dependency. Opencode is a separately running backend.
 
+## Storage availability and supervision
+
+Run durable installations under the shipped `otk.service`, which includes
+`Restart=on-failure`. Equivalent supervisors must restart after fatal signals as
+well as nonzero exits. A thread worker is not process isolation: a native SQLite
+WAL shared-memory fault can terminate OTK, including during cleanup. Setting
+database-page `mmap_size=0` does not disable the WAL-index mapping. Do not
+remove the restart policy or change the native database's journal mode as a
+workaround.
+
+Catchable full-disk and I/O failures keep HTTP and reloadable reads available.
+OTK reports one storage failure without a database write and never reports an
+uncommitted mutation as successful. Free space or restore disk access; a bounded
+committed probe establishes recovery, then derived state is refreshed. The
+recovery notice explicitly identifies interrupted observation rather than
+claiming complete coverage. Startup logs record SQLite version and effective
+database-page mmap size. A supervisor restart alone does not prove storage has
+recovered; inspect the storage notice and service journal.
+
 Development qualification runs inside virtual machine
 `arch-niri-otk-devbase-otk-m5a` on `ark.home`, profile `otk-m5a`, as `tester` in
 a frozen source below `/home/tester/otk`, with `TMPDIR=/home/tester/otk/tmp`.

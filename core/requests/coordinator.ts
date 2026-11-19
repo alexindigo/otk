@@ -24,6 +24,7 @@ import type {
   RpcExecutionPolicy,
 } from "./types.ts";
 import { ExecutionFailure, publicFailure } from "./failures.ts";
+import { storageProblem } from "@otk/store";
 
 export type RequestRepository = Pick<
   Requests,
@@ -98,6 +99,7 @@ export class RequestCoordinator {
   #jobs = new Set<Promise<void>>();
   #resultBytes = 0;
   #maintenance?: MapIterator<Entry>;
+  #storagePending = new Set<Entry>();
   constructor(readonly options: CoordinatorOptions) {}
   #now(): number {
     return (this.options.clock ?? Date.now)();
@@ -718,16 +720,21 @@ export class RequestCoordinator {
         }
         const execution = this.#execution(entry, queue);
         entry.timer = setTimeout(() => {
-          if (this.#refresh(entry)) return;
-          if (!terminal(entry.record)) {
-            this.#progress(entry, {
-              phase: entry.record.dispatched_at === null
-                ? "waiting"
-                : "reconciling",
-              code: entry.record.dispatched_at === null
-                ? "backend-unavailable"
-                : "checking-outcome",
-            });
+          try {
+            if (this.#refresh(entry)) return;
+            if (!terminal(entry.record)) {
+              this.#progress(entry, {
+                phase: entry.record.dispatched_at === null
+                  ? "waiting"
+                  : "reconciling",
+                code: entry.record.dispatched_at === null
+                  ? "backend-unavailable"
+                  : "checking-outcome",
+              });
+            }
+          } catch (error) {
+            if (storageProblem(error)) this.#storagePending.add(entry);
+            else this.options.diagnostic?.(crypto.randomUUID(), error);
           }
         }, this.options.policy.livenessms);
         try {
@@ -780,6 +787,13 @@ export class RequestCoordinator {
           this.#complete(entry, result);
         } catch (cause) {
           if (this.#stopped || entry.record.state === "released") return;
+          if (storageProblem(cause)) {
+            // The durable state is authoritative. A failed commit is not a
+            // terminal result, and trying to persist that failure can fail too.
+            this.#storagePending.add(entry);
+            this.options.diagnostic?.(crypto.randomUUID(), cause);
+            return;
+          }
           // A losing CAS is ownership evidence, never a failed user action.
           if (this.#refresh(entry)) return;
           if (entry.record.state === "succeeded") {
@@ -839,7 +853,10 @@ export class RequestCoordinator {
           }
         }
       },
-    );
+    ).catch((error) => {
+      if (storageProblem(error)) this.#storagePending.add(entry);
+      else throw error;
+    });
     entry.work = work;
     this.#jobs.add(work);
     if (order) {
@@ -958,6 +975,17 @@ export class RequestCoordinator {
   async idle(): Promise<void> {
     while (this.#jobs.size) await Promise.all([...this.#jobs]);
   }
+  storageRecovered(): void {
+    for (const entry of [...this.#storagePending]) {
+      if (entry.work) continue;
+      this.#storagePending.delete(entry);
+      const current = this.options.receipts.get(entry.record);
+      if (current) entry.record = current;
+      if (!terminal(entry.record) && !this.#stopped) {
+        this.#schedule(entry, entry.record.dispatched_at !== null);
+      }
+    }
+  }
   maintenance(): number {
     const now = this.#now(), limit = this.options.policy.sweepbatch;
     this.#maintenance ??= this.#entries.values();
@@ -987,15 +1015,20 @@ export class RequestCoordinator {
       clearTimeout(entry.timer);
       entry.recipients.clear();
       if (!terminal(entry.record) && entry.record.dispatched_at !== null) {
-        this.#transition(entry, {
-          state: "reconciling",
-          progress_code: "checking-outcome",
-        });
+        try {
+          this.#transition(entry, {
+            state: "reconciling",
+            progress_code: "checking-outcome",
+          });
+        } catch (error) {
+          if (!storageProblem(error)) throw error;
+        }
       }
       entry.controller.abort();
     }
     await this.idle();
     this.#entries.clear();
+    this.#storagePending.clear();
     this.#resultBytes = 0;
   }
 }

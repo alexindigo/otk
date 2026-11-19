@@ -58,6 +58,7 @@ export type ToWorker =
       since: number;
       connection?: number;
       diagnostics?: boolean;
+      storageRecovery?: true;
     }
     | { t: "catalog"; connection: number }
     | { t: "projects"; connection: number; directory?: string }
@@ -137,6 +138,7 @@ export type FromWorker =
     | ({ t: "digest" } & DigestWorkerValue)
     | { t: "digests"; values: DigestWorkerValue[] }
     | { t: "progress"; values: import("@otk/protocol").ProgressFacts[] }
+    | { t: "storage"; state: import("@otk/store").StorageStatus }
     | {
       t: "detail";
       sessionID: string;

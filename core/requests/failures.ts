@@ -5,6 +5,24 @@ import {
   type PublicFailure,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
+import { storageProblem } from "@otk/store";
+
+export function storageFailure(
+  problem: "full" | "io",
+  diagnosticID: string = crypto.randomUUID(),
+): PublicFailure {
+  return {
+    code: `storage.${problem}`,
+    retry: "same-intent",
+    diagnosticID,
+    facts: {
+      actionLabel: "Saving changes",
+      reason: problem === "full"
+        ? "Storage is full: OTK can't save changes. Free disk space; OTK resumes automatically."
+        : "Storage is unavailable: OTK can't save changes. Restore disk access; OTK resumes automatically.",
+    },
+  };
+}
 /** Explicit semantic failures only; arbitrary exceptions remain diagnostic causes. */
 export class ExecutionFailure extends Error {
   constructor(readonly failure: Omit<PublicFailure, "diagnosticID">) {
@@ -22,6 +40,11 @@ export function publicFailure(
   try {
     report(diagnosticID, cause);
   } catch { /* Diagnostics cannot change an outcome. */ }
+  const problem = storageProblem(cause);
+  if (problem) {
+    const failure = storageFailure(problem, diagnosticID);
+    return { ...failure, facts: { ...context, ...failure.facts } };
+  }
   return {
     ...(cause instanceof ExecutionFailure
       ? cause.failure

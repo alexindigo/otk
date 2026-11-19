@@ -10,6 +10,9 @@ export function transaction<T>(db: DatabaseSync, run: () => T): T {
     db.exec("COMMIT");
     return result;
   } catch (error) {
+    // SQLITE_FULL/IOERR may already have rolled the transaction back. Cleanup
+    // must not manufacture a second failure or retire somebody else's BEGIN.
+    if (!db.isTransaction) throw error;
     try {
       db.exec("ROLLBACK");
     } catch (rollback) {
