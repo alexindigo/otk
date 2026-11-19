@@ -732,20 +732,23 @@ export async function surfaces(
           "right:0;bottom:0",
         ].entries()
       ) {
-        await page.locator(".otk-tabs-project").evaluate((el, edges) => {
-          const e = el as HTMLElement;
-          e.tabIndex = 0;
-          e.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
-          e.focus();
-        }, edges);
+        await page.locator(".otk-project-chip-trigger").evaluate(
+          (el, edges) => {
+            const e = el as HTMLElement;
+            e.tabIndex = 0;
+            e.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
+            e.focus();
+          },
+          edges,
+        );
         await page.keyboard.press("ContextMenu");
-        const g = await positioned(page, ".otk-tabs-project");
+        const g = await positioned(page, ".otk-project-chip-trigger");
         expect(g.rows.length).toBeGreaterThan(0);
         expect(g.rows.every(Boolean)).toBe(true);
         await shot(`menu-rect-${i}-${theme.id}`);
         await close(page);
       }
-      await page.locator(".otk-tabs-project").evaluate((el) =>
+      await page.locator(".otk-project-chip-trigger").evaluate((el) =>
         (el as HTMLElement).removeAttribute("style")
       );
       for (const [width, height] of [[1280, 657], [720, 360]]) {

@@ -96,6 +96,8 @@ export interface ProjectSummary extends ProjectSummaryFacts {
   topology?: ProjectTopology;
   /** Availability is independent of durable affiliation and activity policy. */
   availability?: "present" | "removed" | "unknown";
+  /** Proven removed worktree; independent of manual inactive policy and lamps. */
+  archived?: boolean;
   /** Exact native owners, including several repositories sharing one path. */
   memberships?: readonly {
     source: string;
@@ -104,6 +106,7 @@ export interface ProjectSummary extends ProjectSummaryFacts {
     leafDirectory: string;
     availability: "present" | "removed" | "unknown";
     kind: "checkout" | "worktree" | "unknown";
+    inventory?: "current" | "unknown";
   }[];
   /** Exact native list/task scopes owned by this checkout, never rewritten paths. */
   scopes?: readonly string[];

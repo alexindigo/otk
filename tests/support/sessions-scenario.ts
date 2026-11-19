@@ -200,7 +200,12 @@ export async function sessionsScenario(profile: Profile) {
       title: "Inspect caller",
     });
     for (let i = 0; i < 9; i++) {
-      f.add({ ...base, id: `tstv1-chain-${i}`, title: `tstv1-chain-${i}` });
+      f.add({
+        ...base,
+        id: `tstv1-chain-${i}`,
+        title: `tstv1-chain-${i}`,
+        parentID: i === 0 ? base.id : `tstv1-chain-${i - 1}`,
+      });
     }
   }
   if (

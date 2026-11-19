@@ -25,18 +25,28 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
     await expect(selected).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('.otk-task-list [aria-selected="true"]'))
       .toHaveCount(1);
-    const current = page.locator(
+    const crumb = page.locator(`[data-crumb=${JSON.stringify(session)}]`);
+    const inTrail = await crumb.count() > 0;
+    const current = inTrail ? crumb : page.locator(
       `[data-open-session=${JSON.stringify(session)}]`,
     );
     await visibleOnScreen(current);
-    await expect(current.locator(".otk-control-label")).toHaveText(title);
+    await expect(current.locator(".otk-control-label, .otk-crumb-title"))
+      .toHaveText(title);
+    if (inTrail) {
+      await expect(page.locator(".otk-open-session-title")).toHaveCount(0);
+      await expect(crumb).toHaveAttribute("aria-current", "page");
+    }
     const geometry = await current.evaluate((node) => {
-      const strip = node.closest(".otk-task-strip")!;
-      const active = strip.querySelector('[role="tab"][aria-selected="true"]')!;
-      const a = active.getBoundingClientRect(),
+      const strip = node.closest(".otk-task-strip, .otk-breadcrumb-row")!;
+      const active = document.querySelector(
+        '[role="tab"][aria-selected="true"]',
+      )!;
+      const aligned = strip.querySelector(".otk-session-crumb") ?? active;
+      const a = aligned.getBoundingClientRect(),
         n = node.getBoundingClientRect(),
         s = strip.getBoundingClientRect();
-      const label = node.querySelector(".otk-control-label")!;
+      const label = node.querySelector(".otk-control-label, .otk-crumb-title")!;
       return {
         fontStyle: getComputedStyle(active).fontStyle,
         currentStyle: getComputedStyle(label).fontStyle,
@@ -90,6 +100,10 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
+  // Project defaults resolve moved helpers to their human owner. Explicit
+  // navigation still exposes the helper in its own checkout.
+  await expect(page).toHaveURL(new RegExp(`${root}$`));
+  await page.goto(`${state.url}/#/local/${root}/${child}`);
   await visibleOnScreen(tab(child));
   await page.reload();
   await collapsed(page);

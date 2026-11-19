@@ -227,6 +227,29 @@ Deno.test("a mixed task lamp shows working while its unseen finish retains strip
   tabs.stop();
 });
 
+Deno.test("pending operation lamp paint cannot erase a session's unseen-finish urgency", () => {
+  const finished = {
+      ...entry("finished"),
+      operationStatus: "working" as const,
+    },
+    newer = entry("newer", 100);
+  const meta = inbox([
+    task("finished", [finished.id]),
+    task("newer", [newer.id]),
+  ]);
+  meta.supervision = {
+    finished: { state: "finishedUnseen", terminal: 50 },
+    newer: { state: "working", terminal: 0 },
+  };
+  const tabs = canonicalTabs(() => Promise.reject(new Error("No promotion")));
+  tabs.update({ directory: "/p", entries: [finished, newer], inbox: meta });
+  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
+    ["finished", "working"],
+    ["newer", "working"],
+  ]);
+  tabs.stop();
+});
+
 Deno.test("helpers roll up to their nearest task and finished helpers remain mandatory until acknowledged", () => {
   const root = entry("root"),
     other = entry("other", 20),

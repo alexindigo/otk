@@ -11,7 +11,7 @@ import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
-import { createSignal, createUniqueId, For, Show } from "solid-js";
+import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import {
   projectName,
   type ProjectProjectionRow,
@@ -81,8 +81,7 @@ export default function ProjectInbox(props: {
       title: () =>
         inactiveOpen() ? "Hide inactive projects" : "Show inactive projects",
     },
-    enabled: () =>
-      !collapsed() && props.projects.some((project) => project.inactive),
+    enabled: () => !collapsed() && inactiveRows().length > 0,
     run: () => setInactiveOpen(!inactiveOpen()),
   });
   const hints = commandHints(ports);
@@ -140,6 +139,59 @@ export default function ProjectInbox(props: {
   const discovered = () =>
     props.projects.filter((p) => projectGroup(p) === "discovered");
   const rows = () => props.projects.filter((p) => projectGroup(p) === "active");
+  const inactiveRows = () =>
+    props.projects.filter((p) => projectGroup(p) === "inactive");
+  const repository = (p: ProjectRow) =>
+    p.topology?.canonicalRoot ?? p.directory;
+  const repositoryKey = (p: ProjectRow) =>
+    JSON.stringify([p.sidecarId, repository(p)]);
+  const liveRows = createMemo(() => {
+    const active = rows(), last = new Map<string, string>();
+    for (const p of active) last.set(repositoryKey(p), p.directory);
+    return active.map((project) => ({
+      project,
+      archive: last.get(repositoryKey(project)) === project.directory,
+    }));
+  });
+  const archivedRows = (repo: ProjectRow) =>
+    props.projects.filter((p) =>
+      projectGroup(p) === "archived" && p.sidecarId === repo.sidecarId &&
+      p.topology?.canonicalRoot === repository(repo)
+    );
+  function Archive(section: { repo: ProjectRow }) {
+    const [expanded, setExpanded] = createSignal(false);
+    const projects = () => archivedRows(section.repo);
+    const label = () =>
+      `Archived checkouts in ${projectName(repository(section.repo))}`;
+    return (
+      <Show when={!collapsed() && projects().length}>
+        <button
+          type="button"
+          class="otk-archived-toggle"
+          aria-label={label()}
+          aria-expanded={expanded() ? "true" : "false"}
+          onClick={() => setExpanded(!expanded())}
+        >
+          <ControlIcon>
+            <ChevronIcon class="otk-archived-chevron" />
+          </ControlIcon>
+          <span class="otk-control-label" title="Archived">Archived</span>
+          <span class="otk-inbox-rule" />
+          <span>({projects().length})</span>
+        </button>
+        <Show when={expanded()}>
+          <section aria-label={label()} class="otk-archived-projects">
+            <For
+              each={projects()}
+              keyed={(p) => `${p.sidecarId}/${p.directory}`}
+            >
+              {(p) => <Row project={p()} />}
+            </For>
+          </section>
+        </Show>
+      </Show>
+    );
+  }
   const discoveredOpen = () => !layout().discoveredCollapsed;
   const toggleDiscovered = ownedAction("projects.discovered", async () => {
     await props.onLayout({ discoveredCollapsed: discoveredOpen() });
@@ -180,6 +232,7 @@ export default function ProjectInbox(props: {
         data-project-parent={project().topology?.parentDirectory}
         data-project-repo={project().topology?.repoID}
         data-project-availability={project().availability}
+        data-project-archived={project().archived ? "true" : "false"}
       >
         <SelectionContent class="otk-project-content">
           <button
@@ -392,8 +445,18 @@ export default function ProjectInbox(props: {
         </Show>
       }
     >
-      <For each={rows()} keyed={(p) => `${p.sidecarId}/${p.directory}`}>
-        {(p) => <Row project={p()} />}
+      <For
+        each={liveRows()}
+        keyed={(p) => `${p.project.sidecarId}/${p.project.directory}`}
+      >
+        {(p) => (
+          <>
+            <Row project={p().project} />
+            <Show when={p().archive}>
+              <Archive repo={p().project} />
+            </Show>
+          </>
+        )}
       </For>
       <Show when={discovered().length}>
         <button
@@ -432,7 +495,7 @@ export default function ProjectInbox(props: {
           </For>
         </section>
       </Show>
-      <Show when={!collapsed() && props.projects.some((p) => p.inactive)}>
+      <Show when={!collapsed() && inactiveRows().length}>
         <button
           type="button"
           class="otk-inactive-toggle"
@@ -451,12 +514,12 @@ export default function ProjectInbox(props: {
           </ControlIcon>
           <span class="otk-control-label" title="Inactive">Inactive</span>
           <span class="otk-inbox-rule" />
-          <span>({props.projects.filter((p) => p.inactive).length})</span>
+          <span>({inactiveRows().length})</span>
         </button>
         <Show when={inactiveOpen()}>
           <section aria-label="Inactive projects" class="otk-inactive-projects">
             <For
-              each={props.projects.filter((p) => p.inactive)}
+              each={inactiveRows()}
               keyed={(p) => `${p.sidecarId}/${p.directory}`}
             >
               {(p) => <Row project={p()} />}
@@ -466,7 +529,7 @@ export default function ProjectInbox(props: {
       </Show>
       <Show when={collapsed()}>
         <For
-          each={props.projects.filter((p) => p.inactive)}
+          each={inactiveRows()}
           keyed={(p) => `${p.sidecarId}/${p.directory}`}
         >
           {(p) => <Row project={p()} />}

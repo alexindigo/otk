@@ -152,6 +152,12 @@ values. Contiguous `catalog.chunk` transfers stage one complete kind before
 publication; chunks never expose a partial usable list. Catalogs declare server
 path style and canonical file paths.
 
+The additive `project` and `repository` directory kinds carry harness-provided
+project identity/avatar and working-folder branch/change facts. They share the
+existing catalog watch, demand, chunk and invalidation lifetimes. Native color
+names are resolved to concrete colors in the plugin; shared UI interprets no
+native repository or VCS kinds. Machine identity is present only when reported.
+
 `frecency.list` returns `{directory,revision,entries}`. Committed
 `frecency.patch` frames carry keyed upserts/removals, including removals grouped
 by the original directory when global retention prunes another directory.

@@ -6,6 +6,54 @@ import type { InboxSnapshot, ProjectSummary } from "@otk/protocol";
 import type { MergedMetadata } from "../index.ts";
 import { shellEntry } from "./shell-fixture.ts";
 
+Deno.test("archive is independent of inactive policy and mandatory removed checkouts stay live", () => {
+  for (const inactive of [false, true]) {
+    for (const status of ["working", "blocked", "finished", "none"] as const) {
+      const inbox: InboxSnapshot = {
+        projects: [{
+          directory: "/tree",
+          order: 0,
+          added: true,
+          inactive,
+          lastVisit: 0,
+        }],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+        summaries: {
+          "/tree": {
+            directory: "/tree",
+            status,
+            hasSessions: true,
+            sessionCount: 1,
+            unseenCount: status === "finished" ? 1 : 0,
+            lastActivity: 1,
+            authority: "current",
+            availability: "removed",
+            ...{ archived: true },
+            topology: {
+              repoID: "repo",
+              canonicalRoot: "/repo",
+              leafDirectory: "/tree",
+              parentDirectory: "/repo",
+            },
+          },
+        },
+      };
+      const rows = createProjectProjection({ entry: () => undefined });
+      rows.inbox(inbox);
+      for (
+        const row of [rows.row("/tree", 0)!, inboxProjects([], inbox, 0)[0]]
+      ) {
+        assertEquals("archived" in row && row.archived, true);
+        assertEquals(row.group, status === "none" ? "archived" : "active");
+        assertEquals(row.inactive, inactive && status === "none");
+      }
+    }
+  }
+});
+
 Deno.test("deleted family members cannot keep project unread contributions", () => {
   for (const tracked of [false, true]) {
     for (const hasSummary of [false, true]) {
