@@ -57,24 +57,3 @@
   min-width: 0;
   min-height: 0;
 }
-.otk-record-group-lead {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.otk-record-group-lead > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-.otk-record-group-count {
-  flex: none;
-  min-height: 26px;
-  padding: 0 8px;
-  border-radius: var(--radius-control);
-  color: var(--otk-fg-2);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-}
-.otk-record-group-count:hover {
-  background: var(--otk-hover);
-}

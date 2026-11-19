@@ -23,6 +23,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
+import ActivityGroup from "./ActivityGroup.tsx";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
@@ -42,6 +43,7 @@ import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
+  activitySpans,
   contextualFailure,
   createTranscriptProjection,
   errorFeedback,
@@ -157,39 +159,9 @@ export default function SessionView(props: {
     return projection.state;
   });
   const projection = () => props.transcript?.state ?? fallback();
-  // Runs of identical record rows (e.g. "Permission once external_directory"
-  // repeated) fold into one row with a count; every row stays reachable.
-  const recordSignature = (key: string) => {
-    const reply = projection().repliesByID[key];
-    const message = reply?.message;
-    if (
-      !message || message.role !== "context" ||
-      reply.messageIDs.length !== 1 || message.parts.length !== 1
-    ) return undefined;
-    const part = message.parts[0];
-    const activity = part.kind === "external" ? part.activity : undefined;
-    if (
-      !activity || activity.layout !== "row" || activity.tone === "error" ||
-      activity.state?.facts.active
-    ) return undefined;
-    return JSON.stringify([activity.title, activity.detail ?? ""]);
-  };
-  const recordGroups = createMemo(() => {
-    const keys: string[] = [], members: Record<string, string[]> = {};
-    let lead: string | undefined, signature: string | undefined;
-    for (const key of projection().replyIDs) {
-      const next = recordSignature(key);
-      if (next !== undefined && next === signature && lead) {
-        members[lead].push(key);
-        continue;
-      }
-      keys.push(key);
-      members[key] = [key];
-      lead = key;
-      signature = next;
-    }
-    return { keys, members };
-  });
+  const recordGroups = createMemo(() =>
+    activitySpans(projection().replyIDs, projection().repliesByID)
+  );
   const [openGroups, setOpenGroups] = createSignal(new Set<string>());
   const toggleGroup = (key: string) =>
     setOpenGroups((current) => {
@@ -198,29 +170,29 @@ export default function SessionView(props: {
       return next;
     });
   const renderGroup = (key: string, one: (key: string) => Element) => {
-    const members = () => recordGroups().members[key] ?? [key];
-    const open = () => openGroups().has(key);
     return (
-      <Show when={members().length > 1} fallback={one(key)}>
-        <div class="otk-record-group" data-count={members().length}>
-          <div class="otk-record-group-lead">
-            {one(key)}
-            <button
-              type="button"
-              class="otk-record-group-count"
-              aria-expanded={open() ? "true" : "false"}
-              title={open()
-                ? "Fold identical rows"
-                : `Show all ${members().length} identical rows`}
-              onClick={() => toggleGroup(key)}
-            >
-              x{members().length}
-            </button>
-          </div>
-          <Show when={open()}>
-            <For each={members().slice(1)}>{(member) => one(member)}</For>
-          </Show>
-        </div>
+      <Show when={recordGroups().groups[key]} fallback={one(key)}>
+        {(group) => (
+          <ActivityGroup
+            group={group()}
+            open={openGroups().has(key)}
+            onToggle={() => toggleGroup(key)}
+            body={() => (
+              <For each={group().children} keyed={(child) => child.key}>
+                {(child) => (
+                  <Show when={child().count} fallback={one(child().key)}>
+                    <ActivityGroup
+                      group={child()}
+                      open={openGroups().has(`records:${child().key}`)}
+                      onToggle={() => toggleGroup(`records:${child().key}`)}
+                      body={() => <For each={child().members}>{one}</For>}
+                    />
+                  </Show>
+                )}
+              </For>
+            )}
+          />
+        )}
       </Show>
     );
   };
@@ -356,7 +328,11 @@ export default function SessionView(props: {
         });
       }
       const key = replyKey(message), reply = projection().repliesByID[key];
-      await window?.reveal(key, {
+      const ancestors = recordGroups().parents[key] ?? [];
+      if (ancestors.length) {
+        setOpenGroups((current) => new Set([...current, ...ancestors]));
+      }
+      await window?.reveal(recordGroups().owners[key] ?? key, {
         align: "center",
         focus: () => {
           const control = controls.get(reply?.message.id ?? target.messageID);
@@ -696,8 +672,8 @@ export default function SessionView(props: {
                                 onPins={(keys) =>
                                   props.transcript?.pin(
                                     keys.flatMap((key) =>
-                                      projection().repliesByID[key]
-                                        ?.messageIDs ?? []
+                                      (recordGroups().groups[key]?.members ?? [key])
+                                        .flatMap((member) => projection().repliesByID[member]?.messageIDs ?? [])
                                     ),
                                   )}
                                 render={(key) =>
