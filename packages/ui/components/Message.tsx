@@ -177,11 +177,11 @@ export default function Message(
           messageID: props.message.id,
           parts: props.message.parts,
           ...(props.message.role === "assistant"
-             ? {
-               agent: props.message.agent,
-               model: props.message.model,
-               time: props.message.time,
-             }
+            ? {
+              agent: props.message.agent,
+              model: props.message.model,
+              time: props.message.time,
+            }
             : {}),
         }],
       JSON.stringify(props.prefs),
