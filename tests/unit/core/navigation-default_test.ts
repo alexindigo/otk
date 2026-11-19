@@ -74,20 +74,25 @@ function fixture() {
   return { resolver, core, states, rows, reads, hierarchy };
 }
 
-Deno.test("navigation default uses existing urgency before exact child memory, then newest root across scopes", async () => {
+Deno.test("navigation default resolves urgency and child memory to human roots, then newest root across scopes", async () => {
   const f = fixture(), input = { directory: "/repo", preferred: "tstv1-child" };
   f.states.set("tstv1-old", "working");
   f.states.set("tstv1-new", "finished");
   f.states.set("tstv1-child", "blocked");
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
   f.states.delete("tstv1-child");
   assertEquals(await f.resolver.resolve(f.core, input), "tstv1-new");
   f.states.delete("tstv1-new");
   assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
-  assertEquals(f.reads, [], "attention never scans a native catalog");
+  assertEquals(
+    f.reads,
+    [["tstv1-child"], ["tstv1-new"], ["tstv1-old"]],
+    "attention resolves keyed ancestry without scanning a native catalog",
+  );
+  f.reads.length = 0;
   f.states.clear();
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
-  assertEquals(f.reads, [["tstv1-child"]]);
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
+  assertEquals(f.reads, [["tstv1-child"], ["tstv1-child"]]);
   f.reads.length = 0;
   assertEquals(
     await f.resolver.resolve(f.core, { directory: "/repo" }),
@@ -135,7 +140,11 @@ Deno.test("navigation urgency still chooses finished over working despite the wo
     await f.resolver.resolve(f.core, { directory: "/repo" }),
     "tstv1-old",
   );
-  assertEquals(f.reads, [], "urgency still never scans a native catalog");
+  assertEquals(
+    f.reads,
+    [["tstv1-new"], ["tstv1-old"]],
+    "urgency validates keyed identities, never scans a native catalog",
+  );
 });
 
 for (const change of ["deleted", "moved", "parented"] as const) {

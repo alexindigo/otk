@@ -35,7 +35,7 @@ test.describe("task tabs", () => {
         "page",
       );
       await expect(page.locator("[data-crumb=tstv1-helper][data-helper=true]"))
-        .toBeVisible();
+        .toHaveCount(0);
       await expect(page.locator(".otk-context-meter")).toHaveAttribute(
         "data-tokens",
         "2670",
@@ -46,13 +46,14 @@ test.describe("task tabs", () => {
       );
       await expect(page.locator(".otk-context-meter")).not.toContainText("%");
       await expect(page.locator(".otk-context-bar")).toHaveCount(0);
-      await page.locator("[data-crumb=tstv1-helper]").click();
+      await page.locator('[data-session="tstv1-helper"]').click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-helper$/);
+      await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveCount(0);
+      await page.locator('[data-session="tstv1-nested"]').click();
       await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveAttribute(
         "data-depth",
         "2",
       );
-      await page.locator("[data-crumb=tstv1-nested]").click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-nested$/);
       await page.locator("[data-crumb=tstv1-helper]").click();
       await page.reload();
@@ -64,7 +65,8 @@ test.describe("task tabs", () => {
         "aria-selected",
         "true",
       );
-      await page.locator("[data-crumb=tstv1-second]").click();
+      await expect(page.locator("[data-crumb=tstv1-second]")).toHaveCount(0);
+      await openSession(state, page, "tstv1-second");
       await expect(page).toHaveURL(/tstv1-second$/);
       await page.locator(`[data-tab="${plan.id}"]`).click();
       await page.locator(`[data-tab="${exec.id}"]`).click();
@@ -111,9 +113,10 @@ test.describe("task tabs", () => {
       ).toEqual([exec.id, plan.id]);
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // Unseen helper finishes stay visible until acknowledged (AXIOM 1).
+      // The trail is only the open path. The session list retains both unseen
+      // helper finishes, while their task retains its aggregate lamp.
       const helpers = page.locator(
-        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+        "[data-session=tstv1-helper], [data-session=tstv1-nested]",
       );
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(2);
@@ -124,13 +127,17 @@ test.describe("task tabs", () => {
           terminal: finishes[sessionID],
         });
       }
-      await expect(helpers).toHaveCount(0);
+      await expect(helpers.locator(".otk-status-light[data-state=finished]"))
+        .toHaveCount(0);
+      await expect(page.locator(
+        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+      )).toHaveCount(0);
       await expect(
         page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
       )
         .toHaveCount(0);
       await page.locator(".otk-new-session").click();
-      await expect(page.locator("[data-crumb]")).toHaveCount(3);
+      await expect(page.locator("[data-crumb]")).toHaveCount(1);
       expect(
         (await state.product("tasks.list", { directory: state.directory }))
           .find((t) => t.id === exec.id)!
@@ -165,7 +172,7 @@ test.describe("task tabs", () => {
       name: "Long chain",
       sessions: ids,
     });
-    await page.goto(`${state.url}/#/local/tstv1-otk`);
+    await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-chain-8`);
     await expect(page.locator(".otk-folded-crumbs")).toBeVisible();
     expect(await page.locator("[data-crumb]:visible").count()).toBeLessThan(10);
     await page.locator(".otk-folded-crumbs > button").click();

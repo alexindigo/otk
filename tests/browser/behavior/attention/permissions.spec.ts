@@ -114,7 +114,8 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   );
   await expect(page.locator(".otk-permission-command")).toHaveText("echo otk");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
-  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "blocked");
   await expect(
     page.locator(`[data-session="${child.id}"]`).locator(
@@ -124,8 +125,10 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
-  // The child's finish was never viewed, so its crumb stays (AXIOM 1).
-  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
+  // The child's finish was never viewed; its session row retains the lamp,
+  // while the breadcrumb remains only the path to the open parent.
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "finished");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   expect(
