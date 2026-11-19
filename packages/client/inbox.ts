@@ -74,11 +74,12 @@ export function ageing(
 export interface InboxProject extends ProjectRecord {
   topology?: ProjectTopology;
   availability?: ProjectSummary["availability"];
+  archived?: boolean;
   depth?: number;
   parentLabel?: string;
   /** A repo can be shown as context while its own independent policy is Inactive. */
   inactivePolicy?: boolean;
-  group?: "active" | "discovered" | "inactive";
+  group?: "active" | "discovered" | "inactive" | "archived";
   /** Older injected projections without a source are tracked projects. */
   source?: "tracked" | "index" | "template";
   status: InboxStatus;
@@ -143,7 +144,9 @@ export function projectHierarchy<
     const leaves = children.get(key(row)) ?? [];
     result.push(
       row.topology && !row.topology.parentDirectory && row.inactive &&
-        leaves.some((leaf) => projectGroup(leaf) === "active")
+        leaves.some((leaf) =>
+          ["active", "archived"].includes(projectGroup(leaf))
+        )
         ? { ...row, group: "active", inactive: false, inactivePolicy: true }
         : row,
     );
@@ -164,7 +167,7 @@ export function projectHierarchy<
 /** Source provenance never decides presentation groups. */
 export function projectGroup(
   project: Pick<InboxProject, "group" | "source" | "inactive">,
-): "active" | "discovered" | "inactive" {
+): "active" | "discovered" | "inactive" | "archived" {
   return project.group ??
     (project.inactive
       ? "inactive"
@@ -298,11 +301,23 @@ export function inboxProjects(
       ageing: 0,
     }));
   return projectHierarchy(
-    [...tracked, ...discovered, ...templates].map((row) => ({
-      ...row,
-      topology: inbox.summaries?.[row.directory]?.topology,
-      availability: inbox.summaries?.[row.directory]?.availability,
-    })),
+    [...tracked, ...discovered, ...templates].map((row) => {
+      const summary = inbox.summaries?.[row.directory];
+      const archived = summary?.archived === true;
+      return {
+        ...row,
+        ...(archived
+          ? {
+            group: row.status === "none"
+              ? "archived" as const
+              : "active" as const,
+          }
+          : {}),
+        archived,
+        topology: summary?.topology,
+        availability: summary?.availability,
+      };
+    }),
   );
 }
 export interface InboxRpc {

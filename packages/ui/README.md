@@ -817,7 +817,10 @@ split view/tab effects. Shell registers commands, observes frames and renders
 chrome through those ports. `ProjectInbox` renders the shared client projection
 in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
 Tracked rows precede the persisted, initially expanded Discovered disclosure and
-Inactive section. Collapsed discovery retains working/blocked/unseen-finished
+Inactive section. Each repository's live children precede its initially
+collapsed Archived disclosure. Archive membership comes from the client
+projection, not manual Inactive policy; mandatory activity stays live in both
+column and rail. Collapsed discovery retains working/blocked/unseen-finished
 rows; the rail retains the same discovery-section geometry and mandatory
 indicators. Template-only rows reserve the same marker track without a lamp (a
 name initial identifies them in the rail). Discovered row context offers the
