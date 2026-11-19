@@ -20,6 +20,17 @@ const unchanged = (): IdentityChange => ({
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
   a.size === b.size && [...a].every((v) => b.has(v));
 /** Sole owner of native repository membership and historical checkout boundaries. */
+/** Only a worktree can be removed. A project's own folder (its canonical
+ * root, or a folder without Git) missing from a worktree inventory is not
+ * evidence that it was removed. */
+function removable(
+  leafDirectory: string,
+  canonicalRoot: string,
+): "removed" | "unknown" {
+  return canonicalRoot && leafDirectory !== canonicalRoot
+    ? "removed"
+    : "unknown";
+}
 export class ProjectIdentity {
   #revision = 0;
   get revision(): number {
@@ -151,7 +162,7 @@ export class ProjectIdentity {
               : r.proven
               ? fact.inventory.some((i) => i.directory === r.leafDirectory)
                 ? "present"
-                : "removed"
+                : removable(r.leafDirectory, canonicalRoot)
               : "unknown",
           });
         }
@@ -195,14 +206,17 @@ export class ProjectIdentity {
             ? "unknown"
             : registered
             ? "present"
-            : "removed",
+            : removable(leafDirectory, canonicalRoot),
         });
       }
       // Legacy null means loss of inventory, not loss of a durable native edge.
       if (seed.topology === null && !seed.identities) {
         for (const r of records.values()) {
           if (r.scope === seed.directory) {
-            put({ ...r, availability: "removed" });
+            put({
+              ...r,
+              availability: removable(r.leafDirectory, r.canonicalRoot),
+            });
           }
         }
       }
