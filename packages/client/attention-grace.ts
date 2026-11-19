@@ -152,13 +152,15 @@ export function createAttentionGrace(o: {
       state: InboxStatus,
       server: string,
       contains: (session: string) => boolean,
-      reducedMotion: boolean,
+      _reducedMotion: boolean,
       immediate = false,
       permissionWaiting?: (session: string) => boolean,
     ): InboxStatus {
       void store.state.revision;
       if (state !== "blocked") previous.set(scope, { server, state });
-      if (!reducedMotion || state !== "blocked" || immediate) return state;
+      // Every lamp waits out the grace, with or without motion: a request
+      // settled within it (e.g. auto-approved) must not blink the lamp.
+      if (state !== "blocked" || immediate) return state;
       if (
         [...inputs.values()].some((p) =>
           p.server === server && contains(p.session)

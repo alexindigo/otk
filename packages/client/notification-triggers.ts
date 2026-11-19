@@ -8,6 +8,7 @@ import type {
 } from "@otk/protocol";
 import { latestTerminal } from "@otk/protocol";
 import { sessionTitle } from "./session-title.ts";
+import { ATTENTION_GRACE_MS } from "./attention-grace.ts";
 import {
   failureNote,
   notificationFailure,
@@ -66,7 +67,25 @@ export class NotificationTriggers {
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
+  /** Input notes wait out the shared attention grace, so a request settled
+   * within it (e.g. auto-approved) never flashes a notification. */
+  #held = new Map<string, ReturnType<typeof setTimeout>>();
   #outcomes = new Map<string, Note>();
+  #input(id: string, kind: Note["kind"], note: Note): void {
+    clearTimeout(this.#held.get(id));
+    this.#held.set(
+      id,
+      setTimeout(() => {
+        this.#held.delete(id);
+        if (this.#kinds.get(id) === kind) this.emit(note);
+      }, ATTENTION_GRACE_MS),
+    );
+  }
+  #retractInput(id: string): void {
+    clearTimeout(this.#held.get(id));
+    this.#held.delete(id);
+    this.retract(id);
+  }
   #index?: ClientIndex;
   constructor(
     /** previous identifies a same-outcome enrichment, never another fresh alert. */
@@ -83,7 +102,7 @@ export class NotificationTriggers {
     for (const key of [...this.#kinds.keys()]) {
       if (key.startsWith(sidecar + "/")) {
         this.#kinds.delete(key);
-        this.retract(key);
+        this.#retractInput(key);
       }
     }
     for (const [key, note] of this.#outcomes) {
@@ -199,7 +218,7 @@ export class NotificationTriggers {
     if (entry) state.roots.set(session, entry);
     else state.roots.delete(session);
     if (!entry) {
-      if (this.#kinds.delete(id)) this.retract(id);
+      if (this.#kinds.delete(id)) this.#retractInput(id);
       const outcome = this.#outcomes.get(id);
       if (outcome) {
         this.#outcomes.delete(id);
@@ -242,7 +261,7 @@ export class NotificationTriggers {
     // Retire the old input before its root ID can acquire a completion owner.
     if (resolved && !remaining) {
       this.#kinds.delete(id);
-      this.retract(id);
+      this.#retractInput(id);
     }
     const publishOutcome = (note: Note) => {
       const previous = this.#outcomes.get(id);
@@ -349,7 +368,9 @@ export class NotificationTriggers {
       // note. Do not retain a stale alias that could later retract its input.
       if (this.#outcomes.get(id)?.id === id) this.#outcomes.delete(id);
       this.#kinds.set(id, kind);
-      this.emit(
+      this.#input(
+        id,
+        kind,
         {
           id,
           kind,
