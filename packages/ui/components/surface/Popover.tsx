@@ -48,6 +48,10 @@ export default function Popover(props: {
   dismissOnAction?: boolean;
   /** Non-modal detail previews, available on hover and keyboard focus. */
   preview?: boolean;
+  /** An entity trigger can navigate while retaining the shared preview owner. */
+  onActivate?(): void;
+  /** Click retains a preview until explicit/outside dismissal. */
+  pinOnClick?: boolean;
   control?(control: PopoverControl): void;
   onOpen?(reason: PopoverOpenReason): void;
   onClose?(): void;
@@ -66,6 +70,7 @@ export default function Popover(props: {
   let invocation = 0;
   let openedBy: PopoverOpenReason = "keyboard";
   let active = false;
+  let pinned = false;
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
   let previewFocus: HTMLElement | undefined;
   let restoringFocus = false;
@@ -83,6 +88,7 @@ export default function Popover(props: {
     stopWatching = undefined;
     const notify = active;
     active = false;
+    pinned = false;
     setOpen(false);
     setPoint(undefined);
     setRequest(undefined);
@@ -182,7 +188,7 @@ export default function Popover(props: {
     hover = hoverIntent(root()!, {
       open: preview,
       close: () => {
-        if (props.preview) panel.hidePopover();
+        if (props.preview && !pinned) panel.hidePopover();
       },
     });
     return () => hover?.dispose();
@@ -229,9 +235,20 @@ export default function Popover(props: {
           aria-describedby={props.preview ? anchor : undefined}
           aria-expanded={open() ? "true" : "false"}
           popovertarget={anchor}
-          onClick={(event) => {
-            event.preventDefault();
-            if (panel.matches(":popover-open")) dismiss();
+            onClick={(event) => {
+              event.preventDefault();
+              if (props.onActivate) {
+                const activate = props.onActivate;
+                dismiss();
+                activate();
+                return;
+              }
+              if (props.pinOnClick && !pinned) {
+                pinned = true;
+                if (!panel.matches(":popover-open")) show(undefined, openedBy);
+                return;
+              }
+              if (panel.matches(":popover-open")) dismiss();
             else show(undefined, openedBy);
           }}
           onPointerDown={() => {

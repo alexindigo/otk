@@ -49,6 +49,7 @@ export interface ToolPresentation {
   icon: string | (() => Element);
   verb: string;
   target?: string;
+  entity?: { label: string; sessionID?: string };
   summary?: string;
   changes?: { additions: number; deletions: number };
   category?: DisclosureCategory;

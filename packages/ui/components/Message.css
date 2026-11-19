@@ -90,10 +90,10 @@
   font: 500 var(--text-meta)/var(--line-meta) var(--font-ui);
   color: var(--otk-fg);
 }
-.otk-reply-start > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.otk-reply-agent {
+  justify-self: start;
+  max-width: 100%;
+  min-width: 0;
 }
 .otk-reply-start > time {
   white-space: nowrap;

@@ -4,6 +4,7 @@ import "./Message.css" with { type: "text" };
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
+import EntityPill from "./EntityPill.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -100,7 +101,11 @@ function PartsView(
 export interface MessageControl {
   reveal(): void;
 }
-function ReplyStart(props: { source: ReplyStartData }) {
+function ReplyStart(props: {
+  source: ReplyStartData;
+  sessionID: string;
+  onOpen(id: string): void;
+}) {
   const date = () =>
     new Date(props.source.time.lastOutput ?? props.source.time.created);
   return (
@@ -110,7 +115,15 @@ function ReplyStart(props: { source: ReplyStartData }) {
       }]}
       data-reply-source={props.source.messageID}
     >
-      <span title={props.source.agent}>{props.source.agent}</span>
+      <div class="otk-reply-agent">
+        <EntityPill
+          label={props.source.agent}
+          sessionID={props.sessionID}
+          model={props.source.model}
+          finished={props.source.time.completed}
+          onOpen={props.onOpen}
+        />
+      </div>
       <time datetime={date().toISOString()} title={date().toLocaleString()}>
         {date().toLocaleTimeString()}
       </time>
@@ -164,7 +177,11 @@ export default function Message(
           messageID: props.message.id,
           parts: props.message.parts,
           ...(props.message.role === "assistant"
-            ? { agent: props.message.agent, time: props.message.time }
+             ? {
+               agent: props.message.agent,
+               model: props.message.model,
+               time: props.message.time,
+             }
             : {}),
         }],
       JSON.stringify(props.prefs),
@@ -296,7 +313,13 @@ export default function Message(
                     fallback={
                       <>
                         <Show when={group().replyStart}>
-                          {(source) => <ReplyStart source={source()} />}
+                          {(source) => (
+                            <ReplyStart
+                              source={source()}
+                              sessionID={props.message.sessionID}
+                              onOpen={props.onOpenChild}
+                            />
+                          )}
                         </Show>
                         <PartsView
                           parts={group().parts}

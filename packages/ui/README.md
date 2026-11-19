@@ -309,6 +309,14 @@ stay in their existing work groups. Work uses compact, intrinsic-width disclosur
 labels with real chevrons, not the full-width compaction boundary treatment.
 Blocks owns paragraph, heading and compact list rhythm across virtual wrappers.
 
+Agent labels share `EntityPill` across reply sources, delegate tools and activity
+records/groups. Producers identify the entity at the start of a record title;
+views never parse native agent parameters. Pills borrow session facts through
+the common session ports and receive navigation callbacks. Hover/focus detail,
+click pinning, anchoring and dismissal belong to Popover, not the pill. Available
+session/model/status/time facts appear without placeholders; a session click
+uses the same guarded navigation as the existing Open task action.
+
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn
 result. Work-log headers pass their own contributed part clocks to the same

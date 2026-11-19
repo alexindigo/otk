@@ -21,6 +21,7 @@ import {
 import NativeSource from "./NativeSource.tsx";
 import { presentFailure } from "@otk/client";
 import FailureContent from "../FailureContent.tsx";
+import EntityPill from "../EntityPill.tsx";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
   const identity = useContentIdentity();
@@ -50,6 +51,11 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
       reference());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
+  const headingLabel = () => {
+    const entity = activity()?.entity;
+    return entity && label().startsWith(entity.label)
+      ? label().slice(entity.label.length).trimStart() : label();
+  };
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
     const value = activity()?.state?.label;
@@ -87,7 +93,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
         </span>
       </Show>
       <span class="otk-tool-verb otk-control-label" title={label()}>
-        {label()}
+        {headingLabel()}
       </span>
       <Show when={activity()?.detail}>
         <span
@@ -112,6 +118,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
           data-activity-state={activity()?.state?.key}
         >
           <header class="otk-tool-state otk-control-row">
+            <Show when={activity()?.entity}>
+              {(entity) => <EntityPill label={entity().label} sessionID={entity().sessionID} onOpen={props.onOpenChild} />}
+            </Show>
             <Show
               when={details()}
               fallback={
@@ -142,6 +151,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                       <>
                         <dt>{parameter().label}</dt>
                         <dd>
+                          <Show when={parameter().entity} fallback={
                           <Show
                             when={parameter().child}
                             fallback={
@@ -151,6 +161,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                             }
                           >
                             {(ref) => child(ref(), true)}
+                          </Show>
+                          }>
+                            {(entity) => <EntityPill label={entity().label} sessionID={entity().sessionID} onOpen={props.onOpenChild} />}
                           </Show>
                         </dd>
                       </>

@@ -6,6 +6,7 @@ export interface ActivityGroup {
   key: string;
   members: string[];
   title: string;
+  entity?: Activity["entity"];
   detail?: string;
   count?: number;
   time?: { first: number; last: number };
@@ -72,6 +73,7 @@ export function activitySpans(
           row.activity.kindLabel,
           row.activity.title,
           row.activity.detail ?? "",
+          row.activity.entity,
         ]);
         const previous = children.at(-1);
         if (previous && next === signature) {
@@ -82,6 +84,7 @@ export function activitySpans(
             key: row.key,
             members: [row.key],
             title: row.activity.title,
+            entity: row.activity.entity,
             detail: row.activity.detail,
           });
         }

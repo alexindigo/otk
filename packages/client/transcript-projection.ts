@@ -23,6 +23,7 @@ export interface TranscriptReply {
     messageID: string;
     parts: Part[];
     agent?: string;
+    model?: AssistantMessage["model"];
     time?: AssistantMessage["time"];
   }[];
   message: Message;
@@ -415,15 +416,17 @@ export function createTranscriptProjection(): TranscriptProjection {
     }
     const segment = segmentByID.get(message.id);
     const agent = message.role === "assistant" ? message.agent : undefined;
+    const model = message.role === "assistant" ? message.model : undefined;
     const time = message.role === "assistant" ? message.time : undefined;
     if (
       segment?.parts !== message.parts || segment?.agent !== agent ||
-      segment?.time !== time
+      segment?.time !== time || segment?.model !== model
     ) {
       segmentByID.set(message.id, {
         messageID: message.id,
         parts: message.parts,
         agent,
+        model,
         time,
       });
     }

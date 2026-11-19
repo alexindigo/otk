@@ -175,6 +175,7 @@ export default function SessionView(props: {
         {(group) => (
           <ActivityGroup
             group={group()}
+            onOpenChild={props.onOpenChild}
             open={openGroups().has(key)}
             onToggle={() => toggleGroup(key)}
             body={() => (
@@ -183,6 +184,7 @@ export default function SessionView(props: {
                   <Show when={child().count} fallback={one(child().key)}>
                     <ActivityGroup
                       group={child()}
+                      onOpenChild={props.onOpenChild}
                       open={openGroups().has(`records:${child().key}`)}
                       onToggle={() => toggleGroup(`records:${child().key}`)}
                       body={() => <For each={child().members}>{one}</For>}

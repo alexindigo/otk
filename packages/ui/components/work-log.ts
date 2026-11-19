@@ -15,6 +15,7 @@ export type { WorkTime } from "../registries/renderers.ts";
 export interface ReplyStart {
   messageID: string;
   agent: string;
+  model?: AssistantMessage["model"];
   time: AssistantMessage["time"];
   continuation: boolean;
 }

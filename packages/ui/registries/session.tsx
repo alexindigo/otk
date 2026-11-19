@@ -40,6 +40,7 @@ export interface SessionPorts {
   failureTarget?(): import("@otk/protocol").FailureTarget;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
+  status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
   permissions(): PermissionRequest[];

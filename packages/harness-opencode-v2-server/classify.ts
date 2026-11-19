@@ -522,6 +522,12 @@ export function mapMessage(
         role: "context",
         parts: [activityPart(raw, {
           kindLabel: "Subagent result",
+          entity: agent
+            ? {
+              label: agent[0].toUpperCase() + agent.slice(1),
+              sessionID,
+            }
+            : undefined,
           title: `${
             agent ? agent[0].toUpperCase() + agent.slice(1) : "Subagent"
           } ${outcome}`,
@@ -535,7 +541,12 @@ export function mapMessage(
             ? { name: "warning", label: "Failed" }
             : undefined,
           parameters: [
-            { key: "agent", label: "Agent", value: agent ?? "Unknown" },
+            {
+              key: "agent",
+              label: "Agent",
+              value: agent ?? "Unknown",
+              entity: agent ? { label: agent, sessionID } : undefined,
+            },
             { key: "state", label: "State", value: state },
             {
               key: "description",

@@ -40,6 +40,7 @@ export function createMessageLayout() {
       parts: Part[];
       rows: Descriptor[];
       agent?: string;
+      model?: ReplyStart["model"];
       time?: ReplyStart["time"];
     }
   >();
@@ -65,7 +66,10 @@ export function createMessageLayout() {
       const changedSources = new Set<string>();
       for (const segment of input) {
         const old = segments.get(segment.messageID);
-        if (old?.agent !== segment.agent || old?.time !== segment.time) {
+        if (
+          old?.agent !== segment.agent || old?.time !== segment.time ||
+          old?.model !== segment.model
+        ) {
           changedSources.add(segment.messageID);
           if (
             !!(old?.agent !== undefined && old.time) !==
@@ -75,6 +79,7 @@ export function createMessageLayout() {
             segments.set(segment.messageID, {
               ...old,
               agent: segment.agent,
+              model: segment.model,
               time: segment.time,
             });
           }
@@ -112,6 +117,7 @@ export function createMessageLayout() {
           parts: segment.parts,
           rows,
           agent: segment.agent,
+          model: segment.model,
           time: segment.time,
         });
       }
@@ -164,6 +170,7 @@ export function createMessageLayout() {
               return {
                 messageID,
                 agent: source.agent,
+                model: source.model,
                 time: source.time,
                 continuation,
               };
@@ -249,6 +256,7 @@ export function createMessageLayout() {
         group.replyStart = {
           ...group.replyStart!,
           agent: source.agent,
+          model: source.model,
           time: source.time,
         };
       }

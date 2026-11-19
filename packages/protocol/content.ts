@@ -302,6 +302,7 @@ export interface ActivityParameter {
   label: string;
   value: string;
   child?: ChildRef;
+  entity?: { label: string; sessionID?: string };
 }
 export type DisclosureCategory =
   | "work"
@@ -340,6 +341,8 @@ export interface Activity {
   state?: ActivityState;
   tone: "normal" | "error";
   title: string;
+  /** Agent label at the start of title, rendered as an independent control. */
+  entity?: { label: string; sessionID?: string };
   detail?: string;
   parameters?: ActivityParameter[];
   body?: Block[];

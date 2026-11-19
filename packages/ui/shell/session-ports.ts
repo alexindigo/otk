@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ClientSession,
+  inboxStatus,
   loadHistory,
   type Selection,
   type ServerResources,
@@ -46,6 +47,12 @@ export function sessionPorts(o: {
     }),
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
+    status: (id) => {
+      const entry = resources.entry(target.sidecarId, id);
+      return entry
+        ? inboxStatus(entry, resources.inbox(target.sidecarId).state.inbox)
+        : undefined;
+    },
     location: (id) => actions.location(target, id),
     permissions: () => session.state.content.permissions,
     permissionVisible: o.permissionVisible

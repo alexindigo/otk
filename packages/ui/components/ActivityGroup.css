@@ -25,3 +25,9 @@
   --message-gap: 0px;
   --tool-line-gap: 0px;
 }
+.otk-record-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}

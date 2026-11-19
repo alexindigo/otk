@@ -16,6 +16,9 @@ export function registerTaskTool(tools: ToolRegistry): void {
       icon: "↳",
       verb: "Delegate",
       target: call.agent || "Unknown agent",
+      entity: call.agent
+        ? { label: call.agent, sessionID: call.childSessionID }
+        : undefined,
       summary: call.description,
       category: "delegation",
     }),

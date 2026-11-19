@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-entity {
+  min-width: 0;
+  max-width: 100%;
+}
+.otk-entity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--otk-action-text) 10%, var(--otk-bg));
+  color: var(--otk-fg);
+  font: 500 var(--text-meta)/var(--line-meta) var(--font-ui);
+  min-width: 0;
+  max-width: 100%;
+}
+.otk-entity-pill:hover {
+  background: color-mix(in srgb, var(--otk-action-text) 18%, var(--otk-bg));
+}
+.otk-entity-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0 0 10px;
+  font-size: var(--text-meta);
+}
+.otk-entity-facts dt {
+  color: var(--otk-fg-3);
+}
+.otk-entity-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.otk-entity-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

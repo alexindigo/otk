@@ -14,6 +14,7 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
       call={props.call}
       waiting={props.waiting}
       prefs={props.prefs}
+      onOpenChild={props.onOpenChild}
       presentation={tools.presentation(props.call, {
         directory: props.directory,
         paths: paths(),
