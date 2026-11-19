@@ -52,6 +52,10 @@ export interface HarnessSink {
   invalidate(value: TranscriptInvalidation): void;
 }
 export interface ProjectSeed {
+  presentation?: Pick<
+    import("@otk/protocol").CatalogProject,
+    "id" | "name" | "color"
+  >;
   directory: string;
   /** Native facts for the core identity owner; one per distinct native owner. */
   identities?: readonly ProjectIdentityFact[];

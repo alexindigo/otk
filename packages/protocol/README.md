@@ -158,6 +158,18 @@ existing catalog watch, demand, chunk and invalidation lifetimes. Native color
 names are resolved to concrete colors in the plugin; shared UI interprets no
 native repository or VCS kinds. Machine identity is present only when reported.
 
+The optional `projectEdit` capability supplies captured project settings and
+writable fields through `project.settings` and `project.update`. Name, icon,
+color and worktree startup script remain native facts. Plugins provide color
+choices and startup-variable hints; unsupported fields are absent. Native
+updates are fenced and re-read before confirmation. Durable receipts retain only
+project identity and field hashes, never uploaded images or script bodies. V1's
+current-project endpoint selects identity only; both settings and chip metadata
+read the authoritative project inventory rather than its cached fields. Project
+summaries carry scalar native name/color from the same native inventory, so
+sidebar labels refresh without per-row catalog demand. Permission policy is not
+part of project editing.
+
 `frecency.list` returns `{directory,revision,entries}`. Committed
 `frecency.patch` frames carry keyed upserts/removals, including removals grouped
 by the original directory when global retention prunes another directory.

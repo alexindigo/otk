@@ -14,8 +14,10 @@ import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import PreferenceControls from "../components/PreferenceControls.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
+import { registerProjectSettings } from "./project-settings.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
+  registerProjectSettings(dialogs);
   dialogs.register({
     id: "add-project",
     size: "form",

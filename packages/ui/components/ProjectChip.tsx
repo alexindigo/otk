@@ -11,7 +11,7 @@ import { copyText } from "../clipboard.ts";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
-import { ChevronIcon, CopyIcon } from "./ChromeIcons.tsx";
+import { ChevronIcon, CopyIcon, SettingsIcon } from "./ChromeIcons.tsx";
 import Icon from "./Icon.tsx";
 import ControlValue, { ControlIcon } from "./ControlValue.tsx";
 import "./ProjectChip.css" with { type: "text" };
@@ -61,12 +61,27 @@ const ChangesIcon = () => (
   </Icon>
 );
 
+/** Every fact/action has the same leading icon and text tracks. */
+function ProjectMenuRow(
+  props: { icon: Element; label: string; accessory?: Element },
+): Element {
+  return (
+    <>
+      <ControlIcon>{props.icon}</ControlIcon>
+      <ControlValue accessory={props.accessory}>
+        <span class="otk-control-label" title={props.label}>{props.label}</span>
+      </ControlValue>
+    </>
+  );
+}
+
 /** Data-only location presentation. Native vocabulary is supplied by the harness. */
 export default function ProjectChip(props: {
   directory: string;
   project?: CatalogProject;
   repository?: CatalogRepository;
   onOpen?(): void;
+  onEdit?(ready: () => void): void;
   feedback?: FailureValue;
 }): Element {
   const name = () =>
@@ -97,12 +112,7 @@ export default function ProjectChip(props: {
       class="otk-project-chip-submenu"
       triggerClass="otk-project-chip-menu-row otk-project-chip-submenu-trigger"
       trigger={
-        <>
-          <ControlIcon>{icon}</ControlIcon>
-          <ControlValue accessory={<ChevronIcon />}>
-            <span class="otk-control-label">{label}</span>
-          </ControlValue>
-        </>
+        <ProjectMenuRow icon={icon} label={label} accessory={<ChevronIcon />} />
       }
     >
       <button
@@ -110,10 +120,7 @@ export default function ProjectChip(props: {
         class="otk-project-chip-menu-row"
         onClick={() => copy(value)}
       >
-        <ControlIcon>
-          <CopyIcon />
-        </ControlIcon>
-        <span class="otk-control-label">{action}</span>
+        <ProjectMenuRow icon={<CopyIcon />} label={action} />
       </button>
     </Menu>
   );
@@ -148,10 +155,7 @@ export default function ProjectChip(props: {
           <Show when={props.project?.repository}>
             {(label) => (
               <div class="otk-project-chip-menu-row">
-                <ControlIcon>
-                  <FolderIcon />
-                </ControlIcon>
-                <span class="otk-control-label">{label()}</span>
+                <ProjectMenuRow icon={<FolderIcon />} label={label()} />
               </div>
             )}
           </Show>
@@ -162,26 +166,31 @@ export default function ProjectChip(props: {
           <Show when={props.repository?.changes}>
             {(changes) => (
               <div class="otk-project-chip-menu-row">
-                <ControlIcon>
-                  <ChangesIcon />
-                </ControlIcon>
-                <span class="otk-control-label">{changes()}</span>
+                <ProjectMenuRow icon={<ChangesIcon />} label={changes()} />
               </div>
             )}
           </Show>
           <Show when={props.project?.machine}>
             {(label) => (
               <div class="otk-project-chip-menu-row">
-                <ControlIcon>
-                  <MachineIcon />
-                </ControlIcon>
-                <span class="otk-control-label">{label()}</span>
+                <ProjectMenuRow icon={<MachineIcon />} label={label()} />
               </div>
             )}
           </Show>
           <Show when={props.directory}>
             {(directory) =>
               submenu(directory(), <FolderIcon />, "Copy path", directory())}
+          </Show>
+          <Show when={props.onEdit}>
+            <button
+              type="button"
+              class="otk-project-chip-menu-row"
+              onClick={() => {
+                props.onEdit?.(() => menu.close());
+              }}
+            >
+              <ProjectMenuRow icon={<SettingsIcon />} label="Edit project" />
+            </button>
           </Show>
         </div>
       </Menu>

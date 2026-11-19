@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CatalogProject, CatalogRepository } from "@otk/protocol";
 import type { Client } from "./client.ts";
+import { HarnessError } from "@otk/harness";
 
-const colors: Readonly<Record<string, string>> = {
+export const projectColors: Readonly<Record<string, string>> = {
   orange: "#ee7330",
   yellow: "#e7af36",
   cyan: "#0096b8",
@@ -15,12 +16,13 @@ const colors: Readonly<Record<string, string>> = {
   purple: "#623be2",
   gray: "#5c5c5c",
 };
-interface NativeProject {
+export interface NativeProject {
   id: string;
   worktree: string;
   name?: string;
   vcs?: string;
   icon?: { override?: string; url?: string; color?: string };
+  commands?: { start?: string };
 }
 export function projectPresentation(project: NativeProject): CatalogProject {
   const color = project.icon?.color;
@@ -32,7 +34,8 @@ export function projectPresentation(project: NativeProject): CatalogProject {
       : project.worktree,
     icon: project.icon?.override || (color ? undefined : project.icon?.url),
     color: color
-      ? colors[color] ?? (/^#[a-f\d]{6}$/i.test(color) ? color : undefined)
+      ? projectColors[color] ??
+        (/^#[a-f\d]{6}$/i.test(color) ? color : undefined)
       : undefined,
     repository: project.vcs ? "Local repository" : undefined,
   };
@@ -42,11 +45,29 @@ export async function readProject(
   directory: string,
   signal: AbortSignal,
 ): Promise<CatalogProject[]> {
-  const project = await client.json<NativeProject>("/project/current", {
+  return [
+    projectPresentation(await readNativeProject(client, directory, signal)),
+  ];
+}
+/** Current selects identity; its cached fields are not mutable metadata authority. */
+export async function readNativeProject(
+  client: Client,
+  directory: string,
+  signal?: AbortSignal,
+): Promise<NativeProject> {
+  const current = await client.json<{ id: string }>("/project/current", {
     query: { directory },
     signal,
   });
-  return [projectPresentation(project)];
+  const projects = await client.json<NativeProject[]>("/project", { signal });
+  const project = projects.find((project) => project.id === current.id);
+  if (!project) {
+    throw new HarnessError(
+      "project.missing",
+      "That project is no longer available.",
+    );
+  }
+  return project;
 }
 export async function readRepository(
   client: Client,

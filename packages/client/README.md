@@ -358,6 +358,13 @@ obsolete successor when demand returns to its admitted witness.
 
 ## Public API
 
+`createProjectEditor` owns one captured project's authoritative baseline,
+editable values, supported fields, dirty dismissal and joined save. Native
+refreshes update clean fields without overwriting dirty input. A confirmed save
+re-reads native settings; edits made while it runs remain dirty. Image-read
+generations fence removal and retired editors. The view supplies field events,
+image decoding and confirmation; it never calls a native API.
+
 `publicDefaultsFrom` reads the allowlisted `{ defaultPort }` session-bootstrap
 projection. Connections publish it through `ConnectionSink.defaults` into each
 sidecar's state. Older peers leave it absent, without a competing fallback port.

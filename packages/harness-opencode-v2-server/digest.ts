@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectPresentation } from "./project-presentation.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Derived,
@@ -591,6 +592,17 @@ export class OpencodeV2DigestSink implements DigestSink {
     const projects: ProjectSeed[] = [];
     const append = async (rows: ProjectSeed[]) => {
       this.#check(signal, connection);
+      rows = rows.map((row) => {
+        const owners = new Set(
+          row.identities?.map((identity) => identity.repoID),
+        );
+        const owner = owners.size === 1
+          ? inventory.find((project) => owners.has(project.id))
+          : undefined;
+        if (!owner) return row;
+        const { id, name, color } = projectPresentation(owner);
+        return { ...row, presentation: { id, name, color } };
+      });
       for (const row of rows) this.#projectDirectories.add(row.directory);
       projects.push(...rows);
       await publish?.(rows);

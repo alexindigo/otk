@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectEditor } from "./project-edit.ts";
 import {
   type DigestPolicy,
   type DigestPort,
@@ -290,6 +291,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
       : {};
     const capabilities: Capabilities = {
+      projectEdit: projectEditor(
+        () => this.stream.client,
+        () => this.catalogs?.catalogs.invalidateAll(["project"]),
+      ),
       ...digestCapabilities,
       ...catalogCapabilities,
       source: {
@@ -1229,6 +1234,13 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
+    if (event.type === "project.updated" && this.digest?.projects) {
+      const result = await this.digest.projects(generation, signal);
+      signal.throwIfAborted();
+      if (generation === this.#generation) {
+        this.#sink?.projectSeeds?.(result.projects);
+      }
+    }
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
