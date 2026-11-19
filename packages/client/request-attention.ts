@@ -6,10 +6,10 @@ import {
   type TaskRecord,
 } from "@otk/protocol";
 import {
-  rollupStatus,
   type InboxProject,
   type InboxStatus,
   type OperationAttention,
+  rollupStatus,
 } from "./inbox.ts";
 import type { Operation } from "./requests.ts";
 

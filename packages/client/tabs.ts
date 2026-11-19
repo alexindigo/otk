@@ -10,12 +10,12 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import { inboxStatus, type InboxStatus, rollup } from "./inbox.ts";
+import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { sortTabsByUrgency } from "./tab-urgency.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
-import { rollupStatus, type OperationAttention } from "./inbox.ts";
+import { type OperationAttention, rollupStatus } from "./inbox.ts";
 import { workingHelpers } from "./live-work.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
@@ -258,14 +258,15 @@ export function createTabs(
     }
     return cachedTabs = sortTabsByUrgency(
       result,
-      (tab) => tab.kind === "task"
-        ? [
-          taskActivity?.[tab.id],
-          ...(families.get(tab.id) ?? []).map((entry) =>
-            inboxStatus(entry, inbox)
-          ),
-        ]
-        : [inboxStatus(byID.get(tab.id)!, inbox)],
+      (tab) =>
+        tab.kind === "task"
+          ? [
+            taskActivity?.[tab.id],
+            ...(families.get(tab.id) ?? []).map((entry) =>
+              inboxStatus(entry, inbox)
+            ),
+          ]
+          : [inboxStatus(byID.get(tab.id)!, inbox)],
       activity,
     );
   }
@@ -408,7 +409,10 @@ export function createTabs(
       // Keep the open-session path, then the same working helpers the composer
       // presents. Finished helpers remain in the family, never in this suffix.
       const path = current
-        ? [...sessionAncestors(current, (id) => byID.get(id)).toReversed(), current]
+        ? [
+          ...sessionAncestors(current, (id) => byID.get(id)).toReversed(),
+          current,
+        ]
         : undefined;
       cachedFamily = result;
       cachedWorking = input.connected === false || !result.length
@@ -416,16 +420,20 @@ export function createTabs(
         : workingHelpers(result, lookup, input.inbox);
       const indexed = new Map(result.map((crumb) => [crumb.id, crumb]));
       const trail = path
-        ? path.map((id, depth) => indexed.get(id) ?? {
-          id,
-          helper: !!byID.get(id)?.parentID,
-          depth,
-          external: foreign.has(id),
-        })
+        ? path.map((id, depth) =>
+          indexed.get(id) ?? {
+            id,
+            helper: !!byID.get(id)?.parentID,
+            depth,
+            external: foreign.has(id),
+          }
+        )
         : result;
       return cachedCrumbs = [
         ...trail,
-        ...cachedWorking.filter((crumb) => !trail.some((c) => c.id === crumb.id)),
+        ...cachedWorking.filter((crumb) =>
+          !trail.some((c) => c.id === crumb.id)
+        ),
       ];
     },
     family() {

@@ -235,20 +235,20 @@ export default function Popover(props: {
           aria-describedby={props.preview ? anchor : undefined}
           aria-expanded={open() ? "true" : "false"}
           popovertarget={anchor}
-            onClick={(event) => {
-              event.preventDefault();
-              if (props.onActivate) {
-                const activate = props.onActivate;
-                dismiss();
-                activate();
-                return;
-              }
-              if (props.pinOnClick && !pinned) {
-                pinned = true;
-                if (!panel.matches(":popover-open")) show(undefined, openedBy);
-                return;
-              }
-              if (panel.matches(":popover-open")) dismiss();
+          onClick={(event) => {
+            event.preventDefault();
+            if (props.onActivate) {
+              const activate = props.onActivate;
+              dismiss();
+              activate();
+              return;
+            }
+            if (props.pinOnClick && !pinned) {
+              pinned = true;
+              if (!panel.matches(":popover-open")) show(undefined, openedBy);
+              return;
+            }
+            if (panel.matches(":popover-open")) dismiss();
             else show(undefined, openedBy);
           }}
           onPointerDown={() => {

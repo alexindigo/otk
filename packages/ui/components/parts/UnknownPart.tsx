@@ -54,7 +54,8 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   const headingLabel = () => {
     const entity = activity()?.entity;
     return entity && label().startsWith(entity.label)
-      ? label().slice(entity.label.length).trimStart() : label();
+      ? label().slice(entity.label.length).trimStart()
+      : label();
   };
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
@@ -119,7 +120,13 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
         >
           <header class="otk-tool-state otk-control-row">
             <Show when={activity()?.entity}>
-              {(entity) => <EntityPill label={entity().label} sessionID={entity().sessionID} onOpen={props.onOpenChild} />}
+              {(entity) => (
+                <EntityPill
+                  label={entity().label}
+                  sessionID={entity().sessionID}
+                  onOpen={props.onOpenChild}
+                />
+              )}
             </Show>
             <Show
               when={details()}
@@ -151,19 +158,28 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                       <>
                         <dt>{parameter().label}</dt>
                         <dd>
-                          <Show when={parameter().entity} fallback={
                           <Show
-                            when={parameter().child}
+                            when={parameter().entity}
                             fallback={
-                              <span class="otk-native-value">
-                                {parameter().value}
-                              </span>
+                              <Show
+                                when={parameter().child}
+                                fallback={
+                                  <span class="otk-native-value">
+                                    {parameter().value}
+                                  </span>
+                                }
+                              >
+                                {(ref) => child(ref(), true)}
+                              </Show>
                             }
                           >
-                            {(ref) => child(ref(), true)}
-                          </Show>
-                          }>
-                            {(entity) => <EntityPill label={entity().label} sessionID={entity().sessionID} onOpen={props.onOpenChild} />}
+                            {(entity) => (
+                              <EntityPill
+                                label={entity().label}
+                                sessionID={entity().sessionID}
+                                onOpen={props.onOpenChild}
+                              />
+                            )}
                           </Show>
                         </dd>
                       </>

@@ -62,31 +62,56 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
   for (
     const activity of [
       { tone: "error" as const },
-      { state: { key: "opaque", label: "Working", facts: { active: true, terminal: false } } },
-      { state: { key: "opaque", label: "Needs you", facts: { active: false, terminal: false } } },
+      {
+        state: {
+          key: "opaque",
+          label: "Working",
+          facts: { active: true, terminal: false },
+        },
+      },
+      {
+        state: {
+          key: "opaque",
+          label: "Needs you",
+          facts: { active: false, terminal: false },
+        },
+      },
       { layout: "boundary" as const },
     ]
   ) {
     const value = group([
-      record("r1"), record("r2"), record("r3", activity),
-      record("r4"), record("r5"),
+      record("r1"),
+      record("r2"),
+      record("r3", activity),
+      record("r4"),
+      record("r5"),
     ]);
     assertEquals(value.keys, ["r1", "r3", "r4"]);
     assertEquals(value.groups.r3, undefined);
     assertEquals(value.owners.r3, "r3");
   }
   const prompt: Message = {
-    id: "r3", sessionID: "session", role: "user", time: { created: 3000 },
+    id: "r3",
+    sessionID: "session",
+    role: "user",
+    time: { created: 3000 },
     parts: [{ kind: "text", id: "text", blocks: [], synthetic: false }],
   };
-  assertEquals(group([record("r1"), record("r2"), prompt, record("r4"), record("r5")]).keys, ["r1", "r3", "r4"]);
+  assertEquals(
+    group([record("r1"), record("r2"), prompt, record("r4"), record("r5")])
+      .keys,
+    ["r1", "r3", "r4"],
+  );
 });
 
 Deno.test("singletons keep their own row and identical groups do not cross kinds or details", () => {
   assertEquals(group([record("r1")]).groups, Object.create(null));
   const value = group([
-    record("r1"), record("r2", { detail: "different" }),
+    record("r1"),
+    record("r2", { detail: "different" }),
     record("r3", { kindLabel: "Other" }),
   ]);
-  assertEquals(value.groups.r1.children?.map((row) => row.members), [["r1"], ["r2"], ["r3"]]);
+  assertEquals(value.groups.r1.children?.map((row) => row.members), [["r1"], [
+    "r2",
+  ], ["r3"]]);
 });
