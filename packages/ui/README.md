@@ -1,10 +1,12 @@
 # @otk/ui
 
 All Copy actions borrow `clipboard.ts`: native clipboard writes on secure pages,
-then a selection-preserving textarea/execCommand fallback, including plain HTTP.
-If both refuse, the owner rejects with FP1 action, target, reason and
-manual-copy instructions; existing action surfaces render that failure and
-retain content.
+then an execCommand fallback, including plain HTTP. A scoped copy event writes
+the original `text/plain` bytes without textarea newline normalization; cleanup
+restores focus and selection direction. If both refuse, the owner rejects with
+FP1 action, target, reason and manual-copy instructions. Address actions supply
+address-specific recovery rather than suggesting a copy of the visible label.
+Existing action surfaces render that failure and retain content.
 
 Reusable Solid **2.0.0-rc.13** components, isolated feature registries, syntax
 rendering and thin Solid bindings over `@otk/client`. The only OTK dependencies

@@ -1416,13 +1416,24 @@ export class Transcript {
       ) throw new HarnessError("cursor-stale", "Message baseline was replaced");
       // Session notices belong to the baseline, not only its newest page.
       if (!token) owner.notices = notices;
-      owner.presentation ??= await revertSession(
-        this.reader.client(),
-        owner.raw,
-        signal,
-      );
+      // A metadata observation can replace raw while previews are in flight.
+      // Only cache a presentation derived from the still-current raw snapshot.
+      while (!owner.presentation) {
+        const raw = owner.raw;
+        const presentation = await revertSession(
+          this.reader.client(),
+          raw,
+          signal,
+        );
+        signal.throwIfAborted();
+        if (raw === owner.raw) owner.presentation = presentation;
+      }
       signal.throwIfAborted();
-      if (revision !== this.requests.revision(id)) {
+      if (
+        owner !== this.#baselines.get(id) ||
+        owner.epoch !== this.replay.clock(id).epoch ||
+        revision !== this.requests.revision(id)
+      ) {
         throw new HarnessError(
           "cursor-stale",
           "Retained message placement changed. Refresh messages.",
@@ -1492,20 +1503,24 @@ export class Transcript {
           ),
         ),
       ];
+      const presentation = owner.presentation;
       const result: MessagePage = {
         sessionID: id,
         version: this.replay.version(id),
         from: capture.from,
         clock: sealed.clock,
         session: {
-          ...owner.presentation,
+          ...presentation,
           ...(owner.notices
             ? {
               notices: owner.notices.map((notice) => ({
                 ...notice,
                 facts: {
                   ...notice.facts,
-                  target: { ...notice.facts?.target, label: owner.raw.title },
+                  target: {
+                    ...notice.facts?.target,
+                    label: presentation.title,
+                  },
                 },
               })),
             }
