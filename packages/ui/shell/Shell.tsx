@@ -47,6 +47,7 @@ import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
 import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
+import ProjectLocation from "../features/project-chip.tsx";
 import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
 import { SessionProvider } from "../registries/session.tsx";
 import { sessionPorts } from "./session-ports.ts";
@@ -591,6 +592,9 @@ export default function Shell(
                             <ProjectTabs
                               reserveTrailing={layout().rightCollapsed}
                               project={owner}
+                              projectChip={<ProjectLocation directory={owner.directory}
+                                serverLabel={resources.server(owner.sidecarId)?.label}
+                                catalog={resources.declares(owner.sidecarId, "catalogs") ? resources.directoryCatalog(owner.sidecarId, owner.directory) : undefined} />}
                               model={tabsFor(owner)}
                               currentEntry={(id) =>
                                 resources.entry(owner.sidecarId, id)}

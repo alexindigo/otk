@@ -16,6 +16,8 @@ const nativeCatalogEvents: Record<
   "catalog.updated": ["models"],
   "integration.updated": ["models", "resources", "commands"],
   "reference.updated": ["agents", "commands", "skills", "resources"],
+  "project.updated": ["project"],
+  "vcs.branch.updated": ["repository"],
 };
 export const catalogEventTypes: ReadonlySet<string> = new Set(
   Object.keys(nativeCatalogEvents),
@@ -29,6 +31,14 @@ export class DirectoryCatalogs extends Catalogs {
     super(reads, {
       ...options,
       contributions: {
+        project: (directory, signal, owner, intent) =>
+          reads.read("catalog.project", { directory }, {
+            owner, signal, priority: intent === "warm" ? "background" : "user",
+          }),
+        repository: (directory, signal, owner, intent) =>
+          reads.read("catalog.repository", { directory }, {
+            owner, signal, priority: intent === "warm" ? "background" : "user",
+          }),
         questions: async (directory, signal, owner) => {
           for (;;) {
             const capture = options.questions?.capture(directory);

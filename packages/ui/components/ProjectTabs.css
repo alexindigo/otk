@@ -27,12 +27,6 @@
 .otk-project-tabs[data-reserve-trailing=true] .otk-task-strip {
   padding-right: var(--corner-zone);
 }
-.otk-tabs-project {
-  flex: 0 1 auto;
-  max-width: 25%;
-  font-weight: 600;
-  margin-right: 8px;
-}
 .otk-task-list {
   flex: 1 1 0;
   height: 100%;
