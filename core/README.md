@@ -10,6 +10,12 @@ mutable locators. Recorded checkout roots and learned history survive pruning,
 native restarts and canonical relocation. `present | removed | unknown` is an
 independent availability fact, never an automatic inactivity policy.
 
+Only a recorded `worktree` missing from a current authoritative inventory can be
+removed and project `archived: true`. Unequal paths, legacy topology loss and
+historical roots do not prove worktree kind. Live inventory coverage resets to
+unknown on restart; durable kind and affiliation survive. Archival is
+independent of the user's manual Inactive policy and of supervision lamps.
+
 Summary `memberships` retain exact scopes and every native owner on shared
 paths. Clients consume these exact mappings and never perform prefix inference.
 Insufficient root evidence remains unresolved instead of merging a removed
