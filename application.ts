@@ -61,6 +61,7 @@ import { PermissionFeature } from "./core/features/approvals.ts";
 import { RequestAttention } from "./core/features/request-attention.ts";
 import { registerDigests } from "./core/features/digests.ts";
 import { NavigationDefault } from "./core/features/navigation-default.ts";
+import { registerProjectEdit } from "./core/features/project-edit.ts";
 import {
   createCatalogCodecs,
   registerCatalogs,
@@ -162,6 +163,7 @@ export async function startApplication(
       (directory, tx) => inbox.activate(directory, tx),
     );
     registerPrompt(rpc, backend);
+    registerProjectEdit(rpc, backend);
     registerShell(rpc, backend);
     registerCommands(rpc, backend);
     registerHistory(rpc, backend);

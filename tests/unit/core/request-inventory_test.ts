@@ -45,6 +45,7 @@ import { createCatalogCodecs } from "@otk/protocol";
 import * as Core from "../../../core/mod.ts";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { registerDigests } from "../../../core/features/digests.ts";
+import { registerProjectEdit } from "../../../core/features/project-edit.ts";
 import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
 
@@ -268,6 +269,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "restore",
       "digests",
       "catalogs",
+      "projectEdit",
     ].map((
       name,
     ) => [name, name === "history" ? { entry: () => undefined } : {}])),
@@ -308,6 +310,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       Core.registerForms,
       Core.registerRevert,
       registerDigests,
+      registerProjectEdit,
     ]
   ) register(rpc, harness);
   const rows = [
@@ -371,6 +374,8 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "inbox.get",
     "projects.list",
     "projects.add",
+    "project.settings",
+    "project.update",
     "projects.inactive",
     "projects.visit",
     "projects.scan",
@@ -402,8 +407,8 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 30, // Retained archive pages have an independent cancellable read.
-      native: 19,
+      read: 31, // Retained archive pages have an independent cancellable read.
+      native: 20,
       local: 10,
       "prepared-local": 6,
       lease: 2,

@@ -20,6 +20,7 @@ import type { DigestsRpcMethods } from "./capabilities/digests.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { CatalogRpcMethods } from "./catalogs.ts";
 import type { FormsRpcMethods } from "./forms.ts";
+import type { ProjectEditRpcMethods } from "./project-edit.ts";
 import type {
   HistoryAttachment,
   HistoryAttachmentRef,
@@ -200,6 +201,7 @@ export interface RpcMethods
     UsageRpcMethods,
     SourceRpcMethods,
     SessionActionsRpcMethods,
+    ProjectEditRpcMethods,
     RestoreRpcMethods,
     DigestsRpcMethods,
     ApprovalRpcMethods,

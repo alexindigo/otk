@@ -81,6 +81,10 @@ export interface ProjectTopology {
   parentDirectory?: string;
 }
 export interface ProjectSummaryFacts {
+  presentation?: Pick<
+    import("./catalogs/project.ts").CatalogProject,
+    "id" | "name" | "color"
+  >;
   /** Pending location-owned forms; not fabricated sessions or session counts. */
   locationForms?: number;
   directory: string;
