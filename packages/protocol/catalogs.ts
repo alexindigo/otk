@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure } from "./requests.ts";
-import type { ProjectCatalogKinds, ProjectChunkKinds } from "./catalogs/project.ts";
+import type {
+  ProjectCatalogKinds,
+  ProjectChunkKinds,
+} from "./catalogs/project.ts";
 export type { CatalogProject, CatalogRepository } from "./catalogs/project.ts";
 import type { PathSemantics } from "./paths.ts";
 import type {

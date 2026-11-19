@@ -58,6 +58,10 @@ export { default as Timeline } from "./components/Timeline.tsx";
 export { registerActivityPanel } from "./features/approvals.tsx";
 export { registerAutoApprovePrompt } from "./features/prompt/approvals.tsx";
 export { default as ProjectTabs } from "./components/ProjectTabs.tsx";
+export {
+  default as ProjectChip,
+  ProjectAvatar,
+} from "./components/ProjectChip.tsx";
 export { registerTaskDialogs, type TaskNameInput } from "./features/tasks.tsx";
 export { registerCommandDialogs } from "./features/dialogs.tsx";
 export {

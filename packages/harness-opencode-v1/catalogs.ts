@@ -33,11 +33,15 @@ export class DirectoryCatalogs extends Catalogs {
       contributions: {
         project: (directory, signal, owner, intent) =>
           reads.read("catalog.project", { directory }, {
-            owner, signal, priority: intent === "warm" ? "background" : "user",
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
           }),
         repository: (directory, signal, owner, intent) =>
           reads.read("catalog.repository", { directory }, {
-            owner, signal, priority: intent === "warm" ? "background" : "user",
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
           }),
         questions: async (directory, signal, owner) => {
           for (;;) {

@@ -19,7 +19,7 @@ test("menus.trusted-context-keyboard-fallback-escape-corners-and-create", {
   tag: ["@menus", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await openSession(state, page, "tstv1-otk");
-  await rightClick(page, ".otk-tabs-project");
+  await rightClick(page, ".otk-project-chip-trigger");
   expect(await menuLabels(page)).toEqual(appActions);
   for (
     const [key, name] of [
@@ -50,7 +50,7 @@ test("menus.trusted-context-keyboard-fallback-escape-corners-and-create", {
   await page.evaluate(
     "document.querySelector('.otk-app').addEventListener('contextmenu',e=>globalThis.contextPrevented=e.defaultPrevented,{once:true})",
   );
-  await page.locator(".otk-tabs-project").click({
+  await page.locator(".otk-project-chip-trigger").click({
     button: "right",
     modifiers: ["Shift"],
   });
@@ -70,7 +70,7 @@ test("menus.trusted-context-keyboard-fallback-escape-corners-and-create", {
     await bounded(page);
     await dismiss(page);
   }
-  await rightClick(page, ".otk-tabs-project");
+  await rightClick(page, ".otk-project-chip-trigger");
   await pick(page, "Display preferences");
   const dialog = page.getByRole("dialog", {
     name: "Display preferences",
@@ -110,7 +110,7 @@ test("menus.trusted-context-keyboard-fallback-escape-corners-and-create", {
   await expect(page.locator("dialog[open]")).toHaveCount(0);
   const before = (await state.observe<{ entries: unknown[] }>()).entries.length;
   const previous = page.url();
-  await rightClick(page, ".otk-tabs-project");
+  await rightClick(page, ".otk-project-chip-trigger");
   await pick(page, "New session");
   await expect(page).not.toHaveURL(previous);
   await expect(page.locator("textarea[name=prompt]")).toBeVisible();

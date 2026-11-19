@@ -111,7 +111,15 @@ test("messages.code-projection-copy-numbered-geometry", {
     ),
   ).toEqual(prefix);
   await copySelection(page, "viewport0");
-  await page.locator(".otk-tabs-project").click();
+  // Release native text selection on inert chrome, not the new menu button.
+  await page.locator(".otk-task-strip").click({
+    position: await page.locator(".otk-task-strip").evaluate((el) => ({
+      x: el.clientWidth / 2,
+      y: 1,
+    })),
+    timeout: 10_000,
+  });
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("");
   await expect(page.locator(".otk-code-group:first-child .otk-token"))
     .toHaveCount(0);
   await expect(page.locator(".otk-code code")).toHaveJSProperty(
