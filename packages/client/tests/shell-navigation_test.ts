@@ -14,14 +14,15 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
-Deno.test("project defaults use attention before exact remembered child on click, cold start and reload", async () => {
+Deno.test("project defaults use attention before remembered child roots on click, cold start and reload", async () => {
   for (const cold of [false, true]) {
     const f = fixture(cold ? "#project/local/%2Fp" : undefined);
     try {
       f.entries("local", [
         shellEntry("tstv1-selected"),
         shellEntry("tstv1-child", "/p", "tstv1-selected"),
-        shellEntry("tstv1-blocked", "/p", "tstv1-selected"),
+        shellEntry("tstv1-urgent-root"),
+        shellEntry("tstv1-blocked", "/p", "tstv1-urgent-root"),
       ]);
       f.resources.receive("local", {
         t: "inbox.snapshot",
@@ -56,7 +57,7 @@ Deno.test("project defaults use attention before exact remembered child on click
       });
       f.navigation.openProject({ sidecarId: "local", directory: "/p" });
       await settled();
-      assertEquals(f.session.state.selection?.sessionID, "tstv1-blocked");
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-urgent-root");
       f.resources.receive("local", {
         t: "inbox.patch",
         generation: "attention",
@@ -70,7 +71,7 @@ Deno.test("project defaults use attention before exact remembered child on click
       });
       f.external("#project/local/%2Fp");
       await settled();
-      assertEquals(f.session.state.selection?.sessionID, "tstv1-child");
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
     } finally {
       f.stop();
     }
@@ -773,7 +774,7 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   );
   f.stop();
 });
-Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", async () => {
+Deno.test("project memory resolves helpers to human roots through guarded navigation and rejects stale project identities", async () => {
   const f = fixture();
   try {
     f.entries("local", [
@@ -810,7 +811,7 @@ Deno.test("project memory restores helpers through guarded navigation and reject
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
-    assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
   } finally {
     f.stop();
   }

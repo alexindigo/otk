@@ -4,7 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-default" });
-test("sessions.project-default-attention-exact-child-and-newest-root", {
+test("sessions.project-default-attention-human-root-and-newest-root", {
   tag: ["@sessions", "@attention", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
   const directory = state.directory;
@@ -33,17 +33,17 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
   await activity(state, "tstv1-urgent-child", "freeze");
   // A cold project route and reload use the same default as a click.
   await page.goto(projectURL);
-  await selected("tstv1-urgent-child");
+  await selected("tstv1-otk");
   await page.goto(projectURL);
   await page.reload();
-  await selected("tstv1-urgent-child");
+  await selected("tstv1-otk");
   await activity(state, "tstv1-urgent-child", "release");
   await expect.poll(() =>
     state.product("navigation.default", {
       directory,
       preferred: "tstv1-remembered-child",
     })
-  ).toBe("tstv1-remembered-child");
+  ).toBe("tstv1-otk");
   // Record real viewing, rather than racing an external preference write against
   // the currently open session's own last-viewed bookkeeping.
   await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-remembered-child`);
@@ -60,7 +60,7 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
-  await selected("tstv1-remembered-child");
+  await selected("tstv1-otk");
   // Same-project clicks must not bypass the resolver with the current selection.
   await activity(state, "tstv1-urgent-child", "freeze");
   await expect.poll(() =>
@@ -68,13 +68,13 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
       directory,
       preferred: "tstv1-remembered-child",
     })
-  ).toBe("tstv1-urgent-child");
+  ).toBe("tstv1-otk");
   await page.locator(
     `.otk-project-row[data-project=${
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
-  await selected("tstv1-urgent-child");
+  await selected("tstv1-otk");
   await activity(state, "tstv1-urgent-child", "release");
   await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-remembered-child`);
   await selected("tstv1-remembered-child");

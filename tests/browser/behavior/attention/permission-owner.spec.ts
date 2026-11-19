@@ -77,14 +77,24 @@ for (
     await expect(parentRow).toContainText("P 1");
     await expect(childRow).toContainText("P 1");
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+    await expect(crumb).toHaveCount(0);
+    await expect(childRow.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
     );
     if (view === "direct") {
       await page.clock.setFixedTime(Date.now() + 12 * 86400_000 + 60_000);
       await page.goto(`${state.url}/#/local/${child.id}`);
-    } else if (view !== "parent" && view !== "publication") await crumb.click();
+    } else if (view !== "parent" && view !== "publication") {
+      await childRow.click();
+      if (view === "crumb") await crumb.click();
+    }
+    if (view !== "parent" && view !== "publication") {
+      await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+        "data-state",
+        "blocked",
+      );
+    }
     if (view === "reload") await page.reload();
     if (view === "reconnect") {
       const before = frames.connections().opened;
