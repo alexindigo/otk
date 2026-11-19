@@ -128,10 +128,11 @@ and close own its lifetime.
 RequestAttention contributes a feature-owned lease for pending manual
 permissions and questions on every connected server. Outside the ordinary view
 it publishes only routing identities, titles, project/parent links and pending
-counts, with no digest, usage or activity history. Existing permission/question
-reads deliver the pending request through their request-owned lifetime.
-Settlement evicts this metadata unless another view still owns it; automatic
-permissions do not acquire the user-attention lease.
+counts plus pending request identities/freshness, with no digest, usage or work
+history. Presentation grace borrows those same identities across project scopes.
+Existing permission/question reads deliver the pending request through their
+request-owned lifetime. Settlement evicts this metadata unless another view
+still owns it; automatic permissions do not acquire the user-attention lease.
 
 `FormsFeature` registers typed `form.list/reply/cancel` operations and publishes
 volatile `forms.pending` attention state. Answer values remain typed; completion

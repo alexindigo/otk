@@ -80,7 +80,7 @@ Deno.test("failed completion and failure facts merge into one session-outcome no
   }
 });
 
-Deno.test("failed outcome coalescing never consumes independent input attention", async () => {
+Deno.test("failed outcome coalescing never consumes independent input attention", () => {
   const notes = new Map<string, Note>();
   const trigger = new NotificationTriggers(
     (note) => notes.set(note.id, note),
@@ -104,8 +104,6 @@ Deno.test("failed outcome coalescing never consumes independent input attention"
       },
     }],
   });
-  assertEquals([...notes.values()].map((note) => note.kind), ["error"]);
-  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals([...notes.values()].map((note) => note.kind).sort(), [
     "error",
     "permission",

@@ -108,8 +108,6 @@ Deno.test("notification edges and policy/link refresh share the waiting projecti
   assertEquals(notes, [], "auto covered request never emits Permission needed");
   linked = false;
   trigger.refresh("s");
-  assertEquals(notes, []);
-  await new Promise((resolve) => setTimeout(resolve, 500));
   assertEquals(notes.map((n) => n.kind), ["permission"]);
   linked = true;
   trigger.refresh("s");
