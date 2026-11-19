@@ -2,6 +2,7 @@
 export {
   type RunningWork,
   runningWork,
+  runningWorkElapsed,
   runningWorkLabel,
 } from "./live-work.ts";
 export {

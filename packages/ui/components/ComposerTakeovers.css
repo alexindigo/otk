@@ -31,6 +31,7 @@
 .otk-composer-activity {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   inline-size: 100%;
   max-inline-size: var(--lane-width);
   margin-inline: auto;

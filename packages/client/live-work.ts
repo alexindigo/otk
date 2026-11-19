@@ -94,6 +94,14 @@ export function runningWork(input: {
 export function runningWorkLabel(items: readonly RunningWork[]): string {
   return (["helper", "shell"] as const).flatMap((kind) => {
     const count = items.filter((item) => item.kind === kind).length;
-    return count ? [`${count} ${kind}${count === 1 ? "" : "s"}`] : [];
+    const label = kind === "helper" ? "subagent" : "shell";
+    return count ? [`${count} ${label}${count === 1 ? "" : "s"}`] : [];
   }).join(", ");
+}
+
+/** Compact elapsed clock for live-work rows; the view supplies the live clock. */
+export function runningWorkElapsed(ms: number): string {
+  const seconds = Math.floor(Math.max(0, ms) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }

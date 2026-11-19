@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./LiveWork.css" with { type: "text" };
 import { createSignal, For, onCleanup, Show } from "solid-js";
-import { duration, type RunningWork, runningWorkLabel } from "@otk/client";
+import {
+  type RunningWork,
+  runningWorkElapsed,
+  runningWorkLabel,
+} from "@otk/client";
 import EntityPill from "./EntityPill.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
@@ -68,11 +72,19 @@ export default function LiveWork(props: {
           <For each={props.items} keyed={(item) => item.id}>
             {(item) => (
               <div
-                class="otk-live-work-item"
+                class={["otk-live-work-item", {
+                  "is-helper": item().kind === "helper",
+                }]}
                 role="listitem"
                 data-running-work={item().id}
+                onClick={() => {
+                  if (item().kind === "helper") open(item().sessionID);
+                }}
               >
-                <div class="otk-live-work-identity">
+                <span
+                  class="otk-live-work-entity"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <EntityPill
                     label={item().label}
                     sessionID={item().kind === "helper"
@@ -80,27 +92,41 @@ export default function LiveWork(props: {
                       : undefined}
                     onOpen={item().kind === "helper" ? open : undefined}
                   />
-                  <span
-                    class="otk-live-work-title otk-control-label"
+                </span>
+                <Show
+                  when={item().kind === "helper"}
+                  fallback={
+                    <span
+                      class="otk-live-work-title otk-control-label"
+                      title={item().title}
+                    >
+                      {item().title}
+                    </span>
+                  }
+                >
+                  <button
+                    type="button"
+                    class="otk-live-work-open otk-live-work-title otk-control-label"
+                    aria-label={`Open ${item().label}: ${item().title}`}
                     title={item().title}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      open(item().sessionID);
+                    }}
                   >
                     {item().title}
-                  </span>
-                </div>
+                  </button>
+                </Show>
                 <span class="otk-live-work-elapsed" aria-label="Elapsed time">
                   {item().startedAt === undefined
                     ? "Time unknown"
-                    : duration(Math.max(0, now() - item().startedAt!))}
+                    : runningWorkElapsed(now() - item().startedAt!)}
                 </span>
-                <div class="otk-live-work-actions">
+                <div
+                  class="otk-live-work-actions"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <Show when={item().kind === "helper"}>
-                    <button
-                      type="button"
-                      class="otk-pill"
-                      onClick={() => open(item().sessionID)}
-                    >
-                      Open
-                    </button>
                     <Show when={props.onStop && !stopping().has(item().id)}>
                       <button
                         type="button"
