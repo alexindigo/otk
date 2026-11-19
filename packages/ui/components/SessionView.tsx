@@ -157,6 +157,73 @@ export default function SessionView(props: {
     return projection.state;
   });
   const projection = () => props.transcript?.state ?? fallback();
+  // Runs of identical record rows (e.g. "Permission once external_directory"
+  // repeated) fold into one row with a count; every row stays reachable.
+  const recordSignature = (key: string) => {
+    const reply = projection().repliesByID[key];
+    const message = reply?.message;
+    if (
+      !message || message.role !== "context" ||
+      reply.messageIDs.length !== 1 || message.parts.length !== 1
+    ) return undefined;
+    const part = message.parts[0];
+    const activity = part.kind === "external" ? part.activity : undefined;
+    if (
+      !activity || activity.layout !== "row" || activity.tone === "error" ||
+      activity.state?.facts.active
+    ) return undefined;
+    return JSON.stringify([activity.title, activity.detail ?? ""]);
+  };
+  const recordGroups = createMemo(() => {
+    const keys: string[] = [], members: Record<string, string[]> = {};
+    let lead: string | undefined, signature: string | undefined;
+    for (const key of projection().replyIDs) {
+      const next = recordSignature(key);
+      if (next !== undefined && next === signature && lead) {
+        members[lead].push(key);
+        continue;
+      }
+      keys.push(key);
+      members[key] = [key];
+      lead = key;
+      signature = next;
+    }
+    return { keys, members };
+  });
+  const [openGroups, setOpenGroups] = createSignal(new Set<string>());
+  const toggleGroup = (key: string) =>
+    setOpenGroups((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  const renderGroup = (key: string, one: (key: string) => Element) => {
+    const members = () => recordGroups().members[key] ?? [key];
+    const open = () => openGroups().has(key);
+    return (
+      <Show when={members().length > 1} fallback={one(key)}>
+        <div class="otk-record-group" data-count={members().length}>
+          <div class="otk-record-group-lead">
+            {one(key)}
+            <button
+              type="button"
+              class="otk-record-group-count"
+              aria-expanded={open() ? "true" : "false"}
+              title={open()
+                ? "Fold identical rows"
+                : `Show all ${members().length} identical rows`}
+              onClick={() => toggleGroup(key)}
+            >
+              x{members().length}
+            </button>
+          </div>
+          <Show when={open()}>
+            <For each={members().slice(1)}>{(member) => one(member)}</For>
+          </Show>
+        </div>
+      </Show>
+    );
+  };
   const count = () => projection().messageIDs.length;
   // One in-flow progress per active turn: an unfinished reply owns it;
   // otherwise the turn's newest active native record does.
@@ -587,7 +654,7 @@ export default function SessionView(props: {
                               .anchor();
                             return (
                               <VirtualList
-                                keys={projection().replyIDs}
+                                keys={recordGroups().keys}
                                 label="Transcript messages"
                                 viewport={() => list}
                                 samples={[{
@@ -633,109 +700,123 @@ export default function SessionView(props: {
                                         ?.messageIDs ?? []
                                     ),
                                   )}
-                                render={(key) => (
-                                  <Show when={projection().repliesByID[key]}>
-                                    {(reply) => {
-                                      const message = () =>
-                                        reply().message;
-                                      const turnID = () =>
-                                        message().role === "assistant"
-                                          ? (message() as import("@otk/protocol").AssistantMessage)
-                                            .replyTo ?? message().id
-                                          : message().id;
-                                      const target = () => ({
-                                        sidecarId: props.sidecarId!,
-                                        sessionID: message().sessionID,
-                                        turnID: turnID(),
-                                      });
-                                      return (
-                                        <Message
-                                          sidecarId={props.sidecarId}
-                                          sessionTitle={props.entry?.title ??
-                                            props.info?.title}
-                                          ownerID={reply().key}
-                                          segments={reply().segments}
-                                          message={message()}
-                                          lastID={reply().lastID}
-                                          pending={reply().pending}
-                                          recovery={props.transcript?.state
-                                            .content
-                                            .recovering
-                                            ?.find((
-                                              p,
-                                            ) =>
-                                              reply().messageIDs.includes(
-                                                p.messageID,
-                                              )
-                                            )
-                                            ?.state ??
-                                            (props.transcript?.state.recovering
-                                                .some((
+                                render={(key) =>
+                                  renderGroup(
+                                    key,
+                                    (key) => (
+                                      <Show
+                                        when={projection().repliesByID[key]}
+                                      >
+                                        {(reply) => {
+                                          const message = () => reply().message;
+                                          const turnID = () =>
+                                            message().role === "assistant"
+                                              ? (message() as import("@otk/protocol").AssistantMessage)
+                                                .replyTo ?? message().id
+                                              : message().id;
+                                          const target = () => ({
+                                            sidecarId: props.sidecarId!,
+                                            sessionID: message().sessionID,
+                                            turnID: turnID(),
+                                          });
+                                          return (
+                                            <Message
+                                              sidecarId={props.sidecarId}
+                                              sessionTitle={props.entry
+                                                ?.title ??
+                                                props.info?.title}
+                                              ownerID={reply().key}
+                                              segments={reply().segments}
+                                              message={message()}
+                                              lastID={reply().lastID}
+                                              pending={reply().pending}
+                                              recovery={props.transcript?.state
+                                                .content
+                                                .recovering
+                                                ?.find((
                                                   p,
                                                 ) =>
                                                   reply().messageIDs.includes(
                                                     p.messageID,
                                                   )
                                                 )
-                                              ? "recovering"
-                                              : undefined)}
-                                          onRetryRecovery={() => void retry()}
-                                          usage={props.usageOwner?.priced(
-                                            target(),
-                                            props.catalog,
-                                          )}
-                                          summary={sessionResult(
-                                            props.entry,
-                                            message(),
-                                          )}
-                                          openUsage={props.openUsage
-                                            ? () => props.openUsage!(turnID())
-                                            : undefined}
-                                          usageError={() =>
-                                            props.usageError?.(turnID())}
-                                          copySource={props.transcript
-                                            ? (id, text) =>
-                                              props.transcript!.source(id, text)
-                                            : undefined}
-                                          activeRecord={progressRecord() ===
-                                            message().id}
-                                          copyIncomplete={message().role ===
-                                              "assistant" &&
-                                            !!props.transcript &&
-                                            (!props.exhausted &&
-                                              (!props.transcript.projection
-                                                .boundary(
-                                                  turnID(),
-                                                )
-                                                ?.firstID ||
-                                                !projection()
-                                                  .messagesByID[
-                                                    reply().firstID
-                                                  ]))}
-                                          prefs={props.prefs}
-                                          directory={props.info?.directory}
-                                          permissions={props.permissions}
-                                          onOpenChild={props.onOpenChild}
-                                          queued={projection().queuedIDs.has(
-                                            message().id,
-                                          )}
-                                          control={(control) => {
-                                            const id = message().id;
-                                            controls.set(id, control);
-                                            return () => {
-                                              if (
-                                                controls.get(id) === control
-                                              ) {
-                                                controls
-                                                  .delete(id);
-                                              }
-                                            };
-                                          }}
-                                        />
-                                      );
-                                    }}
-                                  </Show>
-                                )}
+                                                ?.state ??
+                                                (props.transcript?.state
+                                                    .recovering
+                                                    .some((
+                                                      p,
+                                                    ) =>
+                                                      reply().messageIDs
+                                                        .includes(
+                                                          p.messageID,
+                                                        )
+                                                    )
+                                                  ? "recovering"
+                                                  : undefined)}
+                                              onRetryRecovery={() =>
+                                                void retry()}
+                                              usage={props.usageOwner?.priced(
+                                                target(),
+                                                props.catalog,
+                                              )}
+                                              summary={sessionResult(
+                                                props.entry,
+                                                message(),
+                                              )}
+                                              openUsage={props.openUsage
+                                                ? () =>
+                                                  props.openUsage!(turnID())
+                                                : undefined}
+                                              usageError={() =>
+                                                props.usageError?.(turnID())}
+                                              copySource={props.transcript
+                                                ? (id, text) =>
+                                                  props.transcript!.source(
+                                                    id,
+                                                    text,
+                                                  )
+                                                : undefined}
+                                              activeRecord={progressRecord() ===
+                                                message().id}
+                                              copyIncomplete={message().role ===
+                                                  "assistant" &&
+                                                !!props.transcript &&
+                                                (!props.exhausted &&
+                                                  (!props.transcript.projection
+                                                    .boundary(
+                                                      turnID(),
+                                                    )
+                                                    ?.firstID ||
+                                                    !projection()
+                                                      .messagesByID[
+                                                        reply().firstID
+                                                      ]))}
+                                              prefs={props.prefs}
+                                              directory={props.info?.directory}
+                                              permissions={props.permissions}
+                                              onOpenChild={props.onOpenChild}
+                                              queued={projection().queuedIDs
+                                                .has(
+                                                  message().id,
+                                                )}
+                                              control={(control) => {
+                                                const id = message().id;
+                                                controls.set(id, control);
+                                                return () => {
+                                                  if (
+                                                    controls.get(id) === control
+                                                  ) {
+                                                    controls
+                                                      .delete(id);
+                                                  }
+                                                };
+                                              }}
+                                            />
+                                          );
+                                        }}
+                                      </Show>
+                                    ),
+                                  )}
                               />
                             );
                           }}
