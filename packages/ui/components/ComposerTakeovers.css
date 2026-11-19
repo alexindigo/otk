@@ -35,6 +35,6 @@
   inline-size: 100%;
   max-inline-size: var(--lane-width);
   margin-inline: auto;
-  padding-block-end: 6px;
+  padding-block-end: 8px;
   flex: none;
 }

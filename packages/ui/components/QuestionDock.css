@@ -63,17 +63,17 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .otk-question-label {
   color: var(--otk-fg);
   font-weight: 600;
 }
-.otk-question-row[aria-pressed=true] {
+.otk-question-row.is-selected {
   border-color: var(--otk-accent);
   box-shadow: inset 0 0 0 1px var(--otk-accent);
 }
-.otk-question-row[aria-pressed=true] .otk-question-label {
+.otk-question-row.is-selected .otk-question-label {
   color: var(--otk-accent-text);
 }

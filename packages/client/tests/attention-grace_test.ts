@@ -34,7 +34,7 @@ function clock() {
   };
 }
 
-Deno.test("one request deadline serves composer and every reduced-motion lamp", () => {
+Deno.test("one request deadline serves composer and every lamp with or without motion", () => {
   const time = clock();
   const owner = createAttentionGrace({ clock: time });
   const scope = (id: string) => id === "child";
@@ -42,7 +42,7 @@ Deno.test("one request deadline serves composer and every reduced-motion lamp", 
   owner.light("child", "working", "a", scope, true);
   owner.observe("a", "child", { permissions: { keys: ["p"], fresh: true } });
   assertEquals(owner.permission("a", "child", "p"), false);
-  assertEquals(owner.light("project", "blocked", "a", scope, false), "blocked");
+  assertEquals(owner.light("project", "blocked", "a", scope, false), "working");
   time.tick(499);
   assertEquals(owner.permission("a", "child", "p"), false);
   assertEquals(owner.light("child", "blocked", "a", scope, true), "working");
@@ -52,6 +52,7 @@ Deno.test("one request deadline serves composer and every reduced-motion lamp", 
   assertEquals(owner.permission("a", "child", "p"), true);
   for (const key of ["project", "child", "late"]) {
     assertEquals(owner.light(key, "blocked", "a", scope, true), "blocked");
+    assertEquals(owner.light(key, "blocked", "a", scope, false), "blocked");
   }
   owner.stop();
 });
@@ -122,7 +123,7 @@ Deno.test("motion changes and incomplete metadata do not restart a request deadl
   owner.permission("a", "s", "p");
   time.tick(300);
   owner.observe("a", "s");
-  assertEquals(owner.light("row", "blocked", "a", scope, false), "blocked");
+  assertEquals(owner.light("row", "blocked", "a", scope, false), "working");
   assertEquals(owner.light("row", "blocked", "a", scope, true), "working");
   time.tick(200);
   assertEquals(owner.permission("a", "s", "p"), true);
