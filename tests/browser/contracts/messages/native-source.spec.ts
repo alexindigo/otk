@@ -50,6 +50,13 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   const records = v2
     ? '[data-native-record="opencode-v2/shell"]'
     : '[data-native-record^="opencode-v1/step-"]';
+  const openRecords = async () => {
+    const closed = page.locator(
+      '.otk-record-group-toggle[aria-expanded="false"]',
+    );
+    while (await closed.count()) await closed.first().click();
+  };
+  await openRecords();
   await revealAcquired(page, records);
   const record = page.locator(records).first();
   await record.locator("> .otk-tool-state > .otk-tool-toggle").click();
@@ -103,6 +110,7 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   await page.evaluate("sessionStorage.setItem('sourceMode','fail')");
   await page.reload();
   if (!v2) await openWorkLogs(page);
+  await openRecords();
   await revealAcquired(page, records);
   const again = page.locator(records).first();
   const againToggle = again.locator("> .otk-tool-state > .otk-tool-toggle");

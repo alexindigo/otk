@@ -770,6 +770,17 @@ chronological prompt identities, creation clocks, shared queued flags and
 borrowed source parts. It retains no content or paging state; consumers present
 parts through their own registry and page through the original session owner.
 
+The canonical projection's `records` value owns append-stable Activity spans,
+identical-fact folds, reveal ancestry and presentation revisions. An eligible
+singleton starts as a span; an already admitted individual row never becomes one
+after settling. Explicit failures break out in source order. Native plugins
+supply opaque summary kinds and singular/plural nouns; headings never classify
+records. Records without producer-owned summary facts stay individually visible.
+The existing transcript interaction owner retains all disclosure choices and
+opens reveal ancestors. Measurements use presentation revisions separately from
+logical row identity, so a topology or streamed-content revision cannot borrow
+an old extent, including when an unmounted row was previously empty.
+
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
 request cannot revive completed history, and idle retires pending state. Views

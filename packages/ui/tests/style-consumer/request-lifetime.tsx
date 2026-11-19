@@ -16,6 +16,7 @@ import { registerQuestionTakeover } from "../../components/QuestionDock.tsx";
 import { registerPermissionTakeover } from "../../components/PermissionDock.tsx";
 import { registerFormTakeover } from "../../components/FormDock.tsx";
 import ComposerTakeovers from "../../components/ComposerTakeovers.tsx";
+import "./request-lifetime.css" with { type: "text" };
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { registerAttentionCommands } from "../../shell/commands/attention.ts";
 export default function RequestLifetimeScene() {
@@ -107,53 +108,62 @@ export default function RequestLifetimeScene() {
   registerFormTakeover(registries.takeovers);
   return (
     <section
+      class="request-lifetime-scene"
       data-sent={sent()}
       data-dirty={String(dirty())}
       data-pending={owner.permissions().length + owner.questions().length +
         owner.forms().length}
       data-inventory-failed={inventoryFailed()}
     >
-      <button type="button" onClick={() => setConnected(false)}>
-        Disconnect
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setConnected(true);
-          failInventory(true);
-        }}
+      <div
+        class="request-lifetime-controls"
+        role="group"
+        aria-label="External request controls"
       >
-        Reconnect with failed inventory
-      </button>
-      <button
-        type="button"
-        onClick={() => owner.retireSessions((id) => id === "child")}
-      >
-        Delete child
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          owner.retire(
-            kind === "permission" ? "permission" : "form",
-            kind === "permission" ? "permission" : "input",
-            "settled-remotely",
-            "answered elsewhere",
-          );
-          rpc.resolve();
-        }}
-      >
-        Remove request
-      </button>
-      <CommandProvider commands={commands}>
-        <UiProvider registries={registries}>
-          <SessionProvider ports={ports}>
-            <ComposerTakeovers>
-              {() => <textarea aria-label="Normal composer" />}
-            </ComposerTakeovers>
-          </SessionProvider>
-        </UiProvider>
-      </CommandProvider>
+        <button type="button" onClick={() => setConnected(false)}>
+          Disconnect
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setConnected(true);
+            failInventory(true);
+          }}
+        >
+          Reconnect with failed inventory
+        </button>
+        <button
+          type="button"
+          onClick={() => owner.retireSessions((id) => id === "child")}
+        >
+          Delete child
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            owner.retire(
+              kind === "permission" ? "permission" : "form",
+              kind === "permission" ? "permission" : "input",
+              "settled-remotely",
+              "answered elsewhere",
+            );
+            rpc.resolve();
+          }}
+        >
+          Remove request
+        </button>
+      </div>
+      <div class="request-lifetime-preview">
+        <CommandProvider commands={commands}>
+          <UiProvider registries={registries}>
+            <SessionProvider ports={ports}>
+              <ComposerTakeovers>
+                {() => <textarea aria-label="Normal composer" />}
+              </ComposerTakeovers>
+            </SessionProvider>
+          </UiProvider>
+        </CommandProvider>
+      </div>
     </section>
   );
 }

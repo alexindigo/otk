@@ -4,3 +4,10 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.otk-failure-content.is-inline {
+  display: inline;
+  white-space: nowrap;
+}
+.otk-failure-content.is-inline > * + * {
+  margin-inline-start: .5em;
+}

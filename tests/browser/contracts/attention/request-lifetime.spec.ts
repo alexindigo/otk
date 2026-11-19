@@ -24,6 +24,10 @@ for (const kind of ["question", "permission", "form"] as const) {
     if (kind === "question") await page.keyboard.press("Escape");
     await expect(page.getByRole("textbox", { name: "Normal composer" }))
       .toBeVisible();
+    const composer = page.getByRole("textbox", { name: "Normal composer" });
+    await composer.click();
+    await composer.fill("Independent composer draft");
+    await expect(composer).toHaveValue("Independent composer draft");
     await expect(page.getByRole("button", { name: /Pending .*: reopen/ }))
       .toBeVisible();
     await expect(page.locator("[data-sent]")).toHaveAttribute("data-sent", "0");

@@ -24,6 +24,7 @@ import type {
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
 import ActivityGroup from "./ActivityGroup.tsx";
+import RecordList from "./RecordList.tsx";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
@@ -43,8 +44,8 @@ import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
-  activitySpans,
   contextualFailure,
+  createTranscriptInteraction,
   createTranscriptProjection,
   errorFeedback,
   type FailureValue,
@@ -152,23 +153,23 @@ export default function SessionView(props: {
   );
   // The selected facade can release its resource before this view and its
   // commands unmount. Keep the compatibility projection valid independently.
+  const fallbackProjection = createTranscriptProjection();
   const fallback = createMemo(() => {
-    const projection = createTranscriptProjection();
-    projection.replace(props.messages ?? []);
-    projection.busy(props.busy);
-    return projection.state;
+    fallbackProjection.replace(props.messages ?? []);
+    fallbackProjection.busy(props.busy);
+    return fallbackProjection.state;
   });
+  const interaction = props.transcript?.interaction ??
+    createTranscriptInteraction();
   const projection = () => props.transcript?.state ?? fallback();
-  const recordGroups = createMemo(() =>
-    activitySpans(projection().replyIDs, projection().repliesByID)
-  );
-  const [openGroups, setOpenGroups] = createSignal(new Set<string>());
-  const toggleGroup = (key: string) =>
-    setOpenGroups((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
+  const recordGroups = () => projection().records;
+  const recordWindows = new Map<string, VirtualListControl>();
+  const recordWindow = (key: string, control: VirtualListControl) => {
+    recordWindows.set(key, control);
+    return () => {
+      if (recordWindows.get(key) === control) recordWindows.delete(key);
+    };
+  };
   const renderGroup = (key: string, one: (key: string) => Element) => {
     return (
       <Show when={recordGroups().groups[key]} fallback={one(key)}>
@@ -176,26 +177,39 @@ export default function SessionView(props: {
           <ActivityGroup
             group={group()}
             onOpenChild={props.onOpenChild}
-            open={openGroups().has(key)}
-            onToggle={() => toggleGroup(key)}
+            prefs={props.prefs}
             body={() => (
-              <For
-                each={group().children}
-                keyed={(child) => child.key}
-              >
-                {(child) => (
+              <RecordList
+                items={group().children ?? []}
+                key={(child) => child.key}
+                scope={group().key}
+                control={(control) => recordWindow(group().key, control)}
+                revision={(child) => child.revision}
+                outgoing={group().direction === "outgoing"}
+                render={(child) => (
                   <Show when={child().count} fallback={one(child().key)}>
                     <ActivityGroup
                       group={child()}
                       onOpenChild={props.onOpenChild}
-                      open={openGroups().has(`records:${child().key}`)}
-                      onToggle={() =>
-                        toggleGroup(`records:${child().key}`)}
-                      body={() => <For each={child().members}>{one}</For>}
+                      prefs={props.prefs}
+                      body={() => (
+                        <RecordList
+                          items={child().members}
+                          key={(key) => key}
+                          scope={child().key}
+                          control={(control) =>
+                            recordWindow(child().key, control)}
+                          revision={(key) =>
+                            projection().repliesByID[key]?.revision ?? 0}
+                          outgoing={child().direction === "outgoing"}
+                          render={(key) =>
+                            one(key())}
+                        />
+                      )}
                     />
                   </Show>
                 )}
-              </For>
+              />
             )}
           />
         )}
@@ -335,23 +349,36 @@ export default function SessionView(props: {
       }
       const key = replyKey(message), reply = projection().repliesByID[key];
       const ancestors = recordGroups().parents[key] ?? [];
-      if (ancestors.length) {
-        setOpenGroups((current) => new Set([...current, ...ancestors]));
-      }
+      interaction.reveal(ancestors);
+      const focus = () => {
+        const control = controls.get(reply?.message.id ?? target.messageID);
+        if (!control) {
+          throw new RequestFailure({
+            code: "message.missing",
+            retry: "none",
+            diagnosticID: randomID(),
+          });
+        }
+        control.reveal();
+      };
       await window?.reveal(recordGroups().owners[key] ?? key, {
         align: "center",
-        focus: () => {
-          const control = controls.get(reply?.message.id ?? target.messageID);
-          if (!control) {
-            throw new RequestFailure({
-              code: "message.missing",
-              retry: "none",
-              diagnosticID: randomID(),
-            });
-          }
-          control.reveal();
-        },
+        focus: ancestors.length ? undefined : focus,
       });
+      for (let n = 0; n < ancestors.length; n++) {
+        const control = recordWindows.get(ancestors[n]);
+        if (!control) {
+          throw new RequestFailure({
+            code: "message.missing",
+            retry: "none",
+            diagnosticID: randomID(),
+          });
+        }
+        await control.reveal(ancestors[n + 1] ?? key, {
+          align: "center",
+          focus: n === ancestors.length - 1 ? focus : undefined,
+        });
+      }
     },
   });
   let releaseHighlighting: (() => void) | undefined;
@@ -433,7 +460,7 @@ export default function SessionView(props: {
   return (
     <HighlightProvider lease={highlightLease()}>
       <TranscriptContext
-        interaction={props.transcript?.interaction}
+        interaction={interaction}
         nativeSource={props.transcript?.nativeSource}
         visibility={attachSource}
       >
@@ -602,6 +629,7 @@ export default function SessionView(props: {
                           {(failure) => (
                             <FeedbackStatus
                               class="otk-session-notice"
+                              singleLine
                               feedback={placeFailure(
                                 contextualFailure(failure, {
                                   target: failureTarget(),
@@ -617,7 +645,7 @@ export default function SessionView(props: {
                               <strong>
                                 Retrying · attempt {retry().attempt}
                               </strong>
-                              <p>{retry().message}</p>
+                              <p title={retry().message}>{retry().message}</p>
                               <span>
                                 Next attempt in {Math.max(
                                   0,
@@ -637,6 +665,11 @@ export default function SessionView(props: {
                             return (
                               <VirtualList
                                 keys={recordGroups().keys}
+                                revision={recordGroups().revision}
+                                measurementKey={(key) =>
+                                  `${key}:${
+                                    recordGroups().revisions[key] ?? 0
+                                  }`}
                                 label="Transcript messages"
                                 viewport={() => list}
                                 samples={[{
@@ -669,7 +702,12 @@ export default function SessionView(props: {
                                       {
                                         ...position.anchor,
                                         messageID: projection()
-                                          .repliesByID[position.anchor.key]
+                                          .repliesByID[
+                                            recordGroups()
+                                              .groups[position.anchor.key]
+                                              ?.members[0] ??
+                                              position.anchor.key
+                                          ]
                                           ?.messageIDs[0],
                                       },
                                     );
@@ -841,7 +879,6 @@ export default function SessionView(props: {
               {(active) => (
                 <div
                   class={["otk-composer-stack", {}]}
-                  hidden={active()}
                   inert={active()}
                 >
                   <div

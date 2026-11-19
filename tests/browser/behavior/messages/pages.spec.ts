@@ -242,6 +242,11 @@ test(
       // existing 102 text segments and 101 between-text tool groups.
     ).toHaveAttribute("data-acquired-count", "205");
     if (state.controller.info!.version.startsWith("2.")) {
+      // WP1 admits even a singleton as a stable span. Inspect its retained source
+      // through both public disclosure levels rather than assuming a bare row.
+      const activity = page.locator(".otk-record-group").first();
+      await activity.locator("button").first().click();
+      await activity.locator(".otk-record-group button").first().click();
       await expect(page.locator('[data-native-record="opencode-v2/idle"]'))
         .toBeVisible();
     }

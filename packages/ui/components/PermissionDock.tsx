@@ -82,13 +82,8 @@ function PermissionTakeover(
       session.sessionID(),
       session.entry,
     );
-  const automatic = () =>
-    session.permissions().length - waitingPermissions(session).length;
   return (
     <>
-      <Show when={automatic() > 0 && !request()}>
-        <p class="otk-auto-approving" role="status">Auto-approving…</p>
-      </Show>
       <PermissionDock
         notice={props.notice}
         focusNotice={props.focusNotice}

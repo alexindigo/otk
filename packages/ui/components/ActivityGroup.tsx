@@ -7,16 +7,25 @@ import { ChevronIcon } from "./ChromeIcons.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
+import type { Preferences } from "@otk/protocol";
+import { retainedDisclosure } from "../features/transcript-context.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
   group: Group;
-  open: boolean;
-  onToggle(): void;
+  prefs: Preferences;
   onOpenChild?(id: string): void;
   body(): Element;
 }): Element {
   const session = useOptionalSessionPorts();
+  const [open, setOpen] = retainedDisclosure(
+    "records",
+    () => props.group.category ?? "record",
+    () => props.prefs,
+    undefined,
+    undefined,
+    props.group.key,
+  );
   const clock = (time: number) =>
     new Date(time).toLocaleTimeString([], {
       hour: "numeric",
@@ -40,8 +49,8 @@ export default function ActivityGroup(props: {
         <button
           type="button"
           class="otk-tool-toggle otk-record-group-toggle"
-          aria-expanded={props.open ? "true" : "false"}
-          onClick={() => props.onToggle()}
+          aria-expanded={open() ? "true" : "false"}
+          onClick={() => setOpen(!open())}
         >
           <span
             class="otk-tool-icon otk-record-group-chevron"
@@ -77,8 +86,8 @@ export default function ActivityGroup(props: {
           </Show>
         </button>
       </header>
-      <Show when={props.open}>
-        <div class="otk-record-group-children">{props.body()}</div>
+      <Show when={open()}>
+        {props.body()}
       </Show>
     </section>
   );

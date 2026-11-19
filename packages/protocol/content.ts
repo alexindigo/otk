@@ -335,6 +335,8 @@ export interface NativeSourceView {
 }
 export interface Activity {
   kindLabel: string;
+  /** Producer-owned neutral count wording; kind is opaque to consumers. */
+  summary?: { kind: string; noun: string; plural: string };
   /** Neutral live-work identity supplied by the harness, never inferred from wording. */
   work?: { kind: "shell" };
   layout: "row" | "boundary";

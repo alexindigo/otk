@@ -148,6 +148,7 @@ export const profiles = {
   "contract-messages-clock": "neutral",
   "contract-messages-pending-inventory": "neutral",
   "contract-messages-return-anchor": "neutral",
+  "contract-messages-running-layout": "neutral",
   "contract-reconnect": "neutral",
   "contract-initial-question": "neutral",
   "contract-permission-feedback": "neutral",

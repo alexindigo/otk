@@ -15,6 +15,11 @@ function record(id: string, activity: Partial<Activity> = {}): Message {
       name: "invented/record",
       activity: {
         kindLabel: "Permission",
+        summary: {
+          kind: "permission",
+          noun: "permission",
+          plural: "permissions",
+        },
         title: "Permission once",
         detail: "external_directory",
         layout: "row",
@@ -38,13 +43,37 @@ Deno.test("activity spans summarize mixed records and preserve every reveal path
   const value = group([
     record("r1"),
     record("r2"),
-    record("r3", { kindLabel: "Execution", title: "Execution succeeded" }),
-    record("r4", { kindLabel: "System", title: "System" }),
-    record("r5", { kindLabel: "Subagent result", title: "Junior finished" }),
-    record("r6", { kindLabel: "Shell result", title: "Shell finished" }),
+    record("r3", {
+      kindLabel: "Execution",
+      title: "Execution succeeded",
+      summary: { kind: "execution", noun: "run", plural: "runs" },
+    }),
+    record("r4", {
+      kindLabel: "System",
+      title: "System",
+      summary: {
+        kind: "system",
+        noun: "system update",
+        plural: "system updates",
+      },
+    }),
+    record("r5", {
+      kindLabel: "Subagent result",
+      title: "Junior finished",
+      summary: {
+        kind: "subagent",
+        noun: "helper finished",
+        plural: "helpers finished",
+      },
+    }),
+    record("r6", {
+      kindLabel: "Shell result",
+      title: "Shell finished",
+      summary: { kind: "shell", noun: "shell", plural: "shells" },
+    }),
   ]);
-  assertEquals(value.keys, ["r1"]);
-  const span = value.groups.r1;
+  assertEquals(value.keys, ["activity:r1"]);
+  const span = value.groups["activity:r1"];
   assertEquals(span.members, ["r1", "r2", "r3", "r4", "r5", "r6"]);
   assertEquals(
     span.detail,
@@ -53,9 +82,9 @@ Deno.test("activity spans summarize mixed records and preserve every reveal path
   assertEquals(span.time, { first: 1000, last: 6000 });
   assertEquals(span.children?.[0].members, ["r1", "r2"]);
   assertEquals(span.children?.[0].count, 2);
-  assertEquals(value.parents.r2, ["r1", "records:r1"]);
-  assertEquals(value.parents.r6, ["r1"]);
-  assertEquals(value.owners.r6, "r1");
+  assertEquals(value.parents.r2, ["activity:r1", "records:r1"]);
+  assertEquals(value.parents.r6, ["activity:r1", "records:r6"]);
+  assertEquals(value.owners.r6, "activity:r1");
 });
 
 Deno.test("conversation and unsafe records split spans without hiding failures or waits", () => {
@@ -86,7 +115,7 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
       record("r4"),
       record("r5"),
     ]);
-    assertEquals(value.keys, ["r1", "r3", "r4"]);
+    assertEquals(value.keys, ["activity:r1", "r3", "activity:r4"]);
     assertEquals(value.groups.r3, undefined);
     assertEquals(value.owners.r3, "r3");
   }
@@ -100,18 +129,19 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
   assertEquals(
     group([record("r1"), record("r2"), prompt, record("r4"), record("r5")])
       .keys,
-    ["r1", "r3", "r4"],
+    ["activity:r1", "r3", "activity:r4"],
   );
 });
 
-Deno.test("singletons keep their own row and identical groups do not cross kinds or details", () => {
-  assertEquals(group([record("r1")]).groups, Object.create(null));
+Deno.test("singletons start stable spans and identical groups do not cross kinds or details", () => {
+  assertEquals(group([record("r1")]).groups["activity:r1"].members, ["r1"]);
   const value = group([
     record("r1"),
     record("r2", { detail: "different" }),
     record("r3", { kindLabel: "Other" }),
   ]);
-  assertEquals(value.groups.r1.children?.map((row) => row.members), [["r1"], [
-    "r2",
-  ], ["r3"]]);
+  assertEquals(
+    value.groups["activity:r1"].children?.map((row) => row.members),
+    [["r1"], ["r2"], ["r3"]],
+  );
 });
