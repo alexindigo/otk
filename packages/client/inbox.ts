@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  attentionStatus,
+  rollupStatus,
   DEFAULT_PROJECT_AGEING,
-  PROJECT_STATUS_PRIORITY,
+  ROLLUP_PRIORITY,
 } from "@otk/protocol";
-export { attentionStatus } from "@otk/protocol";
+export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
   InboxOp,
@@ -25,9 +25,7 @@ import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
 import { relativeTime } from "./format.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
-/** Attention first. All aggregate lights use this one immutable priority order. */
-export const INBOX_STATUS_PRIORITY = Object.freeze(PROJECT_STATUS_PRIORITY);
-export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
+export type InboxStatus = typeof ROLLUP_PRIORITY[number];
 export interface OperationAttention {
   operationStatus?: InboxStatus;
 }
@@ -47,7 +45,7 @@ export function inboxStatus(
   // Tombstones retain historical metadata, never authority for live attention.
   if (entry.deleted) return "none";
   const state = inbox.supervision?.[entry.id]?.state;
-  return attentionStatus(
+  return rollupStatus(
     entry.operationStatus,
     state === "needsYou"
       ? "blocked"
@@ -61,8 +59,7 @@ export function rollup(
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): InboxStatus {
   const states = entries.map((entry) => inboxStatus(entry, inbox));
-  return INBOX_STATUS_PRIORITY.find((status) => states.includes(status)) ??
-    "none";
+  return rollupStatus(...states);
 }
 export function visitTime(lastVisit: number, now: number): string {
   return relativeTime(lastVisit, now);
@@ -205,7 +202,7 @@ export function inboxProjects(
   ) => {
     const summary = inbox.summaries?.[directory];
     return summary
-      ? attentionStatus(
+      ? rollupStatus(
         summary.status ?? "none",
         ...sessions.map((entry) => entry.operationStatus),
       )

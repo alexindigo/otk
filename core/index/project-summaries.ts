@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type IndexMetadata,
-  PROJECT_STATUS_PRIORITY,
+  ROLLUP_PRIORITY,
   type ProjectStatus,
   type ProjectSummary,
   type ProjectTopology,
@@ -340,7 +340,7 @@ export class ProjectSummaries {
       : this.#authority;
     const status = locationForms
       ? "blocked"
-      : PROJECT_STATUS_PRIORITY.find((s) =>
+      : ROLLUP_PRIORITY.find((s) =>
         (totals?.statuses.get(s) ?? 0) > 0
       ) ??
         "none";
@@ -441,7 +441,7 @@ export class ProjectSummaries {
         lastActivity: summaries.every((s) => s.lastActivity !== null)
           ? Math.max(...summaries.map((s) => s.lastActivity!))
           : null,
-        status: PROJECT_STATUS_PRIORITY.find((status) =>
+        status: ROLLUP_PRIORITY.find((status) =>
           summaries.some((s) => s.status === status)
         ) ?? "none",
         authority: summaries.some((s) => s.authority === "unknown")

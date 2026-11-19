@@ -90,7 +90,7 @@ Deno.test("deleted metadata cannot retain live family attention or phantom tabs"
     tabs.stop();
   }
 });
-Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle priority without treating idle startup as a finish", () => {
+Deno.test("inbox roll-up gives blocked, working, unseen-finished then none priority without treating idle startup as a finish", () => {
   const inbox = snapshot(),
     idle = entry("idle"),
     busy = entry("busy", "busy"),
@@ -100,7 +100,7 @@ Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle prior
   blocked.attention.questions = 1;
   assertEquals(rollup([idle], inbox), "none");
   assertEquals(rollup([idle, done], inbox), "finished");
-  assertEquals(rollup([done, busy], inbox), "finished");
+  assertEquals(rollup([done, busy], inbox), "working");
   assertEquals(rollup([blocked, done, busy], inbox), "blocked");
   assertEquals(inboxStatus(entry("retry", "retry"), inbox), "working");
   blocked.attention.questions = 0;
@@ -126,7 +126,7 @@ Deno.test("tracked and discovered projects and task tabs share attention-first a
   });
   for (const needsInput of [false, true]) {
     blocked.attention.permissions = needsInput ? 1 : 0;
-    const expected = needsInput ? "blocked" : "finished";
+    const expected = needsInput ? "blocked" : "working";
     for (const entries of [[done, busy, blocked], [blocked, busy, done]]) {
       for (const projects of [inbox.projects, []]) {
         assertEquals(

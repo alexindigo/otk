@@ -10,11 +10,12 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import { INBOX_STATUS_PRIORITY, type InboxStatus, rollup } from "./inbox.ts";
+import { inboxStatus, type InboxStatus, rollup } from "./inbox.ts";
+import { sortTabsByUrgency } from "./tab-urgency.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
-import { attentionStatus, type OperationAttention } from "./inbox.ts";
+import { rollupStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -214,7 +215,7 @@ export function createTabs(
       title: task.name,
       sessions: [...task.sessions],
       preview: false,
-      status: attentionStatus(
+      status: rollupStatus(
         taskActivity?.[task.id],
         rollup(
           families.get(task.id) ?? [],
@@ -249,10 +250,17 @@ export function createTabs(
         });
       }
     }
-    return cachedTabs = result.sort((a, b) =>
-      INBOX_STATUS_PRIORITY.indexOf(a.status) -
-        INBOX_STATUS_PRIORITY.indexOf(b.status) ||
-      activity(b.id) - activity(a.id) || a.id.localeCompare(b.id)
+    return cachedTabs = sortTabsByUrgency(
+      result,
+      (tab) => tab.kind === "task"
+        ? [
+          taskActivity?.[tab.id],
+          ...(families.get(tab.id) ?? []).map((entry) =>
+            inboxStatus(entry, inbox)
+          ),
+        ]
+        : [inboxStatus(byID.get(tab.id)!, inbox)],
+      activity,
     );
   }
   const lookup = (id: string) => {

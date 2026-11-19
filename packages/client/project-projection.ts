@@ -10,8 +10,8 @@ import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
 import {
   ageing,
-  attentionStatus,
-  INBOX_STATUS_PRIORITY,
+  rollupStatus,
+  ROLLUP_PRIORITY,
   type InboxChanges,
   type InboxProject,
   type InboxStatus,
@@ -103,7 +103,7 @@ export function createProjectProjection(o: {
       p = {
         members: new Map(),
         counts: Object.fromEntries(
-          INBOX_STATUS_PRIORITY.map((status) => [status, 0]),
+          ROLLUP_PRIORITY.map((status) => [status, 0]),
         ) as Record<InboxStatus, number>,
         unread: 0,
         discovered: false,
@@ -408,7 +408,7 @@ export function createProjectProjection(o: {
       const resolved = new Map<string, InboxStatus>();
       for (const [directory, status] of states) {
         const leaf = resolve(directory);
-        resolved.set(leaf, attentionStatus(resolved.get(leaf), status));
+        resolved.set(leaf, rollupStatus(resolved.get(leaf), status));
       }
       states = resolved;
       const dirty = new Set<string>();
@@ -438,10 +438,10 @@ export function createProjectProjection(o: {
       if (!p) return undefined;
       const summary = p.summary;
       const summaryReady = summary !== undefined;
-      const status = attentionStatus(
+      const status = rollupStatus(
         p.operation,
         ...(summaryReady ? [summary.status ?? "none"] : [
-          ...INBOX_STATUS_PRIORITY.filter((s) => p.counts[s] > 0),
+          ...ROLLUP_PRIORITY.filter((s) => p.counts[s] > 0),
         ]),
       );
       // Evidence only: an unknown population adds no unseen finish.

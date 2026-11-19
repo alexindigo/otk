@@ -1117,10 +1117,14 @@ keyed project owner. Active means known sessions, Discovered means
 template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
 population counts, so hydrating an existing session cannot increment them. Every
-project row has a light. `INBOX_STATUS_PRIORITY` owns aggregate light priority:
-needs you, finished but unseen, working, none. Project and task lights consume
+project row has a light. The protocol's `ROLLUP_PRIORITY` / `rollupStatus` own
+aggregate lamp display: needs you, working, finished but unseen, none. Navigation
+instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished but unseen,
+working, none. Never use display order to choose the most urgent session, or
+urgency to paint a rollup. Project and task lights consume
 supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs sort by this priority, then newest
+attention until acknowledged. Task tabs sort by attention urgency, not their
+aggregate lamp colour, then newest
 family `timeUpdated`, with identity as a stable tie-break. Stored task order
 remains available for future pinning; it does not drive the strip. Discovery
 retains its recency/name order.

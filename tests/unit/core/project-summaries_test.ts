@@ -69,6 +69,40 @@ Deno.test("unknown population retains last-known discovery without inventing emp
   assertEquals(owner.values.get("/unknown")?.sessionCount, null);
   assertEquals(owner.values.get("/unknown")?.lastActivity, null);
 });
+
+Deno.test("repository lamp shows working over an unseen finished checkout but blocked still wins", () => {
+  const owner = new ProjectSummaries(
+    (id) => ({ seen: 0, finish: id === "tstv1-done" ? 10 : 0 }),
+    () => {},
+  );
+  owner.seed(["/repo", "/tree"].map((directory) => ({
+    directory,
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 2,
+    authority: "current" as const,
+    topology: {
+      repoID: "p",
+      canonicalRoot: "/repo",
+      leafDirectory: directory,
+      ...(directory === "/tree" ? { parentDirectory: "/repo" } : {}),
+    },
+  })));
+  owner.authority("current");
+  owner.entry({ ...entry("tstv1-done"), directory: "/repo" });
+  const running = {
+    ...entry("tstv1-running"),
+    directory: "/tree",
+    activity: { work: { keys: ["run"], fresh: true } },
+  };
+  owner.entry(running);
+  assertEquals(owner.values.get("/repo")?.direct?.status, "finished");
+  assertEquals(owner.values.get("/tree")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 1);
+  owner.locationForms({ "/tree": 1 });
+  assertEquals(owner.values.get("/repo")?.status, "blocked");
+});
 Deno.test("project summaries own status priority, persisted marks, recency and unavailable authority without digest", () => {
   let seen = 0, finish = 0;
   const emitted: ProjectSummary[] = [];
@@ -95,7 +129,7 @@ Deno.test("project summaries own status priority, persisted marks, recency and u
     status: "busy",
     activity: { work: { keys: ["run-b"], fresh: true } },
   });
-  assertEquals(owner.values.get("/other")?.status, "finished");
+  assertEquals(owner.values.get("/other")?.status, "working");
   owner.entry({
     ...a,
     attention: { ...a.attention, questions: 1 },
