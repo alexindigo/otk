@@ -22,8 +22,10 @@ export function catalogReaders(
 ): ProviderReaders {
   const metadata = new NativeReadiness(client.wait, metadataAdmission);
   return {
-    "catalog.project": ({ directory }, signal) => readProject(client, directory, signal),
-    "catalog.repository": ({ directory }, signal) => readRepository(client, directory, signal),
+    "catalog.project": ({ directory }, signal) =>
+      readProject(client, directory, signal),
+    "catalog.repository": ({ directory }, signal) =>
+      readRepository(client, directory, signal),
     "activity.status": async ({ directory }, signal) => {
       const statuses = await client.json<
         Record<

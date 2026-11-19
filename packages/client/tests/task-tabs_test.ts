@@ -215,7 +215,11 @@ Deno.test("a mixed task lamp shows working while its unseen finish retains strip
   ]);
   meta.finishes.finished = 50;
   const tabs = model();
-  tabs.update({ directory: "/p", entries: [running, finished, newer], inbox: meta });
+  tabs.update({
+    directory: "/p",
+    entries: [running, finished, newer],
+    inbox: meta,
+  });
   assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
     ["mixed", "working"],
     ["newer", "working"],
