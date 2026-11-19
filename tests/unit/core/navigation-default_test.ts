@@ -135,7 +135,11 @@ Deno.test("navigation urgency still chooses finished over working despite the wo
     await f.resolver.resolve(f.core, { directory: "/repo" }),
     "tstv1-old",
   );
-  assertEquals(f.reads, [], "urgency still never scans a native catalog");
+  assertEquals(
+    f.reads,
+    [["tstv1-new"], ["tstv1-old"]],
+    "urgency validates keyed identities, never scans a native catalog",
+  );
 });
 
 for (const change of ["deleted", "moved", "parented"] as const) {

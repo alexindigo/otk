@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type IndexMetadata,
-  ROLLUP_PRIORITY,
   type ProjectStatus,
   type ProjectSummary,
   type ProjectTopology,
+  ROLLUP_PRIORITY,
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
 import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
@@ -340,9 +340,7 @@ export class ProjectSummaries {
       : this.#authority;
     const status = locationForms
       ? "blocked"
-      : ROLLUP_PRIORITY.find((s) =>
-        (totals?.statuses.get(s) ?? 0) > 0
-      ) ??
+      : ROLLUP_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
         "none";
     const knownCount = this.#catalog;
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];

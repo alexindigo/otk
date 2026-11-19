@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  rollupStatus,
-  DEFAULT_PROJECT_AGEING,
-  ROLLUP_PRIORITY,
-} from "@otk/protocol";
+import { DEFAULT_PROJECT_AGEING, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
@@ -11,6 +7,7 @@ import type {
   InboxSnapshot,
   IndexMetadata,
   ProjectRecord,
+  ProjectStatus,
   ProjectSummary,
   ProjectTopology,
   RpcMethod,
@@ -25,7 +22,7 @@ import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
 import { relativeTime } from "./format.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
-export type InboxStatus = typeof ROLLUP_PRIORITY[number];
+export type InboxStatus = ProjectStatus;
 export interface OperationAttention {
   operationStatus?: InboxStatus;
 }
@@ -42,17 +39,24 @@ export function inboxStatus(
   entry: IndexMetadata & OperationAttention,
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): InboxStatus {
+  return rollupStatus(...sessionAttentionStates(entry, inbox));
+}
+/** Unranked evidence and operation facts; display and urgency choose separately. */
+export function sessionAttentionStates(
+  entry: IndexMetadata & OperationAttention,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
+): readonly (InboxStatus | undefined)[] {
   // Tombstones retain historical metadata, never authority for live attention.
-  if (entry.deleted) return "none";
+  if (entry.deleted) return ["none"];
   const state = inbox.supervision?.[entry.id]?.state;
-  return rollupStatus(
+  return [
     entry.operationStatus,
     state === "needsYou"
       ? "blocked"
       : state === "finishedUnseen"
       ? "finished"
       : state ?? "none",
-  );
+  ];
 }
 export function rollup(
   entries: readonly (IndexMetadata & OperationAttention)[],
