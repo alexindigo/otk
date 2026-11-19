@@ -53,7 +53,15 @@ export async function readProject(
   const project = projects.find((project) =>
     project.id === location.project.id
   );
-  return project ? [projectPresentation(project)] : [];
+  if (!project) return [];
+  const server = await client.read(
+    (api) => api.server.info({ signal }),
+    signal,
+  );
+  return [{
+    ...projectPresentation(project),
+    ...(server.hostname ? { machine: server.hostname } : {}),
+  }];
 }
 export async function readRepository(
   client: V2Client,
