@@ -5,6 +5,8 @@ import type { Preferences, ToolCall } from "@otk/protocol";
 import { toolFailure } from "@otk/client";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import EntityPill from "../EntityPill.tsx";
+import { useOptionalSessionPorts } from "../../registries/session.tsx";
+import { scopedEntityFacts } from "../../entity-facts.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 import type { ToolPresentation } from "../../registries/renderers.ts";
 import { elapsed } from "../work-log.ts";
@@ -15,16 +17,16 @@ import {
   retainedDisclosure,
   useContentIdentity,
 } from "../../features/transcript-context.tsx";
-export default function ToolFrame(
-  props: {
-    call: ToolCall;
-    waiting: boolean;
-    body(): Element;
-    presentation?: ToolPresentation;
-    prefs?: Preferences;
-    onOpenChild?(id: string): void;
-  },
-): Element {
+
+export default function ToolFrame(props: {
+  call: ToolCall;
+  waiting: boolean;
+  body(): Element;
+  presentation?: ToolPresentation;
+  prefs?: Preferences;
+  onOpenChild?(id: string): void;
+}): Element {
+  const session = useOptionalSessionPorts();
   const parent = useContentIdentity();
   const failure = () => toolFailure(props.call);
   const identity = () => ({ ...parent, callID: props.call.callID });
@@ -68,129 +70,88 @@ export default function ToolFrame(
         data-tool-status={props.call.status}
       >
         <header class="otk-tool-state otk-control-row">
-          <Show
-            when={props.presentation?.entity}
-            fallback={
-              <button
-                class="otk-tool-toggle otk-control-grow"
-                type="button"
-                aria-expanded={open() ? "true" : "false"}
-                onClick={() => void expand()}
-              >
-                <span class="otk-tool-icon" aria-hidden="true">
-                  {typeof props.presentation?.icon === "function"
-                    ? props.presentation.icon()
-                    : props.presentation?.icon ?? "◇"}
-                </span>{" "}
-                <span
-                  class="otk-tool-verb otk-control-label"
-                  title={props.presentation?.verb ?? props.call.tool}
-                >
-                  {props.presentation?.verb ?? props.call.tool}
-                </span>{" "}
-                <Show when={props.presentation?.target}>
-                  <span
-                    class="otk-tool-target otk-id otk-control-label otk-control-grow"
-                    title={props.presentation?.target}
-                  >
-                    {props.presentation?.target}
-                  </span>
-                  {" "}
-                </Show>
-                <Show when={props.presentation?.summary}>
-                  <span
-                    class="otk-tool-brief otk-control-label otk-control-grow"
-                    title={props.presentation?.summary}
-                  >
-                    {props.presentation?.summary}
-                  </span>
-                  {" "}
-                </Show>
-                <Show when={props.presentation?.changes}>
-                  {(changes) => (
-                    <>
-                      <span class="otk-tool-add">+{changes().additions}</span>
-                      {" "}
-                      <span class="otk-tool-del">−{changes().deletions}</span>
-                      {" "}
-                    </>
-                  )}
-                </Show>
-                <Show when={props.call.status === "running" && !props.waiting}>
-                  <ActivityIndicator small />
-                  {" "}
-                </Show>
-                <Show when={props.waiting}>
-                  <span>Awaiting permission</span>
-                  {" "}
-                </Show>
-                <Show when={failure()}>
-                  <span
-                    class="otk-control-label otk-control-grow"
-                    title={failure()}
-                  >
-                    Failed: {failure()}
-                  </span>
-                  {" "}
-                </Show>
-                <Show
-                  when={props.call.time.start !== undefined &&
-                    props.call.time.end !== undefined}
-                >
-                  <span class="otk-tool-duration">
-                    {elapsed(props.call.time.start!, props.call.time.end!)}
-                  </span>
-                </Show>
-              </button>
-            }
-          >
+          <Show when={props.presentation?.entity}>
             {(entity) => (
-              <div class="otk-tool-entity-heading">
-                <button
-                  type="button"
-                  class="otk-tool-toggle"
-                  aria-expanded={open() ? "true" : "false"}
-                  onClick={() => void expand()}
-                >
-                  <span class="otk-tool-icon" aria-hidden="true">
-                    {typeof props.presentation?.icon === "function"
-                      ? props.presentation.icon()
-                      : props.presentation?.icon}
-                  </span>
-                  <span class="otk-tool-verb otk-control-label">
-                    {props.presentation?.verb}
-                  </span>
-                </button>
-                <EntityPill
-                  label={entity().label}
-                  sessionID={entity().sessionID}
-                  onOpen={props.onOpenChild}
-                  finished={props.call.time.end}
-                  duration={props.call.time.start !== undefined &&
-                      props.call.time.end !== undefined
-                    ? props.call.time.end - props.call.time.start
-                    : undefined}
-                />
-                <span
-                  class="otk-tool-brief otk-control-label otk-control-grow"
-                  title={props.presentation?.summary}
-                >
-                  {props.presentation?.summary}
-                </span>
-                <Show when={props.call.status === "running" && !props.waiting}>
-                  <ActivityIndicator small />
-                </Show>
-                <Show when={props.waiting}>
-                  <span>Awaiting permission</span>
-                </Show>
-                <Show when={failure()}>
-                  <span class="otk-control-label" title={failure()}>
-                    Failed: {failure()}
-                  </span>
-                </Show>
-              </div>
+              <EntityPill
+                label={entity().label}
+                facts={scopedEntityFacts(session, {
+                  ...entity(),
+                  tool: props.call,
+                })}
+                onOpen={props.onOpenChild}
+              />
             )}
           </Show>
+          <button
+            class="otk-tool-toggle otk-control-grow"
+            type="button"
+            aria-expanded={open() ? "true" : "false"}
+            onClick={() => void expand()}
+          >
+            <span class="otk-tool-icon" aria-hidden="true">
+              {typeof props.presentation?.icon === "function"
+                ? props.presentation.icon()
+                : props.presentation?.icon ?? "◇"}
+            </span>{" "}
+            <span
+              class="otk-tool-verb otk-control-label"
+              title={props.presentation?.verb ?? props.call.tool}
+            >
+              {props.presentation?.verb ?? props.call.tool}
+            </span>{" "}
+            <Show when={props.presentation?.target}>
+              <span
+                class="otk-tool-target otk-id otk-control-label otk-control-grow"
+                title={props.presentation?.target}
+              >
+                {props.presentation?.target}
+              </span>
+              {" "}
+            </Show>
+            <Show when={props.presentation?.summary}>
+              <span
+                class="otk-tool-brief otk-control-label otk-control-grow"
+                title={props.presentation?.summary}
+              >
+                {props.presentation?.summary}
+              </span>
+              {" "}
+            </Show>
+            <Show when={props.presentation?.changes}>
+              {(changes) => (
+                <>
+                  <span class="otk-tool-add">+{changes().additions}</span>{" "}
+                  <span class="otk-tool-del">−{changes().deletions}</span>
+                  {" "}
+                </>
+              )}
+            </Show>
+            <Show when={props.call.status === "running" && !props.waiting}>
+              <ActivityIndicator small />
+              {" "}
+            </Show>
+            <Show when={props.waiting}>
+              <span>Awaiting permission</span>
+              {" "}
+            </Show>
+            <Show when={failure()}>
+              <span
+                class="otk-control-label otk-control-grow"
+                title={failure()}
+              >
+                Failed: {failure()}
+              </span>
+              {" "}
+            </Show>
+            <Show
+              when={props.call.time.start !== undefined &&
+                props.call.time.end !== undefined}
+            >
+              <span class="otk-tool-duration">
+                {elapsed(props.call.time.start!, props.call.time.end!)}
+              </span>
+            </Show>
+          </button>
           <Show when={failure()}>
             <button
               type="button"

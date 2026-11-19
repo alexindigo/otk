@@ -22,8 +22,11 @@ import NativeSource from "./NativeSource.tsx";
 import { presentFailure } from "@otk/client";
 import FailureContent from "../FailureContent.tsx";
 import EntityPill from "../EntityPill.tsx";
+import { useOptionalSessionPorts } from "../../registries/session.tsx";
+import { scopedEntityFacts } from "../../entity-facts.ts";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
+  const session = useOptionalSessionPorts();
   const identity = useContentIdentity();
   const failure = () => {
     const value = unknownPartFailure(props.part, identity);
@@ -51,12 +54,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
       reference());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
-  const headingLabel = () => {
-    const entity = activity()?.entity;
-    return entity && label().startsWith(entity.label)
-      ? label().slice(entity.label.length).trimStart()
-      : label();
-  };
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
     const value = activity()?.state?.label;
@@ -94,7 +91,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
         </span>
       </Show>
       <span class="otk-tool-verb otk-control-label" title={label()}>
-        {headingLabel()}
+        {label()}
       </span>
       <Show when={activity()?.detail}>
         <span
@@ -123,7 +120,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
               {(entity) => (
                 <EntityPill
                   label={entity().label}
-                  sessionID={entity().sessionID}
+                  facts={scopedEntityFacts(session, entity())}
                   onOpen={props.onOpenChild}
                 />
               )}
@@ -176,7 +173,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                             {(entity) => (
                               <EntityPill
                                 label={entity().label}
-                                sessionID={entity().sessionID}
+                                facts={scopedEntityFacts(session, entity())}
                                 onOpen={props.onOpenChild}
                               />
                             )}

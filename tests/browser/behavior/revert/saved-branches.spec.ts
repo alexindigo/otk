@@ -112,8 +112,13 @@ test("revert.saved-branch-survives-send-and-reload", {
   );
   await expect(saved).toContainText("Files are not restored");
   await expect(saved).toContainText("The saved earlier reply.");
+  // Scoped facts may explicitly explain unknown captured timing. A saved
+  // reply footer must still never borrow a live fallback or digest state.
+  await expect(saved.locator(".otk-message-footer")).not.toContainText(
+    "Time unknown",
+  );
   await expect(saved).not.toContainText(
-    /Digesting|Time unknown|streaming|response in progress/,
+    /Digesting|streaming|response in progress/,
   );
   await expect(saved.getByRole("status")).toHaveCount(0);
   await expect(saved.locator('[data-message-command="prompt.revert"]'))
@@ -135,8 +140,11 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
+  await expect(saved.locator(".otk-message-footer")).not.toContainText(
+    "Time unknown",
+  );
   await expect(saved).not.toContainText(
-    /Digesting|Time unknown|streaming|response in progress/,
+    /Digesting|streaming|response in progress/,
   );
   await saved.getByRole("button", { name: "Reuse prompt", exact: true })
     .click();

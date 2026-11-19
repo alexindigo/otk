@@ -2,12 +2,15 @@
 import {
   type ClientSession,
   type ClientTabs,
+  createLiveWork,
+  entityFacts,
   inboxStatus,
   loadHistory,
   runningWork,
   type Selection,
   type ServerResources,
   type SessionActions,
+  supervisionStatus,
 } from "@otk/client";
 import {
   belongsToSession,
@@ -29,6 +32,25 @@ export function sessionPorts(o: {
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
+  const liveWork = createLiveWork({
+    items: () => {
+      const tabs = o.tabs?.();
+      return tabs
+        ? runningWork({
+          tabs,
+          inbox: resources.inbox(target.sidecarId).state.inbox,
+          sessionID: target.sessionID,
+          entry: (id) => resources.entry(target.sidecarId, id),
+          connected: resources.linked(target.sidecarId),
+        })
+        : [];
+    },
+    stopHelper: () =>
+      resources.linked(target.sidecarId) &&
+        resources.declares(target.sidecarId, "prompt")
+        ? (id) => actions.abort({ ...target, sessionID: id })
+        : undefined,
+  });
   return {
     supports: (c) =>
       c === "history"
@@ -50,26 +72,25 @@ export function sessionPorts(o: {
     }),
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
+    entityFacts: (identity) =>
+      entityFacts(identity, {
+        session: (id) => ({
+          title: resources.entry(target.sidecarId, id)?.title,
+          status: supervisionStatus(
+            id,
+            resources.inbox(target.sidecarId).state.inbox,
+          ),
+        }),
+      }),
     status: (id) => {
       const entry = resources.entry(target.sidecarId, id);
       return entry
         ? inboxStatus(entry, resources.inbox(target.sidecarId).state.inbox)
-        : undefined;
+        : supervisionStatus(id, resources.inbox(target.sidecarId).state.inbox);
     },
     location: (id) => actions.location(target, id),
-    runningWork: () => {
-      const tabs = o.tabs?.();
-      return tabs
-        ? runningWork({
-          tabs,
-          inbox: resources.inbox(target.sidecarId).state.inbox,
-          sessionID: target.sessionID,
-          entry: (id) => resources.entry(target.sidecarId, id),
-          messages: Object.values(session.transcript?.state.messagesByID ?? {}),
-          connected: resources.linked(target.sidecarId),
-        })
-        : [];
-    },
+    liveWork,
+    runningWork: liveWork.items,
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
     requests: connection.attention,
     permissions: () => {

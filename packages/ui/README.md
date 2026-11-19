@@ -312,12 +312,14 @@ treatment. Blocks owns paragraph, heading and compact list rhythm across virtual
 wrappers.
 
 Agent labels share `EntityPill` across reply sources, delegate tools and
-activity records/groups. Producers identify the entity at the start of a record
-title; views never parse native agent parameters. Pills borrow session facts
-through the common session ports and receive navigation callbacks. Hover/focus
-detail, click pinning, anchoring and dismissal belong to Popover, not the pill.
-Available session/model/status/time facts appear without placeholders; a session
-click uses the same guarded navigation as the existing Open task action.
+activity records/groups. Producers carry the entity and remaining title
+separately; views never slice titles or parse native agent parameters. Pills
+receive scoped client facts and navigation callbacks, and perform no session
+lookups. This reply uses canonical working time and completed endpoints; Session
+now is explicitly the live session's supervision. Unknown timing stays unknown.
+Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
+not the pill. Available session/model facts retain their scope; a session click
+uses the same guarded navigation as the existing Open task action.
 
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn

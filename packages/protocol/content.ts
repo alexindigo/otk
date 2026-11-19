@@ -343,7 +343,7 @@ export interface Activity {
   state?: ActivityState;
   tone: "normal" | "error";
   title: string;
-  /** Agent label at the start of title, rendered as an independent control. */
+  /** Independent agent control; title contains only the remaining heading. */
   entity?: { label: string; sessionID?: string };
   detail?: string;
   parameters?: ActivityParameter[];

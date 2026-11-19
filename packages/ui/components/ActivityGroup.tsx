@@ -5,6 +5,8 @@ import { type Element, Show } from "solid-js";
 import type { ActivityGroup as Group } from "@otk/client";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import EntityPill from "./EntityPill.tsx";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { scopedEntityFacts } from "../entity-facts.ts";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -14,17 +16,12 @@ export default function ActivityGroup(props: {
   onOpenChild?(id: string): void;
   body(): Element;
 }): Element {
+  const session = useOptionalSessionPorts();
   const clock = (time: number) =>
     new Date(time).toLocaleTimeString([], {
       hour: "numeric",
       minute: "2-digit",
     });
-  const title = () => {
-    const { entity, title } = props.group;
-    return entity && title.startsWith(entity.label)
-      ? title.slice(entity.label.length).trimStart()
-      : title;
-  };
   return (
     <section
       class="otk-tool-line otk-record-group"
@@ -35,7 +32,7 @@ export default function ActivityGroup(props: {
           {(entity) => (
             <EntityPill
               label={entity().label}
-              sessionID={entity().sessionID}
+              facts={scopedEntityFacts(session, entity())}
               onOpen={props.onOpenChild}
             />
           )}
@@ -52,7 +49,9 @@ export default function ActivityGroup(props: {
           >
             <ChevronIcon />
           </span>
-          <span class="otk-tool-verb otk-control-label">{title()}</span>
+          <span class="otk-tool-verb otk-control-label">
+            {props.group.title}
+          </span>
           <Show when={props.group.detail}>
             <span
               class="otk-tool-brief otk-control-label"

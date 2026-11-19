@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
+import { runningWork } from "@otk/client";
 import { OperationFailure, type SessionMetadata } from "@otk/protocol";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
@@ -19,6 +20,25 @@ Deno.test({
       const target = await native.createSession("Shell owner"),
         other = await native.createSession("Unrelated shell");
       const settings = cfg(), entries = new Map<string, SessionMetadata>();
+      const inventory = () =>
+        runningWork({
+          tabs: { working: () => [] },
+          inbox: {
+            tasks: [],
+            projects: [],
+            pathTemplates: [],
+            seen: {},
+            finishes: {},
+          },
+          sessionID: target.id,
+          connected: true,
+          entry: (id) => {
+            const entry = entries.get(id);
+            return entry
+              ? { ...entry, digest: { state: "ready", revision: 0, turns: {} } }
+              : undefined;
+          },
+        });
       let boots = 0;
       const adapter = new OpencodeV2ServerAdapter({
         serviceFile: native.serviceFile,
@@ -60,31 +80,41 @@ Deno.test({
           (await native.api.session.active())[target.nativeID],
           undefined,
         );
+        await waitFor(() =>
+          inventory().length, (count) =>
+          count === 1);
+        const owned = (await native.api.shell.list({
+          location: { directory: native.directory },
+        })).data.find((shell) => shell.metadata.sessionID === target.nativeID)!;
+        assertEquals(
+          inventory().map((item) => [item.id, item.title, item.startedAt]),
+          [[`shell/${owned.id}`, owned.command, owned.time.started]],
+        );
         const before = boots;
         native.proxy.disconnect();
-        await waitFor(() =>
-          boots, (count) =>
-          count > before);
+        await waitFor(() => boots, (count) => count > before);
         assertEquals(entries.get(target.id)?.status, "busy");
+        await waitFor(() => inventory().length, (count) => count === 1);
+        assertEquals(inventory()[0].startedAt, owned.time.started);
         await adapter.capabilities.prompt!.abort(target.id);
         // Deliberately dropping the proxy also loses the submitting HTTP reply.
         // Its uncertainty must not hide or prevent interruption of native work.
         const outcome = await running.then(() => undefined, (error) => error);
         assert(outcome instanceof OperationFailure);
         assertEquals(outcome.outcome, "unknown");
-        await waitFor(() =>
-          entries.get(target.id)?.status, (status) =>
-          status === "idle");
+        await waitFor(
+          () => entries.get(target.id)?.status,
+          (status) => status === "idle",
+        );
         const remaining = (await native.api.shell.list({
           location: { directory: native.directory },
         })).data;
         assertEquals(
-          remaining.map((shell) =>
-            shell.metadata.sessionID
-          ),
+          remaining.map((shell) => shell.metadata.sessionID),
           [other.nativeID],
         );
         assertEquals(entries.get(other.id)?.status, "busy");
+        assertEquals(inventory(), []);
         assert(
           !(await native.api.message.list({ sessionID: target.nativeID })).data
             .some((message) => message.type === "assistant"),

@@ -4,10 +4,9 @@ import {
   type InboxSnapshot,
   type IndexEntry,
   type Message,
-  type ToolCall,
 } from "@otk/protocol";
-import { inboxStatus } from "./inbox.ts";
 import type { ClientTabs } from "./tabs.ts";
+import { createState } from "./state.ts";
 
 export interface RunningWork {
   id: string;
@@ -17,15 +16,51 @@ export interface RunningWork {
   sessionID: string;
   startedAt?: number;
 }
+export interface LiveWorkOwner {
+  items(): readonly RunningWork[];
+  canStop(id: string): boolean;
+  stopping(id: string): boolean;
+  stop(id: string): Promise<void>;
+  subscribe(listener: () => void): () => void;
+}
+/** Stop admission belongs to the work lifetime, not an open popover. */
+export function createLiveWork(input: {
+  items(): readonly RunningWork[];
+  stopHelper?(): ((id: string) => Promise<void>) | undefined;
+}): LiveWorkOwner {
+  const state = createState({ pending: new Set<string>() });
+  const pending = new Map<string, Promise<void>>();
+  const item = (id: string) => input.items().find((item) => item.id === id);
+  return {
+    items: input.items,
+    canStop: (id) => item(id)?.kind === "helper" && !!input.stopHelper?.(),
+    stopping: (id) => state.state.pending.has(id),
+    subscribe: (listener) => state.subscribe(listener),
+    stop(id) {
+      const admitted = pending.get(id);
+      if (admitted) return admitted;
+      const current = item(id), stop = input.stopHelper?.();
+      if (current?.kind !== "helper" || !stop) return Promise.resolve();
+      const work = Promise.resolve().then(() => stop(current.sessionID))
+        .finally(() => {
+          pending.delete(id);
+          state.update((s) => s.pending.delete(id));
+        });
+      pending.set(id, work);
+      state.update((s) => s.pending.add(id));
+      return work;
+    },
+  };
+}
 
-/** Borrow existing family, lamp and loaded tool evidence. No new content demand
- * or independent running-state cache; missing clocks remain unknown. */
+/** Borrow the shared family and native scalar inventory, never transcript pages. */
 export function runningWork(input: {
-  tabs: ClientTabs;
+  tabs: Pick<ClientTabs, "working">;
   inbox: InboxSnapshot;
   sessionID: string;
   entry(id: string): IndexEntry | undefined;
-  messages: readonly Message[];
+  /** Compatibility input, deliberately not consulted for live inventory. */
+  messages?: readonly Message[];
   connected: boolean;
 }): RunningWork[] {
   if (!input.connected) return [];
@@ -33,58 +68,35 @@ export function runningWork(input: {
   for (const crumb of input.tabs.working()) {
     const entry = input.entry(crumb.id);
     if (!entry) continue;
-    const progress = derivedValue(entry.digest.helper?.progress);
+    const work = entry.activity?.work;
     items.push({
       id: `helper/${entry.id}`,
       kind: "helper",
       label: derivedValue(entry.digest.last)?.agent ?? "Helper",
       title: entry.title,
       sessionID: entry.id,
-      startedAt: progress?.time?.end === undefined
-        ? progress?.time?.start
+      startedAt: work?.fresh
+        ? work.items?.find((item) =>
+          item.kind === "execution" && work.keys.includes(item.id)
+        )?.startedAt
         : undefined,
     });
   }
   const current = input.entry(input.sessionID);
-  // Persisted running tool rows cannot outlive the session's fresh work evidence.
-  if (!current || inboxStatus(current, input.inbox) !== "working") return items;
-  const shells = new Set<string>();
-  const tools = (calls: readonly ToolCall[]) => {
-    for (const call of calls) {
-      if (
-        call.tool === "bash" && call.status === "running" &&
-        !call.time.waitsForUser && !shells.has(call.callID)
-      ) {
-        shells.add(call.callID);
-        items.push({
-          id: `shell/${call.callID}`,
-          kind: "shell",
-          label: "Shell",
-          title: call.description || call.title || call.command,
-          sessionID: input.sessionID,
-          startedAt: call.time.start,
-        });
-      }
-      if (call.children) tools(call.children);
-    }
-  };
-  for (const message of input.messages) {
-    if (message.sessionID !== input.sessionID) continue;
-    for (const part of message.parts) {
-      if (part.kind === "tool") tools([part.call]);
-      if (
-        part.kind !== "external" || part.activity?.work?.kind !== "shell" ||
-        part.activity.state?.facts.active !== true
-      ) continue;
-      items.push({
-        id: `shell/${message.id}/${part.id}`,
-        kind: "shell",
-        label: "Shell",
-        title: part.activity.detail || part.activity.title,
-        sessionID: input.sessionID,
-        startedAt: message.time.created,
-      });
-    }
+  const work = current?.activity?.work;
+  if (!work?.fresh) return items;
+  const seen = new Set<string>();
+  for (const item of work.items ?? []) {
+    if (
+      item.kind !== "shell" || !work.keys.includes(item.id) || seen.has(item.id)
+    ) continue;
+    seen.add(item.id);
+    items.push({
+      ...item,
+      id: `shell/${item.id}`,
+      kind: "shell",
+      sessionID: input.sessionID,
+    });
   }
   return items;
 }

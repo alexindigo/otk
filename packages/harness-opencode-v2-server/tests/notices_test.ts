@@ -59,16 +59,16 @@ const synthetic = (
 // INV-A's V2 cases, retargeted to the binding visible context carrier.
 for (
   const [state, title, tone, facts] of [
-    ["completed", "Junior finished", "normal", {
+    ["completed", "finished", "normal", {
       active: false,
       terminal: true,
     }],
-    ["error", "Junior failed", "error", { active: false, terminal: true }],
-    ["cancelled", "Junior cancelled", "normal", {
+    ["error", "failed", "error", { active: false, terminal: true }],
+    ["cancelled", "cancelled", "normal", {
       active: false,
       terminal: true,
     }],
-    ["future-state", "Junior finished", "normal", {
+    ["future-state", "finished", "normal", {
       active: null,
       terminal: null,
     }],
@@ -77,6 +77,10 @@ for (
   Deno.test(`V2 subagent ${state} preserves native state, parameters, source and rendered response`, () => {
     const part = notice(synthetic(state)), activity = part.activity!;
     assertEquals(activity.title, title);
+    assertEquals(activity.entity, {
+      label: "Junior",
+      sessionID: "opcv2-ses_child",
+    });
     assertEquals(activity.tone, tone);
     assertEquals(activity.state?.facts, facts);
     assertEquals(activity.state?.key, state);

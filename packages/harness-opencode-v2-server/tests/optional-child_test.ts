@@ -54,7 +54,11 @@ for (
     assertEquals(message.source?.payload, raw.text);
     const part = message.parts[0];
     assert(part.kind === "external");
-    assertEquals(part.activity?.title, "Junior finished");
+    assertEquals(part.activity?.title, "finished");
+    assertEquals(part.activity?.entity, {
+      label: "Junior",
+      sessionID: undefined,
+    });
     assertEquals(part.activity?.child, undefined);
     assertEquals(
       part.activity?.parameters?.find((value) => value.key === "sessionID")

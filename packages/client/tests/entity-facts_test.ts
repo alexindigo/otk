@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { assertEquals } from "@std/assert";
+import { entityFacts } from "../entity-facts.ts";
+import type { ToolCall } from "@otk/protocol";
+
+Deno.test("reply facts use canonical work, never session age or helper endpoints", () => {
+  const sources = {
+    session: () => ({ title: "18 day session", status: "working" as const }),
+  };
+  const facts = entityFacts({
+    sessionID: "s",
+    turnID: "turn",
+    timing: { state: "known", start: 100, end: 9000, workingMs: 2000 },
+  }, sources);
+  assertEquals(facts.reply?.working, {
+    known: true,
+    value: 2000,
+    final: true,
+    active: false,
+  });
+  assertEquals(facts.reply?.completed, {
+    known: true,
+    value: 9000,
+    final: true,
+    active: false,
+  });
+  assertEquals(facts.session.status, "working");
+});
+Deno.test("active and migrated reply facts never inherit a finished clock", () => {
+  const sources = { session: () => ({ status: "none" as const }) };
+  const active = entityFacts({
+    sessionID: "s",
+    turnID: "turn",
+    timing: { state: "active", start: 100, workingMs: 2000 },
+  }, sources);
+  assertEquals(active.reply?.completed.known, false);
+  assertEquals(active.reply?.working.final, false);
+  const migrated = entityFacts({
+    sessionID: "s",
+    turnID: "turn",
+    timing: {
+      state: "unknown",
+      start: 100,
+      terminal: true,
+      reason: "migration",
+    },
+  }, sources);
+  assertEquals(migrated.reply?.working.known, false);
+  assertEquals(migrated.reply?.completed.known, false);
+});
+Deno.test("historical reply facts borrow current session supervision across reconnect", () => {
+  let status: "none" | "working" = "none";
+  const source = { session: () => ({ status }) };
+  const identity = {
+    sessionID: "s",
+    turnID: "historical",
+    timing: { state: "known" as const, start: 100, end: 200, workingMs: 100 },
+  };
+  assertEquals(entityFacts(identity, source).session.status, "none");
+  status = "working";
+  assertEquals(entityFacts(identity, source).session.status, "working");
+  status = "none";
+  assertEquals(entityFacts(identity, source).reply?.completed.value, 200);
+  assertEquals(entityFacts(identity, source).session.status, "none");
+});
+
+Deno.test("tool facts retain their own scope and never certify an unfinished endpoint", () => {
+  const tool: ToolCall = {
+    tool: "bash",
+    callID: "call",
+    command: "echo done",
+    output: "done",
+    status: "running",
+    time: { start: 100, end: 2100 },
+  };
+  const active = entityFacts({ sessionID: "s", tool });
+  assertEquals(active.reply, undefined);
+  assertEquals(active.tool?.completed.known, false);
+  tool.status = "completed";
+  const complete = entityFacts({ sessionID: "s", tool });
+  assertEquals(complete.tool?.working.value, 2000);
+  assertEquals(complete.tool?.completed.value, 2100);
+  assertEquals(entityFacts({ sessionID: "s" }).reply, undefined);
+});
