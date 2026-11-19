@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./VirtualList.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import { createWindow, type WindowAnchor } from "@otk/client";
 import { acquireViewport, type ViewportPosition } from "./viewport.ts";
@@ -803,12 +803,13 @@ export default function VirtualList(props: {
         path,
       }}
     >
-      <div
+      <ScrollRegion
         ref={container}
         id={props.id}
-        class={`otk-virtual-list ${
-          borrowed ? "otk-virtual-borrowed" : scrollRegion()
-        } ${props.class ?? ""}`}
+        borrowed={borrowed}
+        class={`otk-virtual-list ${borrowed ? "otk-virtual-borrowed" : ""} ${
+          props.class ?? ""
+        }`}
         role={props.listRole ?? "list"}
         aria-label={props.label}
         data-acquired-count={props.keys.length}
@@ -847,7 +848,7 @@ export default function VirtualList(props: {
           aria-hidden="true"
           style={{ height: `${after()}px` }}
         />
-      </div>
+      </ScrollRegion>
     </Viewport>
   );
 }

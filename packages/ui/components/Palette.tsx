@@ -7,7 +7,7 @@ import {
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./Palette.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
@@ -76,7 +76,7 @@ export default function Palette(
           }
         }}
       />
-      <ul class={[scrollRegion(), "otk-palette-list"]}>
+      <ScrollRegion as="ul" class="otk-palette-list">
         <For each={rows()} keyed={(row) => row.cmd.id}>
           {(row) => (
             <li>
@@ -104,7 +104,7 @@ export default function Palette(
             </li>
           )}
         </For>
-      </ul>
+      </ScrollRegion>
       <Show when={!rows().length}>
         <p class="otk-muted">No matching commands.</p>
       </Show>

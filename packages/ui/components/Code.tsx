@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Code.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
@@ -480,18 +480,52 @@ export default function Code(
       data-reveal-fence={props.revealFence ? "true" : undefined}
     >
       <Show when={props.lineNumbers}>
-        <pre
-          class={[scrollRegion("x"), "otk-code-numbers"]}
+        <ScrollRegion
+          as="pre"
+          axis="x"
+          class="otk-code-numbers"
           aria-hidden="true"
-        >{props.text.split(/\r\n|\n|\r/).map((_, i) => i + (props.startLine ?? 1)).join("\n")}</pre>
+        >
+          {props.text.split(/\r\n|\n|\r/).map((_, i) =>
+            i + (props.startLine ?? 1)
+          ).join("\n")}
+        </ScrollRegion>
       </Show>
-      <pre class={scrollRegion("x")}><code>
-      <For each={pieces()} keyed={piece => piece.key}>{piece => (
-        <Show when={piece().group} fallback={<RawSource text={frame().source.slice(piece().start, piece().end)} source={frame().source} start={piece().start} terminal={piece().end === frame().source.length} mount={selected => mountTail(piece().key, selected)} onDemand={range => demandTail(piece().key, range)} onSelection={() => { setSelectionTick(value => value + 1); enqueue(); }} />}>
-          {group => <CodeGroup rows={group().rows} tokens={styles[group().key]?.owner === frame().model.id ? styles[group().key]?.tokens : undefined} onDemand={visible => demand(group().key, visible)} />}
-        </Show>
-      )}</For>
-    </code></pre>
+      <ScrollRegion as="pre" axis="x" class="otk-code-content">
+        <code>
+          <For each={pieces()} keyed={(piece) => piece.key}>
+            {(piece) => (
+              <Show
+                when={piece().group}
+                fallback={
+                  <RawSource
+                    text={frame().source.slice(piece().start, piece().end)}
+                    source={frame().source}
+                    start={piece().start}
+                    terminal={piece().end === frame().source.length}
+                    mount={(selected) => mountTail(piece().key, selected)}
+                    onDemand={(range) => demandTail(piece().key, range)}
+                    onSelection={() => {
+                      setSelectionTick((value) => value + 1);
+                      enqueue();
+                    }}
+                  />
+                }
+              >
+                {(group) => (
+                  <CodeGroup
+                    rows={group().rows}
+                    tokens={styles[group().key]?.owner === frame().model.id
+                      ? styles[group().key]?.tokens
+                      : undefined}
+                    onDemand={(visible) => demand(group().key, visible)}
+                  />
+                )}
+              </Show>
+            )}
+          </For>
+        </code>
+      </ScrollRegion>
       <Show when={error()}>
         <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>

@@ -4,8 +4,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  /* Scrollbar colors inherit; each nested boundary keeps its own paint. */
-  scrollbar-color: auto;
+  scrollbar-width: none;
 }
 :where(.otk-scroll-x) {
   overflow-y: hidden;
@@ -15,13 +14,62 @@
   overflow-x: hidden;
   overscroll-behavior-x: auto;
 }
-:where(.otk-scrollbar-thin) {
-  scrollbar-width: thin;
-  scrollbar-color: var(--otk-fg-3) var(--otk-bg);
-}
-:where(.otk-scrollbar-hidden) {
-  scrollbar-width: none;
-}
-:where(.otk-scrollbar-hidden)::-webkit-scrollbar {
+:where(.otk-scroll)::-webkit-scrollbar {
   display: none;
+}
+.otk-scroll-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px;
+  grid-template-rows: minmax(0, 1fr) 12px;
+  min-width: 0;
+  min-height: 0;
+  max-height: inherit;
+  flex: 1 1 auto;
+}
+.otk-scroll-frame > .otk-scroll {
+  grid-area: 1 / 1 / -1 / -1;
+}
+.otk-scroll-field {
+  display: inline-grid;
+  inline-size: 100%;
+}
+.otk-scroll-frame[hidden] {
+  display: none;
+}
+.otk-scroll-track {
+  z-index: 1;
+  touch-action: none;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.otk-scroll-track-y {
+  grid-area: 1 / 2;
+}
+.otk-scroll-track-x {
+  grid-area: 2 / 1;
+  display: flex;
+  align-items: center;
+}
+.otk-scroll-track[hidden] {
+  display: none;
+}
+.otk-scroll-thumb {
+  border-radius: var(--radius-control);
+  background: var(--otk-fg-3);
+  pointer-events: none;
+}
+.otk-scroll-track-y > .otk-scroll-thumb {
+  width: 4px;
+  margin-inline: auto;
+}
+.otk-scroll-track-x > .otk-scroll-thumb {
+  height: 4px;
+  flex: none;
+}
+.otk-scroll-frame:hover > .otk-scroll-track,
+.otk-scroll-frame:focus-within > .otk-scroll-track,
+.otk-scroll-frame.is-scrolling > .otk-scroll-track,
+.otk-scroll-frame.is-dragging > .otk-scroll-track {
+  opacity: 1;
 }

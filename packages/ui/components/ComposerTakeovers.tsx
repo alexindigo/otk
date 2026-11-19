@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ComposerTakeovers.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
 import { useUiRegistries } from "../registries/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
@@ -48,15 +48,15 @@ export default function ComposerTakeovers(
               </div>
             </Show>
           </div>
-          <div
-            class={[scrollRegion(), "otk-composer-notice-layer"]}
+          <ScrollRegion
+            frameClass="otk-composer-notice-layer"
             hidden={!hasComposer() || active()}
           >
             <ContentSlot content={!active() ? props.notice : undefined} />
-          </div>
+          </ScrollRegion>
           <div class="otk-composer-frame" hidden={!hasComposer()}>
-            <div
-              class={[scrollRegion(), "otk-composer", {
+            <ScrollRegion
+              class={["otk-composer", {
                 "is-suspended": active(),
               }]}
               data-takeover={active() ? "true" : "false"}
@@ -66,7 +66,7 @@ export default function ComposerTakeovers(
               <div class="otk-composer-body">
                 {hasComposer() && props.children?.(active)}
               </div>
-            </div>
+            </ScrollRegion>
           </div>
           <div class="otk-composer-takeover-layer">
             <RequestReopen />

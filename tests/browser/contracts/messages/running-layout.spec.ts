@@ -32,6 +32,11 @@ async function geometry(page: Page) {
       footer: rect(pane.querySelector(".otk-message-footer")),
       work: rect(pane.querySelector(".otk-work-fold")),
       execution: rect(pane.querySelector(".otk-tool-line")),
+      thumb: rect(
+        pane.parentElement!.querySelector(
+          ".otk-scroll-track-y > .otk-scroll-thumb",
+        ),
+      ),
     };
   });
 }
