@@ -106,23 +106,26 @@ test.describe("shared anchor gutters", () => {
             height - 40,
           ]]
         ) {
-          await page.locator(".otk-tabs-project").evaluate((el, [x, y]) => {
-            const node = el as HTMLElement;
-            node.tabIndex = 0;
-            Object.assign(node.style, {
-              position: "fixed",
-              width: "160px",
-              height: "40px",
-              left: x + "px",
-              top: y + "px",
-            });
-            node.focus();
-          }, [x, y]);
+          await page.locator(".otk-project-chip-trigger").evaluate(
+            (el, [x, y]) => {
+              const node = el as HTMLElement;
+              node.tabIndex = 0;
+              Object.assign(node.style, {
+                position: "fixed",
+                width: "160px",
+                height: "40px",
+                left: x + "px",
+                top: y + "px",
+              });
+              node.focus();
+            },
+            [x, y],
+          );
           await page.keyboard.press("ContextMenu");
           await gutters(page);
           await close(page);
         }
-        await page.locator(".otk-tabs-project").evaluate((el) =>
+        await page.locator(".otk-project-chip-trigger").evaluate((el) =>
           el.removeAttribute("style")
         );
         const trigger = page.locator(".otk-display-menu > button");
