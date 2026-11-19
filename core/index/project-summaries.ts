@@ -365,6 +365,7 @@ export class ProjectSummaries {
       ...(this.identity.availability(directory)
         ? {
           availability: this.identity.availability(directory),
+          archived: this.identity.archived(directory),
           memberships: this.identity.memberships(directory),
         }
         : {}),

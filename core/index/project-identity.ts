@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ProjectSeed } from "@otk/harness";
+import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
 import type { ProjectTopology } from "@otk/protocol";
 import type { CheckoutAuthority, CheckoutRecord } from "@otk/store";
 
@@ -19,26 +19,29 @@ const unchanged = (): IdentityChange => ({
 });
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
   a.size === b.size && [...a].every((v) => b.has(v));
-/** Sole owner of native repository membership and historical checkout boundaries. */
-/** Only a worktree can be removed. A project's own folder (its canonical
- * root, or a folder without Git) missing from a worktree inventory is not
- * evidence that it was removed. */
-function removable(
-  leafDirectory: string,
-  canonicalRoot: string,
-): "removed" | "unknown" {
-  return canonicalRoot && leafDirectory !== canonicalRoot
-    ? "removed"
-    : "unknown";
+interface IdentityRecord extends CheckoutRecord {
+  /** Live coverage cannot survive restart as authority for absence. */
+  inventory: "current" | "unknown";
 }
+function availability(
+  record: Pick<CheckoutRecord, "leafDirectory" | "kind" | "proven">,
+  inventory: ProjectIdentityFact["inventory"],
+): CheckoutRecord["availability"] {
+  if (inventory === undefined || !record.proven) return "unknown";
+  if (inventory.some((row) => row.directory === record.leafDirectory)) {
+    return "present";
+  }
+  return record.kind === "worktree" ? "removed" : "unknown";
+}
+/** Sole owner of native repository membership and historical checkout boundaries. */
 export class ProjectIdentity {
   #revision = 0;
   get revision(): number {
     return this.#revision;
   }
-  #records = new Map<string, CheckoutRecord>();
-  #scopes = new Map<string, CheckoutRecord[]>();
-  #leaves = new Map<string, CheckoutRecord[]>();
+  #records = new Map<string, IdentityRecord>();
+  #scopes = new Map<string, IdentityRecord[]>();
+  #leaves = new Map<string, IdentityRecord[]>();
   #sources = new Set<string>();
   #current = new Map<string, ReadonlySet<string>>();
   #authoritative = false;
@@ -53,7 +56,11 @@ export class ProjectIdentity {
     },
   ) {
     for (const r of history?.list() ?? []) {
-      this.#records.set(key(r), { ...r, availability: "unknown" });
+      this.#records.set(key(r), {
+        ...r,
+        availability: "unknown",
+        inventory: "unknown",
+      });
       this.#sources.add(r.source);
     }
     const authority = history?.authority?.();
@@ -89,13 +96,14 @@ export class ProjectIdentity {
     ) return unchanged();
     const leafDirectory = recordedRoot ?? this.leaf(directory, repoID);
     const known = rows.find((r) => r.leafDirectory === leafDirectory);
-    const record: CheckoutRecord = {
+    const record: IdentityRecord = {
       ...rows[0],
       scope: directory,
       leafDirectory,
       proven: recordedRoot !== undefined || known?.proven === true,
       kind: known?.kind ?? "unknown",
       availability: known?.availability ?? "unknown",
+      inventory: known?.inventory ?? "unknown",
     };
     const records = new Map(this.#records);
     records.set(key(record), record);
@@ -127,7 +135,7 @@ export class ProjectIdentity {
       ),
     );
     const selected = sources.size ? sources : new Set(this.#sources);
-    const put = (r: CheckoutRecord) => {
+    const put = (r: IdentityRecord) => {
       const k = key(r);
       if (JSON.stringify(records.get(k)) === JSON.stringify(r)) return;
       records.set(k, r);
@@ -154,16 +162,15 @@ export class ProjectIdentity {
           "";
         // Canonical relocation and pruning update facts, never discard affiliation.
         for (const r of same) {
+          const kind = fact.inventory?.find((i) =>
+            i.directory === r.leafDirectory
+          )?.kind ?? r.kind;
           put({
             ...r,
             canonicalRoot,
-            availability: fact.inventory === undefined
-              ? "unknown"
-              : r.proven
-              ? fact.inventory.some((i) => i.directory === r.leafDirectory)
-                ? "present"
-                : removable(r.leafDirectory, canonicalRoot)
-              : "unknown",
+            kind,
+            inventory: fact.inventory === undefined ? "unknown" : "current",
+            availability: availability({ ...r, kind }, fact.inventory),
           });
         }
         const previous = records.get(
@@ -191,6 +198,9 @@ export class ProjectIdentity {
           r.directory === leafDirectory
         );
         const proven = root !== undefined;
+        const kind = registered?.kind ??
+          same.find((r) => r.leafDirectory === leafDirectory)?.kind ??
+          (leafDirectory === canonicalRoot ? "checkout" : "unknown");
         put({
           source: fact.source,
           repoID: fact.repoID,
@@ -198,15 +208,12 @@ export class ProjectIdentity {
           canonicalRoot,
           leafDirectory,
           proven,
-          kind: registered?.kind ??
-            (leafDirectory === canonicalRoot
-              ? "checkout"
-              : previous?.kind ?? "unknown"),
-          availability: fact.inventory === undefined || !proven
-            ? "unknown"
-            : registered
-            ? "present"
-            : removable(leafDirectory, canonicalRoot),
+          kind,
+          inventory: fact.inventory === undefined ? "unknown" : "current",
+          availability: availability(
+            { leafDirectory, kind, proven },
+            fact.inventory,
+          ),
         });
       }
       // Legacy null means loss of inventory, not loss of a durable native edge.
@@ -215,7 +222,8 @@ export class ProjectIdentity {
           if (r.scope === seed.directory) {
             put({
               ...r,
-              availability: removable(r.leafDirectory, r.canonicalRoot),
+              availability: "unknown",
+              inventory: "unknown",
             });
           }
         }
@@ -229,7 +237,7 @@ export class ProjectIdentity {
     );
   }
   #accept(
-    records: Map<string, CheckoutRecord>,
+    records: Map<string, IdentityRecord>,
     sources: ReadonlySet<string>,
     current: Map<string, ReadonlySet<string>>,
     authoritative: boolean,
@@ -347,7 +355,16 @@ export class ProjectIdentity {
       leafDirectory: r.leafDirectory,
       availability: r.availability,
       kind: r.kind,
+      inventory: r.inventory,
     }));
+  }
+  archived(directory: string): boolean {
+    const rows = this.#leaves.get(directory);
+    return !!rows?.length &&
+      rows.every((r) =>
+        r.kind === "worktree" && r.inventory === "current" &&
+        r.availability === "removed"
+      );
   }
   topologies(): ProjectTopology[] {
     return [...this.#leaves.keys()].flatMap((directory) =>
