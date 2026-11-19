@@ -54,7 +54,7 @@ test(
       tab = page.locator(`[data-tab="${task.id}"]`);
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
-      "finished",
+      "working",
     );
     await expect(project.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
@@ -83,7 +83,7 @@ test(
     const inspect = async () => {
       for (const consumer of [tab, project]) {
         const lamp = consumer.locator(".otk-status-light");
-        await expect(lamp).toHaveAttribute("data-state", "finished");
+        await expect(lamp).toHaveAttribute("data-state", "working");
         await expect(lamp).toBeVisible();
         await expect(lamp).toBeInViewport({ ratio: 1 });
       }

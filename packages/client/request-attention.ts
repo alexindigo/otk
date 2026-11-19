@@ -6,7 +6,7 @@ import {
   type TaskRecord,
 } from "@otk/protocol";
 import {
-  attentionStatus,
+  rollupStatus,
   type InboxProject,
   type InboxStatus,
   type OperationAttention,
@@ -42,7 +42,7 @@ export function requestAttention(
     map: Map<string, InboxStatus>,
     key: string,
     status: InboxStatus,
-  ) => map.set(key, attentionStatus(map.get(key), status));
+  ) => map.set(key, rollupStatus(map.get(key), status));
   const addSession = (id: string, status: InboxStatus) => {
     if (!lookup(id)?.deleted) add(sessionStates, id, status);
   };
@@ -66,7 +66,7 @@ export function requestAttention(
       : "working";
     add(projectStates, session?.directory ?? task?.directory ?? owner, status);
     if (task) {
-      taskStates[task.id] = attentionStatus(taskStates[task.id], status);
+      taskStates[task.id] = rollupStatus(taskStates[task.id], status);
       for (const id of task.sessions) addSession(id, status);
     }
     if (session) {
@@ -89,7 +89,7 @@ export function requestAttention(
       ),
     projects: (values) =>
       values.map((project) => {
-        const status = attentionStatus(
+        const status = rollupStatus(
           project.status,
           projectStates.get(project.directory),
         );

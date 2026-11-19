@@ -44,19 +44,33 @@ export interface TaskRecord {
   order: number;
   sessions: string[];
 }
-export const PROJECT_STATUS_PRIORITY = [
+/** Aggregate lamp display only; never use this order to choose urgent sessions. */
+export const ROLLUP_PRIORITY = [
+  "blocked",
+  "working",
+  "finished",
+  "none",
+] as const;
+export type ProjectStatus = typeof ROLLUP_PRIORITY[number];
+/** Combine lamp states for display, not navigation or notification urgency. */
+export function rollupStatus(
+  ...states: (ProjectStatus | undefined)[]
+): ProjectStatus {
+  return ROLLUP_PRIORITY.find((state) => states.includes(state)) ??
+    "none";
+}
+/** User-attention urgency for session selection; never use for lamp rollups. */
+export const URGENCY_PRIORITY = [
   "blocked",
   "finished",
   "working",
   "none",
-] as const;
-export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
-/** One attention ordering shared by server navigation and client projections. */
-export function attentionStatus(
+] as const satisfies readonly ProjectStatus[];
+/** Choose the most urgent attention state, not the aggregate lamp colour. */
+export function urgentStatus(
   ...states: (ProjectStatus | undefined)[]
 ): ProjectStatus {
-  return PROJECT_STATUS_PRIORITY.find((state) => states.includes(state)) ??
-    "none";
+  return URGENCY_PRIORITY.find((state) => states.includes(state)) ?? "none";
 }
 /** Connection-local repository identity; checkout roots are explicit native facts. */
 export interface ProjectTopology {

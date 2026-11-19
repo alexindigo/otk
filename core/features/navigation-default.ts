@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HarnessCore } from "@otk/harness";
 import {
-  attentionStatus,
+  urgentStatus,
   type IndexMetadata,
   type ProjectStatus,
   type SessionMetadata,
@@ -42,7 +42,7 @@ export class NavigationDefault {
         !row.deleted && belongs(row) && this.source.status(row.id) !== "none"
       ).sort((a, b) => {
         const x = this.source.status(a.id), y = this.source.status(b.id);
-        return x === y ? recent(a, b) : attentionStatus(x, y) === x ? -1 : 1;
+        return x === y ? recent(a, b) : urgentStatus(x, y) === x ? -1 : 1;
       })[0]?.id;
     // Defaults open a human (top-level) session: a helper that needs
     // attention or was last viewed resolves to the top-level session owning it.

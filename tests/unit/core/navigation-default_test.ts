@@ -122,6 +122,22 @@ Deno.test("navigation default rejects missing, foreign and deleted memories, exc
   );
 });
 
+Deno.test("navigation urgency still chooses finished over working despite the working rollup lamp", async () => {
+  const f = fixture();
+  f.states.set("tstv1-old", "working");
+  f.states.set("tstv1-new", "finished");
+  assertEquals(
+    await f.resolver.resolve(f.core, { directory: "/repo" }),
+    "tstv1-new",
+  );
+  f.states.set("tstv1-old", "blocked");
+  assertEquals(
+    await f.resolver.resolve(f.core, { directory: "/repo" }),
+    "tstv1-old",
+  );
+  assertEquals(f.reads, [], "urgency still never scans a native catalog");
+});
+
 for (const change of ["deleted", "moved", "parented"] as const) {
   Deno.test(`navigation default revalidates ${change} roots after later scope reads`, async () => {
     const f = fixture(),

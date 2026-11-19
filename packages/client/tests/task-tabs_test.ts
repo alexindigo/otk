@@ -205,6 +205,24 @@ Deno.test("keyed task membership retains an explicitly grouped session before it
   assertEquals(tabs.sessionFor("task"), "pending");
 });
 
+Deno.test("a mixed task lamp shows working while its unseen finish retains strip urgency", () => {
+  const running = { ...entry("running"), status: "busy" as const },
+    finished = entry("finished"),
+    newer = { ...entry("newer", 100), status: "busy" as const };
+  const meta = inbox([
+    task("mixed", [running.id, finished.id]),
+    task("newer", [newer.id]),
+  ]);
+  meta.finishes.finished = 50;
+  const tabs = model();
+  tabs.update({ directory: "/p", entries: [running, finished, newer], inbox: meta });
+  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
+    ["mixed", "working"],
+    ["newer", "working"],
+  ]);
+  tabs.stop();
+});
+
 Deno.test("helpers roll up to their nearest task and finished helpers remain mandatory until acknowledged", () => {
   const root = entry("root"),
     other = entry("other", 20),
