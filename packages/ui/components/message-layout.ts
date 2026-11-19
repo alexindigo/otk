@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
+import type { TranscriptReply } from "@otk/client";
 import type { PartPresentation } from "../registries/renderers.ts";
 import {
   partFrames,
   type PartGroup,
   partGroups,
+  type ReplyStart,
   segmentWorkingTime,
 } from "./work-log.ts";
 
@@ -32,8 +34,17 @@ export function createMessageLayout() {
   let preference: string | undefined, previousRole = "", copyable = 0;
   let order: string[] = [];
   let waits: Part[] = [];
-  const segments = new Map<string, { parts: Part[]; rows: Descriptor[] }>();
+  const segments = new Map<
+    string,
+    {
+      parts: Part[];
+      rows: Descriptor[];
+      agent?: string;
+      time?: ReplyStart["time"];
+    }
+  >();
   const parts = new Map<string, Descriptor>();
+  const sourceSlots = new Map<string, { frame: number; group: number }>();
   const slots = new Map<
     string,
     { frame: number; group: number; index: number }
@@ -43,7 +54,7 @@ export function createMessageLayout() {
     update(
       id: string,
       role: string,
-      input: readonly { messageID: string; parts: Part[] }[],
+      input: readonly TranscriptReply["segments"][number][],
       version: string,
       present: (part: Part) => PartPresentation,
     ): MessageLayout {
@@ -51,8 +62,23 @@ export function createMessageLayout() {
       let structural = role !== previousRole || order.length !== input.length ||
         input.some((segment, i) => segment.messageID !== order[i]);
       const replacements: { before: Descriptor; after: Descriptor }[] = [];
+      const changedSources = new Set<string>();
       for (const segment of input) {
         const old = segments.get(segment.messageID);
+        if (old?.agent !== segment.agent || old?.time !== segment.time) {
+          changedSources.add(segment.messageID);
+          if (
+            !!(old?.agent !== undefined && old.time) !==
+              !!(segment.agent !== undefined && segment.time)
+          ) structural = true;
+          if (old) {
+            segments.set(segment.messageID, {
+              ...old,
+              agent: segment.agent,
+              time: segment.time,
+            });
+          }
+        }
         if (!changedPreferences && old?.parts === segment.parts) continue;
         const rows = segment.parts.map((part) => {
           const before = parts.get(part.id);
@@ -70,6 +96,7 @@ export function createMessageLayout() {
           if (
             !before || !!before.value.hidden !== !!value.hidden ||
             before.value.frame !== value.frame ||
+            !!before.value.prose !== !!value.prose ||
             !!before.value.work !== !!value.work ||
             !!before.value.required !== !!value.required
           ) structural = true;
@@ -81,7 +108,12 @@ export function createMessageLayout() {
           !old || old.rows.length !== rows.length ||
           rows.some((row, i) => row.part.id !== old.rows[i].part.id)
         ) structural = true;
-        segments.set(segment.messageID, { parts: segment.parts, rows });
+        segments.set(segment.messageID, {
+          parts: segment.parts,
+          rows,
+          agent: segment.agent,
+          time: segment.time,
+        });
       }
       preference = version;
       previousRole = role;
@@ -113,11 +145,29 @@ export function createMessageLayout() {
           frames.push({ id, parts: [], transcript: false });
         }
         const usedGroups = new Set<string>(), usedFrames = new Set<string>();
+        const proseSources = new Set<string>();
         const next = frames.map((frame) => {
           const groups = partGroups(
             frame.parts,
             (part) => role === "assistant" ? parts.get(part.id)!.value : {},
             waits,
+            (part) => {
+              if (role !== "assistant") return;
+              const messageID = parts.get(part.id)!.messageID;
+              const source = segments.get(messageID)!;
+              if (
+                source.agent === undefined || !source.time ||
+                proseSources.has(messageID)
+              ) return;
+              const continuation = proseSources.size > 0;
+              proseSources.add(messageID);
+              return {
+                messageID,
+                agent: source.agent,
+                time: source.time,
+                continuation,
+              };
+            },
           );
           // Prepending a work prefix keeps an already-known fold's identity.
           for (const group of groups) {
@@ -145,12 +195,19 @@ export function createMessageLayout() {
           return { id: key, transcript: frame.transcript, groups };
         });
         slots.clear();
+        sourceSlots.clear();
         next.forEach((frame, f) =>
-          frame.groups.forEach((group, g) =>
+          frame.groups.forEach((group, g) => {
+            if (group.replyStart) {
+              sourceSlots.set(group.replyStart.messageID, {
+                frame: f,
+                group: g,
+              });
+            }
             group.parts.forEach((part, index) =>
               slots.set(part.id, { frame: f, group: g, index })
-            )
-          )
+            );
+          })
         );
         order = input.map((segment) => segment.messageID);
         const userBubble = role === "user" &&
@@ -185,6 +242,16 @@ export function createMessageLayout() {
         }
         return frames[f].groups[g];
       };
+      for (const id of changedSources) {
+        const slot = sourceSlots.get(id), source = segments.get(id);
+        if (!slot || source?.agent === undefined || !source.time) continue;
+        const group = writable(slot.frame, slot.group);
+        group.replyStart = {
+          ...group.replyStart!,
+          agent: source.agent,
+          time: source.time,
+        };
+      }
       for (const { before, after } of replacements) {
         copyable += Number(after.copyable) - Number(before.copyable);
         const slot = slots.get(after.part.id);

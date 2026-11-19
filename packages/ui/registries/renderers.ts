@@ -5,6 +5,8 @@ export interface WorkTime {
   end?: number;
 }
 export interface PartPresentation {
+  /** Ordinary answer prose, eligible for its source's reply-start boundary. */
+  prose?: boolean;
   work?: WorkTime;
   /** Recorded busy/wait evidence, separate from work-log membership. */
   timing?: import("@otk/protocol").SegmentTimingEvidence;

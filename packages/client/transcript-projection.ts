@@ -19,7 +19,12 @@ export interface TranscriptReply {
   firstID: string;
   lastID: string;
   messageIDs: string[];
-  segments: { messageID: string; parts: Part[] }[];
+  segments: {
+    messageID: string;
+    parts: Part[];
+    agent?: string;
+    time?: AssistantMessage["time"];
+  }[];
   message: Message;
   pending?: boolean;
   revision: number;
@@ -409,10 +414,17 @@ export function createTranscriptProjection(): TranscriptProjection {
       );
     }
     const segment = segmentByID.get(message.id);
-    if (segment?.parts !== message.parts) {
+    const agent = message.role === "assistant" ? message.agent : undefined;
+    const time = message.role === "assistant" ? message.time : undefined;
+    if (
+      segment?.parts !== message.parts || segment?.agent !== agent ||
+      segment?.time !== time
+    ) {
       segmentByID.set(message.id, {
         messageID: message.id,
         parts: message.parts,
+        agent,
+        time,
       });
     }
     const reordered = !previous || compare(previous, message) !== 0;

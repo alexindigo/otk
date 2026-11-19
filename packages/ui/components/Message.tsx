@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAssistantTerminal } from "@otk/protocol";
 import "./Message.css" with { type: "text" };
-import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
@@ -13,6 +12,7 @@ import type { UsageSummary } from "@otk/protocol";
 import {
   createMessageLayout,
   messageLayoutRole,
+  type ReplyStart as ReplyStartData,
   timingExplanation,
   workingTime,
 } from "./work-log.ts";
@@ -100,6 +100,23 @@ function PartsView(
 export interface MessageControl {
   reveal(): void;
 }
+function ReplyStart(props: { source: ReplyStartData }) {
+  const date = () =>
+    new Date(props.source.time.lastOutput ?? props.source.time.created);
+  return (
+    <header
+      class={["otk-reply-start", {
+        "is-continuation": props.source.continuation,
+      }]}
+      data-reply-source={props.source.messageID}
+    >
+      <span title={props.source.agent}>{props.source.agent}</span>
+      <time datetime={date().toISOString()} title={date().toLocaleString()}>
+        {date().toLocaleTimeString()}
+      </time>
+    </header>
+  );
+}
 export default function Message(
   props: {
     sidecarId?: string;
@@ -143,7 +160,13 @@ export default function Message(
       props.ownerID ?? props.message.id,
       messageLayoutRole(props.message),
       props.segments ??
-        [{ messageID: props.message.id, parts: props.message.parts }],
+        [{
+          messageID: props.message.id,
+          parts: props.message.parts,
+          ...(props.message.role === "assistant"
+            ? { agent: props.message.agent, time: props.message.time }
+            : {}),
+        }],
       JSON.stringify(props.prefs),
       (part) => parts.presentation(part, props.prefs),
     )
@@ -271,17 +294,22 @@ export default function Message(
                   <Show
                     when={group().work}
                     fallback={
-                      <PartsView
-                        parts={group().parts}
-                        prefs={props.prefs}
-                        directory={props.directory}
-                        permissions={props.permissions}
-                        onOpenChild={props.onOpenChild}
-                        user={props.message.role === "user"}
-                        streaming={streaming()}
-                        pending={props.pending}
-                        sourceID={sourceID}
-                      />
+                      <>
+                        <Show when={group().replyStart}>
+                          {(source) => <ReplyStart source={source()} />}
+                        </Show>
+                        <PartsView
+                          parts={group().parts}
+                          prefs={props.prefs}
+                          directory={props.directory}
+                          permissions={props.permissions}
+                          onOpenChild={props.onOpenChild}
+                          user={props.message.role === "user"}
+                          streaming={streaming()}
+                          pending={props.pending}
+                          sourceID={sourceID}
+                        />
+                      </>
                     }
                   >
                     <WorkLog
@@ -376,30 +404,6 @@ export default function Message(
                     }]}
                   >
                     <span class="otk-message-details">
-                      <span
-                        class="otk-message-agent otk-created-trigger"
-                        tabindex="0"
-                        data-otk-focus="content"
-                        style={{
-                          "--message-agent-color":
-                            agentColor(message().agentColor) ||
-                            "var(--otk-fg-3)",
-                        }}
-                      >
-                        {message().agent}
-                      </span>
-                      <time
-                        class="otk-created-time"
-                        datetime={new Date(message().time.created)
-                          .toISOString()}
-                      >
-                        {new Date(message().time.created).toLocaleString()}
-                      </time>
-                      <span class="otk-last-output-date" aria-hidden="true">
-                        {new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        ).toLocaleDateString()}
-                      </span>
                       <span>
                         {message().model.provider}/{message().model.model}
                       </span>
@@ -443,27 +447,6 @@ export default function Message(
                         onReveal={setRevealed}
                       />
                     </Show>
-                    <span class="otk-output-time-group">
-                      <time
-                        class="otk-last-output-time"
-                        tabindex="0"
-                        data-otk-focus="content"
-                        aria-label="Last output time"
-                        datetime={new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        ).toISOString()}
-                        title={`Last output: ${
-                          new Date(
-                            message().time.lastOutput ?? message().time.created,
-                          ).toLocaleString()
-                        }`}
-                      >
-                        {new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        )
-                          .toLocaleTimeString()}
-                      </time>
-                    </span>
                   </footer>
                 )}
               />

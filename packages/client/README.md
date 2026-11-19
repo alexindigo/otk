@@ -748,6 +748,9 @@ Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay
 context. Ordinary part updates reuse the indexed assistant header.
+Each borrowed assistant segment also retains its own agent and native clock;
+metadata-only clock updates replace only that source segment. Reply grouping,
+source order and canonical action boundaries remain unchanged.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.

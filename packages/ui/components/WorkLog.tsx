@@ -5,7 +5,6 @@ import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { workingTime } from "./work-log.ts";
 import { ChevronIcon } from "./ChromeIcons.tsx";
-import DividerLabel from "./DividerLabel.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
@@ -35,7 +34,7 @@ export default function WorkLog(
         onClick={() => void toggle()}
       >
         <ChevronIcon class="otk-work-chevron" />
-        <DividerLabel label={label()} />
+        <span class="otk-work-label">{label()}</span>
       </button>
       <Show when={open()}>
         <div class="otk-work-body">{props.body()}</div>

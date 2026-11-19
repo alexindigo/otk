@@ -150,7 +150,10 @@ function Code(
 function List(props: { block: Block & { b: "list" }; conceal?: boolean }) {
   const Tag = dynamic(() => props.block.ordered ? "ol" : "ul");
   return (
-    <Tag start={props.block.ordered ? props.block.start : undefined}>
+    <Tag
+      class="otk-prose-list"
+      start={props.block.ordered ? props.block.start : undefined}
+    >
       <For each={props.block.items} keyed={false}>
         {(item) => (
           <li class={item().task ? "otk-prose-task-item" : undefined}>
@@ -289,9 +292,8 @@ export default function Blocks(props: {
         render={(row) => (
           <div
             class={["otk-prose-block", {
-              "is-compact-start": props.compact && row().index === 0,
-              "is-compact-end": props.compact &&
-                row().index === props.blocks.length - 1,
+              "is-compact-start": row().index === 0,
+              "is-compact-end": row().index === props.blocks.length - 1,
             }]}
           >
             <BlockView

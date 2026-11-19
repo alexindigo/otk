@@ -6,10 +6,10 @@
   font-weight: 600;
   font-size: var(--text-heading);
   line-height: var(--line-heading);
-  margin: 16px 0;
+  margin: 8px 0;
 }
 .otk-prose-paragraph {
-  margin: 12px 0;
+  margin: 0 0 12px;
 }
 .otk-prose-code {
   font-family: var(--font-mono);
@@ -100,4 +100,20 @@
 }
 .otk-prose-unconcealed h6.otk-prose-heading::before {
   content: "###### ";
+}
+.otk-prose-list {
+  margin: 0 0 12px;
+  padding-inline-start: 24px;
+}
+.otk-prose-list > li + li {
+  margin-top: 4px;
+}
+.otk-prose-list > li > .otk-prose-paragraph {
+  margin: 0;
+}
+.otk-prose-list > li > .otk-prose-paragraph + .otk-prose-paragraph {
+  margin-top: 8px;
+}
+.otk-prose-list .otk-prose-list {
+  margin-block: 4px 0;
 }

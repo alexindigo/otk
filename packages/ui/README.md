@@ -216,10 +216,10 @@ other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
 `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
-contribute `{work?, text?, copyable?, hidden?, frame?}` presentation data: the
-message groups adjacent contributed work clocks into expandable folds and copies
-contributed source text without dispatching concrete part kinds or reading child
-DOM. `copyable` is cheap availability; source-bearing features can expose `text`
+contribute `{prose?, work?, text?, copyable?, hidden?, frame?}` presentation data:
+the message groups adjacent contributed work clocks into expandable folds and
+copies contributed source text without dispatching concrete part kinds or reading
+child DOM. `copyable` is cheap availability; source-bearing features can expose `text`
 as a lazy getter. Framing and live action targets do not stringify reply source.
 Copy invokes the canonical transcript source port, paging missing steps before
 the part presenters resolve the complete reply. Action ports use optional
@@ -242,10 +242,10 @@ contiguous source parts for one whole-reply copy.
 
 `frame: "transcript"` places a contributed part outside the ordinary message
 bubble, preserving adjacent normal content in its own frame even in mixed
-messages. Compaction owns that declaration and renders a shared DividerLabel,
-the same label/rule pattern as WorkLog: “Compacting…” for a pending request and
-“Session compacted” afterward. The generic message view dispatches no concrete
-part kinds. Part renderers receive the client projection's optional `pending`
+messages. Compaction owns that declaration and renders a shared DividerLabel:
+"Compacting..." for a pending request and "Session compacted" afterward. The
+generic message view dispatches no concrete part kinds. Part renderers receive
+the client projection's optional `pending`
 input; the summary reply retains its normal rendering.
 
 Shared message framing separates `userBubble` presentation from `prompt` action
@@ -300,6 +300,14 @@ Missing-seed recovery is separate plain in-flow text beside the logical reply:
 available Retry response callback after a checkpoint failure. The canonical
 client resource owns this state. It does not alter supervision lights, disable
 controls or add a loading overlay.
+
+Each prose-bearing assistant source starts with one quiet agent/local-time band,
+kept in the first prose group's virtual item. Continuations within a grouped
+reply add a rule and a larger reply gap. Source clocks use their own last output
+or creation time, independent of the grouped reply's metadata. Work-only sources
+stay in their existing work groups. Work uses compact, intrinsic-width disclosure
+labels with real chevrons, not the full-width compaction boundary treatment.
+Blocks owns paragraph, heading and compact list rhythm across virtual wrappers.
 
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn

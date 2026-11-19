@@ -17,6 +17,7 @@ export function registerTextPart(parts: PartRegistry): void {
       </Show>
     ),
     (part) => ({
+      prose: !part.synthetic && part.blocks.length > 0,
       copyable: !part.synthetic && part.blocks.length > 0,
       get text() {
         return part.synthetic ? undefined : blocksText(part.blocks);

@@ -3,9 +3,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--line-meta);
   padding: 0;
-  margin-bottom: 4px;
+  margin-block: 8px;
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
   text-align: left;
@@ -13,7 +15,13 @@
 .otk-work-chevron {
   width: var(--icon-compact);
   height: var(--icon-compact);
+  flex: none;
 }
 .otk-work-fold[aria-expanded=true] .otk-work-chevron {
   rotate: 90deg;
+}
+.otk-work-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

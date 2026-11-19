@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Message, Part, TurnTiming } from "@otk/protocol";
+import type { AssistantMessage, Message, Part, TurnTiming } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import { isAssistantTerminal } from "@otk/protocol";
 import {
@@ -12,12 +12,19 @@ export { createMessageLayout } from "./message-layout.ts";
 
 import type { PartPresentation } from "../registries/renderers.ts";
 export type { WorkTime } from "../registries/renderers.ts";
+export interface ReplyStart {
+  messageID: string;
+  agent: string;
+  time: AssistantMessage["time"];
+  continuation: boolean;
+}
 export interface PartGroup {
   id: string;
   parts: Part[];
   work: boolean;
   required?: boolean;
   workingMs?: number;
+  replyStart?: ReplyStart;
 }
 export interface PartFrame {
   id: string;
@@ -92,6 +99,7 @@ export function partGroups(
   parts: Part[],
   presentation: (part: Part) => PartPresentation,
   timingParts: readonly Part[] = parts,
+  replyStart?: (part: Part) => ReplyStart | undefined,
 ): PartGroup[] {
   const groups: PartGroup[] = [];
   for (const part of parts) {
@@ -105,6 +113,7 @@ export function partGroups(
         id: part.id,
         parts: [part],
         work,
+        ...(!work && value.prose ? { replyStart: replyStart?.(part) } : {}),
         ...(value.required ? { required: true } : {}),
       });}
   }
