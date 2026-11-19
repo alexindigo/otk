@@ -3,11 +3,14 @@ import {
   derivedValue,
   type InboxSnapshot,
   type IndexEntry,
+  type IndexMetadata,
   type Message,
   type ToolCall,
 } from "@otk/protocol";
 import { inboxStatus } from "./inbox.ts";
 import type { ClientTabs } from "./tabs.ts";
+import type { TaskCrumb } from "./task-breadcrumbs.ts";
+import type { OperationAttention } from "./inbox.ts";
 
 export interface RunningWork {
   id: string;
@@ -16,6 +19,20 @@ export interface RunningWork {
   title: string;
   sessionID: string;
   startedAt?: number;
+}
+
+/** One helper selection for the trail and composer; metadata needs no digest read. */
+export function workingHelpers(
+  family: readonly TaskCrumb[],
+  entry: (id: string) => (IndexMetadata & OperationAttention) | undefined,
+  inbox: InboxSnapshot,
+): TaskCrumb[] {
+  return family.filter((crumb) => {
+    const current = entry(crumb.id);
+    return crumb.helper && current && inboxStatus(current, inbox) === "working";
+  }).toSorted((a, b) =>
+    (entry(a.id)?.timeCreated ?? 0) - (entry(b.id)?.timeCreated ?? 0)
+  );
 }
 
 /** Borrow existing family, lamp and loaded tool evidence. No new content demand
@@ -30,11 +47,9 @@ export function runningWork(input: {
 }): RunningWork[] {
   if (!input.connected) return [];
   const items: RunningWork[] = [];
-  for (const crumb of input.tabs.family()) {
+  for (const crumb of input.tabs.working()) {
     const entry = input.entry(crumb.id);
-    if (
-      !crumb.helper || !entry || inboxStatus(entry, input.inbox) !== "working"
-    ) continue;
+    if (!entry) continue;
     const progress = derivedValue(entry.digest.helper?.progress);
     items.push({
       id: `helper/${entry.id}`,

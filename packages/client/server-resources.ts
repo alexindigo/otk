@@ -693,6 +693,9 @@ export function createServerResources(o: {
     acquire();
     const value: TabInput = {
       version: base.version,
+      get connected() {
+        return linked(p.sidecarId);
+      },
       directory: base.directory,
       directories: base.directories,
       context: [...context.values()],
