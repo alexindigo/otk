@@ -2,7 +2,7 @@
 .otk-live-work .otk-live-work-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   white-space: nowrap;
   font-size: var(--text-meta);
 }

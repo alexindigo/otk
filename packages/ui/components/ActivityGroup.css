@@ -19,8 +19,8 @@
 .otk-record-group-children {
   display: flex;
   flex-direction: column;
-  margin-inline-start: 10px;
-  padding-inline-start: 14px;
+  margin-inline-start: 8px;
+  padding-inline-start: 16px;
   border-inline-start: 1px dotted var(--otk-border);
   --message-gap: 0px;
   --tool-line-gap: 0px;

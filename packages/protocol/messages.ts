@@ -30,6 +30,13 @@ export function checkClientFrameSize(serialized: string): void {
   }
 }
 export type HarnessState = "connecting" | "connected" | "reconnecting";
+export interface StorageState {
+  degraded: boolean;
+  problem?: "full" | "io";
+  /** Monotone observation-gap identity, retained after recovery. */
+  gap: number;
+  failure?: import("./requests.ts").PublicFailure;
+}
 export type ClientFrame =
   | RequestControl
   | { t: "hello"; protocol: number; view?: import("./view.ts").ViewLease }
@@ -65,6 +72,7 @@ type ServerMessage =
     };
   }
   | { t: "harness"; state: HarnessState }
+  | { t: "storage"; state: StorageState }
   | { t: "digest.progress"; values: import("./progress.ts").ProgressFacts[] }
   | { t: "ping" }
   | { t: "prefs"; prefs: Preferences }

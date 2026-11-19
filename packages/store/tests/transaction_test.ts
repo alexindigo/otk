@@ -41,7 +41,7 @@ test("connection transaction commits values, rolls back errors and rejects nesti
   }
 });
 
-test("connection transaction retains the original failure when rollback also fails", async () => {
+test("connection transaction preserves a primary failure after an automatic rollback", async () => {
   const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   try {
     const failure = new Error("write failed after native rollback");
@@ -49,12 +49,33 @@ test("connection transaction retains the original failure when rollback also fai
       db.transaction(() => {
         db.connection.exec("ROLLBACK");
         throw failure;
-      }), AggregateError);
-    assertStrictEquals(error.cause, failure);
-    assertStrictEquals(error.errors[0], failure);
-    assertEquals(error.errors.length, 2);
+      })
+    );
+    assertStrictEquals(error, failure);
     assertEquals(db.transaction(() => "still usable"), "still usable");
   } finally {
+    db.close();
+  }
+});
+
+test("a genuine rollback failure retains both causes with the primary first", async () => {
+  const db = new OtkDb(await fixture(), [], { busyms: 0 });
+  const exec = db.connection.exec;
+  const primary = new Error("primary"), cleanup = new Error("cleanup");
+  db.connection.exec = (sql) => {
+    if (sql === "ROLLBACK") throw cleanup;
+    exec(sql);
+  };
+  try {
+    const error = assertThrows(() =>
+      db.transaction(() => {
+        throw primary;
+      }), AggregateError);
+    assertStrictEquals(error.cause, primary);
+    assertEquals(error.errors, [primary, cleanup]);
+  } finally {
+    db.connection.exec = exec;
+    if (db.connection.isTransaction) db.connection.exec("ROLLBACK");
     db.close();
   }
 });

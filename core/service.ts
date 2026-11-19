@@ -18,6 +18,8 @@ import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
 import { BootstrapRequests } from "./http/bootstrap.ts";
 import { clientRequestPolicy } from "./config/schema.ts";
+import { StorageFeature } from "./features/storage.ts";
+import { StorageRequests } from "./requests/storage.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -81,10 +83,27 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   const index = options.index ?? new IndexStore();
   const requests = new RequestCoordinator({
     registry: rpc,
-    receipts: new Requests(store),
+    receipts: new StorageRequests(new Requests(store)),
     policy: cfg.requests,
     diagnostic: (id, cause) => diagnostic("warn", `request ${id}`, cause),
   });
+  const sources = [
+    ...options.sources ?? [],
+    new StorageFeature(
+      store.availability,
+      cfg.requests.livenessms,
+      () => {
+        // These facts reached the index before a store-backed observer failed.
+        // Replay its ordinary projection boundary without inventing inventory.
+        index.resetMetadata(
+          index.snapshotEntries().map(({ digest: _digest, ...metadata }) =>
+            metadata
+          ),
+        );
+        requests.storageRecovered();
+      },
+    ),
+  ];
   let bootstrap: BootstrapRequests | undefined;
   let maintenance: ReturnType<typeof setInterval> | undefined;
   let connections: Connections | undefined,
@@ -102,7 +121,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         }
       };
       if (connections) await attempt(() => connections!.close());
-      else {for (const source of options.sources ?? []) {
+      else {for (const source of sources) {
           await attempt(() => source.close?.());
         }}
       await attempt(() => requests.stop());
@@ -143,10 +162,10 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         attachments: cfg.attachments,
         requested: options.requested,
       },
-      options.sources,
+      sources,
       options.diagnostics,
     );
-    await startBackend(backend, index, transport, options.sources);
+    await startBackend(backend, index, transport, sources);
     check();
     await requests.start();
     check();
@@ -162,7 +181,13 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
     await bootstrap.start();
     check();
     maintenance = setInterval(
-      () => requests.maintenance(),
+      () => {
+        try {
+          requests.maintenance();
+        } catch (error) {
+          diagnostic("warn", "request maintenance", error);
+        }
+      },
       cfg.requests.livenessms,
     );
     await listener.handle({

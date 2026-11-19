@@ -2,6 +2,13 @@
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb, type StoreWrite } from "./db.ts";
 export {
+  processStorage,
+  StorageAvailability,
+  StorageFailure,
+  storageProblem,
+} from "./availability.ts";
+export type { StorageProblem, StorageStatus } from "./availability.ts";
+export {
   pluginStorageMigrations,
   PluginStore,
 } from "./features/plugin-storage.ts";
