@@ -270,8 +270,10 @@ export function catalogReaders(
   wait: <T>(value: Promise<T>) => Promise<T> = (value) => value,
 ): ProviderReaders {
   return {
-    "catalog.project": ({ directory }, signal) => readProject(client(), directory, signal),
-    "catalog.repository": ({ directory }, signal) => readRepository(client(), directory, signal),
+    "catalog.project": ({ directory }, signal) =>
+      readProject(client(), directory, signal),
+    "catalog.repository": ({ directory }, signal) =>
+      readRepository(client(), directory, signal),
     "catalog.agents": async ({ directory }, signal) =>
       mapAgents(
         (await client().read(
