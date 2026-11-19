@@ -35,11 +35,9 @@ export default function ComposerTakeovers(
             <div class="otk-composer-activity">
               <LiveWork
                 items={work()}
+                owner={session.liveWork}
                 onOpen={(id) =>
                   void commands.run("session.child", id).catch(fail)}
-                onStop={session.connected?.() && session.supports("prompt")
-                  ? session.stopHelper
-                  : undefined}
                 onError={fail}
               />
             </div>

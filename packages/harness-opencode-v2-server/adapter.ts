@@ -617,18 +617,35 @@ export class OpencodeV2ServerAdapter implements Harness {
         .map((row) => ({ ...row, sessionID: ids.encode(row.sessionID) })),
       (id) => id === entry.id ? entry : this.#index.getMetadata(id),
     );
+    const nativeID = ids.decode(entry.id), run = this.#running.get(nativeID);
+    const runID = run === undefined ? undefined : `execution:${run}`;
+    const startedAt = runID
+      ? [entry, this.#index.getMetadata(entry.id)].map((row) =>
+        row?.activity?.work?.items?.find((item) => item.id === runID)?.startedAt
+      ).find((start) => start !== undefined)
+      : undefined;
     entry = {
       ...entry,
       activity: {
         ...terminal,
         work: {
           keys: [
-            ...(this.#running.has(ids.decode(entry.id))
-              ? [`execution:${this.#running.get(ids.decode(entry.id))}`]
-              : []),
-            ...this.#shells.keys(ids.decode(entry.id)),
+            ...(runID ? [runID] : []),
+            ...this.#shells.keys(nativeID),
           ],
           fresh: this.#activityCurrent,
+          items: [
+            ...(runID
+              ? [{
+                id: runID,
+                kind: "execution" as const,
+                label: "Execution",
+                title: entry.title,
+                startedAt,
+              }]
+              : []),
+            ...this.#shells.items(nativeID),
+          ],
         },
         inputs: {
           keys: [...this.#pending.values()].filter((row) =>
@@ -881,7 +898,24 @@ export class OpencodeV2ServerAdapter implements Harness {
       archived: mapped.archived,
       status: busy ? "busy" : "idle",
       activityAuthority: "current",
-      activity: metadata(raw).activity,
+      activity: {
+        ...metadata(raw).activity,
+        // The running token can be observation-time fallback. Only the native
+        // busy clock establishes this run's start for elapsed presentation.
+        work: {
+          keys: [],
+          fresh: false,
+          items: this.#running.has(raw.id)
+            ? [{
+              id: `execution:${this.#running.get(raw.id)}`,
+              kind: "execution",
+              label: "Execution",
+              title: mapped.title,
+              startedAt: millis(raw.time.busy) || undefined,
+            }]
+            : [],
+        },
+      },
       ...(busy && this.#index.getMetadata(mapped.id)?.retry
         ? { retry: this.#index.getMetadata(mapped.id)!.retry }
         : {}),

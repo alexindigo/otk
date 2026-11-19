@@ -528,9 +528,7 @@ export function mapMessage(
               sessionID,
             }
             : undefined,
-          title: `${
-            agent ? agent[0].toUpperCase() + agent.slice(1) : "Subagent"
-          } ${outcome}`,
+          title: agent ? outcome : `Subagent ${outcome}`,
           layout: "row",
           category: "delegation",
           tone: state === "error" ? "error" : "normal",

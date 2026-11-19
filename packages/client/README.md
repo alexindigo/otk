@@ -1,5 +1,15 @@
 # @otk/client
 
+`entityFacts(identity, sources)` projects explicit session, turn and tool
+scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
+markers and never borrow session/helper clocks. Session-now status borrows live
+supervision, including when a metadata entry is not leased. `runningWork` reads
+helpers from the shared tabs working projection and shells only from fresh
+adapter inventory items whose identities remain in that inventory. Transcript
+paging is not an input. `createLiveWork` owns capability checks and joined stop
+admission across presentation lifetimes; elapsed labels describe running time,
+not working time.
+
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
 available and later facts enrich it without adding a second toast. Transcript

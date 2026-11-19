@@ -223,7 +223,12 @@ test.describe("V2 records", () => {
       const failed = page.locator(
         '[data-native-record="opencode-v2/synthetic"]',
       )
-        .filter({ hasText: "Junior failed" });
+        .filter({
+          has: page.locator(".otk-entity-pill", { hasText: "Junior" }),
+        })
+        .filter({ has: page.locator(".otk-tool-verb", { hasText: "failed" }) });
+      await expect(failed.locator(".otk-entity-pill")).toHaveText("Junior");
+      await expect(failed.locator(".otk-tool-verb")).toHaveText("failed");
       await expect(failed).toHaveClass(/is-error/);
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(

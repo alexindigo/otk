@@ -160,5 +160,38 @@ Deno.test("session ports capture target once while capability and resource gette
   session.state.content.questions = [];
   assertEquals(ports.questions(), []);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
+  const inbox = resources.inbox("local");
+  const facts = () =>
+    ports.entityFacts!({
+      sessionID: "unleased",
+      turnID: "historical",
+      timing: { state: "known", start: 100, end: 2100, workingMs: 2000 },
+    });
+  for (
+    const [generation, activity] of [["first", "working"], [
+      "reconnected",
+      "none",
+    ]] as const
+  ) {
+    // This reducer consumes only the welcome edge; other welcome fields belong
+    // to the connection, not the inbox owner under test.
+    inbox.receive({ t: "welcome" } as import("@otk/protocol").ServerFrame);
+    inbox.receive({
+      t: "inbox.snapshot",
+      generation,
+      revision: 1,
+      inbox: {
+        tasks: [],
+        projects: [],
+        pathTemplates: [],
+        seen: {},
+        finishes: {},
+        supervision: { unleased: { state: activity, terminal: 0 } },
+      },
+    });
+    assertEquals(ports.entry("unleased"), undefined);
+    assertEquals(facts().session.status, activity);
+    assertEquals(facts().reply?.completed.value, 2100);
+  }
   resources.stop();
 });

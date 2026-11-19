@@ -8,6 +8,7 @@ function info(id: string, sessionID = "ses_owner") {
   return {
     id,
     status: "running",
+    command: "printf hello",
     metadata: { sessionID },
     time: { started: 1 },
   };
@@ -30,6 +31,23 @@ Deno.test("V2 shell activity is per running identity, deduplicated and independe
     data: { info: info("sh_b") },
   });
   assertEquals(owner.sessions(), ["ses_owner"]);
+  assertEquals(owner.items("ses_owner"), [
+    {
+      id: "sh_a",
+      kind: "shell",
+      label: "Shell",
+      title: "printf hello",
+      startedAt: 1,
+    },
+    {
+      id: "sh_b",
+      kind: "shell",
+      label: "Shell",
+      title: "printf hello",
+      startedAt: 1,
+    },
+  ]);
+  assertEquals(owner.items("ses_unrelated"), []);
   owner.event({ type: "shell.exited", data: { id: "sh_a" } });
   assertEquals(owner.busy("ses_owner"), true);
   owner.event({ type: "shell.deleted", data: { id: "sh_b" } });

@@ -42,6 +42,7 @@ export function createMessageLayout() {
       agent?: string;
       model?: ReplyStart["model"];
       time?: ReplyStart["time"];
+      turnID?: string;
     }
   >();
   const parts = new Map<string, Descriptor>();
@@ -68,7 +69,7 @@ export function createMessageLayout() {
         const old = segments.get(segment.messageID);
         if (
           old?.agent !== segment.agent || old?.time !== segment.time ||
-          old?.model !== segment.model
+          old?.model !== segment.model || old?.turnID !== segment.turnID
         ) {
           changedSources.add(segment.messageID);
           if (
@@ -81,6 +82,7 @@ export function createMessageLayout() {
               agent: segment.agent,
               model: segment.model,
               time: segment.time,
+              turnID: segment.turnID,
             });
           }
         }
@@ -119,6 +121,7 @@ export function createMessageLayout() {
           agent: segment.agent,
           model: segment.model,
           time: segment.time,
+          turnID: segment.turnID,
         });
       }
       preference = version;
@@ -169,6 +172,7 @@ export function createMessageLayout() {
               proseSources.add(messageID);
               return {
                 messageID,
+                turnID: source.turnID,
                 agent: source.agent,
                 model: source.model,
                 time: source.time,
@@ -258,6 +262,7 @@ export function createMessageLayout() {
           agent: source.agent,
           model: source.model,
           time: source.time,
+          turnID: source.turnID,
         };
       }
       for (const { before, after } of replacements) {
