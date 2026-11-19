@@ -270,3 +270,13 @@
   min-width: 0;
   font-size: var(--text-meta);
 }
+/* The project row is one control: focus paints the whole row, never only
+   its open button between the selection bar and the menu. */
+.otk-project-row .otk-project-open:focus-visible {
+  outline: none;
+}
+.otk-project-row:has(.otk-project-open:focus-visible) {
+  outline: 2px solid var(--control-focus);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-row);
+}

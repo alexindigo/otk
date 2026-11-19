@@ -388,7 +388,14 @@ export function createTabs(
         }
         result.splice(at, 0, { id, helper: false, depth: 0, external: true });
       }
-      return cachedCrumbs = result;
+      // Decision 3: the trail is the path to the open session (its
+      // ancestors and itself), not every session of the task family.
+      const path = current
+        ? new Set([current, ...sessionAncestors(current, (id) => byID.get(id))])
+        : undefined;
+      return cachedCrumbs = path
+        ? result.filter((crumb) => path.has(crumb.id))
+        : result;
     },
     sessionFor,
     update(next: TabInput): void {

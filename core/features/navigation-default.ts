@@ -44,9 +44,21 @@ export class NavigationDefault {
         const x = this.source.status(a.id), y = this.source.status(b.id);
         return x === y ? recent(a, b) : attentionStatus(x, y) === x ? -1 : 1;
       })[0]?.id;
+    // Defaults open a human (top-level) session: a helper that needs
+    // attention or was last viewed resolves to the top-level session owning it.
+    const human = async (id: string) => {
+      await hierarchy.prepare(
+        await core.identities([id], signal),
+        (ids, signal) => core.identities(ids, signal),
+        signal,
+      );
+      signal?.throwIfAborted();
+      const chain = hierarchy.ancestors(id);
+      return chain.length ? chain[chain.length - 1] : id;
+    };
     signal?.throwIfAborted();
     const urgent = attention();
-    if (urgent) return urgent;
+    if (urgent) return human(urgent);
     if (input.preferred) {
       const rows = await core.identities([input.preferred], signal);
       await hierarchy.prepare(
@@ -56,10 +68,10 @@ export class NavigationDefault {
       );
       signal?.throwIfAborted();
       const urgent = attention();
-      if (urgent) return urgent;
+      if (urgent) return human(urgent);
       if (
         rows.some((row) => row.id === input.preferred && eligible(row))
-      ) return input.preferred;
+      ) return human(input.preferred);
     }
     const candidates: SessionMetadata[] = [];
     for (const scope of scopes) {
@@ -78,9 +90,12 @@ export class NavigationDefault {
       );
     }
     signal?.throwIfAborted();
-    return attention() ??
-      candidates.map(current).filter((row) => !row.parentID && eligible(row))
-        .sort(recent)[0]?.id ??
+    const late = attention();
+    if (late) return human(late);
+    return candidates.map(current).filter((row) =>
+      !row.parentID && eligible(row)
+    )
+      .sort(recent)[0]?.id ??
       null;
   }
 }

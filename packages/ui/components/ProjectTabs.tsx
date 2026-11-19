@@ -265,6 +265,9 @@ export default function ProjectTabs(props: {
         ? props.session.title
         : model.entry(id)?.title)
       : undefined;
+    // The open session's title belongs to the trail's last crumb; a
+    // separate label is only for an open session outside the trail.
+    if (id && model.crumbs().some((crumb) => crumb.id === id)) return undefined;
     return current && model.selectedTitle() !== current ? current : undefined;
   });
   const crumbs = createMemo(() => {
@@ -390,6 +393,7 @@ export default function ProjectTabs(props: {
         <ScrollRegion
           ref={lane}
           axis="x"
+          scrollbar="hidden"
           class="otk-task-list"
           role="tablist"
           aria-label="Tasks and active sessions"

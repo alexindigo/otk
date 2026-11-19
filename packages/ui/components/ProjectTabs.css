@@ -37,12 +37,6 @@
   flex: 1 1 0;
   height: 100%;
   gap: var(--chrome-gap);
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.otk-task-list:hover,
-.otk-task-list:focus-within {
-  scrollbar-color: var(--otk-fg-3) transparent;
 }
 .otk-tab {
   flex: 1 1 0;
