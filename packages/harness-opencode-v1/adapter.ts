@@ -251,11 +251,18 @@ export class OpencodeV1Adapter implements Harness {
       // Startup inventory, a demand-driven inventory read and live asks all
       // admit through this owner, so a later outcome keeps the request facts.
       (request) =>
-        this.#retention.observe(
+        void this.#errors.retainHistory(
           request.sessionID,
-          `question:${request.id}`,
-          { ...request },
-          Date.now(),
+          `question.observe:${request.id}`,
+          () =>
+            this.#retention.observe(
+              request.sessionID,
+              `question:${request.id}`,
+              { ...request },
+              Date.now(),
+            ),
+        ).catch((error) =>
+          this.diagnostic("warn", "pending question history", error)
         ),
     );
     const catalogReads = digest ??
@@ -562,6 +569,11 @@ export class OpencodeV1Adapter implements Harness {
         return value;
       },
     );
+    const listMessages = this.core.listMessages.bind(this.core);
+    this.core.listMessages = async (id, input, signal) => {
+      await this.#errors.retryHistory(id);
+      return await listMessages(id, input, signal);
+    };
     this.core.hydrate = async (
       wanted,
       signal = new AbortController().signal,
@@ -1822,11 +1834,18 @@ export class OpencodeV1Adapter implements Harness {
       if (permissions) {
         this.#permissionInventories.set(directory, this.#connection);
         await each(permissions, (request) => {
-          this.#retention.observe(
+          void this.#errors.retainHistory(
             request.sessionID,
-            `permission:${request.id}`,
-            { ...request },
-            request.time,
+            `permission.observe:${request.id}`,
+            () =>
+              this.#retention.observe(
+                request.sessionID,
+                `permission:${request.id}`,
+                { ...request },
+                request.time,
+              ),
+          ).catch((error) =>
+            this.diagnostic("warn", "pending permission history", error)
           );
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
@@ -2007,7 +2026,7 @@ export class OpencodeV1Adapter implements Harness {
       if (pending.request.sessionID !== id) continue;
       this.#permissions.delete(key);
       this.#attention.change(id, "permissions", -1);
-      if (!this.digest) {
+      {
         sink.content(id, {
           op: "permission.remove",
           requestID: key,
@@ -2019,7 +2038,7 @@ export class OpencodeV1Adapter implements Harness {
       if (request.sessionID !== id) continue;
       const key = request.id;
       this.#question(key);
-      if (!this.digest) {
+      {
         sink.content(id, {
           op: "question.remove",
           requestID: key,
@@ -2342,8 +2361,8 @@ export class OpencodeV1Adapter implements Harness {
       if (typeof id !== "string" || !id) {
         throw new Error("Malformed session.deleted: session id missing");
       }
+      this.#disposeSession(ids.encode(id));
       this.#retention.remove(ids.encode(id));
-      if (!this.digest) this.#disposeSession(ids.encode(id));
       if (this.digest?.projects) {
         const seeds = await this.digest.projects(
           this.#connection,
@@ -2536,13 +2555,6 @@ export class OpencodeV1Adapter implements Harness {
       const time = this.#permissions.get(request.id)?.request.time ??
         Date.now();
       const mapped = mapPermission(request, time);
-      this.#retention.observe(
-        sessionID,
-        `permission:${request.id}`,
-        p,
-        time,
-        true,
-      );
       const previous = this.#permissions.get(request.id)?.request.sessionID;
       this.#permissions.set(request.id, {
         request: mapped,
@@ -2561,33 +2573,21 @@ export class OpencodeV1Adapter implements Harness {
         op: "permission.upsert",
         request: mapped,
       });
+      await this.#errors.retainHistory(
+        sessionID,
+        `permission.ask:${request.id}`,
+        () =>
+          this.#retention.observe(
+            sessionID,
+            `permission:${request.id}`,
+            p,
+            time,
+            true,
+          ),
+      );
       return;
     }
     if (type === "permission.replied") {
-      const key = `permission:${String(p.requestID)}`;
-      const retained = this.#retention.get(sessionID, key);
-      const created = retained?.created ?? Date.now();
-      const message = eventRecord(
-        ids.decode(sessionID),
-        key,
-        created,
-        type,
-        p,
-        retained?.request,
-      );
-      this.#retention.put({
-        id: key,
-        sessionID,
-        created,
-        request: retained?.request,
-        message,
-      });
-      if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, {
-          op: "message.upsert",
-          message: recordReference(message),
-        });
-      }
       const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
       if (previous) {
@@ -2598,6 +2598,32 @@ export class OpencodeV1Adapter implements Harness {
         requestID: String(p.requestID),
         sessionID,
       });
+      const key = `permission:${String(p.requestID)}`;
+      await this.#errors.retainHistory(sessionID, key, () => {
+        const retained = this.#retention.get(sessionID, key);
+        const created = retained?.created ?? Date.now();
+        const message = eventRecord(
+          ids.decode(sessionID),
+          key,
+          created,
+          type,
+          p,
+          retained?.request,
+        );
+        this.#retention.put({
+          id: key,
+          sessionID,
+          created,
+          request: retained?.request,
+          message,
+        });
+        if (this.buffers.subscribed(sessionID)) {
+          sink.content(sessionID, {
+            op: "message.upsert",
+            message: recordReference(message),
+          });
+        }
+      });
       return;
     }
     if (type === "question.asked") {
@@ -2605,50 +2631,58 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error("Malformed question.asked: request id missing");
       }
       const request = mapQuestion(p as unknown as RawQuestion);
-      this.#retention.observe(
-        sessionID,
-        `question:${String(p.id)}`,
-        p,
-        Date.now(),
-        true,
-      );
       this.#question(String(p.id), request, event.directory);
       sink.content(sessionID, {
         op: "question.upsert",
         request,
       });
+      const created = Date.now();
+      await this.#errors.retainHistory(
+        sessionID,
+        `question.ask:${String(p.id)}`,
+        () =>
+          this.#retention.observe(
+            sessionID,
+            `question:${String(p.id)}`,
+            p,
+            created,
+            true,
+          ),
+      );
       return;
     }
     if (type === "question.replied" || type === "question.rejected") {
-      const key = `question:${String(p.requestID)}`;
-      const retained = this.#retention.get(sessionID, key);
-      const created = retained?.created ?? Date.now();
-      const message = eventRecord(
-        ids.decode(sessionID),
-        key,
-        created,
-        type,
-        p,
-        retained?.request,
-      );
-      this.#retention.put({
-        id: key,
-        sessionID,
-        created,
-        request: retained?.request,
-        message,
-      });
-      if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, {
-          op: "message.upsert",
-          message: recordReference(message),
-        });
-      }
       this.#question(String(p.requestID));
       sink.content(sessionID, {
         op: "question.remove",
         requestID: String(p.requestID),
         sessionID,
+      });
+      const key = `question:${String(p.requestID)}`;
+      await this.#errors.retainHistory(sessionID, key, () => {
+        const retained = this.#retention.get(sessionID, key);
+        const created = retained?.created ?? Date.now();
+        const message = eventRecord(
+          ids.decode(sessionID),
+          key,
+          created,
+          type,
+          p,
+          retained?.request,
+        );
+        this.#retention.put({
+          id: key,
+          sessionID,
+          created,
+          request: retained?.request,
+          message,
+        });
+        if (this.buffers.subscribed(sessionID)) {
+          sink.content(sessionID, {
+            op: "message.upsert",
+            message: recordReference(message),
+          });
+        }
       });
       return;
     }

@@ -44,7 +44,7 @@ for (const kind of ["permission", "question"] as const) {
       await expect(dock.locator(".otk-field-feedback")).toHaveCount(0);
       expect(
         await dock.locator(
-          ".otk-permission-actions button:not([data-primary-action]),.otk-question-actions button:not([data-primary-action]),.otk-question-options button,textarea",
+          ".otk-permission-actions button:not([data-primary-action]):not([data-request-dismiss]),.otk-question-actions button:not([data-primary-action]):not([data-request-dismiss]),.otk-question-options button,textarea",
         ).evaluateAll((elements) =>
           elements.filter((el) =>
             el.getClientRects().length &&
@@ -53,6 +53,9 @@ for (const kind of ["permission", "question"] as const) {
           ).length
         ),
       ).toBe(0);
+      await expect(
+        dock.getByRole("button", { name: "Dismiss locally", exact: true }),
+      ).toBeVisible();
       await expect(
         dock.getByRole("status").filter({
           hasText: /Sending (response|answer)/,

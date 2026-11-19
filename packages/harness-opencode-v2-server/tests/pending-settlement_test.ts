@@ -3,6 +3,30 @@ import { assertEquals } from "@std/assert";
 import type { ContentOp } from "@otk/protocol";
 import type { V2Client } from "../client.ts";
 import { V2Pending } from "../pending.ts";
+import { emptyContent, reduce } from "@otk/client";
+
+Deno.test("request projection replacement cannot orphan a question", () => {
+  let content = emptyContent();
+  const owner = new V2Pending(() => undefined!, () => undefined, (_id, op) => {
+    content = reduce(content, op);
+  });
+  const location = { directory: "/repo" };
+  owner.acceptForm(location, {
+    id: "q",
+    sessionID: "child",
+    metadata: { kind: "question" },
+    fields: [{ key: "q0", type: "string" }],
+  });
+  assertEquals(content.questions.length, 1);
+  owner.acceptForm(location, {
+    id: "q",
+    sessionID: "child",
+    fields: [{ key: "ok", type: "boolean" }],
+  });
+  assertEquals(content.questions, []);
+  owner.settle("form", "q", "child");
+  assertEquals(content.forms, []);
+});
 
 for (const local of [false, true]) {
   Deno.test(`V2 settled permissions cannot return through stale inventories or events: local=${local}`, async () => {

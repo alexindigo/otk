@@ -71,13 +71,29 @@ export function sessionPorts(o: {
         : [];
     },
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
-    permissions: () => session.state.content.permissions,
+    requests: connection.attention,
+    permissions: () => {
+      void session.state.content;
+      return connection.attention.permissions(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        true,
+      );
+    },
     permissionVisible: o.permissionVisible
       ? (request) => o.permissionVisible!(target.sidecarId, request)
       : undefined,
-    questions: () => session.state.content.questions,
+    questions: () => {
+      void session.state.content;
+      return connection.attention.questions(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        true,
+      );
+    },
     forms: () =>
       resources.forms(target.sidecarId).filter((f) =>
+        !connection.attention.get("form", f.id)?.dismissed &&
         f.owner.kind === "session" &&
         f.presentation !== "question" &&
         !session.state.content.questions.some((question) =>

@@ -511,6 +511,7 @@ export class V2Pending {
         }
         : undefined;
     if (question) request.presentation = "question";
+    const previous = this.#forms.get(raw.id);
     this.#forms.set(raw.id, {
       request,
       native: raw.sessionID,
@@ -520,6 +521,13 @@ export class V2Pending {
     if (request.owner.kind === "session") {
       this.observed(request.owner.sessionID, raw.id, structuredClone(raw));
       this.changed(request.owner.sessionID, { op: "form.upsert", request });
+    }
+    if (previous?.question && !question) {
+      this.changed(previous.question.sessionID, {
+        op: "question.remove",
+        requestID: raw.id,
+        sessionID: previous.question.sessionID,
+      });
     }
     if (question) {
       this.changed(question.sessionID, {

@@ -43,7 +43,10 @@ for (const kind of ["question", "permission"] as const) {
     frames.hold((frame, request) =>
       (frame.t === "request.result" && request?.method === `${kind}.reply`) ||
       (frame.t === "content" &&
-        (frame.event as { op?: string })?.op === `${kind}.remove`)
+        ((frame.event as { op?: string })?.op === `${kind}.remove` ||
+          kind === "question" &&
+            (frame.event as { op?: string })?.op === "form.remove")) ||
+      (kind === "question" && frame.t === "forms.pending")
     );
     await primary.click();
     await expect(primary).toBeVisible();
