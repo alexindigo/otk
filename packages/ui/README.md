@@ -609,6 +609,15 @@ content; the generic hub and toast host know no permission schema. Permission
 and question owners preserve dirty state through reconnects. The legacy `Docks`
 API remains independently reusable for existing consumers.
 
+The connection's client `RequestLifetimes` owner joins permission, question and
+typed-form identities, native retirement and retained drafts. Transcripts and
+global form surfaces borrow its projections; a question-compatible form has one
+lifetime, not two pending records. Local Dismiss and Escape release presentation
+without a native reply, including offline or while a response is pending. The
+composer retains a Reopen action and server attention stays pending. Explicit
+Skip/Reject/Cancel execution remain native actions. Session deletion and native
+retirement remove every projection and fence late results and inventories.
+
 `dialogs.register({ id, title, size?, component })` installs feature-owned
 dialog content. A single `DialogHost` handles `dialog.open({ id, input? })`
 through the command hub. Every invocation owns its mounted content, input,
@@ -1054,8 +1063,8 @@ including prompt input commands; unbound actions have no shortcut hint. Dialog
 and Editor contain no static surface hints. Permission's 1/2/3 keys are fixed
 widget data shared by its local dispatch and titles, active only on non-text
 controls in normal mode. Question's fixed Escape layer first leaves an answer
-field; with question controls focused it skips. These widget/layer interactions
-are separate from remappable command bindings.
+field; with question controls focused it dismisses locally without answering.
+These widget/layer interactions are separate from remappable command bindings.
 
 ## Context menus
 

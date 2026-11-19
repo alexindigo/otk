@@ -57,16 +57,21 @@ export function answerOf(draft: QuestionDraft): string[] {
 export function createQuestionForm(
   request: QuestionRequest,
   factory: StateFactory = createState,
+  retention?: import("./forms.ts").FormRetention,
 ): QuestionForm {
   const questions = request.questions;
   const review = questions.length;
-  const form = createForm({
-    id: request.id,
-    owner: { kind: "session", sessionID: request.sessionID },
-    directory: "",
-    title: "Questions",
-    fields: questionFields(request),
-  }, factory);
+  const form = createForm(
+    {
+      id: request.id,
+      owner: { kind: "session", sessionID: request.sessionID },
+      directory: "",
+      title: "Questions",
+      fields: questionFields(request),
+    },
+    factory,
+    retention,
+  );
   const draft = (index: number): QuestionDraft =>
     form.state.drafts[`q${index}`]?.choice ?? empty();
   const state: Readonly<QuestionFormState> = {

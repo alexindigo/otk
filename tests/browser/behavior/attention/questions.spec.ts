@@ -28,8 +28,12 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await expect(page.locator(".otk-question-options button").first()).not
     .toContainText("1.");
   await expect(
-    page.locator('.otk-question-actions button[title^="Skip question"]'),
-  ).toHaveAttribute("title", /Esc/);
+    page.getByRole("button", { name: "Skip question", exact: true }),
+  ).toHaveAttribute("title", "Reject this question without answering");
+  await expect(
+    page.getByRole("button", { name: "Dismiss locally", exact: true }),
+  )
+    .toBeVisible();
   await expect(page.locator(".otk-question-actions")).not.toContainText("j/k");
   expect(
     await page.evaluate(() => document.activeElement?.getAttribute("name")),
@@ -111,7 +115,8 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await prompt(page, "Ask again, to reject");
   await expect(tabs).toHaveCount(2);
   await tabs.first().click();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Skip question", exact: true })
+    .click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
   await page.locator(
     "[data-tool=question][data-tool-status=denied] .otk-tool-toggle",

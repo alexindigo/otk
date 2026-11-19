@@ -13,6 +13,7 @@ import { SidecarConnection } from "../connection.ts";
 import { RequestReleased } from "../failures.ts";
 import {
   connectRequests,
+  fixtureFailure,
   replyRequest,
 } from "../../../tests/support/request-wire.ts";
 import { createState, type StateFactory } from "../state.ts";
@@ -56,7 +57,11 @@ const scope = (directory = "/a") => ({ sidecarId: "server", directory });
 const turns = async () => {
   for (let i = 0; i < 15; i++) await Promise.resolve();
 };
-function fixture(policy?: MessagePolicy) {
+function fixture(
+  policy?: MessagePolicy,
+  entry: (id: string) => import("@otk/protocol").IndexEntry | undefined = () =>
+    undefined,
+) {
   const time = clock();
   const requests: Extract<ClientFrame, { t: "request" }>[] = [];
   const subscriptions = new Set<string>();
@@ -78,7 +83,7 @@ function fixture(policy?: MessagePolicy) {
   };
   const owner = createTranscripts({
     connection: () => connection,
-    entry: () => undefined,
+    entry: (_sidecar, id) => entry(id),
     clock: time.value,
   });
   const messages = (id: string, count = 80): Message[] =>
@@ -126,6 +131,83 @@ const policy = {
   preloadms: 30,
   concurrency: 4,
 };
+
+Deno.test("failed reconnect inventory retains authority and local dismissal", async () => {
+  const f = fixture(policy);
+  f.connection.supports = (capability) => capability === "questions";
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    const question = { id: "retained", sessionID: "a", questions: [] };
+    replyRequest(f.connection.rpc, f.requests.shift()!, [question]);
+    await turns();
+    await f.reply(0, 1);
+    const parent = f.owner.get(target("a"))!;
+    f.connection.attention.dismiss("question", question.id);
+    f.owner.receive("server", { t: "harness", state: "reconnecting" }, true);
+    f.owner.receive("server", { t: "harness", state: "connected" }, true);
+    f.owner.receive("server", { t: "bootstrap.complete" }, true);
+    const inventory = f.requests.shift()!;
+    assertEquals(inventory.method, "question.list");
+    replyRequest(
+      f.connection.rpc,
+      inventory,
+      undefined,
+      fixtureFailure("unavailable"),
+    );
+    await turns();
+    assertEquals(parent.state.content.questions, [question]);
+    assertEquals(f.connection.attention.questions("a", undefined, true), []);
+    assert(parent.state.error);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("child retirement updates the open parent without reacquiring its body", async () => {
+  const entries = new Map<string, import("@otk/protocol").IndexEntry>([
+    ["a", { id: "a", status: "idle" } as import("@otk/protocol").IndexEntry],
+    [
+      "child",
+      {
+        id: "child",
+        parentID: "a",
+        status: "idle",
+      } as import("@otk/protocol").IndexEntry,
+    ],
+  ]);
+  const f = fixture(policy, (id) => entries.get(id));
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const parent = f.owner.get(target("a"))!;
+    f.owner.receive("server", {
+      t: "content",
+      sessionID: "child",
+      event: {
+        op: "question.upsert",
+        request: { id: "orphan", sessionID: "child", questions: [] },
+      },
+    }, true);
+    assertEquals(parent.state.content.questions.length, 1);
+    entries.set("child", {
+      ...entries.get("child")!,
+      deleted: { at: 2, how: "provider" },
+    });
+    f.owner.receive("server", { t: "index.patch" } as never, true);
+    assertEquals(parent.state.content.questions, []);
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("archive pages share canonical body admission without changing live paging or projection", async () => {
   const f = fixture({ ...policy, concurrency: 1 });

@@ -253,11 +253,16 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       // Inventory-first requests keep their facts for a later outcome.
       (sessionID, requestID, request) =>
-        void this.transcript.requests.observe({
-          id: requestID,
+        void this.#errors.retainHistory(
           sessionID,
-          request,
-        }).catch((error) => this.diagnostic(error)),
+          `observe:${requestID}`,
+          () =>
+            this.transcript.requests.observe({
+              id: requestID,
+              sessionID,
+              request,
+            }),
+        ).catch((error) => this.diagnostic(error)),
     );
     this.prompts = new V2Prompt(
       () => this.stream.client,
@@ -546,6 +551,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         return result;
       },
       listMessages: async (id, input, signal) => {
+        await this.#errors.retryHistory(id);
         const decorate = (page: import("@otk/protocol").MessagePage) => ({
           ...page,
           ...(page.session
@@ -1239,6 +1245,14 @@ export class OpencodeV2ServerAdapter implements Harness {
       typeof event.data.sessionID === "string" &&
       !this.#errors.accepts(ids.encode(event.data.sessionID))
     ) return;
+    const pendingForm = event.data.form;
+    const pendingSession = event.data.sessionID ??
+      (pendingForm && typeof pendingForm === "object"
+        ? Reflect.get(pendingForm, "sessionID")
+        : undefined);
+    if (/^(permission\.|form\.)/.test(event.type)) {
+      this.#pendingEvent(event, pendingSession, pendingForm);
+    }
     const executionFailure = await this.transcript.executionFailure(
       event,
       typeof event.data.sessionID === "string"
@@ -1248,7 +1262,23 @@ export class OpencodeV2ServerAdapter implements Harness {
     );
     signal.throwIfAborted();
     if (generation !== this.#generation) return;
-    await this.transcript.event(event);
+    const requestOwner = changedID ??
+      (typeof pendingSession === "string" && pendingSession !== "global"
+        ? ids.encode(pendingSession)
+        : undefined);
+    if (/^(permission\.|form\.)/.test(event.type) && requestOwner) {
+      const identity = String(
+        event.data.requestID ?? event.data.id ??
+          (event.data.form && typeof event.data.form === "object"
+            ? Reflect.get(event.data.form, "id")
+            : ""),
+      );
+      await this.#errors.retainHistory(
+        requestOwner,
+        `${event.type}:${identity}`,
+        () => this.transcript.event(event),
+      );
+    } else await this.transcript.event(event);
     const shell = this.#shells.event(event);
     if (shell) {
       const raw = await readSessionActivity(client, shell.sessionID, signal);
@@ -1274,7 +1304,6 @@ export class OpencodeV2ServerAdapter implements Harness {
         ? Reflect.get(form, "sessionID")
         : undefined);
     if (/^(permission\.|form\.)/.test(event.type)) {
-      this.#pendingEvent(event, sid, form);
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
       await commit();
