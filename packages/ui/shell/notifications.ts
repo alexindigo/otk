@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ApprovalModel,
+  type AttentionGrace,
   commandFailureFacts,
   type CommandHub,
   type EntryChanges,
@@ -40,6 +41,7 @@ export function applicationNotifications(input: {
     listener: (changes: EntryChanges) => void,
   ): () => void;
   attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
+  grace?: AttentionGrace;
 }) {
   const context = () => {
     const selected = input.selection();
@@ -175,7 +177,10 @@ export function applicationNotifications(input: {
       ).then((requests) => {
         if (candidates.get(incoming.id) !== incoming) return;
         const request = oldestPermission(
-          input.attention(ref.sidecar).permissions(requests),
+          input.attention(ref.sidecar).permissions(requests).filter((request) =>
+            !incoming.dismissalKey ||
+            incoming.dismissalKey === `permission/${request.id}`
+          ),
           ref.session,
           (id) => input.entry(ref.sidecar, id),
         );
@@ -220,6 +225,10 @@ export function applicationNotifications(input: {
       });
     },
     retract,
+    undefined,
+    undefined,
+    undefined,
+    input.grace,
   );
   const update = () => {
     os.refresh();
@@ -292,6 +301,7 @@ export function applicationNotifications(input: {
       };
     },
     stop() {
+      triggers.stop();
       for (const stop of observed.values()) stop();
       observed.clear();
       candidates.clear();

@@ -17,6 +17,8 @@ export interface AttentionGrace {
     evidence?: SupervisionEvidence,
   ): void;
   permission(server: string, session: string, id: string): boolean;
+  /** Read-only request eligibility; never creates or revives an arrival. */
+  eligible(server: string, id: string): boolean;
   settled(server: string, id: string): void;
   inputSettled(server: string, id: string): void;
   light(
@@ -138,6 +140,11 @@ export function createAttentionGrace(o: {
       if (!p) return false;
       p.presented = true;
       return p.ready;
+    },
+    eligible(server, id) {
+      void store.state.revision;
+      const p = pending.get(key(server, id));
+      return !!p && p.ready && !p.absent;
     },
     settled(server: string, id: string) {
       if (stopped || !pending.delete(key(server, id))) return;

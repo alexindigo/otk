@@ -92,6 +92,12 @@ export class RequestAttention implements FrameSource {
       timeCreated: 0,
       timeUpdated: 0,
       attention: { ...attention },
+      // Pending identities are routing facts, not work/activity history. Every
+      // presentation borrows their one request-owned arrival/settlement grace.
+      activity: {
+        permissions: entry.activity?.permissions,
+        inputs: entry.activity?.inputs,
+      },
       digest: { state: "digesting", revision: 0, turns: {} },
     };
   }

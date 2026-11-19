@@ -1382,13 +1382,13 @@ registration identity, including after an item was armed.
 `createAttentionGrace({clock?, factory?})` owns one 500 ms deadline per
 sidecar/permission identity and one shared scheduler. Accepted evidence/content
 arrivals and settlements feed it independently of mounted views. Composer
-eligibility and reduced-motion lamp paint borrow that same deadline; late
-mounts, duplicates and preference changes never start another grace. A fresh
-inventory that no longer lists a presented request retires it from lamp grace
-but keeps its one deadline until the content removal settles it, so a reply's
-index update cannot hide and re-present the takeover. Questions remain
-immediate. Supervision, mandatory visibility, notification routing, badges and
-sound do not consume this presentation delay.
+eligibility, notification delivery and lamp paint borrow that same deadline;
+late mounts, duplicates and preference changes never start another grace. A
+fresh inventory that no longer lists a presented request retires it from lamp
+grace but keeps its one deadline until the content removal settles it, so a
+reply's index update cannot hide and re-present the takeover. Questions remain
+immediate. Supervision and mandatory visibility do not consume this presentation
+delay. Notification channels borrow request eligibility before delivery.
 
 Known question/form inputs retain their server/request identities across stale
 or absent evidence. Only a fresh per-session inventory, exact inputSettled call,
@@ -1456,6 +1456,20 @@ delivery. Real eviction, reparenting, archival and tombstones retract the
 appropriate notes. The legacy frame constructor/read/project ports remain
 independently usable through the ordinary canonical reducer and the same compact
 comparison owner.
+
+The shipped composition injects the same `AttentionGrace` used by takeovers and
+lamps into `NotificationTriggers`. Permissions borrow its read-only `eligible`
+query and subscription with current request identities, never root/kind timers.
+Same-count replacements retain surviving deadlines; settled or absent requests
+cannot notify. Settlement also retires the displayed request before index counts
+catch up; remaining already-alerted requests replace it quietly. Questions
+remain immediate. Standalone count-only consumers may omit the grace port and
+retain immediate delivery; request-aware consumers inject their lifetime owner.
+`stop()` releases the borrowed subscription, not the owner.
+
+Routing-only attention leases retain pending permission/input identities and
+freshness for this same owner, but no work or activity history. Notification
+detail still comes from the existing permission read after eligibility.
 
 NotificationTriggers uses the first snapshot after each connection's `reset` as
 a silent baseline. Root attention roll-ups already include children; roots
