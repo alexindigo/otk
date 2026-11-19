@@ -67,7 +67,7 @@
 .otk-project-chip-menu-row .otk-control-label {
   padding-inline-end: var(--menu-item-inset);
 }
-.otk-project-submenu-trigger {
+.otk-project-chip-submenu-trigger {
   width: 100%;
   height: var(--menu-row-height);
 }

@@ -94,8 +94,8 @@ export default function ProjectChip(props: {
   ) => (
     <Menu
       label={label}
-      class="otk-project-submenu"
-      triggerClass="otk-project-chip-menu-row otk-project-submenu-trigger"
+      class="otk-project-chip-submenu"
+      triggerClass="otk-project-chip-menu-row otk-project-chip-submenu-trigger"
       trigger={
         <>
           <ControlIcon>{icon}</ControlIcon>

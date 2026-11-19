@@ -14,10 +14,11 @@ export default function ActivityGroup(props: {
   onOpenChild?(id: string): void;
   body(): Element;
 }): Element {
-  const clock = (time: number) => new Date(time).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const clock = (time: number) =>
+    new Date(time).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
   const title = () => {
     const { entity, title } = props.group;
     return entity && title.startsWith(entity.label)
@@ -39,43 +40,43 @@ export default function ActivityGroup(props: {
             />
           )}
         </Show>
-      <button
-        type="button"
-        class="otk-tool-toggle otk-record-group-toggle"
-        aria-expanded={props.open ? "true" : "false"}
-        onClick={() => props.onToggle()}
-      >
-        <span
-          class="otk-tool-icon otk-record-group-chevron"
-          aria-hidden="true"
+        <button
+          type="button"
+          class="otk-tool-toggle otk-record-group-toggle"
+          aria-expanded={props.open ? "true" : "false"}
+          onClick={() => props.onToggle()}
         >
-          <ChevronIcon />
-        </span>
-        <span class="otk-tool-verb otk-control-label">{title()}</span>
-        <Show when={props.group.detail}>
           <span
-            class="otk-tool-brief otk-control-label"
-            title={props.group.detail}
+            class="otk-tool-icon otk-record-group-chevron"
+            aria-hidden="true"
           >
-            {props.group.detail}
+            <ChevronIcon />
           </span>
-        </Show>
-        <Show when={props.group.count}>
-          <span class="otk-record-group-count">{props.group.count}</span>
-        </Show>
-        <Show when={props.group.time}>
-          {(time) => (
+          <span class="otk-tool-verb otk-control-label">{title()}</span>
+          <Show when={props.group.detail}>
             <span
-              class="otk-record-group-time"
-              title={`${new Date(time().first).toLocaleString()} - ${
-                new Date(time().last).toLocaleString()
-              }`}
+              class="otk-tool-brief otk-control-label"
+              title={props.group.detail}
             >
-              {clock(time().first)} - {clock(time().last)}
+              {props.group.detail}
             </span>
-          )}
-        </Show>
-      </button>
+          </Show>
+          <Show when={props.group.count}>
+            <span class="otk-record-group-count">{props.group.count}</span>
+          </Show>
+          <Show when={props.group.time}>
+            {(time) => (
+              <span
+                class="otk-record-group-time"
+                title={`${new Date(time().first).toLocaleString()} - ${
+                  new Date(time().last).toLocaleString()
+                }`}
+              >
+                {clock(time().first)} - {clock(time().last)}
+              </span>
+            )}
+          </Show>
+        </button>
       </header>
       <Show when={props.open}>
         <div class="otk-record-group-children">{props.body()}</div>
