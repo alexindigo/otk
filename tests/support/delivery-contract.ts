@@ -295,7 +295,7 @@ export function deliveryContract(
       f.close();
     }
   });
-  Deno.test(`V${version} resumed children never borrow old or ambiguous receipts; exact foreground completion can acknowledge`, () => {
+  Deno.test(`V${version} resumed children never borrow a newer run; exact foreground completion can acknowledge`, () => {
     const f = fixture();
     try {
       f.add("reused", 1);
@@ -319,7 +319,15 @@ export function deliveryContract(
             time: { created: 49, completed: 50 },
           }),
         );}
-      assertEquals(scan(f.native, parentID, "", 16).updates, []);
+      // The report covers the latest terminal at or before it; the newer
+      // terminal is not covered and stays unseen.
+      assertEquals(
+        scan(f.native, parentID, "", 16).updates.map((r) => [
+          r.id,
+          r.delivered.terminal,
+        ]),
+        [[`${prefix}-reused`, 20]],
+      );
       // A newer foreground invocation covers only the newer end.
       if (version === 2) {
         const raw = tool2("completed", "reused");
@@ -335,6 +343,92 @@ export function deliveryContract(
       const result = scan(f.native, parentID, "", 16).updates;
       assertEquals(result.length, 1);
       assertEquals(result[0].delivered.terminal, 50);
+    } finally {
+      f.close();
+    }
+  });
+  const terminalAt = (
+    f: ReturnType<typeof fixture>,
+    id: string,
+    terminal: number,
+    key: string,
+  ) => {
+    if (version === 2) {
+      f.native.prepare("INSERT INTO session_message VALUES(?,?,?,?,?,?)").run(
+        `idle-${key}`,
+        id,
+        2,
+        "idle",
+        terminal,
+        JSON.stringify({ outcome: "succeeded" }),
+      );
+      f.native.prepare(
+        "UPDATE session_v2 SET time_idle=max(time_idle,?) WHERE id=?",
+      ).run(terminal, id);
+    } else {
+      f.native.prepare("INSERT INTO message VALUES(?,?,?,?)").run(
+        `idle-${key}`,
+        id,
+        terminal - 1,
+        JSON.stringify({
+          role: "assistant",
+          finish: "stop",
+          time: { created: terminal - 1, completed: terminal },
+        }),
+      );
+    }
+  };
+  Deno.test(`V${version} a report after several runs acknowledges the latest terminal before it; equal clocks stay ambiguous`, () => {
+    const f = fixture();
+    try {
+      f.add("multi", 1);
+      terminalAt(f, "multi", 30, "multi-2");
+      assertEquals(
+        scan(f.native, parentID, "", 16).updates.map((r) => [
+          r.id,
+          r.delivered.terminal,
+        ]),
+        [[`${prefix}-multi`, 30]],
+      );
+      f.add("tied", 2, "synthetic", "completed", 30);
+      terminalAt(f, "tied", 30, "tied-2");
+      assertEquals(
+        scan(f.native, parentID, "", 16).updates.map((r) => r.id),
+        [`${prefix}-multi`],
+      );
+    } finally {
+      f.close();
+    }
+  });
+  Deno.test(`V${version} a parent refresh keeps covered facts; only source replacement retires them`, () => {
+    const f = fixture();
+    try {
+      f.add("kept", 1);
+      const step = (source: string, revision: number, refresh = false) =>
+        f.index().step(
+          { parentID, refresh },
+          source,
+          revision,
+          (cursor) => scan(f.native, parentID, cursor, 16),
+        );
+      assertEquals(step("source", 1).updates.length, 1);
+      const count = () =>
+        f.derived.prepare(`SELECT count(*) AS n FROM ${prefix}_delivery`).get()
+          ?.n;
+      f.native.exec(
+        version === 2
+          ? "DELETE FROM session_message WHERE id='receipt-kept'"
+          : "DELETE FROM part",
+      );
+      assertEquals(step("source", 2, true).reset, true);
+      assertEquals(count(), 1);
+      assertEquals(
+        f.index().facts([`${prefix}-kept`]).map((r) => r.delivered.terminal),
+        [20],
+      );
+      step("replacement", 3);
+      assertEquals(count(), 0);
+      assertEquals(f.index().facts([`${prefix}-kept`]), []);
     } finally {
       f.close();
     }

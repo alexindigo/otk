@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
-import { DeliveryBackfill } from "@otk/harness";
+import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DiagnosticSink,
   errorMessage,
@@ -939,6 +939,15 @@ export class OpencodeV1Adapter implements Harness {
       task: Promise.resolve(),
     };
     this.#sink = this.#publication(run.controller.signal);
+    if (this.digest) {
+      this.#deliveryJoin = new DeliveryJoin(
+        this.digest,
+        (id, fact) => this.#applyDelivered(id, fact),
+        (error) =>
+          this.diagnostic("warn", "delivery evidence unavailable", error),
+        this.digest.publishrows ?? this.cfg.digest.publishrows,
+      );
+    }
     const opening = this.digest?.start() ?? Promise.resolve();
     run.task = opening.then(async () => {
       if (!run.controller.signal.aborted) {
@@ -976,6 +985,16 @@ export class OpencodeV1Adapter implements Harness {
       const permissions = [...this.#permissions.values()].filter((p) =>
         p.request.sessionID === entry.id && p.generation === this.#connection
       ).map((p) => p.request.id);
+      // Delivery is the digest store's durable fact. A published entry
+      // carries the last fact joined from that store; rows never replace it.
+      const published = this.#index.getMetadata(entry.id);
+      const delivered = published
+        ? published.activity?.delivered
+        : entry.activity?.delivered;
+      const terminal = this.#terminals.get(entry.id)?.terminal ?? 0;
+      if (
+        entry.parentID && terminal > (delivered?.terminal ?? 0)
+      ) this.#deliveryJoin?.request([entry.id]);
       return ({
         ...entry,
         activity: {
@@ -983,7 +1002,7 @@ export class OpencodeV1Adapter implements Harness {
           ...(entry.activity?.terminalOrigin === "historical"
             ? { terminalOrigin: "historical" as const }
             : {}),
-          delivered: this.#delivered.get(entry.id),
+          delivered,
           work: {
             keys: this.#liveWork.has(entry.id)
               ? [this.#liveWork.get(entry.id)!.key]
@@ -1019,7 +1038,25 @@ export class OpencodeV1Adapter implements Harness {
   #liveWork = new Map<string, { key: string; generation: number }>();
   #terminals = new Map<string, TerminalEvidence>();
   #deliveries?: DeliveryBackfill;
-  #delivered = new Map<string, import("@otk/protocol").DeliveredEvidence>();
+  #deliveryJoin?: DeliveryJoin;
+  #applyDelivered(
+    id: string,
+    fact: import("@otk/protocol").DeliveredEvidence | undefined,
+  ): void {
+    const entry = this.#index.getMetadata(id);
+    if (
+      !this.#run || !entry ||
+      JSON.stringify(entry.activity?.delivered) === JSON.stringify(fact)
+    ) return;
+    this.#target.indexUpsert({
+      ...entry,
+      activity: {
+        ...entry.activity,
+        delivered: fact,
+        terminalOrigin: "historical",
+      },
+    });
+  }
   #terminalCandidates = new Map<string, TerminalEvidence>();
   #idle = new Map<string, number>();
   #questionFresh = new Map<string, number>();
@@ -1027,7 +1064,8 @@ export class OpencodeV1Adapter implements Harness {
   async #shutdown(): Promise<void> {
     await this.#deliveries?.stop();
     this.#deliveries = undefined;
-    this.#delivered.clear();
+    await this.#deliveryJoin?.stop();
+    this.#deliveryJoin = undefined;
     this.#failureTurns.clear();
     this.#failureAttempts.clear();
     this.#helperObservation?.();
@@ -1628,7 +1666,6 @@ export class OpencodeV1Adapter implements Harness {
     const connection = ++this.#connection;
     await this.#deliveries?.stop();
     this.#deliveries = undefined;
-    this.#delivered.clear();
     const seeds = await this.digest?.projects?.(
       connection,
       controller.signal,
@@ -2008,35 +2045,13 @@ export class OpencodeV1Adapter implements Harness {
           if (
             !this.#current(controller) || connection !== this.#connection
           ) return;
-          const dirty = new Set<string>();
+          const dirty = new Set(updates.map((row) => row.id));
           if (reset) {
-            for (const [id, fact] of this.#delivered) {
-              if (fact.parentID === parent) {
-                this.#delivered.delete(id);
-                dirty.add(id);
-              }
+            for (const entry of this.#index.snapshotEntries()) {
+              if (entry.parentID === parent) dirty.add(entry.id);
             }
           }
-          for (const { id, delivered } of updates) {
-            if ((this.#delivered.get(id)?.terminal ?? 0) > delivered.terminal) {
-              continue;
-            }
-            if (
-              JSON.stringify(this.#delivered.get(id)) ===
-                JSON.stringify(delivered)
-            ) continue;
-            this.#delivered.set(id, delivered);
-            dirty.add(id);
-          }
-          for (const id of dirty) {
-            const entry = this.#index.getMetadata(id);
-            if (entry) {
-              sink.indexUpsert({
-                ...entry,
-                activity: { ...entry.activity, terminalOrigin: "historical" },
-              });
-            }
-          }
+          this.#deliveryJoin?.request(dirty);
         },
         (error) =>
           this.diagnostic("warn", "delivery evidence unavailable", error),
@@ -2089,7 +2104,6 @@ export class OpencodeV1Adapter implements Harness {
     const sink = this.#sink;
     this.#liveWork.delete(id);
     this.#terminals.delete(id);
-    this.#delivered.delete(id);
     this.#terminalCandidates.delete(id);
     this.#idle.delete(id);
     this.#abortCommands(id);

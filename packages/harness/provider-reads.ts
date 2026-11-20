@@ -48,6 +48,12 @@ export interface ProviderReadKinds
     result: DeliveryPage;
     chunk: DeliveryPage;
   };
+  /** Durable child/run facts only; never scans parent history or native I/O. */
+  "supervision.delivered": {
+    input: { ids: string[] };
+    result: DeliveryScalar[];
+    chunk: DeliveryScalar[];
+  };
 }
 export interface DeliveryPage {
   updates: {

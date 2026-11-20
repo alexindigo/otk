@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
-import { DeliveryBackfill } from "@otk/harness";
+import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DigestPolicy,
   type DigestPort,
@@ -83,7 +83,7 @@ export class OpencodeV2ServerAdapter implements Harness {
   #running = new Map<string, number>();
   #finished = new Map<string, TerminalEvidence>();
   #deliveries?: DeliveryBackfill;
-  #delivered = new Map<string, import("@otk/protocol").DeliveredEvidence>();
+  #deliveryJoin?: DeliveryJoin;
   #deliveryParents = new Set<string>();
   #version = "";
   #generation = 0;
@@ -428,6 +428,14 @@ export class OpencodeV2ServerAdapter implements Harness {
           if (summary) this.transcript.helper(id, summary);
         });
         this.#sink = sink;
+        if (digest) {
+          this.#deliveryJoin = new DeliveryJoin(
+            digest,
+            (id, fact) => this.#applyDelivered(id, fact),
+            this.diagnostic,
+            config.digest?.publishrows,
+          );
+        }
         this.transcript.start();
         sink.connection("connecting");
         try {
@@ -445,7 +453,8 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#sink = undefined;
         await this.#deliveries?.stop();
         this.#deliveries = undefined;
-        this.#delivered.clear();
+        await this.#deliveryJoin?.stop();
+        this.#deliveryJoin = undefined;
         this.#deliveryParents.clear();
         this.#errors.reset();
         await this.catalogs?.stop();
@@ -647,7 +656,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ...entry,
       activity: {
         ...terminal,
-        delivered: this.#delivered.get(entry.id),
+        delivered: this.#delivered(entry),
         work: {
           keys: [
             ...(runID ? [runID] : []),
@@ -690,8 +699,12 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       ...(pending.stale ? { activityAuthority: "unknown" } : {}),
     };
-    if (!this.#sink.index) this.#index.upsertMetadata(entry);
-    this.#sink.indexUpsert(entry);
+    this.#publishMetadata(entry);
+    const delivered = entry.activity?.delivered;
+    if (
+      entry.parentID && terminal.terminal &&
+      (delivered?.terminal ?? 0) < terminal.terminal
+    ) this.#deliveryJoin?.request([entry.id]);
     if (
       entry.parentID && terminal.terminal &&
       !this.#deliveryParents.has(entry.parentID)
@@ -699,6 +712,37 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#deliveryParents.add(entry.parentID);
       this.#deliveries?.request(entry.parentID);
     }
+  }
+  #publishMetadata(entry: SessionMetadata): void {
+    if (!this.#sink) return;
+    if (!this.#sink.index) this.#index.upsertMetadata(entry);
+    this.#sink.indexUpsert(entry);
+  }
+  /** Delivery is the digest store's durable fact. A published entry carries
+   * the last fact joined from that store; inventory rows never replace it. */
+  #delivered(entry: SessionMetadata) {
+    const published = this.#index.getMetadata(entry.id);
+    return published
+      ? published.activity?.delivered
+      : entry.activity?.delivered;
+  }
+  #applyDelivered(
+    id: string,
+    fact: import("@otk/protocol").DeliveredEvidence | undefined,
+  ): void {
+    const entry = this.#index.getMetadata(id);
+    if (
+      !entry || JSON.stringify(entry.activity?.delivered) ===
+        JSON.stringify(fact)
+    ) return;
+    this.#publishMetadata({
+      ...entry,
+      activity: {
+        ...entry.activity,
+        delivered: fact,
+        terminalOrigin: "historical",
+      },
+    });
   }
   #refreshAttention(id: string): void {
     for (const key of [id, ...this.#index.ancestors(id)]) {
@@ -900,7 +944,6 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
-    this.#delivered.delete(id);
     this.#lists.invalidate();
     for (const [key, pending] of this.#pending) {
       if (pending.sessionID === ids.decode(id)) this.#setPending(key);
@@ -1002,10 +1045,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
     reconnect = true,
   ): Promise<() => Promise<void>> {
-    await this.#deliveries?.stop();
-    this.#deliveries = undefined;
-    this.#delivered.clear();
-    this.#deliveryParents.clear();
+    if (reconnect) {
+      await this.#deliveries?.stop();
+      this.#deliveries = undefined;
+      this.#deliveryParents.clear();
+    }
     const active = await client.read(
       (api) => api.session.active({ signal }),
       signal,
@@ -1170,40 +1214,18 @@ export class OpencodeV2ServerAdapter implements Harness {
     return async () => {
       signal.throwIfAborted();
       this.#generation = generation;
-      if (this.digest) {
+      if (this.digest && !this.#deliveries) {
         this.#deliveries = new DeliveryBackfill(
           this.digest,
           (parent, updates, reset) => {
             if (generation !== this.#generation || !this.#sink) return;
-            const dirty = new Set<string>();
+            const dirty = new Set(updates.map((row) => row.id));
             if (reset) {
-              for (const [id, fact] of this.#delivered) {
-                if (fact.parentID === parent) {
-                  this.#delivered.delete(id);
-                  dirty.add(id);
-                }
+              for (const entry of this.#index.snapshotEntries()) {
+                if (entry.parentID === parent) dirty.add(entry.id);
               }
             }
-            for (const { id, delivered } of updates) {
-              if (
-                (this.#delivered.get(id)?.terminal ?? 0) > delivered.terminal
-              ) continue;
-              if (
-                JSON.stringify(this.#delivered.get(id)) ===
-                  JSON.stringify(delivered)
-              ) continue;
-              this.#delivered.set(id, delivered);
-              dirty.add(id);
-            }
-            for (const id of dirty) {
-              const entry = this.#index.getMetadata(id);
-              if (entry) {
-                this.#upsert({
-                  ...entry,
-                  activity: { ...entry.activity, terminalOrigin: "historical" },
-                });
-              }
-            }
+            this.#deliveryJoin?.request(dirty);
           },
           this.diagnostic,
         );
