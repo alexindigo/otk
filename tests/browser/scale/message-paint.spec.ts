@@ -3,6 +3,10 @@ import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { revealAcquired, scrollTranscript } from "../pages/transcript.ts";
 import {
+  assertViewportEnd,
+  expectViewportEnd,
+} from "../pages/viewport-commit.ts";
+import {
   measureMessagePaint,
   type MessagePaintEvidence,
 } from "../../support/message-measurements.ts";
@@ -91,6 +95,7 @@ for (let repetition = 0; repetition < 5; repetition++) {
         await expect(page.locator(".otk-reply-start .otk-entity-pill").first())
           .toHaveText("build");
         await scrollTranscript(page, true);
+        await expectViewportEnd(page);
         await page.locator(openLanding).click();
         await expect(page).toHaveURL(new RegExp(`/${landing.id}$`));
         await expect(page.locator("textarea[name=prompt]")).toBeVisible();
@@ -126,3 +131,15 @@ for (let repetition = 0; repetition < 5; repetition++) {
     },
   );
 }
+
+test("scale.message-paint-rejects-an-uncommitted-end-fixture", {
+  tag: ["@scale"],
+}, () => {
+  assertViewportEnd({ actual: 80, extent: 80, committed: 80, end: 80 });
+  expect(() =>
+    assertViewportEnd({ actual: 80, extent: 80, committed: 40, end: 80 })
+  ).toThrow();
+  expect(() =>
+    assertViewportEnd({ actual: 80, extent: 80, committed: 80, end: 120 })
+  ).toThrow();
+});
