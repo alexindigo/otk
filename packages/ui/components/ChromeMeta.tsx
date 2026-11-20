@@ -9,14 +9,13 @@ export default function ChromeMeta(
   return <span class={["otk-chrome-meta", props.class]}>{props.children}</span>;
 }
 
-/** Labels, rules and meta are separate structural slots, never concatenated copy. */
+/** Labels and adjacent meta are separate slots, never concatenated copy. */
 export function SectionHeaderMeta(
   props: { label: string; count: number; metaClass?: string },
 ): Element {
   return (
     <>
       <span class="otk-control-label" title={props.label}>{props.label}</span>
-      <span class="otk-section-header-rule" />
       <ChromeMeta class={props.metaClass}>{props.count}</ChromeMeta>
     </>
   );

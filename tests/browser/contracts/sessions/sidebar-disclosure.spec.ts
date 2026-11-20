@@ -38,10 +38,9 @@ test.describe("sidebar disclosure intent", () => {
     await toggle.locator("svg").click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(row(root + "/worktrees/feature-two")).toHaveCount(0);
-    await expect(row(root + "/worktrees/feature-one")).toBeVisible();
-    await expect(parent.locator(".otk-project-protected").first()).toHaveText(
-      "1 needs attention",
-    );
+    await expect(row(root + "/worktrees/feature-one")).toHaveCount(0);
+    await expect(parent.locator(".otk-archived-toggle")).toHaveCount(0);
+    await expect(row(directory)).toHaveAttribute("data-rollup", "working");
     expect(page.url()).toBe(before);
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     await toggle.press("ArrowRight");
@@ -57,10 +56,12 @@ test.describe("sidebar disclosure intent", () => {
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await activity(state, "tstv1-worktree-1", "hold");
     await toggle.click();
+    await expect(row(root + "/worktrees/feature-two")).toHaveCount(0);
+    await expect(row(root + "/worktrees/feature-one")).toHaveCount(0);
+    await expect(row(directory)).not.toHaveAttribute("data-rollup", "none");
+    await toggle.click();
+    await expect(row(root + "/worktrees/feature-one")).toBeVisible();
     await expect(row(root + "/worktrees/feature-two")).toBeVisible();
-    await expect(parent.locator(".otk-project-protected").first()).toHaveText(
-      "2 need attention",
-    );
     await info.attach("sidebar-dispatch", {
       body: JSON.stringify({
         pointer,
@@ -268,12 +269,19 @@ test.describe("sidebar branch topology cases", () => {
       await expect(row(`${root}/sidebar/empty`)).toBeVisible();
       await expect(toggle("empty")).toHaveCount(0);
       await toggle("all-required").click();
-      await expect(branch("all-required").locator(".otk-project-protected"))
-        .toHaveText("2 need attention");
       for (let n = 0; n < 2; n++) {
         await expect(
           row(`${root}/sidebar/all-required-child-${n}`),
-        ).toBeVisible();
+        ).toHaveCount(0);
+      }
+      await expect(row(`${root}/sidebar/all-required`)).not.toHaveAttribute(
+        "data-rollup",
+        "none",
+      );
+      await toggle("all-required").click();
+      for (let n = 0; n < 2; n++) {
+        await expect(row(`${root}/sidebar/all-required-child-${n}`))
+          .toBeVisible();
       }
       await expect(branch("archive-only").locator(".otk-archived-toggle"))
         .toBeVisible();

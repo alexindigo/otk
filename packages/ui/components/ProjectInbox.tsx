@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   archiveAttention,
-  countLabel,
   createProjectDisclosure,
   errorFeedback,
   type FailureValue,
@@ -53,7 +52,7 @@ import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
-import ChromeMeta, { SectionHeaderMeta } from "./ChromeMeta.tsx";
+import { SectionHeaderMeta } from "./ChromeMeta.tsx";
 import { solidState } from "../state/binding.ts";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
@@ -238,15 +237,7 @@ export default function ProjectInbox(props: {
       projectBranchPresentation(
         node(),
         expanded(),
-        archive()
-          ? {
-            ...archiveAttention(archivedRows(node().project)),
-            requiredCount:
-              archivedRows(node().project).filter((row) =>
-                row.status !== "none"
-              ).length,
-          }
-          : { count: 0, status: "none" },
+        archive() ? archivedRows(node().project).length : 0,
       );
     const children = () => presentation().children;
     const nestedArchive = () =>
@@ -261,12 +252,12 @@ export default function ProjectInbox(props: {
           <>
             <Row project={node().project} />
             <For
-              each={node().children}
+              each={children()}
               keyed={(child) => child.key}
             >
               {(child) => <ProjectNode node={child()} />}
             </For>
-            <Show when={archive()}>
+            <Show when={archive() && presentation().archiveVisible}>
               <Archive repo={node().project} />
             </Show>
           </>
@@ -284,7 +275,6 @@ export default function ProjectInbox(props: {
             <Row
               project={node().project}
               connected={connected}
-              protectedCount={!expanded() ? presentation().protectedCount : 0}
             />
           )}
           feedback={() => <DisclosureFeedback disclosure={intent} />}
@@ -419,7 +409,7 @@ export default function ProjectInbox(props: {
     await discoveredDisclosure.set(!discoveredOpen());
   });
   function Row(
-    row: { project: ProjectRow; connected?: boolean; protectedCount?: number },
+    row: { project: ProjectRow; connected?: boolean },
   ) {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
@@ -527,15 +517,6 @@ export default function ProjectInbox(props: {
                 </Show>
                 <Show when={duplicate()}>
                   <span class="otk-project-machine">{project().label}</span>
-                </Show>
-                <Show when={row.protectedCount}>
-                  <ChromeMeta class="otk-project-protected">
-                    {countLabel(
-                      row.protectedCount!,
-                      "needs attention",
-                      "need attention",
-                    )}
-                  </ChromeMeta>
                 </Show>
               </span>
             </Show>

@@ -5,8 +5,3 @@
   white-space: nowrap;
   font-size: var(--text-meta);
 }
-.otk-section-header-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--otk-border);
-}
