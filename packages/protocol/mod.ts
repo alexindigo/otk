@@ -5,6 +5,7 @@ export * from "./catalogs/models.ts";
 export * from "./catalogs/arrays.ts";
 export * from "./digest.ts";
 export * from "./turn-timing.ts";
+export * from "./outcome-time.ts";
 /** Harness-neutral OTK wire types, versions and shared protocol helpers. */
 export * from "./capabilities.ts";
 export * from "./approvals.ts";

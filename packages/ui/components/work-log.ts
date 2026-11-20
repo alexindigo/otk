@@ -21,6 +21,7 @@ export interface ReplyStart {
   messageID: string;
   turnID?: string;
   timing?: TurnTiming;
+  outcomeTime?: import("@otk/protocol").OutcomeTime;
   agent: string;
   model?: AssistantMessage["model"];
   time: AssistantMessage["time"];

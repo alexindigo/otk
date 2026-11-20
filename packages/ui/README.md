@@ -326,7 +326,10 @@ Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
 not the pill. Available session/model facts retain their scope; a session click
 uses the same guarded navigation as the existing Open task action.
 
-Reply footers show model-call count, charged turn tokens and backend-reported
+Reply footers show outcome instants independently of working-duration availability. A native
+`outcomeTime` is shown in local time for success, failure and interruption; an
+unknown instant states that no native time was recorded and retains its reason.
+Reply footers also show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn
 result. Work-log headers pass their own contributed part clocks to the same
 timing owner for a busy-union-minus-waits result, never the turn total. Missing

@@ -2,6 +2,7 @@
 import {
   type ContextMessage,
   type FailureFacts,
+  outcomeTime,
   type PublicFailure,
   publicFailureReason,
 } from "@otk/protocol";
@@ -125,7 +126,7 @@ const text = (value: unknown): string | undefined =>
 export function requestFailureRecord(
   sessionID: string,
   failure: PublicFailure,
-  created = Date.now(),
+  created?: number,
   replyTo?: string,
 ): ContextMessage {
   const id = `request:failure:${failure.diagnosticID}`;
@@ -146,8 +147,9 @@ export function requestFailureRecord(
     id,
     sessionID,
     role: "context",
+    outcomeTime: outcomeTime({ error: created }),
     ...(replyTo ? { replyTo } : {}),
-    time: { created },
+    time: { created: created ?? Date.now() },
     parts: [{
       kind: "external",
       id: `${id}:failure`,

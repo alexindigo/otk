@@ -73,6 +73,12 @@ supports `kind: "blocks"` for adapter-decoded prose; literal tool/file output
 keeps its existing representation. These plain JSON shapes use the existing
 content-operation wire serialization, without a parallel content codec.
 
+Terminal assistant and context records carry `outcomeTime`, separately from
+working-duration evidence. The native producer supplies a known instant and its
+source, or an explicit unknown reason. `outcomeTime()` selects normalized
+completion, error, last-part or terminal-event clocks without borrowing message
+start, observation or session-update time. Consumers do not reconstruct it.
+
 `errorMessage(unknown)` supplies nonempty feedback without assuming a thrown
 value is an Error; strings and string-valued messages are preserved, other
 values are encoded when possible, and unrepresentable values use
