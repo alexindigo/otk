@@ -49,19 +49,19 @@ Deno.test("record projection mints multi-record spans and preserves append topol
   assertEquals(next.groups[key].children![0].key, child);
   assertEquals(next.groups[key].members.length, 15);
   assert(next.groups[key].revision > first.groups[key].revision);
-  assertEquals(next.groups[key].detail, "15 runs");
+  assertEquals(next.groups[key].title, "15 runs");
   p.apply({
     op: "message.upsert",
     message: record(16, { direction: "outgoing" }),
   });
-  assertEquals(p.state.records.keys, [key, "r16"]);
-  assertEquals(p.state.records.owners.r16, "r16");
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.owners.r16, key);
   p.replace([]);
   p.replace([record(15)]);
-  assertEquals(p.state.records.keys, ["r15"]);
+  assertEquals(p.state.records.keys, [key]);
   p.merge(Array.from({ length: 14 }, (_, n) => record(n + 1)));
-  assertEquals(p.state.records.keys, [key, "r15"]);
-  assertEquals(p.state.records.groups[key].members.length, 14);
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.groups[key].members.length, 15);
   const cache = new Map<string, number>();
   let extentRevision = 1;
   const window = createWindow(cache, (key) => `${key}:${extentRevision}`);
@@ -74,7 +74,7 @@ Deno.test("record projection mints multi-record spans and preserves append topol
   window.measure(key, 200);
   assertEquals([...cache.keys()], [`${key}:2`]);
 });
-Deno.test("terminal transitions never replace an existing individual row", () => {
+Deno.test("terminal transitions rejoin the existing interval", () => {
   const p = createTranscriptProjection();
   p.replace([
     record(1),
@@ -90,7 +90,7 @@ Deno.test("terminal transitions never replace an existing individual row", () =>
   p.apply({ op: "message.upsert", message: record(2) });
   p.apply({ op: "message.upsert", message: record(3) });
   assertEquals(p.state.records.keys.slice(0, 2), keys);
-  assertEquals(p.state.records.owners.r2, "r2");
+  assertEquals(p.state.records.owners.r2, keys[0]);
   p.replace(p.messages());
   assertEquals(p.state.records.keys.slice(0, 2), keys);
 });
@@ -105,13 +105,13 @@ Deno.test("failure breaks out and full record facts prevent title-only folding",
   const key = p.state.records.keys[0];
   assertEquals(p.state.records.groups[key].children?.length, 3);
   p.apply({ op: "message.upsert", message: record(2, { tone: "error" }) });
-  assertEquals(p.state.records.owners.r2, "r2");
-  assertEquals(p.state.records.owners.r1, "r1");
-  assert(p.state.records.keys.includes("r2"));
-  assertEquals(p.state.records.keys, ["r1", "r2", "activity:r3"]);
-  assertEquals(p.state.records.groups["activity:r3"].members, ["r3", "r4"]);
-  assertEquals(p.state.records.parents.r1, undefined);
-  assertEquals(p.state.records.parents.r3[0], "activity:r3");
+  assertEquals(p.state.records.owners.r2, key);
+  assertEquals(p.state.records.owners.r1, key);
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.groups[key].members, ["r1", "r2", "r3", "r4"]);
+  assertEquals(p.state.records.groups[key].breakouts, ["r2"]);
+  assertEquals(p.state.records.parents.r1, [key]);
+  assertEquals(p.state.records.parents.r3[0], key);
 });
 Deno.test("record reveal opens retained ancestry through the interaction owner", () => {
   const p = createTranscriptProjection(),
@@ -190,11 +190,12 @@ Deno.test("ordinary streamed rows publish new measurement revisions without regr
   assertNotEquals(p.state.records.revisions[key], before);
 });
 
-Deno.test("records without producer summary facts remain individually visible", () => {
+Deno.test("records without producer summary facts remain visible within the frame", () => {
   const p = createTranscriptProjection();
   p.replace([
     record(1, { summary: undefined }),
     record(2, { summary: undefined }),
   ]);
-  assertEquals(p.state.records.keys, ["r1", "r2"]);
+  assertEquals(p.state.records.keys, ["activity:r1"]);
+  assertEquals(p.state.records.groups["activity:r1"].breakouts, ["r1", "r2"]);
 });

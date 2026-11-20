@@ -60,7 +60,10 @@ native-kind union. Its optional `Activity` supplies title, detail, generic tone,
 row/boundary layout, outgoing direction, disclosure category, parameters,
 rendered blocks, child reference and a safe icon hint. Native state keys and
 labels belong to the producer; active/terminal facts are nullable and unknown
-never means success. Activity has no visibility/hidden policy.
+never means success. `completion.placement: "footer"` declares normal completion
+owned by a reply footer, independently of native kind or title. Original facts
+remain available for inspection; Activity has no general visibility/hidden
+policy.
 
 Messages, parts and tool calls optionally retain `NativeSource`: bounded
 preview, original byte size, explicit truncation and optional exact text

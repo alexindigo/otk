@@ -158,6 +158,8 @@ export default function Message(
     usage?: Usage;
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
+    /** Injected disclosure for producer-owned successful completion facts. */
+    completionDetails?(): import("solid-js").Element;
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -478,6 +480,7 @@ export default function Message(
                       <Show when={message().interrupted}>
                         <span>interrupted</span>
                       </Show>
+                      {props.completionDetails?.()}
                     </span>
                     <Show when={!props.readOnly}>
                       <MessageActions

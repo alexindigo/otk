@@ -282,7 +282,159 @@ export async function runningTranscriptScenario() {
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
         case "scenario": {
-          const { action, sessionID } = frame.params;
+          const { action, sessionID, target } = frame.params;
+          if (target === "backgrounds") {
+            if (
+              action === "release" || action === "thaw" || action === "stop"
+            ) {
+              // Publish a replacement of the original record, as inbox delivery does.
+              for (let n = 2; n < messages.length; n++) {
+                const message = messages[n], part = message.parts[0];
+                if (part.kind !== "external" || !part.activity) continue;
+                const next: Message = {
+                  ...message,
+                  parts: [{
+                    ...part,
+                    activity: {
+                      ...part.activity,
+                      tone: "normal",
+                      state: {
+                        key: "done",
+                        label: "Done",
+                        facts: { active: false, terminal: true },
+                      },
+                    },
+                  }],
+                };
+                messages[n] = next;
+                emit({ op: "message.upsert", message: next });
+              }
+            } else if (action === "disconnect") {
+              const previous = messages.at(-1)!, part = previous.parts[0];
+              if (part.kind !== "external" || !part.activity) {
+                throw new Error("Missing background record");
+              }
+              const message: Message = {
+                ...previous,
+                parts: [{
+                  ...part,
+                  activity: {
+                    ...part.activity,
+                    tone: "error",
+                    title: "Background failed",
+                    state: {
+                      key: "failed",
+                      label: "Failed",
+                      facts: { active: false, terminal: true },
+                    },
+                  },
+                }],
+              };
+              messages[messages.length - 1] = message;
+              emit({ op: "message.upsert", message });
+            } else if (action === "fail") {
+              emit({
+                op: "session.error",
+                errorState: {
+                  revision: 1,
+                  observations: [{
+                    id: "background-reveal",
+                    source: "event",
+                    message: "Background result",
+                    failure: {
+                      code: "request.params",
+                      retry: "none",
+                      diagnosticID: "background-reveal",
+                      facts: {
+                        origin: "composer",
+                        actionLabel: "Sending prompt",
+                        reason: "Background result",
+                        target: { sessionID: id },
+                        record: {
+                          messageID: messages.at(-1)!.id,
+                          label: "See response",
+                        },
+                      },
+                    },
+                  }],
+                },
+              });
+            } else {
+              const helper = action === "hold",
+                completion = action === "succeed";
+              const number = ++recordCount;
+              const message: Message = {
+                id: `background-${number}`,
+                sessionID: id,
+                role: "context",
+                time: { created: 100 + number },
+                source: {
+                  kind: "fixture",
+                  payload: `Original background ${number}`,
+                },
+                parts: [{
+                  id: `background-part-${number}`,
+                  kind: "external",
+                  name: "fixture/background",
+                  source: {
+                    kind: "fixture",
+                    preview: `Original background ${number}`,
+                    bytes: 32,
+                    truncated: false,
+                  },
+                  activity: {
+                    kindLabel: "Opaque",
+                    summary: helper
+                      ? {
+                        kind: "helper",
+                        noun: "helper finished",
+                        plural: "helpers finished",
+                      }
+                      : completion
+                      ? { kind: "run", noun: "run", plural: "runs" }
+                      : {
+                        kind: "permission",
+                        noun: "permission",
+                        plural: "permissions",
+                      },
+                    ...(completion
+                      ? { completion: { placement: "footer" as const } }
+                      : {}),
+                    title: helper
+                      ? "finished"
+                      : completion
+                      ? "Run succeeded"
+                      : "Permission once",
+                    ...(helper
+                      ? {
+                        entity: { label: "Junior" },
+                        child: { sessionID: id, label: "Open task" },
+                        detail: number % 4 === 0
+                          ? "Inspect plugin settings host"
+                          : "Preserve untouched overrides",
+                      }
+                      : {}),
+                    layout: "row",
+                    category: helper ? "delegation" : "record",
+                    tone: "normal",
+                    state: {
+                      key: completion ? "done" : "queued",
+                      label: completion ? "Done" : "Queued",
+                      facts: { active: false, terminal: completion },
+                    },
+                    parameters: [{
+                      key: "outcome",
+                      label: "Outcome",
+                      value: completion ? "succeeded" : "once",
+                    }],
+                  },
+                }],
+              };
+              messages.push(message);
+              emit({ op: "message.upsert", message });
+            }
+            return null;
+          }
           if (action === "hold") {
             const count = sessionID === id ? 1 : 15;
             for (let n = 0; n < count; n++) {

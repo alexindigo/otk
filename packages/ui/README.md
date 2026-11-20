@@ -595,37 +595,41 @@ control-height track; notices and overflowing takeovers occupy independent,
 bounded layers above the unchanged prompt track. Only draft/editor growth
 changes that track. RecordList owns record spacing and supplies topology to the
 shared Tree; views borrow canonical span identities and retained disclosure
-state rather than regrouping mounted neighbours. Read-only helper transcripts
-mount those same attention owners; only prompt submission is unavailable. With
-no active takeover, helpers mount no empty composer. That same owner provides
-composer availability to takeover headers, so draft-kept copy appears only when
-the open session offers a composer. Permission docks and notifications share
-RequestAge presentation and the client's requestIdle formatter/resumption
-threshold, using the asking session's activity clock rather than request age.
-Permission and question surfaces replace the composer with a raised, bordered,
-20px-radius Takeover and a common blocked-light header. Consumer-supplied
-session location names the project/task; question tabs/options use shared
-underline/pointer primitives. Static keyboard hints are in titles, Keys and the
-palette, not the surface. Question step/collapse changes focus a visible option
-or review action; leaving an own-answer field focuses Answer. Arrival does not
-focus an answer action. Takeover layout sections are programmatic-only
-landmarks, not Tab stops. The prompt restores its own input when a takeover
-releases focus to the document, while preserving focus the reader moved
-elsewhere. Shared focus paint admits semantic controls and explicitly marked
-visible content (message/date reveals), never layout wrappers or
-programmatic-only targets, including browser-focusable scroll containers. Actual
-keyboard controls retain visible focus. The composer's rounded border owns
-focus-within rather than a second textarea rectangle; own-answer input focuses
-its visible row. ComposerTakeovers delegates field paint through
-`--prompt-input-outline`; without that enclosing box, a standalone Prompt
-retains its own field focus outline. Permission takeovers and notification
-toasts share one PermissionSummary: exact tool, command/working directory, edit
-file paths/counts or generic target and requested patterns. Notification
-enrichment carries the neutral request alongside its originating action through
-the hub's opaque detail port. A permission-owned adapter supplies injected toast
-content; the generic hub and toast host know no permission schema. Permission
-and question owners preserve dirty state through reconnects. The legacy `Docks`
-API remains independently reusable for existing consumers.
+state rather than regrouping mounted neighbours. Background intervals share one
+outer conversation gap and compact internal record rhythm, including actionable
+breakouts. Their folded line is plain muted meta text with producer-owned
+counts, no Activity prefix or time range. Successful completion-only intervals
+borrow a footer junction instead of adding a status row; direct reveal opens the
+same retained interval. Read-only helper transcripts mount those same attention
+owners; only prompt submission is unavailable. With no active takeover, helpers
+mount no empty composer. That same owner provides composer availability to
+takeover headers, so draft-kept copy appears only when the open session offers a
+composer. Permission docks and notifications share RequestAge presentation and
+the client's requestIdle formatter/resumption threshold, using the asking
+session's activity clock rather than request age. Permission and question
+surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
+a common blocked-light header. Consumer-supplied session location names the
+project/task; question tabs/options use shared underline/pointer primitives.
+Static keyboard hints are in titles, Keys and the palette, not the surface.
+Question step/collapse changes focus a visible option or review action; leaving
+an own-answer field focuses Answer. Arrival does not focus an answer action.
+Takeover layout sections are programmatic-only landmarks, not Tab stops. The
+prompt restores its own input when a takeover releases focus to the document,
+while preserving focus the reader moved elsewhere. Shared focus paint admits
+semantic controls and explicitly marked visible content (message/date reveals),
+never layout wrappers or programmatic-only targets, including browser-focusable
+scroll containers. Actual keyboard controls retain visible focus. The composer's
+rounded border owns focus-within rather than a second textarea rectangle;
+own-answer input focuses its visible row. ComposerTakeovers delegates field
+paint through `--prompt-input-outline`; without that enclosing box, a standalone
+Prompt retains its own field focus outline. Permission takeovers and
+notification toasts share one PermissionSummary: exact tool, command/working
+directory, edit file paths/counts or generic target and requested patterns.
+Notification enrichment carries the neutral request alongside its originating
+action through the hub's opaque detail port. A permission-owned adapter supplies
+injected toast content; the generic hub and toast host know no permission
+schema. Permission and question owners preserve dirty state through reconnects.
+The legacy `Docks` API remains independently reusable for existing consumers.
 
 The connection's client `RequestLifetimes` owner joins permission, question and
 typed-form identities, native retirement and retained drafts. Transcripts and

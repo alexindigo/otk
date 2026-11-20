@@ -76,18 +76,18 @@ Deno.test("activity spans summarize mixed records and preserve every reveal path
   const span = value.groups["activity:r1"];
   assertEquals(span.members, ["r1", "r2", "r3", "r4", "r5", "r6"]);
   assertEquals(
-    span.detail,
-    "2 permissions · 1 run · 1 system update · 1 helper finished · 1 shell",
+    span.title,
+    "2 permissions, 1 run, 1 system update, 1 helper finished, 1 shell",
   );
-  assertEquals(span.time, { first: 1000, last: 6000 });
+  assertEquals(span.time, undefined);
   assertEquals(span.children?.[0].members, ["r1", "r2"]);
   assertEquals(span.children?.[0].count, 2);
   assertEquals(value.parents.r2, ["activity:r1", "records:r1"]);
-  assertEquals(value.parents.r6, ["activity:r1", "records:r6"]);
+  assertEquals(value.parents.r6, ["activity:r1"]);
   assertEquals(value.owners.r6, "activity:r1");
 });
 
-Deno.test("conversation and unsafe records split spans without hiding failures or waits", () => {
+Deno.test("unsafe records break out inside one interval; conversation separates intervals", () => {
   for (
     const activity of [
       { tone: "error" as const },
@@ -115,9 +115,10 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
       record("r4"),
       record("r5"),
     ]);
-    assertEquals(value.keys, ["activity:r1", "r3", "activity:r4"]);
+    assertEquals(value.keys, ["activity:r1"]);
     assertEquals(value.groups.r3, undefined);
-    assertEquals(value.owners.r3, "r3");
+    assertEquals(value.owners.r3, "activity:r1");
+    assertEquals(value.groups["activity:r1"].breakouts, ["r3"]);
   }
   const prompt: Message = {
     id: "r3",
@@ -133,8 +134,8 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
   );
 });
 
-Deno.test("singletons stay individual and identical groups do not cross kinds or details", () => {
-  assertEquals(group([record("r1")]).keys, ["r1"]);
+Deno.test("singletons mint intervals and identical groups do not cross kinds or details", () => {
+  assertEquals(group([record("r1")]).keys, ["activity:r1"]);
   const value = group([
     record("r1"),
     record("r2", { detail: "different" }),
