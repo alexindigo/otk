@@ -9,7 +9,7 @@ import {
   useContentIdentity,
 } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
-import { TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
 import Icon from "../Icon.tsx";
 import {
   unknownPartFailure,
@@ -73,18 +73,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   );
   const heading = () => (
     <>
-      <Show when={activity()?.icon?.name === "warning"}>
-        <span
-          class="otk-tool-icon"
-          role="img"
-          aria-label={activity()?.icon?.label ?? "Warning"}
-        >
-          <Icon>
-            <path d="M12 3 2 21h20L12 3Z" />
-            <path d="M12 9v5m0 3v.01" />
-          </Icon>
-        </span>
-      </Show>
       <span class="otk-tool-verb otk-control-label" title={label()}>
         {label()}
       </span>
@@ -117,6 +105,20 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             onOpen={details() ? setExpanded : undefined}
             header={() => (
               <header class="otk-tool-state otk-control-row">
+                <TreeIcon>
+                  <Show when={activity()?.icon?.name === "warning"}>
+                    <span
+                      class="otk-tool-icon"
+                      role="img"
+                      aria-label={activity()?.icon?.label ?? "Warning"}
+                    >
+                      <Icon>
+                        <path d="M12 3 2 21h20L12 3Z" />
+                        <path d="M12 9v5m0 3v.01" />
+                      </Icon>
+                    </span>
+                  </Show>
+                </TreeIcon>
                 <Show when={activity()?.entity}>
                   {(entity) => (
                     <EntityPill

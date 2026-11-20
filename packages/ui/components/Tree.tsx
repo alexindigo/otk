@@ -1,10 +1,27 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Tree.css" with { type: "text" };
 import { createContext, type Element, For, Show, useContext } from "solid-js";
+import ContentSlot from "./ContentSlot.tsx";
 
 type Branch = { last: boolean; outgoing?: boolean };
 const BranchContext = createContext<Branch | null>(null);
 const DirectionContext = createContext(false);
+const IconStemContext = createContext<() => boolean>(() => false);
+
+/** A header supplies its kind artwork; the tree owns its slot and child stem. */
+export function TreeIcon(
+  props: { children?: Element; class?: string },
+): Element {
+  const stem = useContext(IconStemContext);
+  return (
+    <span class={["otk-tree-icon", props.class, { "has-stem": stem() }]}>
+      <span class="otk-tree-icon-stem" aria-hidden="true" />
+      <span class="otk-tree-icon-art">
+        {props.children}
+      </span>
+    </span>
+  );
+}
 
 /** Headers with a leading accessory slot borrow the same connector paint. */
 export function TreeConnector(props: { class?: string }): Element {
@@ -96,6 +113,8 @@ export function TreeNode(props: {
   const branch = useContext(BranchContext);
   const direction = useContext(DirectionContext);
   const outgoing = () => props.outgoing ?? branch?.outgoing ?? direction;
+  const visible = () =>
+    !!props.body && (props.bodyVisible ?? props.open ?? true);
   const key = (event: KeyboardEvent) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -108,15 +127,14 @@ export function TreeNode(props: {
         "is-connected": !!branch,
         "is-last": branch?.last ?? true,
         "is-outgoing": outgoing(),
-        "has-body": !!props.body && (props.bodyVisible ?? props.open ?? true),
+        "has-body": visible(),
       }]}
       data-tree-node=""
     >
       <div class="otk-tree-heading">
-        <Show when={branch}>
-          <Junction class="otk-tree-incoming" />
-        </Show>
-        <Junction class="otk-tree-own">
+        <Junction
+          class={branch ? "otk-tree-own otk-tree-incoming" : "otk-tree-own"}
+        >
           <Show
             when={props.onOpen &&
               ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
@@ -130,11 +148,11 @@ export function TreeNode(props: {
               onClick={() => props.onOpen?.(!props.open)}
               onKeyDown={key}
             >
-              <svg viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                <rect x=".5" y=".5" width="9" height="9" />
-                <path d="M3 5h4" />
+              <svg viewBox="0 0 9 9" fill="none" aria-hidden="true">
+                <rect x=".5" y=".5" width="8" height="8" />
+                <path d="M2.5 4.5h4" />
                 <Show when={!props.open}>
-                  <path d="M5 3v4" />
+                  <path d="M4.5 2.5v4" />
                 </Show>
               </svg>
             </button>
@@ -143,20 +161,20 @@ export function TreeNode(props: {
         <div class="otk-tree-label">
           <BranchContext value={null}>
             <DirectionContext value={outgoing()}>
-              {props.header(!!branch)}
+              <IconStemContext value={visible}>
+                <ContentSlot content={() => props.header(!!branch)} />
+              </IconStemContext>
             </DirectionContext>
           </BranchContext>
         </div>
       </div>
-      <Show when={props.body && (props.bodyVisible ?? props.open ?? true)}>
+      <Show when={visible()}>
         <div class="otk-tree-body">
-          <Show when={branch}>
-            <span class="otk-tree-continuation" aria-hidden="true" />
-          </Show>
+          <span class="otk-tree-continuation" aria-hidden="true" />
           <div class="otk-tree-children">
             <BranchContext value={null}>
               <DirectionContext value={outgoing()}>
-                {props.body?.()}
+                <ContentSlot content={() => props.body?.()} />
               </DirectionContext>
             </BranchContext>
           </div>

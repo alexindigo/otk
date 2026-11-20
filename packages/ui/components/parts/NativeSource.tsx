@@ -15,7 +15,7 @@ import {
   retainedDisclosure,
   useNativeSource,
 } from "../../features/transcript-context.tsx";
-import { TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
 
 type Loaded =
@@ -92,6 +92,7 @@ export default function NativeSource(props: {
             aria-expanded={open() ? "true" : "false"}
             onClick={toggle}
           >
+            <TreeIcon />
             <span class="otk-control-label">Source</span>
           </button>
         )}

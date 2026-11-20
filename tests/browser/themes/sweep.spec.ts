@@ -787,7 +787,9 @@ test(
           (await page.locator(".otk-session-row").first().boundingBox())!
             .height,
         ).toBe(30);
-        await expect(page.locator(".otk-session-branch").first()).toHaveText(
+        await expect(
+          page.locator(".otk-session-branch, .otk-tree-guide").first(),
+        ).toHaveText(
           "",
         );
         await expect(page.locator(".otk-session-crumb[aria-current]"))

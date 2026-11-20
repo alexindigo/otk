@@ -4,7 +4,7 @@ import { type Element, Show } from "solid-js";
 import type { Preferences, ToolCall } from "@otk/protocol";
 import { toolFailure } from "@otk/client";
 import ActivityIndicator from "../ActivityIndicator.tsx";
-import { TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
 import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
 import { scopedEntityFacts } from "../../entity-facts.ts";
@@ -81,6 +81,11 @@ export default function ToolFrame(props: {
                 "is-error": !!failure(),
               }]}
             >
+              <TreeIcon>
+                {typeof props.presentation?.icon === "function"
+                  ? props.presentation.icon()
+                  : props.presentation?.icon}
+              </TreeIcon>
               <Show when={props.presentation?.entity}>
                 {(entity) => (
                   <EntityPill
@@ -99,11 +104,6 @@ export default function ToolFrame(props: {
                 aria-expanded={open() ? "true" : "false"}
                 onClick={() => void expand()}
               >
-                <span class="otk-tool-icon" aria-hidden="true">
-                  {typeof props.presentation?.icon === "function"
-                    ? props.presentation.icon()
-                    : props.presentation?.icon ?? "◇"}
-                </span>{" "}
                 <span
                   class="otk-tool-verb otk-control-label"
                   title={props.presentation?.verb ?? props.call.tool}

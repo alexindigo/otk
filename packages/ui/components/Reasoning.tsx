@@ -7,7 +7,7 @@ import { duration } from "@otk/client";
 import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { TreeItem, TreeNode } from "./Tree.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 export default function Reasoning(
   props: {
     part: Extract<Part, { kind: "reasoning" }>;
@@ -37,9 +37,11 @@ export default function Reasoning(
   function Heading() {
     return (
       <>
-        <Show when={props.part.time.end === undefined}>
-          <ActivityIndicator small />
-        </Show>
+        <TreeIcon>
+          <Show when={props.part.time.end === undefined}>
+            <ActivityIndicator small />
+          </Show>
+        </TreeIcon>
         {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
         {props.part.time.end !== undefined
           ? ` ${duration(props.part.time.end - props.part.time.start)}`

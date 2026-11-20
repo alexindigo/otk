@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { recordToggle } from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-public-ui" });
 
 test(
@@ -9,9 +10,9 @@ test(
   async ({ isolatedState: state, page }) => {
     await page.goto(state.url + "/?source-ownership");
     const record = page.locator('[data-native-record="record"]');
-    await record.locator("> .otk-tool-state > .otk-tool-toggle").click();
+    await recordToggle(record).click();
     const source = record.locator(".otk-native-source"),
-      toggle = source.locator("> .otk-tool-toggle");
+      toggle = source.getByRole("button", { name: "Source", exact: true });
     const count = page.locator("[data-source-reads]");
     await expect(count).toHaveText("0");
     await page.getByRole("button", { name: "Update record", exact: true })
@@ -52,9 +53,12 @@ test(
     // Without a resource owner there is also no Retry operation to offer.
     await page.goto(state.url + "/?source-ownership&missing-source-reader");
     const missingRecord = page.locator('[data-native-record="record"]');
-    await missingRecord.locator("> .otk-tool-state > .otk-tool-toggle").click();
+    await recordToggle(missingRecord).click();
     const missingSource = missingRecord.locator(".otk-native-source");
-    const missingToggle = missingSource.locator("> .otk-tool-toggle");
+    const missingToggle = missingSource.getByRole("button", {
+      name: "Source",
+      exact: true,
+    });
     await missingToggle.click();
     await expect(missingSource).toContainText("This view has no source reader");
     await expect(missingSource).not.toContainText("identical failures");

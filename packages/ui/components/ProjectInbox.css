@@ -35,6 +35,8 @@
   padding: 0 8px;
 }
 .otk-project-row {
+  --selection-inset: 0px;
+  --selection-pointer-inset: 0px;
   display: flex;
   align-items: center;
   min-height: var(--row-project);
@@ -145,17 +147,8 @@
 .otk-inactive-toggle[aria-expanded=true] .otk-inactive-chevron {
   transform: rotate(90deg);
 }
-.otk-archived-toggle[aria-expanded=true] .otk-archived-chevron {
-  transform: rotate(90deg);
-}
 .otk-discovered-toggle[aria-expanded=true] .otk-discovered-chevron {
   transform: rotate(90deg);
-}
-.otk-project-marker {
-  display: grid;
-  place-items: center;
-  min-width: 10px;
-  flex: none;
 }
 .otk-inbox-rule {
   flex: 1;
@@ -272,13 +265,16 @@
   outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-row);
 }
-.otk-project-row::before,
-.otk-project-row > .otk-project-connector {
+.otk-project-row::before {
   grid-area: 1 / 1;
 }
 .otk-project-row > .otk-project-content {
-  grid-area: 1 / 2;
+  grid-area: 1 / 1 / 2 / -1;
 }
-.otk-project-row > .otk-project-connector {
-  inline-size: 100%;
+.otk-project-inbox[data-collapsed=true] .otk-archived-toggle {
+  justify-content: center;
+}
+.otk-archived-toggle {
+  margin-top: 0;
+  gap: var(--project-gap);
 }

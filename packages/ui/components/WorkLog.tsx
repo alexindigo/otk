@@ -4,7 +4,7 @@ import type { Element } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { workingTime } from "./work-log.ts";
-import { TreeNode } from "./Tree.tsx";
+import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
@@ -38,6 +38,7 @@ export default function WorkLog(
             aria-expanded={open() ? "true" : "false"}
             onClick={() => void toggle()}
           >
+            <TreeIcon />
             <span class="otk-work-label">{label()}</span>
           </button>
         )}

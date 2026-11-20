@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  archiveAttention,
   errorFeedback,
   type FailureValue,
   failureValue,
@@ -47,7 +48,7 @@ import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
-import { TreeConnector, TreeItem, TreeNode } from "./Tree.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -151,11 +152,23 @@ export default function ProjectInbox(props: {
     props.projects.filter((p) => projectGroup(p) === "inactive");
   const repository = (p: ProjectRow) =>
     p.topology?.canonicalRoot ?? p.directory;
+  const repositoryKey = (p: ProjectRow) =>
+    JSON.stringify([p.sidecarId, repository(p)]);
   const liveRows = createMemo(() => projectTree(rows()));
+  const archiveOwners = createMemo(() => {
+    const owners = new Map<string, ProjectBranch<ProjectRow>>();
+    for (const node of liveRows()) {
+      const key = repositoryKey(node.project);
+      if (owners.get(key)?.project.directory !== repository(node.project)) {
+        owners.set(key, node);
+      }
+    }
+    return owners;
+  });
   const archivedRows = (repo: ProjectRow) =>
     props.projects.filter((p) =>
       projectGroup(p) === "archived" && p.sidecarId === repo.sidecarId &&
-      p.topology?.canonicalRoot === repository(repo)
+      repository(p) === repository(repo)
     );
   function Branches(section: { projects: ProjectRow[]; nested?: boolean }) {
     const nodes = createMemo(() => projectTree(section.projects));
@@ -172,8 +185,14 @@ export default function ProjectInbox(props: {
       </For>
     );
   }
-  function ProjectNode(item: { node: ProjectBranch<ProjectRow> }) {
+  function ProjectNode(
+    item: { node: ProjectBranch<ProjectRow>; archive?: boolean },
+  ) {
     const node = () => item.node;
+    const archive = () =>
+      !!item.archive && archivedRows(node().project).length > 0;
+    const nestedArchive = () =>
+      archive() && node().project.directory === repository(node().project);
     const expanded = () => !layout().projectCollapsed?.[node().key];
     const children = () =>
       node().children.filter((child) => expanded() || child.required);
@@ -193,6 +212,9 @@ export default function ProjectInbox(props: {
             >
               {(child) => <ProjectNode node={child()} />}
             </For>
+            <Show when={archive()}>
+              <Archive repo={node().project} />
+            </Show>
           </>
         }
       >
@@ -200,55 +222,118 @@ export default function ProjectInbox(props: {
           class="otk-project-tree"
           label={`Worktrees in ${projectName(node().project.directory)}`}
           open={expanded()}
-          hasChildren={node().children.length > 0}
+          hasChildren={node().children.length > 0 || nestedArchive()}
           showEmptyToggle={false}
-          bodyVisible={children().length > 0}
+          bodyVisible={children().length > 0 || nestedArchive()}
           onOpen={props.onProjectCollapse ? save : undefined}
           header={(connected) => (
             <Row project={node().project} connected={connected} />
           )}
           body={() => (
-            <For each={children()} keyed={(child) => child.key}>
-              {(child) => (
-                <TreeItem last={child().key === children().at(-1)?.key}>
-                  <ProjectNode node={child()} />
+            <>
+              <For each={children()} keyed={(child) => child.key}>
+                {(child) => (
+                  <TreeItem
+                    last={!nestedArchive() &&
+                      child().key === children().at(-1)?.key}
+                  >
+                    <ProjectNode node={child()} />
+                  </TreeItem>
+                )}
+              </For>
+              <Show when={nestedArchive()}>
+                <TreeItem last>
+                  <Archive repo={node().project} />
                 </TreeItem>
-              )}
-            </For>
+              </Show>
+            </>
           )}
         />
-        <Show when={!node().project.topology?.parentDirectory}>
+        <Show when={archive() && !nestedArchive()}>
           <Archive repo={node().project} />
         </Show>
       </Show>
     );
   }
+  const orphanArchives = createMemo(() => {
+    const live = new Set(rows().map(repositoryKey));
+    const repos = new Map<string, ProjectRow>();
+    for (const project of props.projects) {
+      if (
+        projectGroup(project) === "archived" &&
+        !live.has(repositoryKey(project))
+      ) {
+        repos.set(repositoryKey(project), project);
+      }
+    }
+    return [...repos.values()];
+  });
   function Archive(section: { repo: ProjectRow }) {
     const [expanded, setExpanded] = createSignal(false);
     const projects = () => archivedRows(section.repo);
     const label = () =>
       `Archived checkouts in ${projectName(repository(section.repo))}`;
-    return (
-      <Show when={!collapsed() && projects().length}>
-        <button
-          type="button"
-          class="otk-archived-toggle"
-          aria-label={label()}
-          aria-expanded={expanded() ? "true" : "false"}
-          onClick={() => setExpanded(!expanded())}
-        >
-          <ControlIcon>
-            <ChevronIcon class="otk-archived-chevron" />
-          </ControlIcon>
+    const attention = () => archiveAttention(projects());
+    const description = () =>
+      `${label()} (${attention().count}), ${
+        attention().unseenCount === null
+          ? "unseen count unavailable"
+          : `${attention().unseenCount} unseen`
+      }`;
+    const header = () => (
+      <button
+        type="button"
+        class="otk-archived-toggle"
+        aria-label={description()}
+        title={description()}
+        data-rollup={attention().status}
+        data-unseen-count={attention().unseenCount}
+        aria-expanded={expanded() && !collapsed() ? "true" : "false"}
+        onClick={() => {
+          setExpanded(collapsed() || !expanded());
+          if (collapsed()) {
+            void props.onLayout({ leftCollapsed: false }).catch((error) =>
+              setError(
+                failureValue(error, {
+                  actionLabel: "Opening archived projects",
+                }),
+              )
+            );
+          }
+        }}
+      >
+        <TreeIcon>
+          <StatusLight state={attention().status} />
+        </TreeIcon>
+        <Show when={!collapsed()}>
           <span class="otk-control-label" title="Archived">Archived</span>
           <span class="otk-inbox-rule" />
-          <span>({projects().length})</span>
-        </button>
-        <Show when={expanded()}>
-          <section aria-label={label()} class="otk-archived-projects">
-            <Branches projects={projects()} nested />
-          </section>
+          <span class="otk-archived-count">({attention().count})</span>
         </Show>
+      </button>
+    );
+    return (
+      <Show when={projects().length}>
+        <section
+          class="otk-project-archive"
+          data-project-parent={repository(section.repo)}
+        >
+          <Show when={!collapsed()} fallback={header()}>
+            <TreeNode
+              class="otk-project-tree otk-archive-tree"
+              label={label()}
+              open={expanded()}
+              onOpen={setExpanded}
+              hasChildren
+              header={header}
+              body={() => (
+                <section aria-label={label()} class="otk-archived-projects">
+                  <Branches projects={projects()} nested />
+                </section>
+              )}
+            />
+          </Show>
+        </section>
       </Show>
     );
   }
@@ -295,9 +380,6 @@ export default function ProjectInbox(props: {
         data-project-availability={project().availability}
         data-project-archived={project().archived ? "true" : "false"}
       >
-        <Show when={row.connected}>
-          <TreeConnector class="otk-project-connector" />
-        </Show>
         <SelectionContent class="otk-project-content">
           <button
             type="button"
@@ -305,7 +387,7 @@ export default function ProjectInbox(props: {
             aria-label={`Open project ${name()}${
               project().parentLabel ? ` in ${project().parentLabel}` : ""
             }${duplicate() ? ` on ${project().label}` : ""}${
-              project().availability === "removed" ? " (removed)" : ""
+              project().annotation ? ` (${project().annotation})` : ""
             }`}
             title={`${project().directory} · ${project().label}${
               projectGroup(project()) === "discovered"
@@ -315,10 +397,10 @@ export default function ProjectInbox(props: {
                     ? "No known activity"
                     : project().status
                 }`
-            }${project().availability === "removed" ? " (removed)" : ""}`}
+            }${project().annotation ? ` (${project().annotation})` : ""}`}
             onClick={() => void open(project())}
           >
-            <span class="otk-project-marker">
+            <TreeIcon class="otk-project-marker">
               <StatusLight
                 state={project().status}
                 attention={{
@@ -332,7 +414,7 @@ export default function ProjectInbox(props: {
                   },
                 }}
               />
-            </span>
+            </TreeIcon>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
                 <Show
@@ -350,8 +432,10 @@ export default function ProjectInbox(props: {
                 >
                   {name()}
                 </span>
-                <Show when={project().availability === "removed"}>
-                  <span class="otk-project-availability">removed</span>
+                <Show when={project().annotation}>
+                  <span class="otk-project-availability">
+                    {project().annotation}
+                  </span>
                 </Show>
                 <Show when={project().inactive && project().parentLabel}>
                   <span
@@ -519,7 +603,16 @@ export default function ProjectInbox(props: {
         each={liveRows()}
         keyed={(p) => p.key}
       >
-        {(p) => <ProjectNode node={p()} />}
+        {(p) => (
+          <ProjectNode
+            node={p()}
+            archive={archiveOwners().get(repositoryKey(p().project))?.key ===
+              p().key}
+          />
+        )}
+      </For>
+      <For each={orphanArchives()} keyed={repositoryKey}>
+        {(repo) => <Archive repo={repo()} />}
       </For>
       <Show when={discovered().length}>
         <button

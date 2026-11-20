@@ -3,7 +3,7 @@ import "./tools/ToolFrame.css" with { type: "text" };
 import "./ActivityGroup.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { ActivityGroup as Group } from "@otk/client";
-import { TreeNode } from "./Tree.tsx";
+import { TreeIcon, TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
@@ -44,6 +44,7 @@ export default function ActivityGroup(props: {
         onOpen={setOpen}
         header={() => (
           <header class="otk-record-group-heading">
+            <TreeIcon />
             <Show when={props.group.entity}>
               {(entity) => (
                 <EntityPill

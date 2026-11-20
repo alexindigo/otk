@@ -155,7 +155,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  // WP12 keeps the disclosure and label centered in the shared junction grid.
+  // WP12 centers the disclosure, kind icon and label in adjacent shared slots.
   await revealAcquired(page, ".otk-work-fold");
   const fold = page.locator(".otk-work-fold");
   await expect(fold.locator(".otk-work-label")).toHaveCSS(
@@ -169,14 +169,18 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     const icon = heading.querySelector(".otk-tree-toggle")!
         .getBoundingClientRect(),
       label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
+    const kind = el.querySelector(".otk-tree-icon")!.getBoundingClientRect();
     return {
       center: (icon.top + icon.bottom - label.top - label.bottom) / 2,
-      gap: label.left - icon.right,
+      gap: kind.left - icon.right,
       expected: (rail.width - icon.width) / 2,
+      labelGap: label.left - kind.right,
+      expectedLabelGap: parseFloat(getComputedStyle(el).columnGap),
     };
   });
   expect(Math.abs(disclosure.center)).toBeLessThan(.5);
-  expect(disclosure.gap).toBe(disclosure.expected);
+  expect(Math.abs(disclosure.gap - disclosure.expected)).toBeLessThan(.5);
+  expect(disclosure.labelGap).toBe(disclosure.expectedLabelGap);
   for (const width of [1280, 1600, 2000]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() =>

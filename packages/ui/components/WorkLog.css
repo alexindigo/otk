@@ -5,7 +5,7 @@
   gap: 8px;
   width: fit-content;
   max-width: 100%;
-  min-height: var(--line-meta);
+  min-height: var(--tree-height, calc(var(--tree-icon-size) * 2));
   padding: 0;
   margin-block: 0;
   color: var(--otk-fg-3);

@@ -849,17 +849,20 @@ in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
 Tracked rows precede the persisted, initially expanded Discovered disclosure and
 Inactive section. Each repository's live children precede its initially
 collapsed Archived disclosure. Archive membership comes from the client
-projection, not manual Inactive policy; mandatory activity stays live in both
-column and rail. Collapsed discovery retains working/blocked/unseen-finished
-rows; the rail retains the same discovery-section geometry and mandatory
-indicators. Template-only rows reserve the same marker track without a lamp (a
-name initial identifies them in the rail). Discovered row context offers the
-shared captured New session action, while tracked rows retain their
-active/inactive action. Add project creates an initial session rather than
-tracking an empty directory alone. Width (200–360px, 248 default) and collapsed
-states follow the serving server's `shellLayout` preference. Controls pass
-independent `Partial<ShellLayout>` field intents through `onLayout`; the shell
-sends `layout.patch`, whose core owner merges against persisted state before
+projection, not manual Inactive policy; working/blocked activity stays live in
+both column and rail. Finished-unseen archived rows contribute their lamp and
+unseen count to the Archived header, including in the rail. Removal wording in
+the row, accessible name and tooltip comes from the same client placement
+annotation. Collapsed discovery retains working/blocked/unseen-finished rows;
+the rail retains the same discovery-section geometry and mandatory indicators.
+Template-only rows reserve the same marker track without a lamp (a name initial
+identifies them in the rail). Discovered row context offers the shared captured
+New session action, while tracked rows retain their active/inactive action. Add
+project creates an initial session rather than tracking an empty directory
+alone. Width (200–360px, 248 default) and collapsed states follow the serving
+server's `shellLayout` preference. Controls pass independent
+`Partial<ShellLayout>` field intents through `onLayout`; the shell sends
+`layout.patch`, whose core owner merges against persisted state before
 validation/save/broadcast. No control constructs a whole-layout replacement from
 props. `ProjectTabs` consumes the public client tabs model,
 server/project-scoped task actions and injected guarded navigation. It renders
@@ -934,16 +937,29 @@ including across virtual record boundaries; outgoing branches mirror that same
 grid. Disclosure state and callbacks remain in the existing interaction owner.
 `TreeGuide` borrows the same junction cells for already-expanded virtual session
 hierarchies, using plain client `treePaths` rather than mounted neighbours. No
-component paints a second nesting rail or elbow.
+component paints a second nesting rail or elbow. Horizontal levels are 1.45
+times the compact icon token, independent of row height, with boxes 0.7 times
+that token and half-cell dotted stubs. `TreeIcon` owns the leading artwork slot
+and the downward child rail; callers inject their lamp or kind artwork. The
+child junction is aligned with that parent icon, not its disclosure box.
+TreeIcon never invents artwork: it renders the caller's semantic kind icon or
+lamp, or an empty slot when there is none. Body-only leaf content needs no icon
+or disclosure. Header and body factories borrow ContentSlot so record updates
+retain the mounted preview lifetime.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in
 `shellLayout.projectCollapsed`; keyed `layout.project` intents merge there so
 another tab's project choice cannot be overwritten by a stale layout snapshot.
 Mandatory descendants remain visible while their parent is collapsed. Archived
-and Inactive retain their separate section disclosures. Childless projects omit
-the box; TreeNode's `showEmptyToggle` input controls that presentation without
-changing its geometry or introducing local state.
+and Inactive retain their separate section disclosures. Archived borrows the
+same TreeNode at worktree depth beneath its repository; its children are one
+shared indent further in. The header stays visible under project collapse,
+retaining its independent disclosure and attention lamp/count, including the
+collapsed sidebar rail. Missing canonical roots assign the archive once to the
+remaining repository group; archive-only repositories retain their own header.
+Childless projects omit the box; TreeNode's `showEmptyToggle` input controls
+that presentation without changing its geometry or introducing local state.
 
 ## Example
 

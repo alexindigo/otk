@@ -30,8 +30,17 @@ async function geometry(nodes: Locator) {
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
+        ":scope > .otk-tree-heading .otk-tree-icon",
+      )?.getBoundingClientRect();
+      const parentJunction = parent?.querySelector(
         ":scope > .otk-tree-heading > .otk-tree-own",
       )?.getBoundingClientRect();
+      const parentStem = parent?.querySelector(
+        ":scope > .otk-tree-heading .otk-tree-icon-stem",
+      )?.getBoundingClientRect();
+      const icon =
+        node.querySelector(":scope > .otk-tree-heading .otk-tree-icon") ??
+          parent?.querySelector(":scope > .otk-tree-heading .otk-tree-icon");
       const svg = box?.querySelector("svg");
       const parentHeading = parent?.querySelector(":scope > .otk-tree-heading")
         ?.getBoundingClientRect();
@@ -53,6 +62,13 @@ async function geometry(nodes: Locator) {
         boxColor: svg ? getComputedStyle(svg).color : undefined,
         muted: getComputedStyle(node).getPropertyValue("--otk-fg-3").trim(),
         junction: [r.x + r.width / 2, r.y + r.height / 2],
+        indent: r.width,
+        iconSize: parseFloat(getComputedStyle(icon ?? rail).fontSize),
+        iconSlot: icon?.getBoundingClientRect().width,
+        levelStep: parentJunction
+          ? Math.abs(r.x - parentJunction.x)
+          : undefined,
+        stemEnd: parentStem?.bottom,
         contentCenter: content.y + content.height / 2,
         rowCenter: heading.y + heading.height / 2,
         connector: [c.x, c.right, c.y],
@@ -89,13 +105,22 @@ async function geometry(nodes: Locator) {
       expect(Math.abs(fact.box[0] - fact.junction[0])).toBeLessThanOrEqual(1);
       expect(Math.abs(fact.box[1] - fact.junction[1])).toBeLessThanOrEqual(1);
       expect(Math.abs(fact.box[1] - fact.contentCenter)).toBeLessThanOrEqual(1);
-      expect(fact.boxSize).toEqual([10, 10]);
+      expect(fact.boxSize![0]).toBeCloseTo(fact.boxSize![1], 1);
+      expect(fact.boxSize![0] / fact.iconSize).toBeGreaterThan(.5);
+      expect(fact.boxSize![0] / fact.iconSize).toBeLessThan(.85);
       expect(fact.stroke).not.toBe("none");
       expect(fact.stroke).toBe(fact.boxColor);
       if (fact.lower !== "none") expect(fact.lower).toContain(fact.boxColor!);
     }
     expect(fact.dots).toBe("1px 2px");
     expect(fact.horizontalDots).toBe("2px 1px");
+    expect(fact.indent / fact.iconSize).toBeGreaterThan(1);
+    expect(fact.indent / fact.iconSize).toBeLessThanOrEqual(1.5);
+    if (fact.iconSlot) {
+      expect(fact.indent / fact.iconSlot).toBeLessThanOrEqual(1.5);
+    }
+    expect((fact.connector[1] - fact.connector[0]) / fact.indent)
+      .toBeLessThanOrEqual(.6);
     if (!fact.connected) continue;
     expect(Math.abs(fact.connector[2] - fact.junction[1])).toBeLessThanOrEqual(
       1,
@@ -103,6 +128,7 @@ async function geometry(nodes: Locator) {
     expect(Math.abs(fact.upper - fact.junction[1])).toBeLessThanOrEqual(1);
     expect(fact.incomingLower === "none").toBe(fact.last);
     if (fact.parentAxis !== undefined) {
+      expect(Math.abs(fact.levelStep! - fact.indent)).toBeLessThanOrEqual(1);
       expect(
         Math.abs(fact.incoming![0] - fact.parentAxis),
         JSON.stringify(fact),
@@ -111,6 +137,9 @@ async function geometry(nodes: Locator) {
       );
     }
     if (fact.parentBottom !== undefined) {
+      expect(Math.abs(fact.stemEnd! - fact.parentBottom)).toBeLessThanOrEqual(
+        1,
+      );
       expect(Math.abs(fact.incoming![1] - fact.parentBottom))
         .toBeLessThanOrEqual(1);
     }
@@ -121,6 +150,23 @@ async function geometry(nodes: Locator) {
   return facts;
 }
 
+async function scaledGeometry(nodes: Locator) {
+  try {
+    for (const size of ["10px", "18px"]) {
+      await nodes.page().evaluate(
+        (size) =>
+          document.documentElement.style.setProperty("--icon-compact", size),
+        size,
+      );
+      await geometry(nodes);
+    }
+  } finally {
+    await nodes.page().evaluate(() =>
+      document.documentElement.style.removeProperty("--icon-compact")
+    );
+  }
+}
+
 test.describe("work tree", () => {
   test.use({ profile: "contract-messages-disclosures" });
   test("messages.tree-junction-geometry-keyboard-and-lazy-body", {
@@ -129,12 +175,16 @@ test.describe("work tree", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node");
+    await expect(root.locator(":scope > .otk-tree-heading .otk-tree-icon-art"))
+      .toBeEmpty();
     const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-toggle");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     const tool = page.locator(".otk-tool-toggle");
+    await expect(page.locator(".otk-tool-state > .otk-tree-icon svg"))
+      .toHaveCount(1);
     await tool.click();
     await expect(page.locator(".otk-code")).toContainText("foldedSecret");
     await tool.evaluate((element) => (element as HTMLElement).blur());
@@ -155,6 +205,7 @@ test.describe("work tree", () => {
         fullPage: true,
       });
     }
+    await scaledGeometry(root.locator(".otk-tree-node").or(root));
     await toggle.focus();
     await page.keyboard.press("ArrowLeft");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -187,6 +238,9 @@ test.describe("project tree", () => {
       ":scope > .otk-tree-heading .otk-tree-toggle",
     );
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      row(directory).getByRole("img", { name: "Working", exact: true }),
+    ).toBeVisible();
     const box = await toggle.boundingBox(),
       lamp = await row(directory).locator(".otk-status-light").boundingBox();
     expect(box!.x + box!.width).toBeLessThan(lamp!.x);
@@ -211,7 +265,9 @@ test.describe("project tree", () => {
       .toHaveCount(0);
     const tip = await row(root + "/worktrees/feature-two").evaluate(
       (element) => {
-        const connector = element.querySelector(".otk-project-connector")!
+        const connector = element.closest(".otk-tree-node")!.querySelector(
+          ":scope > .otk-tree-heading .otk-tree-connector",
+        )!
           .getBoundingClientRect();
         const marker = element.querySelector(".otk-project-marker")!
           .getBoundingClientRect();
@@ -253,6 +309,7 @@ test.describe("project tree", () => {
         fullPage: true,
       });
     }
+    await scaledGeometry(page.locator(".otk-project-inbox .otk-tree-node"));
   });
 });
 
@@ -272,6 +329,11 @@ test.describe("activity tree", () => {
     }
     await page.reload();
     const span = page.locator(".otk-record-group").first();
+    await expect(
+      span.locator(
+        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-icon-art",
+      ),
+    ).toBeEmpty();
     await expect(span).toHaveAttribute("data-count", "3");
     await span.locator(".otk-record-group-toggle").first().click();
     const run = span.locator(".otk-record-group");
@@ -302,6 +364,7 @@ test.describe("activity tree", () => {
         fullPage: true,
       });
     }
+    await scaledGeometry(span.locator(".otk-tree-node"));
   });
 });
 

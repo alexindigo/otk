@@ -465,8 +465,8 @@ export function shellOutput(
 ): Locator {
   return page.locator(shellRun(state, status)).locator(
     v2(state)
-      ? ":scope > .otk-tool-body > .otk-text"
-      : ":scope > .otk-tool-body > .otk-tool-output",
+      ? ".otk-tool-body > .otk-text"
+      : ".otk-tool-body > .otk-tool-output",
   );
 }
 
@@ -474,13 +474,16 @@ export function shellOutput(
  * then use its header toggle (never its nested Source fold). */
 export async function openRecord(page: Page, selector: string) {
   await revealAcquired(page, selector);
-  const toggle = page.locator(
-    `${selector} > .otk-tool-state > .otk-tool-toggle`,
-  ).first();
+  const toggle = recordToggle(page.locator(selector).first());
   if (await toggle.getAttribute("aria-expanded") !== "true") {
     await toggle.click();
   }
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
+/** A record owns its state control; tree labels do not own disclosure. */
+export function recordToggle(record: Locator) {
+  return record.locator(".otk-tool-state > .otk-tool-toggle").first();
 }
 
 /** Plugin-owned compaction boundaries, with each harness's lifecycle wording. */
@@ -539,7 +542,7 @@ export async function expectCompactionSummary(
   const { selector } = compactionBoundary(state);
   await expect.poll(async () => {
     for (const row of await page.locator(selector).all()) {
-      const toggle = row.locator("> .otk-tool-state > .otk-tool-toggle");
+      const toggle = recordToggle(row);
       if (await toggle.getAttribute("aria-expanded") !== "true") {
         await toggle.click();
       }
