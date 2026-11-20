@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import {
   CONNECTION_STATES,
+  connectionFeedback,
   type ConnectionInput,
   connectionLabel,
   connectionState,
@@ -12,6 +13,24 @@ const healthy: ConnectionInput = {
   status: "connected",
   harness: "connected",
 };
+Deno.test("connection notice presents reconnecting as information and clears when connected", () => {
+  assertEquals(connectionFeedback({ ...healthy, status: "reconnecting" }), {
+    kind: "info",
+    text: "Reconnecting to OTK...",
+  });
+  assertEquals(connectionFeedback(healthy), undefined);
+  assertEquals(
+    connectionFeedback({
+      ...healthy,
+      status: "reconnecting",
+      error: "Invalid OTK request reference",
+    }),
+    {
+      kind: "error",
+      text: "Invalid OTK request reference",
+    },
+  );
+});
 Deno.test("connection health requires both links and gives failures precedence over a stale connected status", () => {
   assertEquals(connectionState(healthy), "connected");
   assertEquals(connectionState(), "disconnected");

@@ -7,9 +7,11 @@ import { FeedbackFailure } from "../failures.ts";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import {
   bootstrapFetch,
+  fixtureRequestPolicy,
   fixtureRequests,
   replyRequest,
 } from "../../../tests/support/request-wire.ts";
+import { bounded } from "../../../tests/support/resources.ts";
 
 class Socket {
   readyState: number = WebSocket.CONNECTING;
@@ -29,13 +31,13 @@ class Socket {
     this.readyState = WebSocket.OPEN;
     this.onopen?.();
   }
-  welcome() {
+  welcome(requests = fixtureRequests()) {
     this.onmessage?.({
       data: JSON.stringify({
         t: "welcome",
         protocol: PROTOCOL_VERSION,
         messages: fixtureMessagePolicy,
-        requests: fixtureRequests(),
+        requests,
         sidecar: {
           version: "test",
           harness: {
@@ -49,6 +51,94 @@ class Socket {
     });
   }
 }
+Deno.test("restart 503s at admission and request-events reconnect automatically and renew the request window", async () => {
+  const policy = { ...fixtureRequestPolicy, retrybase: 1, retrymax: 2 };
+  const sockets: Socket[] = [];
+  const statuses: { state: string; error?: string }[] = [];
+  const recovered = Promise.withResolvers<void>();
+  const bootstrap = bootstrapFetch();
+  let restarting = false, admissions = 0, unavailableAt = 0, retriedAt = 0;
+  const connection = new SidecarConnection("http://example.test", {
+    status(state, error) {
+      statuses.push({ state, error });
+      if (state === "connected" && restarting) recovered.resolve();
+    },
+    frame() {},
+  }, {
+    policy,
+    fetcher(input, init) {
+      const events = String(input).endsWith("request-events");
+      if (restarting) {
+        if (!events && ++admissions === 1) {
+          unavailableAt = performance.now();
+          return Promise.resolve(
+            new Response("Starting", {
+              status: 503,
+              headers: { "Retry-After": "1" },
+            }),
+          );
+        }
+        if (!events && admissions === 2) retriedAt = performance.now();
+        if (events && admissions === 2) {
+          return Promise.resolve(
+            new Response("proxy unavailable", { status: 503 }),
+          );
+        }
+      }
+      return bootstrap(input, init);
+    },
+    socket() {
+      const socket = new Socket();
+      sockets.push(socket);
+      if (restarting) {
+        queueMicrotask(() => {
+          socket.open();
+          socket.welcome({ ...fixtureRequests(), policy });
+        });
+      }
+      return socket as unknown as WebSocket;
+    },
+  });
+  try {
+    await connection.connect();
+    sockets[0].open();
+    sockets[0].welcome({ ...fixtureRequests(), policy });
+    const pending = connection.rpc.start("usage.get", {
+      sessionID: "s",
+      turnID: "user",
+    });
+    const oldWindow = pending.state.ref.window;
+    restarting = true;
+    sockets[0].onclose!();
+    await bounded(
+      "503 restart must reconnect without reload",
+      recovered.promise,
+      3000,
+    );
+    assertEquals(admissions, 3);
+    assert(
+      retriedAt - unavailableAt >= 990,
+      "Retry-After must be honored beyond retrymax",
+    );
+    assertEquals(statuses.some(({ error }) => error !== undefined), false);
+    assert(statuses.some(({ state }) => state === "reconnecting"));
+    assertEquals(statuses.at(-1)?.state, "connected");
+    assert(
+      pending.state.ref.window !== oldWindow,
+      "WP14 renews the pending read",
+    );
+    assertEquals(connection.rpc.intent().window, pending.state.ref.window);
+    replyRequest(connection.rpc, {
+      t: "request",
+      ref: pending.state.ref,
+      method: "usage.get",
+      params: {},
+    }, { sessionID: "s", turnID: "user" });
+    assertEquals((await pending.result).sessionID, "s");
+  } finally {
+    connection.stop();
+  }
+});
 Deno.test("@load @transport first-page acceptance waits for the consumer and fences selection ABA and reconnect", async () => {
   const sockets: Socket[] = [], renders: (() => void)[] = [];
   const connection = new SidecarConnection("http://example.test", {

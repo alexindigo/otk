@@ -19,7 +19,11 @@ import { apiBase, type AuthStatus, bootstrapRequestMetadata } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
 import { HttpReadFailure, HttpRequests } from "./http-requests.ts";
-import { FeedbackFailure, RequestReleased } from "./failures.ts";
+import {
+  FeedbackFailure,
+  RequestFailure,
+  RequestReleased,
+} from "./failures.ts";
 import { type PublicDefaults, publicDefaultsFrom } from "./public-defaults.ts";
 import { authStatus, discoveryFailure } from "./discovery.ts";
 import { actionFeedback } from "./failure-features.ts";
@@ -81,6 +85,7 @@ export class SidecarConnection {
   #retry?: ReturnType<typeof setTimeout>;
   #silence?: ReturnType<typeof setTimeout>;
   #attempt = 0;
+  #invalidFailure?: string;
   #policy?: ClientRequestPolicy;
   #stopped = false;
   #welcomed = false;
@@ -239,6 +244,7 @@ export class SidecarConnection {
         this.base.href,
       );
       if (!current()) return { kind: "superseded" };
+      this.#invalidFailure = undefined;
       this.#auth = auth;
       const defaults = publicDefaultsFrom(auth.defaults);
       if (defaults) this.sink.defaults?.(defaults);
@@ -340,38 +346,53 @@ export class SidecarConnection {
       return { kind: "checked", auth: this.#auth };
     } catch (cause) {
       if (current() && !(cause instanceof RequestReleased)) {
+        const invalid =
+          cause instanceof HttpReadFailure && cause.kind === "invalid" ||
+          cause instanceof FeedbackFailure;
+        const failure = !invalid && !(cause instanceof RequestFailure)
+          ? undefined
+          : actionFeedback(
+            cause instanceof FeedbackFailure || cause instanceof RequestFailure
+              ? cause
+              : discoveryFailure(
+                this.base.href,
+                cause instanceof HttpReadFailure
+                  ? cause.reason
+                  : "the browser could not open the OTK connection",
+                "Check that the server and this page run matching OTK versions",
+              ),
+          )?.text;
+        // A fresh connection must confirm malformed data before it becomes an
+        // error. Readiness, transport gaps and reset volatile receipts never do.
+        const persistent = invalid && failure !== undefined &&
+          failure === this.#invalidFailure;
+        this.#invalidFailure = invalid ? failure : undefined;
         this.#retire();
-        this.#schedule();
-        this.sink.status(
-          "reconnecting",
-          actionFeedback(
-            cause instanceof FeedbackFailure ? cause : discoveryFailure(
-              this.base.href,
-              cause instanceof HttpReadFailure
-                ? cause.reason
-                : "the browser could not open the OTK connection",
-              "Check that OTK is running and reachable, then reload this page",
-            ),
-          )?.text,
+        this.#schedule(
+          cause instanceof HttpReadFailure ? cause.retryAfter : undefined,
+          persistent || cause instanceof RequestFailure ? failure : undefined,
         );
         return { kind: "failed", cause };
       }
       return { kind: "superseded" };
     }
   }
-  #schedule(): void {
+  #schedule(retryAfter = 0, error?: string): void {
     if (this.#stopped) return;
     const attempt = this.#attempt++;
     if (this.#policy) {
       this.#retry = setTimeout(
         () => void this.connect(),
-        Math.min(
-          this.#policy.retrybase * 2 ** Math.min(attempt, 30),
-          this.#policy.retrymax,
+        Math.max(
+          retryAfter,
+          Math.min(
+            this.#policy.retrybase * 2 ** Math.min(attempt, 30),
+            this.#policy.retrymax,
+          ),
         ),
       );
     }
-    this.sink.status("reconnecting");
+    this.sink.status("reconnecting", error);
   }
   #retire(): void {
     this.#selectionGeneration++;

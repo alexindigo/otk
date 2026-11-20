@@ -292,7 +292,13 @@ composition can re-read configured state or offer an explicit fresh sign-in.
 `HttpRequests.read` gives read-only bootstrap observation a terminal transport
 failure and joined cancellation, without changing mutation receipt recovery.
 Admission status and event references/shapes are validated before tracker
-delivery. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
+delivery. HTTP readiness/proxy failures are availability observations, not event
+validation errors. The connection owner retries fresh session reads with backoff
+and honors Retry-After beyond its normal backoff cap. Only repeated malformed
+data across fresh attempts becomes an error, with its local validation reason.
+Its reconnecting state supplies the shared informational status; the next
+welcome renews request-window authority and clears the notice without a page
+reload. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
 steps. Each started step retains one result and its elapsed time. Elapsed time
 never creates a deadline: only a reported failure or explicit cancellation ends
 a held read. Public `/api/discovery` uses omitted credentials; the existing
@@ -813,9 +819,9 @@ parts through their own registry and page through the original session owner.
 The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
 presentation revisions. The first background record mints its frame even while
-queued. Settlement changes child presentation, never the root partition.
-Folded frames show the producer-authored failure count in error tone and only
-their chronological breakouts. They never partition successful stretches into
+queued. Settlement changes child presentation, never the root partition. Folded
+frames show the producer-authored failure count in error tone and only their
+chronological breakouts. They never partition successful stretches into
 additional disclosure rows; all children remain in the one frame's details.
 Pending, active, blocked, unknown and failed records break out inside that frame
 in source order, then rejoin its compact children when settled. Native plugins
