@@ -240,7 +240,13 @@ test("menus.stale-task-and-session-commands-preserve-captured-identities", {
 test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   tag: ["@menus", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
-  await openSession(state, page, "tstv1-otk");
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    sessionID: "tstv1-crumb-path",
+  });
+  await page.goto(`${state.url}/#/local/tstv1-otk`);
+  await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
   const task = await state.product("tasks.create", {
     directory: state.directory,
     name: "Compact menus",

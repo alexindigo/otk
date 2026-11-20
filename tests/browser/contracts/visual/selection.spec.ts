@@ -7,6 +7,11 @@ test.use({ profile: "contract-visual-inbox" });
 test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
   tag: ["@visual", "@isolated"],
 }, async ({ isolatedState: state, page, context }) => {
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    sessionID: "tstv1-crumb-path",
+  });
   const { entries } = await state.observe<
       { entries: { id: string; directory: string }[] }
     >(),

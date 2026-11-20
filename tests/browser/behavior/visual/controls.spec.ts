@@ -191,7 +191,9 @@ test(
     for (let i = 0; i < 10; i++) {
       ids.push(
         (await state.native<{ id: string }>("/session", "POST", {
-          title: `Native ${i}`,
+          title: `Native ancestry session ${i} with a deliberately long title`,
+          // WP3: overflow follows the selected ancestry, not idle siblings.
+          ...(i ? { parentID: ids[i - 1] } : {}),
           // The meter assertion needs reported zero usage, not native defaults.
           ...(i === 4 && state.controller.info!.version.startsWith("2.")
             ? {
@@ -219,7 +221,8 @@ test(
       name: "Native folding",
       sessions: ids,
     });
-    await openSession(state, page, ids[4]);
+    await page.goto(`${state.url}/#/local/${ids[4]}`);
+    await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
     // The neighboring meter owns a separate grid track. Its digest paint can
     // move More without changing the outer breadcrumb row's rectangle.
     await expect(page.locator(".otk-context-meter")).toHaveAttribute(
