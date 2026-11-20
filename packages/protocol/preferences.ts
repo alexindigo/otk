@@ -51,7 +51,11 @@ export {
 } from "./preferences/models.ts";
 export { isThemeId, registerThemePreferences } from "./preferences/theme.ts";
 export { registerTranscriptPreferences } from "./preferences/transcript.ts";
-export { registerVisualPreferences } from "./preferences/visual.ts";
+export {
+  registerVisualPreferences,
+  TEXT_SIZES,
+  type TextSize,
+} from "./preferences/visual.ts";
 export {
   DEFAULT_PROJECT_AGEING,
   registerInboxPreferences,

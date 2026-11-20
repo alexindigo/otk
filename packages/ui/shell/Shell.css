@@ -15,7 +15,7 @@
   flex-direction: column;
 }
 .otk-global-error {
-  padding: 12px 24px;
+  padding: var(--space-3) var(--space-6);
   margin: 0;
   background: var(--panel);
 }
@@ -36,7 +36,7 @@
   flex: 1;
   align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
 }
 .otk-corner {
   position: absolute;
@@ -50,7 +50,7 @@
   right: var(--corner);
 }
 .otk-shell-progress {
-  padding: 4px var(--lane-gutter);
+  padding: var(--space-1) var(--lane-gutter);
 }
 .otk-shell-progress:empty {
   display: block;

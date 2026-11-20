@@ -12,6 +12,8 @@ import {
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
 import Select from "./Select.tsx";
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 
 export interface PreferenceControlsProps {
   prefs: Preferences;
@@ -70,10 +72,10 @@ export default function PreferenceControls(
               (props.group ? row().settings! : row().display!).control;
             const options = () => {
               const value = control();
-              return value.kind === "select" ? value.options : [];
+              return value.kind !== "toggle" ? value.options : [];
             };
             return (
-              <label class="otk-preference-control">
+              <div class="otk-preference-control">
                 <Show
                   when={control().kind === "toggle"}
                   fallback={
@@ -81,46 +83,85 @@ export default function PreferenceControls(
                       <span class="otk-control-label" title={row().label}>
                         {row().label}
                       </span>
-                      <Select
-                        containerClass="otk-preference-select"
-                        name={row().key}
-                        value={String(props.prefs[row().key])}
-                        onChange={(event) => {
-                          const field = event.currentTarget,
-                            value = field.value;
-                          change(row().key, value, () => {
-                            field.value = String(props.prefs[row().key]);
-                          });
-                        }}
+                      <Show
+                        when={control().kind === "segmented"}
+                        fallback={
+                          <Select
+                            containerClass="otk-preference-select"
+                            name={row().key}
+                            aria-label={row().label}
+                            value={String(props.prefs[row().key])}
+                            onChange={(event) => {
+                              const field = event.currentTarget,
+                                value = field.value;
+                              change(row().key, value, () => {
+                                field.value = String(props.prefs[row().key]);
+                              });
+                            }}
+                          >
+                            <For each={options()}>
+                              {(option) => (
+                                <option value={option.value}>
+                                  {option.label}
+                                </option>
+                              )}
+                            </For>
+                          </Select>
+                        }
                       >
-                        <For each={options()}>
-                          {(option) => (
-                            <option value={option.value}>{option.label}</option>
-                          )}
-                        </For>
-                      </Select>
+                        <div
+                          class="otk-preference-segments"
+                          role="group"
+                          aria-label={row().label}
+                        >
+                          <For each={options()}>
+                            {(option) => (
+                              <button
+                                type="button"
+                                data-otk-selection="horizontal"
+                                {...selection({
+                                  selected:
+                                    props.prefs[row().key] === option.value,
+                                  kind: "pressed",
+                                })}
+                                onClick={() =>
+                                  change(row().key, option.value, () => {})}
+                              >
+                                <SelectionContent>
+                                  {option.label}
+                                </SelectionContent>
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
                     </>
                   }
                 >
-                  <input
-                    type="checkbox"
-                    name={row().key}
-                    checked={props.prefs[row().key] ===
-                      preferenceToggleValue(control(), true)}
-                    onChange={(event) => {
-                      const field = event.currentTarget,
-                        value = preferenceToggleValue(control(), field.checked);
-                      change(row().key, value, () => {
-                        field.checked = props.prefs[row().key] ===
-                          preferenceToggleValue(control(), true);
-                      });
-                    }}
-                  />
-                  <span class="otk-control-label" title={row().label}>
-                    {row().label}
-                  </span>
+                  <label class="otk-preference-toggle">
+                    <input
+                      type="checkbox"
+                      name={row().key}
+                      checked={props.prefs[row().key] ===
+                        preferenceToggleValue(control(), true)}
+                      onChange={(event) => {
+                        const field = event.currentTarget,
+                          value = preferenceToggleValue(
+                            control(),
+                            field.checked,
+                          );
+                        change(row().key, value, () => {
+                          field.checked = props.prefs[row().key] ===
+                            preferenceToggleValue(control(), true);
+                        });
+                      }}
+                    />
+                    <span class="otk-control-label" title={row().label}>
+                      {row().label}
+                    </span>
+                  </label>
                 </Show>
-              </label>
+              </div>
             );
           }}
         </For>

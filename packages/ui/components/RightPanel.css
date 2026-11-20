@@ -39,7 +39,7 @@
   --empty-inline-inset: 0px;
 }
 .otk-panel-content > h2 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
   font-size: var(--text-ui);
   line-height: var(--line-ui);
   font-weight: 600;
@@ -60,7 +60,7 @@
   flex-direction: column;
   align-items: center;
   gap: var(--chrome-gap);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
 .otk-panel-rail-icons .otk-icon-button {
   --control-height: var(--row-project);

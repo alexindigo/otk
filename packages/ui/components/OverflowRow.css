@@ -4,7 +4,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-inline-size: 0;
   overflow: clip;
   block-size: var(--row-compact);

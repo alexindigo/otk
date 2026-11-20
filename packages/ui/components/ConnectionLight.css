@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-connection-light {
-  --connection-size: 10px;
+  --connection-size: calc(10 * var(--otk-unit));
   --connection-color: var(--connection-light-disconnected);
   display: inline-grid;
   place-items: center;
@@ -10,7 +10,7 @@
   vertical-align: middle;
 }
 .otk-connection-light[data-small] {
-  --connection-size: 8px;
+  --connection-size: calc(8 * var(--otk-unit));
 }
 .otk-connection-light[data-connection-state=connected] {
   --connection-color: var(--connection-light-connected);

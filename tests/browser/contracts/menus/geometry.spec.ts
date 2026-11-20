@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { contextMenu, dismiss, menuLabels } from "../../pages/menus.ts";
+import { cssLength } from "../../pages/css-length.ts";
 
 test.use({ profile: "contract-menus-inbox" });
 test("menus.visible-content-density-and-pointer-placement", {
@@ -22,45 +23,51 @@ test("menus.visible-content-density-and-pointer-placement", {
       if (area === ".otk-welcome") {
         expect(labels).toEqual(["Open command palette", "Display preferences"]);
       }
-      const geometry = await contextMenu(page).evaluate((menu) => {
-        const surface = menu.closest(".otk-surface")!;
-        const body = menu.closest(".otk-surface-body")!;
-        const rect = surface.getBoundingClientRect();
-        const style = getComputedStyle(surface);
-        const token = (name: string) =>
-          parseFloat(style.getPropertyValue(name));
-        const rows = Array.from(menu.querySelectorAll('[role="menuitem"]'));
-        const heights = rows.map((row) => row.getBoundingClientRect().height);
-        const separators = Array.from(menu.querySelectorAll("hr"))
-          .reduce((sum, row) => {
-            const css = getComputedStyle(row);
-            return sum + row.getBoundingClientRect().height +
-              parseFloat(css.marginTop) + parseFloat(css.marginBottom);
-          }, 0);
-        return {
-          x: rect.x,
-          y: rect.y,
-          height: rect.height,
-          expected: heights.reduce((sum, height) => sum + height, 0) +
-            separators + 2 * token("--menu-block-inset") +
-            parseFloat(style.borderTopWidth) +
-            parseFloat(style.borderBottomWidth),
-          heights,
-          rowHeight: token("--menu-row-height"),
-          padding: [
-            style.paddingTop,
-            style.paddingRight,
-            style.paddingBottom,
-            style.paddingLeft,
-          ],
-          bodyPadding: getComputedStyle(body).padding,
-          hidden: rows.filter((row) =>
-            getComputedStyle(row).visibility === "hidden"
-          ).length,
-          emptyFeedback:
-            body.querySelectorAll(':scope > [aria-hidden="true"]').length,
-        };
-      });
+      const blockInset = await cssLength(
+        contextMenu(page),
+        "--menu-block-inset",
+      );
+      const rowHeight = await cssLength(contextMenu(page), "--menu-row-height");
+      const geometry = await contextMenu(page).evaluate(
+        (menu, { blockInset, rowHeight }) => {
+          const surface = menu.closest(".otk-surface")!;
+          const body = menu.closest(".otk-surface-body")!;
+          const rect = surface.getBoundingClientRect();
+          const style = getComputedStyle(surface);
+          const rows = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+          const heights = rows.map((row) => row.getBoundingClientRect().height);
+          const separators = Array.from(menu.querySelectorAll("hr"))
+            .reduce((sum, row) => {
+              const css = getComputedStyle(row);
+              return sum + row.getBoundingClientRect().height +
+                parseFloat(css.marginTop) + parseFloat(css.marginBottom);
+            }, 0);
+          return {
+            x: rect.x,
+            y: rect.y,
+            height: rect.height,
+            expected: heights.reduce((sum, height) => sum + height, 0) +
+              separators + 2 * blockInset +
+              parseFloat(style.borderTopWidth) +
+              parseFloat(style.borderBottomWidth),
+            heights,
+            rowHeight,
+            padding: [
+              style.paddingTop,
+              style.paddingRight,
+              style.paddingBottom,
+              style.paddingLeft,
+            ],
+            bodyPadding: getComputedStyle(body).padding,
+            hidden: rows.filter((row) =>
+              getComputedStyle(row).visibility === "hidden"
+            ).length,
+            emptyFeedback:
+              body.querySelectorAll(':scope > [aria-hidden="true"]').length,
+          };
+        },
+        { blockInset, rowHeight },
+      );
       await info.attach(`${theme}-${area}-geometry`, {
         body: JSON.stringify({ point, labels, ...geometry }),
         contentType: "application/json",

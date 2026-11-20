@@ -8,7 +8,7 @@
 .otk-message-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   opacity: 0;
 }
 .otk-message-action-group.is-revealed .otk-message-actions,

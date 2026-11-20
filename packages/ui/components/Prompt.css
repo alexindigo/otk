@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt {
-  --prompt-input-min-height: 48px;
-  --prompt-input-max-height: 240px;
-  padding: 12px 16px 8px;
+  --prompt-input-min-height: calc(48 * var(--otk-unit));
+  --prompt-input-max-height: calc(240 * var(--otk-unit));
+  padding: var(--space-3) var(--space-4) var(--space-2);
 }
 .otk-prompt > label {
   position: absolute;
@@ -29,8 +29,8 @@ textarea.otk-prompt-input:focus-visible {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 4px;
-  padding-top: 4px;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
 }
 .otk-prompt-context {
   flex: 1 1 0;
@@ -38,7 +38,7 @@ textarea.otk-prompt-input:focus-visible {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--space-1);
   color: var(--otk-fg-2);
   font-size: var(--text-meta);
   margin-right: auto;

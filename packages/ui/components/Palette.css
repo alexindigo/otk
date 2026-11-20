@@ -1,7 +1,7 @@
 .otk-palette-list {
   list-style: none;
   padding: 0;
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   max-height: 55vh;
 }
 .otk-palette-list button {
@@ -9,10 +9,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   text-align: left;
   border-color: transparent;
-  padding-left: 16px;
+  padding-left: var(--space-4);
 }
 .otk-palette-list small {
   display: block;
@@ -24,9 +24,9 @@
   white-space: nowrap;
 }
 .otk-palette-list button {
-  --selection-inset: 16px;
+  --selection-inset: calc(16 * var(--otk-unit));
 }
 .otk-palette-content {
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
