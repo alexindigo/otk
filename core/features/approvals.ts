@@ -57,7 +57,12 @@ export class PermissionFeature implements FrameSource {
   // Standalone feature consumers supply an already-usable capability. Application
   // composition supplies the initial connecting state before starting the native.
   #nativeReady = true;
-  #unavailable = new Set<string>();
+  #unavailable = new Map<string, {
+    attempts: number;
+    retryAt: number;
+    sessionID: string;
+    timer?: ReturnType<typeof setTimeout>;
+  }>();
   connection(state: HarnessState): void {
     const ready = state === "connected";
     if (this.#closed || ready === this.#nativeReady) return;
@@ -66,8 +71,7 @@ export class PermissionFeature implements FrameSource {
     if (!ready) return;
     // Only proven-not-dispatched replies are eligible again. Native refusals and
     // uncertain delivery keep their existing suppression/journal authority.
-    for (const key of this.#unavailable) this.#failed.delete(key);
-    this.#unavailable.clear();
+    this.#resumeRetries();
     for (const id of this.#enabled) this.#enqueue(id);
   }
   #inView(id: string, view: ViewLease): boolean {
@@ -118,7 +122,8 @@ export class PermissionFeature implements FrameSource {
   }
   #listeners = new Set<(frame: ServerFrame) => void>();
   #flights = new Set<string>();
-  #failed = new Map<string, string>();
+  // Request identity, not a mutable payload or index publication, owns dispatch.
+  #attempted = new Set<string>();
   #generation = 0;
   #scans = new Map<string, { again: boolean }>();
   #enabled: Set<string>;
@@ -168,8 +173,6 @@ export class PermissionFeature implements FrameSource {
       index.listen((frame) => {
         if (frame.t === "index.snapshot") {
           this.#generation++;
-          this.#failed.clear();
-          this.#unavailable.clear();
           this.#journal.clear();
           this.#pending.clear();
           for (const id of this.#enabled) this.#enqueue(id);
@@ -220,7 +223,8 @@ export class PermissionFeature implements FrameSource {
     this.#controller.abort();
     for (const stop of this.#stops) stop();
     this.#listeners.clear();
-    this.#failed.clear();
+    this.#attempted.clear();
+    for (const retry of this.#unavailable.values()) clearTimeout(retry.timer);
     this.#unavailable.clear();
     this.#dirty.clear();
     this.#journal.clear();
@@ -248,6 +252,34 @@ export class PermissionFeature implements FrameSource {
       this.#dirty.clear();
       for (const owner of owners) this.#scan(owner);
     });
+  }
+  #resumeRetries(): void {
+    if (this.#closed || !this.#nativeReady) return;
+    for (const [key, retry] of this.#unavailable) {
+      if (retry.attempts >= 3 || retry.retryAt > Date.now()) continue;
+      retry.retryAt = Infinity;
+      clearTimeout(retry.timer);
+      retry.timer = undefined;
+      this.#attempted.delete(key);
+      this.#enqueue(this.owner(retry.sessionID));
+    }
+  }
+  #retryUnavailable(key: string, sessionID: string): void {
+    if (this.#closed) return;
+    const previous = this.#unavailable.get(key);
+    clearTimeout(previous?.timer);
+    const attempts = (previous?.attempts ?? 0) + 1;
+    const delay = 250 * 4 ** (attempts - 1);
+    const retry = {
+      attempts,
+      sessionID,
+      retryAt: attempts < 3 ? Date.now() + delay : Infinity,
+      timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    };
+    this.#unavailable.set(key, retry);
+    if (attempts < 3) {
+      retry.timer = setTimeout(() => this.#resumeRetries(), delay);
+    }
   }
   #scan(root: string): void {
     const running = this.#scans.get(root);
@@ -283,8 +315,6 @@ export class PermissionFeature implements FrameSource {
               [...this.#pending.values()].some((set) => set.has(key))
             ) continue;
             this.#journal.delete(key);
-            this.#failed.delete(key);
-            this.#unavailable.delete(key);
           }
           const unknown = requests.filter((request) =>
             !this.#journal.has(JSON.stringify([request.sessionID, request.id]))
@@ -307,13 +337,13 @@ export class PermissionFeature implements FrameSource {
               continue;
             }
             const key = JSON.stringify([request.sessionID, request.id]);
-            const fingerprint = JSON.stringify(request);
             if (generation !== this.#generation) {
               state.again = true;
               break;
             }
-            if (this.#failed.get(key) === fingerprint) continue;
+            if (this.#attempted.has(key)) continue;
             if (this.#flights.has(key)) continue;
+            this.#attempted.add(key);
             try {
               await this.#answer(request, {
                 sessionID: request.sessionID,
@@ -323,9 +353,11 @@ export class PermissionFeature implements FrameSource {
             } catch (error) {
               const unavailable = error instanceof OperationFailure &&
                 error.outcome === "unavailable";
-              if (!unavailable || generation === this.#generation) {
-                this.#failed.set(key, fingerprint);
-                if (unavailable) this.#unavailable.add(key);
+              if (unavailable) {
+                this.#retryUnavailable(key, request.sessionID);
+              } else {
+                clearTimeout(this.#unavailable.get(key)?.timer);
+                this.#unavailable.delete(key);
               }
               if (!this.#closed) console.error("permission auto reply:", error);
             }

@@ -4,6 +4,7 @@ import {
   type FormAnswer,
   type FormRequest,
   type FormsCapability,
+  OperationFailure,
   type PermissionRequest,
   type PermissionsCapability,
   type SessionLookup,
@@ -83,26 +84,35 @@ export class V2Pending {
       },
       replyPermission: async (input, operation) => {
         const pending = this.#permissions.get(input.requestID);
+        if (!pending) return; // Retirement owns dispatch, including late callers.
         // The caller may display a root, but the request's asking identity is authoritative.
-        const asking = pending?.request.sessionID ?? input.sessionID;
+        const asking = pending.request.sessionID;
         // In native V2, feedback converts a decline into a model correction.
         const message = input.message?.trim();
-        await client().effect(
-          (api) =>
-            api.permission.reply({
-              sessionID: ids.decode(asking),
-              requestID: input.requestID,
-              decision: input.reply,
-              ...(message ? { message } : {}),
-              ...(pending ? { location: pending.location } : {}),
-            }),
-          operation,
-          [
-            "PermissionNotFoundError",
-            "PermissionAlreadySettledError",
-            "AlreadySettledError",
-          ],
-        );
+        try {
+          await client().effect(
+            (api) =>
+              api.permission.reply({
+                sessionID: ids.decode(asking),
+                requestID: input.requestID,
+                decision: input.reply,
+                ...(message ? { message } : {}),
+              }),
+            operation,
+            [
+              "PermissionNotFoundError",
+              "PermissionAlreadySettledError",
+              "AlreadySettledError",
+            ],
+          );
+        } catch (error) {
+          if (
+            !(error instanceof OperationFailure &&
+              error.outcome === "rejected" && error.facts?.status === 404)
+          ) throw error;
+          // A native permission 404 proves this identity is no longer answerable,
+          // even if the response did not carry the SDK's tagged error envelope.
+        }
         this.settle("permission", input.requestID, ids.decode(asking));
       },
     };
@@ -264,9 +274,6 @@ export class V2Pending {
       (kind === "permission" ? ids.decode(existing) : existing) !== native
     ) return;
     this.#settled.add(`${kind}:${id}`);
-    if (this.#settled.size > 4096) {
-      this.#settled.delete(this.#settled.values().next().value!);
-    }
     this.#remove(kind, id);
   }
   /** Loaded-directory absence retires routing ownership, not native settlement.
