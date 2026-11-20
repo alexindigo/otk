@@ -87,6 +87,10 @@ does not rewrite seen marks or finish/outcome history, and cannot acknowledge a
 later run. Every count, mandatory family, lamp and notification borrows this
 projection.
 
+Failed helpers require explicit per-user acknowledgement: delivery to a parent
+does not acknowledge the failure. Their unacknowledged terminal takes needs-you
+priority through this same supervision owner, including project rollups.
+
 Historical delivery acquisition uses the existing worker/native connection and
 credited `supervision.deliveries` channel. Plugin-private digest tables retain
 only receipt scalars and resumable parent coverage. Coalesced parent work gives

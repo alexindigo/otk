@@ -814,6 +814,9 @@ The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
 presentation revisions. The first background record mints its frame even while
 queued. Settlement changes child presentation, never the root partition.
+Folded frames show the producer-authored failure count in error tone and only
+their chronological breakouts. They never partition successful stretches into
+additional disclosure rows; all children remain in the one frame's details.
 Pending, active, blocked, unknown and failed records break out inside that frame
 in source order, then rejoin its compact children when settled. Native plugins
 supply opaque summary kinds and singular/plural nouns; headings never classify

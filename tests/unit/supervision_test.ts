@@ -114,3 +114,29 @@ Deno.test("client consumers never reconstruct activity from metadata or completi
     "finished",
   );
 });
+Deno.test("unacknowledged helper failure owns needs-you lamps and the project rollup", () => {
+  let seen = 0;
+  const owner = new SessionSupervision();
+  const row = entry({
+    terminal: 100,
+    outcome: "failed",
+    delivered: {
+      parentID: "opcv2-ses_parent",
+      receipt: "result",
+      terminal: 100,
+    },
+  }, "opcv2-ses_parent");
+  const summaries = new ProjectSummaries(
+    () => ({ seen, finish: 100 }),
+    () => {},
+    () => {},
+    owner,
+  );
+  summaries.entry(row);
+  assertEquals(owner.session(row, seen).state, "needsYou");
+  assertEquals(summaries.values.get("/fixture")?.status, "blocked");
+  seen = 100;
+  summaries.mark(row.id);
+  assertEquals(owner.session(row, seen).state, "none");
+  assertEquals(summaries.values.get("/fixture")?.status, "none");
+});

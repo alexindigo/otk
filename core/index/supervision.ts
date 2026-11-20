@@ -33,12 +33,15 @@ export class SessionSupervision {
       }
       : {};
     const delivery = evidence?.delivered;
-    const delivered = delivery && delivery.parentID === entry.parentID &&
+    // A parent receiving an error is not a human acknowledging the failure.
+    const helperFailed = !!entry.parentID && outcome === "failed";
+    const delivered =
+      !helperFailed && delivery && delivery.parentID === entry.parentID &&
         delivery.receipt.length > 0 &&
         Number.isSafeInteger(delivery.terminal) &&
         delivery.terminal > 0
-      ? delivery.terminal
-      : 0;
+        ? delivery.terminal
+        : 0;
     const unseen = terminal > Math.max(acknowledged, delivered);
     if (entry.deleted) {
       return {
@@ -53,7 +56,7 @@ export class SessionSupervision {
       (evidence?.inputs?.fresh && evidence.inputs.keys.length ||
         evidence?.permissions?.fresh && evidence.permissions.keys.length &&
           (!this.#permissions || this.#permissions(entry.id) > 0));
-    const state = needsInput
+    const state = needsInput || helperFailed && unseen
       ? "needsYou"
       : this.#fresh && evidence?.work?.fresh && evidence.work.keys.length
       ? "working"

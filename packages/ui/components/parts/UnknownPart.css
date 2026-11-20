@@ -25,3 +25,7 @@ button.otk-native-value {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.otk-native-recovery {
+  color: var(--otk-status-error);
+  font-size: var(--text-meta);
+}

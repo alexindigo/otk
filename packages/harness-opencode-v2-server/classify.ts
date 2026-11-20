@@ -14,6 +14,7 @@ import { mapTool, shellFailure } from "./tool-interpretation.ts";
 import { nativeSource, sourceRef } from "./native-source.ts";
 import { referenceSources } from "@otk/protocol";
 import { subagentBody } from "./tool-results.ts";
+import { helperFailure } from "./request-failure.ts";
 import { opencodeV2SessionID as ids, optionalSessionID } from "./ids.ts";
 import type { V2Event } from "./stream.ts";
 export {
@@ -525,56 +526,67 @@ export function mapMessage(
         : state === "cancelled"
         ? "cancelled"
         : "finished";
-      const body = subagentBody(raw.text, childID, state, raw.description) ??
-        raw.text;
+      const result = subagentBody(raw.text, childID, state, raw.description);
+      const body = result ?? raw.text;
+      const failure = state === "error"
+        ? helperFailure(
+          result ?? meta.error,
+          sessionID,
+          raw.description,
+          raw.id,
+        )
+        : undefined;
       return {
         ...common,
         role: "context",
-        parts: [activityPart(raw, {
-          kindLabel: "Subagent result",
-          summary: {
-            kind: "subagent",
-            noun: "helper finished",
-            plural: "helpers finished",
-          },
-          entity: agent
-            ? {
-              label: agent[0].toUpperCase() + agent.slice(1),
-              sessionID,
-            }
-            : undefined,
-          title: agent ? outcome : `Subagent ${outcome}`,
-          layout: "row",
-          category: "delegation",
-          tone: state === "error" ? "error" : "normal",
-          detail: raw.description,
-          state: resultState(state),
-          child,
-          icon: state === "error"
-            ? { name: "warning", label: "Failed" }
-            : undefined,
-          parameters: [
-            {
-              key: "agent",
-              label: "Agent",
-              value: agent ?? "Unknown",
-              entity: agent ? { label: agent, sessionID } : undefined,
+        parts: [{
+          ...activityPart(raw, {
+            kindLabel: "Subagent result",
+            summary: {
+              kind: failure ? "subagent-failure" : "subagent",
+              noun: failure ? "helper failed" : "helper finished",
+              plural: failure ? "helpers failed" : "helpers finished",
             },
-            { key: "state", label: "State", value: state },
-            {
-              key: "description",
-              label: "Description",
-              value: raw.description ?? "",
-            },
-            {
-              key: "sessionID",
-              label: "Session ID",
-              value: childID ?? "Unknown",
-              ...(child ? { child: { ...child, label: childID! } } : {}),
-            },
-          ],
-          body: markdown(body),
-        })],
+            entity: agent
+              ? {
+                label: agent[0].toUpperCase() + agent.slice(1),
+                sessionID,
+              }
+              : undefined,
+            title: agent ? outcome : `Subagent ${outcome}`,
+            layout: "row",
+            category: "delegation",
+            tone: state === "error" ? "error" : "normal",
+            detail: raw.description,
+            state: resultState(state),
+            child,
+            icon: state === "error"
+              ? { name: "warning", label: "Failed" }
+              : undefined,
+            parameters: [
+              {
+                key: "agent",
+                label: "Agent",
+                value: agent ?? "Unknown",
+                entity: agent ? { label: agent, sessionID } : undefined,
+              },
+              { key: "state", label: "State", value: state },
+              {
+                key: "description",
+                label: "Description",
+                value: raw.description ?? "",
+              },
+              {
+                key: "sessionID",
+                label: "Session ID",
+                value: childID ?? "Unknown",
+                ...(child ? { child: { ...child, label: childID! } } : {}),
+              },
+            ],
+            body: markdown(body),
+          }),
+          ...(failure ? { failure } : {}),
+        }],
       };
     }
     if (meta.source === "shell") {
