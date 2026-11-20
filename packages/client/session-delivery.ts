@@ -92,8 +92,7 @@ export function createSessionDelivery(input: {
       if (
         message?.sessionID !== input.target.sessionID || message.role !== "user"
       ) continue;
-      const send = transcript?.projection.entry(receipt.messageID)?.send;
-      if (receipt.entry && send && send.phase !== "committed") continue;
+      if (!transcript?.projection.committed(receipt.messageID)) continue;
       if (receipt.phase !== "admitted") {
         update(receipt.id, (r) => {
           r.phase = "admitted";
@@ -150,8 +149,7 @@ export function createSessionDelivery(input: {
       bind();
       const id = entry?.intent.key ?? randomID();
       if (entry) {
-        const known = transcript?.projection.entry(entry.message.id);
-        if (known && (!known.send || known.send.phase === "committed")) return;
+        if (transcript?.projection.committed(entry.message.id)) return;
         if (store.state.receipts.some((receipt) => receipt.id === id)) return;
       }
       commit((s) => {
@@ -211,11 +209,10 @@ export function createSessionDelivery(input: {
         if (entry) {
           const receipt = store.state.receipts.find((r) => r.id === id);
           if (
-            transcript?.projection.entry(entry.message.id)?.send
-                ?.phase === "committed" ||
+            transcript?.projection.committed(entry.message.id) ||
             receipt?.phase === "admitted" || store.state.last?.id === id
           ) return;
-          const feedback = errorFeedback(failureValue(cause, {
+          const classified = errorFeedback(failureValue(cause, {
             actionLabel: "Sending message",
             target: { ...input.target, label: input.title() },
           })) ?? presentFailure({
@@ -228,6 +225,10 @@ export function createSessionDelivery(input: {
               reason: "The send was released before completion.",
             },
           });
+          // This transcript entry is the failure surface, not a composer pointer.
+          const feedback = classified.failure
+            ? presentFailure(classified.failure.value, "record")
+            : classified;
           const retry = () => {
             if (
               cause instanceof RequestFailure &&
@@ -277,7 +278,7 @@ export function createSessionDelivery(input: {
       }
       // Read-only recovery joins the existing authority. It never submits input.
       if (
-        !result || !transcript?.projection.state.messagesByID[result.messageID]
+        !result || !transcript?.projection.committed(result.messageID)
       ) {
         void transcript?.reconcile(result ? [result.messageID] : []).then(
           inspect,
