@@ -65,7 +65,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   );
   await expect(page.locator("[data-tool=bash] .otk-tool-state")).not
     .toContainText("completed");
-  await expect(page.locator(".otk-reasoning > button")).toHaveText(
+  await expect(page.locator(".otk-reasoning-heading")).toHaveText(
     "Thought for 4.0s",
   );
   await expect(page.locator("[data-tool=edit] .otk-tool-target")).toHaveText(
@@ -77,7 +77,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain("A readable reply");
   expect(copied).not.toContain("Reasoning remains available.");
-  await page.locator(".otk-reasoning > button").click();
+  await page.locator(".otk-reasoning-heading").click();
   await expect(page.locator(".otk-reasoning-body")).toContainText(
     "Reasoning remains available.",
   );
@@ -155,7 +155,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  // FX40/WP1 replaced divider rails with a real disclosure chevron.
+  // WP12 keeps the disclosure and label centered in the shared junction grid.
   await revealAcquired(page, ".otk-work-fold");
   const fold = page.locator(".otk-work-fold");
   await expect(fold.locator(".otk-work-label")).toHaveCSS(
@@ -163,12 +163,16 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     await fold.evaluate((el) => getComputedStyle(el).font),
   );
   const disclosure = await fold.evaluate((el) => {
-    const icon = el.querySelector(".otk-work-chevron")!.getBoundingClientRect(),
+    const heading = el.closest(".otk-tree-heading")!;
+    const rail = heading.querySelector(".otk-tree-own")!
+      .getBoundingClientRect();
+    const icon = heading.querySelector(".otk-tree-toggle")!
+        .getBoundingClientRect(),
       label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
     return {
       center: (icon.top + icon.bottom - label.top - label.bottom) / 2,
       gap: label.left - icon.right,
-      expected: parseFloat(getComputedStyle(el).gap),
+      expected: (rail.width - icon.width) / 2,
     };
   });
   expect(Math.abs(disclosure.center)).toBeLessThan(.5);

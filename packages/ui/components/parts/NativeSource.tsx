@@ -15,7 +15,7 @@ import {
   retainedDisclosure,
   useNativeSource,
 } from "../../features/transcript-context.tsx";
-import { ChevronIcon } from "../ChromeIcons.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
 
 type Loaded =
@@ -81,66 +81,76 @@ export default function NativeSource(props: {
   };
   return (
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
-      <button
-        type="button"
-        class="otk-tool-toggle"
-        aria-expanded={open() ? "true" : "false"}
-        onClick={toggle}
-      >
-        <span class="otk-tool-icon" aria-hidden="true">
-          <ChevronIcon />
-        </span>
-        <span class="otk-control-label">Source</span>
-      </button>
-      <Show when={open()}>
-        <div
-          class="otk-tool-body"
-          aria-busy={shown()?.state === "loading" ? "true" : "false"}
-        >
-          <Show when={shown()?.state === "loading"}>
-            <small class="otk-muted">Loading source</small>
-          </Show>
-          <Show
-            when={(() => {
-              const value = shown();
-              return value?.state === "failed" ? value : undefined;
-            })()}
+      <TreeNode
+        label="Source"
+        open={open()}
+        onOpen={setOpen}
+        header={() => (
+          <button
+            type="button"
+            class="otk-tool-toggle"
+            aria-expanded={open() ? "true" : "false"}
+            onClick={toggle}
           >
-            {(value) => (
-              <FeedbackStatus
-                feedback={(() => {
-                  const feedback = errorFeedback(value().failure);
-                  return feedback && {
-                    ...feedback,
-                    action: resource()
-                      ? {
-                        label: "Retry",
-                        run: () => resource()?.retry(),
-                      }
-                      : undefined,
-                  };
-                })()}
-              />
-            )}
-          </Show>
-          <Show
-            when={(() => {
-              const value = shown();
-              return value?.state === "ready" ? value : undefined;
-            })()}
-          >
-            {(value) => (
-              <>
-                <small class="otk-muted">
-                  {value().bytes}{" "}
-                  bytes{value().truncated ? " - Preview truncated" : ""}
-                </small>
-                <pre class="otk-native-preview">{value().text}</pre>
-              </>
-            )}
-          </Show>
-        </div>
-      </Show>
+            <span class="otk-control-label">Source</span>
+          </button>
+        )}
+        body={() => (
+          <TreeItem last>
+            <TreeNode
+              header={() => (
+                <div
+                  class="otk-tool-body"
+                  aria-busy={shown()?.state === "loading" ? "true" : "false"}
+                >
+                  <Show when={shown()?.state === "loading"}>
+                    <small class="otk-muted">Loading source</small>
+                  </Show>
+                  <Show
+                    when={(() => {
+                      const value = shown();
+                      return value?.state === "failed" ? value : undefined;
+                    })()}
+                  >
+                    {(value) => (
+                      <FeedbackStatus
+                        feedback={(() => {
+                          const feedback = errorFeedback(value().failure);
+                          return feedback && {
+                            ...feedback,
+                            action: resource()
+                              ? {
+                                label: "Retry",
+                                run: () => resource()?.retry(),
+                              }
+                              : undefined,
+                          };
+                        })()}
+                      />
+                    )}
+                  </Show>
+                  <Show
+                    when={(() => {
+                      const value = shown();
+                      return value?.state === "ready" ? value : undefined;
+                    })()}
+                  >
+                    {(value) => (
+                      <>
+                        <small class="otk-muted">
+                          {value().bytes}{" "}
+                          bytes{value().truncated ? " - Preview truncated" : ""}
+                        </small>
+                        <pre class="otk-native-preview">{value().text}</pre>
+                      </>
+                    )}
+                  </Show>
+                </div>
+              )}
+            />
+          </TreeItem>
+        )}
+      />
     </section>
   );
 }

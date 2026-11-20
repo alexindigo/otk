@@ -133,6 +133,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "prefs.set",
     "layout.patch",
     "layout.location",
+    "layout.project",
   ];
   const prepared = [
     "tasks.create",
@@ -370,6 +371,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "prefs.set",
     "layout.patch",
     "layout.location",
+    "layout.project",
     "navigation.default",
     "inbox.get",
     "projects.list",
@@ -409,7 +411,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     assertEquals(counts, {
       read: 31, // Retained archive pages have an independent cancellable read.
       native: 20,
-      local: 10,
+      local: 11,
       "prepared-local": 6,
       lease: 2,
     });

@@ -1176,6 +1176,14 @@ working, blocked and finished-unseen leaves stay in the live list until their
 evidence settles. The snapshot and keyed projections share that contract. Manual
 activity-policy changes cannot unarchive a checkout.
 
+`projectTree` supplies the branch representation shared by `projectHierarchy`
+and the sidebar. Server, repository and canonical-root identity prove each edge;
+missing or cyclic parents remain visible roots. Required descendants borrow the
+existing project status, independently of persisted collapse choices.
+`projectCollapse(project, collapsed)` sends one keyed `layout.project` intent to
+the serving layout owner. `treePaths` supplies virtual session-row continuation
+flags from the complete projected preorder, never mounted DOM neighbours.
+
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
 single-preview tabs. Every ungrouped mandatory session, including a child, has

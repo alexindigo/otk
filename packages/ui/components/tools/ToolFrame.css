@@ -50,7 +50,7 @@
   opacity: 1;
 }
 .otk-tool-body {
-  padding: 0 0 4px 24px;
+  padding-block-end: 4px;
 }
 .otk-tool-body p {
   margin: 4px 0;
@@ -85,6 +85,6 @@
 .otk-tool-del {
   color: var(--otk-diff-del);
 }
-.otk-tool-line.is-error > .otk-tool-state {
+.otk-tool-state.is-error {
   color: var(--otk-status-error);
 }

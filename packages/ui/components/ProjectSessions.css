@@ -66,21 +66,10 @@
 .otk-session-group > p {
   margin: 8px;
 }
-.otk-session-branch {
-  width: 20px;
-  height: var(--row-compact);
-  flex: none;
-  color: var(--otk-border);
-}
 .otk-session-leading {
   display: flex;
   align-items: center;
   flex: none;
-}
-.otk-session-indent {
-  display: flex;
-  justify-content: flex-end;
-  width: calc(var(--session-depth, 0) * 20px);
 }
 .otk-session-group-chevron {
   width: var(--icon-compact);

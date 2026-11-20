@@ -35,6 +35,7 @@ export const isPreference: PreferenceRegistry["validate"] = preferences.validate
 export { registerDiffPreferences } from "./preferences/diff.ts";
 export {
   isProjectLocation,
+  projectLayoutKey,
   type ProjectLocation,
   registerLayoutPreferences,
   SHELL_WIDTHS,

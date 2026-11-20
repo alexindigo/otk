@@ -312,9 +312,9 @@ kept in the first prose group's virtual item. Continuations within a grouped
 reply add a rule and a larger reply gap. Source clocks use their own last output
 or creation time, independent of the grouped reply's metadata. Work-only sources
 stay in their existing work groups. Work uses compact, intrinsic-width
-disclosure labels with real chevrons, not the full-width compaction boundary
-treatment. Blocks owns paragraph, heading and compact list rhythm across virtual
-wrappers.
+disclosure labels with shared tree junctions, not the full-width compaction
+boundary treatment. Blocks owns paragraph, heading and compact list rhythm
+across virtual wrappers.
 
 Agent labels share `EntityPill` across reply sources, delegate tools and
 activity records/groups. Producers carry the entity and remaining title
@@ -593,11 +593,11 @@ its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome never changes the transcript rectangle: helper presence uses a reserved
 control-height track; notices and overflowing takeovers occupy independent,
 bounded layers above the unchanged prompt track. Only draft/editor growth
-changes that track. RecordList owns record spacing and the mirrored disclosure
-rail; views borrow canonical span identities and retained disclosure state
-rather than regrouping mounted neighbours. Read-only helper transcripts mount
-those same attention owners; only prompt submission is unavailable. With no
-active takeover, helpers mount no empty composer. That same owner provides
+changes that track. RecordList owns record spacing and supplies topology to the
+shared Tree; views borrow canonical span identities and retained disclosure
+state rather than regrouping mounted neighbours. Read-only helper transcripts
+mount those same attention owners; only prompt submission is unavailable. With
+no active takeover, helpers mount no empty composer. That same owner provides
 composer availability to takeover headers, so draft-kept copy appears only when
 the open session offers a composer. Permission docks and notifications share
 RequestAge presentation and the client's requestIdle formatter/resumption
@@ -927,6 +927,23 @@ Trigger and portalled panel share `--hover-close-delay` (150ms), so surface
 travel and re-entry retain the preview. Keyboard focus and explicit opening
 bypass the hover delay. Reduced motion does not change either interaction
 deadline.
+
+`TreeNode` owns the Explorer-style dotted connectors, square SVG +/- junction,
+header and lazy body grid. `TreeItem` supplies last-child and direction facts,
+including across virtual record boundaries; outgoing branches mirror that same
+grid. Disclosure state and callbacks remain in the existing interaction owner.
+`TreeGuide` borrows the same junction cells for already-expanded virtual session
+hierarchies, using plain client `treePaths` rather than mounted neighbours. No
+component paints a second nesting rail or elbow.
+
+Project branches come from the client's server-scoped topology projection. Their
+boxes precede lamps and names. Per-project collapse intents persist in
+`shellLayout.projectCollapsed`; keyed `layout.project` intents merge there so
+another tab's project choice cannot be overwritten by a stale layout snapshot.
+Mandatory descendants remain visible while their parent is collapsed. Archived
+and Inactive retain their separate section disclosures. Childless projects omit
+the box; TreeNode's `showEmptyToggle` input controls that presentation without
+changing its geometry or introducing local state.
 
 ## Example
 

@@ -152,6 +152,7 @@ export interface ServerResources {
   add(url: string, label: string): Promise<string>;
   remove(id: string): void;
   layout(patch: Partial<ShellLayout>): Promise<void>;
+  projectCollapse(project: ProjectSelection, collapsed: boolean): Promise<void>;
   rememberLocation(location: ProjectLocation): Promise<void>;
   inactive(project: ProjectSelection, inactive: boolean): Promise<void>;
   setPreference(key: keyof Preferences, value: unknown): Promise<void>;
@@ -1137,6 +1138,13 @@ export function createServerResources(o: {
     },
     async layout(patch) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
+    },
+    async projectCollapse(project, collapsed) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.project", {
+        sidecarId: project.sidecarId,
+        directory: project.directory,
+        collapsed,
+      });
     },
     async rememberLocation(location) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call(
