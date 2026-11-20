@@ -13,6 +13,15 @@ link. Record deltas return their coherent header/parts snapshot independently of
 cache retention; missing headers use bounded recovery. Unavailable optional
 revert SQL likewise leaves the existing API fallback active.
 
+`delivery.ts` classifies completed task envelopes and received synthetic result
+envelopes inside the worker. Running launch envelopes, failed calls and missing
+or mismatched child identities never acknowledge a result. A received failure
+report can acknowledge its proven run. Invocation clocks and native terminal
+history distinguish foreground runs; ambiguous synthetic correlation stays
+unacknowledged. The private digest index stores receipt scalars and resumable
+coverage only, never legacy envelope bodies. Source/revision-fenced backfill
+shares the existing SQLite owner, read admission and credited publication.
+
 `V1RecordRetention` owns the versioned V1 request/outcome and retry schema.
 Application composition injects an isolated `PluginStorage` through
 `storage(storage)` before startup; values persist through OTK restarts in the
