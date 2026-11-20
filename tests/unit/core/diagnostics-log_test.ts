@@ -8,6 +8,55 @@ import { assertThrows } from "@std/assert";
 import { test } from "../../support/resources.ts";
 import { join } from "@std/path";
 
+test("all diagnostic levels use stderr, leaving protocol stdout empty", async () => {
+  const module =
+    new URL("../../../core/diagnostics-log.ts", import.meta.url).href;
+  const result = await new Deno.Command(Deno.execPath(), {
+    args: [
+      "eval",
+      `import { diagnosticsLog } from ${
+        JSON.stringify(module)
+      }; const log = diagnosticsLog("debug"); for (const level of ["warn", "info", "debug"]) log(level, level);`,
+    ],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  assertEquals(result.code, 0);
+  assertEquals(new TextDecoder().decode(result.stdout), "");
+  assertEquals(new TextDecoder().decode(result.stderr), "warn\ninfo\ndebug\n");
+});
+
+test("store startup sends effective settings once through the injected diagnostics owner", async () => {
+  const module =
+    new URL("../../../core/diagnostics-log.ts", import.meta.url).href;
+  const store = new URL("../../../packages/store/mod.ts", import.meta.url).href;
+  const root = await fixture();
+  const result = await new Deno.Command(Deno.execPath(), {
+    args: [
+      "eval",
+      `import { diagnosticsLog } from ${
+        JSON.stringify(module)
+      }; import { OtkDb, DigestDb } from ${
+        JSON.stringify(store)
+      }; const log = diagnosticsLog("info"); const options = {busyms: 0, diagnostic: message => log("info", message)}; new OtkDb(${
+        JSON.stringify(root)
+      }, [], options).close(); new DigestDb(${
+        JSON.stringify(root)
+      }, [], options).close();`,
+    ],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  assertEquals(result.code, 0);
+  assertEquals(new TextDecoder().decode(result.stdout), "");
+  const lines = new TextDecoder().decode(result.stderr).trim().split("\n");
+  assertEquals(lines.length, 1);
+  assertEquals(lines[0].startsWith("SQLite settings "), true);
+  const settings = JSON.parse(lines[0].slice("SQLite settings ".length));
+  assertEquals(settings.mmap_size, 0);
+  assertEquals(typeof settings.version, "string");
+});
+
 test("diagnostics owns cancellation, level filtering and once-only failure reporting", () => {
   const output: unknown[] = [];
   const log = diagnosticsLog("info", (...args) => output.push(args));

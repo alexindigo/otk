@@ -32,10 +32,16 @@ async function launch(oc: TestNative, port: number, level = "info") {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let log = "";
+  let log = "", stdout = "", stderr = "";
   const record = (data: Uint8Array) => log += new TextDecoder().decode(data);
-  owner.child.stdout!.on("data", record);
-  owner.child.stderr!.on("data", record);
+  owner.child.stdout!.on("data", (data: Uint8Array) => {
+    stdout += new TextDecoder().decode(data);
+    record(data);
+  });
+  owner.child.stderr!.on("data", (data: Uint8Array) => {
+    stderr += new TextDecoder().decode(data);
+    record(data);
+  });
   const closed = new Promise<void>((resolve) =>
     owner.child.once("close", () => resolve())
   );
@@ -44,6 +50,12 @@ async function launch(oc: TestNative, port: number, level = "info") {
     closed,
     get log() {
       return log;
+    },
+    get stdout() {
+      return stdout;
+    },
+    get stderr() {
+      return stderr;
     },
   };
 }
@@ -57,8 +69,22 @@ test("compiled SIGINT exits cleanly and occupied port reports only its failure",
     await bounded("occupied port exits", contender.closed);
     const log = contender.log;
     assertEquals(contender.child.exitCode, 1, log);
-    const errors = log.trim().split("\n").filter((line) =>
-      !line.startsWith("config:")
+    assertEquals(
+      contender.stdout,
+      "",
+      "Stdout is reserved for machine protocols",
+    );
+    // WP7b requires one effective-settings diagnostic, now owned by stderr.
+    const lines = contender.stderr.trim().split("\n");
+    const settings = lines.filter((line) =>
+      line.startsWith("SQLite settings ")
+    );
+    assertEquals(settings.length, 1);
+    const value = JSON.parse(settings[0].slice("SQLite settings ".length));
+    assertEquals(value.mmap_size, 0);
+    assertEquals(typeof value.version, "string");
+    const errors = lines.filter((line) =>
+      !line.startsWith("config:") && !settings.includes(line)
     );
     assertEquals(errors, [
       `OTK: Port ${server.port} is in use; configure OTK_SERVER_PORT`,

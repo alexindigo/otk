@@ -67,6 +67,7 @@ import {
   registerCatalogs,
 } from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
+import { diagnosticsLog } from "./core/diagnostics-log.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export async function startApplication(
@@ -86,6 +87,7 @@ export async function startApplication(
     sources?: readonly FrameSource[];
   } = {},
 ): Promise<CoreServer> {
+  const diagnostic = options.diagnostic ?? diagnosticsLog(cfg.log.level);
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     frecencyMigrations,
@@ -99,7 +101,7 @@ export async function startApplication(
     sessionReferenceMigrations,
     requestsMigrations,
     pluginStorageMigrations,
-  ], cfg.storage);
+  ], { ...cfg.storage, diagnostic: (message) => diagnostic("info", message) });
   const sources: FrameSource[] = [...options.sources ?? []];
   try {
     options.signal?.throwIfAborted();

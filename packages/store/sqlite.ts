@@ -18,6 +18,8 @@ export interface SqliteOptions {
   /** Zero is fail-fast: an external cooperative owner waits/retries lock readiness. */
   busyms: number;
   observerError?: (error: unknown) => void;
+  /** The application owns diagnostic level and transport; stdout is a protocol. */
+  diagnostic?: (message: string) => void;
   availability?: StorageAvailability;
 }
 /** Bounded LRU of fixed SQL shapes. Unfinalized statements hold native memory
@@ -174,7 +176,7 @@ export class SqliteDb {
           );
         });
       this.#unregister = owner.register(path, this.#probeWrite);
-      logSettings(db);
+      logSettings(db, options.diagnostic);
     } catch (error) {
       try {
         db.close();
@@ -208,11 +210,16 @@ export class SqliteDb {
 }
 
 let settingsLogged = false;
-function logSettings(db: DatabaseSync): void {
-  if (settingsLogged) return;
-  console.info("SQLite settings", {
-    version: db.prepare("SELECT sqlite_version() AS version").get()!.version,
-    mmap_size: db.prepare("PRAGMA mmap_size").get()!.mmap_size,
-  });
+function logSettings(
+  db: DatabaseSync,
+  diagnostic?: (message: string) => void,
+): void {
+  if (settingsLogged || !diagnostic) return;
+  diagnostic(`SQLite settings ${
+    JSON.stringify({
+      version: db.prepare("SELECT sqlite_version() AS version").get()!.version,
+      mmap_size: db.prepare("PRAGMA mmap_size").get()!.mmap_size,
+    })
+  }`);
   settingsLogged = true;
 }

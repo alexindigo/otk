@@ -146,9 +146,11 @@ affected owners prove a successful commit. Connections register and release
 their own probes. The observation-gap identity survives recovery. Core owns the
 retry lifetime and presentation; storage imports no protocol or UI policy. Owned
 files explicitly select `mmap_size=0` without changing WAL mode. Each isolate
-logs the effective mmap size and SQLite version once. This does not disable
-SQLite's native WAL-index mapping or contain a fatal native signal; durable
-installations still require process supervision.
+reports the effective mmap size and SQLite version once through the optional
+`diagnostic(message)` callback. Application and worker composition route it
+through the core diagnostics owner on stderr, never protocol stdout. This does
+not disable SQLite's native WAL-index mapping or contain a fatal native signal;
+durable installations still require process supervision.
 
 ### Composable writes and request receipts
 
