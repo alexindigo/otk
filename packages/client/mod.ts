@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export {
+  releaseTerminalBoxes,
+  TerminalBox,
+  terminalBoxFor,
+  type TerminalBoxMode,
+} from "./terminal-boxes.ts";
+export {
   createNativeSources,
   type NativeSourceOwner,
   type NativeSources,
@@ -136,3 +142,4 @@ export * from "./failure-features.ts";
 export * from "./http-requests.ts";
 export { createSessionTree, type SessionListRow } from "./session-tree.ts";
 export * from "./forms.ts";
+export * from "./terminals.ts";
