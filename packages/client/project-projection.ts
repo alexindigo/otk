@@ -22,6 +22,7 @@ import {
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { projectName } from "./project-navigation.ts";
+import { projectPlacement } from "./project-placement.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -454,6 +455,12 @@ export function createProjectProjection(o: {
         (summary?.sessionCount != null
           ? summary.sessionCount > 0
           : p.members.size > 0 || summaryReady);
+      const placement = projectPlacement({
+        lifecycle: summary,
+        status,
+        inactive: !!record?.inactive,
+        hasSessions,
+      });
       const time = inactive && record
         ? record.inactiveAt ?? record.lastVisit
         : now;
@@ -480,17 +487,13 @@ export function createProjectProjection(o: {
               (p.summary?.sessionCount === null && summaryReady)
             ? "index"
             : "template",
-          group: archived && status === "none"
-            ? "archived"
-            : inactive
-            ? "inactive"
-            : hasSessions || status !== "none"
-            ? "active"
-            : "discovered",
+          ...placement,
+          group: placement.section === "live" ? "active" : placement.section,
           inactive,
           archived,
           status,
           unread,
+          unseenCount: summary ? summary.unseenCount : p.unread,
           visitText: text,
           ageing: age,
           sessionIDs: p.ids,

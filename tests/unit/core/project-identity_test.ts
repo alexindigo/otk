@@ -20,6 +20,8 @@ Deno.test("removal requires recorded worktree kind and current inventory, not un
       }],
     };
     owner.learn([seed]);
+    assertEquals(owner.availability("/other"), "present");
+    assertEquals(owner.archived("/other"), false);
     owner.learn([{
       ...seed,
       identities: [{ ...seed.identities![0], inventory: [] }],
@@ -39,6 +41,7 @@ Deno.test("removal requires recorded worktree kind and current inventory, not un
     owner.learn([{ ...seed, topology: null, identities: undefined }]);
     assertEquals(owner.availability("/other"), "unknown");
     assertEquals(owner.archived("/other"), false);
+    assertEquals(owner.memberships("/other")[0].kind, kind);
     owner.learn([{
       ...seed,
       identities: [{ ...seed.identities![0], inventory: undefined }],
@@ -94,4 +97,35 @@ Deno.test("non-Git folders, canonical roots and cold historical roots are never 
     }]);
     assertEquals(owner.availability(directory), "unknown");
   }
+});
+
+Deno.test("an unproven recorded worktree cannot become removed from inventory absence", () => {
+  const owner = new ProjectIdentity({
+    list: () => [{
+      source: "native",
+      repoID: "repo",
+      scope: "/unproven",
+      canonicalRoot: "/repo",
+      leafDirectory: "/unproven",
+      kind: "worktree",
+      proven: false,
+      availability: "unknown",
+    }],
+    save: () => {},
+  });
+  owner.learn([{
+    directory: "/unproven",
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    identities: [{
+      source: "native",
+      repoID: "repo",
+      canonicalRoot: "/repo",
+      recordedRoot: null,
+      inventory: [],
+    }],
+  }]);
+  assertEquals(owner.availability("/unproven"), "unknown");
+  assertEquals(owner.archived("/unproven"), false);
 });

@@ -70,7 +70,7 @@ test.describe("actual tool forms", () => {
       );
     const selector = `[data-virtual-key=${
       JSON.stringify(key)
-    }] ${steps} > .otk-tool-state > .otk-tool-toggle`;
+    }] ${steps} .otk-tool-state > .otk-tool-toggle`;
     const record = page.locator(selector);
     await expect(record).toHaveAttribute("aria-expanded", "false");
     await state.product("prefs.set", { key: "expandRecords", value: true });

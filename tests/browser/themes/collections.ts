@@ -248,6 +248,9 @@ async function nativeInput(page: Page) {
       resize: s.resize,
       bottom: composer.bottom,
       top: composer.top,
+      dockTop:
+        document.querySelector(".otk-composer-dock")!.getBoundingClientRect()
+          .top,
       footer: [footer.top, footer.bottom],
       inputBottom: r.bottom,
       viewport: innerHeight,
@@ -374,7 +377,10 @@ export async function collections456(input: Inputs) {
           expect(g.bottom).toBe(empty.bottom);
           expect(g.footer).toEqual(empty.footer);
           expect(g.top).toBe(empty.top - g.height + empty.height);
-          expect(Math.abs(g.transcriptBottom - g.top)).toBeLessThanOrEqual(.5);
+          // WP1's runtime status slot belongs to the dock, above the input.
+          expect(Math.abs(g.transcriptBottom - g.dockTop)).toBeLessThanOrEqual(
+            .5,
+          );
           expect(g.footer[0]).toBeGreaterThanOrEqual(g.inputBottom);
           expect(g.footer[1]).toBeLessThan(g.viewport);
           expect(g.scroll).toEqual([0, 0]);

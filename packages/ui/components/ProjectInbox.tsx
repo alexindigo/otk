@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  archiveAttention,
   errorFeedback,
   type FailureValue,
   failureValue,
@@ -157,39 +158,81 @@ export default function ProjectInbox(props: {
   const archivedRows = (repo: ProjectRow) =>
     props.projects.filter((p) =>
       projectGroup(p) === "archived" && p.sidecarId === repo.sidecarId &&
-      p.topology?.canonicalRoot === repository(repo)
+      repository(p) === repository(repo)
     );
+  const orphanArchives = createMemo(() => {
+    const live = new Set(rows().map(repositoryKey));
+    const repos = new Map<string, ProjectRow>();
+    for (const project of props.projects) {
+      if (
+        projectGroup(project) === "archived" &&
+        !live.has(repositoryKey(project))
+      ) {
+        repos.set(repositoryKey(project), project);
+      }
+    }
+    return [...repos.values()];
+  });
   function Archive(section: { repo: ProjectRow }) {
     const [expanded, setExpanded] = createSignal(false);
     const projects = () => archivedRows(section.repo);
     const label = () =>
       `Archived checkouts in ${projectName(repository(section.repo))}`;
+    const attention = () => archiveAttention(projects());
+    const description = () =>
+      `${label()} (${attention().count}), ${
+        attention().unseenCount === null
+          ? "unseen count unavailable"
+          : `${attention().unseenCount} unseen`
+      }`;
     return (
-      <Show when={!collapsed() && projects().length}>
-        <button
-          type="button"
-          class="otk-archived-toggle"
-          aria-label={label()}
-          aria-expanded={expanded() ? "true" : "false"}
-          onClick={() => setExpanded(!expanded())}
+      <Show when={projects().length}>
+        <section
+          class="otk-project-archive"
+          data-project-parent={repository(section.repo)}
         >
-          <ControlIcon>
-            <ChevronIcon class="otk-archived-chevron" />
-          </ControlIcon>
-          <span class="otk-control-label" title="Archived">Archived</span>
-          <span class="otk-inbox-rule" />
-          <span>({projects().length})</span>
-        </button>
-        <Show when={expanded()}>
-          <section aria-label={label()} class="otk-archived-projects">
-            <For
-              each={projects()}
-              keyed={(p) => `${p.sidecarId}/${p.directory}`}
-            >
-              {(p) => <Row project={p()} />}
-            </For>
-          </section>
-        </Show>
+          <button
+            type="button"
+            class="otk-archived-toggle"
+            aria-label={description()}
+            title={description()}
+            data-rollup={attention().status}
+            data-unseen-count={attention().unseenCount}
+            aria-expanded={expanded() && !collapsed() ? "true" : "false"}
+            onClick={() => {
+              setExpanded(collapsed() || !expanded());
+              if (collapsed()) {
+                void props.onLayout({ leftCollapsed: false }).catch((error) =>
+                  setError(
+                    failureValue(error, {
+                      actionLabel: "Opening archived projects",
+                    }),
+                  )
+                );
+              }
+            }}
+          >
+            <ControlIcon>
+              <StatusLight state={attention().status} />
+            </ControlIcon>
+            <Show when={!collapsed()}>
+              <ChevronIcon class="otk-archived-chevron" />
+              <span class="otk-control-label" title="Archived">Archived</span>
+              <span class="otk-inbox-rule" />
+              <span class="otk-archived-count">({attention().count})</span>
+            </Show>
+          </button>
+          <Show when={expanded() && !collapsed()}>
+            <section aria-label={label()} class="otk-archived-projects">
+              <For
+                each={projects()}
+                keyed={(p) => `${p.sidecarId}/${p.directory}`}
+              >
+                {(p) => <Row project={p()} />}
+              </For>
+            </section>
+          </Show>
+        </section>
       </Show>
     );
   }
@@ -243,7 +286,7 @@ export default function ProjectInbox(props: {
             aria-label={`Open project ${name()}${
               project().parentLabel ? ` in ${project().parentLabel}` : ""
             }${duplicate() ? ` on ${project().label}` : ""}${
-              project().availability === "removed" ? " (removed)" : ""
+              project().annotation ? ` (${project().annotation})` : ""
             }`}
             title={`${project().directory} · ${project().label}${
               projectGroup(project()) === "discovered"
@@ -253,7 +296,7 @@ export default function ProjectInbox(props: {
                     ? "No known activity"
                     : project().status
                 }`
-            }${project().availability === "removed" ? " (removed)" : ""}`}
+            }${project().annotation ? ` (${project().annotation})` : ""}`}
             onClick={() => void open(project())}
           >
             <Show when={project().depth && !collapsed()}>
@@ -291,8 +334,10 @@ export default function ProjectInbox(props: {
                 >
                   {name()}
                 </span>
-                <Show when={project().availability === "removed"}>
-                  <span class="otk-project-availability">removed</span>
+                <Show when={project().annotation}>
+                  <span class="otk-project-availability">
+                    {project().annotation}
+                  </span>
                 </Show>
                 <Show when={project().inactive && project().parentLabel}>
                   <span
@@ -468,6 +513,9 @@ export default function ProjectInbox(props: {
             </Show>
           </>
         )}
+      </For>
+      <For each={orphanArchives()} keyed={repositoryKey}>
+        {(repo) => <Archive repo={repo()} />}
       </For>
       <Show when={discovered().length}>
         <button

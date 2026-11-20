@@ -284,3 +284,22 @@
   outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-row);
 }
+.otk-archived-chevron {
+  width: var(--icon-compact);
+  height: var(--icon-compact);
+  flex: none;
+}
+.otk-project-inbox[data-collapsed=true] .otk-archived-toggle {
+  justify-content: center;
+}
+.otk-project-archive {
+  display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr);
+  column-gap: var(--project-gap);
+}
+.otk-project-archive > * {
+  grid-column: 2;
+}
+.otk-project-inbox[data-collapsed=true] .otk-project-archive {
+  display: block;
+}

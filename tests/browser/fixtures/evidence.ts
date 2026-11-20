@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "@playwright/test";
 import { test as stateTest } from "./test-state.ts";
+import { observeTranscript } from "./transcript-publication.ts";
 
 /** Browser evidence never acquires a native stack; failing capture still unwinds fixtures. */
 export const test = stateTest.extend<{ browserEvidence: void }>({
   browserEvidence: [async ({ context }, use, info) => {
+    await observeTranscript(context);
     const errors: string[] = [];
     const console: string[] = [];
     context.on("weberror", (event) => errors.push(String(event.error())));

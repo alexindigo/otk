@@ -1168,8 +1168,8 @@ does not drive the strip. Discovery retains its recency/name order.
 server, without merging equal repo IDs across connections. The keyed project
 projection borrows topology and scalar repo/leaf status from inbox summaries;
 views never scan sessions for rollups. Inactive children retain their repo
-label, and working/blocked/unseen leaves remain Active under stale authority
-too. That same keyed owner resolves nested metadata/tasks into their
+label, and non-archived working/blocked/unseen leaves remain Active under stale
+authority too. That same keyed owner resolves nested metadata/tasks into their
 authoritative checkout leaf and supplies exact source scopes to tabs and
 Sessions. Navigation uses the leaf while promotion, execution and persisted task
 directories retain their original paths. Sessions borrows bounded native pages
@@ -1178,10 +1178,12 @@ project or second project projection is created. Topology changes re-route only
 affected repo membership.
 
 Server-proven archived worktrees carry `archived` separately from manual
-`inactive`. Quiet archived leaves belong to the repository's Archived section;
-working, blocked and finished-unseen leaves stay in the live list until their
-evidence settles. The snapshot and keyed projections share that contract. Manual
-activity-policy changes cannot unarchive a checkout.
+`inactive`. `projectPlacement` owns section and removal annotation together for
+both snapshot and keyed projections. Only working or blocked attention keeps an
+archived leaf live. Finished-unseen leaves belong to Archived;
+`archiveAttention` borrows the shared rollup order and sums their unseen counts
+for the always-visible disclosure. Manual activity-policy changes cannot
+unarchive a checkout.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
