@@ -2,6 +2,7 @@
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import {
+  assertPagingStep,
   stripContract,
   stripGeometry,
   stripShot,
@@ -94,3 +95,15 @@ for (const count of [2, 10]) {
     });
   });
 }
+
+test("sessions.tab-paging-rejects-an-inert-fixture-button", {
+  tag: ["@sessions", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-task-strip" style="--chrome-header-height:40px"><div class="otk-task-list" style="display:flex;width:110px;overflow:auto"><button data-tab="first" style="flex:0 0 100px">First</button><button data-tab="last" style="flex:0 0 100px">Last</button></div><button data-direction="next" aria-label="Next tasks">Next</button></div>`,
+  );
+  const before = await stripGeometry(page);
+  await page.getByRole("button", { name: "Next tasks" }).click();
+  const after = await stripGeometry(page);
+  expect(() => assertPagingStep(before, after, "next")).toThrow();
+});

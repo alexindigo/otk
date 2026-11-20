@@ -2,6 +2,7 @@
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import {
+  pageTasks,
   stripContract,
   stripGeometry,
   stripShot,
@@ -113,6 +114,12 @@ test("scale.single-visible-task-pages-both-ways", {
 }, async ({ isolatedState: state, page }, info) => {
   const { ids } = await state.observe<{ ids: string[] }>();
   await page.setViewportSize({ width: 600, height: 800 });
+  // Keep the shell above its minimum width; sidebar state establishes one tab.
+  await state.product("layout.patch", {
+    leftWidth: 200,
+    leftCollapsed: false,
+    rightCollapsed: true,
+  });
   await page.goto(`${state.url}/#/local/${ids[150]}`);
   await expect(page.locator("textarea[name=prompt]")).toBeVisible();
   for (const theme of stripThemes) {
@@ -127,15 +134,14 @@ test("scale.single-visible-task-pages-both-ways", {
     await expect.poll(async () => (await stripGeometry(page)).left).toBe(0);
     const first = await stripGeometry(page);
     expect(first.full).toEqual([first.tabs[0].id]);
-    await page.getByRole("button", { name: "Next tasks", exact: true }).click();
+    await pageTasks(page, "next");
     await expect.poll(async () => (await stripGeometry(page)).full).toEqual([
       first.tabs[1].id,
     ]);
     expect((await stripGeometry(page)).left).toBeGreaterThan(first.left);
     for (const direction of ["next", "previous"]) {
       if (direction === "previous") {
-        await page.getByRole("button", { name: "Previous tasks", exact: true })
-          .click();
+        await pageTasks(page, "previous");
         await expect.poll(async () => (await stripGeometry(page)).left).toBe(0);
         expect((await stripGeometry(page)).full).toEqual(first.full);
       }

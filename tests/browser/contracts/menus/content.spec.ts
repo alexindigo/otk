@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
+import { diffHunk, expectDiffHunk } from "../../pages/diff.ts";
 import {
   clipboard,
   copied,
@@ -100,9 +101,15 @@ test("menus.content-targets-complete-source-code-hunks-and-feature-tools", {
   ]);
   await pick(page, "Copy code");
   await copied(page, "// keep\nconst newValue = 2;");
-  await open(
-    "[data-tool=edit] .otk-scroll-frame:nth-of-type(2) .otk-diff-content .otk-diff-text",
+  const second = diffHunk("[data-tool=edit]", 10, 10);
+  await revealAcquired(page, second);
+  await expectDiffHunk(
+    page,
+    second,
+    "const previous = true;",
+    "const current = true;",
   );
+  await open(second + " .otk-diff-text");
   await pick(page, "Copy code");
   await copied(page, "const current = true;");
   await open("[data-tool=patch] .otk-tool-toggle");
@@ -114,4 +121,20 @@ test("menus.content-targets-complete-source-code-hunks-and-feature-tools", {
   ]);
   await pick(page, "Copy paths");
   await copied(page, "/project/main.ts\n/project/other.ts");
+});
+
+test("menus.diff-hunk-contract-rejects-wrong-source-at-the-right-identity", {
+  tag: ["@menus", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<section data-tool="edit"><div class="otk-scroll-frame"><div class="otk-diff-content" data-hunk-old-start="10" data-hunk-new-start="10"><span class="otk-diff-text">wrong hunk</span></div></div></section>`,
+  );
+  await expect(
+    expectDiffHunk(
+      page,
+      diffHunk("[data-tool=edit]", 10, 10),
+      "const previous = true;",
+      "const current = true;",
+    ),
+  ).rejects.toThrow();
 });

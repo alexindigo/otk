@@ -8,6 +8,9 @@ export interface ScaleFrame {
   frame: {
     t: string;
     method: string;
+    ref?: { key: string; window: string };
+    refs?: { key: string; window: string }[];
+    outcome?: { ok: boolean };
     params?: {
       directory?: string;
       sessionID?: string;
