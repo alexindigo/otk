@@ -201,18 +201,9 @@ export class V2Stream {
         typeof aggregate === "string" &&
         event.durable!.seq <= (sequences.get(aggregate) ?? -1)
       ) return;
-      try {
-        await this.ports.event(event, client, signal, generation);
-      } catch (error) {
-        signal.throwIfAborted();
-        // A live fact whose required scalar read failed needs the existing
-        // reconnect/resync owner, not a diagnostic-only dropped event.
-        if (
-          error instanceof OperationFailure && error.outcome === "unavailable"
-        ) throw error;
-        this.ports.diagnostic(error);
-        return;
-      }
+      // Any failed projection needs canonical resync. Logging and continuing
+      // would leave a permanently absent fact under an apparently healthy clock.
+      await this.ports.event(event, client, signal, generation);
       signal.throwIfAborted();
       if (typeof aggregate === "string") {
         sequences.set(aggregate, event.durable!.seq);
@@ -231,13 +222,13 @@ export class V2Stream {
       try {
         value = JSON.parse(raw);
       } catch (error) {
-        this.ports.diagnostic(error);
-        return;
+        throw new Error("Malformed V2 event JSON requires resync", {
+          cause: error,
+        });
       }
       const event = decodeEvent(value);
       if (!event) {
-        this.ports.diagnostic(new Error("Ignored malformed V2 event frame"));
-        return;
+        throw new Error("Malformed V2 event frame requires resync");
       }
       if (event.type === "server.connected") {
         if (bootstrap) return;

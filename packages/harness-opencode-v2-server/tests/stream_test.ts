@@ -253,6 +253,31 @@ Deno.test("V2 mid-body reset is caught by the stream loop and reconnects", async
   }
 });
 
+Deno.test("V2 projection exceptions reconnect and resync instead of dropping native facts", async () => {
+  const failure = new Error("unknown native shape");
+  let broken = true;
+  const x = setup({
+    event: () => {
+      if (broken) throw failure;
+    },
+  });
+  try {
+    await x.stream.start();
+    const previous = x.stream.client;
+    x.send({
+      type: "session.message.content.updated",
+      data: { sessionID: "ses_1", messageID: "msg_1" },
+    });
+    await until(() => x.order.filter((e) => e === "ready").length === 2);
+    assertEquals(previous.signal.aborted, true);
+    assertEquals(x.diagnostics, [failure]);
+    assertEquals(x.order.filter((e) => e === "snapshot").length, 2);
+    broken = false;
+  } finally {
+    await x.stream.stop();
+  }
+});
+
 Deno.test("V2 body-read failure retires concurrent reads as unavailable, not a raw transport throw", async () => {
   const entered = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
