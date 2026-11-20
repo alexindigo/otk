@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { InboxProject } from "./inbox.ts";
+import type { ProjectStatus } from "@otk/protocol";
 import { projectLayoutKey as projectTreeKey } from "@otk/protocol";
 export { projectTreeKey };
 
@@ -8,6 +9,33 @@ export interface ProjectBranch<T> {
   project: T;
   children: ProjectBranch<T>[];
   required: boolean;
+}
+
+/** One branch contract for optional rows, mandatory rows and the archive. */
+export function projectBranchPresentation<T>(
+  node: ProjectBranch<T>,
+  open: boolean,
+  archive: { count: number; status: ProjectStatus; requiredCount?: number },
+): {
+  children: ProjectBranch<T>[];
+  protectedCount: number;
+  archiveVisible: boolean;
+  hasChildren: boolean;
+  bodyVisible: boolean;
+} {
+  const children = node.children.filter((child) => open || child.required);
+  const protectedCount =
+    node.children.filter((child) => child.required).length +
+    (archive.requiredCount ?? (archive.status !== "none" ? 1 : 0));
+  const archiveVisible = archive.count > 0 &&
+    (open || archive.status !== "none");
+  return {
+    children,
+    protectedCount,
+    archiveVisible,
+    hasChildren: node.children.length > 0 || archive.count > 0,
+    bodyVisible: children.length > 0 || archiveVisible,
+  };
 }
 
 /** Topology alone owns nesting. Missing/cyclic parents remain visible roots. */

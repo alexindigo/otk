@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export * from "./project-editor.ts";
+export * from "./project-disclosure.ts";
 export * from "./project-placement.ts";
 export { supervisionStatus } from "./inbox.ts";
 export {
@@ -158,6 +159,7 @@ export * from "./forms.ts";
 export * from "./request-lifetime.ts";
 export {
   type ProjectBranch,
+  projectBranchPresentation,
   projectTree,
   projectTreeKey,
 } from "./project-tree.ts";

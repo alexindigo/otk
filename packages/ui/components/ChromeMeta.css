@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-chrome-meta {
+  font-variant-numeric: tabular-nums;
+  color: var(--otk-fg-3);
+  white-space: nowrap;
+  font-size: var(--text-meta);
+}
+.otk-section-header-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--otk-border);
+}
