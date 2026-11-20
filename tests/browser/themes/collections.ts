@@ -343,13 +343,13 @@ export async function collections456(input: Inputs) {
     const prompt = page.locator("textarea[name=prompt]");
     await expect(page.locator(".otk-variant-picker > button")).toHaveAttribute(
       "aria-label",
-      "Variant: High (agent default)",
+      "Variant: High, agent default",
     );
     for (const theme of themes) {
       await test.step(theme.id, async () => {
         await paint(theme);
         await expect(page.locator(".otk-variant-picker > button"))
-          .toHaveAttribute("aria-label", "Variant: High (agent default)");
+          .toHaveAttribute("aria-label", "Variant: High, agent default");
         await prompt.fill("");
         await prompt.focus();
         await composerAccessories(page, theme, shot);
@@ -460,7 +460,7 @@ export async function collections456(input: Inputs) {
         ).click();
         await expect(variant).toHaveAttribute(
           "aria-label",
-          "Variant: High (agent default)",
+          "Variant: High, agent default",
         );
         await expect(variant).toHaveCSS("color", applied);
         expect(await variant.boundingBox()).toEqual(appliedBox);
@@ -811,7 +811,7 @@ export async function collections456(input: Inputs) {
         await nativePage(native.emptyID, true);
         await expect(variant).toHaveAttribute(
           "aria-label",
-          "Variant: High (agent default)",
+          "Variant: High, agent default",
         );
         for (
           const [agent, label, choice] of [["plan", "Plan", "Low"], [

@@ -718,9 +718,9 @@ export default function ProjectTabs(props: {
           title={`${"Session context"}; latest reported context tokens; ${
             meter().limit === undefined
               ? "context window unavailable"
-              : `${contextRange()} (${
+              : `${contextRange()}, ${
                 (meter().tokens! / meter().limit! * 100).toFixed(1)
-              }%)`
+              }%`
           }`}
           data-tokens={meter().tokens}
           data-cost={props.showCost === false ? undefined : cost()}

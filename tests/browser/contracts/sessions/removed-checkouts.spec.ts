@@ -36,11 +36,12 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   );
   await repositoryToggle.press("ArrowLeft");
   await expect(repositoryToggle).toHaveAttribute("aria-expanded", "false");
-  await visibleOnScreen(archive);
-  await visibleOnScreen(row(two));
-  await expect(archive).toHaveAttribute("aria-expanded", "true");
+  // A quiet Archive mounts with repository expansion; its own intent survives.
+  await expect(archive).toHaveCount(0);
+  await expect(row(two)).toHaveCount(0);
   await repositoryToggle.press("ArrowRight");
   await expect(repositoryToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(archive).toHaveAttribute("aria-expanded", "true");
   for (const directory of [one, two]) {
     await visibleOnScreen(row(directory));
     await expect(row(directory)).toHaveAttribute(
@@ -62,9 +63,9 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
     await expect(row(directory).locator(".otk-project-availability"))
       .toHaveText("removed");
     await expect(row(directory).locator(".otk-project-open"))
-      .toHaveAccessibleName(/\(removed\)$/);
+      .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
-      .toHaveAttribute("title", /\(removed\)$/);
+      .toHaveAttribute("title", /, removed$/);
   }
   await row(one).locator(".otk-project-open").click();
   await expect(row(one + "/src")).toHaveCount(0);
@@ -146,7 +147,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await visibleOnScreen(
     archive.locator(".otk-status-light[data-state=finished]"),
   );
-  await expect(archive.locator(".otk-archived-count")).toHaveText("(1)");
+  await expect(archive.locator(".otk-archived-count")).toHaveText("1");
   await expect(archive).toHaveAccessibleName(/1 unseen$/);
   await expect(archive).toHaveAttribute("title", /1 unseen$/);
   await expect(archive.locator(".otk-archived-unseen")).toHaveCount(0);

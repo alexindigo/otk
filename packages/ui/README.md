@@ -932,20 +932,22 @@ bypass the hover delay. Reduced motion does not change either interaction
 deadline.
 
 `TreeNode` owns the Explorer-style dotted connectors, square SVG +/- junction,
-header and lazy body grid. `TreeItem` supplies last-child and direction facts,
-including across virtual record boundaries; outgoing branches mirror that same
-grid. Disclosure state and callbacks remain in the existing interaction owner.
-`TreeGuide` borrows the same junction cells for already-expanded virtual session
-hierarchies, using plain client `treePaths` rather than mounted neighbours. No
-component paints a second nesting rail or elbow. Horizontal levels are 1.45
-times the compact icon token, independent of row height, with boxes 0.7 times
-that token and half-cell dotted stubs. `TreeIcon` owns the leading artwork slot
-and the downward child rail; callers inject their lamp or kind artwork. The
-child junction is aligned with that parent icon, not its disclosure box.
-TreeIcon never invents artwork: it renders the caller's semantic kind icon or
-lamp, or an empty slot when there is none. Body-only leaf content needs no icon
-or disclosure. Header and body factories borrow ContentSlot so record updates
-retain the mounted preview lifetime.
+header, optional feedback track and lazy body grid. Feedback grows below the
+header instead of moving its junction away from the row's lamp. `TreeItem`
+supplies last-child and direction facts, including across virtual record
+boundaries; outgoing branches mirror that same grid. Disclosure state and
+callbacks remain in the existing interaction owner. `TreeGuide` borrows the same
+junction cells for already-expanded virtual session hierarchies, using plain
+client `treePaths` rather than mounted neighbours. No component paints a second
+nesting rail or elbow. Horizontal levels are 1.45 times the compact icon token,
+independent of row height, with boxes 0.7 times that token and half-cell dotted
+stubs. `TreeIcon` owns the leading artwork slot and the downward child rail;
+callers inject their lamp or kind artwork. The child junction is aligned with
+that parent icon, not its disclosure box. TreeIcon never invents artwork: it
+renders the caller's semantic kind icon or lamp, or an empty slot when there is
+none. Body-only leaf content needs no icon or disclosure. Header and body
+factories borrow ContentSlot so record updates retain the mounted preview
+lifetime.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in
@@ -954,12 +956,22 @@ another tab's project choice cannot be overwritten by a stale layout snapshot.
 Mandatory descendants remain visible while their parent is collapsed. Archived
 and Inactive retain their separate section disclosures. Archived borrows the
 same TreeNode at worktree depth beneath its repository; its children are one
-shared indent further in. The header stays visible under project collapse,
-retaining its independent disclosure and attention lamp/count, including the
-collapsed sidebar rail. Missing canonical roots assign the archive once to the
-remaining repository group; archive-only repositories retain their own header.
-Childless projects omit the box; TreeNode's `showEmptyToggle` input controls
-that presentation without changing its geometry or introducing local state.
+shared indent further in. A quiet Archive mounts with repository expansion; an
+Archive carrying attention retains its independent disclosure and lamp/count
+under project collapse and in the collapsed sidebar rail. Its local disclosure
+survives unmounting. A collapsed branch explains protected descendants beside
+its name, and rejected saves show branch-local feedback and Retry. TreeNode
+remains controlled and stateless. Missing canonical roots assign the archive
+once to the remaining repository group; archive-only repositories retain their
+own header. Childless projects omit the box; TreeNode's `showEmptyToggle` input
+controls that presentation without changing its geometry or introducing local
+state.
+
+Archived, Discovered and Inactive labels share SectionHeaderMeta's separate
+label, rule and count slots. ChromeMeta shares the visit clock's exact
+`--text-meta` size and `--otk-fg-3` colour; counts and annotations have no
+parentheses. The hierarchy projection supplies artwork eligibility, never
+section-local depth.
 
 ## Example
 
