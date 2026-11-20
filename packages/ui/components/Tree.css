@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
   --tree-icon-size: var(--icon-compact);
-  --tree-indent: calc(var(--tree-icon-size) * 1.45);
-  --tree-box-size: calc(var(--tree-icon-size) * .7);
+  --tree-indent: calc(19 * var(--otk-unit));
+  --tree-box-size: calc(9 * var(--otk-unit));
 }
 .otk-tree-node {
   min-inline-size: 0;
+  --tree-heading-flow: row;
 }
 .otk-tree-guide {
   --tree-height: var(--row-compact);
@@ -18,6 +19,9 @@
 .otk-tree-heading {
   display: grid;
   grid-template-columns: var(--tree-indent) minmax(0, 1fr);
+}
+.otk-tree-own {
+  grid-area: 1 / 1;
 }
 .otk-tree-body {
   display: grid;
@@ -99,6 +103,7 @@
   min-inline-size: 0;
 }
 .otk-tree-label {
+  grid-area: 1 / 2;
   display: grid;
   align-items: center;
   min-block-size: var(--tree-height, calc(var(--tree-icon-size) * 2));
@@ -135,6 +140,7 @@
   block-size: var(--tree-icon-size);
 }
 .otk-tree-continuation {
+  grid-area: 1 / 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
@@ -144,11 +150,31 @@
 .otk-tree-node:is(.is-last, :not(.is-connected)) > .otk-tree-body > .otk-tree-continuation::before {
   background-image: none;
 }
-.otk-tree-node.is-outgoing > :is(.otk-tree-heading, .otk-tree-body) {
-  direction: rtl;
+.otk-tree-children {
+  grid-area: 1 / 2;
 }
-.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-children {
-  direction: ltr;
+.otk-tree-node.is-outgoing {
+  --tree-heading-flow: row-reverse;
+}
+.otk-tree-node.is-outgoing > :is(.otk-tree-heading, .otk-tree-body, .otk-tree-feedback) {
+  grid-template-columns: minmax(0, 1fr) var(--tree-indent);
+}
+.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own,
+.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-continuation {
+  grid-column: 2;
+}
+.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-label,
+.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-children,
+.otk-tree-node.is-outgoing > .otk-tree-feedback > .otk-tree-feedback-content {
+  grid-column: 1;
+}
+.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > :is(.otk-tree-upper, .otk-tree-lower),
+.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-continuation::before {
+  grid-column: 2;
+  justify-self: start;
+}
+.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > .otk-tree-connector {
+  grid-column: 1;
 }
 .otk-tree-feedback {
   display: grid;

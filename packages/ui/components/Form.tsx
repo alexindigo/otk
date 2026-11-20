@@ -177,7 +177,7 @@ export function FormTextarea(props: ComponentProps<"textarea">): Element {
         as="textarea"
         {...native.attributes}
         ref={[props.ref, native.ref]}
-        class={props.class}
+        class={["otk-form-textarea", props.class]}
         readonly={field.form?.pending() || props.readonly}
         aria-describedby={field.description}
         aria-invalid={field.invalid}

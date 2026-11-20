@@ -233,7 +233,6 @@ p {
   border-color: var(--otk-action);
   font-weight: 600;
 }
-input[type=checkbox],
 input[type=radio] {
   accent-color: var(--otk-fg-2);
   inline-size: var(--text-ui);

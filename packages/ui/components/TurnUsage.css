@@ -140,7 +140,7 @@
   grid-column: 1;
   grid-row: 1;
   width: 100%;
-  height: var(--space-1);
+  height: calc(4 * var(--otk-unit));
   flex: none;
   background: var(--otk-border);
 }

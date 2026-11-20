@@ -81,17 +81,11 @@
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-2);
-  font: 500 var(--text-meta)/var(--line-meta) var(--font-ui);
-  color: var(--otk-fg);
 }
 .otk-reply-agent {
   justify-self: start;
   max-width: 100%;
   min-width: 0;
-}
-.otk-reply-start > time {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 .otk-reply-start.is-continuation {
   margin-top: var(--space-6);

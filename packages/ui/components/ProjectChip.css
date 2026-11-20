@@ -23,7 +23,7 @@
   flex: none;
   width: calc(18 * var(--otk-unit));
   height: calc(18 * var(--otk-unit));
-  border-radius: var(--space-1);
+  border-radius: var(--radius-inline-code);
   overflow: clip;
   background: var(--otk-surface);
   color: var(--otk-fg-2);
@@ -33,7 +33,7 @@
 }
 .otk-project-avatar.has-color {
   background: var(--project-color);
-  color: #fff;
+  color: var(--otk-accent-on);
 }
 .otk-project-avatar img {
   width: 100%;
