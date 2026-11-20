@@ -2,11 +2,11 @@
 .otk-surface {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
   max-height: inherit;
   box-sizing: border-box;
-  padding: 8px;
+  padding: var(--space-2);
   background: var(--overlay-bg);
   color: var(--otk-fg);
   border: 1px solid var(--overlay-border);
@@ -20,9 +20,9 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
-  padding: 4px;
+  padding: var(--space-1);
 }
 /* A slot's single child is the slot's row: it fills the slot's width. */
 .otk-surface-title > :only-child,
@@ -38,10 +38,10 @@
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
   min-height: 0;
-  padding: 4px;
+  padding: var(--space-1);
 }
 .otk-surface-body > * {
   min-width: 0;

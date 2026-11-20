@@ -780,6 +780,9 @@ export default function SessionView(props: {
                                               ownerID={reply().key}
                                               segments={reply().segments}
                                               message={message()}
+                                              sourceTime={(id) =>
+                                                projection().messagesByID[id]
+                                                  ?.time.created}
                                               lastID={reply().lastID}
                                               pending={reply().pending}
                                               completionDetails={() => (

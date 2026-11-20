@@ -49,6 +49,7 @@ function PartView(
     user: boolean;
     pending?: boolean;
     sourceID?: string;
+    recordTime?: number;
   },
 ) {
   const { parts } = useUiRegistries();
@@ -74,9 +75,10 @@ function PartView(
 }
 /** A stable keyed component boundary preserves source nodes during part updates. */
 function PartsView(
-  props: Omit<PartProps, "part"> & {
+  props: Omit<PartProps, "part" | "recordTime"> & {
     parts: Part[];
     sourceID?(part: Part): string;
+    recordTime?(part: Part): number | undefined;
     tree?: boolean;
   },
 ) {
@@ -101,6 +103,7 @@ function PartsView(
             streaming={props.streaming}
             pending={props.pending}
             sourceID={props.sourceID?.(part())}
+            recordTime={props.recordTime?.(part())}
           />
         </TreeItem>
       )}
@@ -149,6 +152,7 @@ export default function Message(
     sessionTitle?: string;
     ownerID?: string;
     message: OtkMessage;
+    sourceTime?(messageID: string): number | undefined;
     segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
@@ -183,6 +187,13 @@ export default function Message(
   const { parts } = useUiRegistries();
   const layout = createMessageLayout();
   const sourceID = (part: Part) => layout.source(part.id) ?? props.message.id;
+  const recordTime = (part: Part) =>
+    props.message.role === "context"
+      ? props.sourceTime?.(sourceID(part)) ??
+        (sourceID(part) === props.message.id
+          ? props.message.time.created
+          : undefined)
+      : undefined;
   const framing = createMemo(() =>
     layout.update(
       props.ownerID ?? props.message.id,
@@ -350,6 +361,7 @@ export default function Message(
                           streaming={streaming()}
                           pending={props.pending}
                           sourceID={sourceID}
+                          recordTime={recordTime}
                         />
                       </>
                     }
@@ -371,6 +383,7 @@ export default function Message(
                           streaming={streaming()}
                           pending={props.pending}
                           sourceID={sourceID}
+                          recordTime={recordTime}
                         />
                       )}
                     />

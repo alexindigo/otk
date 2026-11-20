@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-deleted-session {
-  width: min(var(--lane-width), 100% - 48px);
+  width: min(var(--lane-width), 100% - 2 * var(--space-6));
   margin-inline: auto;
-  padding-block: 24px;
+  padding-block: var(--space-6);
   container-type: inline-size;
 }
 .otk-deleted-session h1 {
@@ -11,13 +11,14 @@
 }
 .otk-deleted-session dl {
   display: grid;
-  gap: 12px;
-  margin-block: 24px;
+  gap: var(--space-3);
+  margin-block: var(--space-6);
 }
 .otk-deleted-session dl > div {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr);
-  gap: 12px;
+  grid-template-columns: minmax(calc(120 * var(--otk-unit)), 1fr) minmax(0,
+    3fr);
+  gap: var(--space-3);
 }
 .otk-deleted-session dd {
   margin: 0;
@@ -29,6 +30,6 @@
 @container (width < 400px) {
   .otk-deleted-session dl > div {
     grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
+    gap: var(--space-1);
   }
 }

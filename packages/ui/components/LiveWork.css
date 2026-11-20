@@ -2,16 +2,16 @@
 .otk-live-work .otk-live-work-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   white-space: nowrap;
   font-size: var(--text-meta);
 }
 .otk-live-work-list {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: 4px 8px;
-  inline-size: min(360px, 80vw);
-  max-block-size: 270px;
+  gap: var(--space-1) var(--space-2);
+  inline-size: min(calc(360 * var(--otk-unit)), 80vw);
+  max-block-size: calc(270 * var(--otk-unit));
   font-size: var(--text-meta);
   line-height: var(--line-meta);
 }
@@ -20,8 +20,8 @@
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   align-items: center;
-  gap: 8px;
-  padding: 4px;
+  gap: var(--space-2);
+  padding: var(--space-1);
   border-radius: var(--radius-control);
 }
 .otk-live-work-item.is-helper {
@@ -57,7 +57,7 @@
   display: flex;
   justify-content: end;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-block-size: 0;
 }
 .otk-live-work-actions:empty {

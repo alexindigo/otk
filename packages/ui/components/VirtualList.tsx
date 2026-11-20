@@ -146,9 +146,12 @@ export default function VirtualList(props: {
   const path = `${parent?.path ?? ""}/${
     encodeURIComponent(props.scope ?? props.label)
   }`;
+  // Retained numeric sizes are valid only under the metrics that produced them.
+  // This also fences caches borrowed after an unmounted window changes scale.
+  let metrics = getComputedStyle(document.documentElement).fontSize;
   const model = createWindow(
     measurements(path),
-    (key) => props.measurementKey?.(key) ?? key,
+    (key) => `${metrics}:${props.measurementKey?.(key) ?? key}`,
   );
   const [top, setTop] = createSignal(0), [height, setHeight] = createSignal(0);
   const [version, setVersion] = createSignal(0),
@@ -612,6 +615,23 @@ export default function VirtualList(props: {
     observer = new ResizeObserver((entries) => {
       selection();
       transaction(() => {
+        const nextMetrics = getComputedStyle(document.documentElement).fontSize;
+        if (nextMetrics !== metrics) {
+          metrics = nextMetrics;
+          for (const [role, element] of samples) {
+            estimates.set(role, element.getBoundingClientRect().height);
+          }
+          if (currentKeys) {
+            model.update(
+              currentKeys,
+              (key) =>
+                estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
+                  1,
+            );
+            refresh();
+          }
+          changing();
+        }
         for (const entry of entries) {
           const key = (entry.target as HTMLElement).dataset.virtualKey;
           if (key && elements.get(key) === entry.target) {
@@ -625,6 +645,7 @@ export default function VirtualList(props: {
     });
     observer.observe(root);
     observer.observe(container);
+    for (const element of samples.values()) observer.observe(element);
     for (const element of elements.values()) observer.observe(element);
     const moved = () => {
       selection();

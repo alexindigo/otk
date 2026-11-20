@@ -631,6 +631,12 @@ injected toast content; the generic hub and toast host know no permission
 schema. Permission and question owners preserve dirty state through reconnects.
 The legacy `Docks` API remains independently reusable for existing consumers.
 
+Context part renderers receive their original canonical message clock through
+`recordTime`. The fallback shows it, including milliseconds and the local zone,
+only inside expanded record details. Message's optional `sourceTime` port keeps
+multi-source records attached to their own clock, never a digest or arrival
+time.
+
 The connection's client `RequestLifetimes` owner joins permission, question and
 typed-form identities, native retirement and retained drafts. Transcripts and
 global form surfaces borrow its projections; a question-compatible form has one
@@ -1429,13 +1435,25 @@ reduced colours exposes connection-owned glyphs and descriptions.
 `ActivityIndicator` owns the neutral tool/thinking spinner, without a session
 state input. It retains reduced-colour and reduced-motion support.
 
-`paintVisualPreferences` paints authoritative `reducedColors` / `animationsOff`
-preferences supplied by the consumer; `VisualSettings` takes those preferences,
-readiness and an async setter. These settings are contributed by their shared
-protocol feature. Reduced colours replaces lamps with shapes and supplies
-`.otk-age-0` through `.otk-age-3` underline styles; the action accent is mixed
-towards content. Animations off and OS reduced motion suppress all component
-animation and transitions, including breathing and event blink.
+`paintVisualPreferences` paints authoritative `textSize`, `reducedColors` /
+`animationsOff` preferences supplied by the consumer; `VisualSettings` takes
+those preferences, readiness and an async setter. These settings are contributed
+by their shared protocol feature. Reduced colours replaces lamps with shapes and
+supplies `.otk-age-0` through `.otk-age-3` underline styles; the action accent
+is mixed towards content. Animations off and OS reduced motion suppress all
+component animation and transitions, including breathing and event blink.
+
+Appearance's Text size segments contribute five validated percentages through
+the same preference registry and prefs.set owner. The painter applies one root
+`--otk-scale`; `--otk-unit` derives type, line, control and spacing dimensions.
+Production component gaps, padding and margins consume the shared `--space-*`
+roles, including menus and tool content; the visual preference units reject
+fixed-pixel spacing that would bypass the root scale. No browser zoom or
+application transform is used. Physical layout breakpoints remain viewport
+bounds. VirtualList includes the root font metrics in retained measurement
+identities and observes its role samples, so scale changes revoke old extents
+through the existing root geometry transaction. ScrollRegion and Popover
+continue to measure their actual CSS boxes.
 
 ## Notification channels
 

@@ -2,9 +2,13 @@
 import type { Preferences } from "@otk/protocol";
 /** Browser presentation only; the caller supplies authoritative host prefs. */
 export function paintVisualPreferences(
-  prefs: Pick<Preferences, "reducedColors" | "animationsOff">,
+  prefs: Pick<Preferences, "reducedColors" | "animationsOff" | "textSize">,
   doc: Document = document,
 ): void {
+  doc.documentElement.style.setProperty(
+    "--otk-scale",
+    String(Number(prefs.textSize) / 100),
+  );
   doc.documentElement.toggleAttribute(
     "data-otk-reduced-colors",
     prefs.reducedColors,

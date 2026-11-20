@@ -6,27 +6,27 @@
   font-weight: 600;
   font-size: var(--text-heading);
   line-height: var(--line-heading);
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 .otk-prose-paragraph {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
 }
 .otk-prose-code {
   font-family: var(--font-mono);
   background: var(--otk-bg-inline-code);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-inline-code);
 }
 .otk-prose-quote {
   border-left: 2px solid var(--muted);
-  margin: 12px 0;
-  padding-left: 12px;
+  margin: var(--space-3) 0;
+  padding-left: var(--space-3);
   color: var(--secondary);
 }
 .otk-prose-task-item {
   display: grid;
   grid-template-columns: 1lh minmax(0, 1fr);
-  column-gap: 8px;
+  column-gap: var(--space-2);
   align-items: start;
 }
 .otk-prose-task-marker {
@@ -51,7 +51,7 @@
 .otk-table-scroll th,
 .otk-table-scroll td {
   border: 1px solid var(--muted);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
 }
 .otk-prose-block.is-compact-start > :first-child {
   margin-top: 0;
@@ -102,18 +102,18 @@
   content: "###### ";
 }
 .otk-prose-list {
-  margin: 0 0 12px;
-  padding-inline-start: 24px;
+  margin: 0 0 var(--space-3);
+  padding-inline-start: var(--space-6);
 }
 .otk-prose-list > li + li {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .otk-prose-list > li > .otk-prose-paragraph {
   margin: 0;
 }
 .otk-prose-list > li > .otk-prose-paragraph + .otk-prose-paragraph {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .otk-prose-list .otk-prose-list {
-  margin-block: 4px 0;
+  margin-block: var(--space-1) 0;
 }

@@ -6,8 +6,8 @@
 .otk-entity-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 8px;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--otk-action-text) 10%, var(--otk-bg));
   color: var(--otk-fg);
@@ -21,8 +21,8 @@
 .otk-entity-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px 12px;
-  margin: 0 0 12px;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
   font-size: var(--text-meta);
 }
 .otk-entity-facts dt {
@@ -35,5 +35,5 @@
 .otk-entity-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }

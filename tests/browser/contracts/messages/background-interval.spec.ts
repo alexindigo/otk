@@ -116,6 +116,13 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
     name: "See response",
   }).click();
   await expect(page.locator('[data-message="background-7"]')).toBeFocused();
+  const record = page.locator('[data-message="background-7"]');
+  await record.locator(".otk-tool-toggle").click();
+  await expect(record.locator("[data-record-time]")).toHaveAttribute(
+    "datetime",
+    new Date(107).toISOString(),
+  );
+  await expect(record.locator("[data-record-time]")).toContainText(".107");
 });
 
 test("messages.success-only-interval-borrows-footer-and-direct-reveal", {

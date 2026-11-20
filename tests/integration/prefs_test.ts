@@ -19,6 +19,13 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
     await b.connect();
     assertEquals(await a.rpc("prefs.get", {}), DEFAULT_PREFS);
     await assertRejects(() =>
+      a.rpc("prefs.set", { key: "textSize", value: "200" })
+    );
+    await a.rpc("prefs.set", { key: "textSize", value: "150" });
+    await b.wait((frame) =>
+      frame.t === "prefs" && frame.prefs.textSize === "150"
+    );
+    await assertRejects(() =>
       a.rpc("prefs.set", { key: "thinking", value: "minimal" })
     );
     await a.rpc("prefs.set", { key: "thinking", value: "show" });
@@ -143,6 +150,7 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
     clients.push(c);
     await c.connect();
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).thinking, "show");
+    assertEquals((await c.rpc<Preferences>("prefs.get", {})).textSize, "150");
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).keymap, keymap);
     assertEquals(
       (await c.rpc<Preferences>("prefs.get", {})).shellLayout,
