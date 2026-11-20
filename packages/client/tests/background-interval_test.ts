@@ -122,7 +122,7 @@ Deno.test("failure breakout and rejoin change child presentation, never the inte
   assertEquals(p.state.records.keys, [key]);
   assertEquals(p.state.records.groups[key].breakouts, ["r2"]);
   assertEquals(
-    p.state.records.groups[key].segments?.map((segment) => segment.members),
+    p.state.records.groups[key].children?.map((child) => child.members),
     [["r1"], ["r2"], ["r3"]],
   );
   assertEquals(p.state.records.owners.r2, key);
@@ -135,6 +135,45 @@ Deno.test("failure breakout and rejoin change child presentation, never the inte
     "r2",
     "r3",
   ]);
+});
+Deno.test("failed helpers share one summary and frame, without successful run fragments", () => {
+  const p = createTranscriptProjection();
+  const run: Partial<Activity> = {
+    summary: { kind: "execution", noun: "run", plural: "runs" },
+    completion: { placement: "footer" },
+    state: settled,
+  };
+  const failed: Partial<Activity> = {
+    summary: {
+      kind: "helper-failure",
+      noun: "helper failed",
+      plural: "helpers failed",
+    },
+    tone: "error",
+    state: settled,
+    child: { sessionID: "child", label: "Open task" },
+  };
+  p.replace([
+    record(1, run),
+    record(2, failed),
+    record(3, run),
+    record(4, failed),
+    record(5, run),
+  ]);
+  const [key] = p.state.records.keys, group = p.state.records.groups[key];
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(group.failureTitle, "2 helpers failed");
+  assertEquals(group.breakouts, ["r2", "r4"]);
+  assertEquals(group.children?.flatMap((child) => child.members), [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+  ]);
+  for (const id of group.members) {
+    assertEquals(p.state.records.parents[id], [key]);
+  }
 });
 Deno.test("success-only interval is silent, retains source and borrows the preceding reply footer", () => {
   const reply: Message = {

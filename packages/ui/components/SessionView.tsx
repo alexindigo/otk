@@ -216,28 +216,15 @@ export default function SessionView(props: {
           prefs={props.prefs}
           breakouts={() => (
             <RecordList
-              items={group().segments ?? []}
-              key={(segment) => segment.key}
+              items={group().breakouts ?? []}
+              key={(id) => id}
               scope={group().key}
               control={(control) =>
                 recordWindow(group().key, control)}
-              revision={(segment) =>
-                segment.revision}
+              revision={(id) =>
+                projection().repliesByID[id]?.revision ?? 0}
               outgoing={group().direction === "outgoing"}
-              outgoingItem={(segment) => segment.direction === "outgoing"}
-              render={(segment) => (
-                <Show
-                  when={segment().segment}
-                  fallback={one(segment().members[0])}
-                >
-                  <ActivityGroup
-                    group={segment()}
-                    onOpenChild={props.onOpenChild}
-                    prefs={props.prefs}
-                    body={() => renderRecords(segment, one)}
-                  />
-                </Show>
-              )}
+              render={(id) => one(id())}
             />
           )}
           body={() => renderRecords(group, one)}

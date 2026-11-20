@@ -49,11 +49,14 @@ Deno.test("receipt before terminal, wrong relationship, later user seen and fail
   assertEquals(owner.session(row, 0).unseen, true);
   row.activity!.delivered.parentID = row.parentID!;
   row.activity!.terminal = 50;
-  assertEquals(owner.session(row, 0).unseen, false);
+  assertEquals(owner.session(row, 0).unseen, true);
+  assertEquals(owner.session(row, 0).state, "needsYou");
   row.activity!.terminal = undefined;
   assertEquals(owner.session(row, 0).unseen, false);
   row.activity!.terminal = 100;
-  assertEquals(owner.session(row, 0).unseen, false);
+  assertEquals(owner.session(row, 0).unseen, true);
+  assertEquals(owner.session(row, 0).state, "needsYou");
   assertEquals(owner.session(row, 0).outcome, "failed");
+  assertEquals(owner.session(row, 100).state, "none");
   assertEquals(owner.session(row, 200, 200).unseen, false);
 });

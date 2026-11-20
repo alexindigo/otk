@@ -50,17 +50,18 @@ export default function ActivityGroup(props: {
         data-record-members={JSON.stringify(props.group.members)}
       >
         <Show
-          when={(props.group.title || props.group.silent) &&
-            (!props.group.interval || !props.group.breakouts?.length || open())}
+          when={props.group.interval || props.group.title || props.group.silent}
           fallback={props.breakouts?.()}
         >
           <TreeNode
-            label={props.group.silent
-              ? "Completion details"
-              : props.group.title}
+            label={props.group.failureTitle ||
+              (props.group.silent
+                ? "Completion details"
+                : props.group.title || "Details")}
             outgoing={props.group.direction === "outgoing"}
             open={open()}
             onOpen={setOpen}
+            bodyVisible={open() || !!props.group.breakouts?.length}
             header={() => (
               <header class="otk-record-group-heading">
                 <TreeIcon />
@@ -80,7 +81,7 @@ export default function ActivityGroup(props: {
                   onClick={() => setOpen(!open())}
                 >
                   <Show
-                    when={props.group.interval || props.group.segment}
+                    when={props.group.interval}
                     fallback={
                       <span class="otk-tool-verb otk-control-label">
                         {props.group.silent
@@ -89,11 +90,20 @@ export default function ActivityGroup(props: {
                       </span>
                     }
                   >
-                    <ChromeMeta class="otk-control-label">
-                      {props.group.silent
-                        ? "Completion details"
-                        : props.group.title}
-                    </ChromeMeta>
+                    <Show
+                      when={props.group.title || !props.group.failureTitle}
+                    >
+                      <ChromeMeta class="otk-control-label">
+                        {props.group.silent
+                          ? "Completion details"
+                          : props.group.title || "Details"}
+                      </ChromeMeta>
+                    </Show>
+                    <Show when={props.group.failureTitle}>
+                      <ChromeMeta class="otk-control-label otk-record-group-failures">
+                        {props.group.failureTitle}
+                      </ChromeMeta>
+                    </Show>
                   </Show>
                   <Show when={props.group.detail}>
                     <span
@@ -131,7 +141,7 @@ export default function ActivityGroup(props: {
                 </Show>
               </header>
             )}
-            body={props.body}
+            body={() => open() ? props.body() : props.breakouts?.()}
           />
         </Show>
       </section>

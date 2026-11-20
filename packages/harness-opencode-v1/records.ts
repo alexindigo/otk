@@ -12,6 +12,7 @@ import { preview } from "./previews.ts";
 import type { NativeMessage } from "./messages.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { taskEnvelope } from "./tool-results.ts";
+import { helperFailure } from "./request-failure.ts";
 
 /** Native content evidence, not a header's declared user role, establishes a prompt. */
 const promptTypes = ["text", "file", "agent"] as const;
@@ -144,13 +145,23 @@ export function recordPart(part: RawPart): ExternalPart {
           const failed = task.state === "error";
           return {
             ...common,
+            ...(failed
+              ? {
+                failure: helperFailure(
+                  task.text,
+                  ids.encode(task.sessionID),
+                  task.summary,
+                  part.id,
+                ),
+              }
+              : {}),
             activity: {
               ...activity,
               category: "delegation",
               summary: {
-                kind: "subagent",
-                noun: "helper finished",
-                plural: "helpers finished",
+                kind: failed ? "subagent-failure" : "subagent",
+                noun: failed ? "helper failed" : "helper finished",
+                plural: failed ? "helpers failed" : "helpers finished",
               },
               title: failed
                 ? "Task failed"
