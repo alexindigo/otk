@@ -88,12 +88,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.otk-project-visit {
-  font-variant-numeric: tabular-nums;
-  color: var(--otk-fg-3);
-  white-space: nowrap;
-  font-size: var(--text-meta);
-}
 .otk-project-trailing {
   display: grid;
   align-items: center;
@@ -149,11 +143,6 @@
 }
 .otk-discovered-toggle[aria-expanded=true] .otk-discovered-chevron {
   transform: rotate(90deg);
-}
-.otk-inbox-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--otk-border);
 }
 .otk-inactive-projects {
   padding-top: var(--space-1);

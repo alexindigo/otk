@@ -66,6 +66,7 @@ export const profiles = {
   "contract-sessions-window": "neutral",
   "contract-sessions-catalog": "neutral",
   "contract-sessions-worktrees": "neutral",
+  "contract-sessions-sidebar": "neutral",
   "contract-sessions-removed": "neutral",
   "contract-sessions-merge": "neutral",
   "contract-sessions-tabs": "neutral",

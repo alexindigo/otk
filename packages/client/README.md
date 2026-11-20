@@ -1201,9 +1201,21 @@ unarchive a checkout.
 and the sidebar. Server, repository and canonical-root identity prove each edge;
 missing or cyclic parents remain visible roots. Required descendants borrow the
 existing project status, independently of persisted collapse choices.
-`projectCollapse(project, collapsed)` sends one keyed `layout.project` intent to
-the serving layout owner. `treePaths` supplies virtual session-row continuation
-flags from the complete projected preorder, never mounted DOM neighbours.
+`projectHierarchy` also assigns row level and artwork before section filtering;
+worktrees keep their own checkout basename and never receive project avatars,
+including when their root is absent. Native repository names remain
+project-only. `projectBranchPresentation` derives optional and required
+children, protected counts and archive mounting from one topology/disclosure
+snapshot. `createProjectDisclosure` retains immediate local choices by kind,
+server and directory. Per-key saves are ordered, old outcomes cannot overwrite
+newer intent, and the affected branch retains a refusal and explicit retry.
+Archive and Inactive borrow the same owner without adding persistence;
+Discovered and project choices retain their existing preference stores. A
+matching authoritative value retires the successful local overlay; independent
+future preference changes remain live. `projectCollapse(project, collapsed)`
+sends one keyed `layout.project` intent to the serving layout owner. `treePaths`
+supplies virtual session-row continuation flags from the complete projected
+preorder, never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

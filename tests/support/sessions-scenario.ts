@@ -239,6 +239,11 @@ export async function sessionsScenario(profile: Profile) {
         sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
         lastActivity: 1,
         authority: "current" as const,
+        presentation: {
+          id: base.projectID,
+          name: "Fixture project",
+          color: "#628cba",
+        },
         ...(profile === "contract-sessions-removed"
           ? {
             identities: [{
@@ -284,6 +289,11 @@ export async function sessionsScenario(profile: Profile) {
           sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
           lastActivity: 1,
           authority: "current" as const,
+          presentation: {
+            id: base.projectID,
+            name: "Fixture project",
+            color: "#628cba",
+          },
           identities: [{
             source: "worktree-fixture",
             repoID: base.projectID,
@@ -468,6 +478,93 @@ export async function sessionsScenario(profile: Profile) {
       parentID: base.id,
       title: "Helper session",
     });
+  }
+  if (profile === "contract-sessions-sidebar") {
+    const seeds: import("@otk/harness").ProjectSeed[] = [];
+    for (
+      const mode of [
+        "empty",
+        "all-required",
+        "archive-only",
+        "missing-root",
+        "mixed",
+        "large",
+      ]
+    ) {
+      const canonicalRoot = join(root, "sidebar", mode);
+      const count = mode === "large" ? 40 : mode === "empty" ? 0 : 2;
+      const paths = [
+        canonicalRoot,
+        ...Array.from(
+          { length: count },
+          (_, n) => join(root, "sidebar", `${mode}-child-${n}`),
+        ),
+      ];
+      for (const [n, directory] of paths.entries()) {
+        if (mode === "missing-root" && n === 0) continue;
+        await Deno.mkdir(directory, { recursive: true });
+        const id = `tstv1-sidebar-${mode}-${n}`;
+        f.add({
+          ...base,
+          id,
+          projectID: `sidebar-${mode}`,
+          directory,
+          status: mode === "all-required" && n > 0 ? "busy" : "idle",
+          title: `${mode} session ${n}`,
+        });
+        seeds.push({
+          directory,
+          hasSessions: true,
+          sessionCount: 1,
+          lastActivity: 1,
+          authority: "current",
+          presentation: {
+            id: `sidebar-${mode}`,
+            name: `${mode} ${n}`,
+            color: "#628cba",
+          },
+          topology: {
+            repoID: `sidebar-${mode}`,
+            canonicalRoot,
+            leafDirectory: directory,
+            ...(n > 0 ? { parentDirectory: canonicalRoot } : {}),
+          },
+          identities: [{
+            source: "sidebar-fixture",
+            repoID: `sidebar-${mode}`,
+            canonicalRoot,
+            recordedRoot: directory,
+            inventory: paths.map((directory, i) => ({
+              directory,
+              kind: i > 0 ? "worktree" : "checkout",
+            })),
+          }],
+        });
+        await c.rpc("projects.visit", { directory, active: true });
+        if (mode === "mixed" && n === 2) {
+          await c.rpc("projects.inactive", { directory, inactive: true });
+        }
+      }
+    }
+    f.app.index.projectSeeds(seeds);
+    f.app.index.projectAuthority("current");
+    f.app.index.projectSeeds(
+      seeds.filter((seed) =>
+        seed.topology?.canonicalRoot.endsWith("archive-only")
+      ).map((seed) => ({
+        ...seed,
+        identities: [{
+          source: "sidebar-fixture",
+          repoID: seed.topology!.repoID,
+          canonicalRoot: seed.topology!.canonicalRoot,
+          recordedRoot: null,
+          inventory: [{
+            directory: seed.topology!.canonicalRoot,
+            kind: "checkout" as const,
+          }],
+        }],
+      })),
+    );
   }
   await c.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await c.rpc<Record<string, Json>>("prefs.get", {});
