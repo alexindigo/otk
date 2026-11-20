@@ -2,12 +2,12 @@
 .otk-work-fold {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: fit-content;
   max-width: 100%;
   min-height: var(--line-meta);
   padding: 0;
-  margin-block: 8px;
+  margin-block: var(--space-2);
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
   text-align: left;

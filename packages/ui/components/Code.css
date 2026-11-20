@@ -9,9 +9,9 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 .otk-code pre {
-  margin: 8px 0;
+  margin: var(--space-2) 0;
   white-space: pre;
-  padding: 12px;
+  padding: var(--space-3);
   border-radius: var(--radius-card);
   background: var(--otk-bg-code);
   border: 1px solid var(--otk-border-code);

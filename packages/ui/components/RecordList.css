@@ -4,16 +4,16 @@
   --tool-line-gap: 0px;
   display: flex;
   flex-direction: column;
-  margin-inline-start: 12px;
+  margin-inline-start: var(--space-3);
   border-inline-start: 1px dotted var(--otk-border);
 }
 .otk-record-list-row {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
+  grid-template-columns: var(--space-3) minmax(0, 1fr);
   align-items: start;
 }
 .otk-record-list-connector {
-  block-size: 26px;
+  block-size: var(--row-tool);
   display: grid;
   align-items: center;
 }
@@ -25,12 +25,12 @@
   min-inline-size: 0;
 }
 .otk-record-list.is-outgoing {
-  margin-inline: 0 12px;
+  margin-inline: 0 var(--space-3);
   border-inline-start: 0;
   border-inline-end: 1px dotted var(--otk-border);
 }
 .otk-record-list-row.is-outgoing {
-  grid-template-columns: minmax(0, 1fr) 12px;
+  grid-template-columns: minmax(0, 1fr) var(--space-3);
 }
 .otk-record-list-row.is-outgoing > .otk-record-list-connector {
   grid-column: 2;

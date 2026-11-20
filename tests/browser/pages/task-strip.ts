@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Page, TestInfo } from "@playwright/test";
 import { expect } from "../fixtures/evidence.ts";
+import { cssLength } from "./css-length.ts";
 
 export const stripThemes = [
   { name: "dark", id: "otk-dark", mode: "dark" },
@@ -9,7 +10,11 @@ export const stripThemes = [
 ];
 
 export async function stripGeometry(page: Page) {
-  return await page.locator(".otk-task-list").evaluate((lane) => {
+  const expected = await cssLength(
+    page.locator(".otk-task-strip"),
+    "--chrome-header-height",
+  );
+  const geometry = await page.locator(".otk-task-list").evaluate((lane) => {
     const bounds = lane.getBoundingClientRect();
     const tabs = Array.from(lane.querySelectorAll<HTMLElement>("[data-tab]"))
       .map(
@@ -27,9 +32,6 @@ export async function stripGeometry(page: Page) {
     const strip = lane.closest(".otk-task-strip")!;
     return {
       height: strip.getBoundingClientRect().height,
-      expected: parseFloat(
-        getComputedStyle(strip).getPropertyValue("--chrome-header-height"),
-      ),
       tabs,
       full: tabs.filter((tab) => tab.full).map((tab) => tab.id),
       left: lane.scrollLeft,
@@ -57,6 +59,7 @@ export async function stripGeometry(page: Page) {
       ),
     };
   });
+  return { ...geometry, expected };
 }
 
 export async function stripContract(page: Page, count: number) {

@@ -26,7 +26,8 @@
   background: transparent;
   color: var(--otk-fg);
   width: stretch;
-  min-width: min(200px, calc(100vw - 2 * var(--popover-gutter)));
+  min-width: min(calc(200 * var(--otk-unit)), calc(100vw - 2 *
+    var(--popover-gutter)));
   max-width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
   height: fit-content;
   /* An empty anchor side cannot admit a zero-height control surface. */

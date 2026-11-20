@@ -14,7 +14,7 @@
   color: var(--fg);
 }
 .otk-project-inbox .otk-sidebar-commands {
-  padding: 0 8px var(--chrome-inset);
+  padding: 0 var(--space-2) var(--chrome-inset);
 }
 .otk-inbox-search {
   --control-height: var(--row-compact);
@@ -22,7 +22,7 @@
   height: var(--row-compact);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 0;
   color: var(--otk-fg-3);
   text-align: left;
@@ -32,7 +32,7 @@
   height: var(--icon-compact);
 }
 .otk-inbox-scroll {
-  padding: 0 8px;
+  padding: 0 var(--space-2);
 }
 .otk-project-row {
   display: flex;
@@ -60,7 +60,7 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .otk-project-content {
@@ -69,7 +69,7 @@
 }
 .otk-project-error {
   flex-basis: 100%;
-  padding-block-end: 4px;
+  padding-block-end: var(--space-1);
 }
 .otk-project-name {
   font-size: var(--text-ui);
@@ -97,8 +97,8 @@
   align-items: center;
   justify-items: end;
   flex: none;
-  min-width: 24px;
-  padding-inline-end: 4px;
+  min-width: var(--space-6);
+  padding-inline-end: var(--space-1);
 }
 .otk-project-trailing > * {
   grid-area: 1 / 1;
@@ -119,10 +119,10 @@
 .otk-project-menu-trigger {
   cursor: pointer;
   list-style: none;
-  padding: 4px;
+  padding: var(--space-1);
   color: var(--secondary);
-  width: 24px;
-  height: 24px;
+  width: var(--space-6);
+  height: var(--space-6);
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
@@ -135,7 +135,7 @@
   height: var(--row-project);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   text-align: left;
   margin-top: var(--chrome-inset);
   padding: 0;
@@ -154,7 +154,7 @@
 .otk-project-marker {
   display: grid;
   place-items: center;
-  min-width: 10px;
+  min-width: calc(10 * var(--otk-unit));
   flex: none;
 }
 .otk-inbox-rule {
@@ -163,11 +163,11 @@
   background: var(--otk-border);
 }
 .otk-inactive-projects {
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .otk-inbox-footer {
   flex: none;
-  padding: 8px;
+  padding: var(--space-2);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -187,8 +187,8 @@
   height: var(--control-size);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 0;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) 0 0;
   color: var(--otk-fg-3);
 }
 .otk-inbox-resizer {
@@ -212,14 +212,14 @@
   display: none;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-scroll {
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-open {
   justify-content: center;
   padding: 0;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-footer {
-  padding: 8px 4px;
+  padding: var(--space-2) var(--space-1);
   flex-direction: column;
 }
 .otk-project-inbox[data-collapsed=true] .otk-server-connections {
@@ -238,7 +238,7 @@
   justify-content: center;
 }
 .otk-project-inbox[data-collapsed=true] .otk-sidebar-commands {
-  padding-inline: 4px;
+  padding-inline: var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-search {
   width: var(--control-height);
@@ -265,8 +265,8 @@
 }
 .otk-project-branch::before {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: var(--space-2);
+  height: var(--space-2);
   border-inline-start: 1px solid var(--otk-border);
   border-block-end: 1px solid var(--otk-border);
 }

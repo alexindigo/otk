@@ -10,7 +10,7 @@
 .otk-title-editor input {
   min-width: 0;
   height: var(--list-row-height, var(--control-size));
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   line-height: inherit;
   font: inherit;
   color: inherit;

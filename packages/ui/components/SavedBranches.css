@@ -8,14 +8,14 @@
 .otk-saved-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-bottom: 16px;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
   max-width: var(--lane-width);
   margin-inline: auto;
   border-bottom: 1px solid var(--otk-border);
 }
 .otk-saved-toolbar {
-  padding: 16px 24px;
+  padding: var(--space-4) var(--space-6);
   border-bottom: 1px solid var(--otk-border);
 }
 .otk-saved-toolbar-content {
@@ -34,12 +34,12 @@
 .otk-saved-messages {
   flex: 1;
   min-height: 0;
-  padding: 24px;
+  padding: var(--space-6);
 }
 .otk-saved-message {
   max-width: var(--lane-width);
   margin-inline: auto;
-  padding-block: 8px;
+  padding-block: var(--space-2);
 }
 .otk-saved-reuse {
   display: flex;
@@ -48,6 +48,6 @@
 .otk-saved-choice {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-block: 8px;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
 }

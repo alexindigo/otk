@@ -5,13 +5,15 @@ import { selection } from "../components/selection.ts";
 Deno.test("selection has one shared pointer/underline owner for selected, current and pressed semantics", async () => {
   const css = await Deno.readTextFile(new URL("../theme.css", import.meta.url));
   assert(
-    css.includes("--item-inset: 12px") &&
+    css.includes("--item-inset: calc(12 * var(--otk-unit))") &&
       css.includes("--pill-inset: var(--item-inset)"),
     "Items and action pills share the accepted item inset token",
   );
   assert(
     css.includes("var(--selection-inset, var(--item-inset))") &&
-      css.includes("var(--selection-padding, 4px var(--item-inset))"),
+      css.includes(
+        "var(--selection-padding, var(--space-1) var(--item-inset))",
+      ),
     "Both selection orientations consume the shared item inset",
   );
   for (const selected of [false, true]) {
@@ -64,11 +66,11 @@ Deno.test("selection has one shared pointer/underline owner for selected, curren
   assertEquals(applied["aria-selected"], undefined);
   assertMatch(
     css,
-    /\[data-otk-selection=vertical\]\.otk-selection-item::before\s*\{[^}]*content: "";[^}]*width: 3px;[^}]*height: 14px;[^}]*margin-inline-start: var\(--selection-pointer-inset\);/,
+    /\[data-otk-selection=vertical\]\.otk-selection-item::before\s*\{[^}]*content: "";[^}]*width: calc\(3 \* var\(--otk-unit\)\);[^}]*height: calc\(14 \* var\(--otk-unit\)\);[^}]*margin-inline-start: var\(--selection-pointer-inset\);/,
   );
   assertMatch(
     css,
-    /\[data-otk-selection=horizontal\]\.otk-selection-item::after\s*\{[^}]*content: "";[^}]*height: 2px;[^}]*margin-inline: 8px;/,
+    /\[data-otk-selection=horizontal\]\.otk-selection-item::after\s*\{[^}]*content: "";[^}]*height: 2px;[^}]*margin-inline: var\(--space-2\);/,
   );
   assertMatch(
     css,

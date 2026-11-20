@@ -6,7 +6,7 @@
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: baseline;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
 }
 .otk-native-parameters dd {
   margin: 0;

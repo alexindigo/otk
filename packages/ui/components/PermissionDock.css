@@ -8,20 +8,20 @@
   overflow-wrap: anywhere;
 }
 .otk-permission-confirm ul {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
 }
 .otk-permission-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-permission-confirm,
 .otk-permission-reject,
 .otk-permission-reject label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-permission-confirm p {
   margin: 0;
@@ -31,9 +31,9 @@
 }
 .otk-rejection-reason {
   flex: 1;
-  min-width: 160px;
+  min-width: calc(160 * var(--otk-unit));
   width: auto;
   border-radius: var(--radius-pill);
-  padding: 4px var(--item-inset);
+  padding: var(--space-1) var(--item-inset);
   background: transparent;
 }

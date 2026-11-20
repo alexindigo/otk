@@ -7,6 +7,7 @@ import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
 import { reveal } from "./collections.ts";
 import { restoreViewport } from "./capture.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 interface Inputs {
   state: TestState;
@@ -600,17 +601,17 @@ export async function surfaces(
                 expect(g.width).toBeLessThanOrEqual(417);
               }
               if (name === "Editor") {
+                const gutter = await cssLength(
+                  page.locator("html"),
+                  "--overlay-gutter",
+                );
                 const bounds = await page.locator("dialog[open]").evaluate(
-                  (el) => {
+                  (el, g) => {
                     const d = el.getBoundingClientRect(),
                       t = el.querySelector("textarea[name=editor]")!
                         .getBoundingClientRect(),
                       f = el.querySelector(".otk-editor footer")!
-                        .getBoundingClientRect(),
-                      g = parseFloat(
-                        getComputedStyle(document.documentElement)
-                          .getPropertyValue("--overlay-gutter"),
-                      );
+                        .getBoundingClientRect();
                     return [
                       d.left - g,
                       innerWidth - d.right - g,
@@ -620,6 +621,7 @@ export async function surfaces(
                       d.bottom - f.bottom,
                     ];
                   },
+                  gutter,
                 );
                 bounds.slice(0, 5).forEach((v) =>
                   expect(v).toBeGreaterThanOrEqual(-1)

@@ -4,7 +4,7 @@
   min-width: 0;
 }
 .otk-record-group {
-  margin-block-end: var(--message-gap, 24px);
+  margin-block-end: var(--message-gap, var(--space-6));
 }
 .otk-record-group-toggle[aria-expanded=true] .otk-record-group-chevron {
   rotate: 90deg;
@@ -22,6 +22,6 @@
 .otk-record-group-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
