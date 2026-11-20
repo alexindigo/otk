@@ -3,7 +3,7 @@ import "./tools/ToolFrame.css" with { type: "text" };
 import "./ActivityGroup.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { ActivityGroup as Group } from "@otk/client";
-import { ChevronIcon } from "./ChromeIcons.tsx";
+import { TreeIcon, TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
@@ -36,61 +36,63 @@ export default function ActivityGroup(props: {
     <section
       class="otk-tool-line otk-record-group"
       data-count={props.group.members.length}
+      data-record-members={JSON.stringify(props.group.members)}
     >
-      <header class="otk-record-group-heading">
-        <Show when={props.group.entity}>
-          {(entity) => (
-            <EntityPill
-              label={entity().label}
-              facts={scopedEntityFacts(session, entity())}
-              onOpen={props.onOpenChild}
-            />
-          )}
-        </Show>
-        <button
-          type="button"
-          class="otk-tool-toggle otk-record-group-toggle"
-          aria-expanded={open() ? "true" : "false"}
-          onClick={() => setOpen(!open())}
-        >
-          <span
-            class="otk-tool-icon otk-record-group-chevron"
-            aria-hidden="true"
-          >
-            <ChevronIcon />
-          </span>
-          <span class="otk-tool-verb otk-control-label">
-            {props.group.title}
-          </span>
-          <Show when={props.group.detail}>
-            <span
-              class="otk-tool-brief otk-control-label"
-              title={props.group.detail}
+      <TreeNode
+        label={props.group.title}
+        outgoing={props.group.direction === "outgoing"}
+        open={open()}
+        onOpen={setOpen}
+        header={() => (
+          <header class="otk-record-group-heading">
+            <TreeIcon />
+            <Show when={props.group.entity}>
+              {(entity) => (
+                <EntityPill
+                  label={entity().label}
+                  facts={scopedEntityFacts(session, entity())}
+                  onOpen={props.onOpenChild}
+                />
+              )}
+            </Show>
+            <button
+              type="button"
+              class="otk-tool-toggle otk-record-group-toggle"
+              aria-expanded={open() ? "true" : "false"}
+              onClick={() => setOpen(!open())}
             >
-              {props.group.detail}
-            </span>
-          </Show>
-          <Show when={props.group.count}>
-            <span class="otk-record-group-count">{props.group.count}</span>
-          </Show>
-          <Show when={props.group.time}>
-            {(time) => (
-              <span
-                class="otk-record-group-time"
-                title={activityTimeRange(
-                  time(),
-                  (value) => new Date(value).toLocaleString(),
-                )}
-              >
-                {activityTimeRange(time(), clock)}
+              <span class="otk-tool-verb otk-control-label">
+                {props.group.title}
               </span>
-            )}
-          </Show>
-        </button>
-      </header>
-      <Show when={open()}>
-        {props.body()}
-      </Show>
+              <Show when={props.group.detail}>
+                <span
+                  class="otk-tool-brief otk-control-label"
+                  title={props.group.detail}
+                >
+                  {props.group.detail}
+                </span>
+              </Show>
+              <Show when={props.group.count}>
+                <span class="otk-record-group-count">{props.group.count}</span>
+              </Show>
+              <Show when={props.group.time}>
+                {(time) => (
+                  <span
+                    class="otk-record-group-time"
+                    title={activityTimeRange(
+                      time(),
+                      (value) => new Date(value).toLocaleString(),
+                    )}
+                  >
+                    {activityTimeRange(time(), clock)}
+                  </span>
+                )}
+              </Show>
+            </button>
+          </header>
+        )}
+        body={props.body}
+      />
     </section>
   );
 }

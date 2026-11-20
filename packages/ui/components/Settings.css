@@ -8,19 +8,19 @@
   min-width: 0;
 }
 .otk-settings-content {
-  padding: 24px;
+  padding: var(--space-6);
 }
 .otk-sidecar-card {
   border: 1px solid var(--muted);
-  padding: 16px;
-  margin: 20px 0;
+  padding: var(--space-4);
+  margin: var(--space-5) 0;
   border-radius: var(--radius-card);
 }
 .otk-sidecar-card > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .otk-sidecar-card h2 {
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
@@ -28,11 +28,11 @@
 }
 .otk-sidecar-card > p {
   color: var(--secondary);
-  margin: 12px 0;
+  margin: var(--space-3) 0;
   overflow-wrap: anywhere;
 }
 .otk-sidecar-auth {
-  margin-top: 20px;
+  margin-top: var(--space-5);
 }
 .otk-settings-server-help {
   max-width: 72ch;

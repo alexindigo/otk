@@ -16,7 +16,9 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   await expect(patch.locator(".otk-tool-toggle")).not.toContainText(
     "apply_patch",
   );
-  await expect(patch.locator(".otk-tool-icon")).not.toHaveText("\u25c7");
+  await expect(
+    patch.locator(".otk-tool-state > .otk-tree-icon .otk-tree-icon-art"),
+  ).not.toHaveText("\u25c7");
   const read = page.locator("[data-tool=read]").filter({ hasText: "beta.ts" });
   await expect(read).toContainText("190");
   await expect(read).toContainText("50");

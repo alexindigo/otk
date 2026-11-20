@@ -2,6 +2,10 @@
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { scaleWire } from "../fixtures/scale-wire.ts";
+import {
+  assertReadDemand,
+  requestReads,
+} from "../fixtures/request-evidence.ts";
 import { sendPrompt } from "../pages/composer.ts";
 import { contextCommand } from "../pages/menus.ts";
 import type { Page } from "@playwright/test";
@@ -351,6 +355,7 @@ test(
               !body.includes("Generate a title for this conversation:");
           }).length
         ).toBeGreaterThan(0);
+      const backgroundStart = frames.length;
       const finished = await createBackground("Background finished"),
         firstHold = await state.queue(["Background working"], "held");
       await page.locator(search).fill("No matching scale title");
@@ -430,6 +435,7 @@ test(
       await expect(page.locator(".otk-right-panel")).toBeHidden();
       await expect(page.locator(".otk-project-sessions")).toHaveCount(0);
       runs.push(await page.evaluate("scale"));
+      const backgroundEnd = frames.length;
       await page.reload();
       await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
         "data-collapsed",
@@ -441,6 +447,11 @@ test(
       await page.locator(`${project} .otk-project-open`).click();
       // Decision 7: blocked attention precedes the exact remembered working session.
       await expect(page).toHaveURL(new RegExp(`/${blocked.id}$`));
+      await expect(page.locator(".otk-permission-dock")).toBeVisible();
+      await expect(page.locator(".otk-permission-dock")).toContainText(
+        "scale_blocked",
+      );
+      const blockedDockEnd = frames.length;
       for (
         const [id, status] of [[finished.id, "finished"], [
           working.id,
@@ -533,21 +544,31 @@ test(
       await page.locator(search).fill("");
       const allCalls = calls();
       expect(allCalls.filter((f) => f.method === "usage.get")).toHaveLength(0);
-      const attention = new Set([finished.id, blocked.id]),
-        attentionReads = allCalls.filter((f) =>
-          f.method === "permission.list" &&
-          attention.has(f.params?.sessionID ?? "")
-        );
-      // Decision 7 opens blocked after reload, demanding its dock in the new window.
-      expect(attentionReads.map((frame) => frame.params!.sessionID)).toEqual([
-        finished.id,
-        blocked.id,
-        blocked.id,
-      ]);
-      const attentionWindows = attentionReads.map((frame) => frame.ref!.window);
-      expect(attentionWindows[0]).toBe(attentionWindows[1]);
-      expect(attentionWindows[2]).not.toBe(attentionWindows[0]);
+      const attention = new Set([finished.id, blocked.id]);
+      const attentionReads = requestReads(
+        frames,
+        [
+          { name: "background", start: backgroundStart, end: backgroundEnd },
+          { name: "reload-blocked", start: backgroundEnd, end: blockedDockEnd },
+          { name: "warm-selected", start: blockedDockEnd, end: frames.length },
+        ],
+        "permission.list",
+        attention,
+      );
       observations.attentionReads = attentionReads;
+      assertReadDemand(attentionReads, "background");
+      assertReadDemand(attentionReads, "reload-blocked", [blocked.id]);
+      assertReadDemand(attentionReads, "warm-selected");
+      const oldWindows = new Set(
+        attentionReads.filter((read) => read.phase === "background").map((
+          read,
+        ) => read.window),
+      );
+      expect(
+        attentionReads.filter((read) => read.phase === "reload-blocked").every((
+          read,
+        ) => !oldWindows.has(read.window)),
+      ).toBe(true);
       let lastHello = -1;
       frames.forEach((e, index) => {
         if (e.direction === "sent" && e.frame.t === "hello") lastHello = index;

@@ -6,6 +6,7 @@ import { prompt as composer } from "../../pages/composer.ts";
 import {
   openWorkLogs,
   prompt,
+  recordToggle,
   revealAcquired,
   toolScript,
 } from "../../pages/transcript.ts";
@@ -50,18 +51,11 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   const records = v2
     ? '[data-native-record="opencode-v2/shell"]'
     : '[data-native-record^="opencode-v1/step-"]';
-  const openRecords = async () => {
-    const closed = page.locator(
-      '.otk-record-group-toggle[aria-expanded="false"]',
-    );
-    while (await closed.count()) await closed.first().click();
-  };
-  await openRecords();
   await revealAcquired(page, records);
   const record = page.locator(records).first();
-  await record.locator("> .otk-tool-state > .otk-tool-toggle").click();
+  await recordToggle(record).click();
   const source = record.locator(".otk-native-source");
-  const toggle = source.locator("> .otk-tool-toggle");
+  const toggle = source.getByRole("button", { name: "Source", exact: true });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   // A closed fold has read nothing and holds no raw source.
   expect(await page.evaluate("window.sourceReads.length")).toBe(0);
@@ -102,21 +96,20 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   // result the transcript owner keeps for this reference.
   await toggle.click();
   await toggle.click();
-  const recordToggle = record.locator("> .otk-tool-state > .otk-tool-toggle");
-  await recordToggle.click();
-  await open(recordToggle);
+  const ownToggle = recordToggle(record);
+  await ownToggle.click();
+  await open(ownToggle);
   await expect(source.locator(".otk-native-preview")).toBeVisible();
   expect(await page.evaluate("window.sourceReads.length")).toBe(1);
   await page.evaluate("sessionStorage.setItem('sourceMode','fail')");
   await page.reload();
   if (!v2) await openWorkLogs(page);
-  await openRecords();
   await revealAcquired(page, records);
   const again = page.locator(records).first();
-  const againToggle = again.locator("> .otk-tool-state > .otk-tool-toggle");
+  const againToggle = recordToggle(again);
   await open(againToggle);
   const failed = again.locator(".otk-native-source");
-  await open(failed.locator("> .otk-tool-toggle"));
+  await open(failed.getByRole("button", { name: "Source", exact: true }));
   const status = failed.locator(".otk-feedback-status");
   await expect(status).toBeVisible();
   // The plugin says why and the next step fits opening a fold.

@@ -14,6 +14,6 @@
   padding: 0;
 }
 .otk-edge-triangle svg {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: calc(16 * var(--otk-unit));
+  block-size: calc(16 * var(--otk-unit));
 }

@@ -7,6 +7,9 @@ import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
 import { reveal } from "./collections.ts";
 import { restoreViewport } from "./capture.ts";
+import { diffHunk, expectDiffHunk } from "../pages/diff.ts";
+import { clipboard, copied, pick } from "../pages/menus.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 interface Inputs {
   state: TestState;
@@ -469,6 +472,11 @@ export async function surfaces(
         await allMarks(cdp, ".otk-project-sessions [data-otk-selection]", 10);
         await allMarks(cdp, ".otk-project-tabs [data-otk-selection]", 3);
         await allMarks(cdp, ".otk-panel-icons [data-otk-selection]", 1);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "hold",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 800, height: 900 });
         await page.locator(".otk-folded-crumbs > button").click();
         await surface(page);
@@ -480,6 +488,11 @@ export async function surfaces(
         );
         await shot(`selection-more-${reduced}-${theme.id}`);
         await close(page);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "release",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 1280, height: 900 });
         await page.keyboard.press("Control+k");
         await allMarks(cdp, ".otk-palette-list [data-otk-selection]", 5);
@@ -600,17 +613,17 @@ export async function surfaces(
                 expect(g.width).toBeLessThanOrEqual(417);
               }
               if (name === "Editor") {
+                const gutter = await cssLength(
+                  page.locator("html"),
+                  "--overlay-gutter",
+                );
                 const bounds = await page.locator("dialog[open]").evaluate(
-                  (el) => {
+                  (el, g) => {
                     const d = el.getBoundingClientRect(),
                       t = el.querySelector("textarea[name=editor]")!
                         .getBoundingClientRect(),
                       f = el.querySelector(".otk-editor footer")!
-                        .getBoundingClientRect(),
-                      g = parseFloat(
-                        getComputedStyle(document.documentElement)
-                          .getPropertyValue("--overlay-gutter"),
-                      );
+                        .getBoundingClientRect();
                     return [
                       d.left - g,
                       innerWidth - d.right - g,
@@ -620,6 +633,7 @@ export async function surfaces(
                       d.bottom - f.bottom,
                     ];
                   },
+                  gutter,
                 );
                 bounds.slice(0, 5).forEach((v) =>
                   expect(v).toBeGreaterThanOrEqual(-1)
@@ -805,6 +819,7 @@ export async function surfaces(
       key: "collapseFileChanges",
       value: false,
     });
+    await clipboard(page);
     for (const theme of themes) {
       await paint(theme);
       for (
@@ -817,14 +832,26 @@ export async function surfaces(
           ["diff", ".otk-diff .otk-diff-text"],
           [
             "hunk",
-            "[data-tool=edit] .otk-diff-content:nth-of-type(2) .otk-diff-text",
+            diffHunk("[data-tool=edit]", 10, 10) + " .otk-diff-text",
           ],
         ]
       ) {
         await reveal(page, selector);
+        if (name === "hunk") {
+          await expectDiffHunk(
+            page,
+            diffHunk("[data-tool=edit]", 10, 10),
+            "const previous = true;",
+            "const current = true;",
+          );
+        }
         await page.locator(selector).first().click({ button: "right" });
         await menuGeometry(page);
         await shot(`menu-source-${name}-${theme.id}`);
+        if (name === "hunk") {
+          await pick(page, "Copy code");
+          await copied(page, "const current = true;");
+        }
         await close(page);
       }
     }

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { treePaths } from "@otk/client";
+import { TreeGuide } from "./Tree.tsx";
 import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
@@ -120,6 +122,14 @@ export default function ProjectSessions(props: {
       : [];
   });
   const byKey = createMemo(() => new Map(rows().map((row) => [row.key, row])));
+  const treeGuides = createMemo(() => {
+    const items = rows();
+    const paths = treePaths(
+      items,
+      (item) => item.kind === "session" ? item.depth : 0,
+    );
+    return new Map(items.map((item, index) => [item.key, paths[index]]));
+  });
   const keys = createMemo(() => rows().map((row) => row.key));
   const merged = (id: string): MergedEntry => {
     const raw = props.entry?.(id),
@@ -333,7 +343,6 @@ export default function ProjectSessions(props: {
                         attributes={{
                           "data-session": row().session.id,
                           "data-status": row().session.status,
-                          style: { "--session-depth": row().depth },
                           title: row().session.title,
                           "aria-description": costDescription(
                             row().session.id,
@@ -363,19 +372,7 @@ export default function ProjectSessions(props: {
                         leading={
                           <span class="otk-session-leading">
                             <Show when={row().depth > 0}>
-                              <span
-                                class="otk-session-indent"
-                                aria-hidden="true"
-                              >
-                                <svg
-                                  class="otk-session-branch"
-                                  viewBox="0 0 20 30"
-                                  fill="none"
-                                  stroke="currentColor"
-                                >
-                                  <path d="M4 0v10a5 5 0 0 0 5 5h7" />
-                                </svg>
-                              </span>
+                              <TreeGuide path={treeGuides().get(key) ?? []} />
                             </Show>
                             <StatusLight
                               small

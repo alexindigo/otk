@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { prompt, revealAcquired } from "../../pages/transcript.ts";
 import type { MessagePage } from "@otk/protocol";
 test.use({ profile: "messages-tools" });
 test("messages.native-newest10-offpage-undo-cursors-live-reload", {
@@ -242,11 +242,8 @@ test(
       // existing 102 text segments and 101 between-text tool groups.
     ).toHaveAttribute("data-acquired-count", "205");
     if (state.controller.info!.version.startsWith("2.")) {
-      // WP1 admits even a singleton as a stable span. Inspect its retained source
-      // through both public disclosure levels rather than assuming a bare row.
-      const activity = page.locator(".otk-record-group").first();
-      await activity.locator("button").first().click();
-      await activity.locator(".otk-record-group button").first().click();
+      // A singleton remains bare; retained spans disclose by record identity.
+      await revealAcquired(page, '[data-native-record="opencode-v2/idle"]');
       await expect(page.locator('[data-native-record="opencode-v2/idle"]'))
         .toBeVisible();
     }

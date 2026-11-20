@@ -74,3 +74,19 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
     ]
   ) assertEquals(isPreference("shellLayout", value), false);
 });
+Deno.test("project expansion preferences accept booleans only", () => {
+  const base = DEFAULT_PREFS.shellLayout;
+  assertEquals(
+    isPreference("shellLayout", {
+      ...base,
+      projectCollapsed: { '["local","/repo"]': true },
+    }),
+    true,
+  );
+  for (const projectCollapsed of [null, [], { repo: "true" }, false]) {
+    assertEquals(
+      isPreference("shellLayout", { ...base, projectCollapsed }),
+      false,
+    );
+  }
+});

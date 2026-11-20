@@ -14,7 +14,7 @@ export type PreferenceControl =
     readonly offValue?: boolean | string;
   }
   | {
-    readonly kind: "select";
+    readonly kind: "select" | "segmented";
     readonly options: readonly {
       readonly value: string;
       readonly label: string;
@@ -83,7 +83,7 @@ export class PreferenceRegistry {
       }
       return Object.freeze({
         ...value,
-        control: control.kind === "select"
+        control: control.kind !== "toggle"
           ? Object.freeze({
             ...control,
             options: Object.freeze(

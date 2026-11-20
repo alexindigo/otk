@@ -93,6 +93,25 @@ test("messages.edit-write-patch-native-files-geometry", {
   await page.locator(".otk-session-view").evaluate((element) =>
     (element as HTMLElement).style.setProperty("--lane-width", "1600px")
   );
+  // Auto mode belongs to the diff's available width, not its pane or tree depth.
+  const splitViewport = await diff.evaluate((element) =>
+    Math.ceil(
+      innerWidth +
+        parseFloat(
+          getComputedStyle(element).getPropertyValue("--diff-split-min"),
+        ) -
+        element.getBoundingClientRect().width + 1,
+    )
+  );
+  await page.setViewportSize({ width: splitViewport, height: 800 });
+  await expect.poll(() =>
+    diff.evaluate((element) =>
+      element.getBoundingClientRect().width >=
+        parseFloat(
+          getComputedStyle(element).getPropertyValue("--diff-split-min"),
+        )
+    )
+  ).toBe(true);
   await expect(diff).toHaveAttribute("data-diff-style", "split");
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
