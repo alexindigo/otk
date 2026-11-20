@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-migrated-history" });
 test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   tag: ["@messages", "@contracts"],
@@ -11,6 +11,7 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   await openSession(state, page, "tstv1-otk");
   await openWorkLogs(page);
   const patch = page.locator("[data-tool=patch]");
+  await revealAcquired(page, "[data-tool=patch]");
   await expect(patch).toHaveCount(1);
   await expect(patch.locator(".otk-tool-toggle")).not.toContainText(
     "apply_patch",

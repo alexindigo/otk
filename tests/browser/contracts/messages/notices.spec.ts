@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { revealAcquired } from "../../pages/transcript.ts";
 test.describe("V1 records", () => {
   test.use({ profile: "contract-messages-v1-notices" });
   test("messages.running-record-progress-survives-queued-prompt", {
@@ -227,6 +228,7 @@ test.describe("V2 records", () => {
       await page.setViewportSize({ width: 1280, height: 1600 });
       await openSession(state, page, "tstv1-otk");
       const system = page.locator('[data-native-record="opencode-v2/system"]');
+      await revealAcquired(page, '[data-native-record="opencode-v2/system"]');
       await expect(system).toContainText("System");
       await expect(system).toContainText("Instructions updated: codemode");
       const failed = page.locator(
@@ -267,9 +269,11 @@ test.describe("V2 records", () => {
       const rows = await failed.locator(".otk-native-parameters").evaluate((
         list,
       ) =>
-        Array.from(list.querySelectorAll("dt")).map((dt) => {
+        Array.from(list.querySelectorAll(":scope > dt")).map((dt) => {
           const label = dt.getBoundingClientRect(),
-            value = dt.nextElementSibling!.querySelector(".otk-native-value")!
+            value = dt.nextElementSibling!.querySelector(
+              ".otk-native-value, .otk-entity-pill",
+            )!
               .getBoundingClientRect();
           return {
             left: value.left,

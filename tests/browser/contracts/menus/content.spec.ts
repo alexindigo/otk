@@ -101,7 +101,7 @@ test("menus.content-targets-complete-source-code-hunks-and-feature-tools", {
   await pick(page, "Copy code");
   await copied(page, "// keep\nconst newValue = 2;");
   await open(
-    "[data-tool=edit] .otk-diff-content:nth-of-type(2) .otk-diff-text",
+    "[data-tool=edit] .otk-scroll-frame:nth-of-type(2) .otk-diff-content .otk-diff-text",
   );
   await pick(page, "Copy code");
   await copied(page, "const current = true;");
