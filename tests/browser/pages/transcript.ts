@@ -379,57 +379,167 @@ export async function runNativeTool(
   return result!;
 }
 
-/** Reveal an acquired row through the actual measured scroll surface. */
+/** Join publication, disclose identity-owned ancestry, then measured scrolling. */
 export async function revealAcquired(page: Page, selector: string) {
-  await page.evaluate(() =>
-    new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve))
-    )
-  );
-  const probe = () =>
-    page.locator(".otk-messages").evaluate(async (pane, selector) => {
-      // A scroll notification precedes nested virtual-window installation. Join
-      // the measured range (including mounted identities), not only the wheel's
-      // scrollend, before treating an absent selector as an exhausted range.
-      await document.fonts.ready;
-      let previous = "", stable = 0;
-      while (stable < 5) {
-        await new Promise(requestAnimationFrame);
-        const next = JSON.stringify([
-          pane.scrollTop,
-          pane.clientHeight,
-          pane.scrollHeight,
-          pane.getAttribute("aria-busy"),
+  const identity =
+    /\[data-(message|native-record|tool)(\^?=)(?:"([^"]+)"|'([^']+)'|([^\]]+))\]/
+      .exec(selector);
+  let messageID: string | undefined;
+  if (identity) {
+    await expect.poll(async () => {
+      const publishedID = await page.evaluate(
+        ({ kind, prefix, value, selector }) => {
+          const mounted = document.querySelector(selector)?.closest<
+            HTMLElement
+          >(
+            "[data-message]",
+          );
+          if (mounted) return mounted.dataset.message;
+          const messages = (globalThis as typeof globalThis & {
+            transcriptPublication?: Map<
+              string,
+              import("@otk/protocol").Message
+            >;
+          }).transcriptPublication;
+          return [...messages?.values() ?? []].find((message) =>
+            message.parts.length > 0 && (
+              kind === "message"
+                ? message.id === value
+                : message.parts.some((part) => {
+                  const name =
+                    kind === "native-record" && part.kind === "external"
+                      ? part.name
+                      : kind === "tool" && part.kind === "tool"
+                      ? part.call.tool
+                      : undefined;
+                  return name !== undefined &&
+                    (prefix ? name.startsWith(value) : name === value);
+                })
+            )
+          )?.id;
+        },
+        {
+          kind: identity[1],
+          prefix: identity[2] === "^=",
+          value: identity[3] ?? identity[4] ?? identity[5],
+          selector,
+        },
+      );
+      // A tool kind is not its identity (read/list/glob all share typed kinds).
+      // Pin it only once the complete selector identifies a mounted record.
+      if (identity[1] !== "tool") messageID = publishedID;
+      return publishedID;
+    }, { message: "Browser publication of " + selector }).toBeTruthy();
+  }
+  const probe = async () => {
+    const measured = await page.locator(".otk-messages").evaluate(
+      async (pane, { selector, messageID }) => {
+        // A scroll notification precedes nested virtual-window installation. Join
+        // the measured range (including mounted identities), not only the wheel's
+        // scrollend, before treating an absent selector as an exhausted range.
+        await document.fonts.ready;
+        const position = pane.id
+          ? document.querySelector<HTMLElement>(
+            `[role="scrollbar"][aria-controls="${
+              CSS.escape(pane.id)
+            }"][aria-orientation="vertical"]`,
+          )
+          : null;
+        let previous = "", stable = 0;
+        while (stable < 5) {
+          await new Promise(requestAnimationFrame);
+          const next = JSON.stringify([
+            pane.scrollTop,
+            pane.clientHeight,
+            pane.scrollHeight,
+            pane.getAttribute("aria-busy"),
+            position?.getAttribute("aria-valuemax"),
+            position?.getAttribute("aria-valuenow"),
+            Array.from(
+              pane.querySelectorAll("[data-virtual-key]"),
+              (e) => e.getAttribute("data-virtual-key"),
+            ),
+          ]);
+          stable =
+            pane.getAttribute("aria-busy") === "false" && next === previous
+              ? stable + 1
+              : 0;
+          previous = next;
+        }
+        // The group declares its membership; no assumed outer/inner wrapper count.
+        // Clicking the control keeps retained disclosure choices with their owner.
+        const disclosure = (group: HTMLElement) =>
           Array.from(
-            pane.querySelectorAll("[data-virtual-key]"),
-            (e) => e.getAttribute("data-virtual-key"),
+            group.querySelectorAll<HTMLElement>(".otk-record-group-toggle"),
+          ).find((button) => button.closest("[data-record-members]") === group);
+        const ancestor = Array.from(
+          pane.querySelectorAll<HTMLElement>("[data-record-members]"),
+        ).find((group) => {
+          const members: string[] = JSON.parse(group.dataset.recordMembers!);
+          return messageID &&
+            (members.includes(messageID) ||
+              members.includes("reply:" + messageID)) &&
+            disclosure(group)?.getAttribute("aria-expanded") === "false";
+        });
+        if (ancestor) {
+          disclosure(ancestor)!.click();
+          return {
+            top: pane.scrollTop,
+            height: pane.clientHeight,
+            end: pane.scrollHeight - pane.clientHeight,
+            messageID,
+            disclosed: true,
+          };
+        }
+        const element = Array.from(pane.querySelectorAll(selector)).find((
+            element,
+          ) =>
+            !messageID ||
+            element.closest("[data-message]")?.getAttribute("data-message") ===
+              messageID
           ),
-        ]);
-        stable = pane.getAttribute("aria-busy") === "false" && next === previous
-          ? stable + 1
-          : 0;
-        previous = next;
-      }
-      const element = pane.querySelector(selector),
-        viewport = pane.getBoundingClientRect(),
-        rect = element?.getBoundingClientRect();
-      return {
-        top: pane.scrollTop,
-        height: pane.clientHeight,
-        end: pane.scrollHeight - pane.clientHeight,
-        delta: rect
+          viewport = pane.getBoundingClientRect(),
+          rect = element?.getBoundingClientRect();
+        const end = position
+          ? Number(position.getAttribute("aria-valuemax"))
+          : pane.scrollHeight - pane.clientHeight;
+        const delta = rect
           ? rect.top >= viewport.top && rect.bottom <= viewport.bottom
             ? 0
             : rect.top + Math.min(rect.height, pane.clientHeight) / 2 -
               viewport.top - pane.clientHeight / 2
-          : undefined,
-      };
-    }, selector);
+          : undefined;
+        return {
+          top: pane.scrollTop,
+          height: pane.clientHeight,
+          end,
+          messageID:
+            element?.closest("[data-message]")?.getAttribute("data-message") ??
+              undefined,
+          rect: rect
+            ? { top: rect.top, bottom: rect.bottom, height: rect.height }
+            : undefined,
+          viewport: { top: viewport.top, bottom: viewport.bottom },
+          delta: delta === undefined
+            ? undefined
+            : Math.max(0, Math.min(end, pane.scrollTop + delta)) -
+              pane.scrollTop,
+        };
+      },
+      { selector, messageID },
+    );
+    // Virtual overscan changes the first mounted match after a wheel. The
+    // acquired record identity stays fixed while its geometry settles.
+    messageID ??= measured.messageID;
+    return measured;
+  };
   let state = await probe();
+  while (state.disclosed) state = await probe();
   if (state.delta === undefined) {
     // Estimated extents can grow while nested sources materialize.
     await scrollTranscript(page, false);
     state = await probe();
+    while (state.disclosed) state = await probe();
   }
   while (state.delta === undefined) {
     if (state.top >= state.end) {
@@ -437,8 +547,18 @@ export async function revealAcquired(page: Page, selector: string) {
     }
     await wheelTranscript(page, state.height);
     state = await probe();
+    while (state.disclosed) state = await probe();
   }
   if (Math.abs(state.delta) >= 1) await wheelTranscript(page, state.delta);
+  await expect.poll(async () => {
+    state = await probe();
+    return state.delta === undefined ? Infinity : Math.abs(state.delta);
+  }).toBeLessThan(1).catch((cause) => {
+    throw new Error(
+      "Measured reveal did not settle: " + JSON.stringify(state),
+      { cause },
+    );
+  });
 }
 
 const v2 = (state: TestState) =>
@@ -465,8 +585,8 @@ export function shellOutput(
 ): Locator {
   return page.locator(shellRun(state, status)).locator(
     v2(state)
-      ? ":scope > .otk-tool-body > .otk-text"
-      : ":scope > .otk-tool-body > .otk-tool-output",
+      ? ".otk-tool-body > .otk-text"
+      : ".otk-tool-body > .otk-tool-output",
   );
 }
 
@@ -474,13 +594,16 @@ export function shellOutput(
  * then use its header toggle (never its nested Source fold). */
 export async function openRecord(page: Page, selector: string) {
   await revealAcquired(page, selector);
-  const toggle = page.locator(
-    `${selector} > .otk-tool-state > .otk-tool-toggle`,
-  ).first();
+  const toggle = recordToggle(page.locator(selector).first());
   if (await toggle.getAttribute("aria-expanded") !== "true") {
     await toggle.click();
   }
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
+/** A record owns its state control; tree labels do not own disclosure. */
+export function recordToggle(record: Locator) {
+  return record.locator(".otk-tool-state > .otk-tool-toggle").first();
 }
 
 /** Plugin-owned compaction boundaries, with each harness's lifecycle wording. */
@@ -539,7 +662,7 @@ export async function expectCompactionSummary(
   const { selector } = compactionBoundary(state);
   await expect.poll(async () => {
     for (const row of await page.locator(selector).all()) {
-      const toggle = row.locator("> .otk-tool-state > .otk-tool-toggle");
+      const toggle = recordToggle(row);
       if (await toggle.getAttribute("aria-expanded") !== "true") {
         await toggle.click();
       }
