@@ -80,6 +80,12 @@ appear through registered global surfaces with project attention. They never
 acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
+Permission-not-found/already-settled tags and definite permission HTTP 404s
+retire the same pending identity as settled elsewhere. Later callers do not
+dispatch retired or unknown identities. Settlement barriers last for the pending
+owner's lifetime; stale inventories and events cannot resurrect them after a
+fixed number of newer settlements.
+
 Each successful kind/location inventory owns only its own absence facts. Failed
 inventories retain known unresolved identities and payloads for still-loaded
 directories but stale identities never drive needs-you. Failures publish safe

@@ -9,6 +9,8 @@ import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { IndexStore, RpcRegistry } from "../../../core/mod.ts";
 import { fixture } from "../../support/config.ts";
 import { waitFor } from "../../support/opencode.ts";
+import { V2Client } from "../../../packages/harness-opencode-v2-server/client.ts";
+import { V2Pending } from "../../../packages/harness-opencode-v2-server/pending.ts";
 
 const entry = (id: string, parentID?: string): IndexEntry => ({
   id,
@@ -29,6 +31,118 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
   },
 });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test("native permission 404 retires automatic reply through resync and snapshot replacement", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
+  const store = new PermissionStore(db), index = new IndexStore();
+  const root = "opcv2-ses_root", location = { directory: "/owned" };
+  const request = {
+    id: "per_gone",
+    sessionID: "ses_root",
+    action: "read",
+    resources: ["file.ts"],
+  };
+  let posts = 0;
+  const client = new V2Client(
+    { endpoint: { url: "http://localhost:4000" }, pid: 1, version: "2.2.6" },
+    1000,
+    new AbortController().signal,
+    () => {
+      posts++;
+      return Promise.resolve(
+        Response.json({ message: "settled elsewhere" }, { status: 404 }),
+      );
+    },
+  );
+  const pending = new V2Pending(
+    () => client,
+    (id) => index.getMetadata(id),
+    () => {},
+  );
+  const feature = new PermissionFeature(store, index, pending.permissions);
+  try {
+    pending.acceptPermission(location, request);
+    store.setAuto(root, true);
+    index.reset([entry(root)]);
+    await waitFor(() => pending.settled("permission", request.id), Boolean);
+    for (let n = 0; n < 4; n++) {
+      pending.replacePermissions(location, [request]);
+      pending.acceptPermission(location, request);
+      feature.connection("reconnecting");
+      index.reset([entry(root)]);
+      feature.connection("connected");
+      await tick();
+    }
+    assertEquals(await pending.permissions.listPermissions(root), []);
+    assertEquals(posts, 1);
+    assertEquals(store.list([root], undefined, 100).length, 1);
+  } finally {
+    feature.close();
+    db.close();
+  }
+});
+
+test("proven undispatched retries back off, survive snapshots and stop after three attempts", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
+  const store = new PermissionStore(db), index = new IndexStore();
+  const request: PermissionRequest = {
+    id: "retry-bound",
+    sessionID: "tstv1-root",
+    kind: "read",
+    title: "Read",
+    time: 1,
+    patterns: ["file.ts"],
+    alwaysPatterns: [],
+    detail: { kind: "generic", summary: "file.ts" },
+  };
+  const times: number[] = [];
+  const feature = new PermissionFeature(store, index, {
+    listPermissions: () => Promise.resolve([request]),
+    replyPermission: () => {
+      times.push(Date.now());
+      return Promise.reject(
+        new OperationFailure(
+          "unavailable",
+          "native.unavailable",
+          new Error("not dispatched"),
+        ),
+      );
+    },
+  });
+  try {
+    store.setAuto(request.sessionID, true);
+    index.reset([entry(request.sessionID)]);
+    await waitFor(() => times.length, (n) => n === 1);
+    for (let n = 0; n < 3; n++) {
+      feature.connection("reconnecting");
+      index.reset([entry(request.sessionID)]);
+      feature.connection("connected");
+      await tick();
+    }
+    assertEquals(
+      times.length,
+      1,
+      "Publication and readiness cannot bypass backoff",
+    );
+    await waitFor(() => times.length, (n) => n === 3);
+    assertEquals(times[1] - times[0] >= 250, true);
+    assertEquals(times[2] - times[1] >= 1000, true);
+    for (let n = 0; n < 3; n++) {
+      feature.connection("reconnecting");
+      index.reset([entry(request.sessionID)]);
+      feature.connection("connected");
+      await tick();
+    }
+    assertEquals(times.length, 3);
+  } finally {
+    feature.close();
+    db.close();
+  }
+});
 
 test("startup pending permission waits for native readiness and is answered exactly once", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations], {
@@ -218,7 +332,7 @@ test("uncertain automatic delivery is never retried after reconnect", async () =
   }
 });
 
-test("automatic refusal is attempted once across unrelated changes; changed requests and explicit index replacements permit retry", async () => {
+test("automatic refusal is attempted once per identity across changed details, absence and index replacements", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations], {
     busyms: 5000,
   });
@@ -233,11 +347,11 @@ test("automatic refusal is attempted once across unrelated changes; changed requ
     alwaysPatterns: [],
     detail: { kind: "bash", command: "printf exact" },
   };
-  let attempts = 0, lists = 0;
+  let attempts = 0, lists = 0, present = true;
   const feature = new PermissionFeature(store, index, {
     listPermissions: () => {
       lists++;
-      return Promise.resolve([request]);
+      return Promise.resolve(present ? [request] : []);
     },
     replyPermission: () => {
       attempts++;
@@ -283,19 +397,23 @@ test("automatic refusal is attempted once across unrelated changes; changed requ
       detail: { kind: "bash", command: "printf changed" },
     };
     index.upsert(entry("tstv1-root"));
-    await waitFor(
-      () => store.list(["tstv1-root"], undefined, 101).length,
-      (n) => n === 2,
-    );
     await tick();
-    assertEquals(attempts, 2);
+    assertEquals(attempts, 1);
     index.reset([entry("tstv1-root")]);
-    await waitFor(
-      () => store.list(["tstv1-root"], undefined, 101).length,
-      (n) => n === 3,
-    );
     await tick();
-    assertEquals(attempts, 3);
+    assertEquals(attempts, 1);
+    present = false;
+    index.upsert(entry("tstv1-root"));
+    await tick();
+    present = true;
+    index.reset([entry("tstv1-root")]);
+    feature.connection("reconnecting");
+    feature.connection("connected");
+    await tick();
+    assertEquals(attempts, 1);
+    request = { ...request, id: "new-identity" };
+    index.upsert(entry("tstv1-root"));
+    await waitFor(() => attempts, (n) => n === 2);
   } finally {
     feature.close();
     db.close();
