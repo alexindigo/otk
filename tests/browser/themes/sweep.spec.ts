@@ -13,6 +13,7 @@ import { nativeStates } from "./native-states.ts";
 import { supplemental } from "./supplemental.ts";
 import { capture, restoreViewport } from "./capture.ts";
 import { stripGeometry } from "../pages/task-strip.ts";
+import { assertCrumbCoverage } from "../pages/crumbs.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -20,10 +21,8 @@ interface Theme {
   mode: string;
   colors: Record<string, string>;
 }
-const ids = Array.from(
-  { length: 12 },
-  (_, i) => i ? `tstv1-visual-${i}` : "tstv1-otk",
-);
+const ids = Array.from({ length: 11 }, (_, i) => `tstv1-visual-${i + 1}`)
+  .concat("tstv1-otk");
 async function settled(page: Page) {
   await page.evaluate(() =>
     document.fonts.ready.then(() =>
@@ -1099,6 +1098,11 @@ test(
               "time",
             );
             await shot(`timeline-${theme.id}-1280`);
+            await state.controller.call("scenario", {
+              lease: state.lease.lease,
+              action: "hold",
+              sessionID: "tstv1-crumb-path",
+            });
             await state.product("layout.patch", { rightView: "sessions" });
             await layout(state, page, true, true);
             for (const zoom of [1, 2]) {
@@ -1181,9 +1185,14 @@ test(
             ).evaluateAll((els) =>
               els.map((el) => el.getAttribute("data-overflow-target")!)
             );
-            expect(omitted).toEqual(ids.filter((id) => !shown.includes(id)));
+            assertCrumbCoverage(ids, shown, omitted);
             await shot(`more-${theme.id}-800`);
             await page.keyboard.press("Escape");
+            await state.controller.call("scenario", {
+              lease: state.lease.lease,
+              action: "release",
+              sessionID: "tstv1-crumb-path",
+            });
             await page.setViewportSize({ width: 1280, height: 900 });
           });
         }
@@ -1251,7 +1260,7 @@ test(
             await page.evaluate(
               `styleTest.lists(${
                 JSON.stringify(members)
-              },'session-4','session-7')`,
+              },'session-9','session-7')`,
             );
             const edit = page.locator('[data-crumb="session-7"] input');
             await expect(edit).toHaveValue("session-7");
@@ -1263,7 +1272,7 @@ test(
                 )
               );
             const shown = await visible();
-            expect(shown).toContain("session-4");
+            expect(shown).toContain("session-9");
             expect(shown).toContain("session-7");
             expect(shown.length).toBeLessThan(members.length);
             expect(

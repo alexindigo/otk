@@ -144,6 +144,8 @@ export default function Diff(
           <ScrollRegion
             axis="x"
             class="otk-diff-content"
+            data-hunk-old-start={hunk().oldStart}
+            data-hunk-new-start={hunk().newStart}
             ref={contextTarget(() => ({
               kind: "diff",
               data: {

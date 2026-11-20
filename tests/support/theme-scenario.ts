@@ -565,6 +565,22 @@ export async function themeScenario() {
             directory: native.oc.directory,
           });
         case "scenario": {
+          if (
+            ["hold", "release"].includes(frame.params.action) &&
+            frame.params.sessionID === "tstv1-crumb-path"
+          ) {
+            // WP3 trails are selected ancestry; idle task siblings are not crumbs.
+            const held = frame.params.action === "hold";
+            for (let n = 1; n < 12; n++) {
+              f.update(`tstv1-visual-${n}`, {
+                parentID: held && n > 1 ? `tstv1-visual-${n - 1}` : undefined,
+              });
+            }
+            f.update(base.id, {
+              parentID: held ? "tstv1-visual-11" : undefined,
+            });
+            return null;
+          }
           if (frame.params.sessionID === "tstv1-native-interrupt") {
             native.fake.queueHeld({ chunks: ["continuing "] });
             await nc.rpc("session.prompt", {

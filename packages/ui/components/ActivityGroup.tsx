@@ -36,6 +36,7 @@ export default function ActivityGroup(props: {
     <section
       class="otk-tool-line otk-record-group"
       data-count={props.group.members.length}
+      data-record-members={JSON.stringify(props.group.members)}
     >
       <TreeNode
         label={props.group.title}
