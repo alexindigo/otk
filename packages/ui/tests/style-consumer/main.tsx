@@ -74,6 +74,7 @@ const scenes = {
   "feedback-stability": () => import("./feedback-stability.tsx"),
   "command-failures": () => import("./command-failures.tsx"),
   "error-surfaces": () => import("./error-surfaces.tsx"),
+  "failure-layout": () => import("./failure-layout.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

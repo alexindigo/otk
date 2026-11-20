@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FailurePresentation, Feedback } from "@otk/client";
-import { Show } from "solid-js";
-import { ChevronIcon } from "./ChromeIcons.tsx";
-import { ControlIcon } from "./ControlValue.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import { createSignal, Show } from "solid-js";
+import { TreeNode } from "./Tree.tsx";
+import Clock from "./Clock.tsx";
+import FailureSignal from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import "./FailureContent.css" with { type: "text" };
 
@@ -14,10 +14,15 @@ export default function FailureContent(props: {
   onReveal?(messageID: string): void;
   compact?: boolean;
   time?: number;
+  /** The surrounding row already supplies the action and target heading. */
+  placement?: "record";
+  /** A containing surface may own the failure signal on its outer edge. */
+  signal?: boolean;
   /** Compatibility with single-line feedback tracks. */
   inline?: boolean;
 }) {
   const compact = () => props.compact || props.inline;
+  const [open, setOpen] = createSignal(false);
   const reason = () => (
     <div class="otk-failure-body">
       <p class="otk-failure-reason">{props.failure.reason}</p>
@@ -43,66 +48,59 @@ export default function FailureContent(props: {
     </div>
   );
   return (
-    <div
-      class={["otk-failure-content", {
-        "is-compact": compact(),
-        "is-informational": props.failure.tone === "info",
-        "is-reference": !!props.failure.reference,
-      }]}
+    <FailureSignal
+      as="div"
+      enabled={props.signal !== false && !props.failure.reference}
+      informational={props.failure.tone === "info"}
+      class={[
+        "otk-failure-content",
+        compact() ? "is-compact" : "",
+        props.failure.reference ? "is-reference" : "",
+      ].filter(Boolean).join(" ")}
     >
       <Show
         when={props.failure.reference}
         fallback={
           <>
-            <div class="otk-failure-heading">
-              <strong class="otk-control-label" title={props.failure.heading}>
-                {props.failure.heading}
-              </strong>
-              <Show when={props.failure.target.label}>
-                <Show
-                  when={props.failure.target.href}
-                  fallback={
-                    <span
-                      class="otk-failure-target otk-control-label"
-                      title={props.failure.target.label}
-                    >
-                      {props.failure.target.label}
-                    </span>
-                  }
-                >
-                  <a
-                    class="otk-failure-target otk-control-label"
-                    href={props.failure.target.href}
-                    title={props.failure.target.label}
+            <Show when={props.placement !== "record"}>
+              <div class="otk-failure-heading">
+                <Show when={props.placement !== "record"}>
+                  <strong
+                    class="otk-control-label"
+                    title={props.failure.heading}
                   >
-                    {props.failure.target.label}
-                  </a>
-                </Show>
-              </Show>
-              <Show
-                when={props.time === undefined
-                  ? undefined
-                  : new Date(props.time)}
-              >
-                {(time) => (
-                  <ChromeMeta class="otk-failure-time otk-control-label">
-                    <time
-                      datetime={time().toISOString()}
-                      title={time().toLocaleString(undefined, {
-                        timeZoneName: "short",
-                      })}
+                    {props.failure.heading}
+                  </strong>
+                  <Show when={props.failure.target.label}>
+                    <Show
+                      when={props.failure.target.href}
+                      fallback={
+                        <span
+                          class="otk-failure-target otk-control-label"
+                          title={props.failure.target.label}
+                        >
+                          {props.failure.target.label}
+                        </span>
+                      }
                     >
-                      {time().toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                  </ChromeMeta>
-                )}
-              </Show>
-            </div>
+                      <a
+                        class="otk-failure-target otk-control-label"
+                        href={props.failure.target.href}
+                        title={props.failure.target.label}
+                      >
+                        {props.failure.target.label}
+                      </a>
+                    </Show>
+                  </Show>
+                </Show>
+                <Show when={props.time !== undefined}>
+                  <Clock
+                    at={props.time!}
+                    class="otk-failure-time otk-control-label"
+                  />
+                </Show>
+              </div>
+            </Show>
             <div class="otk-failure-main-reason">{reason()}</div>
             <Show when={props.failure.count > 1}>
               <span class="otk-failure-count">
@@ -114,6 +112,7 @@ export default function FailureContent(props: {
               <Show when={props.action}>
                 {(action) => (
                   <button
+                    class="otk-failure-action"
                     type="button"
                     onClick={() => action().run()}
                   >
@@ -121,18 +120,34 @@ export default function FailureContent(props: {
                   </button>
                 )}
               </Show>
-              <details class="otk-failure-details">
-                <summary>
-                  <ControlIcon>
-                    <ChevronIcon />
-                  </ControlIcon>
-                  <span>Details</span>
-                </summary>
-                <ScrollRegion axis="y" class="otk-failure-detail-body">
-                  <div class="otk-failure-disclosed-reason">{reason()}</div>
-                  {diagnostic()}
-                </ScrollRegion>
-              </details>
+              <TreeNode
+                class="otk-failure-details"
+                label="Failure details"
+                open={open()}
+                onOpen={setOpen}
+                header={() => (
+                  <button
+                    type="button"
+                    class="otk-failure-detail-toggle"
+                    aria-expanded={open() ? "true" : "false"}
+                    onClick={() => setOpen(!open())}
+                  >
+                    Details
+                  </button>
+                )}
+                body={() => (
+                  <ScrollRegion axis="y" class="otk-failure-detail-body">
+                    <div class="otk-failure-disclosed-reason">{reason()}</div>
+                    <Show
+                      when={props.placement === "record" &&
+                        props.time !== undefined}
+                    >
+                      <Clock at={props.time!} class="otk-failure-time" />
+                    </Show>
+                    {diagnostic()}
+                  </ScrollRegion>
+                )}
+              />
             </div>
           </>
         }
@@ -152,6 +167,6 @@ export default function FailureContent(props: {
           </a>
         )}
       </Show>
-    </div>
+    </FailureSignal>
   );
 }

@@ -127,7 +127,7 @@ export class FailurePresenter {
     const informational = !pending && enrichment?.kind === "info";
     const heading = pending
       ? `Checking whether ${action} finished`
-      : informational
+      : informational || /(?:^|\s)failed[.!]?$/i.test(action)
       ? action
       : `${action} failed`;
     // Retry policy classifies execution, not advice. Only an owner that knows

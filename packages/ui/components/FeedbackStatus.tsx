@@ -18,6 +18,7 @@ export default function FeedbackStatus(props: {
   singleLine?: boolean;
   compact?: boolean;
   time?: number;
+  placement?: "record";
   onReveal?(messageID: string): void;
 }): Element {
   const feedback = () => errorFeedback(props.feedback ?? props.error);
@@ -49,6 +50,7 @@ export default function FeedbackStatus(props: {
               inline={props.singleLine}
               compact={props.compact}
               time={props.time}
+              placement={props.placement}
               action={feedback()?.action}
               onReveal={props.onReveal}
             />

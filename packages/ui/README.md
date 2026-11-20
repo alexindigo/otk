@@ -144,22 +144,29 @@ FailureContent renders recovery only when the action/cause owner supplies it. An
 absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
 
-FailureContent owns the action/target heading, neutral reason and recovery text,
-available action and initially collapsed Details disclosure. Error colour is a
-leading border, never paragraph paint. Compact callers and containers at or
-below 320px show the heading and controls, with complete reasons inside Details.
-The shared ScrollRegion bounds expanded details; target labels and diagnostic
-IDs truncate with full-value titles. FeedbackStatus normalizes text-only errors
-through the client presenter too. ConnectionStatus adapts retained connection
-facts for Settings and server listings; the sidebar footer gives it a full-width
-row below the connection control, never a flex column beside the server name.
+FailureContent owns the neutral reason and recovery text, available action and
+initially collapsed TreeNode Details disclosure. Its record placement borrows
+the surrounding row's action/target heading rather than repeating it. Standalone
+feedback retains its heading. All content and action text share the same inset;
+the TreeNode junction occupies its own track. Error colour belongs to the shared
+FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
+its surface edge. Compact callers and containers at or below 320px show the
+heading and controls, with complete reasons inside Details. The shared
+ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
+with full-value titles. FeedbackStatus normalizes text-only errors through the
+client presenter too. ConnectionStatus owns the single connection state line;
+ConnectionBadge supplies only the lamp and server label. Quiet connection copy
+borrows ChromeMeta. The sidebar gives it the server label's grid track below the
+connection control, never a separate left edge.
 
 Failure records contribute their public failure through the part registry. The
 reply's legacy assistant error is a fallback only when its retained execution
 record is absent, so a quota reason is rendered once without prose matching.
-Producer-supplied known outcomeTime values render as plain ChromeMeta beside the
-heading; unknown or absent clocks stay absent. Record observation time is not a
-substitute. This does not compute run timing or change footer timing evidence.
+Producer-supplied known outcomeTime values render through the shared Clock
+(ChromeMeta, local hour and minute, full date/zone on hover). The reply footer
+owns its outcome instant; a failure block omits that same instant. Unknown or
+absent clocks stay absent. Record observation time is not a substitute. This
+does not compute run timing or change footer timing evidence.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
@@ -624,39 +631,41 @@ changes that track. RecordList owns record spacing and supplies topology to the
 shared Tree; views borrow canonical span identities and retained disclosure
 state rather than regrouping mounted neighbours. Background intervals share one
 outer conversation gap and compact internal record rhythm, including actionable
-breakouts. Their folded line is plain muted meta text with producer-owned
-counts, no Activity prefix or time range. Successful completion-only intervals
-borrow a footer junction instead of adding a status row; direct reveal opens the
-same retained interval. Read-only helper transcripts mount those same attention
-owners; only prompt submission is unavailable. With no active takeover, helpers
-mount no empty composer. That same owner provides composer availability to
-takeover headers, so draft-kept copy appears only when the open session offers a
-composer. Permission docks and notifications share RequestAge presentation and
-the client's requestIdle formatter/resumption threshold, using the asking
-session's activity clock rather than request age. Permission and question
-surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
-a common blocked-light header. Consumer-supplied session location names the
-project/task; question tabs/options use shared underline/pointer primitives.
-Static keyboard hints are in titles, Keys and the palette, not the surface.
-Question step/collapse changes focus a visible option or review action; leaving
-an own-answer field focuses Answer. Arrival does not focus an answer action.
-Takeover layout sections are programmatic-only landmarks, not Tab stops. The
-prompt restores its own input when a takeover releases focus to the document,
-while preserving focus the reader moved elsewhere. Shared focus paint admits
-semantic controls and explicitly marked visible content (message/date reveals),
-never layout wrappers or programmatic-only targets, including browser-focusable
-scroll containers. Actual keyboard controls retain visible focus. The composer's
-rounded border owns focus-within rather than a second textarea rectangle;
-own-answer input focuses its visible row. ComposerTakeovers delegates field
-paint through `--prompt-input-outline`; without that enclosing box, a standalone
-Prompt retains its own field focus outline. Permission takeovers and
-notification toasts share one PermissionSummary: exact tool, command/working
-directory, edit file paths/counts or generic target and requested patterns.
-Notification enrichment carries the neutral request alongside its originating
-action through the hub's opaque detail port. A permission-owned adapter supplies
-injected toast content; the generic hub and toast host know no permission
-schema. Permission and question owners preserve dirty state through reconnects.
-The legacy `Docks` API remains independently reusable for existing consumers.
+breakouts. Their folded line is plain muted meta text with producer-owned counts
+and client-owned failure wording, no Activity prefix or time range.
+Footer-borrowed successful completions never add a title count. Successful
+completion-only intervals borrow a footer junction instead of adding a status
+row; direct reveal opens the same retained interval. Read-only helper
+transcripts mount those same attention owners; only prompt submission is
+unavailable. With no active takeover, helpers mount no empty composer. That same
+owner provides composer availability to takeover headers, so draft-kept copy
+appears only when the open session offers a composer. Permission docks and
+notifications share RequestAge presentation and the client's requestIdle
+formatter/resumption threshold, using the asking session's activity clock rather
+than request age. Permission and question surfaces replace the composer with a
+raised, bordered, 20px-radius Takeover and a common blocked-light header.
+Consumer-supplied session location names the project/task; question tabs/options
+use shared underline/pointer primitives. Static keyboard hints are in titles,
+Keys and the palette, not the surface. Question step/collapse changes focus a
+visible option or review action; leaving an own-answer field focuses Answer.
+Arrival does not focus an answer action. Takeover layout sections are
+programmatic-only landmarks, not Tab stops. The prompt restores its own input
+when a takeover releases focus to the document, while preserving focus the
+reader moved elsewhere. Shared focus paint admits semantic controls and
+explicitly marked visible content (message/date reveals), never layout wrappers
+or programmatic-only targets, including browser-focusable scroll containers.
+Actual keyboard controls retain visible focus. The composer's rounded border
+owns focus-within rather than a second textarea rectangle; own-answer input
+focuses its visible row. ComposerTakeovers delegates field paint through
+`--prompt-input-outline`; without that enclosing box, a standalone Prompt
+retains its own field focus outline. Permission takeovers and notification
+toasts share one PermissionSummary: exact tool, command/working directory, edit
+file paths/counts or generic target and requested patterns. Notification
+enrichment carries the neutral request alongside its originating action through
+the hub's opaque detail port. A permission-owned adapter supplies injected toast
+content; the generic hub and toast host know no permission schema. Permission
+and question owners preserve dirty state through reconnects. The legacy `Docks`
+API remains independently reusable for existing consumers.
 
 Context part renderers receive their original canonical message clock through
 `recordTime`. The fallback shows it, including milliseconds and the local zone,

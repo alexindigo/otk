@@ -142,10 +142,12 @@
 }
 .otk-server-connection {
   display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr);
+  column-gap: var(--space-2);
   min-inline-size: 0;
   font-size: var(--text-meta);
 }
-.otk-server-connections:has(.otk-feedback-status.is-visible) {
+.otk-server-connections:has(.otk-connection-status) {
   flex-basis: 100%;
   margin-inline: 0;
   min-inline-size: 0;
@@ -156,14 +158,21 @@
   white-space: nowrap;
 }
 .otk-server-connection > button {
+  grid-column: 1 / -1;
   overflow: hidden;
   text-overflow: ellipsis;
   height: var(--control-size);
-  display: flex;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-2) 0 0;
   color: var(--otk-fg-3);
+  text-align: start;
+}
+.otk-server-connection > .otk-connection-status {
+  grid-column: 2;
+  min-inline-size: 0;
 }
 .otk-inbox-resizer {
   position: absolute;

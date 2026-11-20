@@ -162,7 +162,8 @@ Deno.test("failed helpers share one summary and frame, without successful run fr
   ]);
   const [key] = p.state.records.keys, group = p.state.records.groups[key];
   assertEquals(p.state.records.keys, [key]);
-  assertEquals(group.failureTitle, "2 helpers failed");
+  assertEquals(group.failureTitle, "2 failed");
+  assertEquals(group.title, "");
   assertEquals(group.breakouts, ["r2", "r4"]);
   assertEquals(group.children?.flatMap((child) => child.members), [
     "r1",
@@ -174,6 +175,27 @@ Deno.test("failed helpers share one summary and frame, without successful run fr
   for (const id of group.members) {
     assertEquals(p.state.records.parents[id], [key]);
   }
+});
+Deno.test("failure counts include every failed record independently of producer nouns", () => {
+  const p = createTranscriptProjection();
+  p.replace([
+    record(1, {
+      tone: "error",
+      summary: { kind: "execution", noun: "run", plural: "runs" },
+    }),
+    record(2, { tone: "error", summary: undefined }),
+    record(3, {
+      tone: "error",
+      summary: {
+        kind: "helper-failure",
+        noun: "helper failed",
+        plural: "helpers failed",
+      },
+    }),
+  ]);
+  const [key] = p.state.records.keys;
+  assertEquals(p.state.records.groups[key].failureTitle, "3 failed");
+  assertEquals(p.state.records.groups[key].title, "");
 });
 Deno.test("success-only interval is silent, retains source and borrows the preceding reply footer", () => {
   const reply: Message = {

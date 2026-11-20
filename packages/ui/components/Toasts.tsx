@@ -106,7 +106,13 @@ export default function Toasts(
                     </>
                   }
                 >
-                  {(failure) => <FailureContent compact failure={failure()} />}
+                  {(failure) => (
+                    <FailureContent
+                      compact
+                      signal={false}
+                      failure={failure()}
+                    />
+                  )}
                 </Show>
               </div>
               <button

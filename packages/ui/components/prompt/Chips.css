@@ -12,7 +12,10 @@
   border-radius: var(--radius-pill);
   max-width: 100%;
 }
-.otk-prompt-chip.has-error {
+.otk-prompt-attachments {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
   inline-size: 100%;
 }
 .otk-prompt-chip > button:first-child {
@@ -20,10 +23,6 @@
 }
 .otk-prompt-chip > button:last-child {
   grid-area: 1 / 2;
-}
-.otk-prompt-chip-feedback {
-  grid-column: 1 / -1;
-  padding: var(--space-2);
 }
 .otk-prompt-chip button {
   border: 0;
