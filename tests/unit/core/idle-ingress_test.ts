@@ -13,14 +13,30 @@ test("every HTTP ingress resets idle even before routes activate", async () => {
   let requests = 0;
   const listener = bind(settings, undefined, undefined, () => requests++);
   try {
-    for (const path of ["/api/session", "/api/login", "/", "/assets/app.js"]) {
+    for (
+      const path of [
+        "/api/session",
+        "/api/request-events",
+        "/api/login",
+        "/api/health",
+        "/",
+        "/assets/app.js",
+      ]
+    ) {
       const response = await fetch(
         `http://127.0.0.1:${listener.server.addr.port}${path}`,
-        { method: path.endsWith("login") ? "POST" : "GET" },
+        {
+          method: path.endsWith("login") || path.endsWith("request-events")
+            ? "POST"
+            : "GET",
+        },
       );
-      await response.text();
+      assertEquals(response.status, 503);
+      assertEquals(response.headers.get("Retry-After"), "1");
+      assertEquals(response.headers.get("Cache-Control"), "no-store");
+      assertEquals(await response.text(), "Starting");
     }
-    assertEquals(requests, 4);
+    assertEquals(requests, 6);
   } finally {
     await listener.server.shutdown();
   }

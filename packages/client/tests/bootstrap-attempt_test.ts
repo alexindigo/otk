@@ -64,6 +64,37 @@ Deno.test("initial bootstrap retry uses supplied policy before any remote policy
   }
 });
 
+Deno.test("malformed request-event data is reported with its reason only after a fresh reconnect confirms it", async () => {
+  const statuses: { state: string; error?: string }[] = [];
+  let malformed = true;
+  const bootstrap = bootstrapFetch(auth);
+  const connection = new SidecarConnection("http://remote.test", {
+    status: (state, error) => statuses.push({ state, error }),
+    frame() {},
+  }, {
+    fetcher: (input, init) =>
+      malformed
+        ? Promise.resolve(
+          Response.json({ t: "request.accepted", ref: {} }, { status: 202 }),
+        )
+        : bootstrap(input, init),
+  });
+  try {
+    await connection.connect();
+    assertEquals(statuses.at(-1), { state: "reconnecting", error: undefined });
+    await connection.connect();
+    assert(statuses.at(-1)?.error?.includes("Invalid OTK request reference"));
+    malformed = false;
+    await connection.connect();
+    assertEquals(statuses.at(-1), {
+      state: "login required",
+      error: undefined,
+    });
+  } finally {
+    connection.stop();
+  }
+});
+
 Deno.test("saved remotes inherit application bootstrap policy independently of the local API URL", async () => {
   const original = globalThis.fetch, retried = Promise.withResolvers<void>();
   let remoteReads = 0;
@@ -175,9 +206,10 @@ Deno.test("accepted login followed by failed fresh session read preserves the at
       HttpReadFailure,
     );
     assertEquals(state, "reconnecting");
-    assert(
-      message && !message.includes("cookie settings") &&
-        !message.includes("accepted sign-in"),
+    assertEquals(
+      message,
+      undefined,
+      "A transport gap is reconnecting, not a sign-in error",
     );
   } finally {
     connection.stop();

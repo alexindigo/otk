@@ -18,20 +18,58 @@ export interface HttpRequestsOptions {
   tracker?: RequestTracker;
   kind?: RequestTrackerOptions["kind"];
 }
-/** Static transport facts only; response bodies and exception prose are not copy. */
+/** Classified transport facts only; response bodies and fetch exceptions are not copy. */
 export class HttpReadFailure extends Error {
   readonly reason: string;
-  constructor(readonly status?: number, kind?: "timeout" | "receipt-reset") {
+  constructor(
+    readonly status?: number,
+    readonly kind: "unavailable" | "invalid" | "timeout" | "receipt-reset" =
+      "unavailable",
+    readonly retryAfter?: number,
+    detail?: string,
+  ) {
     const reason = kind === "receipt-reset"
       ? "OTK reset the sign-in check's receipt before returning a result"
       : kind === "timeout"
       ? "the transport reported a timeout"
+      : kind === "invalid"
+      ? `${detail ?? "Invalid OTK request-event data"} (HTTP ${status})`
       : status === undefined
       ? "the browser could not obtain an OTK reply"
-      : `OTK returned invalid or interrupted request-event data (HTTP ${status})`;
+      : `OTK is temporarily unavailable (HTTP ${status})`;
     super(reason);
     this.reason = reason;
   }
+}
+/** Only locally authored validation reasons may cross into public failure copy. */
+class RequestDataFailure extends Error {}
+/** HTTP readiness/proxy failures are not request events. Never parse their bodies. */
+async function checkAvailability(response: Response): Promise<void> {
+  if (response.status < 500 && ![408, 425, 429].includes(response.status)) {
+    return;
+  }
+  const header = response.headers.get("Retry-After");
+  let retryAfter: number | undefined;
+  if (header !== null) {
+    const value = /^\d+$/.test(header.trim())
+      ? Number(header) * 1000
+      : Date.parse(header) - Date.now();
+    if (Number.isFinite(value)) retryAfter = Math.max(0, value);
+  }
+  await response.body?.cancel().catch(() => {});
+  throw new HttpReadFailure(response.status, "unavailable", retryAfter);
+}
+function parseEvent(
+  line: string,
+  ref: import("@otk/protocol").RequestRef,
+): RequestEvent {
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    throw new RequestDataFailure("OTK returned malformed request-event JSON");
+  }
+  return eventFrom(value, ref);
 }
 interface Delivery {
   secret: string;
@@ -55,14 +93,14 @@ function eventFrom(
   ref: import("@otk/protocol").RequestRef,
 ): RequestEvent {
   if (!value || typeof value !== "object") {
-    throw new TypeError("Invalid OTK request event");
+    throw new RequestDataFailure("Invalid OTK request event");
   }
   const event = value as RequestEvent;
   if (
     !event.ref || event.ref.key !== ref.key ||
     event.ref.clientID !== ref.clientID || event.ref.window !== ref.window ||
     typeof event.ref.id !== "string"
-  ) throw new TypeError("Invalid OTK request reference");
+  ) throw new RequestDataFailure("Invalid OTK request reference");
   const failure = (value: unknown) => {
     const error = value as import("@otk/protocol").PublicFailure | undefined;
     return error && typeof error.code === "string" &&
@@ -71,7 +109,7 @@ function eventFrom(
   };
   if (event.t === "request.rejected" && failure(event.error)) return event;
   if (!("seq" in event) || !Number.isSafeInteger(event.seq) || event.seq < 0) {
-    throw new TypeError("Invalid OTK request sequence");
+    throw new RequestDataFailure("Invalid OTK request sequence");
   }
   if (
     event.t === "request.accepted" && Number.isFinite(event.acceptedAt) &&
@@ -97,7 +135,7 @@ function eventFrom(
     (event.outcome.ok === true && "result" in event.outcome ||
       event.outcome.ok === false && failure(event.outcome.error))
   ) return event;
-  throw new TypeError("Invalid OTK request event");
+  throw new RequestDataFailure("Invalid OTK request event");
 }
 /** HTTP event transport over the same tracker as WS; no completion deadline. */
 export class HttpRequests {
@@ -253,13 +291,14 @@ export class HttpRequests {
             await response.body?.cancel().catch(() => {});
             return;
           }
-          const event = eventFrom(await response.json(), ref);
+          await checkAvailability(response);
+          const event = parseEvent(await response.text(), ref);
           if (
             event.t !== "request.rejected" &&
             (!response.ok || response.status !== 202 ||
               event.t !== "request.accepted")
           ) {
-            throw new TypeError(
+            throw new RequestDataFailure(
               `Invalid OTK admission (HTTP ${response.status})`,
             );
           }
@@ -286,13 +325,16 @@ export class HttpRequests {
           },
         );
         responseStatus = response.status;
+        await checkAvailability(response);
         if (!response.ok) {
-          const event = eventFrom(await response.json(), ref);
+          const event = parseEvent(await response.text(), ref);
           if (event.t === "request.rejected") {
             this.tracker.receive(event);
             return;
           }
-          throw new Error("Request event transport unavailable");
+          throw new RequestDataFailure(
+            "OTK did not return a request rejection",
+          );
         }
         if (!response.body) {
           throw new Error("Request event transport unavailable");
@@ -310,7 +352,7 @@ export class HttpRequests {
               const line = buffer.slice(0, newline);
               buffer = buffer.slice(newline + 1);
               if (!line.trim()) continue;
-              const event = eventFrom(JSON.parse(line), ref);
+              const event = parseEvent(line, ref);
               observe();
               this.tracker.connectionFor(ref.key, "connected");
               if ("seq" in event) delivery.after = event.seq;
@@ -334,22 +376,30 @@ export class HttpRequests {
     delivery.work = Promise.resolve().then(run).catch((cause) => {
       if (delivery.stopped) return;
       this.options.diagnostic?.(cause);
-      if (delivery.failure) {
-        delivery.failure(
-          new HttpReadFailure(
-            responseStatus,
-            cause instanceof DOMException && cause.name === "TimeoutError"
-              ? "timeout"
-              : undefined,
-          ),
+      const failure = cause instanceof HttpReadFailure
+        ? cause
+        : new HttpReadFailure(
+          responseStatus,
+          cause instanceof RequestDataFailure
+            ? "invalid"
+            : cause instanceof DOMException && cause.name === "TimeoutError"
+            ? "timeout"
+            : "unavailable",
+          undefined,
+          cause instanceof RequestDataFailure ? cause.message : undefined,
         );
+      if (delivery.failure) {
+        delivery.failure(failure);
         return;
       }
       this.tracker.connectionFor(ref.key, "reconnecting");
       if (this.#policy) {
-        const delay = Math.min(
-          this.#policy.retrymax,
-          this.#policy.retrybase * 2 ** Math.min(delivery.attempt++, 30),
+        const delay = Math.max(
+          failure.retryAfter ?? 0,
+          Math.min(
+            this.#policy.retrymax,
+            this.#policy.retrybase * 2 ** Math.min(delivery.attempt++, 30),
+          ),
         );
         delivery.retry = setTimeout(
           () => this.#run(key, randomID()),

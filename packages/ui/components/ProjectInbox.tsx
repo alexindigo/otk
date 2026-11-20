@@ -31,6 +31,7 @@ import {
 } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
 import ConnectionLight from "./ConnectionLight.tsx";
+import ConnectionStatus from "./ConnectionStatus.tsx";
 import { connectionLabel } from "./connection-light.ts";
 import { createResize } from "./resize.ts";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -637,9 +638,7 @@ export default function ProjectInbox(props: {
                     </ControlIcon>
                     <span class="otk-server-label">{s().label}</span>
                   </button>
-                  <Show when={s().error}>
-                    <p class="otk-error" role="alert">{s().error}</p>
-                  </Show>
+                  <ConnectionStatus connection={s()} />
                 </section>
               )}
             </For>

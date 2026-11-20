@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { SidecarState } from "@otk/client";
+import type { Feedback, SidecarState } from "@otk/client";
 
 export type ConnectionInput = Pick<
   SidecarState,
@@ -39,4 +39,13 @@ export function connectionLabel(connection?: ConnectionInput): string {
       connection.error ? `; ${connection.error}` : ""
     }`
     : CONNECTION_STATES.disconnected.label;
+}
+/** Present the connection owner's state, never invent another retry lifetime. */
+export function connectionFeedback(
+  connection: ConnectionInput,
+): Feedback | undefined {
+  if (connection.error) return { kind: "error", text: connection.error };
+  if (connection.status === "reconnecting") {
+    return { kind: "info", text: "Reconnecting to OTK..." };
+  }
 }
