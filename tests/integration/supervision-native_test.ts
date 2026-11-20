@@ -86,6 +86,7 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
       const after = await inbox();
       assertEquals(after.supervision?.[target.id], {
         state: "finishedUnseen",
+        unseen: true,
         terminal,
         outcome: "succeeded",
       });
@@ -123,16 +124,26 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       return sessions.filter((session) => session.id !== parent.id);
     }, (rows) => rows.length > 0);
     const child = children[0];
+    // Acknowledged helpers leave mandatory routing. Retain only their metadata
+    // to inspect outcome history without acquiring a transcript.
+    client.lease({
+      directory: native.directory,
+      crumbs: [],
+      rows: [parent.id, child.id],
+    });
     const value = await waitFor(
       async () => (await client.rpc<InboxBaseline>("inbox.get", {})).inbox,
       (inbox) =>
-        [parent.id, child.id].every((id) =>
-          inbox.supervision?.[id]?.state === "finishedUnseen"
-        ),
+        inbox.supervision?.[parent.id]?.state === "finishedUnseen" &&
+        inbox.supervision?.[child.id]?.state ===
+          (v2 ? "none" : "finishedUnseen"),
     );
     for (const id of [parent.id, child.id]) {
       assert(value.supervision![id].terminal > 0);
-      assertEquals(value.supervision![id].state, "finishedUnseen");
+      assertEquals(
+        value.supervision![id].state,
+        id === child.id && v2 ? "none" : "finishedUnseen",
+      );
       assertEquals(value.supervision![id].outcome, "failed");
     }
     assertEquals(value.summaries?.[native.directory]?.status, "finished");
