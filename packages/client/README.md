@@ -453,6 +453,13 @@ The server's supervision projection governs lamps independently of population
 readiness. Missing supervision is `none`, rendered grey as "No known activity".
 There is no raw-status fallback. Unknown population counts remain null.
 
+Unread names/counts borrow supervision's explicit `unseen`, not raw finish and
+seen clocks. Outcome notifications carry that same eligibility through the
+attention projection, including equal-terminal acknowledgement changes. A
+delivered helper result retracts its outcome notification and mandatory family
+crumb, while a selected helper retains its path and the parent's result record
+remains history. Entity/Activity lamps already borrow the same supervision.
+
 The inbox owns accepted metadata synchronously and publishes a binding clock,
 matching the keyed index: projection observers and commands never wait for a
 framework to expose an accepted mark, task or project update.

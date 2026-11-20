@@ -123,9 +123,32 @@ export class InboxFeature implements FrameSource {
   }
   #views = new Map<string, () => InboxBaseline>();
   retained(): readonly string[] {
-    return [...this.#finishes].filter(([id, finish]) =>
-      finish > (this.#seen.get(this.user)?.get(id) ?? 0)
-    ).map(([id]) => id);
+    return [...this.#finishes].filter(([id]) => this.#unseen(id, this.user))
+      .map(([id]) => id);
+  }
+  #unseen(id: string, user: string): boolean {
+    const entry = this.index.getMetadata(id);
+    // Before native hydration, retained history remains conservatively unseen.
+    return this.supervision.session(
+      entry ?? {
+        id,
+        directory: "",
+        projectID: "",
+        title: "",
+        archived: false,
+        timeCreated: 0,
+        timeUpdated: 0,
+        status: "idle",
+        attention: {
+          permissions: 0,
+          questions: 0,
+          childPermissions: 0,
+          childQuestions: 0,
+        },
+      },
+      this.#seen.get(user)?.get(id) ?? 0,
+      this.#finishes.get(id) ?? 0,
+    ).unseen === true;
   }
   #directory(view: ViewLease): string | undefined {
     return view.directory ??
@@ -967,16 +990,15 @@ export class InboxFeature implements FrameSource {
     this.#supervise(entry.id);
     const state = this.#supervision.get(entry.id)?.state;
     const active = state === "working" || state === "needsYou";
-    const unseen =
-      [...this.#seen.values()].some((marks) =>
-        (this.#finishes.get(entry.id) ?? 0) > (marks.get(entry.id) ?? 0)
-      ) ||
-      (this.#finishes.get(entry.id) ?? 0) >
-        (this.#seen.get(this.user)?.get(entry.id) ?? 0);
+    const unseen = [...new Set([...this.#seen.keys(), this.user])].some((
+      user,
+    ) => this.#unseen(entry.id, user));
     if (
       !entry.deleted && (active || unseen) &&
       (!previous || previous.status !== entry.status ||
-        JSON.stringify(previous.attention) !== JSON.stringify(entry.attention))
+        JSON.stringify(previous.attention) !==
+          JSON.stringify(entry.attention) ||
+        JSON.stringify(previous.activity) !== JSON.stringify(entry.activity))
     ) {
       const promote = () => this.promote?.(entry.id);
       if (tx) s.projects.db.afterCommit(tx, promote);
@@ -992,9 +1014,7 @@ export class InboxFeature implements FrameSource {
         (project.directory === leaf || project.directory === context ||
           project.directory === entry.directory) &&
         project.inactive &&
-        (active ||
-          (this.#finishes.get(entry.id) ?? 0) >
-            (this.#seen.get(project.user)?.get(entry.id) ?? 0))
+        (active || this.#unseen(entry.id, project.user))
       ) {
         s.projects.reactivate(project.user, project.directory, tx);
       }

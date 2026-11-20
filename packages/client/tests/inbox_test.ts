@@ -144,15 +144,21 @@ Deno.test("tracked and discovered projects and task tabs share attention-first a
   assertEquals(tabs.tabs()[0].status, "working");
   tabs.stop();
 });
-Deno.test("live-session unread compares finish and seen independently of working status", () => {
+Deno.test("live-session unread borrows supervision independently of work and legacy marks", () => {
   const inbox = snapshot();
   const session = entry("s");
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 10;
+  assertEquals(unread(session, inbox), false);
+  inbox.supervision = { s: { state: "working", terminal: 10, unseen: true } };
   assert(unread(session, inbox));
   inbox.seen.s = 10;
+  assert(unread(session, inbox));
+  inbox.supervision.s = { state: "working", terminal: 10, unseen: false };
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 11;
+  assertEquals(unread(session, inbox), false);
+  inbox.supervision.s = { state: "working", terminal: 11, unseen: true };
   assert(unread(session, inbox));
   assertEquals(
     unread({ ...session, deleted: { at: 12, how: "provider" } }, inbox),

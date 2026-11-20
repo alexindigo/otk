@@ -14,13 +14,15 @@ Deno.test("V1 projection upgrade retains baselines and requests covered reconcil
   const sql = new DatabaseSync(":memory:");
   try {
     const migrations = opencodeV1DigestMigrations.migrations;
-    for (const migration of migrations.slice(0, -1)) {
+    for (const migration of migrations.filter((m) => m.version < 5)) {
       sql.exec(await Deno.readTextFile(migration.sql));
     }
     sql.exec(
       "INSERT INTO opcv1_scan(session_id,native_id,scan_generation,observed_revision,complete_revision,dirty,after_message,covered_created,covered_message) VALUES('s','native',2,7,7,0,'old',5,'old'); INSERT INTO opcv1_messages(session_id,message_id,role,hash,scan_generation,time_created,cost) VALUES('s','call','assistant','old',2,1,1)",
     );
-    sql.exec(await Deno.readTextFile(migrations.at(-1)!.sql));
+    sql.exec(
+      await Deno.readTextFile(migrations.find((m) => m.version === 5)!.sql),
+    );
     assertEquals(
       sql.prepare(
         "SELECT committed,dirty,complete_revision,after_message,covered_message FROM opcv1_scan",

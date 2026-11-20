@@ -126,10 +126,14 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
-  // WP3: a finished-unseen helper remains mandatory until acknowledged.
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(1);
-  await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
-    .toHaveAttribute("data-state", "finished");
+  // Decision 58: receiving the helper result acknowledges that exact run. Its
+  // parent result remains visible, without acquiring the child's transcript.
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  await expect(
+    page.locator(
+      `[data-session="${child.id}"] .otk-status-light[data-state="finished"]`,
+    ),
+  ).toHaveCount(0);
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   expect(
     frames.sent.some(({ frame }) =>
@@ -137,6 +141,12 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
       frame.params?.sessionID === child.id
     ),
   ).toBe(true);
+  expect(
+    frames.sent.some(({ frame }) =>
+      frame.method === "session.messages" &&
+      frame.params?.sessionID === child.id
+    ),
+  ).toBe(false);
   const history = await state.native<
     {
       parts: { tool?: string; state?: { status: string; output?: string } }[];

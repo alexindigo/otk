@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
+import { DeliveryBackfill } from "@otk/harness";
 import {
   type DigestPolicy,
   type DigestPort,
@@ -81,6 +82,9 @@ export class OpencodeV2ServerAdapter implements Harness {
   #pending = new Map<string, Pending>();
   #running = new Map<string, number>();
   #finished = new Map<string, TerminalEvidence>();
+  #deliveries?: DeliveryBackfill;
+  #delivered = new Map<string, import("@otk/protocol").DeliveredEvidence>();
+  #deliveryParents = new Set<string>();
   #version = "";
   #generation = 0;
   #lists = new V2SessionLists();
@@ -439,6 +443,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       stop: async () => {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
+        await this.#deliveries?.stop();
+        this.#deliveries = undefined;
+        this.#delivered.clear();
+        this.#deliveryParents.clear();
         this.#errors.reset();
         await this.catalogs?.stop();
         this.#helperListener?.();
@@ -639,6 +647,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ...entry,
       activity: {
         ...terminal,
+        delivered: this.#delivered.get(entry.id),
         work: {
           keys: [
             ...(runID ? [runID] : []),
@@ -683,6 +692,13 @@ export class OpencodeV2ServerAdapter implements Harness {
     };
     if (!this.#sink.index) this.#index.upsertMetadata(entry);
     this.#sink.indexUpsert(entry);
+    if (
+      entry.parentID && terminal.terminal &&
+      !this.#deliveryParents.has(entry.parentID)
+    ) {
+      this.#deliveryParents.add(entry.parentID);
+      this.#deliveries?.request(entry.parentID);
+    }
   }
   #refreshAttention(id: string): void {
     for (const key of [id, ...this.#index.ancestors(id)]) {
@@ -884,6 +900,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
+    this.#delivered.delete(id);
     this.#lists.invalidate();
     for (const [key, pending] of this.#pending) {
       if (pending.sessionID === ids.decode(id)) this.#setPending(key);
@@ -985,6 +1002,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
     reconnect = true,
   ): Promise<() => Promise<void>> {
+    await this.#deliveries?.stop();
+    this.#deliveries = undefined;
+    this.#delivered.clear();
+    this.#deliveryParents.clear();
     const active = await client.read(
       (api) => api.session.active({ signal }),
       signal,
@@ -1149,6 +1170,39 @@ export class OpencodeV2ServerAdapter implements Harness {
     return async () => {
       signal.throwIfAborted();
       this.#generation = generation;
+      if (this.digest) {
+        this.#deliveries = new DeliveryBackfill(
+          this.digest,
+          (parent, updates, reset) => {
+            if (generation !== this.#generation || !this.#sink) return;
+            const dirty = new Set<string>();
+            if (reset) {
+              for (const [id, fact] of this.#delivered) {
+                if (fact.parentID === parent) {
+                  this.#delivered.delete(id);
+                  dirty.add(id);
+                }
+              }
+            }
+            for (const { id, delivered } of updates) {
+              if (
+                (this.#delivered.get(id)?.terminal ?? 0) > delivered.terminal
+              ) continue;
+              if (
+                JSON.stringify(this.#delivered.get(id)) ===
+                  JSON.stringify(delivered)
+              ) continue;
+              this.#delivered.set(id, delivered);
+              dirty.add(id);
+            }
+            for (const id of dirty) {
+              const entry = this.#index.getMetadata(id);
+              if (entry) this.#upsert(entry);
+            }
+          },
+          this.diagnostic,
+        );
+      }
       this.#activityCurrent = true;
       this.#shells.replace(shells);
       const changedOwners = new Set(
@@ -1244,6 +1298,19 @@ export class OpencodeV2ServerAdapter implements Harness {
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    if (changedID && generation === this.#generation) {
+      if (
+        /^session\.(tool\.(success|failed)|inbox\.delivered|revert\.)/.test(
+          event.type,
+        )
+      ) this.#deliveries?.request(changedID, true);
+      if (
+        /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+      ) {
+        const parent = this.#index.getMetadata(changedID)?.parentID;
+        if (parent) this.#deliveries?.request(parent, true);
+      }
+    }
     if (changedID && event.type === "session.deleted") {
       this.pending.retireSession(event.data.sessionID as string);
       const previous = this.#index.getMetadata(changedID);

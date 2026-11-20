@@ -45,6 +45,8 @@ import { isPrompt } from "./records.ts";
 import { reportedNumber } from "./usage-values.ts";
 import { NativeReadiness } from "./readiness.ts";
 import { SessionLists } from "./session-lists.ts";
+import { DeliveryIndex } from "@otk/harness";
+import { scanDeliveries } from "./delivery.ts";
 
 export interface DigestSnapshot {
   helper?: HelperSummary;
@@ -286,6 +288,38 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.wait,
     );
     this.readers = {
+      "supervision.deliveries": (input, signal) => {
+        signal.throwIfAborted();
+        const native = this.#native;
+        if (
+          !native || !(this.#nativeVerified || this.#projectVerified) ||
+          native.fileIdentity() !== native.identity
+        ) return Promise.resolve({ updates: [], reset: true });
+        const parent = native.db.prepare(
+          "SELECT time_updated FROM session WHERE id=?",
+        ).get(ids.decode(input.parentID));
+        if (!parent) return Promise.resolve({ updates: [], reset: true });
+        const index = new DeliveryIndex(
+          storage.sql,
+          "opcv1_delivery",
+          (run) => storage.transaction(run),
+          policy.publishrows,
+        );
+        return Promise.resolve(
+          index.step(
+            input,
+            native.identity,
+            Number(parent.time_updated),
+            (cursor) =>
+              scanDeliveries(
+                native.db,
+                input.parentID,
+                cursor,
+                policy.publishrows,
+              ),
+          ),
+        );
+      },
       "supervision.terminals": ({ after }, signal) => {
         signal.throwIfAborted();
         const native = this.#native;
@@ -1412,6 +1446,12 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (metadata && metadata.id !== id) {
       throw new Error("Deletion metadata identity mismatch");
     }
+    new DeliveryIndex(
+      this.storage.sql,
+      "opcv1_delivery",
+      (run) => this.storage.transaction(run),
+      this.policy.publishrows,
+    ).retire(id);
     const saved = this.storage.read(id);
     const previous = saved ??
       (metadata

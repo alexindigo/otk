@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
+import { DeliveryBackfill } from "@otk/harness";
 import {
   type DiagnosticSink,
   errorMessage,
@@ -979,6 +980,7 @@ export class OpencodeV1Adapter implements Harness {
         ...entry,
         activity: {
           ...this.#terminals.get(entry.id),
+          delivered: this.#delivered.get(entry.id),
           work: {
             keys: this.#liveWork.has(entry.id)
               ? [this.#liveWork.get(entry.id)!.key]
@@ -1013,11 +1015,16 @@ export class OpencodeV1Adapter implements Harness {
   }
   #liveWork = new Map<string, { key: string; generation: number }>();
   #terminals = new Map<string, TerminalEvidence>();
+  #deliveries?: DeliveryBackfill;
+  #delivered = new Map<string, import("@otk/protocol").DeliveredEvidence>();
   #terminalCandidates = new Map<string, TerminalEvidence>();
   #idle = new Map<string, number>();
   #questionFresh = new Map<string, number>();
   #permissionInventories = new Map<string, number>();
   async #shutdown(): Promise<void> {
+    await this.#deliveries?.stop();
+    this.#deliveries = undefined;
+    this.#delivered.clear();
     this.#failureTurns.clear();
     this.#failureAttempts.clear();
     this.#helperObservation?.();
@@ -1616,6 +1623,9 @@ export class OpencodeV1Adapter implements Harness {
       }
     };
     const connection = ++this.#connection;
+    await this.#deliveries?.stop();
+    this.#deliveries = undefined;
+    this.#delivered.clear();
     const seeds = await this.digest?.projects?.(
       connection,
       controller.signal,
@@ -1988,6 +1998,51 @@ export class OpencodeV1Adapter implements Harness {
     if (this.digest) {
       await each(entries.values(), (entry) => sink.indexUpsert(entry));
     } else sink.indexReset([...entries.values()]);
+    if (this.digest) {
+      this.#deliveries = new DeliveryBackfill(
+        this.digest,
+        (parent, updates, reset) => {
+          if (
+            !this.#current(controller) || connection !== this.#connection
+          ) return;
+          const dirty = new Set<string>();
+          if (reset) {
+            for (const [id, fact] of this.#delivered) {
+              if (fact.parentID === parent) {
+                this.#delivered.delete(id);
+                dirty.add(id);
+              }
+            }
+          }
+          for (const { id, delivered } of updates) {
+            if ((this.#delivered.get(id)?.terminal ?? 0) > delivered.terminal) {
+              continue;
+            }
+            if (
+              JSON.stringify(this.#delivered.get(id)) ===
+                JSON.stringify(delivered)
+            ) continue;
+            this.#delivered.set(id, delivered);
+            dirty.add(id);
+          }
+          for (const id of dirty) {
+            const entry = this.#index.getMetadata(id);
+            if (entry) sink.indexUpsert(entry);
+          }
+        },
+        (error) =>
+          this.diagnostic("warn", "delivery evidence unavailable", error),
+      );
+      const retainedParents = new Set(
+        (this.#target.retainedSessions ?? []).flatMap((id) => {
+          const parent = this.#index.getMetadata(id)?.parentID;
+          return parent ? [parent] : [];
+        }),
+      );
+      for (const parent of new Set([...retainedParents, ...terminalParents])) {
+        this.#deliveries.request(parent);
+      }
+    }
     sink.projectAuthority?.(hints ? "current" : "unknown");
   }
   /** Scalar routing/activity facts for IDs outside the demanded metadata window. */
@@ -2026,6 +2081,7 @@ export class OpencodeV1Adapter implements Harness {
     const sink = this.#sink;
     this.#liveWork.delete(id);
     this.#terminals.delete(id);
+    this.#delivered.delete(id);
     this.#terminalCandidates.delete(id);
     this.#idle.delete(id);
     this.#abortCommands(id);
@@ -2240,6 +2296,14 @@ export class OpencodeV1Adapter implements Harness {
     const info = p.info as Info | undefined;
     const raw = p.part as RawPart | undefined;
     const sessionID = typeof nativeID === "string" ? ids.encode(nativeID) : "";
+    if (
+      sessionID &&
+      (type === "message.part.updated" && raw &&
+          (raw.tool === "task" && raw.state?.status === "completed" ||
+            raw.type === "text" && raw.synthetic) ||
+        type === "message.part.removed" || type === "message.removed" ||
+        type === "session.updated")
+    ) this.#deliveries?.request(sessionID, true);
     if (sessionID) {
       const turn = this.#failureTurns.get(sessionID) ?? {};
       if (info?.time?.created !== undefined) {
@@ -2752,6 +2816,8 @@ export class OpencodeV1Adapter implements Harness {
           terminalFacts(info),
         ),
       );
+      const parent = this.#index.getMetadata(sessionID)?.parentID;
+      if (parent) this.#deliveries?.request(parent, true);
       const current = this.#index.getMetadata(sessionID);
       if (current) {
         current.timeUpdated = Math.max(

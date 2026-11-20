@@ -135,6 +135,13 @@ inventory freshness; only the core supervision owner interprets them. Legacy
 lifecycle status is not a lamp input. `sessions.seen` requires the captured
 displayed terminal, so delayed acknowledgement cannot consume a newer finish.
 
+`SupervisionEvidence.delivered` carries a proven parent receipt and exact
+covered terminal. The supervision owner's explicit `unseen` fact includes this
+shared acknowledgement without manufacturing a user view. Work/input priority
+and finish/outcome history remain independent. Consumers treat missing `unseen`
+on older injected projections as false, never reconstruct it from finish/seen
+maps.
+
 An additive `summaries` map and `summaryRevision` baseline field publish scalar
 `ProjectSummary` facts. The additive `inbox.summaries` message carries keyed
 replacements under an independent from/revision sequence; older consumers can

@@ -275,7 +275,7 @@ export class ProjectSummaries {
     }
     const marks = this.marks(entry.id);
     const value = this.supervision.session(entry, marks.seen, marks.finish);
-    const unseen = Number(value.terminal > marks.seen);
+    const unseen = Number(value.unseen === true);
     const fact = sign === -1 ? this.#facts.get(entry.id)! : {
       status: this.supervision.status(value),
       unseen,

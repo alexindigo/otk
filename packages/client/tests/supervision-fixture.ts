@@ -20,6 +20,7 @@ export function projected(
         const terminal = value.finishes[entry.id] ?? 0;
         return [entry.id, {
           terminal,
+          unseen: !entry.deleted && terminal > (value.seen[entry.id] ?? 0),
           state: entry.deleted
             ? "none"
             : entry.attention.permissions + entry.attention.questions > 0 ||
