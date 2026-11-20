@@ -800,6 +800,9 @@ records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
 that shared classification to queue admission and UI presentation. Part-owned
 record settlement updates the same queue; no component owns a second queue.
 Mixed replies retain assistant metadata independently of final source position.
+That metadata includes producer-owned `outcomeTime`; message presentation carries
+it independently of digest working time, including when a failed call has no
+streamed interval. Saved presentation preserves the same native instant.
 Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay

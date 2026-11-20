@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { outcomeTime } from "@otk/protocol";
 import {
   type ContextMessage,
   type FailureFacts,
@@ -126,6 +127,9 @@ export function requestFailureRecord(
     id,
     sessionID,
     role: "context",
+    // V1 rejection/event envelopes supply no native error timestamp. The
+    // retained row's observation clock is ordering, not native outcome proof.
+    outcomeTime: outcomeTime({}),
     ...(replyTo ? { replyTo } : {}),
     time: { created },
     parts: [{

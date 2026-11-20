@@ -10,7 +10,7 @@ import type { SessionMetadata } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
 import { isPrompt, nativeSource, recordPart, sourceRef } from "./records.ts";
-import { referenceSources } from "@otk/protocol";
+import { outcomeTime, referenceSources } from "@otk/protocol";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type {
   Info,
@@ -202,6 +202,18 @@ export function deriveMessage(
   return {
     ...common,
     role: "assistant",
+    ...(assistantSettled(info)
+      ? {
+        outcomeTime: outcomeTime({
+          completed: info.time.completed,
+          parts: evidence.map((part) =>
+            part.type === "tool"
+              ? part.state?.time?.end ?? part.state?.time?.start
+              : part.time?.end ?? part.time?.start
+          ),
+        }),
+      }
+      : {}),
     ...(info.time.completed === undefined && assistantSettled(info)
       ? { terminal: true }
       : {}),

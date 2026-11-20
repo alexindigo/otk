@@ -136,6 +136,7 @@ function ReplyStart(props: {
             sessionID: props.sessionID,
             turnID: props.source.turnID ?? props.source.messageID,
             timing: props.source.timing,
+            outcomeTime: props.source.outcomeTime,
             model: props.source.model,
           })}
           onOpen={props.onOpen}
@@ -283,6 +284,14 @@ export default function Message(
       );
   const streaming = () => presentation().streaming;
   const progress = () => presentation().progress;
+  const outcomeClock = createMemo(() => {
+    const time = presentation().time?.outcome;
+    return time?.state === "known" ? time : undefined;
+  });
+  const outcomeUnknown = () => {
+    const time = presentation().time?.outcome;
+    return time?.state === "unknown" ? time.reason : undefined;
+  };
   const error = () =>
     props.message.role === "assistant" && !props.message.interrupted
       ? props.message.error?.message
@@ -348,6 +357,7 @@ export default function Message(
                               source={{
                                 ...source(),
                                 timing: presentation().time?.timing,
+                                outcomeTime: presentation().time?.outcome,
                               }}
                               sessionID={props.message.sessionID}
                               onOpen={props.onOpenChild}
@@ -468,12 +478,40 @@ export default function Message(
                       </span>
                       <Show when={presentation().time}>
                         {(time) => (
-                          <span
-                            class="otk-turn-time"
-                            title={timingExplanation(time().timing)}
-                          >
-                            {workingTime(time().timing) ?? time().fallback}
-                          </span>
+                          <>
+                            <Show when={outcomeClock()}>
+                              {(outcome) => {
+                                const date = () => new Date(outcome().at);
+                                return (
+                                  <time
+                                    datetime={date().toISOString()}
+                                    title={date().toLocaleString()}
+                                  >
+                                    {date().toLocaleString()}
+                                  </time>
+                                );
+                              }}
+                            </Show>
+                            <Show when={outcomeUnknown()}>
+                              {(reason) => (
+                                <span class="otk-turn-time" title={reason()}>
+                                  Time unknown - not recorded
+                                </span>
+                              )}
+                            </Show>
+                            <Show
+                              when={!time().outcome ||
+                                time().timing?.state === "known" ||
+                                time().timing?.state === "active"}
+                            >
+                              <span
+                                class="otk-turn-time"
+                                title={timingExplanation(time().timing)}
+                              >
+                                {workingTime(time().timing) ?? time().fallback}
+                              </span>
+                            </Show>
+                          </>
                         )}
                       </Show>
                       <Show when={presentation().usage}>

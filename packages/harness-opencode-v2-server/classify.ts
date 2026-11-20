@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { outcomeTime } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import type {
   Activity,
@@ -125,8 +126,61 @@ export function assistantSettled(
     typeof raw.finish === "string" && !!raw.finish &&
       !["tool-calls", "unknown"].includes(raw.finish);
 }
+/** Outcome instants do not depend on having measured model working intervals. */
+function nativeOutcomeTime(raw: NativeMessage) {
+  const message = record(raw), time = record(message.time);
+  const error = record(message.error), errorTime = record(error.time);
+  const clock = (value: unknown) =>
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+      ? Date.parse(value)
+      : undefined;
+  return outcomeTime({
+    completed: clock(time.completed),
+    error: clock(
+      typeof error.time === "number"
+        ? error.time
+        : errorTime.completed ?? errorTime.created,
+    ),
+    parts: [
+      clock(time.streamed),
+      ...(Array.isArray(message.content) ? message.content : []).map((part) => {
+        const time = record(record(part).time);
+        return clock(time.completed ?? time.created);
+      }),
+    ],
+    // These records are terminal events, not assistant start clocks.
+    event: raw.type === "idle" || raw.type === "synthetic"
+      ? clock(time.created)
+      : undefined,
+  });
+}
 /** Total native-record classifier. Snapshot, live, inbox and recovery use it. */
 export function mapMessage(
+  raw: NativeMessage,
+  sessionID: string,
+  context: MessageContext,
+): Message {
+  const message = deriveMessage(raw, sessionID, context);
+  if (message.role === "assistant") {
+    if (
+      context.terminal === true ||
+      raw.type === "assistant" && assistantSettled(raw)
+    ) {
+      message.outcomeTime = nativeOutcomeTime(raw);
+    }
+  } else if (
+    message.role === "context" &&
+    message.parts.some((part) =>
+      part.kind === "external" && part.activity?.state?.facts.terminal === true
+    )
+  ) {
+    message.outcomeTime = nativeOutcomeTime(raw);
+  }
+  return message;
+}
+function deriveMessage(
   raw: NativeMessage,
   sessionID: string,
   context: MessageContext,

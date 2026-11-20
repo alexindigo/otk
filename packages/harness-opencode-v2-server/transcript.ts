@@ -10,6 +10,7 @@ import {
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
   OperationFailure,
+  outcomeTime,
   sessionErrorMessage,
   sourceAt,
 } from "@otk/protocol";
@@ -979,7 +980,11 @@ export class Transcript {
         text(record(raw.metadata).parentID),
       );
     }
-    let mapped = mapMessage(raw, id, context);
+    let mapped = mapMessage(
+      raw,
+      id,
+      settled ? { ...context, terminal: true } : context,
+    );
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
     mapped = this.#decorateHelpers(mapped);
@@ -1915,9 +1920,13 @@ export class Transcript {
         );
       const missingParent = known.role === "context" && !known.replyTo &&
         context?.replyTo;
-      const message = missingOrigin || missingParent
+      const message = missingOrigin || missingParent ||
+          known.role === "context" && !known.outcomeTime
         ? {
           ...known,
+          ...(known.role === "context" && !known.outcomeTime
+            ? { outcomeTime: outcomeTime({ error: known.time.created }) }
+            : {}),
           ...(missingParent ? { replyTo: missingParent } : {}),
           parts: missingOrigin
             ? known.parts.map((part) =>
