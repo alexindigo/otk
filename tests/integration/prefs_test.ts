@@ -66,6 +66,10 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
       rightCollapsed: false,
       rightWidth: 400,
       rightView: "external-view",
+      projectCollapsed: {
+        '["first","/repo"]': true,
+        '["second","/repo"]': false,
+      },
     };
     await Promise.all([
       a.rpc("layout.patch", { leftWidth: layout.leftWidth }),
@@ -73,6 +77,16 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
       a.rpc("layout.patch", { rightCollapsed: layout.rightCollapsed }),
       b.rpc("layout.patch", { rightWidth: layout.rightWidth }),
       a.rpc("layout.patch", { rightView: layout.rightView }),
+      a.rpc("layout.project", {
+        sidecarId: "first",
+        directory: "/repo",
+        collapsed: true,
+      }),
+      b.rpc("layout.project", {
+        sidecarId: "second",
+        directory: "/repo",
+        collapsed: false,
+      }),
     ]);
     for (const client of [a, b]) {
       const frame = await client.wait((frame) =>
@@ -81,7 +95,11 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
         frame.prefs.shellLayout.leftCollapsed === layout.leftCollapsed &&
         frame.prefs.shellLayout.rightCollapsed === layout.rightCollapsed &&
         frame.prefs.shellLayout.rightWidth === layout.rightWidth &&
-        frame.prefs.shellLayout.rightView === layout.rightView
+        frame.prefs.shellLayout.rightView === layout.rightView &&
+        frame.prefs.shellLayout.projectCollapsed?.['["first","/repo"]'] ===
+          true &&
+        frame.prefs.shellLayout.projectCollapsed?.['["second","/repo"]'] ===
+          false
       );
       assertEquals(frame.t === "prefs" && frame.prefs.shellLayout, layout);
       assertEquals(
@@ -101,6 +119,9 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
         { rightWidth: 481 },
         { rightView: 1 },
         { rightView: "x".repeat(129) },
+        { projectCollapsed: { bad: "true" } },
+        { projectCollapsed: [] },
+        { projectCollapsed: null },
       ]
     ) {
       await assertRejects(() => a.rpc("layout.patch", patch));

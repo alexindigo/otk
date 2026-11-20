@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectTree } from "./project-tree.ts";
 import { DEFAULT_PROJECT_AGEING, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
@@ -145,35 +146,16 @@ export function projectHierarchy<
   T extends InboxProject & { sidecarId?: string },
 >(rows: readonly T[]): T[] {
   const result: T[] = [];
-  const emitted = new Set<T>();
-  const key = (row: T) =>
-    JSON.stringify([
-      row.sidecarId,
-      row.topology?.repoID,
-      row.topology?.canonicalRoot,
-    ]);
-  const children = new Map<string, T[]>();
-  const parents = new Map<string, T>();
-  for (const row of rows) {
-    if (!row.topology?.parentDirectory) {
-      if (row.topology) parents.set(key(row), row);
-      continue;
-    }
-    const values = children.get(key(row)) ?? [];
-    values.push(row);
-    children.set(key(row), values);
-  }
-  for (const row of rows) {
-    if (emitted.has(row)) continue;
-    if (row.topology?.parentDirectory) {
-      const parent = parents.get(key(row));
-      if (parent && !emitted.has(parent)) continue;
-    }
-    const leaves = children.get(key(row)) ?? [];
+  const walk = (
+    node: ReturnType<typeof projectTree<T>>[number],
+    depth = 0,
+    parent?: T,
+  ) => {
+    const row = node.project;
     result.push(
-      row.topology && !row.topology.parentDirectory && row.inactive &&
-        leaves.some((leaf) =>
-          ["active", "archived"].includes(projectGroup(leaf))
+      row.inactive &&
+        node.children.some((child) =>
+          ["active", "archived"].includes(projectGroup(child.project))
         )
         ? {
           ...row,
@@ -182,20 +164,15 @@ export function projectHierarchy<
           inactive: false,
           inactivePolicy: true,
         }
+        : parent &&
+            (row.depth !== depth ||
+              row.parentLabel !== projectName(parent.directory))
+        ? { ...row, depth, parentLabel: projectName(parent.directory) }
         : row,
     );
-    emitted.add(row);
-    if (row.topology && !row.topology.parentDirectory) {
-      for (const child of leaves) {
-        result.push(
-          child.depth === 1
-            ? child
-            : { ...child, depth: 1, parentLabel: projectName(row.directory) },
-        );
-        emitted.add(child);
-      }
-    }
-  }
+    for (const child of node.children) walk(child, depth + 1, row);
+  };
+  for (const root of projectTree(rows)) walk(root);
   return result;
 }
 /** Source provenance never decides presentation groups. */

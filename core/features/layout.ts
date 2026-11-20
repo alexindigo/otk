@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { isProjectLocation, type Preferences } from "@otk/protocol";
+import {
+  isProjectLocation,
+  type Preferences,
+  projectLayoutKey,
+} from "@otk/protocol";
 import type { Prefs } from "@otk/store";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { localExecution, localWrite } from "../requests/policies.ts";
@@ -48,6 +52,31 @@ export function register(
           ),
         receipt,
       ),
+  });
+  // Like locations, project disclosure is one keyed intent, not a stale map.
+  rpc.register("layout.project", {
+    execution: localExecution(() => ({ resource: "layout" }), receipt),
+    params: (value) => {
+      if (typeof value.collapsed !== "boolean") {
+        throw new Error("Invalid project disclosure");
+      }
+      return {
+        sidecarId: text(value, "sidecarId")!,
+        directory: text(value, "directory")!,
+        collapsed: value.collapsed,
+      };
+    },
+    handler: (ctx, value) =>
+      localWrite(ctx, (tx) => {
+        const layout = prefs.get().shellLayout;
+        return prefs.set("shellLayout", {
+          ...layout,
+          projectCollapsed: {
+            ...layout.projectCollapsed,
+            [projectLayoutKey(value)]: value.collapsed,
+          },
+        }, tx);
+      }, receipt),
   });
   // A project-location intent merges at the same persisted layout owner. An old
   // browser snapshot must never replace another project's newer location.

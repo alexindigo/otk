@@ -552,6 +552,7 @@ export default function Shell(
               onOpen={openProject}
               onInactive={resources.inactive}
               onLayout={saveLayout}
+              onProjectCollapse={resources.projectCollapse}
             />
             <main class="otk-main">
               <Show when={error()}>

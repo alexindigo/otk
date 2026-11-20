@@ -2,8 +2,9 @@
 import "./RecordList.css" with { type: "text" };
 import { type Element, onCleanup } from "solid-js";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
+import { TreeItem } from "./Tree.tsx";
 
-/** The record frame owns rhythm and disclosure rails, not virtual neighbours. */
+/** The record frame owns rhythm and supplies topology, never virtual neighbours. */
 export default function RecordList<T>(props: {
   items: readonly T[];
   key(item: T): string;
@@ -28,12 +29,13 @@ export default function RecordList<T>(props: {
           ? (item) => `${props.key(item)}:${props.revision!(item)}`
           : undefined}
         render={(item) => (
-          <div
-            class={["otk-record-list-row", { "is-outgoing": props.outgoing }]}
+          <TreeItem
+            last={props.items.length > 0 &&
+              props.key(item()) === props.key(props.items.at(-1)!)}
+            outgoing={props.outgoing}
           >
-            <span class="otk-record-list-connector" aria-hidden="true" />
-            <div class="otk-record-list-content">{props.render(item)}</div>
-          </div>
+            {props.render(item)}
+          </TreeItem>
         )}
       />
     </div>

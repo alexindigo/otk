@@ -7,7 +7,7 @@ import { duration } from "@otk/client";
 import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { ChevronIcon } from "./ChromeIcons.tsx";
+import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 export default function Reasoning(
   props: {
     part: Extract<Part, { kind: "reasoning" }>;
@@ -37,9 +37,11 @@ export default function Reasoning(
   function Heading() {
     return (
       <>
-        <Show when={props.part.time.end === undefined}>
-          <ActivityIndicator small />
-        </Show>
+        <TreeIcon>
+          <Show when={props.part.time.end === undefined}>
+            <ActivityIndicator small />
+          </Show>
+        </TreeIcon>
         {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
         {props.part.time.end !== undefined
           ? ` ${duration(props.part.time.end - props.part.time.start)}`
@@ -49,25 +51,40 @@ export default function Reasoning(
   }
   return (
     <section class={["otk-reasoning", { "is-open": open() }]}>
-      <button
-        type="button"
-        aria-expanded={open() ? "true" : "false"}
-        onClick={() => void toggle()}
-      >
-        <ChevronIcon class="otk-reasoning-chevron" />
-        <Heading />
-      </button>
-      <Show when={open()}>
-        <div class="otk-reasoning-body">
-          <Show when={title()}>
-            <strong>{title()}</strong>
-          </Show>
-          <Blocks
-            blocks={heading() ? props.part.blocks.slice(1) : props.part.blocks}
-            conceal={props.conceal}
-          />
-        </div>
-      </Show>
+      <TreeNode
+        label="Thought"
+        open={open()}
+        onOpen={setExpanded}
+        header={() => (
+          <button
+            class="otk-reasoning-heading"
+            type="button"
+            aria-expanded={open() ? "true" : "false"}
+            onClick={() => void toggle()}
+          >
+            <Heading />
+          </button>
+        )}
+        body={() => (
+          <TreeItem last>
+            <TreeNode
+              header={() => (
+                <div class="otk-reasoning-body">
+                  <Show when={title()}>
+                    <strong>{title()}</strong>
+                  </Show>
+                  <Blocks
+                    blocks={heading()
+                      ? props.part.blocks.slice(1)
+                      : props.part.blocks}
+                    conceal={props.conceal}
+                  />
+                </div>
+              )}
+            />
+          </TreeItem>
+        )}
+      />
     </section>
   );
 }

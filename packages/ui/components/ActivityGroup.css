@@ -6,9 +6,6 @@
 .otk-record-group {
   margin-block-end: var(--message-gap, 24px);
 }
-.otk-record-group-toggle[aria-expanded=true] .otk-record-group-chevron {
-  rotate: 90deg;
-}
 .otk-record-group-count,
 .otk-record-group-time {
   flex: none;

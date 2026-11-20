@@ -6,6 +6,7 @@ import "./Message.css" with { type: "text" };
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
+import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
@@ -76,6 +77,7 @@ function PartsView(
   props: Omit<PartProps, "part"> & {
     parts: Part[];
     sourceID?(part: Part): string;
+    tree?: boolean;
   },
 ) {
   const generation = contentGeneration();
@@ -85,17 +87,22 @@ function PartsView(
       key={(part) => generation(part.id)}
       label="Reply parts"
       render={(part) => (
-        <PartView
-          part={part()}
-          prefs={props.prefs}
-          directory={props.directory}
-          permissions={props.permissions}
-          onOpenChild={props.onOpenChild}
-          user={props.user}
-          streaming={props.streaming}
-          pending={props.pending}
-          sourceID={props.sourceID?.(part())}
-        />
+        <TreeItem
+          connected={props.tree === true}
+          last={part().id === props.parts.at(-1)?.id}
+        >
+          <PartView
+            part={part()}
+            prefs={props.prefs}
+            directory={props.directory}
+            permissions={props.permissions}
+            onOpenChild={props.onOpenChild}
+            user={props.user}
+            streaming={props.streaming}
+            pending={props.pending}
+            sourceID={props.sourceID?.(part())}
+          />
+        </TreeItem>
       )}
     />
   );
@@ -352,6 +359,7 @@ export default function Message(
                       required={group().required}
                       body={() => (
                         <PartsView
+                          tree
                           parts={group().parts}
                           prefs={props.prefs}
                           directory={props.directory}
