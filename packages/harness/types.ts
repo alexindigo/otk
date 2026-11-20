@@ -51,6 +51,21 @@ export interface HarnessSink {
   bootstrapComplete(): void;
   invalidate(value: TranscriptInvalidation): void;
 }
+/** Native event delivery pressure, not a content-completeness certificate. */
+export interface EventDispatchPressure {
+  generation: number;
+  received: number;
+  handled: number;
+  queued: number;
+  queuedBytes: number;
+  oldestAgeMs: number;
+  nativeLagMs: number;
+  maxNativeLagMs: number;
+  handlerMs: number;
+  activeType?: string;
+  backpressured: boolean;
+  refresh?: { pending: number; active?: string; oldestAgeMs: number };
+}
 export interface ProjectSeed {
   presentation?: Pick<
     import("@otk/protocol").CatalogProject,

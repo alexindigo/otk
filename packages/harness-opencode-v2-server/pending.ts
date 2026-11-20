@@ -291,9 +291,10 @@ export class V2Pending {
     }
   }
   /** Retain form payload and renderer identity, not fresh attention authority. */
-  uncertain(): void {
+  uncertain(preserve: ReadonlySet<string> = new Set()): void {
     let changed = false;
     for (const pending of this.#forms.values()) {
+      if (preserve.has(pending.request.id)) continue;
       if (pending.request.fresh === false) continue;
       pending.request = { ...pending.request, fresh: false };
       changed = true;
@@ -355,16 +356,20 @@ export class V2Pending {
   replacePermissions(
     location: Location,
     permissions: readonly NativePermission[],
+    preserve: ReadonlySet<string> = new Set(),
   ): void {
     for (const [key, value] of this.#permissions) {
       if (
         value.location.directory === location.directory &&
+        !preserve.has(key) &&
         !permissions.some((x) => x.id === key)
       ) {
         this.settle("permission", key, ids.decode(value.request.sessionID));
       }
     }
-    for (const raw of permissions) this.#permission(location, raw);
+    for (const raw of permissions) {
+      if (!preserve.has(raw.id)) this.#permission(location, raw);
+    }
   }
   /** Events and full inventories converge before any attention count is exposed. */
   acceptPermission(location: Location, value: unknown): boolean {
@@ -432,16 +437,23 @@ export class V2Pending {
     this.observed(request.sessionID, raw.id, structuredClone(raw));
     this.changed(request.sessionID, { op: "permission.upsert", request });
   }
-  replaceForms(location: Location, forms: readonly NativeForm[]): void {
+  replaceForms(
+    location: Location,
+    forms: readonly NativeForm[],
+    preserve: ReadonlySet<string> = new Set(),
+  ): void {
     for (const [key, value] of this.#forms) {
       if (
         value.location.directory === location.directory &&
+        !preserve.has(key) &&
         !forms.some((x) => x.id === key)
       ) {
         this.settle("form", key, value.native);
       }
     }
-    for (const raw of forms) this.#form(location, raw);
+    for (const raw of forms) {
+      if (!preserve.has(raw.id)) this.#form(location, raw);
+    }
     this.#notify();
   }
   acceptForm(location: Location, value: unknown): boolean {

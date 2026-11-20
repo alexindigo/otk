@@ -37,12 +37,13 @@ import { Transcript } from "./transcript.ts";
 import { errorText } from "./classify.ts";
 import { revertSession, sessionActions } from "./session-actions.ts";
 import { readSessionActivity } from "./recency.ts";
-import { pendingAttention } from "./attention.ts";
+import { PendingAttentionIndex } from "./attention.ts";
 import { commands } from "./commands.ts";
 import { V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
 import { V2Shells } from "./shells.ts";
 import { requestFailureRecord } from "./request-failure.ts";
+import { EventRefresh } from "./event-refresh.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -63,6 +64,14 @@ type Pending = {
   directory: string;
   stale?: boolean;
 };
+type MetadataRefresh = {
+  event: V2Event;
+  execution?: V2Event;
+  failure?: PublicFailure;
+  retry?: V2Event;
+  shellEnd?: number;
+  projects?: boolean;
+};
 /** Managed-service connection, native identity and capability composition. */
 export class OpencodeV2ServerAdapter implements Harness {
   storage(storage: import("@otk/harness").PluginStorage): void {
@@ -80,6 +89,9 @@ export class OpencodeV2ServerAdapter implements Harness {
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
+  #pendingAttention = new PendingAttentionIndex((id) =>
+    this.#index.getMetadata(id)
+  );
   #running = new Map<string, number>();
   #finished = new Map<string, TerminalEvidence>();
   #deliveries?: DeliveryBackfill;
@@ -91,6 +103,12 @@ export class OpencodeV2ServerAdapter implements Harness {
   #activityCurrent = false;
   #observation = 0;
   #helperListener?: () => void;
+  #topologyListener?: () => void;
+  #refresh?: EventRefresh;
+  #metadataRefresh = new Map<string, MetadataRefresh>();
+  #inventoryChanges?: Map<string, Pending | undefined>;
+  #executionRevision = 0;
+  #activeRead?: { revision: number; value: Promise<Record<string, unknown>> };
   #errors = new SessionErrors(
     (id, state) => {
       const entry = this.#index.getMetadata(id);
@@ -113,6 +131,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     readonly diagnostic: (error: unknown) => void = () => {},
     fetcher: typeof fetch = fetch,
     reads?: ProviderReadPort,
+    dispatch?: (pressure: import("@otk/harness").EventDispatchPressure) => void,
   ) {
     const digest = this.digest = reads && "start" in reads
       ? reads as DigestPort
@@ -147,6 +166,9 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#sink?.bootstrapComplete();
         },
         disconnected: (generation) => {
+          this.#refresh?.cancel();
+          this.#metadataRefresh.clear();
+          this.#activeRead = undefined;
           this.#activityCurrent = false;
           this.pending.uncertain();
           this.transcript.disconnect();
@@ -162,6 +184,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#sink?.connection("reconnecting");
         },
         diagnostic,
+        dispatch: dispatch
+          ? (pressure) =>
+            dispatch({ ...pressure, refresh: this.#refresh?.pressure })
+          : undefined,
       },
       { ...config.harness, ...config.messages, heartbeattimeout: 45 },
       fetcher,
@@ -427,6 +453,12 @@ export class OpencodeV2ServerAdapter implements Harness {
           const summary = this.#index.helper(id);
           if (summary) this.transcript.helper(id, summary);
         });
+        this.#topologyListener = this.#index.observeTopology((id, parentID) => {
+          for (const key of this.#pendingAttention.reparent({ id, parentID })) {
+            const entry = this.#index.getMetadata(key);
+            if (entry) this.#upsert(entry);
+          }
+        });
         this.#sink = sink;
         if (digest) {
           this.#deliveryJoin = new DeliveryJoin(
@@ -460,11 +492,15 @@ export class OpencodeV2ServerAdapter implements Harness {
         await this.catalogs?.stop();
         this.#helperListener?.();
         this.#helperListener = undefined;
+        this.#topologyListener?.();
+        this.#topologyListener = undefined;
         await this.stream.stop();
+        await this.#refresh?.stop();
         await this.transcript.stop();
         await digest?.stop();
         await this.prompts.stop();
         this.#pending.clear();
+        this.#pendingAttention.clear();
         this.pending.clear();
         this.#running.clear();
         this.#shells.clear();
@@ -639,12 +675,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       entry.activity,
     );
     if (terminal.terminal) this.#finished.set(entry.id, terminal);
-    const pending = pendingAttention(
-      entry.id,
-      [...this.#pending.values()].filter((row) => row.sessionID !== "global")
-        .map((row) => ({ ...row, sessionID: ids.encode(row.sessionID) })),
-      (id) => id === entry.id ? entry : this.#index.getMetadata(id),
-    );
+    const reparented = this.#pendingAttention.reparent(entry);
+    const pending = this.#pendingAttention.get(entry.id);
     const nativeID = ids.decode(entry.id), run = this.#running.get(nativeID);
     const runID = run === undefined ? undefined : `execution:${run}`;
     const startedAt = runID
@@ -677,17 +709,11 @@ export class OpencodeV2ServerAdapter implements Harness {
           ],
         },
         inputs: {
-          keys: [...this.#pending.values()].filter((row) =>
-            !row.stale && row.sessionID !== "global" &&
-            row.kind !== "permission" && ids.encode(row.sessionID) === entry.id
-          ).map((row) => row.id),
+          keys: pending.inputs,
           fresh: this.#activityCurrent,
         },
         permissions: {
-          keys: [...this.#pending.values()].filter((row) =>
-            !row.stale && row.sessionID !== "global" &&
-            row.kind === "permission" && ids.encode(row.sessionID) === entry.id
-          ).map((row) => row.id),
+          keys: pending.permissions,
           fresh: this.#activityCurrent,
         },
       },
@@ -700,6 +726,11 @@ export class OpencodeV2ServerAdapter implements Harness {
       ...(pending.stale ? { activityAuthority: "unknown" } : {}),
     };
     this.#publishMetadata(entry);
+    for (const id of reparented) {
+      if (id === entry.id) continue;
+      const ancestor = this.#index.getMetadata(id);
+      if (ancestor) this.#upsert(ancestor);
+    }
     const delivered = entry.activity?.delivered;
     if (
       entry.parentID && terminal.terminal &&
@@ -1002,6 +1033,13 @@ export class OpencodeV2ServerAdapter implements Harness {
     };
   }
   #setPending(key: string, row?: Pending): void {
+    this.#inventoryChanges?.set(key, row);
+    this.#pendingAttention.set(
+      key,
+      row && row.sessionID !== "global"
+        ? { ...row, sessionID: ids.encode(row.sessionID) }
+        : undefined,
+    );
     if (row) this.#pending.set(key, row);
     else this.#pending.delete(key);
   }
@@ -1046,10 +1084,27 @@ export class OpencodeV2ServerAdapter implements Harness {
     reconnect = true,
   ): Promise<() => Promise<void>> {
     if (reconnect) {
+      await this.#refresh?.stop();
+      this.#metadataRefresh.clear();
+      this.#activeRead = undefined;
+      this.#refresh = new EventRefresh(
+        signal,
+        (error) => this.stream.reconnect(error),
+      );
       await this.#deliveries?.stop();
       this.#deliveries = undefined;
       this.#deliveryParents.clear();
     }
+    const changes = this.#inventoryChanges = new Map<
+      string,
+      Pending | undefined
+    >();
+    const protectedRequests = (kind: Pending["kind"]) =>
+      new Set(
+        [...changes.values()].filter((row) => row?.kind === kind).map((row) =>
+          row!.id
+        ),
+      );
     const active = await client.read(
       (api) => api.session.active({ signal }),
       signal,
@@ -1112,11 +1167,21 @@ export class OpencodeV2ServerAdapter implements Harness {
               V2Pending["replacePermissions"]
             >[1];
             inventories.push(() =>
-              this.pending.replacePermissions(location, permissions)
+              this.pending.replacePermissions(
+                location,
+                permissions,
+                protectedRequests("permission"),
+              )
             );
           } else {
             const forms = rows as Parameters<V2Pending["replaceForms"]>[1];
-            inventories.push(() => this.pending.replaceForms(location, forms));
+            inventories.push(() =>
+              this.pending.replaceForms(
+                location,
+                forms,
+                protectedRequests("form"),
+              )
+            );
           }
           // Each complete kind/location inventory owns only its own absence facts.
           for (const [key, value] of pending) {
@@ -1232,6 +1297,17 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
       this.#activityCurrent = true;
       this.#shells.replace(shells);
+      // An asynchronous inventory owns its captured absence, not newer live
+      // requests. Explicit settlements retain the pending owner's tombstones.
+      for (const [key, row] of changes) {
+        if (row) {
+          pending.set(key, row);
+          directories.add(row.directory);
+        } else pending.delete(key);
+      }
+      if (this.#inventoryChanges === changes) {
+        this.#inventoryChanges = undefined;
+      }
       const changedOwners = new Set(
         [...this.#pending.values(), ...pending.values()]
           .filter((row) => row.sessionID !== "global").map((row) =>
@@ -1239,11 +1315,16 @@ export class OpencodeV2ServerAdapter implements Harness {
           ),
       );
       this.pending.retainLocations(directories);
-      this.pending.uncertain();
+      this.pending.uncertain(protectedRequests("form"));
       this.#pending = pending;
       for (const [key, row] of this.#pending) {
         if (this.pending.settled(row.kind, row.id)) this.#pending.delete(key);
       }
+      this.#pendingAttention.replace(
+        [...this.#pending].filter(([, row]) => row.sessionID !== "global").map((
+          [key, row],
+        ) => [key, { ...row, sessionID: ids.encode(row.sessionID) }]),
+      );
       for (const apply of inventories) apply();
       if (reconnect) {
         await transcriptCommit?.();
@@ -1290,24 +1371,6 @@ export class OpencodeV2ServerAdapter implements Harness {
       for (const error of errors) this.#sink?.error?.(error);
     };
   }
-  async #refreshProjects(
-    directories: readonly string[],
-    signal: AbortSignal,
-    generation: number,
-  ): Promise<void> {
-    if (!this.digest?.projects) return;
-    for (const directory of new Set(directories)) {
-      const result = await this.digest.projects(
-        generation,
-        signal,
-        undefined,
-        directory,
-      );
-      signal.throwIfAborted();
-      if (generation !== this.#generation) return;
-      this.#sink?.projectSeeds?.(result.projects);
-    }
-  }
   async #event(
     event: V2Event,
     client: V2Client,
@@ -1315,16 +1378,16 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
-    if (event.type === "project.updated" && this.digest?.projects) {
-      const result = await this.digest.projects(generation, signal);
-      signal.throwIfAborted();
-      if (generation === this.#generation) {
-        this.#sink?.projectSeeds?.(result.projects);
-      }
-    }
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    if (
+      this.#inventoryChanges &&
+      /^(session\.(execution\.|shell\.|created$|forked$|moved$|deleted$|renamed$|metadata\.updated$|archived$|unarchived$)|shell\.)/
+        .test(event.type)
+    ) {
+      this.#queueInventory(client, signal, generation);
+    }
     if (changedID && generation === this.#generation) {
       if (
         /^session\.(tool\.(success|failed)|inbox\.delivered|revert\.)/.test(
@@ -1339,6 +1402,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
     }
     if (changedID && event.type === "session.deleted") {
+      this.#refresh?.forget(`session:${event.data.sessionID}`);
+      this.#metadataRefresh.delete(event.data.sessionID as string);
       this.pending.retireSession(event.data.sessionID as string);
       const previous = this.#index.getMetadata(changedID);
       await this.#deleted(
@@ -1349,7 +1414,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       // Population refresh belongs to the event stream, not the confirmed
       // mutation's receipt. A held read cannot delay deletion confirmation.
       if (previous) {
-        await this.#refreshProjects([previous.directory], signal, generation);
+        this.#queueProjects([previous.directory], signal, generation);
       }
       return;
     }
@@ -1421,24 +1486,21 @@ export class OpencodeV2ServerAdapter implements Harness {
     } else await this.transcript.event(event);
     const shell = this.#shells.event(event);
     if (shell) {
-      const raw = await readSessionActivity(client, shell.sessionID, signal);
-      signal.throwIfAborted();
-      if (generation !== this.#generation) return;
-      const entry = this.#metadata(raw, this.#running.has(raw.id));
-      if (shell.ended && entry.activity?.terminal === shell.ended) {
-        entry.activity = { ...entry.activity, terminalOrigin: "live" };
-      }
-      this.#execution(entry, entry.status === "idle" ? shell.ended : undefined);
-      if (raw.parentID) await this.#hydrate([ids.encode(raw.parentID)], signal);
+      this.#queueMetadata(
+        { ...event, data: { ...event.data, sessionID: shell.sessionID } },
+        client,
+        signal,
+        generation,
+        executionFailure,
+        shell.ended,
+      );
       return;
     }
     if (
       /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
         .test(event.type)
     ) {
-      const commit = await this.#resync(client, signal, generation, false);
-      signal.throwIfAborted();
-      await commit();
+      this.#queueInventory(client, signal, generation);
       return;
     }
     const form = event.data.form;
@@ -1447,9 +1509,19 @@ export class OpencodeV2ServerAdapter implements Harness {
         ? Reflect.get(form, "sessionID")
         : undefined);
     if (/^(permission\.|form\.)/.test(event.type)) {
-      const commit = await this.#resync(client, signal, generation, false);
-      signal.throwIfAborted();
-      await commit();
+      // The event already supplied the changed request and settlement identity.
+      // Only a new owner needs keyed scalar hydration, never global inventories.
+      if (
+        typeof sid === "string" && sid !== "global" &&
+        !this.#index.getMetadata(ids.encode(sid))
+      ) {
+        this.#queueMetadata(
+          { type: "session.metadata.updated", data: { sessionID: sid } },
+          client,
+          signal,
+          generation,
+        );
+      }
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;
@@ -1464,44 +1536,114 @@ export class OpencodeV2ServerAdapter implements Harness {
       revision: ++this.#observation,
       reason: "metadata",
     }]);
-    if (event.type === "session.deleted") {
-      this.#errors.remove(ids.encode(sid));
-      const previous = this.#index.getMetadata(ids.encode(sid));
-      this.#running.delete(sid);
-      this.#finished.delete(ids.encode(sid));
-      for (const [key, row] of this.#pending) {
-        if (row.sessionID === sid) this.#setPending(key);
-      }
-      this.#sink?.indexRemove(ids.encode(sid));
-      if (previous) {
-        await this.#refreshProjects([previous.directory], signal, generation);
-      }
-      return;
+    this.#queueMetadata(event, client, signal, generation, executionFailure);
+  }
+  #queueProjects(
+    directories: readonly string[],
+    signal: AbortSignal,
+    generation: number,
+  ): void {
+    for (const directory of new Set(directories)) {
+      this.#refresh?.request(`project:${directory}`, async (current) => {
+        if (!this.digest?.projects) return;
+        const result = await this.digest.projects(
+          generation,
+          signal,
+          undefined,
+          directory,
+        );
+        if (current() && generation === this.#generation) {
+          this.#sink?.projectSeeds?.(result.projects);
+        }
+      });
     }
+  }
+  #queueInventory(
+    client: V2Client,
+    signal: AbortSignal,
+    generation: number,
+  ): void {
+    this.#refresh?.request("inventory", async (current) => {
+      const commit = await this.#resync(client, signal, generation, false);
+      if (current() && generation === this.#generation) await commit();
+    });
+  }
+  #queueMetadata(
+    event: V2Event,
+    client: V2Client,
+    signal: AbortSignal,
+    generation: number,
+    failure?: PublicFailure,
+    shellEnd?: number,
+  ): void {
+    const sid = event.data.sessionID as string;
+    const previous = this.#metadataRefresh.get(sid);
+    const execution = /^session\.execution\./.test(event.type);
+    if (execution) this.#executionRevision++;
+    const value: MetadataRefresh = {
+      ...previous,
+      event,
+      ...(execution ? { execution: event, failure } : {}),
+      ...(/^session\.(execution\.|step\.started|retry\.scheduled)/.test(
+          event.type,
+        )
+        ? { retry: event }
+        : {}),
+      ...(shellEnd ? { shellEnd } : {}),
+      projects: previous?.projects ||
+        /^session\.(created|forked|moved)$/.test(event.type),
+    };
+    this.#metadataRefresh.set(sid, value);
+    this.#refresh?.request(`session:${sid}`, async (current) => {
+      try {
+        await this.#refreshMetadata(value, client, signal, generation, current);
+      } catch (error) {
+        if (!(error instanceof V2MissingSession)) throw error;
+      } finally {
+        if (this.#metadataRefresh.get(sid) === value) {
+          this.#metadataRefresh.delete(sid);
+        }
+      }
+    });
+  }
+  #readActive(
+    client: V2Client,
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    if (this.#activeRead?.revision !== this.#executionRevision) {
+      this.#activeRead = {
+        revision: this.#executionRevision,
+        value: client.read((api) => api.session.active({ signal }), signal),
+      };
+    }
+    return this.#activeRead.value;
+  }
+  async #refreshMetadata(
+    value: MetadataRefresh,
+    client: V2Client,
+    signal: AbortSignal,
+    generation: number,
+    current: () => boolean,
+  ): Promise<void> {
+    const event = value.execution ?? value.event;
+    const sid = event.data.sessionID as string;
     const previousRun = this.#running.get(sid);
+    const executionFailure = value.failure;
     this.#errors.register(ids.encode(sid));
-    if (event.type === "session.execution.started") {
-      this.#running.set(sid, event.created ?? Date.now());
-      // A busy edge only clears an existing diagnostic. Publishing an empty
-      // error transition for every healthy run needlessly invalidates content.
-      if (this.#errors.snapshot(ids.encode(sid)).observations.length) {
-        this.#errors.clear(ids.encode(sid));
-      }
-    }
     const previous = this.#index.getMetadata(ids.encode(sid));
-    const raw = await readSessionActivity(client, sid, signal);
+    const raw = await client.read(
+      (api) => api.session.get({ sessionID: sid }, { signal }),
+      signal,
+    );
     signal.throwIfAborted();
-    if (generation !== this.#generation) return;
+    if (!current() || generation !== this.#generation) return;
     // Buffered events and metadata clocks are not process ownership. Read the
     // same native owner used at bootstrap, so a delayed edge cannot revive a
     // dead run or retire a newer run. Keep its resync identity until I/O settles.
     if (/^session\.execution\./.test(event.type)) {
-      const active = await client.read(
-        (api) => api.session.active({ signal }),
-        signal,
-      );
+      const active = await this.#readActive(client, signal);
       signal.throwIfAborted();
-      if (generation !== this.#generation) return;
+      if (!current() || generation !== this.#generation) return;
       const terminalEvent =
         /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type);
       const newer = millis(raw.time.busy) >
@@ -1513,13 +1655,46 @@ export class OpencodeV2ServerAdapter implements Harness {
         );
       } else this.#running.delete(sid);
     }
+    if (
+      event.type === "session.execution.started" && this.#running.has(sid) &&
+      this.#errors.snapshot(ids.encode(sid)).observations.length
+    ) this.#errors.clear(ids.encode(sid));
     // Native shutdown deliberately does not advance idle. Its interrupted event
     // is continuity loss, not a finish; only the durable outcome/idle pair counts.
     const ended = metadata(raw).activity?.terminal;
-    const entry = this.#metadata(raw, this.#running.has(sid));
+    const activityEvent = /^(session\.(execution\.|step\.|shell\.)|shell\.)/
+      .test(
+        value.event.type,
+      );
+    const entry = this.#metadata({
+      ...raw,
+      activity: Math.max(
+        previous?.timeUpdated ?? 0,
+        activityEvent ? value.event.created ?? 0 : 0,
+      ),
+      terminal: value.shellEnd,
+    }, this.#running.has(sid));
+    if (
+      previous?.activity?.terminal === entry.activity?.terminal &&
+      previous?.activity?.outcome === entry.activity?.outcome
+    ) {
+      entry.activity = {
+        ...entry.activity,
+        ...(previous?.activity?.terminalFailure
+          ? { terminalFailure: previous.activity.terminalFailure }
+          : {}),
+        ...(previous?.activity?.terminalOrigin
+          ? { terminalOrigin: previous.activity.terminalOrigin }
+          : {}),
+      };
+    }
+    if (value.shellEnd && entry.activity?.terminal === value.shellEnd) {
+      entry.activity = { ...entry.activity, terminalOrigin: "live" };
+    }
     if (
       /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type) &&
       event.data.reason !== "shutdown" &&
+      (event.created === undefined || event.created === ended) &&
       event.type === `session.execution.${entry.activity?.outcome}` &&
       entry.activity?.terminal === ended && ended
     ) {
@@ -1530,22 +1705,24 @@ export class OpencodeV2ServerAdapter implements Harness {
       };
     }
     if (
-      event.type === "session.execution.started" ||
-      event.type === "session.step.started" ||
-      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+      value.retry && value.retry.type !== "session.retry.scheduled"
     ) delete entry.retry;
     if (
-      event.type === "session.retry.scheduled" &&
-      Number.isSafeInteger(event.data.attempt) &&
-      typeof event.data.at === "number"
+      value.retry?.type === "session.retry.scheduled" &&
+      Number.isSafeInteger(value.retry.data.attempt) &&
+      typeof value.retry.data.at === "number"
     ) {
       entry.retry = {
-        attempt: Number(event.data.attempt),
-        message: errorText(event.data.error),
-        next: event.data.at,
+        attempt: Number(value.retry.data.attempt),
+        message: errorText(value.retry.data.error),
+        next: value.retry.data.at,
       };
     }
-    if (event.type === "session.execution.failed" && !this.#running.has(sid)) {
+    if (
+      event.type === "session.execution.failed" && !this.#running.has(sid) &&
+      (event.created === undefined || event.created === ended) &&
+      raw.outcome === "failed"
+    ) {
       const error = event.data.error;
       this.#errors.native(ids.encode(sid), {
         ...(executionFailure ? { failure: executionFailure } : {}),
@@ -1558,7 +1735,9 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     if (
       event.type === "session.execution.interrupted" &&
-      event.data.reason !== "shutdown" && !this.#running.has(sid)
+      event.data.reason !== "shutdown" && !this.#running.has(sid) &&
+      (event.created === undefined || event.created === ended) &&
+      raw.outcome === "interrupted"
     ) {
       this.#errors.native(ids.encode(sid), {
         message: "Execution interrupted.",
@@ -1567,34 +1746,24 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     this.#execution(
       entry,
-      ended,
+      ended ?? value.shellEnd,
       previousRun !== undefined && event.type !== "session.execution.started" &&
         this.#index.getMetadata(entry.id)?.status === "idle",
     );
-    if (/^session\.(created|forked|moved)$/.test(event.type)) {
-      await this.#refreshProjects(
+    if (value.projects) {
+      this.#queueProjects(
         [raw.location.directory, ...(previous ? [previous.directory] : [])],
         signal,
         generation,
       );
     }
-    if (raw.parentID) {
-      const pending = [raw.parentID], seen = new Set([sid]);
-      for (const parent of pending) {
-        if (seen.has(parent)) continue;
-        seen.add(parent);
-        try {
-          const raw = await client.read(
-            (api) => api.session.get({ sessionID: parent }, { signal }),
-            signal,
-          );
-          signal.throwIfAborted();
-          this.#upsert(this.#metadata(raw, this.#running.has(parent)));
-          if (raw.parentID) pending.push(raw.parentID);
-        } catch (error) {
-          if (!(error instanceof V2MissingSession)) throw error;
-        }
-      }
+    if (raw.parentID && !this.#index.getMetadata(ids.encode(raw.parentID))) {
+      this.#queueMetadata(
+        { type: "session.metadata.updated", data: { sessionID: raw.parentID } },
+        client,
+        signal,
+        generation,
+      );
     }
   }
 }

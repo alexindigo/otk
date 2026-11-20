@@ -19,25 +19,32 @@ export interface RunningShell {
 /** Scalar activity, independent of transcript demand and session executions. */
 export class V2Shells {
   #running = new Map<string, RunningShell>();
+  #bySession = new Map<string, Map<string, RunningShell>>();
+  #add(shell: RunningShell): void {
+    this.#running.set(shell.id, shell);
+    let rows = this.#bySession.get(shell.sessionID);
+    if (!rows) this.#bySession.set(shell.sessionID, rows = new Map());
+    rows.set(shell.id, shell);
+  }
+  #remove(id: string): void {
+    const shell = this.#running.get(id);
+    if (!shell) return;
+    this.#running.delete(id);
+    const rows = this.#bySession.get(shell.sessionID)!;
+    rows.delete(id);
+    if (!rows.size) this.#bySession.delete(shell.sessionID);
+  }
   sessions(): string[] {
-    return [
-      ...new Set([...this.#running.values()].map((shell) => shell.sessionID)),
-    ];
+    return [...this.#bySession.keys()];
   }
   busy(sessionID: string): boolean {
-    return [...this.#running.values()].some((shell) =>
-      shell.sessionID === sessionID
-    );
+    return this.#bySession.has(sessionID);
   }
   keys(sessionID: string): string[] {
-    return [...this.#running.values()].filter((shell) =>
-      shell.sessionID === sessionID
-    ).map((shell) => shell.id);
+    return [...(this.#bySession.get(sessionID)?.keys() ?? [])];
   }
   items(sessionID: string) {
-    return [...this.#running.values()].filter((shell) =>
-      shell.sessionID === sessionID
-    )
+    return [...(this.#bySession.get(sessionID)?.values() ?? [])]
       .map((shell) => ({
         id: shell.id,
         kind: "shell" as const,
@@ -48,11 +55,10 @@ export class V2Shells {
   }
   clear(): void {
     this.#running.clear();
+    this.#bySession.clear();
   }
   retire(sessionID: string): void {
-    for (const [id, shell] of this.#running) {
-      if (shell.sessionID === sessionID) this.#running.delete(id);
-    }
+    for (const id of this.keys(sessionID)) this.#remove(id);
   }
   async snapshot(
     client: V2Client,
@@ -73,7 +79,8 @@ export class V2Shells {
     return rows;
   }
   replace(rows: readonly RunningShell[]): void {
-    this.#running = new Map(rows.map((shell) => [shell.id, shell]));
+    this.clear();
+    for (const shell of rows) this.#add(shell);
   }
   #map(info: Info, location: Location): RunningShell | undefined {
     const sessionID = info.metadata.sessionID;
@@ -104,7 +111,7 @@ export class V2Shells {
       if (!event.location || !raw.metadata || !raw.time) return;
       const shell = this.#map(raw, event.location);
       if (!shell || this.#running.has(shell.id)) return;
-      this.#running.set(shell.id, shell);
+      this.#add(shell);
       return { sessionID: shell.sessionID };
     }
     if (
@@ -126,7 +133,7 @@ export class V2Shells {
     // A session-scoped terminal is positive evidence in its own right. A lost
     // start (including bootstrap/reconnect) must not discard that endpoint.
     if (!sessionID || sessionID === "global") return;
-    this.#running.delete(id);
+    this.#remove(id);
     return { sessionID, ended: event.created };
   }
   /** Discover every asking session's shell before mutating; never stop another session's work. */
