@@ -400,4 +400,37 @@ export function deliveryContract(
       f.close();
     }
   });
+  Deno.test(`V${version} a parent refresh keeps covered facts; only source replacement retires them`, () => {
+    const f = fixture();
+    try {
+      f.add("kept", 1);
+      const step = (source: string, revision: number, refresh = false) =>
+        f.index().step(
+          { parentID, refresh },
+          source,
+          revision,
+          (cursor) => scan(f.native, parentID, cursor, 16),
+        );
+      assertEquals(step("source", 1).updates.length, 1);
+      const count = () =>
+        f.derived.prepare(`SELECT count(*) AS n FROM ${prefix}_delivery`).get()
+          ?.n;
+      f.native.exec(
+        version === 2
+          ? "DELETE FROM session_message WHERE id='receipt-kept'"
+          : "DELETE FROM part",
+      );
+      assertEquals(step("source", 2, true).reset, true);
+      assertEquals(count(), 1);
+      assertEquals(
+        f.index().facts([`${prefix}-kept`]).map((r) => r.delivered.terminal),
+        [20],
+      );
+      step("replacement", 3);
+      assertEquals(count(), 0);
+      assertEquals(f.index().facts([`${prefix}-kept`]), []);
+    } finally {
+      f.close();
+    }
+  });
 }

@@ -141,6 +141,10 @@ export interface DigestExecution {
   readonly examined?: number;
 }
 export interface DigestSink {
+  /** Plugin-private durable acknowledgement projection, no native I/O. */
+  delivered?(
+    ids: readonly string[],
+  ): import("./provider-reads.ts").DeliveryScalar[];
   identity: string;
   catalog(
     signal: AbortSignal,

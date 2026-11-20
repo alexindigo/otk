@@ -110,6 +110,7 @@ export interface V2DigestReadiness {
 }
 export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
   "supervision.deliveries": deliveryReadCodec,
+  "supervision.delivered": arrayReadCodec(),
   "supervision.terminals": arrayReadCodec(),
   ...transcriptReadCodecs,
   ...catalogReadCodecs,
@@ -196,6 +197,10 @@ export class OpencodeV2DigestSink implements DigestSink {
       () => this.#wait(new Promise<void>((resolve) => setTimeout(resolve, 0))),
     );
     this.readers = {
+      "supervision.delivered": ({ ids }, signal) => {
+        signal.throwIfAborted();
+        return Promise.resolve(this.delivered(ids));
+      },
       ...this.#preparedReaders({
         ...catalogReaders(() => {
           if (!this.#client) throw new Error("V2 worker is not connected");
@@ -315,6 +320,14 @@ export class OpencodeV2DigestSink implements DigestSink {
         return result;
       },
     };
+  }
+  delivered(keys: readonly string[]): import("@otk/harness").DeliveryScalar[] {
+    return new DeliveryIndex(
+      this.storage.sql,
+      "opcv2_delivery",
+      (run) => this.storage.transaction(run),
+      this.policy.publishrows,
+    ).facts(keys);
   }
   connection(value: number): void {
     if (value < this.#connection) return;

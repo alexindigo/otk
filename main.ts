@@ -84,7 +84,13 @@ export async function start(
           const current = index.getMetadata(entry.id);
           index.upsertMetadata(
             current && current.timeUpdated > entry.timeUpdated
-              ? current
+              ? {
+                ...current,
+                activity: {
+                  ...current.activity,
+                  delivered: entry.activity?.delivered,
+                },
+              }
               : current
               ? {
                 ...entry,
@@ -96,6 +102,7 @@ export async function start(
                   ...entry.activity,
                   ...current.activity,
                   ...latestTerminal(entry.activity, current.activity),
+                  delivered: entry.activity?.delivered,
                 },
               }
               : entry,
@@ -208,6 +215,7 @@ export async function start(
                 ...entry.activity,
                 ...current.activity,
                 ...latestTerminal(entry.activity, current.activity),
+                delivered: entry.activity?.delivered,
               },
             }
             : entry,
