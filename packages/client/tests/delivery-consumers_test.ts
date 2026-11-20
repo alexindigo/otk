@@ -67,7 +67,7 @@ Deno.test("delivered helper shares unseen across rollup, name, family, navigatio
   tabs.stop();
 });
 
-Deno.test("equal-terminal acknowledgement retracts helper notification; eligibility restoration is observed", () => {
+Deno.test("equal-terminal acknowledgement retracts helper notification without alerting on eligibility replay", () => {
   const f = shellFixture(), notes: string[] = [], retractions: string[] = [];
   const triggers = new NotificationTriggers(
     (n) => notes.push(n.kind),
@@ -124,7 +124,7 @@ Deno.test("equal-terminal acknowledgement retracts helper notification; eligibil
   assertEquals(retractions.length, 1);
   helper.activity!.delivered = undefined;
   publish();
-  assertEquals(notes, ["done", "done"]);
+  assertEquals(notes, ["done"]);
   triggers.stop();
   f.resources.stop();
 });

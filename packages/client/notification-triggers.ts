@@ -38,6 +38,8 @@ interface Facts {
   terminal?: number;
   outcome?: TerminalOutcome;
   unseen?: boolean;
+  terminalOrigin?: TerminalEvidence["terminalOrigin"];
+  terminalFailure?: TerminalEvidence["terminalFailure"];
 }
 const facts = (entry?: IndexEntry): Facts | undefined =>
   !entry || entry.deleted || entry.archived ? undefined : {
@@ -57,6 +59,8 @@ const facts = (entry?: IndexEntry): Facts | undefined =>
     title: entry.title,
     terminal: entry.activity?.terminal,
     outcome: entry.activity?.outcome,
+    terminalOrigin: entry.activity?.terminalOrigin,
+    terminalFailure: entry.activity?.terminalFailure,
   };
 /** Root comparison facts only; application delivery borrows accepted projected deltas. */
 export class NotificationTriggers {
@@ -166,9 +170,9 @@ export class NotificationTriggers {
   /** Accepts immutable borrowed values for this turn; retains no IndexEntry. */
   entriesChanged(sidecar: string, change: EntryChanges): void {
     let state = this.#connections.get(sidecar);
-    const baseline = !state ||
-      state.generation !== change.generation;
-    if (!state || baseline) {
+    const replaced = !state || state.generation !== change.generation;
+    const baseline = replaced || change.baseline;
+    if (!state || replaced) {
       state = {
         rev: change.revision,
         generation: change.generation,
@@ -184,11 +188,15 @@ export class NotificationTriggers {
       if (current && entry.completedAt) {
         current.terminal = entry.completedAt;
         current.outcome = entry.completedOutcome;
+        current.terminalOrigin = entry.completionOrigin;
+        current.terminalFailure = entry.completedFailure;
       }
       if (entry.after && !current && entry.completedAt) {
         state.finishes.set(entry.id, {
           terminal: entry.completedAt,
           outcome: entry.completedOutcome,
+          terminalOrigin: entry.completionOrigin,
+          terminalFailure: entry.completedFailure,
         });
       }
       this.#compare(
@@ -196,7 +204,7 @@ export class NotificationTriggers {
         entry.id,
         current,
         baseline,
-        entry.completedAt,
+        entry.completedAt || (baseline ? current?.terminal : undefined),
       );
     }
     // Install current routing/settlement facts before grace publication can
@@ -291,11 +299,12 @@ export class NotificationTriggers {
     }
     const outcome = completedAt === entry.terminal ? entry.outcome : undefined;
     const priorFinish = state.finishes.get(session);
-    const finished = completedAt !== undefined && completedAt > 0 &&
+    const historical = entry.terminalOrigin === "historical";
+    const finished = !historical && completedAt !== undefined &&
+      completedAt > 0 &&
       (completedAt > (priorFinish?.terminal ?? 0) ||
         completedAt === priorFinish?.terminal && outcome !== undefined &&
-          outcome !== priorFinish.outcome ||
-        entry.unseen === true && old.unseen === false);
+          outcome !== priorFinish.outcome);
     if (completedAt && (baseline || entry.status === "idle")) {
       state.finishes.set(
         session,
@@ -340,9 +349,10 @@ export class NotificationTriggers {
       const beforeCause = previous &&
         notificationFailure(previous)?.value.diagnosticID;
       const cause = notificationFailure(note)?.value.diagnosticID;
-      const distinct = beforeCause && cause && beforeCause !== cause ||
-        priorFinish?.terminal !== undefined && completedAt !== undefined &&
-          completedAt > priorFinish.terminal;
+      const distinct = !historical &&
+        (beforeCause && cause && beforeCause !== cause ||
+          priorFinish?.terminal !== undefined && completedAt !== undefined &&
+            completedAt > priorFinish.terminal);
       if (
         !distinct && previous &&
         JSON.stringify(previous) === JSON.stringify(note)
@@ -358,23 +368,46 @@ export class NotificationTriggers {
     // outcome, not independent notification producers. This also enriches a
     // terminal-only note when its facts arrive later.
     let failure: Note | undefined;
-    const failed = !acknowledged && entry.error &&
+    const failed = !acknowledged &&
+      (!historical || this.#outcomes.has(id)) &&
+      (entry.error || entry.terminalFailure ||
+        finished && outcome === "failed") &&
       (entry.errorIdentity !== old.errorIdentity ||
+        JSON.stringify(entry.terminalFailure) !==
+          JSON.stringify(old.terminalFailure) ||
         finished && outcome === "failed");
     if (failed) {
-      const failures =
-        (entry.observations?.length ? entry.observations : [undefined])
-          .map((observation) =>
-            sessionFailure(observation, entry.error, {
+      const terminalObservation: ErrorObservation | undefined =
+        entry.terminalFailure && {
+          id: entry.terminalFailure.diagnosticID,
+          source: "event",
+          message: entry.terminalFailure.facts?.reason ?? "",
+          failure: entry.terminalFailure,
+        };
+      const failures = (entry.observations?.length
+        ? entry.observations
+        : [terminalObservation])
+        .map((observation) =>
+          sessionFailure(
+            observation,
+            entry.error ?? (outcome === "failed"
+              ? "The provider reported a failed execution without a reason."
+              : undefined),
+            {
               actionLabel: "Running session",
+              recovery:
+                "Open the session to inspect the provider response before sending a new prompt.",
               target: {
                 sidecarId: sidecar,
                 sessionID: session,
                 directory: entry.directory,
                 label: entry.title,
               },
-            })
-          ).filter((value) => value !== undefined);
+            },
+          )
+        ).filter((value) =>
+          value !== undefined
+        );
       const latest = failures.at(-1);
       if (latest) {
         failure = failureNote(
@@ -394,30 +427,24 @@ export class NotificationTriggers {
     }
     if (failure) publishOutcome({ ...failure, id: `${id}/outcome/failed` });
     else if (
-      !acknowledged && finished && entry.status === "idle" &&
+      !acknowledged && finished && outcome !== "failed" &&
+      entry.status === "idle" &&
       !entry.permissions &&
       !entry.questions
     ) {
       // A terminal arriving after its facts must not replace those facts with
-      // generic copy. Failed/unknown completion enriches the same outcome.
+      // generic copy when its terminal outcome is still unknown.
       const retained = this.#outcomes.get(id);
       if (
         !(retained?.id === `${id}/outcome/failed` &&
-          (outcome === "failed" || outcome === undefined))
+          outcome === undefined)
       ) {
         publishOutcome({
-          // Preserve existing successful/unknown completion identities. Only
-          // failed completion joins the independent failure-facts outcome key.
-          id: outcome === "failed" ? `${id}/outcome/failed` : id,
-          kind: outcome === "failed"
-            ? "error"
-            : outcome === "succeeded"
-            ? "done"
-            : "info",
+          // Failures always use structured action/target/cause/recovery above.
+          id,
+          kind: outcome === "succeeded" ? "done" : "info",
           sessionRef: { sidecar, session },
-          title: outcome === "failed"
-            ? "Session failed"
-            : outcome === "interrupted"
+          title: outcome === "interrupted"
             ? "Session interrupted"
             : outcome === "succeeded"
             ? "Session done"

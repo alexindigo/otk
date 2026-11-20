@@ -130,6 +130,11 @@ export interface PromptInput {
   model?: ModelRef;
   variant?: string;
 }
+/** Native acceptance is not transcript admission or visible presentation. */
+export interface PromptReceipt {
+  messageID: string;
+  state: "accepted" | "queued";
+}
 export interface FileMatch {
   path: string;
   directory: boolean;
@@ -238,7 +243,7 @@ export interface RpcMethods
     params: { directory: string; title?: string; parentID?: string };
     result: ContentSession;
   };
-  "session.prompt": { params: PromptInput; result: null };
+  "session.prompt": { params: PromptInput; result: PromptReceipt | null };
   "session.shell": { params: ShellInput; result: null };
   "session.command": {
     params: Omit<CommandInput, "arguments"> & { arguments?: string };
@@ -333,7 +338,7 @@ export interface CoreRequestReceipts {
     mode?: "messages" | "code" | "restore";
     after?: number;
   };
-  "prompt-sent": { completed: true };
+  "prompt-sent": { completed: true; submission?: PromptReceipt };
   "prompt-selection": {
     sessionID: string;
     agent?: string;

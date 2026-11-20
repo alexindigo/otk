@@ -10,11 +10,12 @@ import type { OpenCodeClient } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { sessionRecency } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
+import { terminalFailure } from "./request-failure.ts";
 export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
   >
-  & { activity?: number; terminal?: number };
+  & { activity?: number; terminal?: number; terminalError?: unknown };
 export type SessionFacts = Pick<
   NativeSession,
   | "id"
@@ -26,6 +27,7 @@ export type SessionFacts = Pick<
   | "outcome"
   | "activity"
   | "terminal"
+  | "terminalError"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -72,13 +74,29 @@ export function terminalFacts(
 ): TerminalEvidence {
   const end = terminalEvidence(idle, outcome);
   return latestTerminal(
-    end ? { terminal: end, outcome: outcome as TerminalOutcome } : undefined,
-    shell ? { terminal: shell } : undefined,
+    end
+      ? {
+        terminal: end,
+        outcome: outcome as TerminalOutcome,
+        terminalOrigin: "historical",
+      }
+      : undefined,
+    shell ? { terminal: shell, terminalOrigin: "historical" } : undefined,
   );
 }
 /** Scalar acquisition cannot certify activity or erase live attention. */
 export function metadata(raw: SessionFacts): SessionMetadata {
   const mapped = session(raw);
+  const terminal = terminalFacts(raw.time.idle, raw.outcome, raw.terminal);
+  const failure =
+    terminal.outcome === "failed" && terminal.terminal === millis(raw.time.idle)
+      ? terminalFailure(
+        raw.terminalError,
+        mapped.id,
+        terminal.terminal,
+        mapped.title,
+      )
+      : undefined;
   return {
     id: mapped.id,
     directory: mapped.directory,
@@ -94,7 +112,8 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     status: "idle",
     activityAuthority: "unknown",
     activity: {
-      ...terminalFacts(raw.time.idle, raw.outcome, raw.terminal),
+      ...terminal,
+      ...(failure ? { terminalFailure: failure } : {}),
     },
     attention: {
       permissions: 0,

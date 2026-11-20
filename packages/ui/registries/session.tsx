@@ -11,6 +11,7 @@ import type {
   LiveWorkOwner,
   ModelCatalogOwner,
   RunningWork,
+  SessionDelivery,
   SessionSubmission,
   ToolCompletionSource,
 } from "@otk/client";
@@ -51,6 +52,7 @@ export interface SessionPorts {
   /** Borrowed family and active shell projection; no UI-owned activity store. */
   runningWork?(): readonly RunningWork[];
   liveWork?: LiveWorkOwner;
+  delivery?: SessionDelivery;
   stopHelper?(id: string): Promise<void>;
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;

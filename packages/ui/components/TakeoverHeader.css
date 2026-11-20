@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-takeover-header h2 {
   margin: 0;
@@ -26,6 +26,6 @@
   transform: rotate(180deg);
 }
 .otk-takeover-chevron {
-  width: 16px;
-  height: 16px;
+  width: calc(16 * var(--otk-unit));
+  height: calc(16 * var(--otk-unit));
 }

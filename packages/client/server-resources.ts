@@ -152,6 +152,7 @@ export interface ServerResources {
   add(url: string, label: string): Promise<string>;
   remove(id: string): void;
   layout(patch: Partial<ShellLayout>): Promise<void>;
+  projectCollapse(project: ProjectSelection, collapsed: boolean): Promise<void>;
   rememberLocation(location: ProjectLocation): Promise<void>;
   inactive(project: ProjectSelection, inactive: boolean): Promise<void>;
   setPreference(key: keyof Preferences, value: unknown): Promise<void>;
@@ -491,6 +492,8 @@ export function createServerResources(o: {
           time,
           true,
           supervision?.terminal === time ? supervision.outcome : undefined,
+          supervision?.unseen === true,
+          supervision,
         );
       }
     }
@@ -648,14 +651,17 @@ export function createServerResources(o: {
               : undefined;
             const unseen = supervision?.unseen === true;
             if (changes.admitted) {
-              owner.admitFinished(session, time, outcome, unseen);
-            } else {owner.finished(
+              owner.admitFinished(session, time, outcome, unseen, supervision);
+            } else {
+              owner.finished(
                 session,
                 time,
                 changes.baseline,
                 outcome,
                 unseen,
-              );}
+                supervision,
+              );
+            }
           }
         }
       });
@@ -694,6 +700,15 @@ export function createServerResources(o: {
     }
     const context = new Map(base.entries.map((entry) => [entry.id, entry]));
     const dependencies = new Set(context.keys());
+    const descendants = new Set(dependencies);
+    for (const id of descendants) {
+      for (const child of o.index.children(p.sidecarId, id)) {
+        if (!descendants.has(child)) {
+          descendants.add(child);
+          dependencies.add(child);
+        }
+      }
+    }
     const acquire = () => {
       for (const id of dependencies) {
         const entry = owner.entry(id);
@@ -799,7 +814,10 @@ export function createServerResources(o: {
           if (
             cache.server === id &&
             o.index.changes(id)!.metadata.some((key) =>
-              cache.dependencies.has(key)
+              cache.dependencies.has(key) ||
+              cache.dependencies.has(
+                o.index.getMetadata(id, key)?.parentID ?? "",
+              )
             )
           ) {
             invalidateTabContext(cache);
@@ -1145,6 +1163,13 @@ export function createServerResources(o: {
     },
     async layout(patch) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
+    },
+    async projectCollapse(project, collapsed) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.project", {
+        sidecarId: project.sidecarId,
+        directory: project.directory,
+        collapsed,
+      });
     },
     async rememberLocation(location) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call(

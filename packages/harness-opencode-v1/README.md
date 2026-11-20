@@ -6,12 +6,13 @@ anchors. Mixed messages retain their prompt and carry each synthetic expansion
 as an outgoing part. Snapshot, live projection, worker SQL and API fallback
 share this evidence contract. Bookkeeping, compaction, interruption, delegation,
 retry and unknown records remain visible with their native source; task result
-envelopes share one decoder and render as blocks. Malformed optional child
-relationships never invalidate their containing record: task envelopes fall back
-to exact outgoing context, and tool metadata keeps its source without a child
-link. Record deltas return their coherent header/parts snapshot independently of
-cache retention; missing headers use bounded recovery. Unavailable optional
-revert SQL likewise leaves the existing API fallback active.
+envelopes share one decoder, supply neutral helper count nouns and render as
+blocks. Malformed optional child relationships never invalidate their containing
+record: task envelopes fall back to exact outgoing context, and tool metadata
+keeps its source without a child link. Record deltas return their coherent
+header/parts snapshot independently of cache retention; missing headers use
+bounded recovery. Unavailable optional revert SQL likewise leaves the existing
+API fallback active.
 
 `delivery.ts` classifies completed task envelopes and received synthetic result
 envelopes inside the worker. Running launch envelopes, failed calls and missing

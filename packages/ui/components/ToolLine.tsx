@@ -4,6 +4,7 @@ import type { ToolProps } from "../registries/renderers.ts";
 import { useUiRegistries } from "../registries/context.tsx";
 import ToolFrame from "./tools/ToolFrame.tsx";
 import { usePathSemantics } from "./PathProvider.tsx";
+import { TreeItem } from "./Tree.tsx";
 
 /** Render a registered tool or the consumer-selected generic fallback. */
 export default function ToolLine(props: ToolProps): import("solid-js").Element {
@@ -28,11 +29,21 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
               return <Component {...props} />;
             }}
           </Show>
-          <For each={props.call.children} keyed={(call) => call.callID}>
-            {(call) => <ToolLine {...props} call={call()} waiting={false} />}
-          </For>
         </>
       )}
+      nested={props.call.children?.length
+        ? () => (
+          <For each={props.call.children} keyed={(call) => call.callID}>
+            {(call) => (
+              <TreeItem
+                last={call().callID === props.call.children?.at(-1)?.callID}
+              >
+                <ToolLine {...props} call={call()} waiting={false} />
+              </TreeItem>
+            )}
+          </For>
+        )
+        : undefined}
     />
   );
 }

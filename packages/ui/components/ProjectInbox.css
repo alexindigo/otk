@@ -14,7 +14,7 @@
   color: var(--fg);
 }
 .otk-project-inbox .otk-sidebar-commands {
-  padding: 0 8px var(--chrome-inset);
+  padding: 0 var(--space-2) var(--chrome-inset);
 }
 .otk-inbox-search {
   --control-height: var(--row-compact);
@@ -22,7 +22,7 @@
   height: var(--row-compact);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 0;
   color: var(--otk-fg-3);
   text-align: left;
@@ -32,9 +32,11 @@
   height: var(--icon-compact);
 }
 .otk-inbox-scroll {
-  padding: 0 8px;
+  padding: 0 var(--space-2);
 }
 .otk-project-row {
+  --selection-inset: 0px;
+  --selection-pointer-inset: 0px;
   display: flex;
   align-items: center;
   min-height: var(--row-project);
@@ -60,7 +62,7 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 .otk-project-content {
@@ -69,9 +71,12 @@
 }
 .otk-project-error {
   flex-basis: 100%;
-  padding-block-end: 4px;
+  padding-block-end: var(--space-1);
 }
 .otk-project-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   font-size: var(--text-ui);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -80,25 +85,12 @@
 .otk-project-name[data-unread=true] {
   font-weight: 600;
 }
-.otk-project-machine {
-  font-size: var(--text-meta);
-  color: var(--otk-fg-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.otk-project-visit {
-  font-variant-numeric: tabular-nums;
-  color: var(--otk-fg-3);
-  white-space: nowrap;
-  font-size: var(--text-meta);
-}
 .otk-project-trailing {
   display: grid;
   align-items: center;
   justify-items: end;
   flex: none;
-  min-width: 24px;
-  padding-inline-end: 4px;
+  min-width: var(--control-size);
 }
 .otk-project-trailing > * {
   grid-area: 1 / 1;
@@ -119,55 +111,24 @@
 .otk-project-menu-trigger {
   cursor: pointer;
   list-style: none;
-  padding: 4px;
+  padding: var(--space-1);
   color: var(--secondary);
-  width: 24px;
-  height: 24px;
+  width: var(--control-size);
+  height: var(--control-size);
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
 }
-.otk-inactive-toggle,
-.otk-archived-toggle,
-.otk-discovered-toggle {
-  --control-height: var(--row-project);
-  width: 100%;
-  height: var(--row-project);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-align: left;
+.otk-inactive-section,
+.otk-discovered-section {
   margin-top: var(--chrome-inset);
-  padding: 0;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-}
-.otk-inactive-toggle[aria-expanded=true] .otk-inactive-chevron {
-  transform: rotate(90deg);
-}
-.otk-archived-toggle[aria-expanded=true] .otk-archived-chevron {
-  transform: rotate(90deg);
-}
-.otk-discovered-toggle[aria-expanded=true] .otk-discovered-chevron {
-  transform: rotate(90deg);
-}
-.otk-project-marker {
-  display: grid;
-  place-items: center;
-  min-width: 10px;
-  flex: none;
-}
-.otk-inbox-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--otk-border);
 }
 .otk-inactive-projects {
-  padding-top: 4px;
+  padding-top: var(--space-1);
 }
 .otk-inbox-footer {
   flex: none;
-  padding: 8px;
+  padding: var(--space-2);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -187,8 +148,8 @@
   height: var(--control-size);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 0;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) 0 0;
   color: var(--otk-fg-3);
 }
 .otk-inbox-resizer {
@@ -212,14 +173,14 @@
   display: none;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-scroll {
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-open {
   justify-content: center;
   padding: 0;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-footer {
-  padding: 8px 4px;
+  padding: var(--space-2) var(--space-1);
   flex-direction: column;
 }
 .otk-project-inbox[data-collapsed=true] .otk-server-connections {
@@ -238,7 +199,7 @@
   justify-content: center;
 }
 .otk-project-inbox[data-collapsed=true] .otk-sidebar-commands {
-  padding-inline: 4px;
+  padding-inline: var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-search {
   width: var(--control-height);
@@ -246,33 +207,11 @@
   justify-content: center;
   padding: 0;
 }
-.otk-project-inbox[data-collapsed=true] .otk-discovered-toggle {
-  width: var(--control-height);
-  margin-inline: auto;
-  justify-content: center;
-  padding-inline: 0;
-}
 .otk-project-inbox[data-collapsed=true] .otk-server-status {
   padding: 0;
 }
-.otk-project-branch {
-  flex: none;
-  width: var(--control-size);
-  align-self: stretch;
-  display: grid;
-  align-items: center;
-  justify-items: center;
-}
-.otk-project-branch::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-inline-start: 1px solid var(--otk-border);
-  border-block-end: 1px solid var(--otk-border);
-}
-.otk-project-parent {
-  min-width: 0;
-  font-size: var(--text-meta);
+.otk-project-tree {
+  --tree-height: var(--row-project);
 }
 /* The project row is one control: focus paints the whole row, never only
    its open button between the selection bar and the menu. */
@@ -284,22 +223,9 @@
   outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-row);
 }
-.otk-archived-chevron {
-  width: var(--icon-compact);
-  height: var(--icon-compact);
-  flex: none;
+.otk-project-row::before {
+  grid-area: 1 / 1;
 }
-.otk-project-inbox[data-collapsed=true] .otk-archived-toggle {
-  justify-content: center;
-}
-.otk-project-archive {
-  display: grid;
-  grid-template-columns: var(--control-size) minmax(0, 1fr);
-  column-gap: var(--project-gap);
-}
-.otk-project-archive > * {
-  grid-column: 2;
-}
-.otk-project-inbox[data-collapsed=true] .otk-project-archive {
-  display: block;
+.otk-project-row > .otk-project-content {
+  grid-area: 1 / 1 / 2 / -1;
 }

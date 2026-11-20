@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./WorkLog.css" with { type: "text" };
-import { type Element, Show } from "solid-js";
+import type { Element } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { workingTime } from "./work-log.ts";
-import { ChevronIcon } from "./ChromeIcons.tsx";
+import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
@@ -27,18 +27,23 @@ export default function WorkLog(
   const label = () => workingTime(props.workingMs) ?? "Work log";
   return (
     <section class="otk-work-log">
-      <button
-        class="otk-work-fold"
-        type="button"
-        aria-expanded={open() ? "true" : "false"}
-        onClick={() => void toggle()}
-      >
-        <ChevronIcon class="otk-work-chevron" />
-        <span class="otk-work-label">{label()}</span>
-      </button>
-      <Show when={open()}>
-        <div class="otk-work-body">{props.body()}</div>
-      </Show>
+      <TreeNode
+        label={label()}
+        open={open()}
+        onOpen={(value) => setOpen(value)}
+        header={() => (
+          <button
+            class="otk-work-fold"
+            type="button"
+            aria-expanded={open() ? "true" : "false"}
+            onClick={() => void toggle()}
+          >
+            <TreeIcon />
+            <span class="otk-work-label">{label()}</span>
+          </button>
+        )}
+        body={() => <div class="otk-work-body">{props.body()}</div>}
+      />
     </section>
   );
 }

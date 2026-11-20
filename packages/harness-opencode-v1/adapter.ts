@@ -649,7 +649,7 @@ export class OpencodeV1Adapter implements Harness {
               operation?.key.key,
             );
             try {
-              await capability.prompt(input, operation);
+              return await capability.prompt(input, operation);
             } catch (error) {
               if (!operation?.signal.aborted) {
                 this.#requestFailure(
@@ -980,6 +980,9 @@ export class OpencodeV1Adapter implements Harness {
         ...entry,
         activity: {
           ...this.#terminals.get(entry.id),
+          ...(entry.activity?.terminalOrigin === "historical"
+            ? { terminalOrigin: "historical" as const }
+            : {}),
           delivered: this.#delivered.get(entry.id),
           work: {
             keys: this.#liveWork.has(entry.id)
@@ -2027,7 +2030,12 @@ export class OpencodeV1Adapter implements Harness {
           }
           for (const id of dirty) {
             const entry = this.#index.getMetadata(id);
-            if (entry) sink.indexUpsert(entry);
+            if (entry) {
+              sink.indexUpsert({
+                ...entry,
+                activity: { ...entry.activity, terminalOrigin: "historical" },
+              });
+            }
           }
         },
         (error) =>
@@ -2813,7 +2821,7 @@ export class OpencodeV1Adapter implements Harness {
         sessionID,
         latestTerminal(
           this.#terminalCandidates.get(sessionID),
-          terminalFacts(info),
+          { ...terminalFacts(info), terminalOrigin: "live" },
         ),
       );
       const parent = this.#index.getMetadata(sessionID)?.parentID;

@@ -223,6 +223,7 @@ export default function Shell(
     () => [
       toggles.state.prefs.reducedColors,
       toggles.state.prefs.animationsOff,
+      toggles.state.prefs.textSize,
     ],
     () => paintVisualPreferences(toggles.state.prefs),
   );
@@ -552,6 +553,7 @@ export default function Shell(
               onOpen={openProject}
               onInactive={resources.inactive}
               onLayout={saveLayout}
+              onProjectCollapse={resources.projectCollapse}
             />
             <main class="otk-main">
               <Show when={error()}>

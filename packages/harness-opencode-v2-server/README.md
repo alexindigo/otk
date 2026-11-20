@@ -261,6 +261,10 @@ bodies. Drafts remain owned by the composer when submit rejects. Unknown
 outcomes retain their existing reconciliation semantics, without a fabricated
 retry action.
 
+Successful native idle records declare neutral footer completion placement.
+Failed and interrupted outcomes do not. The canonical client interval retains
+their source and inspection paths without decoding native outcome words.
+
 The retained failure supplies a neutral record reference, so FP1 presents its
 facts only at that record and projects other feedback as a short reference.
 Execution association resolves before the first retained publication. Unanchored

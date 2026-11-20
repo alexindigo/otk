@@ -147,6 +147,11 @@ export function recordPart(part: RawPart): ExternalPart {
             activity: {
               ...activity,
               category: "delegation",
+              summary: {
+                kind: "subagent",
+                noun: "helper finished",
+                plural: "helpers finished",
+              },
               title: failed
                 ? "Task failed"
                 : task.state === "running"

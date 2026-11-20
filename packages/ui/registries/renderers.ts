@@ -155,6 +155,8 @@ export interface PartProps {
   onOpenChild(id: string): void;
   user: boolean;
   pending?: boolean;
+  /** Original context-record clock, supplied by its canonical message owner. */
+  recordTime?: number;
 }
 export type PartRenderer = (props: PartProps) => Element;
 export class PartRegistry {

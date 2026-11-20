@@ -3,30 +3,33 @@
   display: flex;
   flex-direction: column;
   color: var(--otk-fg-2);
-  margin: 0 0 var(--tool-line-gap, 4px);
+  margin: 0 0 var(--tool-line-gap, var(--space-1));
   font-size: var(--text-ui);
 }
 .otk-tool-toggle,
 .otk-tool-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 26px;
-  padding: 0 4px;
+  gap: var(--space-2);
+  min-height: var(--row-tool);
+  padding: 0;
   color: inherit;
   text-align: left;
+}
+.otk-tool-state {
+  flex-direction: var(--tree-heading-flow, row);
 }
 .otk-tool-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 13px;
-  flex: 0 0 13px;
+  width: var(--icon-compact);
+  flex: 0 0 var(--icon-compact);
   color: var(--otk-fg-3);
 }
 .otk-tool-icon svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
 }
 .otk-tool-verb {
   font-weight: 500;
@@ -50,10 +53,10 @@
   opacity: 1;
 }
 .otk-tool-body {
-  padding: 0 0 4px 24px;
+  padding-block-end: var(--space-1);
 }
 .otk-tool-body p {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 .otk-tool-summary {
   color: var(--fg);
@@ -73,7 +76,7 @@
 .otk-tool-error-toggle {
   align-self: flex-start;
   font-size: var(--text-meta);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
 }
 .otk-tool-add,
 .otk-tool-del {
@@ -85,6 +88,6 @@
 .otk-tool-del {
   color: var(--otk-diff-del);
 }
-.otk-tool-line.is-error > .otk-tool-state {
+.otk-tool-state.is-error {
   color: var(--otk-status-error);
 }

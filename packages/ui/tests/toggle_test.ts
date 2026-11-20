@@ -18,8 +18,14 @@ Deno.test("toggle consumers cannot acquire selection marks; native switches and 
   assert(auto.includes("...toggle({"));
   assert(!/selection\(|SelectionContent|data-otk-selection/.test(auto));
   const controls = await read("components/PreferenceControls.tsx");
-  assert(controls.includes('type="checkbox"'));
-  assert(!/selection\(|data-otk-selection/.test(controls));
+  const binary = controls.match(
+    /<label class="otk-preference-toggle">[\s\S]*?<\/label>/,
+  )?.[0];
+  assert(binary);
+  assert(binary.includes('type="checkbox"'));
+  assert(!/selection\(|data-otk-selection/.test(binary));
+  assert(controls.includes('control().kind === "segmented"'));
+  assert(controls.includes('data-otk-selection="horizontal"'));
   const shell = await read("shell/Shell.tsx");
   for (const match of shell.matchAll(/<button\b[\s\S]*?<\/button>/g)) {
     if (!match[0].includes("aria-expanded=")) continue;

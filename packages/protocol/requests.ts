@@ -62,6 +62,12 @@ export interface FailureFacts {
   /** The producer has retained the full failure at this transcript identity. */
   record?: { messageID: string; label?: string };
 }
+/** Admission expiry is not a missing result and never authorizes replaying a mutation. */
+export const REQUEST_WINDOW_EXPIRED_FACTS = {
+  reason: "Request window expired",
+  recovery:
+    "Reconnect to OTK and refresh the session. Check whether the action already completed before trying it again.",
+} satisfies Pick<FailureFacts, "reason" | "recovery">;
 /** Capture only routing facts, never the request input or an invalid identity. */
 export function requestFailureFacts(
   action: string,

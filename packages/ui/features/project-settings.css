@@ -1,41 +1,38 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-native-project-settings {
   width: 100%;
-  max-width: 640px;
+  max-width: calc(640 * var(--otk-unit));
   margin-inline: auto;
 }
 .otk-native-project-settings .otk-form fieldset {
-  gap: 20px;
+  gap: var(--space-5);
 }
 .otk-project-icon-field {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-project-icon-field .otk-project-avatar {
   width: var(--form-control-size);
   height: var(--form-control-size);
 }
 .otk-project-icon-upload input {
-  max-width: 260px;
+  max-width: calc(260 * var(--otk-unit));
 }
 .otk-project-colors legend {
-  margin-block-end: 8px;
+  margin-block-end: var(--space-2);
 }
 .otk-project-color {
+  --selection-padding: 0;
   display: grid;
   place-items: center;
   width: var(--form-control-size);
   height: var(--form-control-size);
   padding: 0;
 }
-.otk-project-color.is-on {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
 .otk-project-color-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: calc(18 * var(--otk-unit));
+  height: calc(18 * var(--otk-unit));
+  border-radius: var(--radius-inline-code);
   background: var(--project-swatch);
 }
 .otk-project-startup-hints p {
@@ -43,6 +40,6 @@
 }
 .otk-project-dismiss {
   display: grid;
-  gap: 8px;
-  margin-block-end: 20px;
+  gap: var(--space-2);
+  margin-block-end: var(--space-5);
 }

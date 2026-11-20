@@ -337,6 +337,9 @@ export interface Activity {
   kindLabel: string;
   /** Producer-owned neutral count wording; kind is opaque to consumers. */
   summary?: { kind: string; noun: string; plural: string };
+  /** Producer-owned normal completion; the reply footer owns its presentation.
+   * Original facts remain inspectable in the background interval. */
+  completion?: { placement: "footer" };
   /** Neutral live-work identity supplied by the harness, never inferred from wording. */
   work?: { kind: "shell" };
   layout: "row" | "boundary";

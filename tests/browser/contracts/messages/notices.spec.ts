@@ -32,6 +32,8 @@ test.describe("V1 records", () => {
     });
     await expect(page.locator(".otk-response-progress")).toHaveCount(0);
     await page.reload();
+    // Settled records rejoin the interval; inspect through its reveal owner.
+    await revealAcquired(page, '[data-message="running-record"]');
     await expect(page.locator('[data-message="running-record"]')).toContainText(
       "Native work finished",
     );
@@ -181,6 +183,10 @@ test.describe("V2 records", () => {
     const idle = page.locator('[data-native-record="opencode-v2/idle"]');
     await expect(idle).toHaveClass(/is-error/);
     await expect(idle).toContainText("The usage limit has been reached");
+    await revealAcquired(
+      page,
+      '[data-native-record="opencode-v2/model-switched"]',
+    );
     await expect(
       page.locator('[data-native-record="opencode-v2/model-switched"]'),
     ).toContainText("Switched variant to high");
@@ -301,6 +307,10 @@ test.describe("V2 records", () => {
         );
       await expect(page.locator('[data-native-record="opencode-v2/shell"]'))
         .toContainText("Exited with code 7");
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/request-outcome"]',
+      );
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toContainText("Question cancelled");
@@ -332,6 +342,10 @@ test.describe("V2 records", () => {
       await expect(execute).toBeVisible();
       await page.reload();
       await expect(failed).toBeVisible();
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/request-outcome"]',
+      );
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toBeVisible();

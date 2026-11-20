@@ -3,6 +3,7 @@ import {
   type ContentSession,
   type CreatedSessionReceipt,
   isSessionID,
+  type PromptReceipt,
   type RequestReceipts,
 } from "@otk/protocol";
 import { mappedReceipt, metadataReceipt } from "../requests/policies.ts";
@@ -142,6 +143,30 @@ export const promptSelectionReceipt = metadataReceipt(
     }
     return result;
   },
+);
+export const sentPromptReceipt = mappedReceipt<
+  "prompt-sent",
+  PromptReceipt | null
+>(
+  "prompt-sent",
+  (value) => {
+    const row = object(value);
+    if (row.completed !== true) throw new TypeError("Invalid prompt receipt");
+    if (row.submission === undefined) return { completed: true };
+    const submission = object(row.submission);
+    if (submission.state !== "accepted" && submission.state !== "queued") {
+      throw new TypeError("Invalid prompt admission state");
+    }
+    return {
+      completed: true,
+      submission: {
+        messageID: text(submission, "messageID")!,
+        state: submission.state,
+      },
+    };
+  },
+  (submission) => ({ completed: true, ...(submission ? { submission } : {}) }),
+  (receipt) => receipt.submission ?? null,
 );
 export const boundaryIntent = metadataReceipt(
   "session-boundary-intent",

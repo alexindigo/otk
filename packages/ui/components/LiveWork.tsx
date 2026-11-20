@@ -8,6 +8,7 @@ import {
   runningWorkLabel,
 } from "@otk/client";
 import EntityPill from "./EntityPill.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
@@ -23,6 +24,7 @@ export default function LiveWork(props: {
 }): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
   const session = useOptionalSessionPorts();
+  const sidecar = session?.failureTarget?.().sidecarId;
   const [revision, setRevision] = createSignal(0);
   onSettled(() =>
     props.owner?.subscribe(() => setRevision((value) => value + 1))
@@ -88,6 +90,15 @@ export default function LiveWork(props: {
                   if (item().kind === "helper") open(item().sessionID);
                 }}
               >
+                <StatusLight
+                  small
+                  attention={sidecar
+                    ? { server: sidecar, session: item().sessionID }
+                    : undefined}
+                  state={session?.status?.(item().sessionID) === "blocked"
+                    ? "blocked"
+                    : "working"}
+                />
                 <span
                   class="otk-live-work-entity"
                   onClick={(event) => event.stopPropagation()}
@@ -124,13 +135,16 @@ export default function LiveWork(props: {
                     {item().title}
                   </button>
                 </Show>
-                <span class="otk-live-work-elapsed" aria-label="Running for">
+                <ChromeMeta
+                  class="otk-live-work-elapsed"
+                  aria-label="Running for"
+                >
                   {item().startedAt === undefined
                     ? "Time unknown"
                     : `Running for ${
                       runningWorkElapsed(now() - item().startedAt!)
                     }`}
-                </span>
+                </ChromeMeta>
                 <div
                   class="otk-live-work-actions"
                   onClick={(event) => event.stopPropagation()}

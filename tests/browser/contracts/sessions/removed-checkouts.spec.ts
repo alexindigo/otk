@@ -28,6 +28,20 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   );
   await expect(row(two)).toHaveCount(0);
   await archive.click();
+  const repositoryTree = row(canonical).locator(
+    "xpath=ancestor::section[contains(@class, 'otk-project-tree')][1]",
+  );
+  const repositoryToggle = repositoryTree.locator(
+    ":scope > .otk-tree-heading .otk-tree-toggle",
+  );
+  await repositoryToggle.press("ArrowLeft");
+  await expect(repositoryToggle).toHaveAttribute("aria-expanded", "false");
+  // A quiet Archive mounts with repository expansion; its own intent survives.
+  await expect(archive).toHaveCount(0);
+  await expect(row(two)).toHaveCount(0);
+  await repositoryToggle.press("ArrowRight");
+  await expect(repositoryToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(archive).toHaveAttribute("aria-expanded", "true");
   for (const directory of [one, two]) {
     await visibleOnScreen(row(directory));
     await expect(row(directory)).toHaveAttribute(
@@ -49,9 +63,9 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
     await expect(row(directory).locator(".otk-project-availability"))
       .toHaveText("removed");
     await expect(row(directory).locator(".otk-project-open"))
-      .toHaveAccessibleName(/\(removed\)$/);
+      .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
-      .toHaveAttribute("title", /\(removed\)$/);
+      .toHaveAttribute("title", /, removed$/);
   }
   await row(one).locator(".otk-project-open").click();
   await expect(row(one + "/src")).toHaveCount(0);
@@ -133,7 +147,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await visibleOnScreen(
     archive.locator(".otk-status-light[data-state=finished]"),
   );
-  await expect(archive.locator(".otk-archived-count")).toHaveText("(1)");
+  await expect(archive.locator(".otk-archived-count")).toHaveText("1");
   await expect(archive).toHaveAccessibleName(/1 unseen$/);
   await expect(archive).toHaveAttribute("title", /1 unseen$/);
   await expect(archive.locator(".otk-archived-unseen")).toHaveCount(0);
@@ -179,19 +193,42 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
         .getBoundingClientRect();
       const count = document.querySelector(".otk-archived-count")!
         .getBoundingClientRect();
+      const tree = document.querySelector(".otk-archive-tree")!;
+      const heading = tree.querySelector(":scope > .otk-tree-heading")!;
+      const child = document.querySelector(
+        `.otk-project-row[data-project="${two}"]`,
+      )!.closest(".otk-tree-node")!;
+      const junction = child.querySelector(
+        ":scope > .otk-tree-heading > .otk-tree-own",
+      )!.getBoundingClientRect();
+      const parent = tree.parentElement!.closest(".otk-project-tree")!;
       return {
         live: live.x + live.width / 2,
         header: header.x + header.width / 2,
         archived: archived.x + archived.width / 2,
         countRight: count.right,
         headerRight: toggle.right,
+        indent: parseFloat(getComputedStyle(heading).gridTemplateColumns),
+        sharedHeader: tree.classList.contains("is-connected"),
+        sharedChild: child.classList.contains("is-connected"),
+        childJunction: junction.x + junction.width / 2,
+        repository: parent.querySelector(".otk-project-row")?.getAttribute(
+          "data-project",
+        ),
       };
     }, { one, two });
     expect(Math.abs(nesting.live - nesting.header)).toBeLessThanOrEqual(1);
     expect(nesting.archived).toBeGreaterThan(nesting.header);
+    expect(nesting.sharedHeader).toBe(true);
+    expect(nesting.sharedChild).toBe(true);
+    expect(nesting.repository).toBe(canonical);
+    expect(Math.abs(nesting.archived - nesting.header - nesting.indent))
+      .toBeLessThanOrEqual(1);
+    expect(Math.abs(nesting.childJunction - nesting.header))
+      .toBeLessThanOrEqual(1);
     expect(nesting.countRight).toBeLessThanOrEqual(nesting.headerRight);
     await page.screenshot({
-      path: info.outputPath(`wp13-${label}-archive.png`),
+      path: info.outputPath(`wp12-combined-sidebar-${label}.png`),
       fullPage: true,
       animations: "disabled",
     });

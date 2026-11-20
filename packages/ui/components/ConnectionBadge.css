@@ -2,7 +2,7 @@
 .otk-connection {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   font-size: var(--text-meta);
   color: var(--secondary);

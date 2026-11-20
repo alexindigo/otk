@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export * from "./project-editor.ts";
+export * from "./project-disclosure.ts";
 export * from "./project-placement.ts";
 export { supervisionStatus } from "./inbox.ts";
 export {
@@ -45,6 +46,7 @@ export * from "./state.ts";
 export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
+export * from "./session-delivery.ts";
 export { archiveAttention, projectGroup } from "./inbox.ts";
 export {
   createTranscript,
@@ -156,3 +158,10 @@ export * from "./http-requests.ts";
 export { createSessionTree, type SessionListRow } from "./session-tree.ts";
 export * from "./forms.ts";
 export * from "./request-lifetime.ts";
+export {
+  type ProjectBranch,
+  projectBranchPresentation,
+  projectTree,
+  projectTreeKey,
+} from "./project-tree.ts";
+export { treePaths } from "./tree-paths.ts";

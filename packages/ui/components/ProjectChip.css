@@ -9,11 +9,11 @@
 .otk-project-chip-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 100%;
   height: var(--control-size);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   font-weight: 500;
 }
 .otk-project-avatar {
@@ -21,9 +21,9 @@
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: calc(18 * var(--otk-unit));
+  height: calc(18 * var(--otk-unit));
+  border-radius: var(--radius-inline-code);
   overflow: clip;
   background: var(--otk-surface);
   color: var(--otk-fg-2);
@@ -33,7 +33,7 @@
 }
 .otk-project-avatar.has-color {
   background: var(--project-color);
-  color: #fff;
+  color: var(--otk-accent-on);
 }
 .otk-project-avatar img {
   width: 100%;
@@ -43,12 +43,12 @@
 .otk-project-chip-menu-content {
   display: flex;
   flex-direction: column;
-  width: min(288px, 70vw);
+  width: min(calc(288 * var(--otk-unit)), 70vw);
 }
 .otk-project-chip-menu-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   margin: 0 0 var(--menu-block-inset);
   padding: var(--menu-item-inset);
@@ -77,6 +77,6 @@ button.otk-project-chip-menu-row {
   padding: 0;
 }
 .otk-project-chip-menu-row svg {
-  width: 16px;
-  height: 16px;
+  width: calc(16 * var(--otk-unit));
+  height: calc(16 * var(--otk-unit));
 }

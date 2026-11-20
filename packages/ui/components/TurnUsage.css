@@ -5,18 +5,18 @@
   padding: 0;
 }
 .otk-usage-breakdown {
-  --usage-call-width: 48px;
-  --usage-activity-width: 200px;
+  --usage-call-width: calc(48 * var(--otk-unit));
+  --usage-activity-width: calc(200 * var(--otk-unit));
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
-  min-width: 984px;
+  min-width: calc(984 * var(--otk-unit));
   width: 100%;
   font-size: var(--text-meta);
   font-variant-numeric: tabular-nums;
 }
 .otk-usage-breakdown :is(th, td) {
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   text-align: right;
   white-space: nowrap;
 }
@@ -51,21 +51,21 @@
 .otk-usage-detail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   overflow: hidden;
 }
 .otk-usage-summary {
   flex: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 32px;
-  padding: 4px 8px 8px;
+  gap: var(--space-3) var(--space-8);
+  padding: var(--space-1) var(--space-2) var(--space-2);
   font-variant-numeric: tabular-nums;
 }
 .otk-usage-summary > div {
   display: flex;
   flex-direction: column-reverse;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .otk-usage-summary dt {
   color: var(--otk-fg-3);
@@ -77,7 +77,7 @@
   font-weight: 600;
 }
 .otk-usage-scroll {
-  max-height: 320px;
+  max-height: calc(320 * var(--otk-unit));
   scrollbar-gutter: stable;
 }
 .otk-usage-breakdown thead th {
@@ -123,14 +123,14 @@
   inset-inline-start: 0;
 }
 .otk-usage-breakdown thead th:nth-child(3) {
-  width: 144px;
+  width: calc(144 * var(--otk-unit));
 }
 .otk-usage-context {
-  --usage-context-bar-width: 48px;
+  --usage-context-bar-width: calc(48 * var(--otk-unit));
   display: grid;
   grid-template-columns: var(--usage-context-bar-width) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-usage-context > span:first-child {
   grid-column: 2;
@@ -140,7 +140,7 @@
   grid-column: 1;
   grid-row: 1;
   width: 100%;
-  height: 4px;
+  height: calc(4 * var(--otk-unit));
   flex: none;
   background: var(--otk-border);
 }
@@ -153,6 +153,6 @@
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-inline: 8px;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
 }

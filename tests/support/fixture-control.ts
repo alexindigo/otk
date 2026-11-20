@@ -66,6 +66,7 @@ export const profiles = {
   "contract-sessions-window": "neutral",
   "contract-sessions-catalog": "neutral",
   "contract-sessions-worktrees": "neutral",
+  "contract-sessions-sidebar": "neutral",
   "contract-sessions-removed": "neutral",
   "contract-sessions-merge": "neutral",
   "contract-sessions-tabs": "neutral",
@@ -213,7 +214,13 @@ export interface Commands {
       | "succeed"
       | "stop";
     sessionID?: string;
-    target?: "revert" | "unrevert" | "backgrounds" | "summarize" | "tabs-pin";
+    target?:
+      | "revert"
+      | "unrevert"
+      | "backgrounds"
+      | "summarize"
+      | "tabs-pin"
+      | "delivery-helpers";
   };
   stop: Record<string, never>;
 }
@@ -419,7 +426,14 @@ export function request(value: unknown): ControlRequest {
     case "scenario":
       if (
         p.target !== undefined &&
-        !["revert", "unrevert", "backgrounds", "summarize", "tabs-pin"]
+        ![
+          "revert",
+          "unrevert",
+          "backgrounds",
+          "summarize",
+          "tabs-pin",
+          "delivery-helpers",
+        ]
           .includes(
             String(p.target),
           )

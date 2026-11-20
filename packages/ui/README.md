@@ -312,9 +312,9 @@ kept in the first prose group's virtual item. Continuations within a grouped
 reply add a rule and a larger reply gap. Source clocks use their own last output
 or creation time, independent of the grouped reply's metadata. Work-only sources
 stay in their existing work groups. Work uses compact, intrinsic-width
-disclosure labels with real chevrons, not the full-width compaction boundary
-treatment. Blocks owns paragraph, heading and compact list rhythm across virtual
-wrappers.
+disclosure labels with shared tree junctions, not the full-width compaction
+boundary treatment. Blocks owns paragraph, heading and compact list rhythm
+across virtual wrappers.
 
 Agent labels share `EntityPill` across reply sources, delegate tools and
 activity records/groups. Producers carry the entity and remaining title
@@ -593,39 +593,49 @@ its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome never changes the transcript rectangle: helper presence uses a reserved
 control-height track; notices and overflowing takeovers occupy independent,
 bounded layers above the unchanged prompt track. Only draft/editor growth
-changes that track. RecordList owns record spacing and the mirrored disclosure
-rail; views borrow canonical span identities and retained disclosure state
-rather than regrouping mounted neighbours. Read-only helper transcripts mount
-those same attention owners; only prompt submission is unavailable. With no
-active takeover, helpers mount no empty composer. That same owner provides
-composer availability to takeover headers, so draft-kept copy appears only when
-the open session offers a composer. Permission docks and notifications share
-RequestAge presentation and the client's requestIdle formatter/resumption
-threshold, using the asking session's activity clock rather than request age.
-Permission and question surfaces replace the composer with a raised, bordered,
-20px-radius Takeover and a common blocked-light header. Consumer-supplied
-session location names the project/task; question tabs/options use shared
-underline/pointer primitives. Static keyboard hints are in titles, Keys and the
-palette, not the surface. Question step/collapse changes focus a visible option
-or review action; leaving an own-answer field focuses Answer. Arrival does not
-focus an answer action. Takeover layout sections are programmatic-only
-landmarks, not Tab stops. The prompt restores its own input when a takeover
-releases focus to the document, while preserving focus the reader moved
-elsewhere. Shared focus paint admits semantic controls and explicitly marked
-visible content (message/date reveals), never layout wrappers or
-programmatic-only targets, including browser-focusable scroll containers. Actual
-keyboard controls retain visible focus. The composer's rounded border owns
-focus-within rather than a second textarea rectangle; own-answer input focuses
-its visible row. ComposerTakeovers delegates field paint through
-`--prompt-input-outline`; without that enclosing box, a standalone Prompt
-retains its own field focus outline. Permission takeovers and notification
-toasts share one PermissionSummary: exact tool, command/working directory, edit
-file paths/counts or generic target and requested patterns. Notification
-enrichment carries the neutral request alongside its originating action through
-the hub's opaque detail port. A permission-owned adapter supplies injected toast
-content; the generic hub and toast host know no permission schema. Permission
-and question owners preserve dirty state through reconnects. The legacy `Docks`
-API remains independently reusable for existing consumers.
+changes that track. RecordList owns record spacing and supplies topology to the
+shared Tree; views borrow canonical span identities and retained disclosure
+state rather than regrouping mounted neighbours. Background intervals share one
+outer conversation gap and compact internal record rhythm, including actionable
+breakouts. Their folded line is plain muted meta text with producer-owned
+counts, no Activity prefix or time range. Successful completion-only intervals
+borrow a footer junction instead of adding a status row; direct reveal opens the
+same retained interval. Read-only helper transcripts mount those same attention
+owners; only prompt submission is unavailable. With no active takeover, helpers
+mount no empty composer. That same owner provides composer availability to
+takeover headers, so draft-kept copy appears only when the open session offers a
+composer. Permission docks and notifications share RequestAge presentation and
+the client's requestIdle formatter/resumption threshold, using the asking
+session's activity clock rather than request age. Permission and question
+surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
+a common blocked-light header. Consumer-supplied session location names the
+project/task; question tabs/options use shared underline/pointer primitives.
+Static keyboard hints are in titles, Keys and the palette, not the surface.
+Question step/collapse changes focus a visible option or review action; leaving
+an own-answer field focuses Answer. Arrival does not focus an answer action.
+Takeover layout sections are programmatic-only landmarks, not Tab stops. The
+prompt restores its own input when a takeover releases focus to the document,
+while preserving focus the reader moved elsewhere. Shared focus paint admits
+semantic controls and explicitly marked visible content (message/date reveals),
+never layout wrappers or programmatic-only targets, including browser-focusable
+scroll containers. Actual keyboard controls retain visible focus. The composer's
+rounded border owns focus-within rather than a second textarea rectangle;
+own-answer input focuses its visible row. ComposerTakeovers delegates field
+paint through `--prompt-input-outline`; without that enclosing box, a standalone
+Prompt retains its own field focus outline. Permission takeovers and
+notification toasts share one PermissionSummary: exact tool, command/working
+directory, edit file paths/counts or generic target and requested patterns.
+Notification enrichment carries the neutral request alongside its originating
+action through the hub's opaque detail port. A permission-owned adapter supplies
+injected toast content; the generic hub and toast host know no permission
+schema. Permission and question owners preserve dirty state through reconnects.
+The legacy `Docks` API remains independently reusable for existing consumers.
+
+Context part renderers receive their original canonical message clock through
+`recordTime`. The fallback shows it, including milliseconds and the local zone,
+only inside expanded record details. Message's optional `sourceTime` port keeps
+multi-source records attached to their own clock, never a digest or arrival
+time.
 
 The connection's client `RequestLifetimes` owner joins permission, question and
 typed-form identities, native retirement and retained drafts. Transcripts and
@@ -931,6 +941,50 @@ travel and re-entry retain the preview. Keyboard focus and explicit opening
 bypass the hover delay. Reduced motion does not change either interaction
 deadline.
 
+`TreeNode` owns the Explorer-style dotted connectors, square SVG +/- junction,
+header, optional feedback track and lazy body grid. Feedback grows below the
+header instead of moving its junction away from the row's lamp. `TreeItem`
+supplies last-child and direction facts, including across virtual record
+boundaries; outgoing branches mirror that same grid. Disclosure state and
+callbacks remain in the existing interaction owner. `TreeGuide` borrows the same
+junction cells for already-expanded virtual session hierarchies, using plain
+client `treePaths` rather than mounted neighbours. No component paints a second
+nesting rail or elbow. Horizontal levels use the named 19u tree indent,
+independent of row height, with the named 9u box size and half-cell dotted
+stubs. Outgoing grids reverse their tracks and header flow, never text
+direction. `TreeIcon` owns the leading artwork slot and the downward child rail;
+callers inject their lamp or kind artwork. The child junction is aligned with
+that parent icon, not its disclosure box. TreeIcon never invents artwork: it
+renders the caller's semantic kind icon or lamp, or an empty slot when there is
+none. Body-only leaf content needs no icon or disclosure. Header and body
+factories borrow ContentSlot so record updates retain the mounted preview
+lifetime.
+
+Project branches come from the client's server-scoped topology projection. Their
+boxes precede lamps and names. Per-project collapse intents persist in
+`shellLayout.projectCollapsed`; keyed `layout.project` intents merge there so
+another tab's project choice cannot be overwritten by a stale layout snapshot.
+Collapsing hides every descendant regardless of status; the project's existing
+rollup lamp continues to summarize hidden activity. Archived and Inactive retain
+their separate section disclosures. Archived borrows the same TreeNode at
+worktree depth beneath its repository; its children are one shared indent
+further in. Archive mounts only with repository expansion, including in the
+collapsed sidebar rail. Its local disclosure survives unmounting. Rejected saves
+show branch-local feedback and Retry. TreeNode remains controlled and stateless.
+Missing canonical roots assign the archive once to the remaining repository
+group; archive-only repositories retain their own header. Childless projects
+omit the box; TreeNode's `showEmptyToggle` input controls that presentation
+without changing its geometry or introducing local state.
+
+Archived, Discovered, Inactive and Sessions groups share SectionHeader's
+TreeNode disclosure and SectionHeaderMeta's adjacent label/count slots, with the
+rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
+`--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
+record summaries/counts, running-work elapsed time and project annotations use
+that same owner. Project metadata borrows the elastic label slot, yielding
+before the project name. Counts and annotations have no parentheses. The
+hierarchy projection supplies artwork eligibility, never section-local depth.
+
 ## Example
 
 [`example.tsx`](./example.tsx) renders a generic tool with only the selected
@@ -963,9 +1017,9 @@ Every project-menu row shares one icon/value/accessory layout, including nested
 branch/path triggers. Edit project opens registered project-settings content
 through DialogHost. Its title names the captured project; fields borrow the
 framework-free editor and Form feedback owner. Color swatches use the shared
-on/off binding. Upload/remove, name and startup text commit through Save
-changes; dirty dismissal asks before discarding. No project auto-accept field is
-shown.
+selection binding and underline, separate from focus paint. Upload/remove, name
+and startup text commit through Save changes; dirty dismissal asks before
+discarding. No project auto-accept field is shown.
 
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
@@ -1031,7 +1085,8 @@ alone only fills; reduced colours retains both indicators.
 Binary buttons use the same state-binding module's `toggle({on, class?})`, which
 owns `is-on` and `aria-pressed` together. Shared theme paint supplies the
 on-state accent, without selection classes, orientation, pointer or underline.
-Native checkboxes retain checked semantics; disclosures retain expanded
+Checkbox borrows TaskMarker's artwork over a native input, keeping the same
+checked/focus semantics in settings and typed forms; disclosures retain expanded
 semantics. Panel tabs and question choices remain collection selections with
 their marks.
 
@@ -1395,13 +1450,25 @@ reduced colours exposes connection-owned glyphs and descriptions.
 `ActivityIndicator` owns the neutral tool/thinking spinner, without a session
 state input. It retains reduced-colour and reduced-motion support.
 
-`paintVisualPreferences` paints authoritative `reducedColors` / `animationsOff`
-preferences supplied by the consumer; `VisualSettings` takes those preferences,
-readiness and an async setter. These settings are contributed by their shared
-protocol feature. Reduced colours replaces lamps with shapes and supplies
-`.otk-age-0` through `.otk-age-3` underline styles; the action accent is mixed
-towards content. Animations off and OS reduced motion suppress all component
-animation and transitions, including breathing and event blink.
+`paintVisualPreferences` paints authoritative `textSize`, `reducedColors` /
+`animationsOff` preferences supplied by the consumer; `VisualSettings` takes
+those preferences, readiness and an async setter. These settings are contributed
+by their shared protocol feature. Reduced colours replaces lamps with shapes and
+supplies `.otk-age-0` through `.otk-age-3` underline styles; the action accent
+is mixed towards content. Animations off and OS reduced motion suppress all
+component animation and transitions, including breathing and event blink.
+
+Appearance's Text size segments contribute five validated percentages through
+the same preference registry and prefs.set owner. The painter applies one root
+`--otk-scale`; `--otk-unit` derives type, line, control and spacing dimensions.
+Production component gaps, padding and margins consume the shared `--space-*`
+roles, including menus and tool content; the visual preference units reject
+fixed-pixel spacing that would bypass the root scale. No browser zoom or
+application transform is used. Physical layout breakpoints remain viewport
+bounds. VirtualList includes the root font metrics in retained measurement
+identities and observes its role samples, so scale changes revoke old extents
+through the existing root geometry transaction. ScrollRegion and Popover
+continue to measure their actual CSS boxes.
 
 ## Notification channels
 

@@ -4,7 +4,8 @@ import type { ProjectEditor } from "@otk/client";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import Form, { FormInput, FormTextarea } from "../components/Form.tsx";
 import { ProjectAvatar } from "../components/ProjectChip.tsx";
-import { toggle } from "../components/selection.ts";
+import { selection } from "../components/selection.ts";
+import SelectionContent from "../components/SelectionContent.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import "./project-settings.css" with { type: "text" };
 
@@ -134,27 +135,35 @@ function ProjectSettingsPage(props: DialogProps<ProjectSettingsInput>) {
               <div class="otk-control-row">
                 <button
                   type="button"
-                  {...toggle({ on: !editor.state.values.color })}
+                  data-otk-selection="horizontal"
+                  {...selection({
+                    selected: !editor.state.values.color,
+                    kind: "pressed",
+                  })}
                   onClick={() => editor.edit("color", "")}
                 >
-                  Default
+                  <SelectionContent>Default</SelectionContent>
                 </button>
                 <For each={editor.state.colors} keyed={(color) => color.value}>
                   {(color) => (
                     <button
                       type="button"
-                      {...toggle({
-                        on: editor.state.values.color === color().value,
+                      data-otk-selection="horizontal"
+                      {...selection({
+                        selected: editor.state.values.color === color().value,
+                        kind: "pressed",
                         class: "otk-project-color",
                       })}
                       aria-label={`${color().label} color`}
                       title={color().label}
                       onClick={() => editor.edit("color", color().value)}
                     >
-                      <span
-                        class="otk-project-color-swatch"
-                        style={{ "--project-swatch": color().color }}
-                      />
+                      <SelectionContent>
+                        <span
+                          class="otk-project-color-swatch"
+                          style={{ "--project-swatch": color().color }}
+                        />
+                      </SelectionContent>
                     </button>
                   )}
                 </For>

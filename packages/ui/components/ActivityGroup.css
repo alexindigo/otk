@@ -1,27 +1,27 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-record-group-toggle {
-  width: 100%;
+  flex: 1;
   min-width: 0;
 }
 .otk-record-group {
-  margin-block-end: var(--message-gap, 24px);
-}
-.otk-record-group-toggle[aria-expanded=true] .otk-record-group-chevron {
-  rotate: 90deg;
+  margin-block-end: var(--message-gap, var(--space-6));
 }
 .otk-record-group-count,
 .otk-record-group-time {
   flex: none;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
 }
 .otk-record-group-time {
   margin-inline-start: auto;
 }
 .otk-record-group-heading {
   display: flex;
+  flex-direction: var(--tree-heading-flow, row);
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
+}
+.otk-record-completion {
+  --tree-height: var(--line-meta);
+  display: inline-grid;
+  align-items: center;
 }

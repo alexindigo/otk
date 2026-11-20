@@ -60,7 +60,10 @@ native-kind union. Its optional `Activity` supplies title, detail, generic tone,
 row/boundary layout, outgoing direction, disclosure category, parameters,
 rendered blocks, child reference and a safe icon hint. Native state keys and
 labels belong to the producer; active/terminal facts are nullable and unknown
-never means success. Activity has no visibility/hidden policy.
+never means success. `completion.placement: "footer"` declares normal completion
+owned by a reply footer, independently of native kind or title. Original facts
+remain available for inspection; Activity has no general visibility/hidden
+policy.
 
 Messages, parts and tool calls optionally retain `NativeSource`: bounded
 preview, original byte size, explicit truncation and optional exact text
@@ -236,12 +239,16 @@ presentations validate and freeze the same control contract. Toggles may declare
 `onValue`/`offValue` to preserve a legacy stored representation while checked
 means on; absent mappings use true/false. UI and command consumers share
 `preferenceToggleValue`, so neither surface coerces or rewrites saved values.
-Theme IDs are bounded, nonempty identifier strings, independent of installed
-palettes; missing palettes resolve to the consumer's dark base at paint time,
-without changing the saved ID. System retains OS-mode base selection. The
-shipped contract uses interface inheritance rather than library-internal module
-augmentation, which JSR's publication graph does not support. The composition
-names owners only, never individual keys or validators.
+The visual feature contributes `textSize` as one of `90`, `100`, `110`, `125` or
+`150` (percentage strings), default `100`. Its settings-only segmented control
+uses the same validated registry, storage and broadcast contract; it does not
+contribute a second Display command or browser-local preference. Theme IDs are
+bounded, nonempty identifier strings, independent of installed palettes; missing
+palettes resolve to the consumer's dark base at paint time, without changing the
+saved ID. System retains OS-mode base selection. The shipped contract uses
+interface inheritance rather than library-internal module augmentation, which
+JSR's publication graph does not support. The composition names owners only,
+never individual keys or validators.
 
 The layout preference owner exports immutable `SHELL_WIDTHS` data for each
 column's minimum, maximum and default. Preference defaults/validation and UI

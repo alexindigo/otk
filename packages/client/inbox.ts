@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectTree } from "./project-tree.ts";
 import { DEFAULT_PROJECT_AGEING, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
@@ -102,6 +103,9 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   availability?: ProjectSummary["availability"];
   archived?: boolean;
   depth?: number;
+  level?: "project" | "worktree";
+  artwork?: "avatar" | "none";
+  displayName?: string;
   parentLabel?: string;
   /** A repo can be shown as context while its own independent policy is Inactive. */
   inactivePolicy?: boolean;
@@ -139,62 +143,79 @@ export function projectDirectory(
   }
   return leaves.size === 1 ? [...leaves][0] : directory;
 }
+type HierarchyRow<T> = T & {
+  level: "project" | "worktree";
+  artwork: "avatar" | "none";
+  displayName: string;
+};
+// Projection rows are immutable owner snapshots. Presentation must retain their
+// identity on digest-only publications, without retaining retired source rows.
+const hierarchyRows = new WeakMap<
+  InboxProject,
+  { key: string; row: InboxProject }
+>();
 /** Hierarchy is presentation only: directory/task identities are never rewritten. */
 export function projectHierarchy<
-  T extends InboxProject & { sidecarId?: string },
->(rows: readonly T[]): T[] {
-  const result: T[] = [];
-  const emitted = new Set<T>();
-  const key = (row: T) =>
-    JSON.stringify([
-      row.sidecarId,
-      row.topology?.repoID,
-      row.topology?.canonicalRoot,
+  T extends InboxProject & {
+    sidecarId?: string;
+    summary?: Pick<ProjectSummary, "presentation">;
+  },
+>(
+  rows: readonly T[],
+): HierarchyRow<T>[] {
+  const result: HierarchyRow<T>[] = [];
+  const walk = (
+    node: ReturnType<typeof projectTree<T>>[number],
+    depth = 0,
+    parent?: T,
+  ) => {
+    const row = node.project;
+    const worktree = !!row.topology &&
+      row.topology.canonicalRoot !== row.directory;
+    const presentation = {
+      level: worktree ? "worktree" as const : "project" as const,
+      artwork: worktree ? "none" as const : "avatar" as const,
+      displayName: (!worktree && row.summary?.presentation?.name) ||
+        projectName(row.directory),
+    };
+    const lifted = row.inactive &&
+      node.children.some((child) =>
+        ["active", "archived"].includes(projectGroup(child.project))
+      );
+    const parentLabel = parent
+      ? projectName(parent.directory)
+      : row.parentLabel;
+    const key = JSON.stringify([
+      presentation,
+      lifted,
+      parent ? depth : row.depth,
+      parentLabel,
     ]);
-  const children = new Map<string, T[]>();
-  const parents = new Map<string, T>();
-  for (const row of rows) {
-    if (!row.topology?.parentDirectory) {
-      if (row.topology) parents.set(key(row), row);
-      continue;
+    let cached = hierarchyRows.get(row);
+    if (!cached || cached.key !== key) {
+      const value = {
+        ...(lifted
+          ? {
+            ...row,
+            group: "active" as const,
+            section: "live" as const,
+            inactive: false,
+            inactivePolicy: true,
+          }
+          : parent &&
+              (row.depth !== depth ||
+                row.parentLabel !== projectName(parent.directory))
+          ? { ...row, depth, parentLabel: projectName(parent.directory) }
+          : row),
+        ...presentation,
+      };
+      cached = { key, row: value };
+      hierarchyRows.set(row, cached);
     }
-    const values = children.get(key(row)) ?? [];
-    values.push(row);
-    children.set(key(row), values);
-  }
-  for (const row of rows) {
-    if (emitted.has(row)) continue;
-    if (row.topology?.parentDirectory) {
-      const parent = parents.get(key(row));
-      if (parent && !emitted.has(parent)) continue;
-    }
-    const leaves = children.get(key(row)) ?? [];
-    result.push(
-      row.topology && !row.topology.parentDirectory && row.inactive &&
-        leaves.some((leaf) =>
-          ["active", "archived"].includes(projectGroup(leaf))
-        )
-        ? {
-          ...row,
-          group: "active",
-          section: "live",
-          inactive: false,
-          inactivePolicy: true,
-        }
-        : row,
-    );
-    emitted.add(row);
-    if (row.topology && !row.topology.parentDirectory) {
-      for (const child of leaves) {
-        result.push(
-          child.depth === 1
-            ? child
-            : { ...child, depth: 1, parentLabel: projectName(row.directory) },
-        );
-        emitted.add(child);
-      }
-    }
-  }
+    result.push(cached.row as HierarchyRow<T>);
+    for (const child of node.children) walk(child, depth + 1, row);
+  };
+  for (const root of projectTree(rows)) walk(root);
   return result;
 }
 /** Source provenance never decides presentation groups. */

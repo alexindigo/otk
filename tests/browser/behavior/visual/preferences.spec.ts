@@ -43,11 +43,11 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
     await expect(folds.nth(i)).toHaveAttribute("aria-expanded", "false");
   }
   await openWorkLogs(page);
-  await expect(page.locator(".otk-reasoning > button")).toContainText(
+  await expect(page.locator(".otk-reasoning-heading")).toContainText(
     "Thought",
   );
   await expect(page.locator(".otk-reasoning-body")).toHaveCount(0);
-  await page.locator(".otk-reasoning > button").click();
+  await page.locator(".otk-reasoning-heading").click();
   await expect(page.locator(".otk-reasoning-body")).toContainText(
     "Reasoning body visible",
   );
