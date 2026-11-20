@@ -1832,7 +1832,7 @@ export class Transcript {
         turn.summary = summaries[turnID];
       }
       signal.throwIfAborted();
-      if (!snapshot && !token) this.#seedHistory(id, nativeItems.at(-1)?.id);
+      if (!snapshot && !token) this.#seedHistory(id, page.items.at(-1)?.id);
       this.#next(id, owner, page.next);
       return result;
     } finally {
