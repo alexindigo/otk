@@ -4,6 +4,7 @@ import type { FormDraft } from "@otk/client";
 import type { FormField as Field, FormValue } from "@otk/protocol";
 import { ChoiceFrame } from "./ChoiceFrame.tsx";
 import ContentTextarea from "./ContentTextarea.tsx";
+import Checkbox from "./Checkbox.tsx";
 import { CloseIcon } from "./ChromeIcons.tsx";
 import "./FormField.css" with { type: "text" };
 /** The same native toggle as preference controls, with explicit unanswered state. */
@@ -12,8 +13,7 @@ function FormToggle(
 ) {
   return (
     <label class="otk-form-toggle">
-      <input
-        type="checkbox"
+      <Checkbox
         role="switch"
         aria-label={props.label}
         checked={props.value === true}

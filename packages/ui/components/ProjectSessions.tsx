@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { treePaths } from "@otk/client";
 import { TreeGuide } from "./Tree.tsx";
+import ChromeMeta, { SectionHeader } from "./ChromeMeta.tsx";
+import { solidState } from "../state/binding.ts";
 import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
@@ -19,6 +21,7 @@ import VirtualList from "./VirtualList.tsx";
 import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import {
+  createSessionGroupDisclosure,
   createSessionTree,
   inboxStatus,
   type ListInteraction,
@@ -32,7 +35,7 @@ import {
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import UsageCost from "./UsageCost.tsx";
-import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
+import { PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
@@ -110,7 +113,11 @@ export default function ProjectSessions(props: {
       setError(failureValue(e, { actionLabel: "Opening session" }))
     );
   const hierarchy = createSessionTree();
-  const rows = createMemo(() => {
+  const disclosure = createSessionGroupDisclosure(
+    props.interaction,
+    solidState,
+  );
+  const allRows = createMemo(() => {
     const project = props.project;
     return project && props.ready !== false
       ? props.rows?.(query()) ?? hierarchy.rows(
@@ -121,6 +128,16 @@ export default function ProjectSessions(props: {
       )
       : [];
   });
+  const groupCounts = createMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of allRows()) {
+      if (row.kind === "session") {
+        counts.set(row.group, (counts.get(row.group) ?? 0) + 1);
+      }
+    }
+    return counts;
+  });
+  const rows = createMemo(() => disclosure.rows(allRows()));
   const byKey = createMemo(() => new Map(rows().map((row) => [row.key, row])));
   const treeGuides = createMemo(() => {
     const items = rows();
@@ -276,11 +293,12 @@ export default function ProjectSessions(props: {
                       data-session-group={initial.group}
                       aria-label={item().title}
                     >
-                      <ChevronIcon class="otk-session-group-chevron" />
-                      <span class="otk-control-label" title={item().title}>
-                        {item().title}
-                      </span>
-                      <span class="otk-session-group-rule" />
+                      <SectionHeader
+                        label={item().title}
+                        count={groupCounts().get(initial.group) ?? 0}
+                        open={disclosure.open(initial.group)}
+                        onOpen={(value) => disclosure.set(initial.group, value)}
+                      />
                     </h3>
                   );
                 }
@@ -409,21 +427,25 @@ export default function ProjectSessions(props: {
                               when={row().session.attention.questions +
                                 row().session.attention.childQuestions}
                             >
-                              <span title="Pending questions">
-                                Q {row().session.attention.questions +
+                              <ChromeMeta
+                                title="Pending questions"
+                                aria-label="Pending questions"
+                              >
+                                <StatusLight small state="blocked" />{" "}
+                                {row().session.attention.questions +
                                   row().session.attention.childQuestions}
-                              </span>
+                              </ChromeMeta>
                             </Show>
                             <Show when={row().session.attention.error}>
-                              <span
+                              <ChromeMeta
                                 title="The agent reported a session failure"
                                 aria-label="Session error"
                               >
                                 Error
-                              </span>
+                              </ChromeMeta>
                             </Show>
                             <Show when={costLabel(row().session.id)}>
-                              <span
+                              <ChromeMeta
                                 class="otk-session-cost"
                                 aria-hidden="true"
                                 title="Session cost"
@@ -431,7 +453,7 @@ export default function ProjectSessions(props: {
                                 <UsageCost
                                   value={cost(row().session.id)!}
                                 />
-                              </span>
+                              </ChromeMeta>
                             </Show>
                             <Show
                               when={row().session.digest.total?.state !==
@@ -440,9 +462,9 @@ export default function ProjectSessions(props: {
                                   costLabel(row().session.id) ===
                                     undefined)}
                             >
-                              <span class="otk-session-digest-state">
+                              <ChromeMeta class="otk-session-digest-state">
                                 {digestLabel(row().session)}
-                              </span>
+                              </ChromeMeta>
                             </Show>
                           </>
                         }

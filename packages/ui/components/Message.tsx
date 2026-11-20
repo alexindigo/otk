@@ -8,6 +8,7 @@ import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -140,9 +141,11 @@ function ReplyStart(props: {
           onOpen={props.onOpen}
         />
       </div>
-      <time datetime={date().toISOString()} title={date().toLocaleString()}>
-        {date().toLocaleTimeString()}
-      </time>
+      <ChromeMeta>
+        <time datetime={date().toISOString()} title={date().toLocaleString()}>
+          {date().toLocaleTimeString()}
+        </time>
+      </ChromeMeta>
     </header>
   );
 }

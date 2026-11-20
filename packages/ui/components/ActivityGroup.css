@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-record-group-toggle {
-  width: 100%;
+  flex: 1;
   min-width: 0;
 }
 .otk-record-group {
@@ -9,23 +9,16 @@
 .otk-record-group-count,
 .otk-record-group-time {
   flex: none;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
 }
 .otk-record-group-time {
   margin-inline-start: auto;
 }
 .otk-record-group-heading {
   display: flex;
+  flex-direction: var(--tree-heading-flow, row);
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-}
-.otk-record-summary {
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  font-weight: normal;
 }
 .otk-record-completion {
   --tree-height: var(--line-meta);

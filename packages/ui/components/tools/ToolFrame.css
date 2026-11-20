@@ -16,6 +16,9 @@
   color: inherit;
   text-align: left;
 }
+.otk-tool-state {
+  flex-direction: var(--tree-heading-flow, row);
+}
 .otk-tool-icon {
   display: flex;
   align-items: center;

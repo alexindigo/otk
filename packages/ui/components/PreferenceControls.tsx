@@ -14,6 +14,7 @@ import FieldFeedback from "./FieldFeedback.tsx";
 import Select from "./Select.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import Checkbox from "./Checkbox.tsx";
 
 export interface PreferenceControlsProps {
   prefs: Preferences;
@@ -139,8 +140,7 @@ export default function PreferenceControls(
                   }
                 >
                   <label class="otk-preference-toggle">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       name={row().key}
                       checked={props.prefs[row().key] ===
                         preferenceToggleValue(control(), true)}

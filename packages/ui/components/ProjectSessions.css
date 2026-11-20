@@ -55,13 +55,6 @@
   height: var(--row-project);
   margin: 0;
   padding: 0 var(--project-inset);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  line-height: var(--line-meta);
-  font-weight: 500;
 }
 .otk-session-group > p {
   margin: var(--space-2);
@@ -71,32 +64,16 @@
   align-items: center;
   flex: none;
 }
-.otk-session-group-chevron {
-  width: var(--icon-compact);
-  height: var(--icon-compact);
-  transform: rotate(90deg);
-}
-.otk-session-group-rule {
-  flex: 1;
-  height: 1px;
-  background: var(--otk-border);
-}
 .otk-session-cost {
   flex: none;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 .otk-session-row.is-deleted:not(.is-editing) .otk-row-title {
   color: var(--deleted-fg);
   text-decoration: line-through;
 }
 .otk-session-digest-state {
-  white-space: nowrap;
   inline-size: 15ch;
   text-align: end;
-  color: var(--otk-fg-3);
 }
 .otk-session-summary-status {
   position: absolute;

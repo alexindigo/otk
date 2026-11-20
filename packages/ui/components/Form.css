@@ -42,3 +42,6 @@
 .otk-form-action {
   align-self: stretch;
 }
+.otk-form-textarea {
+  resize: none;
+}
