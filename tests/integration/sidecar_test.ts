@@ -51,6 +51,7 @@ v1Test(
         "history",
         "models",
         "permissions",
+        "projectEdit", // WP9: native project editing is capability-selected.
         "prompt",
         "questions",
         "resources",

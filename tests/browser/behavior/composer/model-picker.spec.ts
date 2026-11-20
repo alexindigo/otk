@@ -87,11 +87,16 @@ test(
       frames.sent.filter(({ frame }) =>
         frame.t === "request" && frame.method === "catalogs.demand"
       ).map(({ frame }) => frame.params);
-    expect(demands()).toEqual([{
+    expect(demands()).toHaveLength(2);
+    expect(demands()).toEqual(expect.arrayContaining([{
+      directory: state.directory,
+      kinds: ["project"], // WP9: the project chip reads its native facts.
+      intent: "consumer",
+    }, {
       directory: state.directory,
       kinds: ["models", "agents", "commands", "skills"],
       intent: "warm",
-    }]);
+    }]));
     await prompt(page).fill("@pk2-demand");
     await expect(page.locator(".otk-autocomplete")).toContainText(
       "pk2-demand.txt",

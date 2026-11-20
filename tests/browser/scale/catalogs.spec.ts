@@ -156,7 +156,7 @@ test(
         // Decision 34: four warm kinds, at most one consumer promotion each,
         // plus files/resources on mention. This ceiling is population-independent.
         const warm = ["models", "agents", "commands", "skills"],
-          consumers = [...warm, "files", "resources"],
+          consumers = [...warm, "files", "resources", "project"], // WP9 project chip.
           demands = g.requests.filter((r) => r.method === "catalogs.demand");
         expect(g.requests.length).toBeLessThanOrEqual(
           2 + warm.length + consumers.length,
