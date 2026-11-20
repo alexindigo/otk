@@ -4,6 +4,58 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { activity, viewByUrl, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-hierarchy" });
+test(
+  "sessions.native-running-inventory-keeps-three-blocked-helpers-in-the-four-helper-count",
+  {
+    tag: ["@sessions", "@attention", "@contracts"],
+  },
+  async ({ isolatedState: state, page }, info) => {
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      target: "delivery-helpers",
+      sessionID: "tstv1-otk",
+    });
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Parent task",
+      sessions: ["tstv1-otk"],
+    });
+    await viewByUrl(state, page, "tstv1-otk");
+    const inventory = page.getByRole("button", {
+      name: "Running work: 4 subagents",
+    });
+    await expect(inventory).toBeVisible();
+    for (let n = 0; n < 4; n++) {
+      await expect(page.locator(`[data-crumb="tstv1-delivery-helper-${n}"]`))
+        .toBeVisible();
+    }
+    await inventory.click();
+    await expect(page.locator("[data-running-work^='helper/']")).toHaveCount(4);
+    await expect(
+      page.locator(
+        "[data-running-work] > .otk-status-light[data-state=blocked]",
+      ),
+    ).toHaveCount(3);
+    await expect(
+      page.locator(
+        "[data-running-work] > .otk-status-light[data-state=working]",
+      ),
+    ).toHaveCount(1);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.screenshot({
+        path: info.outputPath(`wp14-helpers-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+  },
+);
 test("sessions.working-helpers-share-composer-and-trail-lifetime", {
   tag: ["@sessions", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {

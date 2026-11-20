@@ -526,6 +526,32 @@ export async function sessionsScenario(profile: Profile) {
         case "scenario": {
           const { action, sessionID: id } = frame.params;
           if (
+            profile === "contract-sessions-hierarchy" &&
+            frame.params.target === "delivery-helpers" && action === "hold"
+          ) {
+            for (let n = 0; n < 4; n++) {
+              f.add({
+                ...base,
+                id: `tstv1-delivery-helper-${n}`,
+                parentID: n === 3 ? "tstv1-delivery-helper-2" : base.id,
+                directory: n >= 2
+                  ? join(root, "helper-checkout")
+                  : base.directory,
+                title: `Delivery helper ${n + 1}`,
+              });
+              f.update(`tstv1-delivery-helper-${n}`, {
+                status: "busy",
+                attention: { ...base.attention, questions: n < 3 ? 1 : 0 },
+              });
+            }
+            await c.rpc("tasks.create", {
+              directory: join(root, "helper-checkout"),
+              name: "Split helper task",
+              sessions: ["tstv1-delivery-helper-2"],
+            });
+            return null;
+          }
+          if (
             frame.params.target === "tabs-pin" && id &&
             profile === "contract-sessions-phantom"
           ) {

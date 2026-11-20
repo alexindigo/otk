@@ -1,5 +1,12 @@
 # @otk/client
 
+`SessionActions` owns source-free, session-bound submission receipts. Native
+acceptance carries a message identity; only the canonical transcript can admit
+it, and only the viewport can report its presentation. The ten-second
+observation deadline is not a mutation timeout: recovery reloads canonical
+messages and never resends input. Own sends switch the existing viewport to
+follow; canonical append revisions expose new messages even near the tail.
+
 `entityFacts(identity, sources)` projects explicit session, turn and tool
 scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
 markers and never borrow session/helper clocks. Session-now status borrows live
@@ -9,6 +16,12 @@ adapter inventory items whose identities remain in that inventory. Transcript
 paging is not an input. `createLiveWork` owns capability checks and joined stop
 admission across presentation lifetimes; elapsed labels describe running time,
 not working time.
+
+The helper inventory follows native ancestry and fresh positive work keys,
+independently of task/checkout boundaries and attention priority. Blocked
+helpers remain in the count with their own attention lamps. Cross-project
+routing keeps work facts for these demanded descendants while unrelated pending
+identities remain request-only.
 
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
@@ -172,6 +185,12 @@ preparation that starts during Sending cannot admit a prompt, shell or native
 command effect after the earlier send settles. A later explicit activation can
 send the retained draft. Both lifetimes stay framework-free, with native input
 and focus owned by the UI adapter.
+
+Submission readiness rechecks use the intent owner's `require()` boundary.
+Readiness loss and captured-send admission refusal publish classified feedback
+with action, target, reason and recovery instead of resolving as an unsent
+success. An explicitly handled input command remains distinct from refused
+dispatch.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
