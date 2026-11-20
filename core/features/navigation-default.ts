@@ -13,22 +13,24 @@ export class NavigationDefault {
   constructor(
     readonly source: {
       hierarchy: SessionHierarchy;
-      scopes(directory: string): readonly string[];
+      scopes(directory: string, repository?: boolean): readonly string[];
       entries(directory: string): readonly IndexMetadata[];
       status(id: string): ProjectStatus;
     },
   ) {}
   async resolve(
     core: HarnessCore,
-    input: { directory: string; preferred?: string },
+    input: { directory: string; preferred?: string; attention?: boolean },
     signal?: AbortSignal,
   ): Promise<string | null> {
     const { hierarchy } = this.source;
     const directory = hierarchy.project(input.directory);
-    const scopes = [...new Set(this.source.scopes(directory))];
+    const checkout = hierarchy.repository(directory) !== directory;
+    const exact = checkout || input.attention === true;
+    const scopes = [...new Set(this.source.scopes(directory, input.attention))];
     const entries = () => scopes.flatMap((scope) => this.source.entries(scope));
     const belongs = (row: { id: string }) =>
-      hierarchy.node(row.id)?.projectDirectory === directory;
+      scopes.includes(hierarchy.node(row.id)?.projectDirectory ?? "");
     const current = <T extends { id: string }>(row: T) =>
       entries().find((entry) => entry.id === row.id) ?? row;
     const eligible = (row: { id: string; deleted?: unknown }) =>
@@ -44,15 +46,16 @@ export class NavigationDefault {
         const x = this.source.status(a.id), y = this.source.status(b.id);
         return x === y ? recent(a, b) : urgentStatus(x, y) === x ? -1 : 1;
       })[0]?.id;
-    // Only the hierarchy can prove a human root. Partial/cyclic ancestry is
-    // not a navigation target, even when the unresolved helper needs attention.
+    // Human-root resolution is only a project default. An explicit checkout or
+    // attention target must retain its session identity and checkout.
     const proven = (id: string) => {
       signal?.throwIfAborted();
       const node = hierarchy.node(id);
       if (
-        node?.projectDirectory !== directory ||
+        !node || !scopes.includes(node.projectDirectory) ||
         entries().find((entry) => entry.id === id)?.deleted
       ) return null;
+      if (exact) return id;
       const root = node?.ancestry === "complete" ? node.rootID : undefined;
       return root && !entries().find((entry) => entry.id === root)?.deleted
         ? root
@@ -100,7 +103,7 @@ export class NavigationDefault {
     for (const scope of scopes) {
       const page = await core.listSessions({
         directory: scope,
-        parentID: null,
+        ...(checkout ? {} : { parentID: null }),
         limit: 1,
       }, signal);
       await hierarchy.prepare(
@@ -109,7 +112,9 @@ export class NavigationDefault {
         signal,
       );
       candidates.push(
-        ...page.items.filter((row) => !current(row).parentID && eligible(row)),
+        ...page.items.filter((row) =>
+          (checkout || !current(row).parentID) && eligible(row)
+        ),
       );
     }
     signal?.throwIfAborted();
@@ -119,7 +124,7 @@ export class NavigationDefault {
       if (root && proven(late) === root) return root;
     }
     return candidates.map(current).filter((row) =>
-      !row.parentID && eligible(row) && proven(row.id) === row.id
+      (checkout || !row.parentID) && eligible(row) && proven(row.id) === row.id
     )
       .sort(recent)[0]?.id ??
       null;

@@ -45,6 +45,7 @@ export interface ShellNavigation {
   subscribe(listener: (state: ShellNavigationState) => void): () => void;
   navigate(selection: Selection): boolean;
   openProject(project: ProjectSelection): void;
+  openAttention(project: ProjectSelection): void;
   openChild(id: string): void;
   projectHome(): boolean;
   preview(target: Selection): boolean;
@@ -105,7 +106,11 @@ export function createShellNavigation(o: {
     connection: number;
     outcome: "pending" | "failed" | "complete";
   } | undefined;
-  let projectIntent: { at: number; target: ProjectSelection } | undefined;
+  let projectIntent: {
+    at: number;
+    target: ProjectSelection;
+    attention?: boolean;
+  } | undefined;
   const presentation = (
     p: ProjectSelection,
     repoID?: string,
@@ -244,8 +249,13 @@ export function createShellNavigation(o: {
     }
     return true;
   };
-  const resolveProject = (input?: ProjectSelection): void => {
-    if (input) projectIntent = { at: revision, target: { ...input } };
+  const resolveProject = (
+    input?: ProjectSelection,
+    attention?: boolean,
+  ): void => {
+    if (input) {
+      projectIntent = { at: revision, target: { ...input }, attention };
+    }
     const value = projectIntent?.at === revision
       ? projectIntent.target
       : projectDefault
@@ -270,7 +280,11 @@ export function createShellNavigation(o: {
       outcome: "pending",
     };
     resolution = attempt;
-    void resources.projectSession(target, lastLocation(target)?.sessionID).then(
+    void resources.projectSession(
+      target,
+      lastLocation(target)?.sessionID,
+      projectIntent?.attention,
+    ).then(
       (id) => {
         attempt.outcome = "complete";
         if (revision === attempt.at) {
@@ -398,6 +412,13 @@ export function createShellNavigation(o: {
     fail,
     clearError,
     closeSettings,
+    openAttention(target) {
+      // Capture a distinct explicit intent without letting a project-route
+      // default race it. The accepted session route still owns the input guard.
+      revision++;
+      closeSettings();
+      resolveProject(target, true);
+    },
     openProject(target) {
       target = presentation(target);
       if (

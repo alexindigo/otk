@@ -66,6 +66,7 @@ export default function ProjectInbox(props: {
   prefs: Preferences;
   ready: boolean;
   onOpen(project: ProjectSelection): void;
+  onAttention?(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
   onLayout(patch: Partial<ShellLayout>): Promise<void>;
   onProjectCollapse?(
@@ -150,6 +151,19 @@ export default function ProjectInbox(props: {
       },
     },
   });
+  const openAttention = ownedAction(
+    "project.attention",
+    props.onAttention ?? props.onOpen,
+    {
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          directory: { type: "string" },
+        },
+      },
+    },
+  );
   ownedAction(
     "project.inactive",
     (input: { sidecarId: string; directory: string; value: boolean }) =>
@@ -442,6 +456,36 @@ export default function ProjectInbox(props: {
         data-project-archived={project().archived ? "true" : "false"}
       >
         <SelectionContent class="otk-project-content">
+          <TreeIcon class="otk-project-marker">
+            <button
+              type="button"
+              class="otk-project-attention"
+              aria-label={project().status === "none"
+                ? `Open project ${name()}`
+                : `Open session needing attention in ${name()}`}
+              title={project().status === "none"
+                ? `Open project ${project().directory}`
+                : `Open session needing attention in ${project().directory}`}
+              onClick={() =>
+                void (project().status === "none"
+                  ? open(project())
+                  : openAttention(project()))}
+            >
+              <StatusLight
+                state={project().status}
+                attention={{
+                  server: project().sidecarId,
+                  project: {
+                    directory: project().directory,
+                    repo: project().summary?.topology?.canonicalRoot ===
+                        project().directory
+                      ? project().summary?.topology?.repoID
+                      : undefined,
+                  },
+                }}
+              />
+            </button>
+          </TreeIcon>
           <button
             type="button"
             class="otk-project-open"
@@ -461,21 +505,6 @@ export default function ProjectInbox(props: {
             }${project().annotation ? `, ${project().annotation}` : ""}`}
             onClick={() => void open(project())}
           >
-            <TreeIcon class="otk-project-marker">
-              <StatusLight
-                state={project().status}
-                attention={{
-                  server: project().sidecarId,
-                  project: {
-                    directory: project().directory,
-                    repo: project().summary?.topology?.canonicalRoot ===
-                        project().directory
-                      ? project().summary?.topology?.repoID
-                      : undefined,
-                  },
-                }}
-              />
-            </TreeIcon>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
                 <Show

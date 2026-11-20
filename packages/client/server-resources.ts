@@ -79,6 +79,7 @@ export interface ServerResources {
   projectSession(
     project: ProjectSelection,
     preferred?: string,
+    attention?: boolean,
   ): Promise<string | undefined>;
   /** Presentation routing only; native/persisted directories remain unchanged. */
   projectDirectory?(
@@ -932,11 +933,12 @@ export function createServerResources(o: {
         listOwner(project.sidecarId).viewport(list, rows);
       }
     },
-    async projectSession(project, preferred) {
+    async projectSession(project, preferred, attention) {
       const connection = sidecars.connection(project.sidecarId);
       return await connection.rpc.call("navigation.default", {
         directory: project.directory,
         preferred,
+        ...(attention ? { attention: true } : {}),
       }) ?? undefined;
     },
     projectDirectory: (sidecar, directory, repoID) =>

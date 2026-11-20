@@ -5,6 +5,51 @@ import * as client from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
 
+Deno.test("failed cross-checkout helpers stay in their human family's trail and family without inheriting its task", () => {
+  const root = shellEntry("human", "/repo");
+  const child = shellEntry("failed", "/tree", root.id);
+  const tabs = client.createTabs(() =>
+    Promise.reject(new Error("No promotion"))
+  );
+  tabs.update({
+    directory: root.directory,
+    entries: [root],
+    context: [root, child],
+    inbox: {
+      projects: [],
+      tasks: [{
+        id: "task",
+        name: "Human task",
+        directory: root.directory,
+        sessions: [root.id],
+        order: 0,
+      }],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+      supervision: {
+        failed: {
+          state: "needsYou",
+          terminal: 10,
+          unseen: true,
+          outcome: "failed",
+        },
+      },
+    },
+  });
+  tabs.preview(root.id);
+  assertEquals(tabs.taskFor(child.id), undefined);
+  assertEquals(tabs.crumbs().map((row) => [row.id, !!row.external]), [[
+    root.id,
+    false,
+  ], [child.id, true]]);
+  assertEquals(
+    tabs.family().find((row) => row.id === child.id)?.status,
+    "blocked",
+  );
+  tabs.stop();
+});
+
 Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested scopes", () => {
   const root = shellEntry("root", "/tree");
   const child = shellEntry("child", "/tree/src", root.id);

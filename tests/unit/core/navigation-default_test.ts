@@ -54,11 +54,12 @@ function fixture() {
       reads.push(ids);
       return Promise.resolve(rows.filter((row) => ids.includes(row.id)));
     },
-    listSessions(input: { directory: string; parentID: null; limit: number }) {
+    listSessions(input: { directory: string; parentID?: null; limit: number }) {
       reads.push(input);
       return Promise.resolve({
         items: rows.filter((row) =>
-          row.directory === input.directory && !row.parentID
+          row.directory === input.directory &&
+          (input.parentID !== null || !row.parentID)
         ).sort((a, b) => b.timeUpdated - a.timeUpdated).slice(0, input.limit),
         older: null,
         generation: "test",
@@ -71,8 +72,58 @@ function fixture() {
     entries: (directory) => rows.filter((row) => row.directory === directory),
     status: (id) => states.get(id) ?? "none",
   });
-  return { resolver, core, states, rows, reads, hierarchy };
+  return { resolver, core, states, rows, reads, hierarchy, identity };
 }
+
+Deno.test("explicit checkout and repository attention targets never redirect to a foreign human root", async () => {
+  const f = fixture();
+  f.identity.learn([{
+    directory: "/tree",
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    topology: {
+      repoID: "p",
+      canonicalRoot: "/repo",
+      leafDirectory: "/tree",
+      parentDirectory: "/repo",
+    },
+  }]);
+  const child = entry("tstv1-failed", "/tree", "tstv1-old");
+  f.rows.push(child);
+  f.hierarchy.entry(child);
+  f.states.set(child.id, "blocked");
+  const resolver = new NavigationDefault({
+    hierarchy: f.hierarchy,
+    scopes: (directory, repository) =>
+      repository ? ["/repo", "/repo/src", "/tree"] : [directory],
+    entries: (directory) => f.rows.filter((row) => row.directory === directory),
+    status: (id) => f.states.get(id) ?? "none",
+  });
+  assertEquals(
+    await resolver.resolve(f.core, { directory: "/tree" }),
+    child.id,
+  );
+  assertEquals(
+    await resolver.resolve(f.core, { directory: "/repo", attention: true }),
+    child.id,
+  );
+  // Ordinary project-name clicks still obey decision 56.
+  f.states.set("tstv1-child", "blocked");
+  assertEquals(
+    await f.resolver.resolve(f.core, { directory: "/repo" }),
+    "tstv1-old",
+  );
+  f.states.clear();
+  assertEquals(
+    await resolver.resolve(f.core, { directory: "/tree" }),
+    child.id,
+  );
+  assertEquals(
+    await resolver.resolve(f.core, { directory: "/tree", preferred: child.id }),
+    child.id,
+  );
+});
 
 Deno.test("navigation default resolves urgency and child memory to human roots, then newest root across scopes", async () => {
   const f = fixture(), input = { directory: "/repo", preferred: "tstv1-child" };

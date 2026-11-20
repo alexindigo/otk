@@ -37,6 +37,9 @@ export class SessionHierarchy {
   project(directory: string, repoID?: string): string {
     return this.#identity.leaf(directory, repoID);
   }
+  repository(directory: string): string {
+    return this.#identity.topology(directory)?.canonicalRoot ?? directory;
+  }
   entry(entry: HierarchySession): void {
     for (const admission of this.#admissions) admission.delete(entry.id);
     const before = this.#entries.get(entry.id);
