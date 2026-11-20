@@ -53,6 +53,10 @@ const measure = (page: Page) =>
       footerTop: footer.top,
       footerBottom: footer.bottom,
       composerTop: box.top,
+      // WP1: the fixed runtime-status slot belongs to the dock, not the input.
+      dockTop:
+        document.querySelector(".otk-composer-dock")!.getBoundingClientRect()
+          .top,
       composerBottom: box.bottom,
       transcriptBottom:
         document.querySelector(".otk-messages")!.getBoundingClientRect().bottom,
@@ -99,7 +103,7 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
     expect(geometry.composerTop).toBe(
       empty.composerTop - (geometry.height - empty.height),
     );
-    expect(Math.abs(geometry.transcriptBottom - geometry.composerTop))
+    expect(Math.abs(geometry.transcriptBottom - geometry.dockTop))
       .toBeLessThan(.5);
     expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.bottom);
     expect(geometry.footerBottom).toBeLessThan(geometry.viewport);
