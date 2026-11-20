@@ -14,6 +14,8 @@ export default defineConfig({
       "@otk/client":
         new URL("../packages/client/mod.ts", import.meta.url).pathname,
       "@otk/ui": new URL("../packages/ui/mod.ts", import.meta.url).pathname,
+      "@otk/content":
+        new URL("../packages/content/mod.ts", import.meta.url).pathname,
     },
   },
   plugins: [

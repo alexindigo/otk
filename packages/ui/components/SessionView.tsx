@@ -367,7 +367,9 @@ export default function SessionView(props: {
           diagnosticID: randomID(),
         });
       }
-      const key = replyKey(message), reply = projection().repliesByID[key];
+      const reply = props.transcript?.projection.entry(message.id) ??
+        projection().repliesByID[replyKey(message)];
+      const key = reply?.key ?? replyKey(message);
       const ancestors = recordGroups().parents[key] ?? [];
       interaction.reveal(ancestors);
       const focus = () => {
@@ -794,6 +796,7 @@ export default function SessionView(props: {
                                               ownerID={reply().key}
                                               segments={reply().segments}
                                               message={message()}
+                                              send={reply().send}
                                               sourceTime={(id) =>
                                                 projection().messagesByID[id]
                                                   ?.time.created}

@@ -3,8 +3,14 @@ import { type ContentClock, type PromptReceipt, randomID } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { TranscriptOwner } from "./transcript.ts";
 import type { Selection } from "./session.ts";
-import { presentFailure } from "./failure-features.ts";
+import {
+  errorFeedback,
+  failureValue,
+  presentFailure,
+} from "./failure-features.ts";
 import type { Feedback } from "./failures.ts";
+import { RequestFailure } from "./failures.ts";
+import type { PendingSend } from "./pending-send.ts";
 
 /** This is an observation deadline, never a mutation timeout or permission to resend. */
 export const SEND_OBSERVATION_MS = 10_000;
@@ -14,6 +20,7 @@ export interface DeliveryReceipt {
   phase: "submitted" | "accepted" | "queued" | "admitted" | "presented";
   clock?: ContentClock;
   feedback?: Feedback;
+  entry?: boolean;
 }
 export interface SessionDelivery {
   readonly state: {
@@ -22,7 +29,10 @@ export interface SessionDelivery {
     last?: DeliveryReceipt;
   };
   subscribe(listener: () => void): () => void;
-  send(action: () => Promise<PromptReceipt | null>): Promise<void>;
+  send(
+    action: () => Promise<PromptReceipt | null>,
+    entry?: PendingSend,
+  ): Promise<void>;
   /** The viewport reports real visible native sources through its existing port. */
   presented(ids: readonly string[]): void;
   reload(): Promise<void>;
@@ -82,6 +92,8 @@ export function createSessionDelivery(input: {
       if (
         message?.sessionID !== input.target.sessionID || message.role !== "user"
       ) continue;
+      const send = transcript?.projection.entry(receipt.messageID)?.send;
+      if (receipt.entry && send && send.phase !== "committed") continue;
       if (receipt.phase !== "admitted") {
         update(receipt.id, (r) => {
           r.phase = "admitted";
@@ -131,21 +143,108 @@ export function createSessionDelivery(input: {
       return store.state;
     },
     subscribe: (listener) => store.subscribe(listener),
-    async send(action) {
+    async send(action, entry) {
       if (stopped) {
         throw new DOMException("Submission owner stopped", "AbortError");
       }
       bind();
-      const id = randomID();
+      const id = entry?.intent.key ?? randomID();
+      if (entry) {
+        const known = transcript?.projection.entry(entry.message.id);
+        if (known && (!known.send || known.send.phase === "committed")) return;
+        if (store.state.receipts.some((receipt) => receipt.id === id)) return;
+      }
       commit((s) => {
-        s.receipts.push({ id, phase: "submitted" });
+        s.receipts.push({
+          id,
+          phase: "submitted",
+          messageID: entry?.message.id,
+          entry: !!entry,
+        });
         s.follow++;
       });
+      if (entry) {
+        const publish = (value: PendingSend) => transcript?.send?.(value);
+        const observeAgain = () => {
+          publish({ ...entry, phase: "pending" });
+          timers.set(
+            id,
+            clock.set(() => failObservation(), SEND_OBSERVATION_MS),
+          );
+          void owner.reload();
+        };
+        const failObservation = () => {
+          const receipt = store.state.receipts.find((r) => r.id === id);
+          if (
+            !receipt || receipt.phase === "admitted" ||
+            receipt.phase === "presented"
+          ) return;
+          const feedback = presentFailure({
+            code: "send.observation",
+            retry: "none",
+            diagnosticID: id,
+            facts: {
+              actionLabel: "Sending message",
+              target: { ...input.target, label: input.title() },
+              reason:
+                "The message has not been observed in opencode's transcript within ten seconds.",
+              recovery:
+                "Retry checks the existing send without sending it again.",
+            },
+          });
+          publish({
+            ...entry,
+            phase: "failed",
+            feedback: feedback &&
+              { ...feedback, action: { label: "Retry", run: observeAgain } },
+            retry: observeAgain,
+          });
+        };
+        publish(entry);
+        timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
+      }
       let result: PromptReceipt | null;
       try {
         result = await action();
       } catch (cause) {
         clear(id);
+        if (entry) {
+          const receipt = store.state.receipts.find((r) => r.id === id);
+          if (
+            transcript?.projection.entry(entry.message.id)?.send
+                ?.phase === "committed" ||
+            receipt?.phase === "admitted" || store.state.last?.id === id
+          ) return;
+          const feedback = errorFeedback(failureValue(cause, {
+            actionLabel: "Sending message",
+            target: { ...input.target, label: input.title() },
+          })) ?? presentFailure({
+            code: "send.released",
+            retry: "new-intent",
+            diagnosticID: id,
+            facts: {
+              actionLabel: "Sending message",
+              target: { ...input.target, label: input.title() },
+              reason: "The send was released before completion.",
+            },
+          });
+          const retry = () => {
+            if (
+              cause instanceof RequestFailure &&
+              (cause.failure.facts?.outcome === "unknown" ||
+                cause.failure.facts?.outcome === "unavailable")
+            ) {
+              void owner.reload();
+            } else entry.retry?.();
+          };
+          transcript?.send?.({
+            ...entry,
+            phase: "failed",
+            feedback: feedback &&
+              { ...feedback, action: { label: "Retry", run: retry } },
+            retry,
+          });
+        }
         commit((s) => {
           s.receipts = s.receipts.filter((r) => r.id !== id);
         });
@@ -153,8 +252,10 @@ export function createSessionDelivery(input: {
       }
       if (stopped) return;
       update(id, (r) => {
-        r.messageID = result?.messageID;
-        r.phase = result?.state ?? "accepted";
+        r.messageID = result?.messageID ?? entry?.message.id;
+        if (r.phase !== "admitted" && r.phase !== "presented") {
+          r.phase = result?.state ?? "accepted";
+        }
       });
       bind();
       if (!store.state.receipts.some((r) => r.id === id)) return;
@@ -165,13 +266,15 @@ export function createSessionDelivery(input: {
       if (result) {
         pins.set(id, transcript?.pin([result.messageID]) ?? (() => {}));
       }
-      timers.set(
-        id,
-        clock.set(() => {
-          timers.delete(id);
-          unavailable(id);
-        }, SEND_OBSERVATION_MS),
-      );
+      if (!entry) {
+        timers.set(
+          id,
+          clock.set(() => {
+            timers.delete(id);
+            unavailable(id);
+          }, SEND_OBSERVATION_MS),
+        );
+      }
       // Read-only recovery joins the existing authority. It never submits input.
       if (
         !result || !transcript?.projection.state.messagesByID[result.messageID]
