@@ -2,6 +2,7 @@
 import {
   capabilityNames,
   checkClientFrameSize,
+  ContentDeliveryDiagnostics,
   isAttentionOp,
   isSessionID,
   MAX_UPLOAD_BYTES,
@@ -75,6 +76,7 @@ export interface ConnectionRequests {
 }
 /** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
+  readonly contentDelivery = new ContentDeliveryDiagnostics("fanout");
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
   harnessState: HarnessState = "connecting";
@@ -138,8 +140,9 @@ export class Connections {
   #fanout(
     frame: ServerFrame,
     accepts: (connection: Connection) => boolean,
-  ): void {
+  ): number {
     let serialized: string | undefined;
+    let recipients = 0;
     for (const connection of this.#connections) {
       if (!accepts(connection) || connection.ws.readyState !== WebSocket.OPEN) {
         continue;
@@ -150,7 +153,9 @@ export class Connections {
         this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
       }
       connection.ws.send(serialized);
+      recipients++;
     }
+    return recipients;
   }
   connection(state: HarnessState): void {
     this.harnessState = state;
@@ -164,12 +169,20 @@ export class Connections {
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
-    this.#fanout({
+    const delivered = this.#fanout({
       t: "content",
       sessionID,
       event,
       ...(clock ? { clock } : {}),
     }, (c) => c.welcomed && recipients.some((id) => c.sessions.has(id)));
+    this.contentDelivery.record({
+      sessionID,
+      operation: event.op,
+      clock,
+      state: "sent",
+      recipients: delivered,
+      ...(event.op === "message.upsert" ? { messageID: event.message.id } : {}),
+    });
   }
   #subscribe(c: Connection, id: string, enabled: boolean): void {
     if (enabled === c.sessions.has(id)) return;

@@ -648,7 +648,7 @@ export class OpencodeV1Adapter implements Harness {
               operation?.key.key,
             );
             try {
-              await capability.prompt(input, operation);
+              return await capability.prompt(input, operation);
             } catch (error) {
               if (!operation?.signal.aborted) {
                 this.#requestFailure(

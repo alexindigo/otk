@@ -526,6 +526,17 @@ export class Transcript {
     };
   }
   #publish(id: string, event: ContentOp): void {
+    if (!this.#subscriptions.has(id) || this.#lifetime.signal.aborted) {
+      this.replay.delivery.record({
+        sessionID: id,
+        operation: event.op,
+        state: "unsubscribed",
+        ...(event.op === "message.upsert"
+          ? { messageID: event.message.id }
+          : {}),
+      });
+      return;
+    }
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
       event = this.#causalEvent(id, event);
       if (event.op === "message.upsert") {

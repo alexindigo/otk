@@ -214,7 +214,13 @@ export interface Commands {
       | "succeed"
       | "stop";
     sessionID?: string;
-    target?: "revert" | "unrevert" | "backgrounds" | "summarize" | "tabs-pin";
+    target?:
+      | "revert"
+      | "unrevert"
+      | "backgrounds"
+      | "summarize"
+      | "tabs-pin"
+      | "delivery-helpers";
   };
   stop: Record<string, never>;
 }
@@ -420,7 +426,14 @@ export function request(value: unknown): ControlRequest {
     case "scenario":
       if (
         p.target !== undefined &&
-        !["revert", "unrevert", "backgrounds", "summarize", "tabs-pin"]
+        ![
+          "revert",
+          "unrevert",
+          "backgrounds",
+          "summarize",
+          "tabs-pin",
+          "delivery-helpers",
+        ]
           .includes(
             String(p.target),
           )

@@ -3,6 +3,7 @@ import {
   type FailureFacts,
   OperationFailure,
   type PublicFailure,
+  REQUEST_WINDOW_EXPIRED_FACTS,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import { storageProblem } from "@otk/store";
@@ -26,7 +27,20 @@ export function storageFailure(
 /** Explicit semantic failures only; arbitrary exceptions remain diagnostic causes. */
 export class ExecutionFailure extends Error {
   constructor(readonly failure: Omit<PublicFailure, "diagnosticID">) {
-    super("Request rejected");
+    super(
+      failure.code === "request.expired"
+        ? "Request window expired"
+        : "Request rejected",
+    );
+    if (failure.code === "request.expired") {
+      this.failure = {
+        ...failure,
+        facts: {
+          ...REQUEST_WINDOW_EXPIRED_FACTS,
+          ...failure.facts,
+        },
+      };
+    }
   }
 }
 export function publicFailure(

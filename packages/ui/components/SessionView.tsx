@@ -65,6 +65,7 @@ import {
   type ViewportSnapshot,
 } from "./viewport.ts";
 import JumpToLatest from "./JumpToLatest.tsx";
+import MessageDelivery from "./MessageDelivery.tsx";
 import { highlightingScope } from "../highlight/client.ts";
 import {
   HighlightProvider,
@@ -302,11 +303,15 @@ export default function SessionView(props: {
   });
   const publishHistory = () =>
     following?.history({
+      appendRevision: props.transcript?.state.appendRevision ??
+        fallback().appendRevision,
       first: projection().messageIDs[0],
       last: projection().messageIDs.at(-1),
       exhausted: props.exhausted,
     });
   createEffect(() => ({
+    appendRevision: props.transcript?.state.appendRevision ??
+      fallback().appendRevision,
     first: projection().messageIDs[0],
     last: projection().messageIDs.at(-1),
     exhausted: props.exhausted,
@@ -408,13 +413,29 @@ export default function SessionView(props: {
         if (props.retryState) setNow(Date.now());
       }, 1000);
       following = followViewport(list, flow);
+      let sendRevision = sessionPorts?.delivery?.state.follow;
+      const releaseSends = sessionPorts?.delivery?.subscribe(() => {
+        const next = sessionPorts.delivery?.state.follow;
+        if (next === sendRevision) return;
+        sendRevision = next;
+        props.transcript?.interaction.anchor(null);
+        following?.reset();
+      });
       publishHistory();
       setGeometry(following.snapshot());
       const releaseGeometry = following.subscribeSnapshot(setGeometry);
       source = sourceViewport(
         list,
         () => projection().messageIDs,
-        (range) => props.transcript?.viewport(range),
+        (range) => {
+          props.transcript?.viewport(range);
+          if (range) {
+            const ids = projection().messageIDs;
+            sessionPorts?.delivery?.presented(
+              ids.slice(ids.indexOf(range.first), ids.indexOf(range.last) + 1),
+            );
+          }
+        },
       );
       for (const [element, region] of regions) {
         region.release = source.attach(element, region.id);
@@ -447,6 +468,7 @@ export default function SessionView(props: {
       return () => {
         clearInterval(clock);
         releaseGeometry();
+        releaseSends?.();
         following?.dispose();
         source?.dispose();
         source = undefined;
@@ -504,7 +526,10 @@ export default function SessionView(props: {
                       aria-busy={transcriptBusy() ? "true" : "false"}
                       class={[
                         "otk-messages",
-                        { "is-empty": !count() },
+                        {
+                          "is-empty": !count() &&
+                            !sessionPorts?.delivery?.state.receipts.length,
+                        },
                       ]}
                       scrollbar={props.prefs.scrollbar ? "otk" : "hidden"}
                       ref={[
@@ -525,6 +550,7 @@ export default function SessionView(props: {
                     >
                       <Show
                         when={!count() &&
+                          !sessionPorts?.delivery?.state.receipts.length &&
                           (props.loading || props.error ||
                             props.continuity === "missing")}
                       >
@@ -550,6 +576,7 @@ export default function SessionView(props: {
                       </Show>
                       <Show
                         when={!props.loading && !count() && !props.error &&
+                          !sessionPorts?.delivery?.state.receipts.length &&
                           !props.sessionError && !props.info?.notices?.length &&
                           props.continuity !== "missing"}
                       >
@@ -842,12 +869,15 @@ export default function SessionView(props: {
                             );
                           }}
                         </Show>
+                        <MessageDelivery owner={sessionPorts?.delivery} />
                       </div>
                     </ScrollRegion>
                     <JumpToLatest
                       visible={!!geometry() &&
-                        geometry()!.distanceFromBottom >
-                          geometry()!.viewportHeight}
+                        (geometry()!.newMessages ||
+                          geometry()!.distanceFromBottom >
+                            geometry()!.viewportHeight)}
+                      newMessages={geometry()?.newMessages}
                       title={hints.title("transcript.latest", "Jump to latest")}
                       onJump={() => {
                         void latest().catch((error) => {

@@ -7,6 +7,7 @@ import "./JumpToLatest.css" with { type: "text" };
 export default function JumpToLatest(props: {
   visible: boolean;
   title: string;
+  newMessages?: boolean;
   onJump(): void;
 }): Element {
   return (
@@ -14,8 +15,12 @@ export default function JumpToLatest(props: {
       <button
         type="button"
         class="otk-icon-button"
-        aria-label="Jump to latest"
-        title={props.title}
+        aria-label={props.newMessages
+          ? "New messages - Jump to latest"
+          : "Jump to latest"}
+        title={props.newMessages
+          ? `New messages - ${props.title}`
+          : props.title}
         inert={!props.visible}
         aria-hidden={!props.visible ? "true" : undefined}
         onClick={() => props.onJump()}

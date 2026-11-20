@@ -21,8 +21,15 @@ import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
 import type { BranchHistory } from "./branch-history.ts";
+import {
+  createSessionDelivery,
+  type SessionDelivery,
+} from "./session-delivery.ts";
+import type { StateFactory } from "./state.ts";
 
 export interface SessionActions {
+  delivery(target: Selection): SessionDelivery;
+  stop(): void;
   rpc(target: Selection): InboxRpc["call"];
   eligibility(
     target: Selection,
@@ -66,13 +73,31 @@ export interface SessionActions {
 /** Session-bound operations capture their target before asynchronous resolution. */
 export function createSessionActions(o: {
   resources: ServerResources;
-  session: Pick<ClientSession, "state">;
+  session:
+    & Pick<ClientSession, "state">
+    & Partial<Pick<ClientSession, "transcripts">>;
+  factory?: StateFactory;
   current: CurrentClient;
   branchHistory?: Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">;
   /** Wrap the common submission lifetime, including shell/native commands. */
   submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
 }): SessionActions {
   const { resources, session, current } = o;
+  const deliveries = new Map<string, SessionDelivery>();
+  const delivery = (target: Selection) => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    let value = deliveries.get(key);
+    if (!value) {
+      value = createSessionDelivery({
+        target: { ...target },
+        factory: o.factory,
+        title: () => resources.entry(target.sidecarId, target.sessionID)?.title,
+        transcript: () => session.transcripts?.get(target),
+      });
+      deliveries.set(key, value);
+    }
+    return value;
+  };
   const selectedEntry = (): IndexEntry | undefined => {
     const target = session.state.selection;
     return target
@@ -167,6 +192,11 @@ export function createSessionActions(o: {
     return !!status && status !== "idle";
   };
   return {
+    delivery,
+    stop() {
+      for (const owner of deliveries.values()) owner.stop();
+      deliveries.clear();
+    },
     rpc: (target) => (method, params, input) =>
       resources.sidecars.connection(target.sidecarId).rpc.call(
         method,
@@ -344,14 +374,17 @@ export function createSessionActions(o: {
     },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();
-      await submission(target)(async (options) => {
-        await rpc.call("session.prompt", {
-          sessionID: target.sessionID,
-          mode: "normal",
-          parts: await attachments(parts, target.sidecarId),
-          ...selection,
-        }, options);
-      });
+      await delivery(target).send(() =>
+        submission(target)(async (options) => {
+          const prepared = await attachments(parts, target.sidecarId);
+          return await rpc.call("session.prompt", {
+            sessionID: target.sessionID,
+            mode: "normal",
+            parts: prepared,
+            ...selection,
+          }, options);
+        })
+      );
     },
     async abort(target = current.context().selection, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
