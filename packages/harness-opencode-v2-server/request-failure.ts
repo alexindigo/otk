@@ -14,7 +14,7 @@ export function requestFailureFacts(
   credentials: readonly string[] = [],
 ): FailureFacts {
   const body = object(raw), data = object(body.data ?? body);
-  const kind = text(body._tag) ?? text(body.name) ?? "";
+  const kind = text(body.type) ?? text(body._tag) ?? text(body.name) ?? "";
   const lines = [text(data.message)];
   if (/ModelNotFound/.test(kind)) {
     lines.push(
@@ -63,6 +63,31 @@ export function requestFailureFacts(
       credentials,
     ),
     ...(httpStatus === undefined ? {} : { status: httpStatus }),
+    ...(kind === "provider.quota"
+      ? {
+        recovery:
+          "Check your provider quota or choose another available model, then send a new prompt.",
+      }
+      : {}),
+  };
+}
+/** Scalar terminal acquisition uses the same public native-cause codec as events. */
+export function terminalFailure(
+  raw: unknown,
+  sessionID: string,
+  terminal: number,
+  label?: string,
+): PublicFailure | undefined {
+  if (!raw || !terminal) return;
+  return {
+    code: "session.failure",
+    retry: "none",
+    diagnosticID: `execution/${sessionID}/${terminal}`,
+    facts: {
+      actionLabel: "Running session",
+      target: { sessionID, label },
+      ...requestFailureFacts(raw),
+    },
   };
 }
 const object = (value: unknown): Record<string, unknown> =>

@@ -124,7 +124,7 @@ Deno.test("historical finishes stay silent and a live finish is not duplicated b
   }
 });
 
-Deno.test("a replacement view baseline preserves a finish newer than an already observed root", () => {
+Deno.test("a replacement view baseline remains silent even with a newer historical finish", () => {
   const f = fixture();
   try {
     f.resources.receive("local", {
@@ -153,7 +153,7 @@ Deno.test("a replacement view baseline preserves a finish newer than an already 
         pathTemplates: [],
       },
     });
-    assertEquals(f.notes, ["done"]);
+    assertEquals(f.notes, []);
     f.resources.receive("local", {
       t: "index.patch",
       rev: 1,
@@ -162,7 +162,7 @@ Deno.test("a replacement view baseline preserves a finish newer than an already 
         entry: { ...shellEntry("historical"), status: "idle" },
       }],
     });
-    assertEquals(f.notes, ["done"]);
+    assertEquals(f.notes, []);
   } finally {
     f.resources.stop();
   }

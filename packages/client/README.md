@@ -29,6 +29,13 @@ available and later facts enrich it without adding a second toast. Transcript
 reply groups cannot precede their known causal prompt, including inbox prompts
 whose acquired source position follows an early selection failure.
 
+Terminal provenance follows the adapter through supervision and the attention
+projection. Snapshots, historical acquisition, lease admission and
+equal-terminal acknowledgement replay seed notification clocks without alerting.
+Restoring unseen eligibility never creates another terminal edge. Live failures
+borrow the paired native public cause and recovery, including when no transcript
+is acquired.
+
 Outcome enrichment carries its prior notification identity to quiet channel
 replacement; unchanged facts do not redeliver, and distinct failure diagnostics
 still alert. Input retirement precedes root-ID completion publication. Reply

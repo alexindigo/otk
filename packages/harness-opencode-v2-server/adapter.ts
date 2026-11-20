@@ -1197,7 +1197,12 @@ export class OpencodeV2ServerAdapter implements Harness {
             }
             for (const id of dirty) {
               const entry = this.#index.getMetadata(id);
-              if (entry) this.#upsert(entry);
+              if (entry) {
+                this.#upsert({
+                  ...entry,
+                  activity: { ...entry.activity, terminalOrigin: "historical" },
+                });
+              }
             }
           },
           this.diagnostic,
@@ -1398,6 +1403,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       signal.throwIfAborted();
       if (generation !== this.#generation) return;
       const entry = this.#metadata(raw, this.#running.has(raw.id));
+      if (shell.ended && entry.activity?.terminal === shell.ended) {
+        entry.activity = { ...entry.activity, terminalOrigin: "live" };
+      }
       this.#execution(entry, entry.status === "idle" ? shell.ended : undefined);
       if (raw.parentID) await this.#hydrate([ids.encode(raw.parentID)], signal);
       return;
@@ -1487,6 +1495,18 @@ export class OpencodeV2ServerAdapter implements Harness {
     // is continuity loss, not a finish; only the durable outcome/idle pair counts.
     const ended = metadata(raw).activity?.terminal;
     const entry = this.#metadata(raw, this.#running.has(sid));
+    if (
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type) &&
+      event.data.reason !== "shutdown" &&
+      event.type === `session.execution.${entry.activity?.outcome}` &&
+      entry.activity?.terminal === ended && ended
+    ) {
+      entry.activity = {
+        ...entry.activity,
+        terminalOrigin: "live",
+        ...(executionFailure ? { terminalFailure: executionFailure } : {}),
+      };
+    }
     if (
       event.type === "session.execution.started" ||
       event.type === "session.step.started" ||
