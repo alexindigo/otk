@@ -22,5 +22,8 @@ export const opencodeV2DigestMigrations: {
   }, {
     version: 5,
     sql: new URL("./digest-migrations/005.sql", import.meta.url),
+  }, {
+    version: 6,
+    sql: new URL("./digest-migrations/006.sql", import.meta.url),
   }],
 };

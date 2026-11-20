@@ -3,7 +3,6 @@ import type { DatabaseSync } from "node:sqlite";
 import type { DeliveryScan } from "@otk/harness";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { taskEnvelope } from "./tool-results.ts";
-import { terminalProjection } from "./db-hints.ts";
 
 export interface Receipt {
   childID: string;
@@ -70,11 +69,11 @@ export function scanDeliveries(
   const ended =
     "json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown')))";
   const children = db.prepare(
-    `SELECT wanted.key AS receipt_index,s.id,s.parent_id,${
-      terminalProjection("s")
-    },(SELECT count(*) FROM message m WHERE m.session_id=s.id AND ${ended}) AS runs,
-    (SELECT count(*) FROM message m WHERE m.session_id=s.id AND ${ended} AND (${terminal})>=json_extract(wanted.value,'$.started') AND (${terminal})<=json_extract(wanted.value,'$.received')) AS matching
-    FROM json_each(?) wanted JOIN session s ON json_extract(wanted.value,'$.childID')=s.id`,
+    `WITH terminals AS (
+      SELECT wanted.key AS receipt_index,s.id,s.parent_id,
+        (SELECT max(${terminal}) FROM message m WHERE m.session_id=s.id AND ${ended} AND (${terminal})<=json_extract(wanted.value,'$.received')) AS terminal
+      FROM json_each(?) wanted JOIN session s ON json_extract(wanted.value,'$.childID')=s.id
+    ) SELECT t.*,(SELECT count(*) FROM message m WHERE m.session_id=t.id AND ${ended} AND (${terminal})=t.terminal) AS matching FROM terminals t`,
   ).all(JSON.stringify(receipts));
   const updates: DeliveryScan["updates"] = [];
   for (const [index, receipt] of receipts.entries()) {
@@ -83,12 +82,8 @@ export function scanDeliveries(
     if (
       !child || child.parent_id !== parent || !token || token > receipt.received
     ) continue;
-    if (
-      receipt.started === undefined
-        ? Number(child.runs) !== 1
-        : token < receipt.started
-    ) continue;
-    if (receipt.started !== undefined && Number(child.matching) !== 1) continue;
+    if (receipt.started !== undefined && token < receipt.started) continue;
+    if (Number(child.matching) !== 1) continue;
     updates.push({
       id: ids.encode(receipt.childID),
       delivered: { parentID, receipt: receipt.receipt, terminal: token },

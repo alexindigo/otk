@@ -112,10 +112,11 @@ export function scanDeliveries(
     )
   ).filter((r): r is Receipt => !!r);
   const children = db.prepare(
-    `SELECT wanted.key AS receipt_index,s.id,s.parent_id,s.time_idle AS terminal,
-    (SELECT count(*) FROM session_message m WHERE m.session_id=s.id AND m.type='idle' AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS runs
-    ,(SELECT count(*) FROM session_message m WHERE m.session_id=s.id AND m.type='idle' AND m.time_created>=json_extract(wanted.value,'$.started') AND m.time_created<=json_extract(wanted.value,'$.received') AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS matching
-    FROM json_each(?) wanted JOIN session_v2 s ON json_extract(wanted.value,'$.childID')=s.id`,
+    `WITH terminals AS (
+      SELECT wanted.key AS receipt_index,s.id,s.parent_id,
+        (SELECT max(m.time_created) FROM session_message m WHERE m.session_id=s.id AND m.type='idle' AND m.time_created<=json_extract(wanted.value,'$.received') AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS terminal
+      FROM json_each(?) wanted JOIN session_v2 s ON json_extract(wanted.value,'$.childID')=s.id
+    ) SELECT t.*,(SELECT count(*) FROM session_message m WHERE m.session_id=t.id AND m.type='idle' AND m.time_created=t.terminal AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS matching FROM terminals t`,
   ).all(
     JSON.stringify(receipts),
   );
@@ -127,14 +128,10 @@ export function scanDeliveries(
       !child || child.parent_id !== parent || !terminal ||
       terminal > receipt.received
     ) continue;
-    // Synthetic metadata has no generation. Multiple runs are ambiguous, even
-    // when a late report happens to arrive during the newest invocation.
-    if (
-      receipt.started === undefined
-        ? Number(child.runs) !== 1
-        : terminal < receipt.started
-    ) continue;
-    if (receipt.started !== undefined && Number(child.matching) !== 1) continue;
+    // Receipt order covers the latest proven terminal at or before receipt,
+    // never a newer run. Equal-clock native terminals remain ambiguous.
+    if (receipt.started !== undefined && terminal < receipt.started) continue;
+    if (Number(child.matching) !== 1) continue;
     updates.push({
       id: ids.encode(receipt.childID),
       delivered: { parentID, receipt: receipt.receipt, terminal },
