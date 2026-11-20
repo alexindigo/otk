@@ -18,6 +18,89 @@ import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
 
+Deno.test("family metadata leases include cross-checkout failures and inputs, but not delivered successes or unrelated sessions", async () => {
+  const path = await Deno.makeTempDir();
+  const db = new OtkDb(path, [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "local",
+    () => Promise.resolve([]),
+  );
+  const row = (
+    id: string,
+    directory: string,
+    parentID?: string,
+  ): IndexMetadata => ({
+    id,
+    directory,
+    parentID,
+    projectID: "p",
+    title: id,
+    timeCreated: 1,
+    timeUpdated: 1,
+    archived: false,
+    status: "idle",
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  });
+  try {
+    index.upsertMetadata(row("tstv1-human", "/repo"));
+    index.upsertMetadata({
+      ...row("tstv1-failed", "/tree", "tstv1-human"),
+      activity: { terminal: 10, outcome: "failed" },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-question", "/tree", "tstv1-human"),
+      activity: { inputs: { keys: ["question"], fresh: true } },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-delivered", "/tree", "tstv1-human"),
+      activity: {
+        terminal: 10,
+        outcome: "succeeded",
+        delivered: { parentID: "tstv1-human", receipt: "report", terminal: 10 },
+      },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-unrelated", "/away"),
+      activity: { terminal: 10, outcome: "failed" },
+    });
+    assertEquals(
+      feature.keys({
+        epoch: 1,
+        directory: "/repo",
+        selected: "tstv1-human",
+        rows: [],
+        crumbs: [],
+      }).sort(),
+      ["tstv1-failed", "tstv1-question"],
+    );
+  } finally {
+    feature.close();
+    db.close();
+    await Deno.remove(path, { recursive: true });
+  }
+});
+
 Deno.test("inbox admission reconciliation flushes queued live finishes before replay", async () => {
   const path = await Deno.makeTempDir();
   const db = new OtkDb(path, [

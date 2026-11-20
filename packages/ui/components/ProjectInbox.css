@@ -49,7 +49,7 @@
   flex: 1;
   min-width: 0;
   height: var(--row-project);
-  padding: 0 var(--chrome-inset) 0 0;
+  padding: 0 var(--chrome-inset) 0 var(--project-gap);
   border: 0;
   text-align: left;
   color: inherit;
@@ -176,8 +176,7 @@
   padding: 0 var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-open {
-  justify-content: center;
-  padding: 0;
+  display: none;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-footer {
   padding: var(--space-2) var(--space-1);
@@ -228,4 +227,14 @@
 }
 .otk-project-row > .otk-project-content {
   grid-area: 1 / 1 / 2 / -1;
+}
+.otk-project-attention {
+  display: grid;
+  place-items: center;
+  inline-size: var(--tree-indent);
+  block-size: var(--tree-indent);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
 }

@@ -961,15 +961,20 @@ selected server. One core resolver uses SessionHierarchy membership and the
 shared attention order first, then validates the exact remembered session
 (helpers resolve to their proven human root), then compares one newest native
 root per exact checkout scope. Explicit session links remain explicit
-selections, not project-default intents. ShellNavigation applies the result only
-while its captured revision is current; same-project clicks do not bypass
-resolution. Locations live in the existing host-sidecar `shellLayout`
-preference; `layout.location` merges one server/directory intent at the
-persistence owner, so concurrent project visits cannot overwrite one another.
-Pending saves bridge immediate switches; preference broadcasts own the saved
-snapshot. Current task membership resolves the restored session's tab, including
-helper ancestry. Missing, foreign or closed locations use the same resolver's
-newest-root fallback.
+selections, not project-default intents. Worktree clicks retain their checkout
+and choose its exact urgent or remembered session, even a helper. The separate
+project lamp requests `navigation.default` with `attention: true`: it opens the
+exact urgent session across the repository's checkout scopes, without human-root
+redirection. Mandatory descendants in other checkouts remain scalar family
+leases and appear in the trail and family without inheriting local tasks.
+ShellNavigation applies the result only while its captured revision is current;
+same-project clicks do not bypass resolution. Locations live in the existing
+host-sidecar `shellLayout` preference; `layout.location` merges one
+server/directory intent at the persistence owner, so concurrent project visits
+cannot overwrite one another. Pending saves bridge immediate switches;
+preference broadcasts own the saved snapshot. Current task membership resolves
+the restored session's tab, including helper ancestry. Missing, foreign or
+closed locations use the same resolver's newest-root fallback.
 
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without

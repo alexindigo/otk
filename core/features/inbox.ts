@@ -160,14 +160,14 @@ export class InboxFeature implements FrameSource {
     const directory = this.#directory(view);
     if (!directory) return [];
     const ids = new Set<string>();
-    // Native work follows the open session's descendants across explicit tasks
-    // and checkout scopes. Attention remains a separate per-item projection.
+    // Mandatory family attention follows native ancestry across checkout scopes,
+    // independently of checkout-local task membership. These are scalar leases.
     if (view.selected) {
       for (const id of this.index.descendants(view.selected)) {
-        const entry = this.index.getMetadata(id), work = entry?.activity?.work;
+        const entry = this.index.getMetadata(id);
         if (
-          id !== view.selected && !entry?.deleted && work?.fresh &&
-          work.keys.length
+          id !== view.selected && !entry?.deleted &&
+          (this.#supervision.get(id)?.state ?? "none") !== "none"
         ) ids.add(id);
       }
     }

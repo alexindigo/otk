@@ -143,8 +143,15 @@ export async function startApplication(
       prefs,
       new NavigationDefault({
         hierarchy: index.hierarchy,
-        scopes: (directory) =>
-          inbox.summaries.values.get(directory)?.scopes ?? [directory],
+        scopes: (directory, repository) => {
+          const summary = inbox.summaries.values.get(directory);
+          if (!repository || summary?.topology?.canonicalRoot !== directory) {
+            return summary?.scopes ?? [directory];
+          }
+          return [...inbox.summaries.values.values()].filter((row) =>
+            row.topology?.canonicalRoot === directory
+          ).flatMap((row) => row.scopes ?? [row.directory]);
+        },
         entries: (directory) => index.catalog(directory),
         status: (id) => inbox.navigationStatus(id),
       }),

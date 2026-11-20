@@ -70,11 +70,18 @@ export function taskBreadcrumbs(
     }));
     while (stack.length) {
       const { entry: child, depth } = stack.pop()!;
-      if (visited.has(child.id) || !belongs(child)) continue;
+      const external = (node(child)?.projectDirectory ?? child.directory) !==
+        (root && node(root)?.projectDirectory || task.directory);
+      if (visited.has(child.id)) continue;
       visited.add(child.id);
       const status = inboxStatus(child, inbox);
-      if (status !== "none") {
-        result.push({ id: child.id, helper: true, depth });
+      if (status !== "none" && (belongs(child) || external)) {
+        result.push({
+          id: child.id,
+          helper: true,
+          depth,
+          ...(external ? { external: true } : {}),
+        });
       }
       for (const entry of (children.get(child.id) ?? []).toReversed()) {
         stack.push({ entry, depth: depth + 1 });

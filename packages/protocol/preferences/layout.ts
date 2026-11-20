@@ -49,7 +49,7 @@ export interface LayoutPreferences {
 }
 export interface LayoutRpcMethods {
   "navigation.default": {
-    params: { directory: string; preferred?: string };
+    params: { directory: string; preferred?: string; attention?: boolean };
     result: string | null;
   };
   "layout.patch": { params: Partial<ShellLayout>; result: Preferences };
