@@ -90,9 +90,16 @@
     "menus",
     "visual",
     "transport",
-    "harness"
+    "harness",
+    "terminal"
   ],
   "rules": [
+    {
+      "id": 13,
+      "pattern": "^packages/(ui|client)/.*[Tt]erminal|^packages/ui/terminal/|^tests/browser/behavior/terminal/",
+      "areas": ["terminal"],
+      "themes": "always"
+    },
     {
       "id": 1,
       "pattern": "(?i)^packages/(ui|client)/.*(prompt|composer|editor|attachment)",

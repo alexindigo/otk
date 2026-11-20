@@ -37,3 +37,38 @@
 .otk-tabs-panel > * {
   margin: 0;
 }
+.otk-tabs-header,
+.otk-tabs-item,
+.otk-tabs-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.otk-tabs-actions {
+  gap: 4px;
+}
+.otk-tabs-header {
+  gap: 4px;
+  flex: none;
+}
+.otk-tabs-item {
+  flex: none;
+}
+.otk-tabs-actions {
+  margin-inline-start: auto;
+  flex: none;
+}
+.otk-tabs.is-compact .otk-tabs-strip {
+  flex: 1;
+  flex-wrap: nowrap;
+}
+.otk-tabs.is-compact .otk-tabs-panel {
+  min-height: 0;
+}
+.otk-tabs.is-compact .otk-tabs-item {
+  max-width: 100%;
+}
+.otk-tabs.is-compact .otk-tabs-item > [role=tab] {
+  flex: 1 1 auto;
+  min-width: 0;
+}

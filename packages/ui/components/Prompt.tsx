@@ -198,6 +198,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     run: submitInput,
   });
   const primaryState = bindPrimaryAction(primary);
+  ownedCommand(ports, {
+    id: "prompt.focus",
+    title: "Focus prompt",
+    category: "Prompt",
+    enabled: () => !props.suspended,
+    run: () => ctx.focus(),
+  });
   const send = ownedCommand(ports, {
     id: "prompt.send",
     title: "Send prompt",

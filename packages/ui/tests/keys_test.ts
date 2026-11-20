@@ -181,7 +181,9 @@ Deno.test("keys: opt-in typing, predicate, unregister, composition and repeat li
     },
   });
   const release = km.bind({ id: "a", command: "a", key: "Tab" }, () => enabled);
-  const target = { closest: () => ({}) } as unknown as EventTarget;
+  const target = {
+    closest: (selector: string) => selector.includes("input,") ? {} : null,
+  } as unknown as EventTarget;
   assert(!km.dispatch({ ...ev("Tab"), target }));
   assert(km.dispatch(ev("Tab")));
   enabled = false;

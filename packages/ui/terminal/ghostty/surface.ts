@@ -771,11 +771,13 @@ export class GhosttyTerminalSurface {
     const canvas = document.createElement("canvas");
     canvas.className = "otk-ghostty-canvas";
     canvas.style.touchAction = "pan-x pinch-zoom";
-    canvas.setAttribute("aria-hidden", "true");
+    canvas.setAttribute("role", "img");
+    canvas.setAttribute("aria-label", "Terminal output");
 
     const input = document.createElement("textarea");
     input.className = "otk-ghostty-input";
     input.setAttribute("aria-label", "Terminal input");
+    input.setAttribute("data-otk-keyboard", "local");
     input.autocapitalize = "off";
     input.autocomplete = "off";
     input.spellcheck = false;
@@ -2263,6 +2265,13 @@ export class GhosttyTerminalSurface {
       this.canvasDevicePixelRatio = canvasConfiguration.ratio;
     }
     this.snapshot = this.core.snapshot();
+    // The accessible alternative is the same viewport snapshot drawn below,
+    // not another terminal buffer or a source of transport authority.
+    this.canvas.setAttribute(
+      "aria-label",
+      this.snapshot.rowData.map((row) => row.text).join("\n").trimEnd() ||
+        "Terminal output",
+    );
     if (!this.blinkEnabled()) this.cursorOn = true;
     // Move the origin only on full repaint; dirty-row updates cannot mix origins.
     const scrollState = this.readScrollbarState();
@@ -2310,6 +2319,8 @@ export class GhosttyTerminalSurface {
       this.updateScrollbar();
     }
     this.forceFullRender = false;
+    // Output/replay/resize can invalidate a selection without a new gesture.
+    this.options.onSelectionChange();
     this.scheduleCursorBlink();
   }
 

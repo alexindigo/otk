@@ -510,8 +510,21 @@ test("application teardown hands terminals to the next real application composit
   const attached = await Probe.open(next.url);
   await attached.attach(1, a.id);
   const snapshot = await attached.control("snapshot", 1);
-  assert(
-    typeof snapshot.checkpoint === "string" && snapshot.checkpoint.length > 0,
+  assert(snapshot.restore === "replay" || snapshot.restore === "checkpoint");
+  assert(typeof snapshot.checkpoint === "string");
+  if (snapshot.restore === "checkpoint") assert(snapshot.checkpoint.length > 0);
+  else assertEquals(snapshot.checkpoint, "");
+  await until(
+    () =>
+      (atob(snapshot.checkpoint as string) + (attached.output.get(1) ?? ""))
+        .includes("retained-81"),
+    "handoff restored prior output through the reported attach path",
+  );
+  console.info(
+    JSON.stringify({
+      handoffRestore: snapshot.restore,
+      retainedOutput: "retained-81",
+    }),
   );
   attached.input(1, "echo reclaimed-$((9*10))\r");
   await attached.text(1, "\r\nreclaimed-90\r\n");

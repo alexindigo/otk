@@ -304,30 +304,62 @@ class Relay {
     const daemon = await this.host.daemon();
     if (!channel.active || !this.#open) return;
     channel.daemon = daemon;
-    const snapshot = await daemon.request({ op: "snapshot", id: channel.id });
+    const metadata = await daemon.request({ op: "get", id: channel.id });
     if (
-      snapshot.type !== "snapshot" ||
-      snapshot.process.group_id !== channel.session || !snapshot.process.pty
+      metadata.type !== "process" ||
+      metadata.process.group_id !== channel.session || !metadata.process.pty
     ) throw new Error("Terminal not found");
     if (!channel.active || !this.#open) return;
-    const pty = snapshot.process.pty;
+    let connection = await this.#subscribe(channel, 0n);
+    if (!connection) return;
+    let first = connection.first;
+    let process = first.process;
+    let checkpoint = "";
+    let restore = "replay";
+    // Always request zero: truncated=false at a nonzero head does not establish
+    // completeness. An active-screen checkpoint cannot recover the inactive one.
+    if (first.truncated) {
+      daemon.release(connection.stream);
+      channel.connection = undefined;
+      const snapshot = await daemon.request({ op: "snapshot", id: channel.id });
+      if (snapshot.type !== "snapshot") throw new Error("Expected snapshot");
+      if (!channel.active || !this.#open) return;
+      checkpoint = snapshot.checkpoint_base64;
+      process = snapshot.process;
+      restore = "checkpoint";
+      // The old connection's unsubscribe must not retire the replacement lease.
+      channel.attachment = crypto.randomUUID();
+      connection = await this.#subscribe(channel, snapshot.process.output_tail);
+      if (!connection) return;
+      first = connection.first;
+    }
+    const pty = process.pty!;
     channel.cols = pty.cols;
     channel.rows = pty.rows;
     this.#control(channel, {
       t: "snapshot",
       cols: pty.cols,
       rows: pty.rows,
-      checkpoint: snapshot.checkpoint_base64,
+      checkpoint,
+      restore,
       title: pty.title,
       foreground: pty.foreground_process,
-      status: snapshot.process.lifecycle.status === "running"
-        ? "running"
-        : "exited",
+      status: process.lifecycle.status === "running" ? "running" : "exited",
     });
+    // Replay drains independently, never holding keyboard ingress at its budget.
+    this.#track(this.#read(channel, connection.stream, first));
+  }
+  async #subscribe(channel: Channel, offset: bigint): Promise<
+    {
+      stream: DaemonConnection;
+      first: Extract<Response, { type: "attached" }>;
+    } | undefined
+  > {
+    const daemon = channel.daemon!;
     const connection = await daemon.subscribe({
       op: "subscribe",
       id: channel.id,
-      offset: snapshot.process.output_tail,
+      offset,
       attachment_id: channel.attachment,
       role: "observer",
       takeover: false,
@@ -350,10 +382,7 @@ class Relay {
     if (first?.kind !== "json" || first.value.type !== "attached") {
       throw new Error("Terminal attachment refused");
     }
-    // Subscription reading is independent per channel. Only this reader pauses
-    // at its queue budget, leaving every other terminal and input path runnable.
-    // Replay drains in that reader, not in ready: input never waits for output.
-    this.#track(this.#read(channel, connection, first.value));
+    return { stream: connection, first: first.value };
   }
   async #read(
     channel: Channel,

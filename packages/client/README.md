@@ -385,7 +385,11 @@ The connection owner calls `releaseTerminalBoxes` when removed or stopped.
 `TerminalSocket(connection)` is one lazy `/api/terminal` transport per sidecar.
 It shares numbered channels, decodes base64 checkpoints, frames input with the
 channel prefix and reconnects retained channels from fresh snapshots. Reuse the
-connection's injected socket factory for authenticated native consumers.
+connection's injected socket factory for authenticated native consumers. The
+relay restores complete raw output when available, otherwise an active-screen
+checkpoint; its initial snapshot reports `restore: "replay" | "checkpoint"`. Raw
+replay follows the empty reset through the same ordered byte stream as live
+output. Truncated checkpoint fallback cannot recover the inactive normal screen.
 Initial/reconnect snapshots call the sink's `reset`; ordered live resize events
 call `resize` without replaying a checkpoint, preserving renderer scrollback and
 the saved primary screen while an alternate-screen program runs.
