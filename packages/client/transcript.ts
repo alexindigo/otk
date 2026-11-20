@@ -4,6 +4,7 @@ import {
   type ClockedContent,
   compareTranscriptVersion,
   type ContentClock,
+  ContentDeliveryDiagnostics,
   type IntentIdentity,
   type LatestPrompt,
   type LoadCoverage,
@@ -119,6 +120,7 @@ export type ToolCompletionSource = (
   listener: (part: ToolPart) => void,
 ) => () => void;
 export interface TranscriptOwner {
+  readonly deliveryDiagnostics?: ContentDeliveryDiagnostics;
   progress?(): ProgressDisplay;
   state: TranscriptState;
   readonly projection: TranscriptProjection;
@@ -147,6 +149,7 @@ export interface TranscriptOwner {
   ensure(messageID: string, signal?: AbortSignal): Promise<void>;
   /** Join current newest-page/live-tail authority, never walk older cursors. */
   latest(signal?: AbortSignal): Promise<void>;
+  /** Coalesced read-only recovery of missing correlated send identities. */
   reconcile(messageIDs: readonly string[]): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
@@ -171,6 +174,7 @@ export function createTranscript(
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
   const projection = createTranscriptProjection();
+  const deliveryDiagnostics = new ContentDeliveryDiagnostics("browser");
   const sources = createNativeSources({
     messages: () => projection.state.messagesByID,
     load: (ref, signal) =>
@@ -820,6 +824,12 @@ export function createTranscript(
         draft.exhausted = page.older === null;
       });
       queueMicrotask(reserve);
+      deliveryDiagnostics.record({
+        ...target,
+        operation: "page",
+        clock,
+        state: "accepted",
+      });
       connection(target.sidecarId).firstPage?.(target.sessionID)();
       if (!page.load || page.load.state === "complete") {
         readStage("ready", progressGeneration, messages.length);
@@ -1001,6 +1011,7 @@ export function createTranscript(
     })
   );
   const owner: TranscriptOwner = {
+    deliveryDiagnostics,
     progress: () => readProgress.display("page", readLabel),
     projection,
     interaction,
@@ -1364,94 +1375,123 @@ export function createTranscript(
           return;
         }
       } else if (frame.sessionID !== selected.sessionID) return;
-      if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
-      if (frame.event.op === "message.upsert") baseline([frame.event.message]);
-      if (isAttentionOp(frame.event) && attentionReads) {
-        const event = frame.event;
-        const key = event.op === "permission.upsert"
-          ? `permission:${event.request.id}`
-          : event.op === "permission.remove"
-          ? `permission:${event.requestID}`
-          : event.op === "question.upsert"
-          ? `question:${event.request.id}`
-          : event.op === "question.remove"
-          ? `question:${event.requestID}`
-          : undefined;
-        if (
-          key &&
-          attentionReads.pending.has(
-            key.startsWith("permission:") ? "permission" : "question",
-          )
-        ) {
-          const settings = policy()!;
-          const bytes =
-            new TextEncoder().encode(JSON.stringify(event)).byteLength;
+      const previousClock = clock;
+      try {
+        if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
+        if (frame.event.op === "message.upsert") {
+          baseline([frame.event.message]);
+        }
+        if (isAttentionOp(frame.event) && attentionReads) {
+          const event = frame.event;
+          const key = event.op === "permission.upsert"
+            ? `permission:${event.request.id}`
+            : event.op === "permission.remove"
+            ? `permission:${event.requestID}`
+            : event.op === "question.upsert"
+            ? `question:${event.request.id}`
+            : event.op === "question.remove"
+            ? `question:${event.requestID}`
+            : undefined;
           if (
-            ++attentionReads.count > settings.replayops ||
-            attentionReads.bytes + bytes > settings.replaybytes
-          ) invalidate();
-          else {
-            attentionReads.bytes += bytes;
-            attentionReads.events.set(key, event);
+            key &&
+            attentionReads.pending.has(
+              key.startsWith("permission:") ? "permission" : "question",
+            )
+          ) {
+            const settings = policy()!;
+            const bytes =
+              new TextEncoder().encode(JSON.stringify(event)).byteLength;
+            if (
+              ++attentionReads.count > settings.replayops ||
+              attentionReads.bytes + bytes > settings.replaybytes
+            ) invalidate();
+            else {
+              attentionReads.bytes += bytes;
+              attentionReads.events.set(key, event);
+            }
           }
         }
-      }
-      if (isAttentionOp(frame.event)) {
-        setState((draft) => {
-          draft.content = apply(draft.content, frame.event);
-        });
-        return;
-      }
-      if (frame.event.op === "stream.reconcile") {
-        invalidate();
-        return;
-      }
-      if (missing) return;
-      if (!frame.clock) {
-        invalidate();
-        return;
-      }
-      if (fetching) {
-        const settings = policy()!;
-        const value = { clock: frame.clock, event: frame.event };
-        const bytes =
-          new TextEncoder().encode(JSON.stringify(value)).byteLength;
-        if (
-          buffer.length >= settings.replayops ||
-          bufferBytes + bytes > settings.replaybytes
-        ) {
-          invalidate();
-          return;
-        }
-        buffer.push(value);
-        bufferBytes += bytes;
-      } else {
-        const duplicate = clock?.epoch === frame.clock.epoch &&
-          frame.clock.seq <= clock.seq;
-        if (!accept({ clock: frame.clock, event: frame.event })) {
-          invalidate();
-          return;
-        }
-        if (duplicate) return;
-        if (
-          state.temperature === "warm" && frame.event.op === "message.upsert" &&
-          !state.messagesByID[frame.event.message.id] &&
-          ([...pages.values()].some((page) =>
-            page.ids.includes(
-              frame.event.op === "message.upsert" ? frame.event.message.id : "",
-            )
-          ) ||
-            frame.event.message.time.created <
-              (state.content.messages.at(-MESSAGE_ADMISSION_WATERMARK)?.time
-                .created ?? -Infinity))
-        ) {
-          // Only retained pages and the live tail own bodies; old identities do not resurrect their source.
+        if (isAttentionOp(frame.event)) {
           setState((draft) => {
-            draft.clock = clock;
+            draft.content = apply(draft.content, frame.event);
           });
           return;
         }
-        try {
+        if (frame.event.op === "stream.reconcile") {
+          invalidate();
+          return;
+        }
+        if (missing) return;
+        if (!frame.clock) {
+          deliveryDiagnostics.record({
+            ...target,
+            operation: frame.event.op,
+            previous: previousClock,
+            state: "gap",
+            reason: "Content publication has no clock",
+          });
+          invalidate();
+          return;
+        }
+        if (fetching) {
+          const settings = policy()!;
+          const value = { clock: frame.clock, event: frame.event };
+          const bytes =
+            new TextEncoder().encode(JSON.stringify(value)).byteLength;
+          if (
+            buffer.length >= settings.replayops ||
+            bufferBytes + bytes > settings.replaybytes
+          ) {
+            invalidate();
+            return;
+          }
+          buffer.push(value);
+          bufferBytes += bytes;
+        } else {
+          const duplicate = clock?.epoch === frame.clock.epoch &&
+            frame.clock.seq <= clock.seq;
+          if (!accept({ clock: frame.clock, event: frame.event })) {
+            deliveryDiagnostics.record({
+              ...target,
+              operation: frame.event.op,
+              clock: frame.clock,
+              previous: previousClock,
+              state: "gap",
+            });
+            invalidate();
+            return;
+          }
+          if (duplicate) return;
+          if (
+            state.temperature === "warm" &&
+            frame.event.op === "message.upsert" &&
+            !state.messagesByID[frame.event.message.id] &&
+            ([...pages.values()].some((page) =>
+              page.ids.includes(
+                frame.event.op === "message.upsert"
+                  ? frame.event.message.id
+                  : "",
+              )
+            ) ||
+              frame.event.message.time.created <
+                (state.content.messages.at(-MESSAGE_ADMISSION_WATERMARK)?.time
+                  .created ?? -Infinity))
+          ) {
+            // Only retained pages and the live tail own bodies; old identities do not resurrect their source.
+            setState((draft) => {
+              draft.clock = clock;
+            });
+            deliveryDiagnostics.record({
+              ...target,
+              operation: frame.event.op,
+              clock,
+              state: "accepted",
+              ...(frame.event.op === "message.upsert"
+                ? { messageID: frame.event.message.id }
+                : {}),
+            });
+            return;
+          }
           setState((draft) => {
             draft.content = apply(draft.content, frame.event);
             draft.clock = clock;
@@ -1486,9 +1526,31 @@ export function createTranscript(
             frame.event.op === "message.upsert" ||
             frame.event.op === "message.remove"
           ) trim();
-        } catch {
-          invalidate();
+          deliveryDiagnostics.record({
+            ...target,
+            operation: frame.event.op,
+            clock,
+            state: "accepted",
+            ...(frame.event.op === "message.upsert"
+              ? { messageID: frame.event.message.id }
+              : {}),
+          });
         }
+      } catch (cause) {
+        deliveryDiagnostics.record({
+          ...target,
+          operation: frame.event.op,
+          clock: frame.clock,
+          previous: previousClock,
+          state: "projection-error",
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+        console.error("Transcript projection diagnostic", {
+          ...target,
+          clock: frame.clock,
+          operation: frame.event.op,
+        }, cause);
+        invalidate();
       }
     },
     async sibling(delta) {
