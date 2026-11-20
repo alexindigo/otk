@@ -136,14 +136,10 @@ function Request(
     setPending(true);
     feedback?.clear();
     setError("");
+    const settled = session?.requests?.settlement("question", props.request.id);
     try {
       await props.onReply(props.request.id, answers);
-      session?.requests?.retire(
-        "question",
-        props.request.id,
-        "settled-locally",
-        "local response confirmed",
-      );
+      settled?.();
       forgetQuestionForm(props.request.id);
       if (alive) props.onDirty(false);
     } catch (failure) {

@@ -16,16 +16,41 @@ export interface InputGuard {
   release(input?: ReleaseInput): boolean;
   permit(owner: string, message: string): boolean;
 }
+export interface InputRetention {
+  /** These owners are authoritative even when their canonical input is empty. */
+  owners: readonly string[];
+  inputs: { owner: string; value: string }[];
+  discard(): void;
+}
 export function createInputGuard(
   o: {
     drafts: Drafts;
     key(): string;
     confirm(message: string): boolean;
     retain?(): boolean;
+    /** Retained request drafts belong to their lifecycle, not mounted inputs. */
+    retention?(): InputRetention | undefined;
   },
 ): InputGuard {
   const dirty = new Map<string, boolean>();
   const inputs = new Map<string, string>();
+  let accepted: InputRetention | undefined;
+  const isDirty = (owner: string, retention = o.retention?.()) =>
+    retention?.owners.includes(owner)
+      ? retention.inputs.some((input) => input.owner === owner)
+      : !!dirty.get(owner);
+  const retained = () => {
+    const retention = o.retention?.();
+    const values = new Map(
+      [...inputs].filter(([owner]) =>
+        dirty.get(owner) && !retention?.owners.includes(owner)
+      ),
+    );
+    for (const input of retention?.inputs ?? []) {
+      values.set(input.owner, input.value);
+    }
+    return [...values].map(([owner, value]) => ({ owner, value }));
+  };
   return {
     mark(owner, value, input) {
       if (!value && dirty.get(owner) && o.retain?.()) return;
@@ -33,14 +58,13 @@ export function createInputGuard(
       if (input !== undefined) inputs.set(owner, input);
       if (!value) inputs.delete(owner);
     },
-    retained: () =>
-      [...inputs].filter(([owner]) => dirty.get(owner)).map((
-        [owner, value],
-      ) => ({ owner, value })),
-    dirty: (owner) => !!dirty.get(owner),
+    retained,
+    dirty: (owner) => isDirty(owner),
     clear() {
       dirty.clear();
       inputs.clear();
+      accepted?.discard();
+      accepted = undefined;
     },
     release(input = { draft: "kept" }) {
       // Frameworks can batch painted reads during input events. The plain
@@ -51,8 +75,11 @@ export function createInputGuard(
       // would not submit them. Losing a draft is distinct from sendability.
       const losesDraft = input.draft === "dropped" &&
         drafts.some((draft) => !!draft.input.trim() || draft.chips.length > 0);
+      const retention = o.retention?.();
       const losesInput = drafts.some((draft) => !!draft.editor) ||
-        (keys.includes(key) && [...dirty.values()].some(Boolean));
+        (keys.includes(key) &&
+          ([...dirty.keys()].some((owner) => isDirty(owner, retention)) ||
+            !!retention?.inputs.length));
       if (!losesDraft && !losesInput) return true;
       if (
         !o.confirm(
@@ -61,6 +88,8 @@ export function createInputGuard(
             : "Discard unsaved editor or attention input before switching sessions?",
         )
       ) return false;
+      // Clear only after the caller confirms the captured transition succeeded.
+      accepted = keys.includes(key) ? retention : undefined;
       // A destructive mutation may still fail. Its caller drops drafts only
       // after success; consent alone never consumes the draft or its editor.
       if (input.draft === "kept") {
@@ -72,6 +101,6 @@ export function createInputGuard(
       }
       return true;
     },
-    permit: (owner, message) => !dirty.get(owner) || o.confirm(message),
+    permit: (owner, message) => !isDirty(owner) || o.confirm(message),
   };
 }

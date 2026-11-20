@@ -179,14 +179,13 @@ function RequestDock(
     setPending(true);
     feedback?.clear();
     setError("");
+    const settled = session?.requests?.settlement(
+      "permission",
+      props.request.id,
+    );
     try {
       await props.onReply(input);
-      session?.requests?.retire(
-        "permission",
-        props.request.id,
-        "settled-locally",
-        "local response confirmed",
-      );
+      settled?.();
       if (active) props.onDirty(false);
     } catch (error) {
       if (feedback) feedback.fail(error);

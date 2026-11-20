@@ -143,6 +143,17 @@ export function createShellState(
     key: actions.key,
     retain: () =>
       session.state.view === "deleted" || !!actions.selectedEntry()?.deleted,
+    retention: () => {
+      const target = session.state.selection;
+      if (
+        !target ||
+        !(session.state.view === "deleted" || actions.selectedEntry()?.deleted)
+      ) return;
+      return sidecars.connection(target.sidecarId).attention.retention(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+      );
+    },
     confirm: (message) => globalThis.confirm(message),
   });
   // One presence owner: navigation reads it to gate finish acknowledgement,

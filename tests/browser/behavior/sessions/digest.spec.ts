@@ -128,7 +128,7 @@ isolatedTest.describe("dirty permission deletion", () => {
   isolatedTest(
     "sessions.external-deletion-keeps-dirty-permission-normal-release-guard",
     { tag: ["@sessions", "@isolated"] },
-    async ({ isolatedState: state, page }) => {
+    async ({ isolatedState: state, page }, info) => {
       const s = await state.native<{ id: string }>("/session", "POST", {
         title: "Unsent permission input",
       });
@@ -148,6 +148,17 @@ isolatedTest.describe("dirty permission deletion", () => {
       await state.native(`/session/${s.id}`, "DELETE");
       const details = page.locator(".otk-deleted-session");
       await expect(details).toContainText("Keep my unsent permission feedback");
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await info.attach(`deleted-retained-input-${theme}`, {
+          body: await page.screenshot(),
+          contentType: "image/png",
+        });
+      }
       await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
       page.once("dialog", (d) => d.dismiss());
       await details.locator(".otk-control-row button").last().click();
@@ -156,6 +167,46 @@ isolatedTest.describe("dirty permission deletion", () => {
       page.once("dialog", (d) => d.accept());
       await details.locator(".otk-control-row button").last().click();
       await expect(details).toHaveCount(0);
+    },
+  );
+  isolatedTest(
+    "sessions.confirmed-permission-input-is-not-retained-as-unsent-after-deletion",
+    {
+      tag: ["@sessions", "@isolated"],
+    },
+    async ({ isolatedState: state, page }) => {
+      const session = await state.native<{ id: string }>("/session", "POST", {
+        title: "Confirmed permission input",
+      });
+      await openSession(state, page, session.id);
+      await state.controller.call("queueScript", {
+        lease: state.lease.lease,
+        chunks: [],
+        tool: {
+          name: "bash",
+          input: {
+            command: "pwd",
+            description: "Request a permission response",
+          },
+        },
+      });
+      await state.queue(["Permission response completed."]);
+      await prompt(page, "Ask before running pwd");
+      await page.locator(".otk-rejection-reason").fill(
+        "Submitted local feedback",
+      );
+      await page.getByRole("button", { name: "Reject", exact: true }).click();
+      await page.getByRole("button", { name: "Reject request", exact: true })
+        .click();
+      await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
+      await expect(page.locator(".otk-messages")).toContainText(
+        "Permission response completed.",
+      );
+      await state.native(`/session/${session.id}`, "DELETE");
+      const details = page.locator(".otk-deleted-session");
+      await expect(details).toBeVisible();
+      await expect(details).not.toContainText("Unsent permissions input");
+      await expect(details).not.toContainText("Submitted local feedback");
     },
   );
 });
