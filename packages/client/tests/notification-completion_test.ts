@@ -41,6 +41,7 @@ function fixture(finishes: Record<string, number> = {}) {
             sessionID: id,
             value: {
               state: "finishedUnseen",
+              unseen: true,
               terminal: time,
               outcome: "succeeded",
             },
@@ -136,9 +137,15 @@ Deno.test("a replacement view baseline preserves a finish newer than an already 
         seen: {},
         finishes: { root: 10, historical: 5 },
         supervision: {
-          root: { state: "finishedUnseen", terminal: 10, outcome: "succeeded" },
+          root: {
+            state: "finishedUnseen",
+            terminal: 10,
+            unseen: true,
+            outcome: "succeeded",
+          },
           historical: {
             state: "finishedUnseen",
+            unseen: true,
             terminal: 5,
             outcome: "succeeded",
           },

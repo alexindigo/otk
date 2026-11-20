@@ -18,6 +18,7 @@ export interface EntryChange {
   after?: IndexEntry;
   completedAt?: number;
   completedOutcome?: TerminalOutcome;
+  completedUnseen?: boolean;
 }
 export interface EntryChanges {
   generation: string;
@@ -34,9 +35,15 @@ export interface AttentionProjection {
     time: number,
     baseline?: boolean,
     outcome?: TerminalOutcome,
+    unseen?: boolean,
   ): void;
   /** Admission replays known state, even when it advances an older clock. */
-  admitFinished(id: string, time: number, outcome?: TerminalOutcome): void;
+  admitFinished(
+    id: string,
+    time: number,
+    outcome?: TerminalOutcome,
+    unseen?: boolean,
+  ): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
   reset(): void;
   stop(): void;
@@ -50,8 +57,11 @@ export function createAttentionProjection(o: {
   factory?: StateFactory;
 }): AttentionProjection {
   const values = new Map<string, IndexEntry>();
-  const finishClocks = new Map<string, TerminalEvidence>();
-  const completed = new Map<string, TerminalEvidence>();
+  const finishClocks = new Map<
+    string,
+    TerminalEvidence & { unseen?: boolean }
+  >();
+  const completed = new Map<string, TerminalEvidence & { unseen?: boolean }>();
   const covered = new Set<string>();
   const boundaries = new Map<string, { count: number; ancestors: string[] }>();
   const subtracted = new Map<string, number>();
@@ -172,6 +182,7 @@ export function createAttentionProjection(o: {
             ? {
               completedAt: completed.get(id)?.terminal ?? 0,
               completedOutcome: completed.get(id)?.outcome,
+              completedUnseen: completed.get(id)?.unseen,
             }
             : {}),
         });
@@ -196,6 +207,7 @@ export function createAttentionProjection(o: {
     time: number,
     baseline = false,
     outcome?: TerminalOutcome,
+    unseen?: boolean,
     admitted = false,
   ) => {
     const previous = finishClocks.get(id);
@@ -203,11 +215,15 @@ export function createAttentionProjection(o: {
       stopped || previous !== undefined &&
         (time < (previous.terminal ?? 0) ||
           time === previous.terminal &&
-            (!outcome || outcome === previous.outcome))
+            (!outcome || outcome === previous.outcome) &&
+            unseen === previous.unseen)
     ) return;
-    const value = { terminal: time, ...(outcome ? { outcome } : {}) };
+    const value = { terminal: time, ...(outcome ? { outcome } : {}), unseen };
     finishClocks.set(id, value);
-    if (admitted || baseline && previous === undefined) return;
+    if (
+      (admitted || baseline && previous === undefined) &&
+      (!previous || unseen === previous.unseen)
+    ) return;
     completed.set(id, value);
     update([id], false, false, true);
   };
@@ -231,8 +247,8 @@ export function createAttentionProjection(o: {
     },
     update,
     finished,
-    admitFinished(id, time, outcome) {
-      finished(id, time, false, outcome, true);
+    admitFinished(id, time, outcome, unseen) {
+      finished(id, time, false, outcome, unseen, true);
     },
     subscribe(listener) {
       if (stopped) return () => {};

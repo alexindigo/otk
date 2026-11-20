@@ -32,8 +32,7 @@ export function unread(
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): boolean {
   if (session.deleted) return false;
-  const sessionID = session.id;
-  return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
+  return inbox.supervision?.[session.id]?.unseen === true;
 }
 export function inboxStatus(
   entry: IndexMetadata & OperationAttention,

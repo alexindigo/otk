@@ -646,8 +646,16 @@ export function createServerResources(o: {
             const outcome = supervision?.terminal === time
               ? supervision.outcome
               : undefined;
-            if (changes.admitted) owner.admitFinished(session, time, outcome);
-            else owner.finished(session, time, changes.baseline, outcome);
+            const unseen = supervision?.unseen === true;
+            if (changes.admitted) {
+              owner.admitFinished(session, time, outcome, unseen);
+            } else {owner.finished(
+                session,
+                time,
+                changes.baseline,
+                outcome,
+                unseen,
+              );}
           }
         }
       });

@@ -83,6 +83,9 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
         tasks: [],
         seen: {},
         finishes: { [child.id]: 10 },
+        supervision: {
+          [child.id]: { state: "finishedUnseen", terminal: 10, unseen: true },
+        },
         pathTemplates: [],
         ...(hasSummary ? { summaries: { "/p": summary } } : {}),
       };
@@ -115,6 +118,11 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
       rows.update([child.id]);
       check(true);
       inbox.seen[child.id] = 12;
+      inbox.supervision![child.id] = {
+        state: "none",
+        terminal: 12,
+        unseen: false,
+      };
       rows.inbox(inbox, {
         baseline: false,
         projects: [],
@@ -254,14 +262,30 @@ Deno.test("project lamps consume server supervision independently of metadata an
   entry = { ...entry, status: "idle" };
   rows.update([entry.id]);
   assertEquals(rows.row(entry.directory, 0)?.status, "none");
-  assertEquals(rows.row(entry.directory, 0)?.unread, true);
-  assertEquals(rows.row(entry.directory, 0)?.summary?.unseenCount, null);
+  assertEquals(rows.row(entry.directory, 0)?.unread, false);
   model.receive({
     t: "inbox.patch",
     generation: "g",
     from: 1,
     revision: 2,
-    ops: [{ op: "seen", sessionID: entry.id, time: 4 }],
+    ops: [{
+      op: "supervision",
+      sessionID: entry.id,
+      value: { state: "finishedUnseen", terminal: 3, unseen: true },
+    }],
+  });
+  assertEquals(rows.row(entry.directory, 0)?.unread, true);
+  assertEquals(rows.row(entry.directory, 0)?.summary?.unseenCount, null);
+  model.receive({
+    t: "inbox.patch",
+    generation: "g",
+    from: 2,
+    revision: 4,
+    ops: [{ op: "seen", sessionID: entry.id, time: 4 }, {
+      op: "supervision",
+      sessionID: entry.id,
+      value: { state: "none", terminal: 3, unseen: false },
+    }],
   });
   assertEquals(
     rows.row(entry.directory, 0)?.unread,
