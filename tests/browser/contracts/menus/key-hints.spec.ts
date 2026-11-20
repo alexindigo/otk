@@ -142,7 +142,12 @@ test.describe("permission widget keys", () => {
     tag: ["@menus", "@isolated"],
   }, async ({ isolatedState: state, page }) => {
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    const buttons = page.locator(".otk-permission-actions button");
+    // WP7a adds local dismissal without changing the three remote actions.
+    await expect(page.locator(".otk-permission-actions [data-request-dismiss]"))
+      .toBeVisible();
+    const buttons = page.locator(
+      ".otk-permission-actions button:not([data-request-dismiss])",
+    );
     await expect(buttons).toHaveCount(3);
     expect(
       await buttons.evaluateAll((items) =>
@@ -185,7 +190,7 @@ test.describe("question widget keys", () => {
     await expect(page.locator(".otk-question-actions button").nth(1))
       .toHaveAttribute(
         "title",
-        "Skip question (Esc with question controls focused)",
+        "Reject this question without answering", // WP7a: Escape is local dismissal.
       );
     const answer = page.locator("textarea[name=question-answer]");
     await answer.fill("Keep my answer");
@@ -195,6 +200,15 @@ test.describe("question widget keys", () => {
     expect((await state.observe<{ answers: unknown[] }>()).answers).toEqual([]);
     await expect(answer).toHaveValue("Keep my answer");
     await page.keyboard.press("Escape");
+    await expect(page.locator(".otk-question-dock")).toHaveCount(0);
+    expect((await state.observe<{ answers: unknown[] }>()).answers).toEqual([]);
+    await page.getByRole("button", {
+      name: "Pending question: reopen",
+      exact: true,
+    }).click();
+    await expect(answer).toHaveValue("Keep my answer");
+    await page.getByRole("button", { name: "Skip question", exact: true })
+      .click();
     await expect.poll(async () =>
       (await state.observe<{ answers: unknown[] }>()).answers
     ).toEqual([null]);
