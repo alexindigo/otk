@@ -50,7 +50,8 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       ? props.part.label || props.part.kind
       : props.part.kind;
   const details = () =>
-    !!(activity()?.state || activity()?.body?.length ||
+    !!(props.recordTime !== undefined || activity()?.state ||
+      activity()?.body?.length ||
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
       reference());
   const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
@@ -157,8 +158,40 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                         <Show when={state()}>
                           {(value) => <p>{value()}</p>}
                         </Show>
-                        <Show when={activity()?.parameters?.length}>
+                        <Show
+                          when={props.recordTime !== undefined ||
+                            activity()?.parameters?.length}
+                        >
                           <dl class="otk-native-parameters">
+                            <Show
+                              when={props.recordTime === undefined
+                                ? undefined
+                                : new Date(props.recordTime)}
+                            >
+                              {(recorded) => (
+                                <>
+                                  <dt>Recorded at</dt>
+                                  <dd>
+                                    <time
+                                      class="otk-native-value"
+                                      data-record-time=""
+                                      datetime={recorded().toISOString()}
+                                    >
+                                      {recorded().toLocaleString(undefined, {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                        second: "2-digit",
+                                        fractionalSecondDigits: 3,
+                                        timeZoneName: "short",
+                                      })}
+                                    </time>
+                                  </dd>
+                                </>
+                              )}
+                            </Show>
                             <For
                               each={activity()?.parameters}
                               keyed={(parameter) => parameter.key}

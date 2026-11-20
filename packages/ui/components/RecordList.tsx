@@ -9,6 +9,7 @@ export default function RecordList<T>(props: {
   items: readonly T[];
   key(item: T): string;
   outgoing?: boolean;
+  outgoingItem?(item: T): boolean;
   scope: string;
   revision?(item: T): number;
   control?(control: VirtualListControl): (() => void) | void;
@@ -33,6 +34,8 @@ export default function RecordList<T>(props: {
             last={props.items.length > 0 &&
               props.key(item()) === props.key(props.items.at(-1)!)}
             outgoing={props.outgoing}
+            connected={!props.outgoingItem ||
+              props.outgoingItem(item()) === !!props.outgoing}
           >
             {props.render(item)}
           </TreeItem>

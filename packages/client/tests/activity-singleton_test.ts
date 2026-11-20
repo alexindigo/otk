@@ -24,27 +24,22 @@ function record(id: string, created = 1000): Message {
     }],
   };
 }
-Deno.test("one record owns its row and later appends never replace that row with a span", () => {
+Deno.test("one record mints its interval before later appends", () => {
   const p = createTranscriptProjection();
   p.replace([record("r1")]);
-  assertEquals(p.state.records.keys, ["r1"]);
-  assertEquals(p.state.records.groups, Object.create(null));
-  assertEquals(p.state.records.owners.r1, "r1");
+  assertEquals(p.state.records.keys, ["activity:r1"]);
+  assertEquals(p.state.records.groups["activity:r1"].members, ["r1"]);
+  assertEquals(p.state.records.owners.r1, "activity:r1");
   p.apply({ op: "message.upsert", message: record("r2") });
-  assertEquals(p.state.records.keys, ["r1", "r2"]);
-  assertEquals(p.state.records.owners.r1, "r1");
+  assertEquals(p.state.records.keys, ["activity:r1"]);
+  assertEquals(p.state.records.owners.r1, "activity:r1");
   p.replace(p.messages());
-  assertEquals(p.state.records.keys, ["r1", "r2"]);
+  assertEquals(p.state.records.keys, ["activity:r1"]);
 });
-Deno.test("span clocks carry one time when their endpoints are equal", () => {
+Deno.test("folded intervals do not display a redundant time range", () => {
   const p = createTranscriptProjection();
   p.replace([record("r1"), record("r2")]);
-  assertEquals<unknown>(p.state.records.groups["activity:r1"].time, {
-    first: 1000,
-  });
+  assertEquals(p.state.records.groups["activity:r1"].time, undefined);
   p.apply({ op: "message.upsert", message: record("r2", 2000) });
-  assertEquals(p.state.records.groups["activity:r1"].time, {
-    first: 1000,
-    last: 2000,
-  });
+  assertEquals(p.state.records.groups["activity:r1"].time, undefined);
 });

@@ -23,7 +23,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
-import ActivityGroup from "./ActivityGroup.tsx";
+import ActivityGroup, { CompletionToggle } from "./ActivityGroup.tsx";
 import RecordList from "./RecordList.tsx";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
@@ -171,52 +171,80 @@ export default function SessionView(props: {
       if (recordWindows.get(key) === control) recordWindows.delete(key);
     };
   };
-  const renderGroup = (key: string, one: (key: string) => Element) => {
-    return (
-      <Show when={recordGroups().groups[key]} fallback={one(key)}>
-        {(group) => (
+  const renderRecords = (
+    group: () => import("@otk/client").ActivityGroup,
+    one: (key: string) => Element,
+  ): Element => (
+    <RecordList
+      items={group().children ?? []}
+      key={(child) => child.key}
+      scope={group().key}
+      control={(control) => recordWindow(group().key, control)}
+      revision={(child) => child.revision}
+      outgoing={group().direction === "outgoing"}
+      outgoingItem={(child) => child.direction === "outgoing"}
+      render={(child) => (
+        <Show when={child().count} fallback={one(child().members[0])}>
           <ActivityGroup
-            group={group()}
+            group={child()}
             onOpenChild={props.onOpenChild}
             prefs={props.prefs}
             body={() => (
               <RecordList
-                items={group().children ?? []}
-                key={(child) => child.key}
-                scope={group().key}
-                control={(control) => recordWindow(group().key, control)}
-                revision={(child) => child.revision}
-                outgoing={group().direction === "outgoing"}
-                render={(child) => (
-                  <Show when={child().count} fallback={one(child().key)}>
-                    <ActivityGroup
-                      group={child()}
-                      onOpenChild={props.onOpenChild}
-                      prefs={props.prefs}
-                      body={() => (
-                        <RecordList
-                          items={child().members}
-                          key={(key) => key}
-                          scope={child().key}
-                          control={(control) =>
-                            recordWindow(child().key, control)}
-                          revision={(key) =>
-                            projection().repliesByID[key]?.revision ?? 0}
-                          outgoing={child().direction === "outgoing"}
-                          render={(key) =>
-                            one(key())}
-                        />
-                      )}
-                    />
-                  </Show>
-                )}
+                items={child().members}
+                key={(key) => key}
+                scope={child().key}
+                control={(control) =>
+                  recordWindow(child().key, control)}
+                revision={(key) =>
+                  projection().repliesByID[key]?.revision ?? 0}
+                outgoing={child().direction === "outgoing"}
+                render={(key) => one(key())}
               />
             )}
           />
-        )}
-      </Show>
-    );
-  };
+        </Show>
+      )}
+    />
+  );
+  const renderGroup = (key: string, one: (key: string) => Element) => (
+    <Show when={recordGroups().groups[key]} fallback={one(key)}>
+      {(group) => (
+        <ActivityGroup
+          group={group()}
+          onOpenChild={props.onOpenChild}
+          prefs={props.prefs}
+          breakouts={() => (
+            <RecordList
+              items={group().segments ?? []}
+              key={(segment) => segment.key}
+              scope={group().key}
+              control={(control) =>
+                recordWindow(group().key, control)}
+              revision={(segment) =>
+                segment.revision}
+              outgoing={group().direction === "outgoing"}
+              outgoingItem={(segment) => segment.direction === "outgoing"}
+              render={(segment) => (
+                <Show
+                  when={segment().segment}
+                  fallback={one(segment().members[0])}
+                >
+                  <ActivityGroup
+                    group={segment()}
+                    onOpenChild={props.onOpenChild}
+                    prefs={props.prefs}
+                    body={() => renderRecords(segment, one)}
+                  />
+                </Show>
+              )}
+            />
+          )}
+          body={() => renderRecords(group, one)}
+        />
+      )}
+    </Show>
+  );
   const count = () => projection().messageIDs.length;
   // One in-flow progress per active turn: an unfinished reply owns it;
   // otherwise the turn's newest active native record does.
@@ -379,10 +407,13 @@ export default function SessionView(props: {
             diagnosticID: randomID(),
           });
         }
-        await control.reveal(ancestors[n + 1] ?? key, {
-          align: "center",
-          focus: n === ancestors.length - 1 ? focus : undefined,
-        });
+        await control.reveal(
+          ancestors[n + 1] ?? recordGroups().leaves[key] ?? key,
+          {
+            align: "center",
+            focus: n === ancestors.length - 1 ? focus : undefined,
+          },
+        );
       }
     },
   });
@@ -776,8 +807,40 @@ export default function SessionView(props: {
                                               ownerID={reply().key}
                                               segments={reply().segments}
                                               message={message()}
+                                              sourceTime={(id) =>
+                                                projection().messagesByID[id]
+                                                  ?.time.created}
                                               lastID={reply().lastID}
                                               pending={reply().pending}
+                                              completionDetails={() => (
+                                                <Show
+                                                  when={recordGroups()
+                                                    .groups[
+                                                      recordGroups()
+                                                        .completions[
+                                                          reply().key
+                                                        ]
+                                                    ]}
+                                                >
+                                                  {(group) => (
+                                                    <Show when={group().silent}>
+                                                      <CompletionToggle
+                                                        group={group()}
+                                                        prefs={props.prefs}
+                                                        onReveal={() => {
+                                                          following?.pause();
+                                                          void window?.reveal(
+                                                            group().key,
+                                                            {
+                                                              align: "nearest",
+                                                            },
+                                                          );
+                                                        }}
+                                                      />
+                                                    </Show>
+                                                  )}
+                                                </Show>
+                                              )}
                                               recovery={props.transcript?.state
                                                 .content
                                                 .recovering

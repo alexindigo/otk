@@ -796,16 +796,22 @@ chronological prompt identities, creation clocks, shared queued flags and
 borrowed source parts. It retains no content or paging state; consumers present
 parts through their own registry and page through the original session owner.
 
-The canonical projection's `records` value owns append-stable Activity spans,
-identical-fact folds, reveal ancestry and presentation revisions. An eligible
-singleton starts as a span; an already admitted individual row never becomes one
-after settling. Explicit failures break out in source order. Native plugins
+The canonical projection's `records` value owns one stable background interval
+between conversation messages, identical-fact folds, reveal ancestry and
+presentation revisions. The first background record mints its frame even while
+queued. Settlement changes child presentation, never the root partition.
+Pending, active, blocked, unknown and failed records break out inside that frame
+in source order, then rejoin its compact children when settled. Native plugins
 supply opaque summary kinds and singular/plural nouns; headings never classify
-records. Records without producer-owned summary facts stay individually visible.
-The existing transcript interaction owner retains all disclosure choices and
-opens reveal ancestors. Measurements use presentation revisions separately from
-logical row identity, so a topology or streamed-content revision cannot borrow
-an old extent, including when an unmounted row was previously empty.
+records. Records without producer-owned summary facts remain visible breakouts.
+Producer-declared footer completions retain their original source and reveal
+paths. A success-only interval is silent until explicitly disclosed through the
+preceding reply footer or revealed; mixed intervals include those completion
+facts in their summary and original chronology. The existing transcript
+interaction owner retains all disclosure choices and opens reveal ancestors.
+Measurements use presentation revisions separately from logical row identity, so
+a topology or streamed-content revision cannot borrow an old extent, including
+when an unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later

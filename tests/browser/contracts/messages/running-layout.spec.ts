@@ -209,15 +209,15 @@ test(
     await openSession(state, page, session);
     await expect(page.locator(".otk-response-progress")).toBeVisible();
     await scenario(state, "freeze");
-    // Issue 2.26: first admission of a singleton is an individual row forever.
-    const singleton = page.locator('[data-message="record-1"]');
-    await expect(singleton).toBeVisible();
-    const original = await singleton.elementHandle();
+    // WP16: the first live record mints the stable interval, before settlement.
+    const span = page.locator("[data-background-interval]").first();
+    await expect(span).toHaveAttribute("data-count", "1");
+    const original = await span.elementHandle();
     await scenario(state, "freeze");
-    await expect(page.locator('[data-message="record-2"]')).toBeVisible();
-    await expect(page.locator(".otk-record-group")).toHaveCount(0);
+    await expect(span).toHaveAttribute("data-count", "2");
+    await expect(page.locator("[data-background-interval]")).toHaveCount(1);
     expect(
-      await singleton.evaluate(
+      await span.evaluate(
         (element, original) => element === original,
         original,
       ),
@@ -233,20 +233,13 @@ test(
         contentType: "image/png",
       });
     }
-    // A fresh snapshot admits multiple records together and can mint a span.
-    await page.reload();
-    const span = page.locator(".otk-record-group").first();
-    await expect(span).toHaveAttribute("data-count", "2");
     await span.evaluate((element) => {
       (globalThis as typeof globalThis & { wp1Span: Element }).wp1Span =
         element;
     });
     for (let n = 3; n <= 15; n++) await scenario(state, "freeze");
     await expect(span).toHaveAttribute("data-count", "15");
-    await expect(span.locator(".otk-record-group-time").first()).not
-      .toContainText(" - ");
-    await expect(span.locator(".otk-record-group-time").first()).not
-      .toHaveAttribute("title", / - /);
+    await expect(span.locator(".otk-record-group-time")).toHaveCount(0);
     expect(
       await span.evaluate((element) =>
         element ===
