@@ -133,8 +133,8 @@ Deno.test("conversation and unsafe records split spans without hiding failures o
   );
 });
 
-Deno.test("singletons start stable spans and identical groups do not cross kinds or details", () => {
-  assertEquals(group([record("r1")]).groups["activity:r1"].members, ["r1"]);
+Deno.test("singletons stay individual and identical groups do not cross kinds or details", () => {
+  assertEquals(group([record("r1")]).keys, ["r1"]);
   const value = group([
     record("r1"),
     record("r2", { detail: "different" }),

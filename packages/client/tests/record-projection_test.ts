@@ -34,14 +34,14 @@ function record(
     }],
   };
 }
-Deno.test("record projection mints singleton spans and preserves append topology", () => {
+Deno.test("record projection mints multi-record spans and preserves append topology", () => {
   const p = createTranscriptProjection();
-  p.replace([record(1)]);
+  p.replace([record(1), record(2)]);
   const first = p.state.records;
   const key = first.keys[0], child = first.groups[key].children![0].key;
   assertNotEquals(key, "r1");
-  assertEquals(first.groups[key].members, ["r1"]);
-  for (let id = 2; id <= 15; id++) {
+  assertEquals(first.groups[key].members, ["r1", "r2"]);
+  for (let id = 3; id <= 15; id++) {
     p.apply({ op: "message.upsert", message: record(id) });
   }
   const next = p.state.records;
@@ -54,14 +54,14 @@ Deno.test("record projection mints singleton spans and preserves append topology
     op: "message.upsert",
     message: record(16, { direction: "outgoing" }),
   });
-  assertEquals(p.state.records.keys, [key, "activity:r16"]);
-  assertEquals(p.state.records.groups["activity:r16"].direction, "outgoing");
+  assertEquals(p.state.records.keys, [key, "r16"]);
+  assertEquals(p.state.records.owners.r16, "r16");
   p.replace([]);
   p.replace([record(15)]);
-  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.keys, ["r15"]);
   p.merge(Array.from({ length: 14 }, (_, n) => record(n + 1)));
-  assertEquals(p.state.records.keys, [key]);
-  assertEquals(p.state.records.groups[key].members.length, 15);
+  assertEquals(p.state.records.keys, [key, "r15"]);
+  assertEquals(p.state.records.groups[key].members.length, 14);
   const cache = new Map<string, number>();
   let extentRevision = 1;
   const window = createWindow(cache, (key) => `${key}:${extentRevision}`);
@@ -106,11 +106,12 @@ Deno.test("failure breaks out and full record facts prevent title-only folding",
   assertEquals(p.state.records.groups[key].children?.length, 3);
   p.apply({ op: "message.upsert", message: record(2, { tone: "error" }) });
   assertEquals(p.state.records.owners.r2, "r2");
-  assertEquals(p.state.records.groups[key].members, ["r1"]);
+  assertEquals(p.state.records.owners.r1, "r1");
   assert(p.state.records.keys.includes("r2"));
-  assertEquals(p.state.records.keys, [key, "r2", "activity:r3"]);
+  assertEquals(p.state.records.keys, ["r1", "r2", "activity:r3"]);
   assertEquals(p.state.records.groups["activity:r3"].members, ["r3", "r4"]);
-  assertNotEquals(p.state.records.parents.r1[1], p.state.records.parents.r3[1]);
+  assertEquals(p.state.records.parents.r1, undefined);
+  assertEquals(p.state.records.parents.r3[0], "activity:r3");
 });
 Deno.test("record reveal opens retained ancestry through the interaction owner", () => {
   const p = createTranscriptProjection(),
