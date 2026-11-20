@@ -721,6 +721,8 @@ export interface FormIntent<T, R> {
 export interface SubmissionIntent<T> {
   readonly state: FormIntentState<T>;
   subscribe(listener: () => void): () => void;
+  /** Recheck readiness inside asynchronous preparation; refusal is visible feedback. */
+  require(): void;
   submit(
     prepare: () => Promise<T | undefined>,
     run: (captured: T) => Promise<void>,
@@ -733,13 +735,41 @@ export function createSubmissionIntent<T>(options: {
   capture(value: T): T;
   presenter: FailurePresenter;
   diagnostic?(id: string, cause: unknown): void;
+  target?(): import("@otk/protocol").FailureTarget | undefined;
+  unavailable?(): string | undefined;
+  recovery?(reason: string): string;
 }): SubmissionIntent<T> {
   const input = createFormIntent<void, { result: Promise<void> } | undefined>({
     ...options,
     capture: () => undefined,
   });
   const effect = createFormIntent<T, void>(options);
+  const refuse = (reason: string, recovery: string): never => {
+    throw new RequestFailure({
+      code: "prompt.refused",
+      diagnosticID: randomID(),
+      retry: "new-intent",
+      facts: {
+        actionLabel: "Sending prompt",
+        target: options.target?.(),
+        origin: "composer",
+        reason,
+        recovery,
+      },
+    });
+  };
+  const require = () => {
+    const reason = options.unavailable?.();
+    if (reason) {
+      refuse(
+        reason,
+        options.recovery?.(reason) ??
+          "Resolve the unavailable state, then send the retained draft",
+      );
+    }
+  };
   return {
+    require,
     get state() {
       return {
         ...effect.state,
@@ -762,7 +792,15 @@ export function createSubmissionIntent<T>(options: {
       const blocked = effect.state.pending;
       return input.submit(undefined, async () => {
         const value = await prepare();
-        if (value === undefined || blocked || effect.state.pending) return;
+        // Undefined is an explicitly handled input command, never a refused send.
+        if (value === undefined) return;
+        if (blocked || effect.state.pending) {
+          refuse(
+            "Another message is still being sent",
+            "Wait for that send to settle, then send the retained draft",
+          );
+        }
+        require();
         return { result: effect.submit(value, run) };
       }).then((admitted) => admitted?.result);
     },

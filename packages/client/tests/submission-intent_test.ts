@@ -1,6 +1,91 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { createSubmissionIntent, FailurePresenter } from "@otk/client";
+
+for (
+  const boundary of [
+    "before preparation",
+    "after preparation",
+    "before dispatch",
+  ] as const
+) {
+  Deno.test(`Send readiness loss ${boundary} refuses visibly with its captured target`, async () => {
+    let unavailable: string | undefined;
+    const intent = createSubmissionIntent<{ text: string }>({
+      capture: structuredClone,
+      presenter: new FailurePresenter(),
+      target: () => ({
+        sessionID: "opcv2-ses_send",
+        label: "Captured session",
+      }),
+      unavailable: () => unavailable,
+      recovery: () => "Reconnect, then send the retained draft",
+    });
+    let sends = 0;
+    await assertRejects(() =>
+      intent.submit(async () => {
+        if (boundary === "before preparation") {
+          unavailable = "Reconnect to send";
+        }
+        intent.require();
+        await Promise.resolve();
+        if (boundary === "after preparation") {
+          unavailable = "Reconnect to send";
+          intent.require();
+        }
+        if (boundary === "before dispatch") unavailable = "Reconnect to send";
+        return { text: "retained draft" };
+      }, () => {
+        sends++;
+        return Promise.resolve();
+      })
+    );
+    const shown = intent.state.feedback?.failure;
+    assertEquals(sends, 0);
+    assertEquals(intent.state.pending, false);
+    assertEquals(shown?.action, "Sending prompt");
+    assertEquals(shown?.target.label, "Captured session");
+    assertEquals(shown?.reason, "Reconnect to send");
+    assertEquals(shown?.recovery, "Reconnect, then send the retained draft");
+  });
+}
+
+Deno.test("a refused send during captured submission has visible refusal rather than successful silence", async () => {
+  const intent = createSubmissionIntent<{ text: string }>({
+    capture: structuredClone,
+    presenter: new FailurePresenter(),
+  });
+  const held = Promise.withResolvers<void>();
+  const entered = Promise.withResolvers<void>();
+  const first = intent.submit(
+    () => Promise.resolve({ text: "first" }),
+    async () => {
+      entered.resolve();
+      await held.promise;
+    },
+  );
+  await entered.promise;
+  for (let n = 0; n < 8; n++) await Promise.resolve();
+  try {
+    await assertRejects(() =>
+      intent.submit(
+        () => Promise.resolve({ text: "retained second draft" }),
+        () => Promise.reject(new Error("A refused send cannot dispatch")),
+      )
+    );
+    assertEquals(
+      intent.state.feedback?.failure?.reason,
+      "Another message is still being sent",
+    );
+    assertEquals(
+      intent.state.feedback?.failure?.recovery,
+      "Wait for that send to settle, then send the retained draft",
+    );
+  } finally {
+    held.resolve();
+    await first;
+  }
+});
 
 Deno.test("a pending native submission does not swallow a later input command or admit another send", async () => {
   const intent = createSubmissionIntent<{ text: string }>({
@@ -27,10 +112,12 @@ Deno.test("a pending native submission does not swallow a later input command or
   }, () => {
     throw new Error("Commands do not send");
   });
-  await intent.submit(() => Promise.resolve({ text: "new draft" }), () => {
-    sends++;
-    return Promise.resolve();
-  });
+  await assertRejects(() =>
+    intent.submit(() => Promise.resolve({ text: "new draft" }), () => {
+      sends++;
+      return Promise.resolve();
+    })
+  );
   assertEquals(commands, 1);
   assertEquals(sends, 1);
   assertEquals(intent.state.pending, true);
@@ -83,7 +170,7 @@ for (const mode of ["normal", "shell", "command"] as const) {
     held.resolve();
     await first;
     ready.resolve();
-    await blocked;
+    await assertRejects(() => blocked);
     assertEquals(requests, [{ text: "first prompt", mode: "normal" }]);
     assertEquals(draft, { text: "newer draft", mode });
     assertEquals(intent.state.pending, false);
