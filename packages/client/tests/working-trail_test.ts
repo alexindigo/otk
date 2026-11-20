@@ -35,6 +35,9 @@ for (const grouped of [true, false]) {
       finished = entry("finished", 2, root.id),
       unrelated = entry("unrelated", 3);
     const entries = [root, late, nested, early, finished, unrelated];
+    for (const entry of [early, nested, late, unrelated]) {
+      entry.activity = { work: { fresh: true, keys: [`native:${entry.id}`] } };
+    }
     const inbox: InboxSnapshot = {
       tasks: grouped
         ? [{
@@ -91,6 +94,7 @@ for (const grouped of [true, false]) {
     ]);
     for (const id of ["early", "nested", "late"]) {
       inbox.supervision![id] = { state: "finishedUnseen", terminal: 60 };
+      entries.find((entry) => entry.id === id)!.activity!.work!.keys = [];
     }
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
@@ -111,8 +115,9 @@ for (const grouped of [true, false]) {
       "late",
       "finished",
     ]);
-    // A rerun reappears; a blocked or stale helper is not working.
+    // A native rerun counts under its ancestor, never under an open sibling.
     inbox.supervision!.late = { state: "working", terminal: 60 };
+    late.activity!.work!.keys = ["native:rerun"];
     inbox.supervision!.finished = { state: "needsYou", terminal: 50 };
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
@@ -122,7 +127,10 @@ for (const grouped of [true, false]) {
       "late",
       "finished",
     ]);
+    assertEquals(helpers(), []);
+    tabs.preview(root.id);
     assertEquals(helpers(), ["late"]);
+    tabs.preview(nested.id);
     connected = false;
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [

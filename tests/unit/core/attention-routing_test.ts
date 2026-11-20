@@ -29,12 +29,13 @@ Deno.test("WP5 cross-project attention retains only request identities for share
       outcome: "succeeded",
     },
   };
+  let ancestors: string[] = [];
   const owner = new RequestAttention({
     snapshotEntries: () => [entry],
     observe: () => () => {},
     observeRemoval: () => () => {},
     getMetadata: () => entry,
-    ancestors: () => [],
+    ancestors: () => ancestors,
   } as unknown as IndexStore, () => false);
   try {
     owner.keys();
@@ -49,6 +50,21 @@ Deno.test("WP5 cross-project attention retains only request identities for share
     assertStrictEquals(
       owner.project(entry, { ...view, directory: "/pending" }),
       entry,
+    );
+    ancestors = ["open"];
+    assertStrictEquals(
+      owner.project(entry, { ...view, selected: "open" }),
+      entry,
+    );
+    entry.activity!.work!.fresh = false;
+    assertEquals(
+      owner.project(entry, { ...view, selected: "open" }).activity?.work,
+      undefined,
+    );
+    entry.activity!.work = { fresh: true, keys: [] };
+    assertEquals(
+      owner.project(entry, { ...view, selected: "open" }).activity?.work,
+      undefined,
     );
   } finally {
     owner.close();
