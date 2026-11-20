@@ -165,7 +165,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       );
       assertEquals(
         nativeRemoved.find((r) => r.directory === nativeTree)?.availability,
-        "removed",
+        "unknown", // WP4: a cold owner has no retained positive worktree kind.
       );
       assertEquals(
         nativeRemoved.find((r) => r.directory === nativeTree)?.sessionCount,
@@ -189,7 +189,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       assertEquals(after.find((r) => r.directory === tree)?.depth, 1);
       assertEquals(
         after.find((r) => r.directory === tree)?.availability,
-        "removed",
+        "unknown", // WP4: absence alone cannot prove kind or archival.
       );
       assertEquals(after.find((r) => r.directory === tree)?.scopes, [
         tree,
@@ -294,7 +294,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       assertEquals(after.find((r) => r.directory === tree)?.depth, 1);
       assertEquals(
         after.find((r) => r.directory === tree)?.availability,
-        "removed",
+        "unknown", // WP4: V1's legacy inventory does not prove worktree kind.
       );
       assertEquals(after.find((r) => r.directory === tree)?.sessionCount, 1);
       assertEquals(
