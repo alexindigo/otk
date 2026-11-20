@@ -569,7 +569,7 @@ export default function ProjectTabs(props: {
                 class="otk-folded-crumbs"
                 triggerClass="otk-overflow-trigger otk-folded-crumbs-trigger"
                 label="More task sessions"
-                trigger="…"
+                trigger="..."
               >
                 <For each={ids()} keyed={(id) => id}>
                   {(id) => (

@@ -39,7 +39,7 @@ export default function MessageDelivery(
                 : {
                   kind: "pending",
                   text: value().phase === "submitted"
-                    ? "Sending message..."
+                    ? "Sending prompt..."
                     : value().phase === "queued"
                     ? "Queued while the session is busy"
                     : "Sent, waiting for opencode",

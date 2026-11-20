@@ -1746,7 +1746,7 @@ export async function collections456(input: Inputs) {
           }
           if (name === "recovery") {
             await expect(page.locator(".otk-response-recovery")).toHaveText(
-              "Refreshing response\u2026",
+              "Refreshing response...",
             );
           }
           if (name === "revert") {
@@ -1935,9 +1935,9 @@ export async function collections456(input: Inputs) {
           );
         }
         if (scene === "journal") {
-          await page.locator(".otk-permission-patterns").evaluateAll((els) =>
-            els.forEach((el) => (el as HTMLDetailsElement).open = true)
-          );
+          for (
+            const toggle of await page.locator(".otk-permission-scope").all()
+          ) await toggle.click();
           const values = await page.evaluate(() =>
             ["summary", "activity"].map((id) =>
               Array.from(

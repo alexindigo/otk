@@ -40,7 +40,6 @@ export default function NativeSource(props: {
     open() && props.reference ? read?.(props.reference) : undefined
   );
   const [revision, setRevision] = createSignal(0);
-  const toggle = () => setOpen(!open());
   // An explicit choice or the category default can open the fold; either reads.
   createEffect(() => [open(), resource()] as const, ([expanded, owner]) => {
     if (!expanded || !owner) return;
@@ -82,15 +81,17 @@ export default function NativeSource(props: {
   return (
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
       <TreeNode
+        toggleHeader
         label="Source"
         open={open()}
         onOpen={setOpen}
-        header={() => (
+        header={(_connected, toggleID) => (
           <button
+            id={toggleID}
             type="button"
-            class="otk-tool-toggle"
+            class="otk-tool-toggle otk-tree-control"
             aria-expanded={open() ? "true" : "false"}
-            onClick={toggle}
+            onClick={() => setOpen(!open())}
           >
             <TreeIcon />
             <span class="otk-control-label">Source</span>

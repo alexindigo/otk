@@ -9,6 +9,14 @@ import ProjectInbox from "../../components/ProjectInbox.tsx";
 import Settings from "../../components/Settings.tsx";
 import Message from "../../components/Message.tsx";
 import ActivityGroup from "../../components/ActivityGroup.tsx";
+import WorkLog from "../../components/WorkLog.tsx";
+import Reasoning from "../../components/Reasoning.tsx";
+import NativeSource from "../../components/parts/NativeSource.tsx";
+import Timeline from "../../components/Timeline.tsx";
+import Sidebar from "../../components/Sidebar.tsx";
+import RolledBackStrip from "../../components/RolledBackStrip.tsx";
+import StatusLight from "../../components/StatusLight.tsx";
+import ConnectionLight from "../../components/ConnectionLight.tsx";
 import { useUiRegistries } from "../../registries/context.tsx";
 import { registerUnknownPart } from "../../components/parts/UnknownPart.tsx";
 import { registerTextPart } from "../../components/parts/TextPart.tsx";
@@ -158,6 +166,145 @@ export default function FailureLayout() {
       onOpenChild={() => {}}
     />
   );
+  if (surface === "metadata") {
+    const user: MessageData = {
+      id: "user-queued",
+      sessionID: base.sessionID,
+      role: "user",
+      time: { created: at },
+      parts: [{
+        kind: "text",
+        id: "queued-text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{
+            i: "text",
+            text: "Keep this queued prompt in its ordinary bubble.",
+          }],
+        }],
+      }],
+    };
+    return (
+      <section class="error-review-run">
+        <h2>Prompt metadata and independent disclosures</h2>
+        <Message
+          message={user}
+          prefs={{ ...DEFAULT_PREFS, timestamps: true }}
+          permissions={[]}
+          queued
+          onOpenChild={() => {}}
+        />
+        <Message
+          message={{ ...user, id: "user-pending" }}
+          prefs={{ ...DEFAULT_PREFS, timestamps: true }}
+          permissions={[]}
+          queued={false}
+          onOpenChild={() => {}}
+          send={{
+            phase: "pending",
+            message: { ...user, id: "user-pending" },
+            intent: {
+              clientID: "style",
+              key: "metadata-send",
+              window: "window",
+            },
+          }}
+        />
+        <h3>Work and source</h3>
+        <WorkLog
+          workingMs={4200}
+          body={() => <p>Owned work content remains available.</p>}
+        />
+        <Reasoning
+          part={{
+            kind: "reasoning",
+            id: "thought",
+            title: "Plan the verification",
+            time: { start: at - 4000, end: at },
+            blocks: [{
+              b: "paragraph",
+              inline: [{
+                i: "text",
+                text: "Check shared owners before their consumers.",
+              }],
+            }],
+          }}
+          mode="hide"
+        />
+        <NativeSource
+          prefs={DEFAULT_PREFS}
+          preview={{ text: '{"kind":"retained"}', bytes: 19, truncated: false }}
+        />
+        <h3>Timeline</h3>
+        <Timeline
+          session={{ sidecarId: "local", sessionID: base.sessionID }}
+          prompts={[{ id: user.id, time: at, queued: true, parts: user.parts }]}
+          exhausted
+          paging={false}
+          preview={() => "Queued prompt in Timeline"}
+          onOlder={() => Promise.resolve()}
+          onReveal={() => Promise.resolve()}
+        />
+        <RolledBackStrip
+          state={{}}
+          strip={{
+            count: 1,
+            preview: "Earlier prompt",
+            prompts: [{
+              messageID: "earlier",
+              preview: "Earlier prompt",
+              time: at - 60000,
+            }],
+            more: 0,
+            files: [],
+          }}
+        />
+        <h3>Indicator artwork</h3>
+        <div class="otk-control-row">
+          {(["blocked", "working", "finished", "none"] as const).map((
+            state,
+          ) => (
+            <span>
+              <StatusLight state={state} /> {state}
+            </span>
+          ))}
+          <span>
+            <ConnectionLight
+              connection={{
+                ...server,
+                status: "connected",
+                harness: "connected",
+              }}
+            />{" "}
+            Connected
+          </span>
+          <span>
+            <ConnectionLight connection={server} /> Reconnecting
+          </span>
+          <span>
+            <ConnectionLight
+              connection={{ ...server, error: "The server is unavailable" }}
+            />{" "}
+            Error
+          </span>
+        </div>
+      </section>
+    );
+  }
+  if (surface === "legacy-sidebar") {
+    return (
+      <div style={{ width: "320px", height: "800px" }}>
+        <Sidebar
+          sidecars={[server]}
+          entries={[]}
+          onOpen={() => {}}
+          onCreate={() => {}}
+          onSettings={() => {}}
+        />
+      </div>
+    );
+  }
   if (surface === "settings") {
     return (
       <div class="error-review-settings">

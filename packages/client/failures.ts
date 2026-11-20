@@ -43,7 +43,7 @@ export interface FeedbackOwner {
 }
 /** Placement is local to a surface/view, never a reason to discard a failure. */
 export type FailurePlacement = "record" | {
-  surface: "feedback" | "session" | "notification";
+  surface: "feedback" | "session" | "notification" | "record";
   view?: FailureTarget;
 };
 function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
@@ -110,15 +110,19 @@ export class FailurePresenter {
     };
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
-    const reference = placement !== "record" &&
+    const retained = placement === "record" || placement.surface === "record";
+    const reference = !retained &&
       placement.surface !== "notification" && placement.view?.sessionID &&
       placement.view.sessionID === facts.target?.sessionID &&
       (placement.view.sidecarId ?? "local") ===
         (facts.target?.sidecarId ?? "local");
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
-    const target = this.context.target?.(facts.target ?? {}) ??
-      { label: facts.target?.label ?? "OTK" };
+    const target = retained && placement !== "record" &&
+        sameView(facts.target, placement.view)
+      ? { label: "" }
+      : this.context.target?.(facts.target ?? {}) ??
+        { label: facts.target?.label ?? "OTK" };
     const known = [facts.reason, enrichment?.text].find((text) => text?.trim());
     const reason = known ?? GENERIC_FAILURE_REASON;
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
@@ -126,7 +130,9 @@ export class FailurePresenter {
       facts.outcome === "unavailable" || enrichment?.kind === "pending";
     const informational = !pending && enrichment?.kind === "info";
     const heading = pending
-      ? `Checking whether ${action} finished`
+      ? `Checking whether ${action.charAt(0).toLowerCase()}${
+        action.slice(1)
+      } finished`
       : informational || /(?:^|\s)failed[.!]?$/i.test(action)
       ? action
       : `${action} failed`;
@@ -161,7 +167,9 @@ export class FailurePresenter {
       text: presentation.reference?.label ?? [
         informational
           ? presentation.reason
-          : `${heading} for ${target.label}: ${presentation.reason}`,
+          : `${heading}${
+            target.label ? ` for ${target.label}` : ""
+          }: ${presentation.reason}`,
         ...recovery ? [recovery] : [],
       ].map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`)
         .join(" "),

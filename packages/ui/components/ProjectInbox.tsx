@@ -30,9 +30,7 @@ import {
   type ShellLayout,
 } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
-import ConnectionLight from "./ConnectionLight.tsx";
-import ConnectionStatus from "./ConnectionStatus.tsx";
-import { connectionLabel } from "./connection-light.ts";
+import ConnectionBadge from "./ConnectionBadge.tsx";
 import { createResize } from "./resize.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import {
@@ -654,26 +652,13 @@ export default function ProjectInbox(props: {
             <For each={props.servers} keyed={(s) => s.id}>
               {(s) => (
                 <section class="otk-server-connection">
-                  <button
-                    type="button"
-                    class="otk-server-status"
-                    data-connection={s().id}
-                    aria-label={connectionLabel(s())}
-                    title={connectionLabel(s())}
-                    onClick={() => void commands.run("settings.open")}
-                  >
-                    <ControlIcon>
-                      <ConnectionLight small connection={s()} />
-                    </ControlIcon>
-                    <span class="otk-server-label">{s().label}</span>
-                  </button>
-                  <Show when={!collapsed()}>
-                    <ConnectionStatus
-                      connection={s()}
-                      compact
-                      onSettings={() => void commands.run("settings.open")}
-                    />
-                  </Show>
+                  <ConnectionBadge
+                    sidecar={s()}
+                    label={!collapsed()}
+                    status={!collapsed()}
+                    compact
+                    onSettings={() => void commands.run("settings.open")}
+                  />
                 </section>
               )}
             </For>

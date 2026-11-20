@@ -452,9 +452,9 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "journal");
-    await page.locator(".otk-permission-patterns").evaluateAll((els) =>
-      els.forEach((el) => (el as HTMLDetailsElement).open = true)
-    );
+    for (
+      const toggle of await page.locator(".otk-permission-scope").all()
+    ) await toggle.click();
     const values = await page.evaluate(() =>
       ["summary", "activity"].map((id) =>
         Array.from(document.getElementById(id)!.querySelectorAll(
@@ -546,13 +546,10 @@ test(
       "data-collapsed",
       "true",
     );
+    await expect(page.locator(".otk-server-connection .otk-server-label"))
+      .toHaveCount(0);
     expect(
-      await page.locator(".otk-server-status > span:last-child").evaluate(
-        (el) => getComputedStyle(el).display,
-      ),
-    ).toBe("none");
-    expect(
-      (await page.locator(".otk-server-status [role=img]").boundingBox())!
+      (await page.locator(".otk-server-connection [role=img]").boundingBox())!
         .width,
     ).toBeGreaterThan(0);
     await expect(

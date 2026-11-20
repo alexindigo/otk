@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./SavedBranches.css" with { type: "text" };
+import { clockTitle } from "./Clock.tsx";
 import { createMemo, For, Show } from "solid-js";
 import {
   branchDraftLabels,
@@ -148,8 +149,7 @@ export default function SavedBranches(
                   restored to native history. Files are not restored.
                 </p>
                 <p>
-                  Saved in this browser{" "}
-                  {new Date(saved().created).toLocaleString()}{" "}
+                  Saved in this browser {clockTitle(saved().created)}{" "}
                   ({saved().bytes.toLocaleString()}{" "}
                   bytes). Kept until you delete it.
                 </p>
@@ -172,7 +172,7 @@ export default function SavedBranches(
                           onClick={() => props.owner.open(b().id)}
                         >
                           <SelectionContent>
-                            {new Date(b().created).toLocaleString()}
+                            {clockTitle(b().created)}
                           </SelectionContent>
                         </button>
                       )}

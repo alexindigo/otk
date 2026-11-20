@@ -342,9 +342,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         ? "true"
         : "false"}
       aria-description={pending()
-        ? "Preparing or sending prompt…"
+        ? "Preparing or sending prompt..."
         : features.some((feature) => feature.pending?.())
-        ? "Loading message settings…"
+        ? "Loading message settings..."
         : undefined}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -362,7 +362,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         <ComposerNotice>
           <OperationFeedback
             feedback={feedback() ??
-              { kind: "pending", text: "Sending prompt…" }}
+              { kind: "pending", text: "Sending prompt..." }}
           />
         </ComposerNotice>
       </Show>

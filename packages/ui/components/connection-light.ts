@@ -6,11 +6,11 @@ export type ConnectionInput = Pick<
   "label" | "status" | "harness" | "error" | "feedback"
 >;
 export const CONNECTION_STATES = {
-  connected: { label: "Connected", shape: "✓" },
-  connecting: { label: "Connecting", shape: "◌" },
-  reconnecting: { label: "Reconnecting", shape: "↻" },
-  disconnected: { label: "Disconnected", shape: "○" },
-  error: { label: "Connection error", shape: "×" },
+  connected: { label: "Connected", shape: "check" },
+  connecting: { label: "Connecting", shape: "loading" },
+  reconnecting: { label: "Reconnecting", shape: "retry" },
+  disconnected: { label: "Disconnected", shape: "circle" },
+  error: { label: "Connection error", shape: "cross" },
 } as const;
 export type ConnectionLightState = keyof typeof CONNECTION_STATES;
 

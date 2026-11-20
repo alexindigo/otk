@@ -29,10 +29,6 @@
 .otk-timeline-actions {
   visibility: hidden;
 }
-.otk-timeline-queued {
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-}
 .otk-timeline-row.is-revealed .otk-timeline-clock,
 .otk-timeline-row:focus-within .otk-timeline-clock,
 .otk-timeline-row.is-selected .otk-timeline-clock {

@@ -11,8 +11,7 @@ import type { Preferences } from "@otk/protocol";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
-import { clockText } from "./Clock.tsx";
-import FailureSignal from "./FailureSignal.tsx";
+import { clockText, clockTitle } from "./Clock.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -51,6 +50,7 @@ export default function ActivityGroup(props: {
           fallback={props.breakouts?.()}
         >
           <TreeNode
+            toggleHeader
             label={props.group.failureTitle ||
               (props.group.silent
                 ? "Completion details"
@@ -59,7 +59,7 @@ export default function ActivityGroup(props: {
             open={open()}
             onOpen={setOpen}
             bodyVisible={open() || !!props.group.breakouts?.length}
-            header={() => (
+            header={(_connected, toggleID) => (
               <header class="otk-record-group-heading">
                 <TreeIcon />
                 <Show when={props.group.entity}>
@@ -72,8 +72,9 @@ export default function ActivityGroup(props: {
                   )}
                 </Show>
                 <button
+                  id={toggleID}
                   type="button"
-                  class="otk-tool-toggle otk-record-group-toggle"
+                  class="otk-tool-toggle otk-record-group-toggle otk-tree-control"
                   aria-expanded={open() ? "true" : "false"}
                   onClick={() => setOpen(!open())}
                 >
@@ -97,11 +98,12 @@ export default function ActivityGroup(props: {
                       </ChromeMeta>
                     </Show>
                     <Show when={props.group.failureTitle}>
-                      <FailureSignal>
-                        <ChromeMeta class="otk-control-label otk-record-group-failures">
-                          {props.group.failureTitle}
-                        </ChromeMeta>
-                      </FailureSignal>
+                      <Show when={props.group.title}>
+                        <ChromeMeta aria-hidden="true">·</ChromeMeta>
+                      </Show>
+                      <ChromeMeta class="otk-control-label otk-record-group-failures">
+                        {props.group.failureTitle}
+                      </ChromeMeta>
                     </Show>
                   </Show>
                   <Show when={props.group.detail}>
@@ -123,7 +125,7 @@ export default function ActivityGroup(props: {
                         class="otk-record-group-time"
                         title={activityTimeRange(
                           time(),
-                          (value) => new Date(value).toLocaleString(),
+                          clockTitle,
                         )}
                       >
                         {activityTimeRange(time(), clockText)}

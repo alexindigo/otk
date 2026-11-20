@@ -72,10 +72,10 @@ Deno.test("connection descriptions retain transport, agent link and error detail
   );
   assertEquals(connectionLabel(), "Disconnected");
   assertEquals(Object.values(CONNECTION_STATES).map((s) => s.shape), [
-    "✓",
-    "◌",
-    "↻",
-    "○",
-    "×",
+    "check",
+    "loading",
+    "retry",
+    "circle",
+    "cross",
   ]);
 });

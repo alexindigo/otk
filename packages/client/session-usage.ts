@@ -296,7 +296,7 @@ export function createSessionUsage(
             resource.again = true;
             return;
           }
-          throw new Error("Refreshing usage breakdown…");
+          throw new Error("Refreshing usage breakdown...");
         }
         if (
           value.sessionID !== target.sessionID ||
@@ -304,7 +304,7 @@ export function createSessionUsage(
             call.turnID !== target.turnID
           )
         ) throw new Error("Usage detail identity mismatch");
-        if (resource.overflow) throw new Error("Refreshing usage breakdown…");
+        if (resource.overflow) throw new Error("Refreshing usage breakdown...");
         const ledger = new UsageLedger(
           value.sessionID,
           value.calls,

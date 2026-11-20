@@ -35,7 +35,7 @@ export default function TaskTool(
     const value = derivedValue(result);
     if (!value) {
       return result?.state === "pending"
-        ? "Preparing progress\u2026"
+        ? "Preparing progress..."
         : "Progress unavailable";
     }
     if (props.call.status === "running" && value.current) {

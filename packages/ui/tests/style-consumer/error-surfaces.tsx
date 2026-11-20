@@ -162,6 +162,13 @@ export default function ErrorSurfaces() {
   onSettled(() => {
     if (surface !== "main") return;
     notifications.hub.publish({
+      id: "ordinary-review",
+      kind: "info",
+      title: "Project saved",
+      body: "The selected project name was saved",
+      actions: [],
+    });
+    notifications.hub.publish({
       id: "error-review",
       kind: "error",
       title: "Sending prompt failed",
@@ -274,6 +281,14 @@ export default function ErrorSurfaces() {
             </ComposerNotice>
             <Chips
               chips={[{
+                id: "readable-attachment",
+                label: "readable-notes.txt",
+                part: {
+                  kind: "file",
+                  source: "path",
+                  path: "/workspace/readable-notes.txt",
+                },
+              }, {
                 id: "attachment",
                 label: "unreadable-attachment.txt",
                 part: {

@@ -23,8 +23,8 @@ function TaskName(props: DialogProps) {
       title="Task name"
       submitLabel="Save task"
       pendingLabel={input.name === undefined
-        ? "Creating task…"
-        : "Renaming task…"}
+        ? "Creating task..."
+        : "Renaming task..."}
       onSubmit={async (data) => {
         await input.save(String(data.get("taskName")).trim());
         props.close();

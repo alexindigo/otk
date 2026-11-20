@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
   --tree-icon-size: var(--icon-compact);
-  --tree-indent: calc(19 * var(--otk-unit));
-  --tree-box-size: calc(9 * var(--otk-unit));
 }
 .otk-tree-node {
   min-inline-size: 0;
@@ -76,27 +74,23 @@
   place-self: center;
   display: grid;
   place-items: center;
+  grid-template-columns: 1fr;
   inline-size: var(--tree-box-size);
   block-size: var(--tree-box-size);
   padding: 0;
   border: 0;
   border-radius: 0;
   color: var(--otk-fg-3);
-  background: var(--otk-bg);
+  background: transparent;
 }
-.otk-tree-toggle svg {
+.otk-tree-toggle > .otk-disclosure-icon {
   inline-size: 100%;
   block-size: 100%;
-  color: var(--otk-fg-3);
-  shape-rendering: crispEdges;
-  stroke-width: 1px;
+  min-block-size: 0;
 }
-.otk-tree-toggle rect {
+/* Only tree junctions have guides passing behind the box to mask. */
+.otk-tree-toggle .otk-disclosure-icon rect {
   fill: var(--otk-bg);
-  stroke: currentColor;
-}
-.otk-tree-toggle path {
-  stroke: currentColor;
 }
 .otk-tree-label,
 .otk-tree-children {

@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+:root {
+  --tree-indent: calc(19 * var(--otk-unit));
+  --tree-box-size: calc(9 * var(--otk-unit));
+}
+.otk-disclosure-toggle {
+  display: grid;
+  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
+  align-items: center;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+  text-align: start;
+  color: var(--otk-fg-2);
+}
+.otk-disclosure-icon {
+  display: grid;
+  place-items: center;
+  justify-self: stretch;
+  min-block-size: var(--tree-height, var(--control-size));
+}
+.otk-disclosure-icon svg {
+  inline-size: var(--tree-box-size);
+  block-size: var(--tree-box-size);
+  color: var(--otk-fg-3);
+  shape-rendering: crispEdges;
+  stroke-width: 1px;
+}
+.otk-disclosure-icon rect {
+  fill: none;
+  stroke: currentColor;
+}
+.otk-disclosure-icon path {
+  stroke: currentColor;
+}

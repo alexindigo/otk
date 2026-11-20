@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ConnectionLight.css" with { type: "text" };
+import StateShape from "./StateShape.tsx";
 import {
   CONNECTION_STATES,
   type ConnectionInput,
@@ -28,9 +29,10 @@ export default function ConnectionLight(
       title={label()}
     >
       <span class="otk-connection-dot" aria-hidden="true" />
-      <span class="otk-connection-shape" aria-hidden="true">
-        {CONNECTION_STATES[state()].shape}
-      </span>
+      <StateShape
+        class="otk-connection-shape"
+        kind={CONNECTION_STATES[state()].shape}
+      />
     </span>
   );
 }

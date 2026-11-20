@@ -177,7 +177,13 @@ test.describe("work tree", () => {
     const root = page.locator(".otk-work-log > .otk-tree-node");
     await expect(root.locator(":scope > .otk-tree-heading .otk-tree-icon-art"))
       .toBeEmpty();
-    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-toggle");
+    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
+    await expect(root.locator(":scope > .otk-tree-heading [aria-expanded]"))
+      .toHaveCount(1);
+    await root.locator(":scope > .otk-tree-heading label.otk-tree-toggle")
+      .click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await toggle.press("ArrowLeft");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
@@ -339,7 +345,7 @@ test.describe("activity tree", () => {
     const run = span.locator(".otk-record-group");
     await expect(run).toHaveCount(1);
     const toggle = run.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-toggle",
+      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-control",
     );
     await toggle.focus();
     await page.keyboard.press("ArrowRight");

@@ -59,6 +59,7 @@ export function SectionHeader(props: {
         : `${props.label}, ${props.count}`);
   return (
     <TreeNode
+      toggleHeader={!props.compact || !!props.leading}
       class={["otk-section-tree", props.class].filter(Boolean).join(" ")}
       label={description()}
       open={props.open}
@@ -66,17 +67,19 @@ export function SectionHeader(props: {
       onOpen={props.onOpen}
       feedback={props.feedback}
       body={props.body}
-      header={() => (
+      header={(_connected, toggleID) => (
         <Show when={!props.compact || props.leading}>
           <button
+            id={toggleID}
             ref={native.ref}
             {...native.attributes}
             type="button"
-            class={["otk-section-header", props.headerClass]}
+            class={["otk-section-header otk-tree-control", props.headerClass]}
             aria-label={description()}
             title={description()}
             aria-expanded={props.open ? "true" : "false"}
-            onClick={() => props.onOpen(!props.open)}
+            onClick={() =>
+              props.onOpen(!props.open)}
           >
             {props.leading?.()}
             <Show when={!props.compact}>

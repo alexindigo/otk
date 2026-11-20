@@ -98,7 +98,7 @@ Deno.test("accepted send is not admitted or presented by RPC success, deadline o
   f.expire();
   const failed = f.owner.state.receipts[0].feedback;
   assert(failed?.failure);
-  assertEquals(failed.failure.target.label, "Captured session");
+  assertEquals(failed.failure.target, { label: "" });
   assert(failed.failure.reason.includes("not been observed"));
   assert(failed.failure.recovery?.includes("Do not send it again"));
   await f.owner.reload();
@@ -220,6 +220,12 @@ Deno.test("unacknowledged send has bounded visible failure; Retry observes witho
   const entry = f.projection.entry("msg_timeout")!.send!;
   assertEquals(entry.phase, "failed");
   assert(entry.feedback?.failure?.reason.includes("ten seconds"));
+  assertEquals(
+    entry.feedback?.failure?.heading,
+    "Checking whether sending prompt finished",
+  );
+  assertEquals(entry.feedback?.failure?.target, { label: "" });
+  assertEquals(entry.feedback?.kind, "pending");
   entry.feedback?.action?.run();
   assertEquals(
     f.projection.entry("msg_timeout")?.send?.phase,
@@ -286,6 +292,8 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
   assertEquals(entry.phase, "failed");
   assert(entry.feedback?.failure?.reason.includes("selected model"));
   assertEquals(entry.feedback?.failure?.reference, undefined);
+  assertEquals(entry.feedback?.failure?.heading, "Sending prompt failed");
+  assertEquals(entry.feedback?.failure?.target, { label: "" });
   entry.feedback?.action?.run();
   assertEquals(retries, 1);
   assertEquals(f.projection.state.replyIDs, ["send-key"]);

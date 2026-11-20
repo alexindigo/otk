@@ -14,7 +14,7 @@ export default function Login(
       <Form
         title={`Log in · ${props.label}`}
         submitLabel="Log in"
-        pendingLabel="Signing in…"
+        pendingLabel="Signing in..."
         onSubmit={(data) =>
           props.onLogin({
             username: String(data.get("username")),
