@@ -16,7 +16,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   const row = (directory: string) =>
     page.locator(`.otk-project-row[data-project=${JSON.stringify(directory)}]`);
   await page.goto(state.url);
-  // Archive is separate from manual Inactive; all mandatory lamps stay live.
+  // Archive is separate from manual Inactive; working/blocked rows stay live.
   const archive = page.locator(".otk-archived-toggle");
   await expect(archive).toHaveAttribute("aria-expanded", "false");
   const liveBounds = await row(one).boundingBox();
@@ -35,7 +35,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       canonical,
     );
     const rollup = await row(directory).getAttribute("data-rollup");
-    const live = rollup !== "none";
+    const live = rollup === "working" || rollup === "blocked";
     await expect(row(directory)).toHaveAttribute(
       "data-group",
       live ? "active" : "archived",
@@ -48,6 +48,10 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
     );
     await expect(row(directory).locator(".otk-project-availability"))
       .toHaveText("removed");
+    await expect(row(directory).locator(".otk-project-open"))
+      .toHaveAccessibleName(/\(removed\)$/);
+    await expect(row(directory).locator(".otk-project-open"))
+      .toHaveAttribute("title", /\(removed\)$/);
   }
   await row(one).locator(".otk-project-open").click();
   await expect(row(one + "/src")).toHaveCount(0);
@@ -116,19 +120,88 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await activity(state, "tstv1-worktree-1", "freeze");
   await expect(row(two)).toHaveAttribute("data-rollup", "blocked");
   await activity(state, "tstv1-worktree-1", "release");
-  // An unseen finish stays live in the rail and after reload, not in archive.
-  await expect(row(two)).toHaveAttribute("data-rollup", "finished");
-  await expect(row(two)).toHaveAttribute("data-group", "active");
+  // An unseen finish is archived, but its header lamp/count stay visible.
+  await expect(row(two)).toHaveCount(0);
+  await visibleOnScreen(
+    archive.locator(".otk-status-light[data-state=finished]"),
+  );
+  await expect(archive).toHaveAttribute("data-unseen-count", "1");
   await state.product("layout.patch", { leftCollapsed: false });
   await page.reload();
+  await expect(row(two)).toHaveCount(0);
+  await expect(archive).toHaveAttribute("aria-expanded", "false");
+  await visibleOnScreen(
+    archive.locator(".otk-status-light[data-state=finished]"),
+  );
+  await expect(archive.locator(".otk-archived-count")).toHaveText("(1)");
+  await expect(archive).toHaveAccessibleName(/1 unseen$/);
+  await expect(archive).toHaveAttribute("title", /1 unseen$/);
+  await expect(archive.locator(".otk-archived-unseen")).toHaveCount(0);
+  await archive.click();
   await expect(row(two)).toHaveAttribute("data-rollup", "finished");
-  await expect(row(two)).toHaveAttribute("data-group", "active");
+  await expect(row(two)).toHaveAttribute("data-group", "archived");
   await visibleOnScreen(
     row(two).locator(".otk-status-light[data-state=finished]"),
   );
+  for (
+    const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
+      "otk-light-stone",
+      "stone",
+    ]]
+  ) {
+    await state.product("prefs.set", { key: "theme", value: theme });
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    const alignment = await archive.evaluate((element) => {
+      const selectors = [
+        ".otk-status-light",
+        ".otk-control-label",
+        ".otk-archived-count",
+      ];
+      return selectors.map((selector) => {
+        const box = element.querySelector(selector)!.getBoundingClientRect();
+        return box.y + box.height / 2;
+      });
+    });
+    expect(Math.max(...alignment) - Math.min(...alignment)).toBeLessThanOrEqual(
+      1,
+    );
+    const nesting = await page.evaluate(({ one, two }) => {
+      const live = document.querySelector(
+        `.otk-project-row[data-project="${one}"] .otk-status-light`,
+      )!.getBoundingClientRect();
+      const header = document.querySelector(
+        ".otk-archived-toggle .otk-status-light",
+      )!.getBoundingClientRect();
+      const archived = document.querySelector(
+        `.otk-project-row[data-project="${two}"] .otk-status-light`,
+      )!.getBoundingClientRect();
+      const toggle = document.querySelector(".otk-archived-toggle")!
+        .getBoundingClientRect();
+      const count = document.querySelector(".otk-archived-count")!
+        .getBoundingClientRect();
+      return {
+        live: live.x + live.width / 2,
+        header: header.x + header.width / 2,
+        archived: archived.x + archived.width / 2,
+        countRight: count.right,
+        headerRight: toggle.right,
+      };
+    }, { one, two });
+    expect(Math.abs(nesting.live - nesting.header)).toBeLessThanOrEqual(1);
+    expect(nesting.archived).toBeGreaterThan(nesting.header);
+    expect(nesting.countRight).toBeLessThanOrEqual(nesting.headerRight);
+    await page.screenshot({
+      path: info.outputPath(`wp13-${label}-archive.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
   await row(two).locator(".otk-project-open").click();
-  await expect(row(two)).toHaveCount(0);
-  await archive.click();
   await expect(row(two)).toHaveAttribute("data-group", "archived");
   await expect(row(two)).toHaveAttribute("data-rollup", "none");
+  await expect(archive).toHaveAccessibleName(/0 unseen$/);
+  await expect(archive.locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "none",
+  );
 });

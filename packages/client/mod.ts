@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export * from "./project-editor.ts";
+export * from "./project-placement.ts";
 export { supervisionStatus } from "./inbox.ts";
 export {
   type EntityFact,
@@ -44,7 +45,7 @@ export * from "./state.ts";
 export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
-export { projectGroup } from "./inbox.ts";
+export { archiveAttention, projectGroup } from "./inbox.ts";
 export {
   createTranscript,
   type TranscriptOwner,
