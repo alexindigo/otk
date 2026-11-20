@@ -2,6 +2,7 @@
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { surface } from "../../themes/overlays.ts";
+import { assertCrumbCoverage } from "../../pages/crumbs.ts";
 
 test.use({ profile: "contract-themes" });
 test("menus.folded-menu-unpainted-focus-boundary", {
@@ -51,4 +52,12 @@ test("menus.folded-menu-unpainted-focus-boundary", {
     body: JSON.stringify(observations),
     contentType: "application/json",
   });
+});
+
+test("menus.crumb-coverage-rejects-an-omitted-ancestor", {
+  tag: ["@menus", "@contracts"],
+}, () => {
+  assertCrumbCoverage(["root", "selected"], ["selected"], ["root"]);
+  expect(() => assertCrumbCoverage(["root", "selected"], ["selected"], []))
+    .toThrow();
 });

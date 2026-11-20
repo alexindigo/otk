@@ -471,6 +471,11 @@ export async function surfaces(
         await allMarks(cdp, ".otk-project-sessions [data-otk-selection]", 10);
         await allMarks(cdp, ".otk-project-tabs [data-otk-selection]", 3);
         await allMarks(cdp, ".otk-panel-icons [data-otk-selection]", 1);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "hold",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 800, height: 900 });
         await page.locator(".otk-folded-crumbs > button").click();
         await surface(page);
@@ -482,6 +487,11 @@ export async function surfaces(
         );
         await shot(`selection-more-${reduced}-${theme.id}`);
         await close(page);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "release",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 1280, height: 900 });
         await page.keyboard.press("Control+k");
         await allMarks(cdp, ".otk-palette-list [data-otk-selection]", 5);
