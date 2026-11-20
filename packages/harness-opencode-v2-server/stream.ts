@@ -3,6 +3,7 @@ import type { DiscoveredService } from "./discovery.ts";
 import { serviceHeaders } from "./discovery.ts";
 import { V2Client } from "./client.ts";
 import { OperationFailure } from "@otk/protocol";
+import type { EventDispatchPressure } from "@otk/harness";
 
 export const V2_SILENCE_MS = 45_000;
 export interface V2Event {
@@ -60,6 +61,7 @@ export interface StreamPorts {
   connected(client: V2Client, generation: number): void;
   disconnected(generation: number): void;
   diagnostic(error: unknown): void;
+  dispatch?(pressure: EventDispatchPressure): void;
 }
 /** Adapter-owned SSE consumer. No SDK queue, replay fiction or service lifecycle. */
 export class V2Stream {
@@ -69,6 +71,15 @@ export class V2Stream {
   #ready?: PromiseWithResolvers<void>;
   #client?: V2Client;
   #generation = 0;
+  #connection?: AbortController;
+  #pressure?: () => EventDispatchPressure;
+  get pressure(): EventDispatchPressure | undefined {
+    return this.#pressure?.();
+  }
+  /** Background projection failures retire the same generation as handler errors. */
+  reconnect(error: unknown): void {
+    this.#connection?.abort(error);
+  }
   constructor(
     readonly ports: StreamPorts,
     readonly policy: {
@@ -119,6 +130,7 @@ export class V2Stream {
     while (!signal.aborted) {
       const generation = ++this.#generation;
       const owner = new AbortController();
+      this.#connection = owner;
       const current = AbortSignal.any([signal, owner.signal]);
       let client: V2Client | undefined;
       try {
@@ -150,6 +162,7 @@ export class V2Stream {
         if (!signal.aborted) this.ports.diagnostic(error);
       } finally {
         owner.abort();
+        if (this.#connection === owner) this.#connection = undefined;
         this.#client = undefined;
         this.ports.disconnected(generation);
         await client?.join();
@@ -193,7 +206,44 @@ export class V2Stream {
     let queuedBytes = 0;
     const seen = new Set<string>();
     const sequences = new Map<string, number>();
-    const apply = async (event: V2Event) => {
+    const backlog = new Map<
+      number,
+      { event: V2Event; bytes: number; at: number }
+    >();
+    let next = 0, backlogBytes = 0, received = 0, handled = 0;
+    let active: { event: V2Event; at: number; started: number } | undefined;
+    let admitting: { bytes: number; at: number } | undefined;
+    let nativeLagMs = 0,
+      maxNativeLagMs = 0,
+      handlerMs = 0,
+      backpressured = false;
+    let dispatch: Promise<void> | undefined;
+    const capacity = new Set<() => void>();
+    const pressure = () => ({
+      generation,
+      received,
+      handled,
+      queued: queue.length + backlog.size + (admitting ? 1 : 0),
+      queuedBytes: queuedBytes + backlogBytes + (admitting?.bytes ?? 0),
+      oldestAgeMs: active
+        ? Date.now() - active.at
+        : backlog.size
+        ? Date.now() - backlog.values().next().value!.at
+        : 0,
+      nativeLagMs: active?.event.created === undefined
+        ? nativeLagMs
+        : Math.max(0, Date.now() - active.event.created),
+      maxNativeLagMs,
+      handlerMs: active ? performance.now() - active.started : handlerMs,
+      activeType: active?.event.type,
+      backpressured,
+    });
+    this.#pressure = pressure;
+    const report = () => this.ports.dispatch?.(pressure());
+    const reporting = this.ports.dispatch
+      ? setInterval(report, 1000)
+      : undefined;
+    const process = async (event: V2Event) => {
       signal.throwIfAborted();
       if (event.id && seen.has(event.id)) return;
       const aggregate = event.durable?.aggregateID;
@@ -216,6 +266,72 @@ export class V2Stream {
         // Bounded dedupe window, not an unbounded event history.
         if (seen.size > 4096) seen.delete(seen.values().next().value!);
       }
+    };
+    const apply = async (event: V2Event, at = Date.now()) => {
+      const started = performance.now();
+      active = { event, at, started };
+      if (event.created !== undefined) {
+        nativeLagMs = Math.max(0, Date.now() - event.created);
+        maxNativeLagMs = Math.max(maxNativeLagMs, nativeLagMs);
+      }
+      try {
+        await process(event);
+        handled++;
+      } finally {
+        handlerMs = performance.now() - started;
+        active = undefined;
+      }
+    };
+    const kick = () => {
+      if (dispatch) return;
+      dispatch = (async () => {
+        while (backlog.size) {
+          signal.throwIfAborted();
+          const [key, work] = backlog.entries().next().value!;
+          backlog.delete(key);
+          backlogBytes -= work.bytes;
+          for (const wake of capacity) wake();
+          capacity.clear();
+          await apply(work.event, work.at);
+        }
+      })().catch((error) => owner.abort(error)).finally(() => {
+        dispatch = undefined;
+        for (const wake of capacity) wake();
+        capacity.clear();
+        if (!signal.aborted && backlog.size) kick();
+      });
+    };
+    const enqueue = async (event: V2Event) => {
+      const bytes = new TextEncoder().encode(JSON.stringify(event)).byteLength;
+      const at = Date.now();
+      admitting = { bytes, at };
+      while (
+        backlog.size >= this.policy.replayops ||
+        (backlog.size > 0 && backlogBytes + bytes > this.policy.replaybytes)
+      ) {
+        backpressured = true;
+        pause();
+        try {
+          await new Promise<void>((resolve) => {
+            const done = () => {
+              capacity.delete(done);
+              signal.removeEventListener("abort", done);
+              resolve();
+            };
+            capacity.add(done);
+            signal.addEventListener("abort", done, { once: true });
+            if (signal.aborted) done();
+          });
+          signal.throwIfAborted();
+        } finally {
+          backpressured = false;
+          touch();
+        }
+      }
+      backlog.set(++next, { event, bytes, at });
+      admitting = undefined;
+      backlogBytes += bytes;
+      kick();
     };
     const accept = async (raw: string) => {
       let value: unknown;
@@ -251,13 +367,9 @@ export class V2Stream {
         return;
       }
       if (!bootstrap) return;
+      received++;
       if (booted) {
-        pause();
-        try {
-          await apply(event);
-        } finally {
-          touch();
-        }
+        await enqueue(event);
         return;
       }
       const size = new TextEncoder().encode(JSON.stringify(event)).byteLength;
@@ -370,14 +482,21 @@ export class V2Stream {
         }
         if (start < text.length) fragments.push(text.slice(start));
       }
+      signal.throwIfAborted();
     } finally {
       owner.abort();
       pause();
+      clearInterval(reporting);
       signal.removeEventListener("abort", cancelBody);
       await cancelReader?.();
       await nextRead?.catch(() => {});
       reader?.releaseLock();
       await bootstrap?.catch(() => {});
+      await dispatch;
+      backlog.clear();
+      backlogBytes = 0;
+      report();
+      if (this.#pressure === pressure) this.#pressure = undefined;
     }
   }
 }

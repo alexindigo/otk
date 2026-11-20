@@ -4,6 +4,7 @@ import type { DigestPressure } from "./digest/protocol.ts";
 export type SectionObserver = (name: string, elapsedMs: number) => void;
 export interface ServingDiagnostics {
   section: SectionObserver;
+  dispatch?(value: import("@otk/harness").EventDispatchPressure): void;
   admission?(): void;
   pressure?(value: DigestPressure): void;
 }
