@@ -2,6 +2,7 @@
 import {
   type ClockedContent,
   type ContentClock,
+  ContentDeliveryDiagnostics,
   type ContentOp,
   isAttentionOp,
   type MessagePolicy,
@@ -19,6 +20,8 @@ interface Session {
 }
 /** Bounded event-aligned capture only: no native reader, bodies cache or timers. */
 export class ContentReplay {
+  readonly delivery: ContentDeliveryDiagnostics =
+    new ContentDeliveryDiagnostics("native");
   #sessions = new Map<string, Session>();
   #generation = 0;
   #revisions = new Map<string, number>();
@@ -90,6 +93,13 @@ export class ContentReplay {
         }
       }
     }
+    this.delivery.record({
+      sessionID: id,
+      operation: event.op,
+      clock,
+      state: "emitted",
+      ...(event.op === "message.upsert" ? { messageID: event.message.id } : {}),
+    });
     this.options.emit(id, event, clock);
     return { ...clock };
   }
