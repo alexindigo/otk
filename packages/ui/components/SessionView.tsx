@@ -409,6 +409,14 @@ export default function SessionView(props: {
         if (props.retryState) setNow(Date.now());
       }, 1000);
       following = followViewport(list, flow);
+      let sendRevision = sessionPorts?.delivery?.state.follow;
+      const releaseSends = sessionPorts?.delivery?.subscribe(() => {
+        const next = sessionPorts.delivery?.state.follow;
+        if (next === sendRevision) return;
+        sendRevision = next;
+        props.transcript?.interaction.anchor(null);
+        following?.reset();
+      });
       publishHistory();
       setGeometry(following.snapshot());
       const releaseGeometry = following.subscribeSnapshot(setGeometry);
@@ -456,6 +464,7 @@ export default function SessionView(props: {
       return () => {
         clearInterval(clock);
         releaseGeometry();
+        releaseSends?.();
         following?.dispose();
         source?.dispose();
         source = undefined;
