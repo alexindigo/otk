@@ -20,6 +20,7 @@ import type { DigestsRpcMethods } from "./capabilities/digests.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { CatalogRpcMethods } from "./catalogs.ts";
 import type { FormsRpcMethods } from "./forms.ts";
+import type { TerminalRpcMethods } from "./terminals.ts";
 import type {
   HistoryAttachment,
   HistoryAttachmentRef,
@@ -204,6 +205,7 @@ export interface RpcMethods
     DigestsRpcMethods,
     ApprovalRpcMethods,
     CatalogRpcMethods,
+    TerminalRpcMethods,
     FormsRpcMethods {
   "session.get": {
     params: { sessionID: string };

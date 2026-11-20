@@ -66,6 +66,10 @@ import {
   registerCatalogs,
 } from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
+import { TerminalHost } from "./core/terminals/host.ts";
+import { TerminalMux } from "./core/terminals/mux.ts";
+import { terminalDataDirectory } from "./core/terminals/env.ts";
+import { registerTerminals } from "./core/features/terminals.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export async function startApplication(
@@ -83,8 +87,12 @@ export async function startApplication(
     diagnostic?: DiagnosticSink;
     signal?: AbortSignal;
     sources?: readonly FrameSource[];
+    environment?: Readonly<Record<string, string>>;
   } = {},
 ): Promise<CoreServer> {
+  const environment = Object.freeze({
+    ...options.environment ?? Deno.env.toObject(),
+  });
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     frecencyMigrations,
@@ -100,6 +108,9 @@ export async function startApplication(
     pluginStorageMigrations,
   ], cfg.storage);
   const sources: FrameSource[] = [...options.sources ?? []];
+  let terminals: TerminalHost | undefined;
+  let terminalSockets: TerminalMux | undefined;
+  let coreOwnsResources = false;
   try {
     options.signal?.throwIfAborted();
     await options.upgrade?.(store);
@@ -217,7 +228,17 @@ export async function startApplication(
       );
     }
     registerRevert(rpc, backend);
-    return startCore({
+    terminals = await TerminalHost.start({
+      statePath: cfg.state.path,
+      dataDir: terminalDataDirectory(environment),
+      environment,
+      signal: options.signal ?? new AbortController().signal,
+    });
+    registerTerminals(rpc, terminals);
+    terminalSockets = new TerminalMux(terminals);
+    // startCore assumes ownership of sources/storage, including failed startup.
+    coreOwnsResources = true;
+    const core = await startCore({
       cfg,
       backend,
       store,
@@ -230,20 +251,56 @@ export async function startApplication(
       diagnostic: options.diagnostic,
       signal: options.signal,
       requested: options.requested,
+      terminals: terminalSockets,
     });
+    let stopping: Promise<void> | undefined;
+    return {
+      ...core,
+      stop: () =>
+        stopping ??= (async () => {
+          const failures: unknown[] = [];
+          for (
+            const release of [
+              () => terminalSockets!.stop(),
+              () => core.stop(),
+              () => terminals!.stop(),
+            ]
+          ) {
+            try {
+              await release();
+            } catch (cause) {
+              failures.push(cause);
+            }
+          }
+          if (failures.length) {
+            throw new AggregateError(failures, "Application cleanup failed");
+          }
+        })(),
+    };
   } catch (error) {
     const failures: unknown[] = [error];
-    for (const source of sources.reverse()) {
+    for (
+      const release of [() => terminalSockets?.stop(), () => terminals?.stop()]
+    ) {
       try {
-        source.close?.();
+        await release();
       } catch (failure) {
         failures.push(failure);
       }
     }
-    try {
-      store.close();
-    } catch (failure) {
-      failures.push(failure);
+    if (!coreOwnsResources) {
+      for (const source of sources.reverse()) {
+        try {
+          source.close?.();
+        } catch (failure) {
+          failures.push(failure);
+        }
+      }
+      try {
+        store.close();
+      } catch (failure) {
+        failures.push(failure);
+      }
     }
     if (failures.length > 1) {
       throw new AggregateError(failures, "Application composition failed", {

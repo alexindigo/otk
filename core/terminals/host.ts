@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAbsolute, join } from "@std/path";
 import { embeddedPtyBinary, resolvePtyBinary } from "./binary.ts";
-import { PtyDaemon, readHandoff } from "./daemon.ts";
+import { DaemonResponseError, PtyDaemon, readHandoff } from "./daemon.ts";
 import { hasSystemd, shellEnvironment, shellProgram } from "./env.ts";
 import type { ProcessInfo } from "./frames.ts";
 
@@ -9,6 +9,17 @@ export class TerminalUnavailable extends Error {
   readonly code = "terminal-unavailable";
   constructor(cause?: unknown) {
     super("Terminal service unavailable", { cause });
+  }
+}
+/** Only host operations proven not to have taken effect use this result. */
+export class TerminalRejected extends Error {
+  constructor(readonly code: string, cause?: unknown) {
+    super(
+      code === "not-found"
+        ? "Terminal not found"
+        : "Terminal operation rejected",
+      { cause },
+    );
   }
 }
 export interface TerminalHostOptions {
@@ -103,14 +114,22 @@ export class TerminalHost {
     cols: number,
     rows: number,
   ): Promise<ProcessInfo> {
+    return await (await this.prepareCreate(sessionID, cwd, cols, rows))();
+  }
+  async prepareCreate(
+    sessionID: string,
+    cwd: string,
+    cols: number,
+    rows: number,
+  ): Promise<() => Promise<ProcessInfo>> {
     if (!isAbsolute(cwd)) {
       throw new Error("Terminal working directory must be absolute");
     }
     const program = await shellProgram(this.#environment);
     const daemon = await this.daemon();
     if (this.#stopped) throw new TerminalUnavailable();
-    const reply = await daemon.request({
-      op: "create_pty",
+    const request = {
+      op: "create_pty" as const,
       program,
       args: ["-l"],
       cwd,
@@ -119,17 +138,48 @@ export class TerminalHost {
       env: shellEnvironment(this.#environment),
       group_id: sessionID,
       title: program.split("/").at(-1) || "Shell",
-    });
-    if (reply.type !== "created") throw new Error("Expected created terminal");
-    return reply.process;
+    };
+    return async () => {
+      if (this.#stopped) throw new TerminalUnavailable();
+      let reply;
+      try {
+        reply = await daemon.request(request);
+      } catch (cause) {
+        // Protocol 8 also reports errors after spawning (reader/actor setup).
+        // Only openpty/spawn failures prove that no shell was started.
+        // Unqualified shell names can collide with the daemon's thread setup
+        // contexts ("failed to spawn terminal writer/reader/actor/child waiter").
+        if (
+          cause instanceof DaemonResponseError &&
+          (cause.message.startsWith("failed to open PTY:") ||
+            (cause.message.startsWith(`failed to spawn ${program}:`) &&
+              !cause.message.startsWith("failed to spawn terminal ")))
+        ) {
+          throw new TerminalRejected("terminal-spawn-failed", cause);
+        }
+        throw cause;
+      }
+      if (reply.type !== "created") {
+        throw new Error("Expected created terminal");
+      }
+      return reply.process;
+    };
   }
   async close(sessionID: string, id: number): Promise<void> {
     const daemon = await this.daemon();
-    const reply = await daemon.request({ op: "get", id });
-    if (reply.type !== "process" || reply.process.group_id !== sessionID) {
-      throw new Error("Terminal not found");
+    try {
+      const reply = await daemon.request({ op: "get", id });
+      if (reply.type !== "process" || reply.process.group_id !== sessionID) {
+        throw new TerminalRejected("not-found");
+      }
+      await daemon.request({ op: "terminate", id });
+    } catch (cause) {
+      if (
+        cause instanceof DaemonResponseError &&
+        cause.message === `process ${id} not found`
+      ) throw new TerminalRejected("not-found", cause);
+      throw cause;
     }
-    await daemon.request({ op: "terminate", id });
   }
   stop(): Promise<void> {
     this.#stopped = true;

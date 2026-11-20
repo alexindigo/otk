@@ -18,6 +18,7 @@ import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
 import { BootstrapRequests } from "./http/bootstrap.ts";
 import { clientRequestPolicy } from "./config/schema.ts";
+import type { TerminalSockets } from "./terminals/mux.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -32,6 +33,7 @@ export interface CoreOptions {
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
   requested?: () => void;
+  terminals?: TerminalSockets;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -172,6 +174,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       backend,
       connections: transport,
       staticRoot,
+      terminals: options.terminals,
     });
     check();
     return {
