@@ -372,7 +372,8 @@ Deno.test({
         rows.some((m) => {
           const p = part(m);
           return p?.kind === "external" &&
-            p.activity?.title === "Explore failed" &&
+            p.activity?.title === "failed" &&
+            p.activity.entity?.label === "Explore" && // WP2: entity and outcome are separate.
             JSON.stringify(p.activity.body).includes(
               "The usage limit has been reached",
             );

@@ -27,29 +27,34 @@ test.describe("neutral backend facts", () => {
       await page.locator("[data-tool=external] .otk-tool-toggle").click();
       await expect(page.locator("[data-tool=external] .otk-tool-toggle"))
         .toHaveAttribute("aria-expanded", "true");
-      await page.locator(".otk-message-agent").hover();
+      await page.locator(".otk-reply-start .otk-entity-pill").hover();
       const observed = await page.evaluate(() => {
         const probe = document.createElement("span");
         probe.style.color = "var(--accent)";
         document.body.append(probe);
         const accent = getComputedStyle(probe).color;
+        probe.style.color = "var(--otk-fg)";
+        const foreground = getComputedStyle(probe).color;
         probe.remove();
         return {
           task: document.querySelector("[data-tool=task] .otk-tool-target")
             ?.textContent,
           notice: document.querySelector("[data-tool=external] small")
             ?.textContent,
-          reply: getComputedStyle(document.querySelector(".otk-message-agent")!)
+          reply: getComputedStyle(
+            document.querySelector(".otk-reply-start .otk-entity-pill")!,
+          )
             .color,
           trigger: getComputedStyle(
             document.querySelector(".otk-agent-picker > button")!,
           ).color,
           accent,
+          foreground,
         };
       });
       expect(observed.task).toBe("Unknown agent");
       expect(observed.notice).toBe("Output truncated.");
-      expect(observed.reply).toBe(observed.accent);
+      expect(observed.reply).toBe(observed.foreground); // WP2 neutral entity surface.
       expect(observed.trigger).toBe(observed.accent);
       await page.locator(".otk-agent-picker > button").click();
       await expect(

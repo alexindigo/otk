@@ -424,6 +424,16 @@ export async function messagesScenario(profile: Profile) {
             outputTruncated: true,
           },
         },
+        // FX40/WP2: reply identity is attached to actual prose, not work-only sources.
+        {
+          id: "facts-reply",
+          kind: "text",
+          synthetic: false,
+          blocks: [{
+            b: "paragraph",
+            inline: [{ i: "text", text: "Backend-owned reply." }],
+          }],
+        },
       ],
     }];
   } else if (profile === "contract-messages-metadata") {

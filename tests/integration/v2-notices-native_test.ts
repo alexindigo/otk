@@ -842,15 +842,15 @@ Deno.test({
           target.id,
         );
       await native.prompt(target.id, "Delegate, then report result");
+      // WP2: preserve both facts without joining the entity into the title.
+      const failed = (m: Message) => {
+        const p = record(m);
+        return p?.kind === "external" && p.activity?.title === "failed" &&
+          p.activity.entity?.label === "Explore";
+      };
       const rows = await waitFor(() => projection.messages(), (rows) =>
-        rows.some((m) => {
-          const p = record(m);
-          return p?.kind === "external" &&
-            p.activity?.title === "Explore failed";
-        }), 30000);
-      const notice = rows.map(record).find((p) =>
-        p?.kind === "external" && p.activity?.title === "Explore failed"
-      );
+        rows.some(failed), 30000);
+      const notice = record(rows.find(failed)!);
       assert(notice?.kind === "external" && notice.activity?.tone === "error");
       assert(notice.activity.child?.sessionID);
       assert(
@@ -863,9 +863,7 @@ Deno.test({
         m.role === "assistant" &&
         m.error?.message.includes("The usage limit has been reached")
       ));
-      assert(snapshot.items.some((m) =>
-        JSON.stringify(record(m) ?? {}).includes("Explore failed")
-      ));
+      assert(snapshot.items.some(failed));
       native.proxy.freeze();
       try {
         native.proxy.disconnect();
@@ -873,9 +871,7 @@ Deno.test({
           Promise.resolve(connections.at(-1)), (state) =>
           state === "reconnecting");
         assert(
-          projection.messages().some((m) =>
-            JSON.stringify(record(m) ?? {}).includes("Explore failed")
-          ),
+          projection.messages().some(failed),
           "the retained notice survives the disconnected generation",
         );
       } finally {
@@ -888,8 +884,6 @@ Deno.test({
             state === "connected"
           ).length >= 2);
       const after = await adapter.core.listMessages(target.id, {});
-      assert(after.items.some((m) =>
-        JSON.stringify(record(m) ?? {}).includes("Explore failed")
-      ));
+      assert(after.items.some(failed));
     }),
 });

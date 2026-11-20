@@ -46,8 +46,8 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
     delay: 1000,
   });
   await prompt(page, "Show timestamp behavior");
-  const time = page.locator(".otk-last-output-time"),
-    date = page.locator(".otk-last-output-date");
+  // WP2: reply identity owns its live clock and full localized timestamp.
+  const time = page.locator(".otk-reply-start > time");
   await expect(time).toBeAttached();
   await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
     "first output",
@@ -87,46 +87,47 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await expect.poll(() =>
     time.getAttribute("datetime").then((s) => Date.parse(s!))
   ).toBe(expected);
-  await expect(date).toHaveCSS("visibility", "hidden");
   const before = await time.boundingBox();
   await time.hover();
-  await expect(date).toHaveCSS("visibility", "visible");
   const geometry = await page.evaluate(() => {
-    const date = document.querySelector(".otk-last-output-date")!,
-      time = document.querySelector<HTMLTimeElement>(".otk-last-output-time")!,
-      d = date.getBoundingClientRect(),
+    const header = document.querySelector(".otk-reply-start")!,
+      time = header.querySelector<HTMLTimeElement>(":scope > time")!,
+      agent = header.querySelector(".otk-entity-pill")!,
+      h = header.getBoundingClientRect(),
+      a = agent.getBoundingClientRect(),
       t = time.getBoundingClientRect();
     return {
-      dateRight: d.right,
       timeLeft: t.left,
       timeRight: t.right,
-      dateCenter: d.y + d.height / 2,
+      headerRight: h.right,
+      agentRight: a.right,
+      agentCenter: a.y + a.height / 2,
       timeCenter: t.y + t.height / 2,
-      date: date.textContent!.trim(),
-      expected: new Date(time.dateTime).toLocaleDateString(),
+      title: time.title,
+      expected: new Date(time.dateTime).toLocaleString(),
+      color: getComputedStyle(time).color,
+      headerColor: getComputedStyle(header).color,
     };
   });
-  expect(geometry.date).toBe(geometry.expected);
-  expect(geometry.dateRight).toBeLessThan(geometry.timeLeft);
-  expect(Math.abs(geometry.dateCenter - geometry.timeCenter)).toBeLessThan(.5);
+  expect(geometry.title).toBe(geometry.expected);
+  expect(geometry.agentRight).toBeLessThan(geometry.timeLeft);
+  expect(Math.abs(geometry.agentCenter - geometry.timeCenter)).toBeLessThan(.5);
+  expect(Math.abs(geometry.headerRight - geometry.timeRight)).toBeLessThan(.5);
+  expect(geometry.color).toBe(geometry.headerColor);
   expect(Math.abs(geometry.timeLeft - before!.x)).toBeLessThan(.5);
   expect(Math.abs(geometry.timeRight - before!.x - before!.width)).toBeLessThan(
     .5,
   );
   await page.mouse.move(10, 10);
-  await expect(date).toHaveCSS("visibility", "hidden");
-  for (const role of ["user", "assistant"]) {
+  for (const role of ["user"]) {
     const created = page.locator(`[data-role=${role}] .otk-created-time`);
     await expect(created).toHaveCSS("visibility", "hidden");
-    await page.locator(`[data-role=${role}] .otk-created-trigger`).hover();
+    await page.locator(`[data-role=${role}] .otk-user-bubble`).hover();
     await expect(created).toHaveCSS("visibility", "visible");
     await page.mouse.move(10, 10);
     await expect(created).toHaveCSS("visibility", "hidden");
   }
   const style = await page.evaluate(() => {
-    const footer = document.querySelector(".otk-message-footer")!,
-      t = footer.querySelector(".otk-last-output-time")!,
-      d = footer.querySelector(".otk-message-details")!;
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 1;
     const ctx = canvas.getContext("2d")!;
@@ -148,22 +149,22 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
       );
     };
     return {
-      footerRight: footer.getBoundingClientRect().right,
-      timeRight: t.getBoundingClientRect().right,
-      detailsRight: d.getBoundingClientRect().right,
-      timeLeft: t.getBoundingClientRect().left,
-      footerColor: getComputedStyle(footer).color,
-      timeColor: getComputedStyle(t).color,
-      roleInk: color(document.querySelector(".otk-created-trigger")!),
+      roleInk: color(document.querySelector(".otk-user-bubble")!),
       createdInk: color(document.querySelector(".otk-created-time")!),
     };
   });
-  expect(Math.abs(style.footerRight - style.timeRight)).toBeLessThan(.5);
-  expect(style.detailsRight).toBeLessThan(style.timeLeft);
-  expect(style.footerColor).toBe(style.timeColor);
   expect(style.createdInk).toBeLessThan(style.roleInk);
-  await page.locator("[data-role=assistant] .otk-created-trigger").click();
-  await page.keyboard.press("Tab");
+  const agent = page.locator(".otk-reply-start .otk-entity-pill");
+  await agent.focus();
+  await expect(page.locator(".otk-entity :popover-open")).toContainText(
+    "This reply",
+  );
+  await expect(page.locator(".otk-entity :popover-open")).toContainText(
+    "Completed",
+  );
+  await page.keyboard.press("Escape");
+  await expect(agent).toBeFocused();
+  await page.locator(".otk-turn-usage > button").focus();
   await expect(page.locator(".otk-turn-usage > button")).toBeFocused();
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   await page.keyboard.press("Tab");
@@ -176,17 +177,13 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
     const selector of [
       '[data-message-command="reply.fork"]',
       ".otk-copy-message",
-      ".otk-last-output-time",
     ]
   ) {
     await page.keyboard.press("Tab");
     await expect(page.locator(selector)).toBeFocused();
   }
-  await expect(date).toHaveCSS("visibility", "visible");
-  for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+Tab");
-  await expect(page.locator("[data-role=assistant] .otk-created-trigger"))
-    .toBeFocused();
-  await expect(page.locator("[data-role=assistant] .otk-created-time"))
+  await page.locator(".otk-user-bubble").focus();
+  await expect(page.locator("[data-role=user] .otk-created-time"))
     .toHaveCSS("visibility", "visible");
   await page.locator(".otk-display-menu > button").click();
   await expect(page.locator(".otk-display-menu")).toContainText(
@@ -196,7 +193,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await page.mouse.move(10, 10);
   await expect.poll(() =>
     page.locator(".otk-created-time").evaluateAll((rows) =>
-      rows.length === 2 &&
+      rows.length === 1 &&
       rows.every((e) => getComputedStyle(e).visibility === "visible")
     )
   ).toBe(true);
@@ -205,7 +202,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await expect(time).toHaveAttribute("datetime", completed!);
   await expect.poll(() =>
     page.locator(".otk-created-time").evaluateAll((rows) =>
-      rows.length === 2 &&
+      rows.length === 1 &&
       rows.every((e) => getComputedStyle(e).visibility === "visible")
     )
   ).toBe(true);

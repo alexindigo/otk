@@ -201,7 +201,23 @@ test(
     // Native reverse/forward Tab travel reaches the visible named control.
     await jump.focus();
     await page.keyboard.press("Shift+Tab");
+    await info.attach("jump-reverse-tab", {
+      body: JSON.stringify(
+        await page.evaluate(() => ({
+          active: document.activeElement?.outerHTML,
+          scrollTop: document.querySelector(".otk-messages")?.scrollTop,
+          jump: document.querySelector(".otk-jump-slot")?.outerHTML,
+        })),
+      ),
+      contentType: "application/json",
+    });
     await expect(jump).not.toBeFocused();
+    // WP2: reverse Tab can focus a reply identity and open its independent
+    // preview. Close that card before continuing the surrounding tab order.
+    if (await page.locator(".otk-entity :popover-open").count()) {
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".otk-entity :popover-open")).toHaveCount(0);
+    }
     await page.keyboard.press("Tab");
     await expect(jump).toBeFocused();
     await page.keyboard.press("Enter");

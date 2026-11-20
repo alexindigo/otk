@@ -83,13 +83,16 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   );
   for (
     const value of [
-      "build",
       "test/reported-model",
       "6.0s",
       "interrupted",
       "76 tokens · $0.25",
     ]
   ) await expect(page.locator(".otk-message-footer")).toContainText(value);
+  await expect(page.locator(".otk-reply-start .otk-entity-pill")).toHaveText([
+    "build",
+    "build",
+  ]);
   await page.locator(".otk-turn-usage > button").focus();
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   await expect(page.locator(".otk-usage-breakdown tfoot tr")).toBeAttached();
@@ -152,41 +155,24 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  expect(
-    await page.evaluate(() =>
-      getComputedStyle(
-        document.querySelector(".otk-work-fold .otk-divider-label")!,
-      ).font ===
-        getComputedStyle(document.querySelector(".otk-work-fold")!).font
-    ),
-  ).toBe(true);
-  const rule = await page.locator(".otk-work-fold .otk-divider-rule").evaluate(
-    (e) => {
-      const s = getComputedStyle(e), canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 1;
-      const c = canvas.getContext("2d")!,
-        rgb = (color: string) => {
-          c.clearRect(0, 0, 1, 1);
-          c.fillStyle =
-            getComputedStyle(document.documentElement).backgroundColor;
-          c.fillRect(0, 0, 1, 1);
-          c.fillStyle = color;
-          c.fillRect(0, 0, 1, 1);
-          return Array.from(c.getImageData(0, 0, 1, 1).data).slice(0, 3);
-        },
-        bg = rgb("transparent"),
-        distance = (a: number[]) =>
-          a.reduce((n, v, i) => n + Math.abs(v - bg[i]), 0);
-      return {
-        width: s.borderTopWidth,
-        style: s.borderTopStyle,
-        ratio: distance(rgb(s.borderTopColor)) / distance(rgb(s.color)),
-      };
-    },
+  // FX40/WP1 replaced divider rails with a real disclosure chevron.
+  await revealAcquired(page, ".otk-work-fold");
+  const fold = page.locator(".otk-work-fold");
+  await expect(fold.locator(".otk-work-label")).toHaveCSS(
+    "font",
+    await fold.evaluate((el) => getComputedStyle(el).font),
   );
-  expect([rule.width, rule.style]).toEqual(["1px", "solid"]);
-  expect(rule.ratio).toBeGreaterThan(0);
-  expect(rule.ratio).toBeLessThan(.2);
+  const disclosure = await fold.evaluate((el) => {
+    const icon = el.querySelector(".otk-work-chevron")!.getBoundingClientRect(),
+      label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
+    return {
+      center: (icon.top + icon.bottom - label.top - label.bottom) / 2,
+      gap: label.left - icon.right,
+      expected: parseFloat(getComputedStyle(el).gap),
+    };
+  });
+  expect(Math.abs(disclosure.center)).toBeLessThan(.5);
+  expect(disclosure.gap).toBe(disclosure.expected);
   for (const width of [1280, 1600, 2000]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() =>
