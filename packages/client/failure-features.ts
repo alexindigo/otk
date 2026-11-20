@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID } from "@otk/protocol";
+import { randomID, REQUEST_WINDOW_EXPIRED_FACTS } from "@otk/protocol";
 import {
   contextualFailure,
   failureFeedback,
@@ -121,7 +121,7 @@ export function createFailurePresenter(): FailurePresenter {
   );
   contribute(
     ["request.expired"],
-    "The old result is no longer retained. Review the current state before starting again",
+    REQUEST_WINDOW_EXPIRED_FACTS.reason,
   );
   contribute(
     ["request.capacity"],

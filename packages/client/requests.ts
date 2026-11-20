@@ -3,6 +3,7 @@ import { randomID } from "@otk/protocol";
 import {
   canonicalRequest,
   isSessionID,
+  REQUEST_WINDOW_EXPIRED_FACTS,
   requestFailureFacts,
   requestRef,
 } from "@otk/protocol";
@@ -68,6 +69,8 @@ export interface RequestTrackerOptions {
   send(frame: RequestControl): void;
   /** Independent HTTP/bootstrap and socket readiness share the same intent owner. */
   available?(frame: RequestControl): boolean;
+  /** Retire the serving connection and obtain another welcome before read retry. */
+  renewWindow?(): void;
   clientID?: string;
   server?: string;
   sidecarId?: string;
@@ -94,6 +97,8 @@ interface Pending {
   settled: boolean;
   submitted: boolean;
   snapshot: boolean;
+  readRenewed: boolean;
+  awaitingWindow: boolean;
   cleanup(): void;
 }
 const active = (state: OperationState) =>
@@ -198,6 +203,13 @@ export class RequestTracker {
   }
   #send(frame: RequestControl): void {
     if (
+      frame.t === "request" && frame.ref.window !== "bootstrap" && !this.#window
+    ) {
+      // Availability callbacks may be reentrant during retirement. Only welcome
+      // establishes socket admission; bootstrap HTTP owns its separate window.
+      return;
+    }
+    if (
       this.#stopped ||
       !this.#connected && frame.t !== "request.resume" &&
         !this.options.available?.(frame)
@@ -260,6 +272,8 @@ export class RequestTracker {
       settled: false,
       submitted: state.phase !== "sending",
       snapshot: false,
+      readRenewed: false,
+      awaitingWindow: false,
       listeners: new Set(),
       cleanup() {},
       operation: undefined!,
@@ -423,6 +437,31 @@ export class RequestTracker {
     this.#publish(item);
     return item.operation;
   }
+  #renewRead(item: Pending, window: RequestWindow): void {
+    const previous = item.state.ref;
+    this.#pending.delete(previous.key);
+    item.state = {
+      ...item.state,
+      ref: { ...previous, id: randomID(), key: randomID(), window: window.id },
+      seq: 0,
+      phase: "sending",
+      connection: "connected",
+      progress: undefined,
+      error: undefined,
+    };
+    item.snapshot = false;
+    item.submitted = false;
+    item.readRenewed = true;
+    item.awaitingWindow = false;
+    this.#pending.set(item.state.ref.key, item);
+    this.#send({
+      t: "request",
+      ref: item.state.ref,
+      method: item.state.method,
+      params: item.params,
+    });
+    this.#publish(item);
+  }
   connect(
     window: RequestWindow,
     resumebatch: number,
@@ -432,6 +471,8 @@ export class RequestTracker {
     if (!Number.isSafeInteger(resumebatch) || resumebatch < 1) {
       throw new TypeError("Invalid resume batch");
     }
+    // Welcome establishes server-clock authority. Local wall time cannot expire
+    // it; an authoritative expiry rejection retires the connection instead.
     this.#window = window;
     this.#batch = resumebatch;
     this.#connected = true;
@@ -441,8 +482,23 @@ export class RequestTracker {
       this.#controls.delete(key);
       this.#send(queued.control);
     }
-    for (const item of this.#pending.values()) {
-      if (item.state.ref.window === "") {
+    const renewed = new Set<Pending>();
+    for (const item of [...this.#pending.values()]) {
+      if (
+        active(item.state) && item.principal === principal &&
+        this.options.kind?.(item.state.method) === "read" &&
+        item.params !== undefined && !item.readRenewed &&
+        item.submitted && item.state.ref.window !== window.id
+      ) {
+        this.#renewRead(item, window);
+        renewed.add(item);
+        continue;
+      }
+      if (
+        (item.state.ref.window === "" ||
+          !item.submitted && active(item.state)) &&
+        (item.principal === principal || item.principal === undefined)
+      ) {
         item.principal = principal;
         item.state = {
           ...item.state,
@@ -457,7 +513,7 @@ export class RequestTracker {
       }
     }
     const pending = [...this.#pending.values()].filter((item) =>
-      active(item.state) && item.principal === principal
+      active(item.state) && item.principal === principal && !renewed.has(item)
     );
     for (const item of pending) {
       item.state = {
@@ -479,6 +535,8 @@ export class RequestTracker {
   }
   disconnect(authentication = false): void {
     this.#connected = false;
+    // New captures belong to the next welcome, not the retired connection.
+    this.#window = undefined;
     for (const item of this.#pending.values()) {
       if (active(item.state)) {
         item.state = {
@@ -504,6 +562,9 @@ export class RequestTracker {
       ...error,
       facts: {
         ...item.state.facts,
+        ...(error.code === "request.expired"
+          ? REQUEST_WINDOW_EXPIRED_FACTS
+          : {}),
         ...error.facts,
         ...(item.state.ref.origin ? { origin: item.state.ref.origin } : {}),
         target: this.#target({
@@ -525,6 +586,25 @@ export class RequestTracker {
       };
     } else if (event.t === "request.rejected") {
       if (item.settled) return;
+      if (
+        event.error.code === "request.expired" &&
+        this.options.kind?.(item.state.method) === "read" &&
+        item.params !== undefined && !item.readRenewed
+      ) {
+        if (
+          this.#window && this.#window.id !== item.state.ref.window
+        ) {
+          this.#renewRead(item, this.#window);
+          return;
+        }
+        if (this.options.renewWindow && !item.awaitingWindow) {
+          item.awaitingWindow = true;
+          item.state = { ...item.state, phase: "reconciling" };
+          this.#publish(item);
+          this.options.renewWindow();
+          return;
+        }
+      }
       if (event.error.code === "request.receipt-reset") {
         item.state = {
           ...item.state,
