@@ -8,12 +8,13 @@ import { nativeEffect, nativeExecution } from "../requests/policies.ts";
 import {
   completionReceipt,
   promptSelectionReceipt,
+  sentPromptReceipt,
 } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.prompt;
   if (!capability) return;
-  const sent = completionReceipt("prompt-sent"),
+  const sent = sentPromptReceipt,
     interrupted = completionReceipt("interrupt-sent");
   rpc.register("session.prompt", {
     execution: {
@@ -49,8 +50,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
     },
     handler: (ctx, input) =>
       nativeEffect(ctx, async (operation) => {
-        await capability.prompt(input, operation);
-        return null;
+        return await capability.prompt(input, operation) ?? null;
       }, sent),
   });
   rpc.register("session.abort", {

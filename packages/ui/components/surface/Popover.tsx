@@ -210,7 +210,7 @@ export default function Popover(props: {
   );
   const triggerLabel = () =>
     `${props.triggerLabel ?? props.label}${
-      props.applied ? ` (${props.applied})` : ""
+      props.applied ? `, ${props.applied}` : ""
     }`;
   return (
     <span

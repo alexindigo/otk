@@ -327,14 +327,14 @@ test.describe("applied choices", () => {
     await openSession(state, page, session.id);
     await expect(page.locator(".otk-variant-picker > button")).toHaveAttribute(
       "aria-label",
-      "Variant: High (agent default)",
+      "Variant: High, agent default",
     );
     await expectPrimaryBlocked(composerSend(page), "Write a message");
     for (
-      const [kind, label] of [["agent", "Reviewer (agent default)"], [
+      const [kind, label] of [["agent", "Reviewer, agent default"], [
         "model",
-        "Second fixture provider Scripted with variants (agent default)",
-      ], ["variant", "High (agent default)"]]
+        "Second fixture provider Scripted with variants, agent default",
+      ], ["variant", "High, agent default"]]
     ) {
       await expect(page.locator(`.otk-${kind}-picker > button`)).toHaveClass(
         /is-applied/,

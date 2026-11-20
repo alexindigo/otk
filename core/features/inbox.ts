@@ -137,6 +137,17 @@ export class InboxFeature implements FrameSource {
     const directory = this.#directory(view);
     if (!directory) return [];
     const ids = new Set<string>();
+    // Native work follows the open session's descendants across explicit tasks
+    // and checkout scopes. Attention remains a separate per-item projection.
+    if (view.selected) {
+      for (const id of this.index.descendants(view.selected)) {
+        const entry = this.index.getMetadata(id), work = entry?.activity?.work;
+        if (
+          id !== view.selected && !entry?.deleted && work?.fresh &&
+          work.keys.length
+        ) ids.add(id);
+      }
+    }
     for (const task of this.#projectTasks(directory, view.tasksFollowParent)) {
       for (const id of task.sessions) ids.add(id);
     }

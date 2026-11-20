@@ -23,6 +23,7 @@ export default function LiveWork(props: {
 }): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
   const session = useOptionalSessionPorts();
+  const sidecar = session?.failureTarget?.().sidecarId;
   const [revision, setRevision] = createSignal(0);
   onSettled(() =>
     props.owner?.subscribe(() => setRevision((value) => value + 1))
@@ -88,6 +89,15 @@ export default function LiveWork(props: {
                   if (item().kind === "helper") open(item().sessionID);
                 }}
               >
+                <StatusLight
+                  small
+                  attention={sidecar
+                    ? { server: sidecar, session: item().sessionID }
+                    : undefined}
+                  state={session?.status?.(item().sessionID) === "blocked"
+                    ? "blocked"
+                    : "working"}
+                />
                 <span
                   class="otk-live-work-entity"
                   onClick={(event) => event.stopPropagation()}

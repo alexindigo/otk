@@ -3,10 +3,53 @@ import {
   derivedValue,
   type InboxSnapshot,
   type IndexEntry,
+  type IndexMetadata,
   type Message,
 } from "@otk/protocol";
 import type { ClientTabs } from "./tabs.ts";
 import { createState } from "./state.ts";
+import type { TaskCrumb } from "./task-breadcrumbs.ts";
+
+/** Native ancestry and positive current work, not task grouping or lamp priority. */
+export function runningDescendants(
+  root: string | undefined,
+  entries: readonly IndexMetadata[],
+  connected = true,
+): TaskCrumb[] {
+  if (!root || !connected) return [];
+  const children = new Map<string, IndexMetadata[]>();
+  for (const entry of entries) {
+    if (!entry.parentID) continue;
+    const rows = children.get(entry.parentID) ?? [];
+    rows.push(entry);
+    children.set(entry.parentID, rows);
+  }
+  const visited = new Set([root]);
+  const stack = (children.get(root) ?? []).map((entry) => ({
+    entry,
+    depth: 1,
+  }));
+  const result: TaskCrumb[] = [];
+  while (stack.length) {
+    const { entry, depth } = stack.pop()!;
+    if (visited.has(entry.id)) continue;
+    visited.add(entry.id);
+    if (
+      !entry.deleted && entry.activity?.work?.fresh &&
+      entry.activity.work.keys.length
+    ) {
+      result.push({ id: entry.id, helper: true, depth });
+    }
+    for (const child of children.get(entry.id) ?? []) {
+      stack.push({ entry: child, depth: depth + 1 });
+    }
+  }
+  const byID = new Map(entries.map((entry) => [entry.id, entry]));
+  return result.toSorted((a, b) =>
+    (byID.get(a.id)?.timeCreated ?? 0) - (byID.get(b.id)?.timeCreated ?? 0) ||
+    a.id.localeCompare(b.id)
+  );
+}
 
 export interface RunningWork {
   id: string;

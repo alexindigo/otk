@@ -75,11 +75,13 @@ export interface ViewportTarget {
   anchor?: { id: string; key: string; start: number };
 }
 export interface ViewportHistory {
+  readonly appendRevision?: number;
   readonly first?: string;
   readonly last?: string;
   readonly exhausted: boolean;
 }
 export interface ViewportSnapshot {
+  readonly newMessages: boolean;
   readonly revision: number;
   readonly scrollTop: number;
   readonly contentHeight: number;
@@ -178,7 +180,9 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   let geometryPending = true;
   let readerCapturePending = false;
   let history: ViewportHistory = Object.freeze({ exhausted: false });
+  let newMessages = false;
   let snapshot: ViewportSnapshot = Object.freeze({
+    newMessages: false,
     revision: 0,
     scrollTop: viewport.scrollTop,
     contentHeight: viewport.scrollHeight,
@@ -238,16 +242,19 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         contentHeight = viewport.scrollHeight,
         scrollTop = viewport.scrollTop,
         following = mode === "follow";
+      if (following && distanceFromBottom <= 1) newMessages = false;
       if (
         publishedGeometry === revision &&
         snapshot.distanceFromBottom === distanceFromBottom &&
         snapshot.viewportHeight === viewportHeight &&
         snapshot.contentHeight === contentHeight &&
         snapshot.scrollTop === scrollTop &&
-        snapshot.following === following && snapshot.history === history
+        snapshot.following === following && snapshot.history === history &&
+        snapshot.newMessages === newMessages
       ) return;
       publishedGeometry = revision;
       snapshot = Object.freeze({
+        newMessages,
         revision: snapshot.revision + 1,
         distanceFromBottom,
         viewportHeight,
@@ -626,8 +633,13 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     history(value) {
       if (
         history.first === value.first && history.last === value.last &&
-        history.exhausted === value.exhausted
+        history.exhausted === value.exhausted &&
+        history.appendRevision === value.appendRevision
       ) return;
+      if (
+        mode === "anchored" &&
+        (value.appendRevision ?? 0) > (history.appendRevision ?? 0)
+      ) newMessages = true;
       history = Object.freeze({ ...value });
       layout();
     },

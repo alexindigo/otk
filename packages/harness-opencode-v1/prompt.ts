@@ -31,8 +31,8 @@ export function prompt(
       const dir = await directory.resolve(input.sessionID);
       const parts = await mapPromptParts(input.parts, dir, operation, policy);
       const origin = operation?.key.origin;
-      const messageID = submitted && origin ? submissionID() : undefined;
-      if (messageID && origin) submitted!(input.sessionID, messageID, origin);
+      const messageID = submissionID();
+      if (submitted && origin) submitted(input.sessionID, messageID, origin);
       await client.request(
         `/session/${
           encodeURIComponent(ids.decode(input.sessionID))
@@ -44,7 +44,7 @@ export function prompt(
             : {}),
           query: { directory: dir },
           body: {
-            ...(messageID ? { messageID } : {}),
+            messageID,
             parts,
             variant: input.variant,
             agent: input.agent,
@@ -54,6 +54,7 @@ export function prompt(
           },
         },
       );
+      return { messageID, state: "accepted" };
     },
     async abort(id, operation) {
       await client.json(

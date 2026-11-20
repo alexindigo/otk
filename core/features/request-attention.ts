@@ -75,10 +75,14 @@ export class RequestAttention implements FrameSource {
         ? this.index.getMetadata(view.selected)?.directory
         : undefined);
     const attention = this.#routes.get(entry.id);
+    const work = entry.activity?.work;
+    const runningDescendant = !!view.selected && !!work?.fresh &&
+      !!work.keys.length &&
+      this.index.ancestors(entry.id).includes(view.selected);
     if (
       !attention || entry.directory === directory ||
       entry.id === view.selected || view.crumbs.includes(entry.id) ||
-      view.rows.includes(entry.id)
+      view.rows.includes(entry.id) || runningDescendant
     ) return entry;
     return {
       id: entry.id,

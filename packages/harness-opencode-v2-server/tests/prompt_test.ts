@@ -174,6 +174,18 @@ Deno.test("V2 prompt and action selections resolve the agent's model default bef
     });
   }
 });
+Deno.test("V2 successful prompt returns the exact submitted native identity", async () => {
+  const f = fixture();
+  const receipt: unknown = await f.prompt.prompt({
+    sessionID: "opcv2-ses_root",
+    mode: "normal",
+    parts: [{ kind: "text", text: "Correlate this send" }],
+  }, f.operation);
+  assertEquals(receipt, {
+    messageID: f.submissions[0].messageID,
+    state: "queued",
+  });
+});
 Deno.test("V2 failed preparation leaves every selection untouched; uncertain later switch is never resent", async () => {
   const f = fixture();
   await assertRejects(

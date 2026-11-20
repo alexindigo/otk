@@ -30,6 +30,10 @@ export class StorageRequests implements RequestRepository {
   }
   admit(record: RequestRecord, tx?: StoreWrite) {
     if (record.execution === "read" || record.execution === "lease") {
+      // Lookup and admission borrow the same validated server authority. After
+      // restart a mutation's durable window must not disappear only for reads.
+      const window = this.windowInfo(record.window_id);
+      if (window) this.reads.retainWindow(window);
       return this.reads.admit(record);
     }
     // Storage owns window/receipt atomicity; the coordinator knows no SQL schema.

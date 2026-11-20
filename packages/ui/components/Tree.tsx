@@ -108,6 +108,7 @@ export function TreeNode(props: {
   onOpen?(open: boolean): void;
   outgoing?: boolean;
   header(connected: boolean): Element;
+  feedback?(): Element;
   body?(): Element;
 }): Element {
   const branch = useContext(BranchContext);
@@ -168,6 +169,13 @@ export function TreeNode(props: {
           </BranchContext>
         </div>
       </div>
+      <Show when={props.feedback}>
+        <div class="otk-tree-feedback">
+          <div class="otk-tree-feedback-content">
+            <ContentSlot content={() => props.feedback?.()} />
+          </div>
+        </div>
+      </Show>
       <Show when={visible()}>
         <div class="otk-tree-body">
           <span class="otk-tree-continuation" aria-hidden="true" />

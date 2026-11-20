@@ -52,6 +52,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const intent = createSubmissionIntent<PromptProps["value"]>({
     capture: (value) => value,
     presenter: createFailurePresenter(),
+    target: () => session.failureTarget?.(),
+    unavailable: () => unavailable(),
+    recovery: () =>
+      "Resolve the stated Send reason, then send the retained draft",
   });
   const [revision, setRevision] = createSignal(0);
   onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
@@ -153,17 +157,17 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const composerReady = () =>
     promptUnavailable({ ...facts(), content: true, chips: [] }) === undefined;
   const submit = async () => {
-    if (!primary.permitted()) return;
+    intent.require();
     session?.feedback?.clear();
     setFeedback(undefined);
     input.focus();
     await ctx.ready();
-    if (!primary.permitted()) return;
+    intent.require();
     const draft = change((current) => current);
     for (const feature of features) {
       if (await feature.beforeSubmit?.(draft)) return;
     }
-    if (!primary.permitted()) return;
+    intent.require();
     return draft;
   };
   const performSend = async (draft: PromptProps["value"]) => {
@@ -187,9 +191,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = () => {
-    if (primary.permitted()) return intent.submit(submit, performSend);
-  };
+  const submitInput = () => intent.submit(submit, performSend);
   const primary = createPrimaryAction({
     label: () => "Send",
     unavailable,

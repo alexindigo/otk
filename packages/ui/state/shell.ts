@@ -108,6 +108,7 @@ export function createShellState(
     session,
     current,
     branchHistory,
+    factory: solidState,
     submitted: (target, action) =>
       forkNotes.submission(
         sessionKey(target.sidecarId, target.sessionID),
@@ -191,6 +192,7 @@ export function createShellState(
     globalThis.removeEventListener("focus", observePresence);
     globalThis.removeEventListener("blur", observePresence);
     transcriptScopes.stop();
+    actions.stop();
   });
   createEffect(() => ({
     project: navigation.state.project,

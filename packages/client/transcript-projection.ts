@@ -36,6 +36,8 @@ export interface TranscriptReply {
   revision: number;
 }
 export interface TranscriptProjectionState {
+  /** New canonical tail rows, independent of paging, geometry and part edits. */
+  appendRevision: number;
   messageIDs: string[];
   messagesByID: Record<string, Message>;
   replyIDs: string[];
@@ -92,6 +94,7 @@ export interface TranscriptProjection {
 export function createTranscriptProjection(): TranscriptProjection {
   const records = createRecordProjection();
   const state: TranscriptProjectionState = {
+    appendRevision: 0,
     messageIDs: [],
     messagesByID: dictionary<Message>(),
     replyIDs: [],
@@ -100,6 +103,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     records: records.reconcile([], {}),
   };
   const parts = new Map<string, Map<string, number>>();
+  let replacing = false;
   const helperLinks = new Map<string, Map<string, string>>();
   const helperChildren = new Map<string, number>();
   const helperPart = (message: string, part: string, value?: Part) => {
@@ -419,6 +423,10 @@ export function createTranscriptProjection(): TranscriptProjection {
       oldKey = previous && replyKey(previous),
       key = replyKey(message);
     if (previous === message) return;
+    const last = read(state.messageIDs.at(-1) ?? "");
+    if (!replacing && !previous && last && compare(last, message) < 0) {
+      state.appendRevision++;
+    }
     if (previous?.role === "context" || message.role === "context") {
       recordsDirty = true;
     }
@@ -555,9 +563,19 @@ export function createTranscriptProjection(): TranscriptProjection {
     },
     replace(messages: readonly Message[]) {
       const previous = state.messagesByID;
+      const last = read(state.messageIDs.at(-1) ?? "");
       owner.clear(false);
-      for (const message of messages) {
-        put(retainStreamMessage(previous[message.id], message));
+      replacing = true;
+      try {
+        for (const message of messages) {
+          put(retainStreamMessage(previous[message.id], message));
+        }
+      } finally {
+        replacing = false;
+      }
+      const next = read(state.messageIDs.at(-1) ?? "");
+      if (last && next && !previous[next.id] && compare(last, next) < 0) {
+        state.appendRevision++;
       }
       queues();
     },

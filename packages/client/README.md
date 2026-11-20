@@ -1,5 +1,12 @@
 # @otk/client
 
+`SessionActions` owns source-free, session-bound submission receipts. Native
+acceptance carries a message identity; only the canonical transcript can admit
+it, and only the viewport can report its presentation. The ten-second
+observation deadline is not a mutation timeout: recovery reloads canonical
+messages and never resends input. Own sends switch the existing viewport to
+follow; canonical append revisions expose new messages even near the tail.
+
 `entityFacts(identity, sources)` projects explicit session, turn and tool
 scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
 markers and never borrow session/helper clocks. Session-now status borrows live
@@ -9,6 +16,12 @@ adapter inventory items whose identities remain in that inventory. Transcript
 paging is not an input. `createLiveWork` owns capability checks and joined stop
 admission across presentation lifetimes; elapsed labels describe running time,
 not working time.
+
+The helper inventory follows native ancestry and fresh positive work keys,
+independently of task/checkout boundaries and attention priority. Blocked
+helpers remain in the count with their own attention lamps. Cross-project
+routing keeps work facts for these demanded descendants while unrelated pending
+identities remain request-only.
 
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
@@ -172,6 +185,12 @@ preparation that starts during Sending cannot admit a prompt, shell or native
 command effect after the earlier send settles. A later explicit activation can
 send the retained draft. Both lifetimes stay framework-free, with native input
 and focus owned by the UI adapter.
+
+Submission readiness rechecks use the intent owner's `require()` boundary.
+Readiness loss and captured-send admission refusal publish classified feedback
+with action, target, reason and recovery instead of resolving as an unsent
+success. An explicitly handled input command remains distinct from refused
+dispatch.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
@@ -1188,9 +1207,21 @@ unarchive a checkout.
 and the sidebar. Server, repository and canonical-root identity prove each edge;
 missing or cyclic parents remain visible roots. Required descendants borrow the
 existing project status, independently of persisted collapse choices.
-`projectCollapse(project, collapsed)` sends one keyed `layout.project` intent to
-the serving layout owner. `treePaths` supplies virtual session-row continuation
-flags from the complete projected preorder, never mounted DOM neighbours.
+`projectHierarchy` also assigns row level and artwork before section filtering;
+worktrees keep their own checkout basename and never receive project avatars,
+including when their root is absent. Native repository names remain
+project-only. `projectBranchPresentation` derives optional and required
+children, protected counts and archive mounting from one topology/disclosure
+snapshot. `createProjectDisclosure` retains immediate local choices by kind,
+server and directory. Per-key saves are ordered, old outcomes cannot overwrite
+newer intent, and the affected branch retains a refusal and explicit retry.
+Archive and Inactive borrow the same owner without adding persistence;
+Discovered and project choices retain their existing preference stores. A
+matching authoritative value retires the successful local overlay; independent
+future preference changes remain live. `projectCollapse(project, collapsed)`
+sends one keyed `layout.project` intent to the serving layout owner. `treePaths`
+supplies virtual session-row continuation flags from the complete projected
+preorder, never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

@@ -86,13 +86,15 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
             height: box.height,
             center: box.y + box.height / 2,
             light: light.y + light.height / 2,
+            markerX: light.x + light.width / 2,
           };
         })
       );
     const parent = geometry.find((r) => r.directory === canonical)!;
     const first = geometry.find((r) => r.directory === one)!;
     const second = geometry.find((r) => r.directory === two)!;
-    expect(first.x).toBeGreaterThan(parent.x);
+    // Hierarchy aligns marker axes; project-only artwork can extend its label.
+    expect(first.markerX).toBeGreaterThan(parent.markerX);
     expect(first.x).toBe(second.x);
     for (const r of geometry) {
       expect(Math.abs(r.center - r.light)).toBeLessThanOrEqual(1);

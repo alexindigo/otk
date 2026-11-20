@@ -47,7 +47,10 @@ export interface ConnectionOptions {
   api?: URL;
   socket?: (url: URL) => WebSocket;
   fetcher?: typeof fetch;
-  requests?: Omit<RequestTrackerOptions, "send" | "server" | "available">;
+  requests?: Omit<
+    RequestTrackerOptions,
+    "send" | "server" | "available" | "renewWindow"
+  >;
 }
 export type ConnectionAttempt =
   | { kind: "checked"; auth: AuthStatus }
@@ -157,6 +160,10 @@ export class SidecarConnection {
             bootstrapRequestMetadata[method]?.kind ??
             "mutation"),
       available: (control) => this.#welcomed || this.#bootstrap(control),
+      renewWindow: () => {
+        this.#retire();
+        this.#schedule();
+      },
       send: (control) => this.#route(control),
     });
     this.rpc = new Rpc((frame) => this.send(frame), this.requests);

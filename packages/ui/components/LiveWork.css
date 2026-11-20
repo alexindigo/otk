@@ -8,7 +8,7 @@
 }
 .otk-live-work-list {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   gap: var(--space-1) var(--space-2);
   inline-size: min(calc(360 * var(--otk-unit)), 80vw);
   max-block-size: calc(270 * var(--otk-unit));
