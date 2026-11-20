@@ -3,6 +3,8 @@ import { isAssistantTerminal } from "@otk/protocol";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
+import { errorFeedback, replyErrorFeedback } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
@@ -51,6 +53,7 @@ function PartView(
     pending?: boolean;
     sourceID?: string;
     recordTime?: number;
+    failureTime?: number;
   },
 ) {
   const { parts } = useUiRegistries();
@@ -76,10 +79,11 @@ function PartView(
 }
 /** A stable keyed component boundary preserves source nodes during part updates. */
 function PartsView(
-  props: Omit<PartProps, "part" | "recordTime"> & {
+  props: Omit<PartProps, "part" | "recordTime" | "failureTime"> & {
     parts: Part[];
     sourceID?(part: Part): string;
     recordTime?(part: Part): number | undefined;
+    failureTime?(part: Part): number | undefined;
     tree?: boolean;
   },
 ) {
@@ -105,6 +109,7 @@ function PartsView(
             pending={props.pending}
             sourceID={props.sourceID?.(part())}
             recordTime={props.recordTime?.(part())}
+            failureTime={props.failureTime?.(part())}
           />
         </TreeItem>
       )}
@@ -157,6 +162,9 @@ export default function Message(
     ownerID?: string;
     message: OtkMessage;
     sourceTime?(messageID: string): number | undefined;
+    sourceOutcomeTime?(
+      messageID: string,
+    ): import("@otk/protocol").OutcomeTime | undefined;
     segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
@@ -191,13 +199,22 @@ export default function Message(
   const { parts } = useUiRegistries();
   const layout = createMessageLayout();
   const sourceID = (part: Part) => layout.source(part.id) ?? props.message.id;
-  const recordTime = (part: Part) =>
-    props.message.role === "context"
+  const recordTime = (part: Part) => {
+    const record = parts.presentation(part, props.prefs).failure?.facts?.record;
+    if (record) {
+      return props.sourceTime?.(record.messageID) ??
+        (props.message.role === "context" &&
+            props.message.id === record.messageID
+          ? props.message.time.created
+          : undefined);
+    }
+    return props.message.role === "context"
       ? props.sourceTime?.(sourceID(part)) ??
         (sourceID(part) === props.message.id
           ? props.message.time.created
           : undefined)
       : undefined;
+  };
   const framing = createMemo(() =>
     layout.update(
       props.ownerID ?? props.message.id,
@@ -220,6 +237,16 @@ export default function Message(
     )
   );
   const frames = () => framing().frames;
+  const failureTime = (part: Part) => {
+    const id =
+      parts.presentation(part, props.prefs).failure?.facts?.record?.messageID ??
+        sourceID(part);
+    const time = props.sourceOutcomeTime?.(id) ??
+      (id === props.message.id && props.message.role !== "user"
+        ? props.message.outcomeTime
+        : undefined);
+    return time?.state === "known" ? time.at : undefined;
+  };
   const userBubble = () => framing().userBubble;
   const prompt = () => framing().prompt;
   const identity = () => ({
@@ -293,9 +320,16 @@ export default function Message(
     return time?.state === "unknown" ? time.reason : undefined;
   };
   const error = () =>
-    props.message.role === "assistant" && !props.message.interrupted
-      ? props.message.error?.message
-      : undefined;
+    replyErrorFeedback(
+      props.message,
+      frames().flatMap((frame) =>
+        frame.groups.flatMap((group) => group.parts).flatMap((part) => {
+          const failure = parts.presentation(part, props.prefs).failure;
+          return failure ? [failure] : [];
+        })
+      ),
+      identity(),
+    );
   return (
     <ContentIdentityProvider value={identity()}>
       <article
@@ -375,6 +409,7 @@ export default function Message(
                           pending={props.pending}
                           sourceID={sourceID}
                           recordTime={recordTime}
+                          failureTime={failureTime}
                         />
                       </>
                     }
@@ -397,6 +432,7 @@ export default function Message(
                           pending={props.pending}
                           sourceID={sourceID}
                           recordTime={recordTime}
+                          failureTime={failureTime}
                         />
                       )}
                     />
@@ -410,21 +446,19 @@ export default function Message(
           )}
         </For>
         <Show when={props.recovery}>
-          <p role="status" class="otk-response-recovery">
-            {props.recovery === "unavailable"
-              ? "Response refresh unavailable."
-              : "Refreshing response…"}
-            <Show
-              when={props.recovery === "unavailable" && props.onRetryRecovery}
-            >
-              <button
-                type="button"
-                onClick={() => props.onRetryRecovery?.()}
-              >
-                Retry response
-              </button>
-            </Show>
-          </p>
+          <FeedbackStatus
+            feedback={props.recovery === "unavailable"
+              ? {
+                ...errorFeedback("Response refresh unavailable.", {
+                  actionLabel: "Refreshing response",
+                  target: identity(),
+                })!,
+                action: props.onRetryRecovery
+                  ? { label: "Retry response", run: props.onRetryRecovery }
+                  : undefined,
+              }
+              : { kind: "pending", text: "Refreshing response..." }}
+          />
         </Show>
         <Show when={prompt()}>
           <footer
@@ -552,7 +586,10 @@ export default function Message(
           )}
         </Show>
         <Show when={error()}>
-          <p class="otk-error" role="alert">{error()}</p>
+          <FeedbackStatus
+            feedback={error()}
+            time={outcomeClock()?.at}
+          />
         </Show>
       </article>
     </ContentIdentityProvider>

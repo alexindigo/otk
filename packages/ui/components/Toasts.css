@@ -30,10 +30,10 @@
   padding: 0;
   line-height: 1.5;
 }
-.otk-toast-message strong {
+.otk-toast-title {
   font-weight: 500;
 }
-.otk-toast-message span {
+.otk-toast-body {
   color: var(--otk-fg-faint);
 }
 .otk-toast-actions {
@@ -69,8 +69,4 @@
 }
 .otk-toast .otk-surface-body > * {
   flex-shrink: 0;
-}
-.otk-toast-message .otk-failure-content,
-.otk-toast-message .otk-failure-content span {
-  color: inherit;
 }

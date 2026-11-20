@@ -83,6 +83,7 @@ for (
     }
     if (scenario === "http-401") assert(text.includes("HTTP 401"));
     assertEquals(owner.state.steps.at(-1)?.result?.kind, "error");
+    assertEquals(owner.state.steps.at(-1)?.result?.feedback, result.feedback);
   });
 }
 Deno.test("held discovery has live elapsed time, no deadline, joined cancellation and fresh retry", async () => {

@@ -16,8 +16,11 @@ export default function FeedbackStatus(props: {
   ref?(element: HTMLDivElement): void;
   focusable?: boolean;
   singleLine?: boolean;
+  compact?: boolean;
+  time?: number;
+  onReveal?(messageID: string): void;
 }): Element {
-  const feedback = () => props.feedback ?? errorFeedback(props.error);
+  const feedback = () => errorFeedback(props.feedback ?? props.error);
   const native = nativeAttributes(() =>
     feedbackState({
       feedback: feedback(),
@@ -33,9 +36,8 @@ export default function FeedbackStatus(props: {
       ref={[props.ref, native.ref]}
       tabindex={props.focusable ? -1 : undefined}
       aria-label={feedback()?.text}
-      title={feedback()?.text}
     >
-      <p
+      <div
         class={feedback()?.failure
           ? "otk-feedback-text"
           : "otk-feedback-text otk-control-label"}
@@ -45,11 +47,15 @@ export default function FeedbackStatus(props: {
             <FailureContent
               failure={feedback()!.failure!}
               inline={props.singleLine}
+              compact={props.compact}
+              time={props.time}
+              action={feedback()?.action}
+              onReveal={props.onReveal}
             />
           )
           : feedback()?.text ?? "\u00a0"}
-      </p>
-      <Show when={feedback()?.action}>
+      </div>
+      <Show when={!feedback()?.failure && feedback()?.action}>
         {(action) => (
           <button
             type="button"

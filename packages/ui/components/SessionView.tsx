@@ -797,6 +797,13 @@ export default function SessionView(props: {
                                               sourceTime={(id) =>
                                                 projection().messagesByID[id]
                                                   ?.time.created}
+                                              sourceOutcomeTime={(id) => {
+                                                const source =
+                                                  projection().messagesByID[id];
+                                                return source?.role !== "user"
+                                                  ? source?.outcomeTime
+                                                  : undefined;
+                                              }}
                                               lastID={reply().lastID}
                                               pending={reply().pending}
                                               completionDetails={() => (

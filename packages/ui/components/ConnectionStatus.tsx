@@ -7,11 +7,30 @@ import {
 import FeedbackStatus from "./FeedbackStatus.tsx";
 
 export default function ConnectionStatus(
-  props: { connection: ConnectionInput },
+  props: {
+    connection: ConnectionInput;
+    compact?: boolean;
+    onSettings?(): void;
+  },
 ) {
   return (
     <Show when={connectionFeedback(props.connection)}>
-      {(feedback) => <FeedbackStatus feedback={feedback()} />}
+      {(feedback) => (
+        <FeedbackStatus
+          compact={props.compact}
+          feedback={{
+            ...feedback(),
+            ...(feedback().failure && props.onSettings
+              ? {
+                action: {
+                  label: "Server settings",
+                  run: () => props.onSettings?.(),
+                },
+              }
+              : {}),
+          }}
+        />
+      )}
     </Show>
   );
 }

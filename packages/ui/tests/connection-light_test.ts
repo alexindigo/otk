@@ -19,17 +19,14 @@ Deno.test("connection notice presents reconnecting as information and clears whe
     text: "Reconnecting to OTK...",
   });
   assertEquals(connectionFeedback(healthy), undefined);
-  assertEquals(
-    connectionFeedback({
-      ...healthy,
-      status: "reconnecting",
-      error: "Invalid OTK request reference",
-    }),
-    {
-      kind: "error",
-      text: "Invalid OTK request reference",
-    },
-  );
+  const invalid = connectionFeedback({
+    ...healthy,
+    status: "reconnecting",
+    error: "Invalid OTK request reference",
+  });
+  assertEquals(invalid?.kind, "error");
+  assertEquals(invalid?.failure?.reason, "Invalid OTK request reference");
+  assertEquals(invalid?.failure?.target.label, "This server");
 });
 Deno.test("connection health requires both links and gives failures precedence over a stale connected status", () => {
   assertEquals(connectionState(healthy), "connected");

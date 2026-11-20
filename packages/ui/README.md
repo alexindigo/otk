@@ -138,6 +138,23 @@ FailureContent renders recovery only when the action/cause owner supplies it. An
 absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
 
+FailureContent owns the action/target heading, neutral reason and recovery text,
+available action and initially collapsed Details disclosure. Error colour is a
+leading border, never paragraph paint. Compact callers and containers at or
+below 320px show the heading and controls, with complete reasons inside Details.
+The shared ScrollRegion bounds expanded details; target labels and diagnostic
+IDs truncate with full-value titles. FeedbackStatus normalizes text-only errors
+through the client presenter too. ConnectionStatus adapts retained connection
+facts for Settings and server listings; the sidebar footer gives it a full-width
+row below the connection control, never a flex column beside the server name.
+
+Failure records contribute their public failure through the part registry. The
+reply's legacy assistant error is a fallback only when its retained execution
+record is absent, so a quota reason is rendered once without prose matching.
+Producer-supplied known outcomeTime values render as plain ChromeMeta beside the
+heading; unknown or absent clocks stay absent. Record observation time is not a
+substitute. This does not compute run timing or change footer timing evidence.
+
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
 reveal command as its callback; that owner resolves grouped reply keys, ensures
@@ -326,38 +343,39 @@ Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
 not the pill. Available session/model facts retain their scope; a session click
 uses the same guarded navigation as the existing Open task action.
 
-Reply footers show outcome instants independently of working-duration availability. A native
-`outcomeTime` is shown in local time for success, failure and interruption; an
-unknown instant states that no native time was recorded and retains its reason.
-Reply footers also show model-call count, charged turn tokens and backend-reported
-cost after working time. Footers and opened detail bind the adapter's whole-turn
-result. Work-log headers pass their own contributed part clocks to the same
-timing owner for a busy-union-minus-waits result, never the turn total. Missing
-segment evidence leaves the plain Work log label. Busy clocks belong to each
-group; wait clocks come from the complete reply, including nonwork/hidden parts.
-The cached layout rechecks dependent durations when a wait witness changes,
-preserving unchanged groups and never turning absent busy evidence into zero.
-There is no loaded-page turn timing fallback; missing turn evidence says Time
-unknown, with the adapter's explanation on hover. The shared Popover's
-hover/focus preview reveals an ordered per-call table: existing tool labels or
-answered, full prompt Context, five token categories, reported cost and time.
-New input is the uncached part; a footnote explains New input + Cache read +
-Cache write = Context. The Total row sums calls' Context and retains category
-tokens and catalog-priced costs; unknown category prices show token counts only.
-Category pricing is provided by the framework-free reply usage owner, never
-reconstructed in the view. Display's persisted Show cost toggle defaults on;
-turning it off hides all footer/detail and context-meter cost figures while
-retaining tokens. Popover's generic wide size accommodates comparison tables; it
-continues to own native anchoring, available-side viewport bounds, dismissal and
-keyboard focus return. Hover/focus previews have no native title tooltip; their
-accessible trigger label and linked detail description are supplied by that same
-owner. Click-only controls retain their name tooltips. ShellPorts exposes the
-same framework-free usage owner to registered panel adapters. The Sessions
-adapter reads keyed index digests for the selected project's sessions; rows
-present total.cost as quiet trailing metadata using the shared cost formatter,
-including known zero. Show cost also hides these amounts and their accessible
-labels. Footers, rows and meter never sum transcript pages; unavailable metadata
-stays unknown while content remains usable.
+Reply footers show outcome instants independently of working-duration
+availability. A native `outcomeTime` is shown in local time for success, failure
+and interruption; an unknown instant states that no native time was recorded and
+retains its reason. Reply footers also show model-call count, charged turn
+tokens and backend-reported cost after working time. Footers and opened detail
+bind the adapter's whole-turn result. Work-log headers pass their own
+contributed part clocks to the same timing owner for a busy-union-minus-waits
+result, never the turn total. Missing segment evidence leaves the plain Work log
+label. Busy clocks belong to each group; wait clocks come from the complete
+reply, including nonwork/hidden parts. The cached layout rechecks dependent
+durations when a wait witness changes, preserving unchanged groups and never
+turning absent busy evidence into zero. There is no loaded-page turn timing
+fallback; missing turn evidence says Time unknown, with the adapter's
+explanation on hover. The shared Popover's hover/focus preview reveals an
+ordered per-call table: existing tool labels or answered, full prompt Context,
+five token categories, reported cost and time. New input is the uncached part; a
+footnote explains New input + Cache read + Cache write = Context. The Total row
+sums calls' Context and retains category tokens and catalog-priced costs;
+unknown category prices show token counts only. Category pricing is provided by
+the framework-free reply usage owner, never reconstructed in the view. Display's
+persisted Show cost toggle defaults on; turning it off hides all footer/detail
+and context-meter cost figures while retaining tokens. Popover's generic wide
+size accommodates comparison tables; it continues to own native anchoring,
+available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
+previews have no native title tooltip; their accessible trigger label and linked
+detail description are supplied by that same owner. Click-only controls retain
+their name tooltips. ShellPorts exposes the same framework-free usage owner to
+registered panel adapters. The Sessions adapter reads keyed index digests for
+the selected project's sessions; rows present total.cost as quiet trailing
+metadata using the shared cost formatter, including known zero. Show cost also
+hides these amounts and their accessible labels. Footers, rows and meter never
+sum transcript pages; unavailable metadata stays unknown while content remains
+usable.
 
 `TurnUsage` receives a cheap nullable turn summary and injected
 detail/open/close ports. Its preview keeps one Model calls scroll/focus region

@@ -573,12 +573,12 @@ export default function ProjectInbox(props: {
             </div>
           </Show>
           <Show when={rowError()}>
-            <span
+            <div
               id={rowErrorID}
-              class="otk-error otk-project-error"
+              class="otk-project-error"
             >
-              <FeedbackStatus feedback={errorFeedback(rowError())} />
-            </span>
+              <FeedbackStatus compact feedback={errorFeedback(rowError())} />
+            </div>
           </Show>
         </SelectionContent>
       </div>
@@ -667,13 +667,23 @@ export default function ProjectInbox(props: {
                     </ControlIcon>
                     <span class="otk-server-label">{s().label}</span>
                   </button>
-                  <ConnectionStatus connection={s()} />
+                  <Show when={!collapsed()}>
+                    <ConnectionStatus
+                      connection={s()}
+                      compact
+                      onSettings={() => void commands.run("settings.open")}
+                    />
+                  </Show>
                 </section>
               )}
             </For>
           </div>
           <Show when={error()}>
-            <FeedbackStatus feedback={errorFeedback(error())} />
+            <FeedbackStatus
+              class="otk-inbox-error"
+              compact
+              feedback={errorFeedback(error())}
+            />
           </Show>
         </footer>
       }

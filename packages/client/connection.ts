@@ -20,6 +20,7 @@ import { Rpc } from "./rpc.ts";
 import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
 import { HttpReadFailure, HttpRequests } from "./http-requests.ts";
 import {
+  type Feedback,
   FeedbackFailure,
   RequestFailure,
   RequestReleased,
@@ -38,7 +39,12 @@ export type ConnectionState =
   | "protocol mismatch";
 export interface ConnectionSink {
   defaults?(value: PublicDefaults): void;
-  status(state: ConnectionState, error?: string, authType?: string): void;
+  status(
+    state: ConnectionState,
+    error?: string,
+    authType?: string,
+    feedback?: Feedback,
+  ): void;
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
@@ -349,7 +355,7 @@ export class SidecarConnection {
         const invalid =
           cause instanceof HttpReadFailure && cause.kind === "invalid" ||
           cause instanceof FeedbackFailure;
-        const failure = !invalid && !(cause instanceof RequestFailure)
+        const feedback = !invalid && !(cause instanceof RequestFailure)
           ? undefined
           : actionFeedback(
             cause instanceof FeedbackFailure || cause instanceof RequestFailure
@@ -361,7 +367,8 @@ export class SidecarConnection {
                   : "the browser could not open the OTK connection",
                 "Check that the server and this page run matching OTK versions",
               ),
-          )?.text;
+          );
+        const failure = feedback?.text;
         // A fresh connection must confirm malformed data before it becomes an
         // error. Readiness, transport gaps and reset volatile receipts never do.
         const persistent = invalid && failure !== undefined &&
@@ -370,14 +377,14 @@ export class SidecarConnection {
         this.#retire();
         this.#schedule(
           cause instanceof HttpReadFailure ? cause.retryAfter : undefined,
-          persistent || cause instanceof RequestFailure ? failure : undefined,
+          persistent || cause instanceof RequestFailure ? feedback : undefined,
         );
         return { kind: "failed", cause };
       }
       return { kind: "superseded" };
     }
   }
-  #schedule(retryAfter = 0, error?: string): void {
+  #schedule(retryAfter = 0, feedback?: Feedback): void {
     if (this.#stopped) return;
     const attempt = this.#attempt++;
     if (this.#policy) {
@@ -392,7 +399,7 @@ export class SidecarConnection {
         ),
       );
     }
-    this.sink.status("reconnecting", error);
+    this.sink.status("reconnecting", feedback?.text, undefined, feedback);
   }
   #retire(): void {
     this.#selectionGeneration++;
@@ -434,6 +441,7 @@ export class SidecarConnection {
         "login required",
         actionFeedback(failure)?.text,
         attempt.auth.authType,
+        actionFeedback(failure),
       );
       throw failure;
     }

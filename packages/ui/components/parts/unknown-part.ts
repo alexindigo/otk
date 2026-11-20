@@ -25,6 +25,9 @@ export function unknownPartPresentation(part: Part): PartPresentation {
     ? source?.payload
     : undefined;
   return {
+    ...(part.kind === "external" && part.failure
+      ? { failure: part.failure }
+      : {}),
     frame: "transcript",
     ...(activity?.layout === "row" && activity.direction !== "outgoing"
       ? { work: {} }

@@ -142,6 +142,7 @@ export default function ProjectChip(props: {
         status={
           <Show when={error() || props.feedback}>
             <FeedbackStatus
+              compact
               feedback={errorFeedback(error() || props.feedback)}
             />
           </Show>
