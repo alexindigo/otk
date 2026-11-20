@@ -19,6 +19,8 @@ export interface EntryChange {
   completedAt?: number;
   completedOutcome?: TerminalOutcome;
   completedUnseen?: boolean;
+  completionOrigin?: "live" | "historical";
+  completedFailure?: TerminalEvidence["terminalFailure"];
 }
 export interface EntryChanges {
   generation: string;
@@ -36,6 +38,7 @@ export interface AttentionProjection {
     baseline?: boolean,
     outcome?: TerminalOutcome,
     unseen?: boolean,
+    evidence?: TerminalEvidence,
   ): void;
   /** Admission replays known state, even when it advances an older clock. */
   admitFinished(
@@ -43,6 +46,7 @@ export interface AttentionProjection {
     time: number,
     outcome?: TerminalOutcome,
     unseen?: boolean,
+    evidence?: TerminalEvidence,
   ): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
   reset(): void;
@@ -183,6 +187,8 @@ export function createAttentionProjection(o: {
               completedAt: completed.get(id)?.terminal ?? 0,
               completedOutcome: completed.get(id)?.outcome,
               completedUnseen: completed.get(id)?.unseen,
+              completionOrigin: completed.get(id)?.terminalOrigin,
+              completedFailure: completed.get(id)?.terminalFailure,
             }
             : {}),
         });
@@ -208,6 +214,7 @@ export function createAttentionProjection(o: {
     baseline = false,
     outcome?: TerminalOutcome,
     unseen?: boolean,
+    evidence?: TerminalEvidence,
     admitted = false,
   ) => {
     const previous = finishClocks.get(id);
@@ -216,14 +223,23 @@ export function createAttentionProjection(o: {
         (time < (previous.terminal ?? 0) ||
           time === previous.terminal &&
             (!outcome || outcome === previous.outcome) &&
-            unseen === previous.unseen)
+            unseen === previous.unseen &&
+            JSON.stringify(evidence?.terminalFailure) ===
+              JSON.stringify(previous.terminalFailure))
     ) return;
-    const value = { terminal: time, ...(outcome ? { outcome } : {}), unseen };
+    const replay = baseline || admitted ||
+      evidence?.terminalOrigin === "historical" ||
+      previous?.terminal === time;
+    const value = {
+      terminal: time,
+      ...(outcome ? { outcome } : {}),
+      unseen,
+      terminalOrigin: replay ? "historical" as const : "live" as const,
+      ...(evidence?.terminalFailure
+        ? { terminalFailure: evidence.terminalFailure }
+        : {}),
+    };
     finishClocks.set(id, value);
-    if (
-      (admitted || baseline && previous === undefined) &&
-      (!previous || unseen === previous.unseen)
-    ) return;
     completed.set(id, value);
     update([id], false, false, true);
   };
@@ -247,8 +263,8 @@ export function createAttentionProjection(o: {
     },
     update,
     finished,
-    admitFinished(id, time, outcome, unseen) {
-      finished(id, time, false, outcome, unseen, true);
+    admitFinished(id, time, outcome, unseen, evidence) {
+      finished(id, time, false, outcome, unseen, evidence, true);
     },
     subscribe(listener) {
       if (stopped) return () => {};

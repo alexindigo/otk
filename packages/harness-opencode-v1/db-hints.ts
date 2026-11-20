@@ -64,6 +64,7 @@ export function terminalSessions(
     activity: {
       terminal: Number(row.terminal),
       outcome: row.terminal_outcome as import("@otk/protocol").TerminalOutcome,
+      terminalOrigin: "historical",
     },
   }));
 }

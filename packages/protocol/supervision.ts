@@ -17,6 +17,10 @@ export interface TerminalEvidence {
   terminal?: number;
   /** Outcome belongs only to this exact terminal watermark; absent means unknown. */
   outcome?: TerminalOutcome;
+  /** Acquired history/backfill is state, never a new live terminal edge. */
+  terminalOrigin?: "live" | "historical";
+  /** Public native failure facts for this exact terminal, independent of bodies. */
+  terminalFailure?: import("./requests.ts").PublicFailure;
 }
 /** Parent-owned positive receipt, correlated by the plugin to this exact run.
  * This is not a human-view event and never covers a later child terminal. */
@@ -37,9 +41,24 @@ export function latestTerminal(
         terminal: value.terminal,
         // Explicit absence clears an older outcome in composed activity objects.
         outcome: value.outcome,
+        ...(value.terminalOrigin
+          ? { terminalOrigin: value.terminalOrigin }
+          : {}),
+        ...(value.terminalFailure
+          ? { terminalFailure: value.terminalFailure }
+          : {}),
       };
-    } else if (value.outcome) {
-      result = { terminal: value.terminal, outcome: value.outcome };
+    } else {
+      result = {
+        ...result,
+        ...(value.outcome ? { outcome: value.outcome } : {}),
+        ...(value.terminalOrigin
+          ? { terminalOrigin: value.terminalOrigin }
+          : {}),
+        ...(value.terminalFailure
+          ? { terminalFailure: value.terminalFailure }
+          : {}),
+      };
     }
   }
   return result;

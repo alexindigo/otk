@@ -22,6 +22,16 @@ export class SessionSupervision {
     const outcome = terminal === evidence?.terminal
       ? evidence.outcome
       : undefined;
+    const detail = terminal === evidence?.terminal
+      ? {
+        ...(evidence.terminalOrigin
+          ? { terminalOrigin: evidence.terminalOrigin }
+          : {}),
+        ...(evidence.terminalFailure
+          ? { terminalFailure: evidence.terminalFailure }
+          : {}),
+      }
+      : {};
     const delivery = evidence?.delivered;
     const delivered = delivery && delivery.parentID === entry.parentID &&
         delivery.receipt.length > 0 &&
@@ -35,6 +45,7 @@ export class SessionSupervision {
         state: "none",
         terminal,
         unseen: false,
+        ...detail,
         ...(outcome ? { outcome } : {}),
       };
     }
@@ -49,7 +60,13 @@ export class SessionSupervision {
       : unseen
       ? "finishedUnseen"
       : "none";
-    return { state, terminal, unseen, ...(outcome ? { outcome } : {}) };
+    return {
+      state,
+      terminal,
+      unseen,
+      ...detail,
+      ...(outcome ? { outcome } : {}),
+    };
   }
   status(value: Supervision): ProjectStatus {
     return value.state === "needsYou"

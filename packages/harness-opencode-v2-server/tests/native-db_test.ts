@@ -2,6 +2,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { V2NativeDb } from "../native-db.ts";
+import { metadata } from "../metadata.ts";
 
 Deno.test("V2 saved worktree inventory is bounded, project-scoped and schema-tolerant", () => {
   const root = Deno.makeTempDirSync({ prefix: "v2-worktrees-" }),
@@ -135,6 +136,56 @@ Deno.test("V2 scalar DB tolerates optional columns but rejects missing routing a
       Error,
       "Incompatible native session_v2 schema",
     );
+  } finally {
+    writer.close();
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
+Deno.test("V2 historical terminal metadata retains the native quota cause and recovery without a transcript", () => {
+  const root = Deno.makeTempDirSync({ prefix: "v2-terminal-failure-" }),
+    file = root + "/native.db";
+  const writer = new DatabaseSync(file);
+  try {
+    writer.exec(
+      "CREATE TABLE project(id TEXT,worktree TEXT); CREATE TABLE session_v2(id TEXT,project_id TEXT,directory TEXT,parent_id TEXT,time_created INTEGER,time_updated INTEGER,title TEXT,time_idle INTEGER,idle_outcome TEXT); CREATE TABLE session_message(session_id TEXT,seq INTEGER,type TEXT,time_created INTEGER,data TEXT); INSERT INTO session_v2 VALUES('ses_failed','p','/repo',NULL,1,100,'Failed session',100,'failed')",
+    );
+    writer.prepare(
+      "INSERT INTO session_message VALUES('ses_failed',1,'idle',100,?)",
+    ).run(JSON.stringify({
+      outcome: "failed",
+      time: { created: 100 },
+      error: {
+        type: "provider.quota",
+        message: "The usage limit has been reached",
+      },
+    }));
+    // A later failed record must not supply the reason for this terminal.
+    writer.prepare(
+      "INSERT INTO session_message VALUES('ses_failed',2,'idle',200,?)",
+    ).run(JSON.stringify({
+      outcome: "failed",
+      time: { created: 200 },
+      error: { type: "other", message: "Wrong terminal" },
+    }));
+    const db = new V2NativeDb(file);
+    try {
+      const scalar = db.lookup(["opcv2-ses_failed"])[0];
+      const hydrated = metadata(db.facts(["opcv2-ses_failed"])[0]);
+      for (const row of [scalar, hydrated]) {
+        assertEquals(row.activity?.terminalOrigin, "historical");
+        assertEquals(
+          row.activity?.terminalFailure?.facts?.reason,
+          "The usage limit has been reached",
+        );
+        assertEquals(
+          row.activity?.terminalFailure?.facts?.recovery,
+          "Check your provider quota or choose another available model, then send a new prompt.",
+        );
+      }
+    } finally {
+      db.close();
+    }
   } finally {
     writer.close();
     Deno.removeSync(root, { recursive: true });
