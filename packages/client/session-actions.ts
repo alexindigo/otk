@@ -26,6 +26,7 @@ import {
   type SessionDelivery,
 } from "./session-delivery.ts";
 import type { StateFactory } from "./state.ts";
+import { pendingMessage, pendingMessageID } from "./pending-send.ts";
 
 export interface SessionActions {
   delivery(target: Selection): SessionDelivery;
@@ -77,6 +78,7 @@ export function createSessionActions(o: {
     & Pick<ClientSession, "state">
     & Partial<Pick<ClientSession, "transcripts">>;
   factory?: StateFactory;
+  promptBlocks?(text: string): import("@otk/protocol").Block[];
   current: CurrentClient;
   branchHistory?: Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">;
   /** Wrap the common submission lifetime, including shell/native commands. */
@@ -139,13 +141,17 @@ export function createSessionActions(o: {
       return action(path);
     }, visit);
   };
-  const submission = (target: Selection): SessionSubmission =>
+  const submission = (
+    target: Selection,
+    captured?: IntentGroup,
+  ): SessionSubmission =>
     createSessionSubmission({
       sessionID: target.sessionID,
       group: () =>
-        new IntentGroup(
-          resources.sidecars.connection(target.sidecarId).rpc.intent(),
-        ),
+        captured ??
+          new IntentGroup(
+            resources.sidecars.connection(target.sidecarId).rpc.intent(),
+          ),
       directory: () => directory(target),
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
@@ -374,17 +380,56 @@ export function createSessionActions(o: {
     },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();
-      await delivery(target).send(() =>
-        submission(target)(async (options) => {
-          const prepared = await attachments(parts, target.sidecarId);
-          return await rpc.call("session.prompt", {
-            sessionID: target.sessionID,
-            mode: "normal",
-            parts: prepared,
-            ...selection,
-          }, options);
-        })
+      const group = new IntentGroup(rpc.intent());
+      const intent = group.options("send", target.sessionID).intent!;
+      const messageID = pendingMessageID(intent);
+      const message = pendingMessage(
+        messageID,
+        target.sessionID,
+        parts,
+        o.promptBlocks,
       );
+      const send = (captured: IntentGroup): Promise<void> =>
+        delivery(target).send(
+          () =>
+            submission(target, captured)(async (options) => {
+              const prepared = await attachments(parts, target.sidecarId);
+              const transcript = session.transcripts?.get(target);
+              const pending = transcript?.projection.entry(messageID)?.send;
+              if (pending && pending.phase !== "committed") {
+                transcript?.send?.({
+                  ...pending,
+                  message: {
+                    ...pending.message,
+                    parts: pendingMessage(
+                      messageID,
+                      target.sessionID,
+                      prepared,
+                      o.promptBlocks,
+                    ).parts,
+                  },
+                });
+              }
+              return await rpc.call("session.prompt", {
+                sessionID: target.sessionID,
+                messageID,
+                mode: "normal",
+                parts: prepared,
+                ...selection,
+              }, options);
+            }),
+          {
+            intent,
+            message,
+            phase: "pending",
+            retry: () => {
+              void send(new IntentGroup(rpc.intent())).catch((cause) => {
+                console.error("Pending-send retry diagnostic", target, cause);
+              });
+            },
+          },
+        );
+      await send(group);
     },
     async abort(target = current.context().selection, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;

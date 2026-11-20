@@ -1,8 +1,19 @@
 # @otk/client
 
-`SessionActions` owns source-free, session-bound submission receipts. Native
-acceptance carries a message identity; only the canonical transcript can admit
-it, and only the viewport can report its presentation. The ten-second
+`createTranscriptProjection` owns local sends and native messages in the same
+entry collection. Normal Send captures its request identity and native message
+ID together before preparation, publishes the ordinary user message immediately,
+then commits that entry on native identity evidence, including evidence
+preceding acknowledgement. Pending and failed entries survive reconnect and OTK
+process replacement in the open browser; no prompt payload is persisted in
+server request receipts. Cooling releases committed local bindings, while
+unresolved input stays owned by its entry. The ten-second observation bound
+starts at Send. Timeout Retry only reacquires existing source; definitive
+refusal offers an explicit send retry.
+
+`SessionActions` also owns source-free, session-bound submission receipts.
+Native acceptance carries a message identity; only the canonical transcript can
+admit it, and only the viewport can report its presentation. The ten-second
 observation deadline is not a mutation timeout: recovery reloads canonical
 messages and never resends input. Own sends switch the existing viewport to
 follow; canonical append revisions expose new messages even near the tail.

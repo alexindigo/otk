@@ -178,13 +178,15 @@ Deno.test("V2 successful prompt returns the exact submitted native identity", as
   const f = fixture();
   const receipt: unknown = await f.prompt.prompt({
     sessionID: "opcv2-ses_root",
+    messageID: "msg_123456789abcdef01234567890",
     mode: "normal",
     parts: [{ kind: "text", text: "Correlate this send" }],
   }, f.operation);
   assertEquals(receipt, {
-    messageID: f.submissions[0].messageID,
+    messageID: "msg_123456789abcdef01234567890",
     state: "queued",
   });
+  assertEquals(f.submissions[0].messageID, "msg_123456789abcdef01234567890");
 });
 Deno.test("V2 failed preparation leaves every selection untouched; uncertain later switch is never resent", async () => {
   const f = fixture();

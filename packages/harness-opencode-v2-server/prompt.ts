@@ -308,7 +308,7 @@ export class V2Prompt implements PromptCapability {
         });
       }
       const origin = operation?.key.origin;
-      const id = submissionID();
+      const id = input.messageID ?? submissionID();
       if (this.submitted && origin) {
         await this.submitted(input.sessionID, id, origin);
       }

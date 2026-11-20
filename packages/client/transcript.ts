@@ -120,6 +120,7 @@ export type ToolCompletionSource = (
   listener: (part: ToolPart) => void,
 ) => () => void;
 export interface TranscriptOwner {
+  send?(value: import("./pending-send.ts").PendingSend): void;
   readonly deliveryDiagnostics?: ContentDeliveryDiagnostics;
   progress?(): ProgressDisplay;
   state: TranscriptState;
@@ -1014,6 +1015,10 @@ export function createTranscript(
     deliveryDiagnostics,
     progress: () => readProgress.display("page", readLabel),
     projection,
+    send(value) {
+      projection.send(value);
+      setState(() => {});
+    },
     interaction,
     snapshotPage: (before, cancellation) => {
       const signal = cancellation
@@ -1092,6 +1097,7 @@ export function createTranscript(
       });
       if (value === "cold") {
         readProgress.stop();
+        projection.releaseCommittedSends();
         open();
         cursor = null;
         setState((draft) => {

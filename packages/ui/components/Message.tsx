@@ -11,6 +11,8 @@ import WorkLog from "./WorkLog.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import ActivityIndicator from "./ActivityIndicator.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -168,6 +170,7 @@ export default function Message(
     segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
+    send?: import("@otk/client").TranscriptReply["send"];
     recovery?: "recovering" | "unavailable";
     onRetryRecovery?(): void;
     metadata?: import("@otk/protocol").AssistantMessage | null;
@@ -296,7 +299,7 @@ export default function Message(
       : undefined,
     lastID: props.lastID ?? props.message.id,
     completed: isAssistantTerminal(props.message),
-    queued: props.queued,
+    queued: props.queued || !!props.send && props.send.phase !== "committed",
   });
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
@@ -352,6 +355,8 @@ export default function Message(
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
+        data-send-state={props.send?.phase}
+        data-send-key={props.send?.intent.key}
         tabindex="-1"
       >
         <For each={frames()} keyed={(frame) => frame.id}>
@@ -473,11 +478,22 @@ export default function Message(
               >
                 {new Date(props.message.time.created).toLocaleString()}
               </time>
-              <Show when={props.queued}>
+              <Show when={props.send?.phase === "pending"}>
+                <ChromeMeta class="otk-send-meta">
+                  <ActivityIndicator small label="Sending" />Sending
+                </ChromeMeta>
+              </Show>
+              <Show
+                when={props.queued &&
+                  (!props.send || props.send.phase === "committed")}
+              >
                 <span class="otk-queued">Queued</span>
               </Show>
             </span>
-            <Show when={!props.readOnly}>
+            <Show
+              when={!props.readOnly &&
+                (!props.send || props.send.phase === "committed")}
+            >
               <MessageActions
                 kind="prompt"
                 revealed={revealed()}
@@ -487,6 +503,12 @@ export default function Message(
               />
             </Show>
           </footer>
+          <Show when={props.send?.phase === "failed"}>
+            <FeedbackStatus
+              class="otk-send-failure"
+              feedback={props.send?.feedback}
+            />
+          </Show>
         </Show>
         <Show when={assistant()}>
           {(message) => (

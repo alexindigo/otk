@@ -21,6 +21,7 @@
 }
 .otk-user-meta {
   display: flex;
+  min-block-size: var(--control-size);
   align-items: center;
   gap: var(--space-3);
   padding-inline: var(--space-2);
@@ -91,4 +92,12 @@
   margin-top: var(--space-6);
   padding-top: var(--space-3);
   border-top: 1px solid var(--otk-border);
+}
+.otk-send-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-send-failure {
+  max-width: 80%;
 }

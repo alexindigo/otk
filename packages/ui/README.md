@@ -1,5 +1,11 @@
 # @otk/ui
 
+Local sends use ordinary Message, not a receipt bubble. Its transcript-owned
+`send` input supplies pending/committed/failed state. Pending metadata borrows
+ChromeMeta and the shared ActivityIndicator; failures borrow FeedbackStatus and
+its owner-provided Retry. The user metadata track retains the shared control
+height through commitment, and native-only actions are absent before commitment.
+
 All Copy actions borrow `clipboard.ts`: native clipboard writes on secure pages,
 then a selection-preserving textarea/execCommand fallback, including plain HTTP.
 If both refuse, the owner rejects with FP1 action, target, reason and

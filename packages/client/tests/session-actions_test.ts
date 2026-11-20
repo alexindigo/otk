@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertMatch, assertRejects } from "@std/assert";
 import * as client from "@otk/client";
 import type { PromptPart } from "@otk/protocol";
 import {
@@ -368,6 +368,10 @@ Deno.test("session actions prompt captures invocation target and enters submissi
     model: { provider: "p", model: "m" },
     variant: "high",
   });
+  const captured =
+    actions.delivery({ sidecarId: "local", sessionID: "selected" }).state
+      .receipts[0];
+  assertMatch(captured.messageID!, /^msg_[0-9a-f]{26}$/);
   await admitted.promise;
   f.session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   f.reply((_id, method, params) =>
@@ -403,6 +407,7 @@ Deno.test("session actions prompt captures invocation target and enters submissi
     }],
     ["local", "session.prompt", {
       sessionID: "selected",
+      messageID: captured.messageID,
       mode: "normal",
       parts: [
         {
