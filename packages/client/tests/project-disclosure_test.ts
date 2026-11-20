@@ -74,7 +74,7 @@ Deno.test("every section shares disclosure identity without aliasing servers or 
 
 function row(
   directory: string,
-  status: "none" | "working" = "none",
+  status: "none" | "working" | "blocked" | "finished" = "none",
   root = "/repo",
 ) {
   return {
@@ -136,7 +136,7 @@ Deno.test("hierarchy artwork preserves unchanged owner row identity while topolo
   assertStrictEquals(changed[0], first[0]);
   assertEquals(changed[1].level, "project");
 });
-Deno.test("branch presentation handles empty, all-required, archive-only, mixed and large branches", () => {
+Deno.test("branch collapse hides every child and archive regardless of status", () => {
   for (const count of [0, 1, 2, 200]) {
     const tree = projectTree([
       row("/repo"),
@@ -145,43 +145,46 @@ Deno.test("branch presentation handles empty, all-required, archive-only, mixed 
         (_, n) => row(`/worktree-${n}`, "working"),
       ),
     ])[0];
-    const view = projectBranchPresentation(tree, false, {
-      count: 0,
-      status: "none",
-    });
-    assertEquals(view.children.length, count);
-    assertEquals(view.protectedCount, count);
+    const view = projectBranchPresentation(tree, false, 0);
+    assertEquals(view.children.length, 0);
+    assertEquals(view.bodyVisible, false);
     assertEquals(view.hasChildren, count > 0);
+    assertEquals(
+      projectBranchPresentation(tree, true, 0).children.length,
+      count,
+    );
   }
-  const tree =
-    projectTree([row("/repo"), row("/quiet"), row("/busy", "working")])[0];
+  const tree = projectTree([
+    row("/repo"),
+    row("/quiet"),
+    row("/busy", "working"),
+    row("/blocked", "blocked"),
+    row("/unseen", "finished"),
+  ])[0];
   assertEquals(
-    projectBranchPresentation(tree, false, { count: 1, status: "none" })
+    projectBranchPresentation(tree, false, 1)
       .children.map((c) => c.project.directory),
-    ["/busy"],
+    [],
+  );
+  assertEquals(
+    projectBranchPresentation(tree, true, 1).children.map((c) =>
+      c.project.directory
+    ),
+    ["/quiet", "/busy", "/blocked", "/unseen"],
   );
   const empty = projectTree([row("/repo")])[0];
   assertEquals(
-    projectBranchPresentation(empty, false, {
-      count: 3,
-      status: "finished",
-      requiredCount: 1,
-    }).protectedCount,
-    1,
-  );
-  assertEquals(
-    projectBranchPresentation(empty, false, { count: 1, status: "none" })
+    projectBranchPresentation(empty, false, 1)
       .archiveVisible,
     false,
   );
   assertEquals(
-    projectBranchPresentation(empty, true, { count: 1, status: "none" })
+    projectBranchPresentation(empty, true, 1)
       .archiveVisible,
     true,
   );
   assertEquals(
-    projectBranchPresentation(empty, false, { count: 1, status: "finished" })
-      .archiveVisible,
+    projectBranchPresentation(empty, false, 1).hasChildren,
     true,
   );
 });

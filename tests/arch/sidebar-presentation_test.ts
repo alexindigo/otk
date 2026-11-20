@@ -28,4 +28,5 @@ Deno.test("sidebar section counts must use the shared visit-clock metadata slot"
       "<ChromeMeta class={props.metaClass}>{props.count}</ChromeMeta>",
     ),
   );
+  assert(!slot.includes("otk-section-header-rule"));
 });

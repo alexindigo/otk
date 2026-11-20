@@ -15,14 +15,14 @@ const row = (directory: string, parent?: string, sidecarId = "local") => ({
   },
 } as ProjectProjectionRow & { sidecarId: string });
 
-Deno.test("project tree preserves topology, server identity and mandatory descendants", () => {
+Deno.test("project tree preserves topology and server identity independently of status", () => {
   const root = row("/repo"), child = row("/tree", "/repo");
   child.status = "working";
   const foreign = row("/tree", "/repo", "other");
   const tree = projectTree([root, child, foreign]);
   assertEquals(tree.map((node) => node.project.directory), ["/repo", "/tree"]);
   assertEquals(tree[0].children[0].key, projectTreeKey(child));
-  assertEquals(tree[0].required, true);
+  assertEquals(tree[0].children[0].project.status, "working");
   assertEquals(tree[1].children, []);
 });
 Deno.test("missing and cyclic project parents never hide projects", () => {
