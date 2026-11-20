@@ -22,8 +22,21 @@ export class SessionSupervision {
     const outcome = terminal === evidence?.terminal
       ? evidence.outcome
       : undefined;
+    const delivery = evidence?.delivered;
+    const delivered = delivery && delivery.parentID === entry.parentID &&
+        delivery.receipt.length > 0 &&
+        Number.isSafeInteger(delivery.terminal) &&
+        delivery.terminal > 0
+      ? delivery.terminal
+      : 0;
+    const unseen = terminal > Math.max(acknowledged, delivered);
     if (entry.deleted) {
-      return { state: "none", terminal, ...(outcome ? { outcome } : {}) };
+      return {
+        state: "none",
+        terminal,
+        unseen: false,
+        ...(outcome ? { outcome } : {}),
+      };
     }
     const needsInput = this.#fresh &&
       (evidence?.inputs?.fresh && evidence.inputs.keys.length ||
@@ -33,10 +46,10 @@ export class SessionSupervision {
       ? "needsYou"
       : this.#fresh && evidence?.work?.fresh && evidence.work.keys.length
       ? "working"
-      : terminal > acknowledged
+      : unseen
       ? "finishedUnseen"
       : "none";
-    return { state, terminal, ...(outcome ? { outcome } : {}) };
+    return { state, terminal, unseen, ...(outcome ? { outcome } : {}) };
   }
   status(value: Supervision): ProjectStatus {
     return value.state === "needsYou"

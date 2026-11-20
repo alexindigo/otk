@@ -79,6 +79,21 @@ observation clocks. Old clocks survive but cannot acknowledge proven history.
 Native viewed state is neither read nor written. Completion requires a proven
 terminal.
 
+Plugins can additionally supply `activity.delivered`: a parent-owned receipt
+correlated to one exact child terminal. SessionSupervision alone computes
+effective acknowledgement from explicit per-user seen and that delivered token,
+and publishes `unseen` independently of the winning work/input state. Delivery
+does not rewrite seen marks or finish/outcome history, and cannot acknowledge a
+later run. Every count, mandatory family, lamp and notification borrows this
+projection.
+
+Historical delivery acquisition uses the existing worker/native connection and
+credited `supervision.deliveries` channel. Plugin-private digest tables retain
+only receipt scalars and resumable parent coverage. Coalesced parent work gives
+retained terminal helpers priority and yields between bounded keysets. It does
+not block startup, acquire browser transcripts or read a parent for each child.
+Unavailable or ambiguous native proof leaves a helper unseen.
+
 ## View-scoped publication (protocol 20)
 
 A selected socket view parks optional work until the first message page settles.

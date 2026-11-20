@@ -43,7 +43,46 @@ export interface ProviderReadKinds
     result: import("@otk/protocol").SessionMetadata[];
     chunk: import("@otk/protocol").SessionMetadata[];
   };
+  "supervision.deliveries": {
+    input: { parentID: string; after?: string; refresh?: boolean };
+    result: DeliveryPage;
+    chunk: DeliveryPage;
+  };
 }
+export interface DeliveryPage {
+  updates: {
+    id: string;
+    delivered: import("@otk/protocol").DeliveredEvidence;
+  }[];
+  reset?: boolean;
+  /** Opaque, source-fenced continuation; absent means this bounded pass ended. */
+  after?: string;
+}
+export interface DeliveryScalar {
+  id: string;
+  delivered: import("@otk/protocol").DeliveredEvidence;
+}
+export interface DeliveryScan {
+  cursor: string;
+  complete: boolean;
+  updates: DeliveryScalar[];
+}
+export const deliveryReadCodec: ProviderReadCodec<"supervision.deliveries"> = {
+  *chunks(value) {
+    yield value;
+  },
+  create() {
+    let value: DeliveryPage = { updates: [] };
+    return {
+      append(chunk) {
+        value = chunk;
+      },
+      finish() {
+        return value;
+      },
+    };
+  },
+};
 export interface ProviderReadOptions {
   optional?: boolean;
   owner: string;
