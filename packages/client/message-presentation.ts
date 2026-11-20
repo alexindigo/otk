@@ -62,7 +62,9 @@ export function messagePresentation(
       ? {
         time: {
           timing: value?.timing,
-          ...(message.role !== "user" ? { outcome: message.outcomeTime } : {}),
+          ...(message.role !== "user" && message.outcomeTime
+            ? { outcome: message.outcomeTime }
+            : {}),
         },
       }
       : {}),
