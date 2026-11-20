@@ -1,13 +1,116 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-failure-content {
   display: grid;
   gap: var(--space-1);
+  min-inline-size: 0;
+  inline-size: 100%;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--danger);
+  color: var(--otk-fg);
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
   white-space: normal;
-  overflow-wrap: anywhere;
+  text-align: start;
+  container: otk-failure / inline-size;
 }
-.otk-failure-content.is-inline {
-  display: inline;
-  white-space: nowrap;
+.otk-failure-content.is-informational {
+  border-inline-start-color: var(--otk-fg-3);
 }
-.otk-failure-content.is-inline > * + * {
-  margin-inline-start: .5em;
+.otk-failure-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.otk-failure-heading strong {
+  flex: 0 1 auto;
+  max-inline-size: 70%;
+  font-weight: 500;
+}
+.otk-failure-target {
+  flex: 1;
+  min-inline-size: 0;
+}
+.otk-failure-time {
+  flex: none;
+  margin-inline-start: auto;
+}
+.otk-failure-body {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  max-inline-size: 76ch;
+}
+.otk-failure-body :is(.otk-failure-reason, .otk-failure-recovery) {
+  margin: 0;
+  color: var(--otk-fg);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.otk-failure-count,
+.otk-failure-diagnostic {
+  font-size: var(--text-meta);
+  color: var(--otk-fg-3);
+}
+.otk-failure-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-failure-details {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.otk-failure-details > summary {
+  --control-height: var(--control-size);
+  display: flex;
+  align-items: center;
+  gap: 0;
+  inline-size: fit-content;
+  min-block-size: var(--control-size);
+  cursor: pointer;
+  list-style: none;
+  color: var(--otk-fg-2);
+}
+.otk-failure-details > summary::-webkit-details-marker {
+  display: none;
+}
+.otk-failure-details > summary svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+  flex: none;
+}
+.otk-failure-details[open] > summary svg {
+  transform: rotate(90deg);
+}
+.otk-failure-detail-body {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  max-block-size: min(40dvh, 20rem);
+}
+.otk-failure-diagnostic {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-failure-content.is-reference {
+  border: 0;
+  padding: 0;
+}
+.otk-failure-disclosed-reason,
+.otk-failure-content.is-compact .otk-failure-main-reason {
+  display: none;
+}
+.otk-failure-content.is-compact .otk-failure-disclosed-reason {
+  display: block;
+}
+@container otk-failure (max-width: 320px) {
+  .otk-failure-main-reason {
+    display: none;
+  }
+  .otk-failure-disclosed-reason {
+    display: block;
+  }
 }

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-native-record.is-error .otk-tool-state {
-  color: var(--otk-status-error);
+  color: var(--otk-fg-2);
 }
 .otk-native-parameters {
   display: grid;
@@ -24,8 +24,4 @@
 button.otk-native-value {
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-.otk-native-recovery {
-  color: var(--otk-status-error);
-  font-size: var(--text-meta);
 }

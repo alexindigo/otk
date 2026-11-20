@@ -2,7 +2,8 @@
 import "./ToolFrame.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { Preferences, ToolCall } from "@otk/protocol";
-import { toolFailure } from "@otk/client";
+import { errorFeedback, toolFailure } from "@otk/client";
+import FeedbackStatus from "../FeedbackStatus.tsx";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
 import EntityPill from "../EntityPill.tsx";
@@ -32,12 +33,6 @@ export default function ToolFrame(props: {
   const parent = useContentIdentity();
   const failure = () => toolFailure(props.call);
   const identity = () => ({ ...parent, callID: props.call.callID });
-  const [errorOpen, setErrorOpen] = retainedDisclosure(
-    "tool-error",
-    "toolOutput",
-    () => props.prefs ?? {},
-    identity(),
-  );
   const [open, setExpanded] = retainedDisclosure(
     "tool",
     () => props.presentation?.category ?? "toolOutput",
@@ -49,10 +44,6 @@ export default function ToolFrame(props: {
     expanded: open,
     toggle: () => setExpanded(!open()),
   });
-  const toggle = ownedAction(
-    "tool.error.toggle",
-    () => setErrorOpen(!errorOpen()),
-  );
   return (
     <ContentIdentityProvider value={identity()}>
       <section
@@ -75,6 +66,20 @@ export default function ToolFrame(props: {
           label={props.presentation?.verb ?? props.call.tool}
           open={open()}
           onOpen={setExpanded}
+          feedback={failure()
+            ? () => (
+              <FeedbackStatus
+                time={props.call.time.end}
+                feedback={errorFeedback(failure(), {
+                  actionLabel: props.presentation?.verb ?? props.call.tool,
+                  target: {
+                    ...identity(),
+                    label: props.presentation?.target ?? props.call.tool,
+                  },
+                })}
+              />
+            )
+            : undefined}
           header={() => (
             <header
               class={["otk-tool-state otk-control-row", {
@@ -151,7 +156,7 @@ export default function ToolFrame(props: {
                     class="otk-control-label otk-control-grow"
                     title={failure()}
                   >
-                    Failed: {failure()}
+                    Failed
                   </span>
                   {" "}
                 </Show>
@@ -164,16 +169,6 @@ export default function ToolFrame(props: {
                   </span>
                 </Show>
               </button>
-              <Show when={failure()}>
-                <button
-                  type="button"
-                  class="otk-tool-error-toggle"
-                  aria-expanded={errorOpen() ? "true" : "false"}
-                  onClick={() => void toggle()}
-                >
-                  Error details
-                </button>
-              </Show>
             </header>
           )}
           body={() => (
@@ -187,9 +182,6 @@ export default function ToolFrame(props: {
             </>
           )}
         />
-        <Show when={failure() && errorOpen()}>
-          <pre class="otk-tool-error" role="alert">{failure()}</pre>
-        </Show>
       </section>
     </ContentIdentityProvider>
   );

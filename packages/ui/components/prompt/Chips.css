@@ -5,11 +5,25 @@
   gap: var(--space-2);
 }
 .otk-prompt-chip {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   border: 1px solid var(--muted);
   border-radius: var(--radius-pill);
   max-width: 100%;
+}
+.otk-prompt-chip.has-error {
+  inline-size: 100%;
+}
+.otk-prompt-chip > button:first-child {
+  grid-area: 1 / 1;
+}
+.otk-prompt-chip > button:last-child {
+  grid-area: 1 / 2;
+}
+.otk-prompt-chip-feedback {
+  grid-column: 1 / -1;
+  padding: var(--space-2);
 }
 .otk-prompt-chip button {
   border: 0;

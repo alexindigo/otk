@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Feedback, SidecarState } from "@otk/client";
+import { errorFeedback, type Feedback, type SidecarState } from "@otk/client";
 
 export type ConnectionInput = Pick<
   SidecarState,
-  "label" | "status" | "harness" | "error"
+  "label" | "status" | "harness" | "error" | "feedback"
 >;
 export const CONNECTION_STATES = {
   connected: { label: "Connected", shape: "✓" },
@@ -44,7 +44,12 @@ export function connectionLabel(connection?: ConnectionInput): string {
 export function connectionFeedback(
   connection: ConnectionInput,
 ): Feedback | undefined {
-  if (connection.error) return { kind: "error", text: connection.error };
+  if (connection.error) {
+    return connection.feedback ?? errorFeedback(connection.error, {
+      actionLabel: "Connecting",
+      target: { label: connection.label },
+    });
+  }
   if (connection.status === "reconnecting") {
     return { kind: "info", text: "Reconnecting to OTK..." };
   }

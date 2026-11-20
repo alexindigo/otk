@@ -5,6 +5,7 @@ import type { Chip } from "./model.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 import { errorFeedback } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
+import { CloseIcon } from "../ChromeIcons.tsx";
 function title(chip: Chip): string | undefined {
   const part = chip.part;
   return chip.error
@@ -37,8 +38,8 @@ export default function Chips(
     <div class="otk-prompt-chips">
       <For each={props.chips} keyed={(chip) => chip.id}>
         {(chip) => (
-          <span
-            class="otk-prompt-chip"
+          <div
+            class={["otk-prompt-chip", { "has-error": !!chip().error }]}
             aria-busy={chip().pending ? "true" : "false"}
           >
             <button
@@ -60,16 +61,20 @@ export default function Chips(
               </span>
             </button>
             <Show when={chip().error}>
-              <FeedbackStatus feedback={errorFeedback(chip().error)} />
+              <FeedbackStatus
+                class="otk-prompt-chip-feedback"
+                compact
+                feedback={errorFeedback(chip().error)}
+              />
             </Show>
             <button
               type="button"
               aria-label={`Remove ${chip().label}`}
               onClick={() => void remove(chip())}
             >
-              ×
+              <CloseIcon />
             </button>
-          </span>
+          </div>
         )}
       </For>
     </div>

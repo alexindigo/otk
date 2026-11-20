@@ -384,7 +384,7 @@ export default function ListPicker<T = string>(props: {
           <Show
             when={props.error && !props.loading && props.status === undefined}
           >
-            <FeedbackStatus error={props.error} />
+            <FeedbackStatus compact error={props.error} />
           </Show>
         </div>
       </Show>

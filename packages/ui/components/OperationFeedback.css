@@ -3,5 +3,5 @@
   color: var(--otk-fg);
 }
 .otk-operation-feedback.is-error {
-  color: var(--danger);
+  color: var(--otk-fg);
 }

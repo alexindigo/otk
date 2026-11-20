@@ -137,10 +137,23 @@
 .otk-server-connections {
   margin-left: auto;
 }
+.otk-inbox-error {
+  flex-basis: 100%;
+}
 .otk-server-connection {
-  display: flex;
-  align-items: center;
+  display: grid;
+  min-inline-size: 0;
   font-size: var(--text-meta);
+}
+.otk-server-connections:has(.otk-feedback-status.is-visible) {
+  flex-basis: 100%;
+  margin-inline: 0;
+  min-inline-size: 0;
+}
+.otk-server-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .otk-server-connection > button {
   overflow: hidden;

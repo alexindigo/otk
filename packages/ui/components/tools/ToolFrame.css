@@ -62,21 +62,8 @@
   color: var(--fg);
   white-space: pre-wrap;
 }
-.otk-tool-line[data-tool-status=error] .otk-tool-state,
-.otk-tool-error {
-  color: var(--otk-status-error);
-}
 .otk-tool-line[data-tool-status=denied] :is(.otk-tool-toggle, .otk-tool-summary) {
   text-decoration: line-through;
-}
-.otk-tool-error {
-  white-space: pre-wrap;
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
-}
-.otk-tool-error-toggle {
-  align-self: flex-start;
-  font-size: var(--text-meta);
-  padding: var(--space-1) var(--space-2);
 }
 .otk-tool-add,
 .otk-tool-del {
@@ -89,5 +76,5 @@
   color: var(--otk-diff-del);
 }
 .otk-tool-state.is-error {
-  color: var(--otk-status-error);
+  color: var(--otk-fg-2);
 }

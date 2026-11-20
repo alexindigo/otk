@@ -16,6 +16,8 @@ export interface PartPresentation {
   hidden?: boolean;
   /** Its row must be visible even when an enclosing group defaults closed. */
   required?: boolean;
+  /** A retained failure owns the reply's full facts, not its legacy error copy. */
+  failure?: import("@otk/protocol").PublicFailure;
   /** Flow directly in the transcript rather than inside a message bubble. */
   frame?: "transcript";
 }
@@ -157,6 +159,8 @@ export interface PartProps {
   pending?: boolean;
   /** Original context-record clock, supplied by its canonical message owner. */
   recordTime?: number;
+  /** Producer-supplied terminal instant; never inferred from record observation. */
+  failureTime?: number;
 }
 export type PartRenderer = (props: PartProps) => Element;
 export class PartRegistry {

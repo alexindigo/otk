@@ -8,7 +8,7 @@ import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
-import { errorFeedback, type FailureValue } from "@otk/client";
+import { errorFeedback, type FailureValue, presentFailure } from "@otk/client";
 
 const action = (entry: Activity) =>
   entry.reply === "reject"
@@ -65,20 +65,30 @@ export default function PermissionActivity(props: {
               </header>
               <p class="otk-muted">{props.title(entry().request.sessionID)}</p>
               <PermissionSummary request={entry().request} />
-              <p
-                class={entry().outcome === "failed" ? "otk-error" : "otk-muted"}
+              <Show
+                when={entry().outcome === "failed"}
+                fallback={
+                  <p class="otk-muted">
+                    {entry().outcome === "confirmed"
+                      ? (entry().reply === "reject" ? "Rejected" : "Allowed")
+                      : "Reply started; outcome not confirmed"}
+                  </p>
+                }
               >
-                {entry().outcome === "confirmed"
-                  ? (entry().reply === "reject" ? "Rejected" : "Allowed")
-                  : entry().outcome === "failed"
-                  ? entry().failure?.facts?.reason
-                    ? `${entry().failure!.facts!.reason} ${
-                      entry().failure!.facts!.recovery ??
-                        "Review this request before trying again."
-                    }`
-                    : "The response could not be sent. Review this request before trying again"
-                  : "Reply started; outcome not confirmed"}
-              </p>
+                <FeedbackStatus
+                  compact
+                  feedback={entry().failure
+                    ? presentFailure(entry().failure!, "record")
+                    : errorFeedback("The response could not be sent", {
+                      actionLabel: "Sending permission response",
+                      target: {
+                        sessionID: entry().request.sessionID,
+                        label: props.title(entry().request.sessionID),
+                      },
+                      recovery: "Review this request before trying again",
+                    })}
+                />
+              </Show>
               <Show when={entry().message}>
                 <p>{entry().message}</p>
               </Show>
