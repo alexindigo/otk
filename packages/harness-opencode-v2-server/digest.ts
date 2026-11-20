@@ -1007,6 +1007,10 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         await this.#ensure(input.sessionID, signal, false);
         return this.transcript.sequence(input.sessionID, input.messageID);
       },
+      "opcv2.transcript.head": async (input, signal) => {
+        await this.#ensure(input.sessionID, signal, false);
+        return this.transcript.head(input.sessionID, input.cutoff);
+      },
       "opcv2.message.prefetch": async (input, signal) => {
         await this.#ensure(input.sessionID, signal);
         const value = await this.transcript.prefetch(input, signal);

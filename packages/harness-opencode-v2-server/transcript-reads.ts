@@ -50,6 +50,12 @@ export interface TranscriptFacts {
   contexts: Record<string, MessageContext>;
   cutoffOrder?: number;
 }
+/** Native completeness witness, not an OTK publication clock. */
+export interface NativeHead {
+  id: string;
+  seq?: number;
+  updated?: number;
+}
 export interface TranscriptInput {
   sessionID: string;
   messages: string[];
@@ -72,6 +78,7 @@ export interface HelperAggregate {
 function jsonCodec<
   K extends
     | "opcv2.transcript"
+    | "opcv2.transcript.head"
     | "opcv2.message.prefetch"
     | "opcv2.request.anchor"
     | "opcv2.helper.progress",
@@ -107,6 +114,7 @@ function jsonCodec<
 export const transcriptReadCodecs: ProviderReadCodecs = {
   "opcv2.helper.progress": jsonCodec<"opcv2.helper.progress">(),
   "opcv2.transcript": jsonCodec<"opcv2.transcript">(),
+  "opcv2.transcript.head": jsonCodec<"opcv2.transcript.head">(),
   "opcv2.message.prefetch": jsonCodec<"opcv2.message.prefetch">(),
   "opcv2.request.anchor": jsonCodec<"opcv2.request.anchor">(),
 };
@@ -538,6 +546,25 @@ export class TranscriptReads {
           "SELECT seq FROM session_message WHERE session_id=? ORDER BY seq DESC LIMIT 1",
         ).get(sid);
     return row ? { seq: Number(row.seq) } : {};
+  }
+  head(sessionID: string, cutoff?: string): NativeHead | null {
+    const sql = this.native();
+    if (!sql) return null;
+    const sid = ids.decode(sessionID);
+    const row = cutoff
+      ? sql.prepare(
+        "SELECT id,seq,time_updated FROM session_message WHERE session_id=? AND seq<(SELECT seq FROM session_message WHERE session_id=? AND id=?) ORDER BY seq DESC LIMIT 1",
+      ).get(sid, sid, cutoff)
+      : sql.prepare(
+        "SELECT id,seq,time_updated FROM session_message WHERE session_id=? ORDER BY seq DESC LIMIT 1",
+      ).get(sid);
+    return row
+      ? {
+        id: String(row.id),
+        seq: Number(row.seq),
+        updated: Number(row.time_updated),
+      }
+      : null;
   }
   sqlFacts(input: TranscriptInput): TranscriptFacts | undefined {
     const sql = this.native();

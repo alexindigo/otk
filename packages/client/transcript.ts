@@ -344,7 +344,7 @@ export function createTranscript(
   ) =>
     op.op === "message.upsert" && bounded && first &&
     !projection.state.messagesByID[op.message.id] &&
-    op.message.time.created < first.time.created;
+    compareMessages(op.message, first) < 0;
   const apply = (content: ContentState, op: ContentOp): ContentState => {
     if (isAttentionOp(op)) {
       requests.receive(op);
@@ -1473,9 +1473,13 @@ export function createTranscript(
                   : "",
               )
             ) ||
-              frame.event.message.time.created <
-                (state.content.messages.at(-MESSAGE_ADMISSION_WATERMARK)?.time
-                  .created ?? -Infinity))
+              (() => {
+                const first = state.content.messages.at(
+                  -MESSAGE_ADMISSION_WATERMARK,
+                );
+                return first !== undefined &&
+                  compareMessages(frame.event.message, first) < 0;
+              })())
           ) {
             // Only retained pages and the live tail own bodies; old identities do not resurrect their source.
             setState((draft) => {
