@@ -5,6 +5,7 @@ import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
+import { clockTitle } from "../components/Clock.tsx";
 import "./Shell.css" with { type: "text" };
 import ScrollRegion from "../components/ScrollRegion.tsx";
 import {
@@ -36,7 +37,7 @@ import Login from "../components/Login.tsx";
 import NotificationSettings from "../components/NotificationSettings.tsx";
 import { paintVisualPreferences } from "../features/visual.ts";
 import { ProjectSettings } from "../features/projects.tsx";
-import SessionView from "../components/SessionView.tsx";
+import SessionView, { transcriptStatus } from "../components/SessionView.tsx";
 import Settings from "../components/Settings.tsx";
 import Setup from "../components/Setup.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
@@ -656,14 +657,14 @@ export default function Shell(
                             />
                             <ProgressStatus
                               class="otk-shell-progress"
-                              text={session.transcript?.state.load?.state ===
-                                    "loading" &&
-                                  !session.state.loading &&
-                                  session.transcript.progress?.().busy
-                                ? session.transcript.progress().text
-                                : resources.progress(owner.sidecarId).busy
+                              text={transcriptStatus({
+                                loading: session.state.loading,
+                                paging: session.state.paging,
+                                continuity: session.state.continuity,
+                                transcript: session.transcript,
+                              }) || (resources.progress(owner.sidecarId).busy
                                 ? resources.progress(owner.sidecarId).text
-                                : ""}
+                                : "")}
                             />
                           </>
                         )}
@@ -709,14 +710,11 @@ export default function Shell(
                                     entry().deleted?.how === "otk"
                                       ? "Deleted through OTK"
                                       : "Deleted from the agent service"
-                                  } on ${
-                                    new Date(entry().deleted!.at)
-                                      .toLocaleString()
-                                  }`}
+                                  } on ${clockTitle(entry().deleted!.at)}`}
                                   facts={deletedFacts(
                                     entry(),
                                     toggles.state.prefs.showCost,
-                                    (time) => new Date(time).toLocaleString(),
+                                    clockTitle,
                                   )}
                                   retained={guard.retained()}
                                   draftNotice={draft().input ||

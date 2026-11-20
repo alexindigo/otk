@@ -7,6 +7,9 @@ export function clockText(at: number): string {
     minute: "2-digit",
   });
 }
+export function clockTitle(at: number): string {
+  return new Date(at).toLocaleString(undefined, { timeZoneName: "short" });
+}
 
 /** One local-time presentation for transcript instants; the title keeps the date. */
 export default function Clock(props: { at: number; class?: string }) {
@@ -15,7 +18,7 @@ export default function Clock(props: { at: number; class?: string }) {
     <ChromeMeta class={props.class}>
       <time
         datetime={date().toISOString()}
-        title={date().toLocaleString(undefined, { timeZoneName: "short" })}
+        title={clockTitle(props.at)}
       >
         {clockText(props.at)}
       </time>

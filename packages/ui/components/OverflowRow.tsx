@@ -132,7 +132,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
             );
           }}
         </For>
-        <span ref={(e) => sizing = e}>…</span>
+        <span ref={(e) => sizing = e}>...</span>
       </div>
       <div class="otk-overflow-items">
         <For each={props.items} keyed={(item) => item.key}>

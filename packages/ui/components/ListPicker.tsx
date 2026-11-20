@@ -145,7 +145,7 @@ export default function ListPicker<T = string>(props: {
       triggerLabel={props.triggerLabel}
       busy={props.loading}
       description={props.loading
-        ? `Loading ${props.label.toLowerCase()}…`
+        ? `Loading ${props.label.toLowerCase()}...`
         : undefined}
       applied={props.applied}
       triggerColor={props.triggerColor}

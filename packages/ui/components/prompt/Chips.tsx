@@ -79,7 +79,6 @@ export default function Chips(
         {(chip) => (
           <Show when={chip().error}>
             <FieldFeedback
-              placement="record"
               id={feedbackID(chip())}
               feedback={errorFeedback(chip().error)}
             />

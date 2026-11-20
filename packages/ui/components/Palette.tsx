@@ -64,7 +64,7 @@ export default function Palette(
       <input
         name="command-search"
         aria-label="Find a command"
-        placeholder="Find a command…"
+        placeholder="Find a command..."
         autofocus
         value={query()}
         onInput={(event) => setQuery(event.currentTarget.value)}

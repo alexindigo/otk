@@ -104,7 +104,7 @@ export default function Form(
             if (button.isConnected) button.focus();
           }}
           feedback={pending()
-            ? { kind: "pending", text: props.pendingLabel ?? "Working…" }
+            ? { kind: "pending", text: props.pendingLabel ?? "Working..." }
             : undefined}
         >
           <button

@@ -78,7 +78,9 @@ for (
         if (kind === "native-null") {
           await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
           await open();
-          await expect(picker.locator("[role=status]")).toHaveText("Loading…");
+          await expect(picker.locator("[role=status]")).toHaveText(
+            "Loading...",
+          );
           await expect(
             page.locator(
               ".otk-variant-picker, .otk-prompt-context > span:not(.otk-popover)",
@@ -111,7 +113,9 @@ for (
             .toHaveText("restored-model");}
         await open();
         if (kind === "missing") {
-          await expect(picker.locator("[role=status]")).toHaveText("Loading…");
+          await expect(picker.locator("[role=status]")).toHaveText(
+            "Loading...",
+          );
           await expect(picker.locator(".otk-picker-empty")).toHaveCount(0);
           await expect(picker).not.toContainText("unavailable");
           // The loading presentation precedes backend acquisition; reject only

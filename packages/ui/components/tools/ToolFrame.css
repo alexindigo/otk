@@ -49,7 +49,7 @@
   opacity: 0;
   font-variant-numeric: tabular-nums;
 }
-.otk-tool-toggle:is(:hover,:focus-visible) .otk-tool-duration {
+.otk-tree-heading:is(:hover,:focus-within) .otk-tool-duration {
   opacity: 1;
 }
 .otk-tool-body {

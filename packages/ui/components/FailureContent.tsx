@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FailurePresentation, Feedback } from "@otk/client";
 import { createSignal, Show } from "solid-js";
-import { TreeNode } from "./Tree.tsx";
+import DisclosureToggle from "./DisclosureToggle.tsx";
 import Clock from "./Clock.tsx";
 import FailureSignal from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
@@ -56,6 +56,8 @@ export default function FailureContent(props: {
         "otk-failure-content",
         compact() ? "is-compact" : "",
         props.failure.reference ? "is-reference" : "",
+        props.placement === "record" ? "is-record" : "",
+        props.signal === false ? "is-unmarked" : "",
       ].filter(Boolean).join(" ")}
     >
       <Show
@@ -120,34 +122,26 @@ export default function FailureContent(props: {
                   </button>
                 )}
               </Show>
-              <TreeNode
+              <DisclosureToggle
                 class="otk-failure-details"
-                label="Failure details"
+                label="Details"
                 open={open()}
                 onOpen={setOpen}
-                header={() => (
-                  <button
-                    type="button"
-                    class="otk-failure-detail-toggle"
-                    aria-expanded={open() ? "true" : "false"}
-                    onClick={() => setOpen(!open())}
+              >
+                <span class="otk-failure-detail-toggle">Details</span>
+              </DisclosureToggle>
+              <Show when={open()}>
+                <ScrollRegion axis="y" class="otk-failure-detail-body">
+                  <div class="otk-failure-disclosed-reason">{reason()}</div>
+                  <Show
+                    when={props.placement === "record" &&
+                      props.time !== undefined}
                   >
-                    Details
-                  </button>
-                )}
-                body={() => (
-                  <ScrollRegion axis="y" class="otk-failure-detail-body">
-                    <div class="otk-failure-disclosed-reason">{reason()}</div>
-                    <Show
-                      when={props.placement === "record" &&
-                        props.time !== undefined}
-                    >
-                      <Clock at={props.time!} class="otk-failure-time" />
-                    </Show>
-                    {diagnostic()}
-                  </ScrollRegion>
-                )}
-              />
+                    <Clock at={props.time!} class="otk-failure-time" />
+                  </Show>
+                  {diagnostic()}
+                </ScrollRegion>
+              </Show>
             </div>
           </>
         }

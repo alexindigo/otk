@@ -128,7 +128,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       ) => (
         <>
           <Show when={catalog.loading}>
-            <p class="otk-picker-status" role="status">Loading…</p>
+            <p class="otk-picker-status" role="status">Loading...</p>
           </Show>
           <Show when={catalog.error}>
             <div class="otk-picker-status">
@@ -269,7 +269,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   })),
                 }))}
                 selected={owner.selectedModelKey()}
-                search="Search models…"
+                search="Search models..."
                 status={status(owner.state.models, owner.refreshModels)}
                 loading={owner.state.models.loading}
                 error={owner.state.models.error}

@@ -169,7 +169,7 @@ export default function ThemePicker(props: {
               text: `Saving ${
                 choices.find((choice) => choice.id === selected())?.label ??
                   "theme"
-              }…`,
+              }...`,
             }
             : undefined}
           control={(control) => status = control}

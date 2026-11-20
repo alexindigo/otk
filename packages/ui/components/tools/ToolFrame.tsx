@@ -63,6 +63,7 @@ export default function ToolFrame(props: {
         data-tool-status={props.call.status}
       >
         <TreeNode
+          toggleHeader
           label={props.presentation?.verb ?? props.call.tool}
           open={open()}
           onOpen={setExpanded}
@@ -81,7 +82,7 @@ export default function ToolFrame(props: {
               />
             )
             : undefined}
-          header={() => (
+          header={(_connected, toggleID) => (
             <header
               class={["otk-tool-state otk-control-row", {
                 "is-error": !!failure(),
@@ -105,8 +106,9 @@ export default function ToolFrame(props: {
                 )}
               </Show>
               <button
-                class="otk-tool-toggle otk-control-grow"
+                id={toggleID}
                 type="button"
+                class="otk-tool-toggle otk-tree-control otk-control-grow"
                 aria-expanded={open() ? "true" : "false"}
                 onClick={() => void expand()}
               >

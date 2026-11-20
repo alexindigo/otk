@@ -126,7 +126,7 @@ export function createSessionDelivery(input: {
         retry: "none",
         diagnosticID: receipt.id,
         facts: {
-          actionLabel: "Observing sent message",
+          actionLabel: "Sending prompt",
           target: { ...input.target, label: input.title() },
           reason: receipt.phase === "admitted"
             ? "The sent message was admitted, but its presentation has not been observed."
@@ -134,7 +134,7 @@ export function createSessionDelivery(input: {
           recovery:
             "Reload this session's latest messages. Do not send it again.",
         },
-      });
+      }, { surface: "record", view: input.target });
     });
   const owner: SessionDelivery = {
     get state() {
@@ -182,14 +182,15 @@ export function createSessionDelivery(input: {
             retry: "none",
             diagnosticID: id,
             facts: {
-              actionLabel: "Sending message",
+              actionLabel: "Sending prompt",
+              outcome: "unknown",
               target: { ...input.target, label: input.title() },
               reason:
                 "The message has not been observed in opencode's transcript within ten seconds.",
               recovery:
                 "Retry checks the existing send without sending it again.",
             },
-          });
+          }, { surface: "record", view: input.target });
           publish({
             ...entry,
             phase: "failed",
@@ -213,21 +214,24 @@ export function createSessionDelivery(input: {
             receipt?.phase === "admitted" || store.state.last?.id === id
           ) return;
           const classified = errorFeedback(failureValue(cause, {
-            actionLabel: "Sending message",
+            actionLabel: "Sending prompt",
             target: { ...input.target, label: input.title() },
           })) ?? presentFailure({
             code: "send.released",
             retry: "new-intent",
             diagnosticID: id,
             facts: {
-              actionLabel: "Sending message",
+              actionLabel: "Sending prompt",
               target: { ...input.target, label: input.title() },
               reason: "The send was released before completion.",
             },
           });
           // This transcript entry is the failure surface, not a composer pointer.
           const feedback = classified.failure
-            ? presentFailure(classified.failure.value, "record")
+            ? presentFailure(classified.failure.value, {
+              surface: "record",
+              view: input.target,
+            })
             : classified;
           const retry = () => {
             if (

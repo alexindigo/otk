@@ -143,12 +143,10 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
     v2
       ? [
         ...history.filter((m) => m.info.type === "compaction").map((m) =>
-          m.info.status === "completed"
-            ? "Session compacted"
-            : "Compacting\u2026"
+          m.info.status === "completed" ? "Session compacted" : "Compacting..."
         ),
         ...queued.filter((item) => item.type === "compaction").map(() =>
-          "Compacting\u2026"
+          "Compacting..."
         ),
       ]
       : history.filter((m) => m.parts.some((p) => p.type === "compaction")).map(
@@ -158,9 +156,9 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
               r.info.time.completed !== undefined
             )
             ? "Session compacted"
-            : "Compacting…",
+            : "Compacting...",
       ),
-  ).toEqual(["Session compacted", "Compacting…"]);
+  ).toEqual(["Session compacted", "Compacting..."]);
   // Every native record counts, including V2 lifecycle records the
   // V1-shaped fixture facade omits.
   await expect(page.locator(".otk-message-flow")).toHaveAttribute(

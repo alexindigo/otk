@@ -5,19 +5,25 @@
   overflow-wrap: anywhere;
 }
 .otk-user-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  --user-column: 80%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--user-column));
+  justify-items: end;
   gap: var(--space-1);
 }
+.otk-user-message > * {
+  grid-column: 2;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
 .otk-user-bubble {
-  max-width: 80%;
   background: var(--otk-bubble);
   border-radius: var(--radius-bubble);
   padding: var(--space-3) var(--space-4);
 }
 .otk-transcript-frame {
-  align-self: stretch;
+  grid-column: 1 / -1;
+  justify-self: stretch;
 }
 .otk-user-meta {
   display: flex;
@@ -62,12 +68,6 @@
 .otk-user-details > * {
   flex: none;
 }
-.otk-queued {
-  background: var(--otk-surface-2);
-  color: var(--fg);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-control);
-}
 .otk-response-recovery {
   display: flex;
   align-items: center;
@@ -99,5 +99,5 @@
   gap: var(--space-1);
 }
 .otk-send-failure {
-  inline-size: 80%;
+  justify-self: stretch;
 }

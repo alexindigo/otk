@@ -114,6 +114,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
           data-activity-state={activity()?.state?.key}
         >
           <TreeNode
+            toggleHeader={!!details()}
             label={label()}
             outgoing={activity()?.direction === "outgoing" ? true : undefined}
             open={expanded()}
@@ -127,7 +128,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                 />
               )
               : undefined}
-            header={() => (
+            header={(_connected, toggleID) => (
               <header class="otk-tool-state otk-control-row">
                 <TreeIcon>
                   <Show when={activity()?.icon?.name === "warning"}>
@@ -161,8 +162,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                   }
                 >
                   <button
+                    id={toggleID}
                     type="button"
-                    class="otk-tool-toggle otk-control-grow"
+                    class="otk-tool-toggle otk-tree-control otk-control-grow"
                     aria-expanded={expanded() ? "true" : "false"}
                     onClick={() => setExpanded(!expanded())}
                   >

@@ -38,3 +38,6 @@
   object-fit: contain;
   border-radius: var(--radius-control);
 }
+.otk-prompt-chip.has-error {
+  border-color: var(--danger);
+}

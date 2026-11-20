@@ -20,7 +20,7 @@ export function TitleFeedback(
     <FieldFeedback
       id={props.id}
       feedback={props.owner.state.pending
-        ? { kind: "pending", text: "Renaming session…" }
+        ? { kind: "pending", text: "Renaming session..." }
         : props.owner.state.error
         ? errorFeedback(props.owner.state.error)
         : undefined}

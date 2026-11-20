@@ -39,10 +39,10 @@ export default function Reasoning(
       <>
         <TreeIcon>
           <Show when={props.part.time.end === undefined}>
-            <ActivityIndicator small />
+            <ActivityIndicator small decorative />
           </Show>
         </TreeIcon>
-        {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
+        {props.part.time.end === undefined ? "Thinking..." : "Thought for"}
         {props.part.time.end !== undefined
           ? ` ${duration(props.part.time.end - props.part.time.start)}`
           : ""}
@@ -52,13 +52,15 @@ export default function Reasoning(
   return (
     <section class={["otk-reasoning", { "is-open": open() }]}>
       <TreeNode
+        toggleHeader
         label="Thought"
         open={open()}
         onOpen={setExpanded}
-        header={() => (
+        header={(_connected, toggleID) => (
           <button
-            class="otk-reasoning-heading"
+            id={toggleID}
             type="button"
+            class="otk-reasoning-heading otk-tree-control"
             aria-expanded={open() ? "true" : "false"}
             onClick={() => void toggle()}
           >

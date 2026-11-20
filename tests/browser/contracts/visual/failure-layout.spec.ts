@@ -37,11 +37,14 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       for (const failure of await page.locator(".otk-failure-content").all()) {
         const edges = await failure.evaluate((el) =>
           [...el.querySelectorAll(
-            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-failure-detail-toggle",
+            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action",
           )].filter((node) => node.getClientRects().length).map((node) =>
             node.getBoundingClientRect().left
           )
         );
+        await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
+        await expect(failure.locator(".otk-tree-node, .otk-tree-connector"))
+          .toHaveCount(0);
         if (edges.length > 1) {
           expect(Math.max(...edges) - Math.min(...edges)).toBeLessThanOrEqual(
             1,
@@ -55,7 +58,14 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveCount(0);
         await expect(
           page.locator(".otk-prompt-attachments .otk-failure-heading"),
-        ).toHaveCount(0);
+        ).toHaveCount(1);
+        await expect(
+          page.locator(".otk-prompt-attachments .otk-failure-target"),
+        )
+          .toHaveText("unreadable-attachment.txt");
+        await expect(page.locator(".otk-prompt-chip.has-error")).toHaveCount(1);
+        await expect(page.locator(".otk-prompt-chip:not(.has-error)"))
+          .toHaveText("readable-notes.txt");
         await expect(
           page.locator(".otk-prompt-attachments .otk-failure-reason:visible"),
         ).toHaveText("The attachment could not be read");
@@ -64,11 +74,21 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-signal"))
           .toHaveCount(0);
+        const toastEdges = await page.locator(
+          ".otk-toast-title, .otk-toast .otk-failure-heading",
+        ).evaluateAll((elements) =>
+          elements.map((element) => element.getBoundingClientRect().left)
+        );
+        expect(toastEdges).toHaveLength(2);
+        expect(Math.max(...toastEdges) - Math.min(...toastEdges))
+          .toBeLessThanOrEqual(1);
         const failure = page.locator(".otk-inbox-footer .otk-failure-details");
-        const toggle = failure.locator(".otk-tree-toggle");
+        const toggle = failure;
         await toggle.press("ArrowRight");
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
-        await expect(failure.locator(".otk-failure-reason:visible"))
+        await expect(
+          page.locator(".otk-inbox-footer .otk-failure-reason:visible"),
+        )
           .toBeVisible();
         await toggle.press("ArrowLeft");
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -78,7 +98,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           "2 failed",
         );
         await expect(page.locator(".otk-record-group-heading").first())
-          .toHaveText("1 permission2 failed");
+          .toHaveText("1 permission·2 failed");
         await expect(page.locator(".otk-native-record .otk-failure-heading"))
           .toHaveCount(0);
         await expect(page.locator(".otk-tool-brief")).toHaveCount(0);
@@ -94,7 +114,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
               )!,
             ).color,
           }));
-        expect(colors.actual).toBe(colors.meta);
+        expect(colors.actual).not.toBe(colors.meta);
       }
       if (surface === "reconnect") {
         const geometry = await page.locator(".otk-server-connection").evaluate(
@@ -119,6 +139,8 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         expect(geometry.labelColor).toBe(geometry.statusColor);
       }
       if (surface === "settings") {
+        await expect(page.getByText("This server", { exact: true }))
+          .toHaveCount(1);
         await expect(page.getByText("Reconnecting to OTK...", { exact: true }))
           .toHaveCount(1);
         await expect(

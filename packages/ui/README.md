@@ -3,8 +3,10 @@
 Local sends use ordinary Message, not a receipt bubble. Its transcript-owned
 `send` input supplies pending/committed/failed state. Pending metadata borrows
 ChromeMeta and the shared ActivityIndicator; failures borrow FeedbackStatus and
-its owner-provided Retry. The user metadata track retains the shared control
-height through commitment, and native-only actions are absent before commitment.
+its owner-provided Retry. One user-column grid bounds both the bubble and
+failure and gives them the same trailing edge. The user metadata track retains
+the shared control height through commitment, and native-only actions are absent
+before commitment.
 
 All Copy actions borrow `clipboard.ts`: native clipboard writes on secure pages,
 then a selection-preserving textarea/execCommand fallback, including plain HTTP.
@@ -145,19 +147,20 @@ absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
 
 FailureContent owns the neutral reason and recovery text, available action and
-initially collapsed TreeNode Details disclosure. Its record placement borrows
-the surrounding row's action/target heading rather than repeating it. Standalone
-feedback retains its heading. All content and action text share the same inset;
-the TreeNode junction occupies its own track. Error colour belongs to the shared
+initially collapsed DisclosureToggle Details disclosure. Its record placement
+borrows the surrounding row's action/target heading rather than repeating it.
+Standalone feedback retains its heading. Its two-track grid owns the disclosure
+gutter and content; record placement borrows the row's artwork gap, and unmarked
+toast headings have no gutter inset. Error colour belongs to the shared
 FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
 its surface edge. Compact callers and containers at or below 320px show the
 heading and controls, with complete reasons inside Details. The shared
 ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
 with full-value titles. FeedbackStatus normalizes text-only errors through the
-client presenter too. ConnectionStatus owns the single connection state line;
-ConnectionBadge supplies only the lamp and server label. Quiet connection copy
-borrows ChromeMeta. The sidebar gives it the server label's grid track below the
-connection control, never a separate left edge.
+client presenter too. ConnectionBadge owns the lamp, optional label/action and
+ConnectionStatus grid on every surface. A containing title replaces its label;
+otherwise the single state line shares that label's column. Quiet connection
+copy borrows ChromeMeta.
 
 Failure records contribute their public failure through the part registry. The
 reply's legacy assistant error is a fallback only when its retained execution
@@ -167,6 +170,23 @@ Producer-supplied known outcomeTime values render through the shared Clock
 owns its outcome instant; a failure block omits that same instant. Unknown or
 absent clocks stay absent. Record observation time is not a substitute. This
 does not compute run timing or change footer timing evidence.
+
+Clock also owns prompt, Timeline, activity, rollback, saved-branch and entity
+completion instants. Full date/zone tooltips use clockTitle. Interface progress
+and truncation text uses ASCII three dots. Attachment failures retain filename
+identity in their feedback and semantic error borders on the individual chip.
+StateShape owns real SVG fallback artwork for activity, supervision and
+connection indicators; their state definitions name shapes rather than font
+glyphs.
+
+SessionView never renders acquisition status inside its message flow. It
+exports the transcriptStatus projection; Shell shows it in its existing reserved
+header metadata slot, so loading and paging never displace a message. A load
+error with no messages remains in PaneState. Permission scope and failure
+Details use the same DisclosureToggle; only Tree junctions paint the masking box
+fill behind their guides. Folded interval meta joins items with the muted middle
+dot separator used by tool meta, and gives only the failure count the danger
+tone.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
@@ -332,8 +352,8 @@ and unfinished assistant ownership still fence the scan; SessionView only binds
 its result. The neutral active-record predicate belongs to the client owner.
 
 Missing-seed recovery is separate plain in-flow text beside the logical reply:
-“Refreshing response…” while source is unaligned, or an unavailable message and
-available Retry response callback after a checkpoint failure. The canonical
+"Refreshing response..." while source is unaligned, or an unavailable message
+and available Retry response callback after a checkpoint failure. The canonical
 client resource owns this state. It does not alter supervision lights, disable
 controls or add a loading overlay.
 
@@ -995,6 +1015,14 @@ renders the caller's semantic kind icon or lamp, or an empty slot when there is
 none. Body-only leaf content needs no icon or disclosure. Header and body
 factories borrow ContentSlot so record updates retain the mounted preview
 lifetime.
+
+DisclosureToggle owns that SVG artwork, keyboard expansion and one button.
+TreeNode's toggleHeader associates its decorative junction label with the
+header's single native button. The button keeps its text and focus target;
+clicking the box activates that same control, without a hit-area overlay or a
+second tab stop. Sibling entity/navigation controls remain independent. Feedback
+resets branch and direction context. Standalone failure disclosures borrow only
+DisclosureToggle, never the tree's topology or connectors.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in

@@ -27,6 +27,39 @@ Deno.test("failure headings do not append another outcome to producer outcome ti
   }
 });
 
+Deno.test("record placement omits its own session target but retains cross-session navigation", () => {
+  const presenter = new FailurePresenter({
+    target: (target) => ({
+      label: target.label ?? "OTK",
+      href: `/session/${target.sessionID}`,
+    }),
+  });
+  const target = {
+    sidecarId: "server",
+    sessionID: "session",
+    label: "Current session",
+  };
+  const failure = {
+    code: "send.refused",
+    retry: "none" as const,
+    diagnosticID: "send",
+    facts: {
+      actionLabel: "Sending prompt",
+      target,
+      reason: "The model is unavailable",
+    },
+  };
+  const own = presenter.describe(failure, { surface: "record", view: target });
+  assertEquals(own.failure?.target, { label: "" });
+  assertEquals(own.text, "Sending prompt failed: The model is unavailable.");
+  const other = presenter.describe(failure, {
+    surface: "record",
+    view: { ...target, sessionID: "other" },
+  });
+  assertEquals(other.failure?.target.href, "/session/session");
+  assertEquals(other.failure?.target.label, "Current session");
+});
+
 Deno.test("failure presenter derives the complete contract and optional enrichment", () => {
   const presenter = new FailurePresenter();
   const failure = {

@@ -93,5 +93,4 @@
 :root[data-otk-reduced-colors] .otk-lamp-shape {
   display: block;
   color: var(--otk-fg);
-  font: 600 var(--text-meta)/1 var(--font-ui);
 }

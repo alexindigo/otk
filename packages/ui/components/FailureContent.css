@@ -1,7 +1,10 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-failure-content {
   display: grid;
+  grid-template-columns: var(--failure-gutter, var(--tree-indent)) minmax(0,
+    1fr);
   gap: var(--space-1);
+  column-gap: 0;
   min-inline-size: 0;
   inline-size: 100%;
   color: var(--otk-fg);
@@ -9,6 +12,27 @@
   white-space: normal;
   text-align: start;
   container: otk-failure / inline-size;
+}
+.otk-failure-content.is-record {
+  column-gap: var(--space-2);
+}
+.otk-failure-content > * {
+  grid-column: 1 / -1;
+}
+.otk-failure-content.is-record > :not(.otk-failure-controls) {
+  grid-column: 2;
+}
+/* The gutter track holds the stripe; painting it takes no inline space. */
+.otk-failure-content.otk-failure-signal {
+  border: 0;
+  padding-inline-start: 0;
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+.otk-failure-content.otk-failure-signal.is-informational {
+  box-shadow: inset 2px 0 0 var(--otk-fg-3);
+}
+.otk-failure-content.otk-failure-signal:not(.is-record) > :not(.otk-failure-controls) {
+  grid-column: 2;
 }
 .otk-failure-heading {
   display: flex;
@@ -47,13 +71,25 @@
 }
 .otk-failure-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: subgrid;
   justify-items: start;
   gap: var(--space-1);
+  column-gap: inherit;
   min-inline-size: 0;
 }
+.otk-failure-controls > * {
+  grid-column: 2;
+}
+.otk-failure-controls > .otk-failure-details {
+  grid-column: 1 / -1;
+}
+.otk-failure-content.is-unmarked .otk-failure-action {
+  grid-column: 1 / -1;
+}
 .otk-failure-details {
-  inline-size: 100%;
+  grid-template-columns: var(--failure-gutter, var(--tree-indent)) auto;
+  column-gap: inherit;
+  inline-size: fit-content;
   min-inline-size: 0;
 }
 .otk-failure-action,
@@ -63,17 +99,15 @@
   text-align: start;
   color: var(--otk-fg-2);
 }
-.otk-failure-heading,
-.otk-failure-main-reason,
-.otk-failure-count,
-.otk-failure-action {
-  margin-inline-start: var(--tree-indent);
-}
 .otk-failure-detail-body {
   display: grid;
   gap: var(--space-2);
   padding-block: var(--space-1);
   max-block-size: min(40dvh, 20rem);
+}
+.otk-failure-detail-toggle {
+  display: flex;
+  align-items: center;
 }
 .otk-failure-diagnostic {
   display: grid;

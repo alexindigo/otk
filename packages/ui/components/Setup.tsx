@@ -20,7 +20,7 @@ export default function Setup(
       <Form
         title="Set up OTK"
         submitLabel="Set up OTK"
-        pendingLabel="Configuring server…"
+        pendingLabel="Configuring server..."
         onSubmit={(data) =>
           props.onSetup({
             type: String(data.get("type")),

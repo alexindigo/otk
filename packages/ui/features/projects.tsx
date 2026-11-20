@@ -61,7 +61,7 @@ function AddProject(props: DialogProps) {
       <Form
         title="Project directory"
         submitLabel="Create session"
-        pendingLabel="Creating project session…"
+        pendingLabel="Creating project session..."
         onSubmit={(data) =>
           picker.add({
             sidecarId: String(data.get("server")),
@@ -107,7 +107,7 @@ function AddProject(props: DialogProps) {
       >
         <strong>From path templates</strong>
         <Show when={picker.state.loading}>
-          <p class="otk-muted">Scanning directories…</p>
+          <p class="otk-muted">Scanning directories...</p>
         </Show>
         <Show when={picker.state.error}>
           <FeedbackStatus feedback={picker.state.error || undefined} />

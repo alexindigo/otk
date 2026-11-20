@@ -2,10 +2,10 @@
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import { inboxStatus } from "@otk/client";
 export const LIGHT_STATES = {
-  blocked: { label: "Needs you", shape: "×" },
-  working: { label: "Working", shape: "◐" },
-  finished: { label: "Finished, not seen", shape: "✓" },
-  none: { label: "No known activity", shape: "○" },
+  blocked: { label: "Needs you", shape: "cross" },
+  working: { label: "Working", shape: "half-disc" },
+  finished: { label: "Finished, not seen", shape: "check" },
+  none: { label: "No known activity", shape: "circle" },
 } as const;
 export type LightState = keyof typeof LIGHT_STATES;
 /** Lamps render the server supervision projection; status is never a fallback. */

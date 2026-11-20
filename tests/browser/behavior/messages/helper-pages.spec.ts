@@ -44,7 +44,7 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
       if (
         start !== undefined &&
         cards.some((e) =>
-          e.textContent!.includes("Preparing progress…") &&
+          e.textContent!.includes("Preparing progress...") &&
           e.getBoundingClientRect().bottom > 0 &&
           e.getBoundingClientRect().top < innerHeight
         )

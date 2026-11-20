@@ -425,7 +425,7 @@ second timeout.
 
 HTTP results publish a header before requested parts, share the stream owner's
 generation clock, and never seed appends or fabricate output receipt clocks. The
-browser shows “Refreshing response…” until a full native part event or a
+browser shows "Refreshing response..." until a full native part event or a
 terminal checkpoint supplies authority. Failed checkpoints expose unavailable
 state and explicit Retry response; a distinct authoritative header can retry,
 but deltas cannot. Unsubscribe, cutoff, epoch retirement, removal, disposal,
