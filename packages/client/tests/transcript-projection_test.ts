@@ -22,6 +22,26 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
+Deno.test("canonical append revision ignores older pages, updates and replacement baselines", () => {
+  const projection = createTranscriptProjection();
+  projection.replace([step("middle", "prompt", 2)]);
+  assertEquals(projection.state.appendRevision, 0);
+  projection.merge([step("older", "prompt", 1)]);
+  projection.apply({
+    op: "message.upsert",
+    message: step("middle", "prompt", 2),
+  });
+  assertEquals(projection.state.appendRevision, 0);
+  projection.apply({
+    op: "message.upsert",
+    message: step("latest", "next", 3),
+  });
+  assertEquals(projection.state.appendRevision, 1);
+  projection.replace([step("middle", "prompt", 2), step("latest", "next", 3)]);
+  assertEquals(projection.state.appendRevision, 1);
+  projection.replace([step("middle", "prompt", 2), step("newest", "next", 4)]);
+  assertEquals(projection.state.appendRevision, 2);
+});
 Deno.test("first-message reorder uses its canonical clock, not the aggregate last clock", () => {
   const projection = createTranscriptProjection();
   const a = step("a", "prompt", 2), b = step("b", "prompt", 5);

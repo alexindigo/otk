@@ -82,6 +82,7 @@ function promptAfter(
 }
 
 export interface TranscriptState {
+  appendRevision?: number;
   temperature: Temperature;
   revision: number;
   messageIDs: string[];
@@ -443,6 +444,7 @@ export function createTranscript(
     state.repliesByID = projection.state.repliesByID;
     state.queuedIDs = projection.state.queuedIDs;
     state.records = projection.state.records;
+    state.appendRevision = projection.state.appendRevision;
     sources.sync();
     state.recovering = state.content.recovering ?? [];
     state.olderCursor = cursor;

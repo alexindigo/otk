@@ -303,11 +303,15 @@ export default function SessionView(props: {
   });
   const publishHistory = () =>
     following?.history({
+      appendRevision: props.transcript?.state.appendRevision ??
+        fallback().appendRevision,
       first: projection().messageIDs[0],
       last: projection().messageIDs.at(-1),
       exhausted: props.exhausted,
     });
   createEffect(() => ({
+    appendRevision: props.transcript?.state.appendRevision ??
+      fallback().appendRevision,
     first: projection().messageIDs[0],
     last: projection().messageIDs.at(-1),
     exhausted: props.exhausted,
@@ -870,8 +874,10 @@ export default function SessionView(props: {
                     </ScrollRegion>
                     <JumpToLatest
                       visible={!!geometry() &&
-                        geometry()!.distanceFromBottom >
-                          geometry()!.viewportHeight}
+                        (geometry()!.newMessages ||
+                          geometry()!.distanceFromBottom >
+                            geometry()!.viewportHeight)}
+                      newMessages={geometry()?.newMessages}
                       title={hints.title("transcript.latest", "Jump to latest")}
                       onJump={() => {
                         void latest().catch((error) => {
