@@ -7,6 +7,8 @@ import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
 import { reveal } from "./collections.ts";
 import { restoreViewport } from "./capture.ts";
+import { diffHunk, expectDiffHunk } from "../pages/diff.ts";
+import { clipboard, copied, pick } from "../pages/menus.ts";
 
 interface Inputs {
   state: TestState;
@@ -805,6 +807,7 @@ export async function surfaces(
       key: "collapseFileChanges",
       value: false,
     });
+    await clipboard(page);
     for (const theme of themes) {
       await paint(theme);
       for (
@@ -817,14 +820,26 @@ export async function surfaces(
           ["diff", ".otk-diff .otk-diff-text"],
           [
             "hunk",
-            "[data-tool=edit] .otk-diff-content:nth-of-type(2) .otk-diff-text",
+            diffHunk("[data-tool=edit]", 10, 10) + " .otk-diff-text",
           ],
         ]
       ) {
         await reveal(page, selector);
+        if (name === "hunk") {
+          await expectDiffHunk(
+            page,
+            diffHunk("[data-tool=edit]", 10, 10),
+            "const previous = true;",
+            "const current = true;",
+          );
+        }
         await page.locator(selector).first().click({ button: "right" });
         await menuGeometry(page);
         await shot(`menu-source-${name}-${theme.id}`);
+        if (name === "hunk") {
+          await pick(page, "Copy code");
+          await copied(page, "const current = true;");
+        }
         await close(page);
       }
     }
