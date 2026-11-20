@@ -65,6 +65,7 @@ import {
   type ViewportSnapshot,
 } from "./viewport.ts";
 import JumpToLatest from "./JumpToLatest.tsx";
+import MessageDelivery from "./MessageDelivery.tsx";
 import { highlightingScope } from "../highlight/client.ts";
 import {
   HighlightProvider,
@@ -414,7 +415,15 @@ export default function SessionView(props: {
       source = sourceViewport(
         list,
         () => projection().messageIDs,
-        (range) => props.transcript?.viewport(range),
+        (range) => {
+          props.transcript?.viewport(range);
+          if (range) {
+            const ids = projection().messageIDs;
+            sessionPorts?.delivery?.presented(
+              ids.slice(ids.indexOf(range.first), ids.indexOf(range.last) + 1),
+            );
+          }
+        },
       );
       for (const [element, region] of regions) {
         region.release = source.attach(element, region.id);
@@ -504,7 +513,10 @@ export default function SessionView(props: {
                       aria-busy={transcriptBusy() ? "true" : "false"}
                       class={[
                         "otk-messages",
-                        { "is-empty": !count() },
+                        {
+                          "is-empty": !count() &&
+                            !sessionPorts?.delivery?.state.receipts.length,
+                        },
                       ]}
                       scrollbar={props.prefs.scrollbar ? "otk" : "hidden"}
                       ref={[
@@ -525,6 +537,7 @@ export default function SessionView(props: {
                     >
                       <Show
                         when={!count() &&
+                          !sessionPorts?.delivery?.state.receipts.length &&
                           (props.loading || props.error ||
                             props.continuity === "missing")}
                       >
@@ -550,6 +563,7 @@ export default function SessionView(props: {
                       </Show>
                       <Show
                         when={!props.loading && !count() && !props.error &&
+                          !sessionPorts?.delivery?.state.receipts.length &&
                           !props.sessionError && !props.info?.notices?.length &&
                           props.continuity !== "missing"}
                       >
@@ -842,6 +856,7 @@ export default function SessionView(props: {
                             );
                           }}
                         </Show>
+                        <MessageDelivery owner={sessionPorts?.delivery} />
                       </div>
                     </ScrollRegion>
                     <JumpToLatest

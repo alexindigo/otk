@@ -45,6 +45,7 @@ export * from "./state.ts";
 export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
+export * from "./session-delivery.ts";
 export { archiveAttention, projectGroup } from "./inbox.ts";
 export {
   createTranscript,

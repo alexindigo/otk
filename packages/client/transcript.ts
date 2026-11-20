@@ -146,6 +146,7 @@ export interface TranscriptOwner {
   ensure(messageID: string, signal?: AbortSignal): Promise<void>;
   /** Join current newest-page/live-tail authority, never walk older cursors. */
   latest(signal?: AbortSignal): Promise<void>;
+  reconcile(messageIDs: readonly string[]): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
   sibling(delta: number): Promise<string | undefined>;
@@ -481,6 +482,7 @@ export function createTranscript(
     clock: ContentClock;
   }>();
   let inFlight: Promise<void> | undefined;
+  let reconciling: Promise<void> | undefined;
   let automatic = false;
   let tailDirty = false;
   let toolGeneration = 0;
@@ -1191,6 +1193,31 @@ export function createTranscript(
         if (selected && missing && !fetching) void refetch();
         inspect();
       });
+    },
+    reconcile(messageIDs) {
+      const absent = () =>
+        messageIDs.some((id) => !projection.state.messagesByID[id]);
+      if (!absent() && state.continuity === "ready") return Promise.resolve();
+      if (reconciling) return reconciling;
+      const work = (async () => {
+        // Do not cancel a newest-page acquisition with another read of the same
+        // boundary. Its canonical install can already cover this send.
+        if (fetching) {
+          await new Promise<void>((resolve) => {
+            const release = subscribe(() => {
+              if (!fetching || !selected) {
+                release();
+                resolve();
+              }
+            });
+          });
+        }
+        if (selected && (absent() || missing)) await refetch();
+      })();
+      const pending = work.finally(() => {
+        if (reconciling === pending) reconciling = undefined;
+      });
+      return reconciling = pending;
     },
     pin(keys) {
       for (const key of keys) pins.set(key, (pins.get(key) ?? 0) + 1);
