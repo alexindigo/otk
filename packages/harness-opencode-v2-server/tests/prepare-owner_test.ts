@@ -16,7 +16,7 @@ Deno.test("V2 SQL reads reuse proven registration generations and reprove replac
     "CREATE TABLE project(id TEXT,worktree TEXT); INSERT INTO project VALUES('p','/repo'); CREATE TABLE session_v2(id TEXT,project_id TEXT,directory TEXT,parent_id TEXT,time_created INTEGER,time_updated INTEGER); INSERT INTO session_v2 VALUES('ses_one','p','/repo',NULL,1,1);",
   );
   db.exec(
-    "CREATE TABLE session_message(id TEXT,session_id TEXT,type TEXT,seq INTEGER,time_created INTEGER,data TEXT); CREATE TABLE session_part(message_id TEXT,session_id TEXT,ordinal INTEGER,type TEXT,call_id TEXT,data TEXT);",
+    "CREATE TABLE session_message(id TEXT,session_id TEXT,type TEXT,seq INTEGER,time_created INTEGER,time_updated INTEGER,data TEXT); CREATE TABLE session_part(message_id TEXT,session_id TEXT,ordinal INTEGER,type TEXT,call_id TEXT,data TEXT);",
   );
   let infos = 0, projects = 0, gets = 0, pid = 42;
   const server = Deno.serve(
@@ -94,7 +94,15 @@ Deno.test("V2 SQL reads reuse proven registration generations and reprove replac
     await transcript({ sessionID: "opcv2-ses_one", messages: [] }, signal);
     await transcript({ sessionID: "opcv2-ses_one", messages: [] }, signal);
     assertEquals(gets, 1);
+    const head = sink.readers["opcv2.transcript.head"]!;
+    await head({ sessionID: "opcv2-ses_one" }, signal);
     db.exec("UPDATE session_v2 SET time_updated=2");
+    await head({ sessionID: "opcv2-ses_one" }, signal);
+    assertEquals(
+      gets,
+      1,
+      "Head checks use keyed identity proof, not a native HTTP read after every database write",
+    );
     await transcript({ sessionID: "opcv2-ses_one", messages: [] }, signal);
     assertEquals(gets, 2);
     // A terminal inventory refreshes its source proof once, at its first page;

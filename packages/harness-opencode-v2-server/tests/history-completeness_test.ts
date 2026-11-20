@@ -16,6 +16,7 @@ import {
   TranscriptReads,
 } from "../transcript-reads.ts";
 import { Transcript } from "../transcript.ts";
+import { requestFailureFacts } from "../request-failure.ts";
 
 const sessionID = "opcv2-ses_history";
 const policy: MessagePolicy = {
@@ -48,10 +49,12 @@ function fixture(retryms = 1000) {
   const rows: NativeMessage[] = [prompt("before", 1)];
   const failure: { next?: Error } = {};
   const diagnostics: unknown[] = [];
+  const gets: string[] = [];
   const projection = createTranscriptProjection();
   const reads: { limit: number; cursor?: string }[] = [];
   const client = {
     service: { version: "2.2.6" },
+    failureFacts: requestFailureFacts,
     read: <T>(run: (api: unknown) => Promise<T>) =>
       run({
         session: {
@@ -64,8 +67,9 @@ function fixture(retryms = 1000) {
             }),
           inbox: { list: () => Promise.resolve([]) },
           message: {
-            get: ({ messageID }: { messageID: string }) =>
-              failure.next
+            get: ({ messageID }: { messageID: string }) => {
+              gets.push(messageID);
+              return failure.next
                 ? (() => {
                   const error = failure.next;
                   failure.next = undefined;
@@ -73,7 +77,8 @@ function fixture(retryms = 1000) {
                 })()
                 : Promise.resolve(
                   structuredClone(rows.find((r) => r.id === messageID)),
-                ),
+                );
+            },
           },
         },
         message: {
@@ -124,7 +129,7 @@ function fixture(retryms = 1000) {
     invalidated() {},
   });
   transcript.subscriptions(sessionID, 1);
-  return { rows, projection, transcript, reads, failure, diagnostics };
+  return { rows, projection, transcript, reads, gets, failure, diagnostics };
 }
 Deno.test("native head is a keyed scalar witness and respects a staged boundary", () => {
   const db = new DatabaseSync(":memory:");
@@ -187,6 +192,35 @@ Deno.test("native history repairs a missed compaction, prompt and reply without 
       count + 1,
       "An unchanged native head costs only one bounded probe",
     );
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("history checkpoints use native identities when a failure has a different presentation identity", async () => {
+  const x = fixture();
+  try {
+    x.rows.push(
+      {
+        id: "native-failure",
+        type: "idle",
+        outcome: "failed",
+        error: { type: "unknown", message: "Provider failure" },
+        time: { created: 2 },
+      } as NativeMessage,
+    );
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    assert(
+      x.projection.state.messageIDs.some((id) =>
+        id.startsWith("request:failure:")
+      ),
+    );
+    await x.transcript.check(sessionID);
+    assert(
+      x.gets.every((id) => x.rows.some((row) => row.id === id)),
+      "A presentation identity must never reach the native reader",
+    );
+    assertEquals(x.diagnostics, []);
   } finally {
     await x.transcript.stop();
   }
