@@ -1214,8 +1214,7 @@ export function createTranscript(
       });
     },
     reconcile(messageIDs) {
-      const absent = () =>
-        messageIDs.some((id) => !projection.state.messagesByID[id]);
+      const absent = () => messageIDs.some((id) => !projection.committed(id));
       if (!absent() && state.continuity === "ready") return Promise.resolve();
       if (reconciling) return reconciling;
       const work = (async () => {

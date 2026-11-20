@@ -232,6 +232,28 @@ Deno.test("unacknowledged send has bounded visible failure; Retry observes witho
   f.owner.stop();
 });
 
+Deno.test("a local pending body cannot satisfy native admission or suppress read-only recovery", async () => {
+  const f = fixture();
+  await f.owner.send(
+    () => Promise.resolve({ messageID: "msg_pending", state: "accepted" }),
+    {
+      intent: { clientID: "tab", key: "send-key", window: "window" },
+      message: pendingMessage("msg_pending", "opcv2-root", [{
+        kind: "text",
+        text: "Native source still missing",
+      }]),
+      phase: "pending",
+    },
+  );
+  assertEquals(f.counts().reads, 1);
+  assertEquals(f.owner.state.receipts[0].phase, "accepted");
+  f.message("different-native-identity");
+  assertEquals(f.projection.committed("msg_pending"), false);
+  f.expire();
+  assertEquals(f.projection.entry("msg_pending")?.send?.phase, "failed");
+  f.owner.stop();
+});
+
 Deno.test("definite failure retains the prompt and Retry action in that same entry", async () => {
   const f = fixture();
   let retries = 0;
@@ -242,7 +264,11 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
           code: "native.refused",
           retry: "new-intent",
           diagnosticID: "refused",
-          facts: { reason: "The selected model is unavailable." },
+          facts: {
+            reason: "The selected model is unavailable.",
+            origin: "composer",
+            record: { messageID: "native-failure" },
+          },
         }),
       ), {
       intent: { clientID: "tab", key: "send-key", window: "window" },
@@ -259,6 +285,7 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
   const entry = f.projection.entry("msg_failure")!.send!;
   assertEquals(entry.phase, "failed");
   assert(entry.feedback?.failure?.reason.includes("selected model"));
+  assertEquals(entry.feedback?.failure?.reference, undefined);
   entry.feedback?.action?.run();
   assertEquals(retries, 1);
   assertEquals(f.projection.state.replyIDs, ["send-key"]);

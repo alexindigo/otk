@@ -81,6 +81,7 @@ export interface TranscriptProjection {
   readonly state: TranscriptProjectionState;
   send(value: PendingSend): void;
   entry(messageID: string): TranscriptReply | undefined;
+  committed(messageID: string): boolean;
   releaseCommittedSends(): void;
   messages(): Message[];
   clear(): void;
@@ -556,6 +557,10 @@ export function createTranscriptProjection(): TranscriptProjection {
     state,
     entry(messageID: string) {
       return state.repliesByID[locations.get(messageID)?.key ?? messageID];
+    },
+    committed(messageID: string) {
+      return !!read(messageID) &&
+        (!sends.has(messageID) || sends.get(messageID)?.phase === "committed");
     },
     releaseCommittedSends() {
       for (const [id, send] of sends) {

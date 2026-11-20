@@ -99,5 +99,5 @@
   gap: var(--space-1);
 }
 .otk-send-failure {
-  max-width: 80%;
+  inline-size: 80%;
 }

@@ -22,6 +22,7 @@ Deno.test("send immediately owns one pending entry then commits that same identi
   p.send({ intent, message: message(), phase: "pending" });
   const keys = p.state.replyIDs;
   assertEquals(keys.length, 1);
+  assertEquals(p.committed("msg_send"), false);
   assertEquals(p.state.repliesByID[keys[0]].send?.phase, "pending");
   p.apply({
     op: "message.upsert",
@@ -29,6 +30,7 @@ Deno.test("send immediately owns one pending entry then commits that same identi
   });
   assertEquals(p.state.replyIDs, keys);
   assertEquals(p.state.repliesByID[keys[0]].send?.phase, "committed");
+  assertEquals(p.committed("msg_send"), true);
   assertEquals(p.state.messagesByID.msg_send.sourceOrder, 0);
 });
 
