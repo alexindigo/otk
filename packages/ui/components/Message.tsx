@@ -12,7 +12,6 @@ import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
-import FeedbackStatus from "./FeedbackStatus.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
