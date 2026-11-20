@@ -8,6 +8,25 @@ import {
   RequestFailure,
 } from "../mod.ts";
 
+Deno.test("failure headings do not append another outcome to producer outcome titles", () => {
+  const presenter = new FailurePresenter();
+  for (
+    const actionLabel of [
+      "failed",
+      "Execution failed",
+      "Install dependencies failed",
+    ]
+  ) {
+    const shown = presenter.describe({
+      code: "invented",
+      retry: "none",
+      diagnosticID: "outcome",
+      facts: { actionLabel, reason: "The request was refused" },
+    });
+    assertEquals(shown.failure?.heading, actionLabel);
+  }
+});
+
 Deno.test("failure presenter derives the complete contract and optional enrichment", () => {
   const presenter = new FailurePresenter();
   const failure = {

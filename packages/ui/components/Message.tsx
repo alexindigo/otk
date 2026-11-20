@@ -11,6 +11,7 @@ import WorkLog from "./WorkLog.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import Clock from "./Clock.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
@@ -148,11 +149,7 @@ function ReplyStart(props: {
           onOpen={props.onOpen}
         />
       </div>
-      <ChromeMeta>
-        <time datetime={date().toISOString()} title={date().toLocaleString()}>
-          {date().toLocaleTimeString()}
-        </time>
-      </ChromeMeta>
+      <Clock at={date().getTime()} />
     </header>
   );
 }
@@ -247,7 +244,9 @@ export default function Message(
       (id === props.message.id && props.message.role !== "user"
         ? props.message.outcomeTime
         : undefined);
-    return time?.state === "known" ? time.at : undefined;
+    return time?.state === "known" && time.at !== outcomeClock()?.at
+      ? time.at
+      : undefined;
   };
   const userBubble = () => framing().userBubble;
   const prompt = () => framing().prompt;
@@ -535,22 +534,12 @@ export default function Message(
                         {(time) => (
                           <>
                             <Show when={outcomeClock()}>
-                              {(outcome) => {
-                                const date = () => new Date(outcome().at);
-                                return (
-                                  <time
-                                    datetime={date().toISOString()}
-                                    title={date().toLocaleString()}
-                                  >
-                                    {date().toLocaleString()}
-                                  </time>
-                                );
-                              }}
+                              {(outcome) => <Clock at={outcome().at} />}
                             </Show>
                             <Show when={outcomeUnknown()}>
                               {(reason) => (
                                 <span class="otk-turn-time" title={reason()}>
-                                  Time unknown - not recorded
+                                  No time recorded
                                 </span>
                               )}
                             </Show>
@@ -609,7 +598,6 @@ export default function Message(
         <Show when={error()}>
           <FeedbackStatus
             feedback={error()}
-            time={outcomeClock()?.at}
           />
         </Show>
       </article>

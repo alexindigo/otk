@@ -53,4 +53,7 @@ export function connectionFeedback(
   if (connection.status === "reconnecting") {
     return { kind: "info", text: "Reconnecting to OTK..." };
   }
+  if (connection.harness === "reconnecting") {
+    return { kind: "info", text: "Reconnecting to the agent service..." };
+  }
 }

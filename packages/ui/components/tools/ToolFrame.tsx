@@ -69,6 +69,7 @@ export default function ToolFrame(props: {
           feedback={failure()
             ? () => (
               <FeedbackStatus
+                placement="record"
                 time={props.call.time.end}
                 feedback={errorFeedback(failure(), {
                   actionLabel: props.presentation?.verb ?? props.call.tool,

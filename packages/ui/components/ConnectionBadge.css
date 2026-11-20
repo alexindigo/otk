@@ -7,6 +7,3 @@
   font-size: var(--text-meta);
   color: var(--secondary);
 }
-.otk-connection small {
-  flex-basis: 100%;
-}

@@ -4,16 +4,11 @@
   gap: var(--space-1);
   min-inline-size: 0;
   inline-size: 100%;
-  padding-inline-start: var(--space-3);
-  border-inline-start: 2px solid var(--danger);
   color: var(--otk-fg);
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
   white-space: normal;
   text-align: start;
   container: otk-failure / inline-size;
-}
-.otk-failure-content.is-informational {
-  border-inline-start-color: var(--otk-fg-3);
 }
 .otk-failure-heading {
   display: flex;
@@ -23,7 +18,6 @@
 }
 .otk-failure-heading strong {
   flex: 0 1 auto;
-  max-inline-size: 70%;
   font-weight: 500;
 }
 .otk-failure-target {
@@ -62,27 +56,18 @@
   inline-size: 100%;
   min-inline-size: 0;
 }
-.otk-failure-details > summary {
-  --control-height: var(--control-size);
-  display: flex;
-  align-items: center;
-  gap: 0;
-  inline-size: fit-content;
+.otk-failure-action,
+.otk-failure-detail-toggle {
+  padding: 0;
   min-block-size: var(--control-size);
-  cursor: pointer;
-  list-style: none;
+  text-align: start;
   color: var(--otk-fg-2);
 }
-.otk-failure-details > summary::-webkit-details-marker {
-  display: none;
-}
-.otk-failure-details > summary svg {
-  inline-size: var(--icon-compact);
-  block-size: var(--icon-compact);
-  flex: none;
-}
-.otk-failure-details[open] > summary svg {
-  transform: rotate(90deg);
+.otk-failure-heading,
+.otk-failure-main-reason,
+.otk-failure-count,
+.otk-failure-action {
+  margin-inline-start: var(--tree-indent);
 }
 .otk-failure-detail-body {
   display: grid;

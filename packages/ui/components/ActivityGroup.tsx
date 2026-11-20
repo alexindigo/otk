@@ -11,6 +11,8 @@ import type { Preferences } from "@otk/protocol";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
+import { clockText } from "./Clock.tsx";
+import FailureSignal from "./FailureSignal.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -32,11 +34,6 @@ export default function ActivityGroup(props: {
     undefined,
     props.group.key,
   );
-  const clock = (time: number) =>
-    new Date(time).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
   return (
     <Show when={!props.group.silent || open()}>
       <section
@@ -100,9 +97,11 @@ export default function ActivityGroup(props: {
                       </ChromeMeta>
                     </Show>
                     <Show when={props.group.failureTitle}>
-                      <ChromeMeta class="otk-control-label otk-record-group-failures">
-                        {props.group.failureTitle}
-                      </ChromeMeta>
+                      <FailureSignal>
+                        <ChromeMeta class="otk-control-label otk-record-group-failures">
+                          {props.group.failureTitle}
+                        </ChromeMeta>
+                      </FailureSignal>
                     </Show>
                   </Show>
                   <Show when={props.group.detail}>
@@ -127,7 +126,7 @@ export default function ActivityGroup(props: {
                           (value) => new Date(value).toLocaleString(),
                         )}
                       >
-                        {activityTimeRange(time(), clock)}
+                        {activityTimeRange(time(), clockText)}
                       </ChromeMeta>
                     )}
                   </Show>

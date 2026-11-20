@@ -2,7 +2,7 @@
 import { errorFeedback, type Feedback } from "@otk/client";
 import { type Element, Show } from "solid-js";
 import { ComposerNoticeRow } from "./ComposerNotice.tsx";
-import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
 import FailureContent from "./FailureContent.tsx";
@@ -22,7 +22,7 @@ export default function OperationFeedback(
       focusable
       control={props.control}
       icon={props.icon ??
-        (props.feedback.kind === "error" ? <CloseIcon /> : <ActivityIcon />)}
+        (feedback().failure ? null : <ActivityIcon />)}
       {...feedbackState({
         feedback: props.feedback,
         class: "otk-operation-feedback",

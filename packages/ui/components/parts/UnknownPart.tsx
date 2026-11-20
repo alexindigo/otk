@@ -89,7 +89,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       <span class="otk-tool-verb otk-control-label" title={label()}>
         {label()}
       </span>
-      <Show when={activity()?.detail}>
+      <Show
+        when={activity()?.detail && activity()?.detail !== failure()?.reason}
+      >
         <span
           class="otk-tool-brief otk-control-label otk-control-grow"
           title={activity()?.detail}
@@ -118,7 +120,11 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             onOpen={details() ? setExpanded : undefined}
             feedback={failure()
               ? () => (
-                <FailureContent failure={failure()!} time={props.failureTime} />
+                <FailureContent
+                  placement="record"
+                  failure={failure()!}
+                  time={props.failureTime}
+                />
               )
               : undefined}
             header={() => (
