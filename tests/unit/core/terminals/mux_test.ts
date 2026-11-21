@@ -2,6 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { createRequestMetadata } from "@otk/protocol";
 import { TerminalMux } from "../../../../core/terminals/mux.ts";
+import { terminalGroup } from "../../../../core/terminals/ownership.ts";
 import type { DaemonConnection } from "../../../../core/terminals/daemon.ts";
 import type {
   Frame,
@@ -29,7 +30,7 @@ const process: ProcessInfo = {
   pid: 42,
   command: ["/bin/sh"],
   cwd: "/workspace",
-  group_id: "tstv1-a",
+  group_id: terminalGroup({ dir: "/workspace", session: "tstv1-a" }),
   lifecycle: { status: "running" },
   output_head: 0n,
   output_tail: 0n,
@@ -183,7 +184,7 @@ function fixture(autoAttach = true) {
         listeners.delete(listener);
       };
     },
-  });
+  }, () => Promise.resolve("/workspace"));
   resources().defer("terminal mux", () => mux.stop());
   const socket = new Socket();
   mux.accept(socket as unknown as WebSocket);

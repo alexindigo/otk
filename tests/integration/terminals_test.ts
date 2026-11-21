@@ -11,7 +11,7 @@ import { bounded, resources, tempDir, test } from "../support/resources.ts";
 import { cfg } from "../support/config.ts";
 import { originFetch } from "../support/request-wire.ts";
 
-const A = "tstv1-terminal-a", B = "tstv1-terminal-b";
+const A = "tstv1-terminal-a", B = "tstv1-terminal-b", C = "tstv1-terminal-c";
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 async function until(
@@ -73,9 +73,9 @@ async function application(
       subscriptions() {},
       identities: (ids) =>
         Promise.resolve(
-          ids.filter((id) => id === A || id === B).map((id) => ({
+          ids.filter((id) => id === A || id === B || id === C).map((id) => ({
             id,
-            directory: root,
+            directory: id === C ? join(root, "other-checkout") : root,
           })),
         ),
       getSession: (id) => Promise.resolve(session(id)),
@@ -432,17 +432,28 @@ test("terminal socket validates membership, channel count and policy limits", as
     rows: 24,
   });
   const socket = await Probe.open(app.url);
-  socket.send({ t: "attach", ch: 1, session: B, terminal: a.id });
+  socket.send({ t: "attach", ch: 1, session: C, terminal: a.id });
   assertEquals((await socket.control("error", 1)).code, "not-found");
   const wrongClose = await assertRejects(
     () =>
       client.conn.rpc.call("terminal.close", {
-        sessionID: B,
+        sessionID: C,
         terminalID: a.id,
       }),
     RequestFailure,
   );
   assertEquals(wrongClose.failure.code, "not-found");
+  assertEquals(
+    (await client.conn.rpc.call("terminal.list", { sessionID: B })).map((p) =>
+      p.id
+    ),
+    [a.id],
+  );
+  const shared = await Probe.open(app.url);
+  await shared.attach(1, a.id, B);
+  shared.input(1, "echo shared-$((6*9))\r");
+  await shared.text(1, "\r\nshared-54\r\n");
+  await shared.stop();
   socket.send({ t: "attach", ch: 2, session: A, terminal: "999999" });
   assertEquals((await socket.control("error", 2)).code, "not-found");
   for (let ch = 3; ch < 19; ch++) await socket.attach(ch, a.id);

@@ -4,6 +4,8 @@ import { embeddedPtyBinary, resolvePtyBinary } from "./binary.ts";
 import { DaemonResponseError, PtyDaemon, readHandoff } from "./daemon.ts";
 import { hasSystemd, shellEnvironment, shellProgram } from "./env.ts";
 import type { ProcessInfo } from "./frames.ts";
+import { terminalGroup, terminalOwner } from "./ownership.ts";
+import { TerminalTracking } from "./tracking.ts";
 
 export class TerminalUnavailable extends Error {
   readonly code = "terminal-unavailable";
@@ -27,6 +29,8 @@ export interface TerminalHostOptions {
   dataDir: string;
   environment: Readonly<Record<string, string>>;
   signal: AbortSignal;
+  publishRows?: number;
+  diagnostic?: (cause: unknown) => void;
 }
 
 /** One lazy daemon owner per server; application composition owns this lifetime. */
@@ -40,7 +44,13 @@ export class TerminalHost {
   readonly runtimeDir: string;
   readonly handoffFile: string;
   unavailable?: TerminalUnavailable;
+  readonly tracking: TerminalTracking;
   private constructor(private options: TerminalHostOptions) {
+    this.tracking = new TerminalTracking(
+      options.diagnostic ??
+        ((cause) => console.error("Terminal inventory refresh failed", cause)),
+      options.publishRows,
+    );
     this.#environment = Object.freeze({ ...options.environment });
     this.runtimeDir = join(options.statePath, "terminals", "pty");
     this.handoffFile = join(options.statePath, "terminals", "handoff.json");
@@ -90,14 +100,16 @@ export class TerminalHost {
       void daemon.closed.then(() => {
         if (this.#daemon !== daemon) return;
         this.#daemon = undefined;
+        this.tracking.clear();
         if (!this.#stopped) { for (const listener of this.#gone) listener(); }
       });
+      await this.tracking.bind(daemon);
       return daemon;
     } catch (cause) {
       throw this.unavailable = new TerminalUnavailable(cause);
     }
   }
-  async list(sessionID: string): Promise<ProcessInfo[]> {
+  async list(directory: string): Promise<ProcessInfo[]> {
     const daemon = await this.daemon();
     if (this.#stopped) throw new TerminalUnavailable();
     const reply = await daemon.request({ op: "list", mode: "pty" });
@@ -105,7 +117,7 @@ export class TerminalHost {
       throw new Error("Expected daemon process list");
     }
     return reply.processes.filter((terminal) =>
-      terminal.group_id === sessionID
+      terminalOwner(terminal.group_id)?.dir === directory
     );
   }
   async create(
@@ -136,7 +148,7 @@ export class TerminalHost {
       cols,
       rows,
       env: shellEnvironment(this.#environment),
-      group_id: sessionID,
+      group_id: terminalGroup({ dir: cwd, session: sessionID }),
       title: program.split("/").at(-1) || "Shell",
     };
     return async () => {
@@ -162,14 +174,26 @@ export class TerminalHost {
       if (reply.type !== "created") {
         throw new Error("Expected created terminal");
       }
+      await this.tracking.changed();
       return reply.process;
     };
   }
-  async close(sessionID: string, id: number): Promise<void> {
+  async owned(sessionID: string, id: number): Promise<ProcessInfo | undefined> {
+    const daemon = await this.daemon();
+    const reply = await daemon.request({ op: "get", id });
+    return reply.type === "process" &&
+        terminalOwner(reply.process.group_id)?.session === sessionID
+      ? reply.process
+      : undefined;
+  }
+  async close(directory: string, id: number): Promise<void> {
     const daemon = await this.daemon();
     try {
       const reply = await daemon.request({ op: "get", id });
-      if (reply.type !== "process" || reply.process.group_id !== sessionID) {
+      if (
+        reply.type !== "process" ||
+        terminalOwner(reply.process.group_id)?.dir !== directory
+      ) {
         throw new TerminalRejected("not-found");
       }
       await daemon.request({ op: "terminate", id });
@@ -180,10 +204,12 @@ export class TerminalHost {
       ) throw new TerminalRejected("not-found", cause);
       throw cause;
     }
+    await this.tracking.changed();
   }
   stop(): Promise<void> {
     this.#stopped = true;
     return this.#stop ??= (async () => {
+      await this.tracking.stop();
       try {
         await this.#starting;
       } catch { /* Failed acquisition has no owner to hand off. */ }

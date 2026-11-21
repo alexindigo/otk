@@ -355,7 +355,7 @@ export class PtyDaemon {
     this.#ownerSerial = work.catch(() => {});
     return work;
   }
-  async #oneShot(request: Request): Promise<Response> {
+  async #oneShot(request: Request, signal?: AbortSignal): Promise<Response> {
     if (!this.alive) throw new Error("Daemon is gone");
     const conn = await DaemonConnection.connect(this.registration.socket);
     this.#connections.add(conn);
@@ -363,14 +363,14 @@ export class PtyDaemon {
       return await bounded(conn, async () => {
         await conn.send(this.registration.token, request);
         return await conn.response();
-      });
+      }, signal);
     } finally {
       conn.close();
       this.#connections.delete(conn);
     }
   }
-  request(request: Request): Promise<Response> {
-    if (!("id" in request)) return this.#oneShot(request);
+  request(request: Request, signal?: AbortSignal): Promise<Response> {
+    if (!("id" in request)) return this.#oneShot(request, signal);
     const id = request.id;
     if (
       request.op === "input" && decodeBase64(request.data_base64).length > 65536

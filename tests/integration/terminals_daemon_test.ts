@@ -11,6 +11,7 @@ import {
   spawnDaemon,
 } from "../../core/terminals/daemon.ts";
 import { embeddedPtyBinary } from "../../core/terminals/binary.ts";
+import { terminalOwner } from "../../core/terminals/ownership.ts";
 import { shellEnvironment } from "../../core/terminals/env.ts";
 import {
   TerminalHost,
@@ -331,7 +332,7 @@ test("real daemon: 200 single-byte input round trips and ordered coalescing", as
   await daemon.request({ op: "terminate", id });
 });
 
-test("terminal host is lazy, session scoped, restartable and reports unavailable", async () => {
+test("terminal host is lazy, checkout scoped, restartable and reports unavailable", async () => {
   const root = await tempDir("pty-host-");
   const environment = {
     ...Deno.env.toObject(),
@@ -348,29 +349,46 @@ test("terminal host is lazy, session scoped, restartable and reports unavailable
   const host = await TerminalHost.start(options);
   resources().defer("stop terminal host", () => host.stop());
   assert(await missing(host.runtimeDir));
-  assertEquals(await host.list("session-a"), []);
-  const created = await host.create("session-a", "/home/tester/otk", 80, 24);
-  assertEquals((await host.list("session-a")).length, 1);
-  assertEquals(await host.list("session-b"), []);
+  assertEquals(await host.list("/home/tester/otk"), []);
+  const created = await host.create(
+    "tstv1-session-a",
+    "/home/tester/otk",
+    80,
+    24,
+  );
+  assertEquals((await host.list("/home/tester/otk")).length, 1);
+  assertEquals(await host.list("/home/tester/other"), []);
   await assertRejects(
-    () => host.close("session-b", created.id),
+    () => host.close("/home/tester/other", created.id),
     Error,
     "not found",
   );
   await host.stop();
   const next = await TerminalHost.start(options);
   resources().defer("stop replacement host", () => next.stop());
-  assertEquals((await next.list("session-a"))[0].id, created.id);
-  await next.close("session-a", created.id);
-  assertEquals(await next.list("session-a"), []);
+  assertEquals((await next.list("/home/tester/otk"))[0].id, created.id);
+  assertEquals(
+    terminalOwner((await next.list("/home/tester/otk"))[0].group_id),
+    { dir: "/home/tester/otk", session: "tstv1-session-a" },
+  );
+  await next.close("/home/tester/otk", created.id);
+  assertEquals(await next.list("/home/tester/otk"), []);
   const daemon = await next.daemon();
   let lost = 0;
   next.onGone(() => lost++);
   await daemon.shutdown();
   await gone(daemon.registrationFile, daemon.pid);
   assertEquals(lost, 1);
-  const fresh = await next.create("session-b", "/home/tester/otk", 80, 24);
-  assertEquals(fresh.group_id, "session-b");
+  const fresh = await next.create(
+    "tstv1-session-b",
+    "/home/tester/otk",
+    80,
+    24,
+  );
+  assertEquals(terminalOwner(fresh.group_id), {
+    dir: "/home/tester/otk",
+    session: "tstv1-session-b",
+  });
   await (await next.daemon()).shutdown();
   const bad = await TerminalHost.start({
     ...options,

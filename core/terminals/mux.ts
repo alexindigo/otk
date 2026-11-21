@@ -4,6 +4,7 @@ import { isSessionID } from "@otk/protocol";
 import type { TerminalHost } from "./host.ts";
 import type { DaemonConnection, PtyDaemon } from "./daemon.ts";
 import type { Response } from "./frames.ts";
+import { terminalOwner } from "./ownership.ts";
 
 export interface TerminalSockets {
   accept(socket: WebSocket): void;
@@ -49,7 +50,10 @@ export class TerminalMux implements TerminalSockets {
   #sockets = new Set<Relay>();
   #unlisten: () => void;
   #stopped = false;
-  constructor(private host: TerminalRelayHost) {
+  constructor(
+    private host: TerminalRelayHost,
+    private directory: (sessionID: string) => Promise<string>,
+  ) {
     this.#unlisten = host.onGone(() => {
       for (const relay of this.#sockets) relay.gone();
     });
@@ -62,6 +66,7 @@ export class TerminalMux implements TerminalSockets {
     const relay = new Relay(
       socket,
       this.host,
+      this.directory,
       () => this.#sockets.delete(relay),
     );
     this.#sockets.add(relay);
@@ -87,6 +92,7 @@ class Relay {
   constructor(
     private socket: WebSocket,
     private host: TerminalRelayHost,
+    private directory: (sessionID: string) => Promise<string>,
     private closed: () => void,
   ) {
     socket.binaryType = "arraybuffer";
@@ -301,13 +307,15 @@ class Relay {
     }
   }
   async #attach(channel: Channel): Promise<void> {
+    const directory = await this.directory(channel.session);
     const daemon = await this.host.daemon();
     if (!channel.active || !this.#open) return;
     channel.daemon = daemon;
     const metadata = await daemon.request({ op: "get", id: channel.id });
     if (
       metadata.type !== "process" ||
-      metadata.process.group_id !== channel.session || !metadata.process.pty
+      terminalOwner(metadata.process.group_id)?.dir !== directory ||
+      !metadata.process.pty
     ) throw new Error("Terminal not found");
     if (!channel.active || !this.#open) return;
     let connection = await this.#subscribe(channel, 0n);
