@@ -233,9 +233,15 @@ export async function startApplication(
       dataDir: () => terminalDataDirectory(environment),
       environment,
       signal: options.signal ?? new AbortController().signal,
+      publishRows: cfg.digest.publishrows,
     });
     registerTerminals(rpc, terminals);
-    terminalSockets = new TerminalMux(terminals);
+    inbox.terminalDependencies(terminals.tracking);
+    terminalSockets = new TerminalMux(
+      terminals,
+      async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    );
     // startCore assumes ownership of sources/storage, including failed startup.
     coreOwnsResources = true;
     const core = await startCore({
@@ -262,6 +268,8 @@ export async function startApplication(
           for (
             const release of [
               () => terminalSockets!.stop(),
+              () => terminals!.tracking.stop(),
+              () => inbox.stopDependencies(),
               () => core.stop(),
               () => terminals!.stop(),
             ]

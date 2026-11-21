@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub } from "@otk/client";
+import { localKeyboard } from "./ownership.ts";
 import { type KeyEvent, type Keymap, makeKeymap } from "./keys.ts";
 export interface Keyboard {
   keymap: Keymap;
@@ -31,7 +32,10 @@ export function createKeyboard(
   const layers: { command: string; when: () => boolean; rank: number }[] = [];
   const resets = new Set<string>();
   const close = (e: KeyEvent): boolean => {
-    if (e.key !== "Escape" || e.isComposing || e.repeat || e.defaultPrevented) {
+    if (
+      e.key !== "Escape" || e.isComposing || e.repeat || e.defaultPrevented ||
+      localKeyboard(e.target)
+    ) {
       return false;
     }
     const top =

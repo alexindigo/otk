@@ -37,6 +37,8 @@ export interface SupervisionEvidence extends TerminalEvidence {
   terminal?: number;
 }
 export interface Supervision extends TerminalEvidence {
+  /** Running terminal programs owned by this session, not its own activity. */
+  dependencies?: { running: number };
   state: "needsYou" | "working" | "finishedUnseen" | "none";
   terminal: number;
 }

@@ -9,7 +9,7 @@ import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
 import type { ForkNotes } from "./fork-notes.ts";
 import { sessionKey } from "./index.ts";
-import { inboxStatus } from "./inbox.ts";
+import { aggregateStatus } from "./inbox.ts";
 import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
 import {
   projectHash,
@@ -350,7 +350,7 @@ export function createShellNavigation(o: {
     if (!entry) return false;
     const inbox = resources.inbox(target.sidecarId).state.inbox;
     if (
-      disposition === "kept" && inboxStatus(entry, inbox) !== "none" &&
+      disposition === "kept" && aggregateStatus(entry, inbox) !== "none" &&
       !o.confirm(
         `Close "${entry.title}"? It will stay visible as a phantom tab while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )

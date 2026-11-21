@@ -124,7 +124,9 @@ Deno.test("status lamps consume semantic theme paint through the shared role ali
     !/--lamp-color:\s*#/.test(css),
     "The component must not own gel colours",
   );
-  for (const state of ["blocked", "finished", "working", "none"]) {
+  for (
+    const state of ["blocked", "finished", "working", "dependencies", "none"]
+  ) {
     assert(css.includes(`--lamp-color: var(--status-light-${state})`));
     assert(
       shared.includes(
@@ -137,7 +139,7 @@ Deno.test("every theme's session and connection tokens meet non-text contrast on
   const themes = new ThemeRegistry();
   registerOtkThemes(themes);
   const lamps = THEME_SLOTS.filter((s) => /^(lamp-|connection-)/.test(s));
-  assertEquals(lamps.length, 8);
+  assertEquals(lamps.length, 9);
   for (const theme of themes.list()) {
     const colors = themes.resolve(theme.id, theme.mode).colors;
     for (const token of lamps) {

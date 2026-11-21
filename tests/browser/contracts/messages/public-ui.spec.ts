@@ -115,13 +115,24 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await page.goto(state.url);
   // Decision 6: all evidence states render, including grey for no evidence.
   const lights = page.locator("[data-visual-gallery] .otk-status-light");
-  await expect(lights).toHaveCount(5);
+  await expect(lights).toHaveCount(6);
   expect(
     await lights.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-state"))
     ),
-  ).toEqual(["blocked", "working", "finished", "none", "working"]);
+  ).toEqual([
+    "blocked",
+    "working",
+    "finished",
+    "dependencies",
+    "none",
+    "working",
+  ]);
   await expect(lights.nth(3)).toHaveAttribute(
+    "aria-label",
+    "Running in terminal (0)",
+  );
+  await expect(lights.nth(4)).toHaveAttribute(
     "aria-label",
     "No known activity",
   );

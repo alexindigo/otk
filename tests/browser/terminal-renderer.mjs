@@ -52,6 +52,7 @@ try {
       "hidden",
       "links",
       "conceal",
+      "tabs",
       "paste-hidden",
       "paste-native-first",
       "paste-read-first",
@@ -60,6 +61,7 @@ try {
       "scrollbar",
       "scrollbar-accessibility",
       "hover",
+      "selection-blink",
       "composition-hidden",
       "composition-visible",
       "composition-reopen",
@@ -175,6 +177,24 @@ try {
             fullPage: true,
           });
         }
+      } else if (test === "tabs") {
+        const geometry = await page.evaluate(() =>
+          globalThis.terminalFixture.tabs()
+        );
+        assert.deepEqual(geometry.styles, {
+          header: "flex",
+          strip: "flex",
+          wrap: "wrap",
+          shrink: "1",
+        });
+        assert(
+          geometry.strip.right <= geometry.header.right + .5,
+          "noncompact tab strip must fit its header",
+        );
+        assert(
+          Math.max(...geometry.rows) > Math.min(...geometry.rows),
+          "noncompact tabs must wrap",
+        );
       } else if (test.startsWith("paste-")) {
         if (test === "paste-mac") {
           await page.evaluate(() =>
@@ -277,6 +297,45 @@ try {
             },
             undefined,
             { timeout: 1500 },
+          );
+        }
+      } else if (test === "selection-blink") {
+        await page.emulateMedia({ reducedMotion: "no-preference" });
+        await page.clock.install();
+        await page.evaluate(() =>
+          globalThis.terminalFixture.prepareSelection()
+        );
+        await page.clock.runFor(64);
+        const before = await page.evaluate(() => ({
+          ...globalThis.terminalFixture.selections[0],
+        }));
+        assert(before.text.includes("selected-output"));
+        await page.clock.runFor(1100);
+        assert.deepEqual(
+          await page.evaluate(() => globalThis.terminalFixture.selections[0]),
+          before,
+          "idle cursor paints must not reformat the selection",
+        );
+        for (
+          const action of [
+            "selectionOutput",
+            "selectionReplay",
+            "selectionResize",
+          ]
+        ) {
+          const prior = await page.evaluate(() =>
+            globalThis.terminalFixture.selections[0].notifications
+          );
+          await page.evaluate(
+            (action) => globalThis.terminalFixture[action](),
+            action,
+          );
+          await page.clock.runFor(64);
+          assert(
+            await page.evaluate(() =>
+              globalThis.terminalFixture.selections[0].notifications
+            ) > prior,
+            action + " must notify the selection consumer",
           );
         }
       } else if (test === "hover") {

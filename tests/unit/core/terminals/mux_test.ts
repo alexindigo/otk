@@ -2,6 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { createRequestMetadata } from "@otk/protocol";
 import { TerminalMux } from "../../../../core/terminals/mux.ts";
+import { terminalGroup } from "../../../../core/terminals/ownership.ts";
 import {
   type DaemonConnection,
   DaemonResponseError,
@@ -32,7 +33,7 @@ const process: ProcessInfo = {
   pid: 42,
   command: ["/bin/sh"],
   cwd: "/workspace",
-  group_id: "tstv1-a",
+  group_id: terminalGroup({ dir: "/workspace", session: "tstv1-a" }),
   lifecycle: { status: "running" },
   output_head: 0n,
   output_tail: 0n,
@@ -138,7 +139,16 @@ function fixture(autoAttach = true) {
   let acquisitions = 0;
   const listeners = new Set<() => void>();
   const subscriptions: Subscription[] = [];
+  const subscribeRequests: Extract<Request, { op: "subscribe" }>[] = [];
   const requests: Request[] = [];
+  let snapshot: Response = {
+    type: "snapshot",
+    process,
+    text: "",
+    checkpoint_base64: "",
+    cursor_x: 0,
+    cursor_y: 0,
+  };
   let get: () => Promise<Response> = () =>
     Promise.resolve({ type: "process", process });
   let interact: (request: Request, signal?: AbortSignal) => Promise<Response> =
@@ -151,18 +161,14 @@ function fixture(autoAttach = true) {
       requests.push(request);
       if (request.op === "get") return get();
       if (request.op === "snapshot") {
-        return Promise.resolve({
-          type: "snapshot",
-          process: { ...process, id: request.id },
-          text: "",
-          checkpoint_base64: "",
-          cursor_x: 0,
-          cursor_y: 0,
-        });
+        return Promise.resolve(snapshot);
       }
       return interact(request, signal);
     },
-    subscribe(): Promise<DaemonConnection> {
+    subscribe(
+      request: Extract<Request, { op: "subscribe" }>,
+    ): Promise<DaemonConnection> {
+      subscribeRequests.push(request);
       const subscription = new Subscription();
       subscriptions.push(subscription);
       if (autoAttach) subscription.push(attached());
@@ -183,7 +189,7 @@ function fixture(autoAttach = true) {
         listeners.delete(listener);
       };
     },
-  });
+  }, () => Promise.resolve("/workspace"));
   resources().defer("terminal mux", () => mux.stop());
   const socket = new Socket();
   mux.accept(socket as unknown as WebSocket);
@@ -191,7 +197,9 @@ function fixture(autoAttach = true) {
     mux,
     socket,
     subscriptions,
+    subscribeRequests,
     requests,
+    snapshot: (value: Response) => snapshot = value,
     acquisitions: () => acquisitions,
     get: (run: () => Promise<Response>) => get = run,
     interact: (run: typeof interact) => interact = run,
@@ -200,6 +208,37 @@ function fixture(autoAttach = true) {
       for (const listener of listeners) listener();
     },
   };
+}
+
+for (const end of ["detach", "stop"]) {
+  test(`relay ${end} cancels a held checkout identity read before joining its jobs`, async () => {
+    let started = false, aborted = false;
+    const mux = new TerminalMux({
+      daemon: () => {
+        throw new Error("Checkout identity must resolve before daemon access");
+      },
+      onGone: () => () => {},
+    }, (_id, signal) =>
+      new Promise((_resolve, reject) => {
+        started = true;
+        signal.addEventListener("abort", () => {
+          aborted = true;
+          reject(signal.reason);
+        }, { once: true });
+      }));
+    resources().defer("held identity relay", () => mux.stop());
+    const socket = new Socket();
+    mux.accept(socket as unknown as WebSocket);
+    socket.attach();
+    await until(() => started);
+    if (end === "detach") {
+      socket.receive({ t: "detach", ch: 1 });
+      await until(() => aborted);
+    }
+    await mux.stop();
+    assertEquals(aborted, true);
+    assertEquals(socket.code, 1001);
+  });
 }
 
 for (const missing of [false, true]) {
@@ -214,10 +253,10 @@ for (const missing of [false, true]) {
       f.socket.controls().find((v) => v.t === "detached").reason,
       missing ? "terminated" : "lagging",
     );
-    assertEquals(f.requests.filter((r) => r.op === "get"), [{
-      op: "get",
-      id: 1,
-    }]);
+    assertEquals(f.requests.filter((r) => r.op === "get"), [
+      { op: "get", id: 1 },
+      { op: "get", id: 1 },
+    ]);
     assert(!f.socket.controls().some((v) => v.t === "exited"));
   });
 }
@@ -235,6 +274,81 @@ test("daemon loss closes every relay with gone, not a synthesized exit", async (
     assert(!socket.controls().some((v) => v.t === "exited"));
   }
   assert(f.subscriptions.every((s) => s.closed));
+});
+
+test("complete raw attach resets once before replay and live bytes without a checkpoint", async () => {
+  const f = fixture(false);
+  f.socket.attach();
+  await until(() => f.subscriptions.length === 1);
+  const first = attached();
+  assert(first.kind === "json" && first.value.type === "attached");
+  first.value.replay_base64 = btoa("primary\x1b[?1049halternate");
+  f.subscriptions[0].push(first);
+  f.subscriptions[0].push({
+    kind: "output",
+    start: 30n,
+    end: 34n,
+    bytes: new TextEncoder().encode("live"),
+  });
+  await until(() =>
+    f.socket.sent.filter((v) => typeof v !== "string").length === 2
+  );
+  assertEquals(f.subscribeRequests[0].offset, 0n);
+  assertEquals(f.requests.some((r) => r.op === "snapshot"), false);
+  const snapshots = f.socket.controls().filter((v) => v.t === "snapshot");
+  assertEquals(snapshots.length, 1);
+  assertEquals(snapshots[0].restore, "replay");
+  assertEquals(snapshots[0].checkpoint, "");
+  assertEquals(JSON.parse(f.socket.sent[0] as string).t, "snapshot");
+  assertEquals(
+    f.socket.sent.filter((v): v is Uint8Array => typeof v !== "string").map(
+      (v) => new TextDecoder().decode(v.subarray(4)),
+    ),
+    ["primary\x1b[?1049halternate", "live"],
+  );
+});
+
+test("truncated raw attach uses checkpoint and fresh tail subscription without leaking partial replay", async () => {
+  const f = fixture(false);
+  f.snapshot({
+    type: "snapshot",
+    process: { ...process, output_head: 12n, output_tail: 100n },
+    text: "",
+    checkpoint_base64: btoa("checkpoint"),
+    cursor_x: 0,
+    cursor_y: 0,
+  });
+  f.socket.attach();
+  await until(() => f.subscriptions.length === 1);
+  const first = attached();
+  assert(first.kind === "json" && first.value.type === "attached");
+  first.value.truncated = true;
+  first.value.available_offset = 12n;
+  first.value.replay_base64 = btoa("incomplete");
+  f.subscriptions[0].push(first);
+  await until(() => f.subscriptions.length === 2);
+  const next = attached();
+  assert(next.kind === "json" && next.value.type === "attached");
+  next.value.replay_base64 = btoa("tail");
+  f.subscriptions[1].push(next);
+  await until(() => f.socket.sent.some((v) => typeof v !== "string"));
+  assert(f.subscriptions[0].closed);
+  assertEquals(f.subscribeRequests.map((r) => r.offset), [0n, 100n]);
+  assert(
+    f.subscribeRequests[0].attachment_id !==
+      f.subscribeRequests[1].attachment_id,
+  );
+  const snapshots = f.socket.controls().filter((v) => v.t === "snapshot");
+  assertEquals(snapshots.length, 1);
+  assertEquals(snapshots[0].restore, "checkpoint");
+  assertEquals(snapshots[0].checkpoint, btoa("checkpoint"));
+  assertEquals(
+    f.socket.sent.filter((v): v is Uint8Array => typeof v !== "string").map(
+      (v) => new TextDecoder().decode(v.subarray(4)),
+    ),
+    ["tail"],
+  );
+  assertEquals(f.socket.controls().some((v) => v.t === "detached"), false);
 });
 test("stop joins a closed relay's pending EOF classification and fences late output", async () => {
   const f = fixture();

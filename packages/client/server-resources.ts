@@ -23,9 +23,9 @@ import type {
   MergedMetadata,
 } from "./index.ts";
 import {
+  aggregateStatus,
   createInbox,
   type InboxModel,
-  inboxStatus,
   projectHierarchy,
 } from "./inbox.ts";
 import {
@@ -373,7 +373,7 @@ export function createServerResources(o: {
       for (const id of rowDemand.rows) required.add(id);
     }
     for (const entry of input.entries) {
-      if (entry.deleted || inboxStatus(entry, input.inbox) !== "none") {
+      if (entry.deleted || aggregateStatus(entry, input.inbox) !== "none") {
         required.add(entry.id);
       }
     }

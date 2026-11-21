@@ -55,6 +55,11 @@ export { registerSessionsPanel } from "./features/sessions.tsx";
 export { registerTimelinePanel } from "./features/timeline.tsx";
 export { default as Timeline } from "./components/Timeline.tsx";
 export { registerActivityPanel } from "./features/approvals.tsx";
+export {
+  registerTerminalDialog,
+  registerTerminalDock,
+} from "./features/terminal/Terminal.tsx";
+export { registerTerminalPrompt } from "./features/prompt/terminal.tsx";
 export { registerAutoApprovePrompt } from "./features/prompt/approvals.tsx";
 export { default as ProjectTabs } from "./components/ProjectTabs.tsx";
 export { registerTaskDialogs, type TaskNameInput } from "./features/tasks.tsx";

@@ -15,7 +15,8 @@ export default function ComposerTakeovers(
     readOnly?: boolean;
   },
 ): Element {
-  const { takeovers } = useUiRegistries(), session = useSessionPorts();
+  const { takeovers, composerDocks } = useUiRegistries(),
+    session = useSessionPorts();
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -35,6 +36,14 @@ export default function ComposerTakeovers(
                 focusNotice: () => props.focusNotice?.(),
               })}
           </For>
+          <Show when={hasComposer()}>
+            <For
+              each={composerDocks.available(session.supports)}
+              keyed={(item) => item.id}
+            >
+              {(item) => item().component()}
+            </For>
+          </Show>
           <div
             class={[scrollRegion(), "otk-composer"]}
             data-takeover={active() ? "true" : "false"}

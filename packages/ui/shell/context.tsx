@@ -34,6 +34,7 @@ export interface ShellPorts {
   inbox(id: string): InboxModel;
   approvals(id: string): ApprovalModel;
   openProject(project: ProjectSelection): void;
+  addToPrompt(text: string, label: string): void;
   project(): ProjectSelection | undefined;
   entries(): MergedEntry[];
   entry(server: string, session: string): IndexEntry | undefined;
