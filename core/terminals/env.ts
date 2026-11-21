@@ -27,8 +27,9 @@ export function shellEnvironment(
 export function terminalDataDirectory(
   source: Readonly<Record<string, string>>,
 ): string {
-  const root = source.XDG_DATA_HOME ||
-    (source.HOME ? join(source.HOME, ".local", "share") : "");
+  const root = source.XDG_DATA_HOME && isAbsolute(source.XDG_DATA_HOME)
+    ? source.XDG_DATA_HOME
+    : (source.HOME ? join(source.HOME, ".local", "share") : "");
   if (!isAbsolute(root)) {
     throw new Error("Terminal data directory must be absolute");
   }

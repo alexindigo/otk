@@ -7,7 +7,7 @@ import {
   shellProgram,
   terminalDataDirectory,
 } from "../../../../core/terminals/env.ts";
-import { test } from "../../../support/resources.ts";
+import { tempDir, test } from "../../../support/resources.ts";
 
 test("shell and daemon environments have independent injected projections", async () => {
   const source = {
@@ -46,9 +46,24 @@ test("shell and daemon environments have independent injected projections", asyn
   });
   assertEquals(await shellProgram(source), "/bin/bash");
   assertEquals(await shellProgram({}), "/bin/sh");
+  const bin = await tempDir("terminal-shell-");
+  await Deno.writeTextFile(
+    `${bin}/getent`,
+    "#!/bin/sh\nprintf 'root:x:0:0:root:/root:/bin/sh\\n'\n",
+    { mode: 0o755 },
+  );
   assertEquals(
-    await shellProgram({ USER: "root", PATH: "/usr/bin:/bin" }),
-    "/bin/bash",
+    await shellProgram({ USER: "root", PATH: bin }),
+    "/bin/sh",
+  );
+  await Deno.writeTextFile(
+    `${bin}/getent`,
+    "#!/bin/sh\nprintf 'root:x:0:0:root:/root:/configured-login-shell\\n'\n",
+  );
+  assertEquals(
+    await shellProgram({ USER: "root", PATH: bin }),
+    "/configured-login-shell",
+    "the lookup must run rather than coincidentally using the /bin/sh fallback",
   );
   assertEquals(terminalDataDirectory(source), "/data/otk");
   assertEquals(
@@ -56,6 +71,10 @@ test("shell and daemon environments have independent injected projections", asyn
     "/home/tester/.local/share/otk",
   );
   assertThrows(() => terminalDataDirectory({ XDG_DATA_HOME: "relative" }));
+  assertEquals(
+    terminalDataDirectory({ XDG_DATA_HOME: "relative", HOME: "/home/tester" }),
+    "/home/tester/.local/share/otk",
+  );
   assertEquals(await hasSystemd({ PATH: "/usr/bin" }), false);
   assertEquals(
     await hasSystemd({ PATH: "/does-not-exist", INVOCATION_ID: "test" }),
