@@ -503,6 +503,24 @@ export async function revealAcquired(page: Page, selector: string) {
             disclosed: true,
           };
         }
+        // WP16 gives successful terminal records a footer-owned disclosure, so
+        // their interval is not mounted until that public control is opened.
+        // Acquire that ancestry through the real control, not a forced DOM row.
+        const completion = messageID && !pane.querySelector(selector)
+          ? pane.querySelector<HTMLElement>(
+            '.otk-record-completion button[aria-expanded="false"]',
+          )
+          : undefined;
+        if (completion) {
+          completion.click();
+          return {
+            top: pane.scrollTop,
+            height: pane.clientHeight,
+            end: pane.scrollHeight - pane.clientHeight,
+            messageID,
+            disclosed: true,
+          };
+        }
         const element = Array.from(pane.querySelectorAll(selector)).find((
             element,
           ) =>

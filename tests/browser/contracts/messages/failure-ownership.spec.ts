@@ -48,7 +48,7 @@ for (const available of [true, false]) {
       const editor = page.locator("textarea[name=prompt]");
       await editor.fill("Keep this draft when revealing the error");
       await editor.press("Enter");
-      const link = page.locator(".otk-operation-feedback").getByRole("link", {
+      const link = page.locator(".otk-operation-feedback").getByRole("button", {
         name: "See the retained failure",
       });
       await expect(link).toBeVisible();

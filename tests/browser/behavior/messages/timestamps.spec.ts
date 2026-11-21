@@ -87,7 +87,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await expect.poll(() =>
     time.getAttribute("datetime").then((s) => Date.parse(s!))
   ).toBe(expected);
-  const before = await time.boundingBox();
+  const before = await time.locator("..").boundingBox();
   await time.hover();
   const geometry = await page.evaluate(() => {
     const header = document.querySelector(".otk-reply-start")!,
@@ -97,7 +97,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
       agent = header.querySelector(".otk-entity-pill")!,
       h = header.getBoundingClientRect(),
       a = agent.getBoundingClientRect(),
-      t = time.getBoundingClientRect();
+      t = time.closest(".otk-chrome-meta")!.getBoundingClientRect();
     return {
       timeLeft: t.left,
       timeRight: t.right,
@@ -110,7 +110,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
         timeZoneName: "short",
       }),
       color: getComputedStyle(time).color,
-      headerColor: getComputedStyle(header).color,
+      headerColor: getComputedStyle(time.closest(".otk-chrome-meta")!).color,
     };
   });
   expect(geometry.title).toBe(geometry.expected);

@@ -132,9 +132,15 @@ test.describe("honest native metadata", () => {
         new DragEvent("drop", { bubbles: true, dataTransfer: data }),
       );
     });
-    await expect(page.locator(".otk-prompt-chip")).toContainText(
-      "Each upload must be 20 MiB or smaller",
-    );
+    const chip = page.locator(".otk-prompt-chip");
+    await expect(chip).toHaveClass(/has-error/);
+    const feedbackID = await chip.locator("button.otk-control-grow")
+      .getAttribute("aria-describedby");
+    expect(feedbackID).toBeTruthy();
+    await expect(page.locator(`[id=${JSON.stringify(feedbackID)}]`))
+      .toContainText(
+        "Each upload must be 20 MiB or smaller",
+      );
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(
       /Keep this unsent draft/,
     );

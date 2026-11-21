@@ -151,14 +151,16 @@ for (
       }).toBe(true);
       await expect(page.locator(".otk-shell-progress")).toHaveText("");
       await expect(page.locator(".otk-permission-dock .otk-request-age"))
-        .toHaveText("Session idle 12 days");
+        .toHaveText(/^Session idle 12d(?: \d+(?:\.\d+)?[hms])*$/);
       await expect(
         page.getByRole("button", { name: "Allow once", exact: true }),
       ).toHaveAttribute("title", "Allow once (1 when focused)");
       await expect(
         page.getByRole("button", { name: "Allow once", exact: true }),
       )
-        .toHaveAccessibleDescription("Resumes work paused 12 days ago");
+        .toHaveAccessibleDescription(
+          /^Resumes work paused 12d(?: \d+(?:\.\d+)?[hms])* ago$/,
+        );
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await state.product("prefs.set", { key: "theme", value: theme });
         await expect(page.locator("html")).toHaveAttribute(

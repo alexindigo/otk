@@ -59,7 +59,8 @@ for (const surface of ["palette", "menu", "message", "notification"]) {
         await expect(feedback).not.toContainText("consumer.private-copy");
         await expect(feedback).not.toContainText("Private command diagnostic");
         if (surface === "message") {
-          await expect(feedback).toContainText("Captured target");
+          await expect(feedback).not.toContainText("Captured target");
+          await expect(feedback.getByRole("link")).toHaveCount(0);
         }
       },
     );

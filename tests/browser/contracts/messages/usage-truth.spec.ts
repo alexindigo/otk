@@ -31,7 +31,7 @@ test.describe("unknown prices", () => {
     await expect(trigger).toHaveText("1 model call · 240 tokens · $0.43");
     await trigger.hover();
     await expect(page.locator(".otk-usage-breakdown tbody tr")).toHaveText(
-      "1answered19010020304050$0.430.0s",
+      "1answered19010020304050$0.430s",
     );
     expect(
       await trigger.evaluate((t) => {
@@ -77,7 +77,7 @@ test.describe("queued provider identity", () => {
       "80,000$0.06",
       "100,000$0.45",
       "$0.86",
-      "0.0s",
+      "0s",
     ]);
   });
 });

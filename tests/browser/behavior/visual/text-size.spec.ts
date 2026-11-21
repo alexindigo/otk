@@ -73,8 +73,13 @@ test("visual.text-size-live-geometry-broadcast-and-reload", {
     );
     const checkbox = await settings.locator("input[name=reducedColors]")
       .boundingBox();
-    expect(checkbox!.width).toBeCloseTo(13 * size / 100, 1);
-    expect(checkbox!.height).toBeCloseTo(13 * size / 100, 1);
+    const checkboxLine = await settings.locator("input[name=reducedColors]")
+      .evaluate((input) =>
+        parseFloat(getComputedStyle(input.closest(".otk-checkbox")!).lineHeight)
+      );
+    expect(checkboxLine).toBeCloseTo(20 * size / 100, 1);
+    expect(checkbox!.width).toBeCloseTo(checkboxLine, 1);
+    expect(checkbox!.height).toBeCloseTo(checkboxLine, 1);
     const avatar =
       (await page.locator(".otk-project-chip .otk-project-avatar").first()
         .boundingBox())!;
@@ -247,7 +252,9 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     await revealAcquired(page, "[data-tool=bash] .otk-tool-toggle");
     const tool = (await row.locator(".otk-tool-toggle").boundingBox())!;
     expect(tool.height).toBeGreaterThanOrEqual(26 * size / 100 - 1);
-    const icon = (await row.locator(".otk-tool-icon svg").boundingBox())!;
+    const icon = (await row.locator(
+      ".otk-tool-state > .otk-tree-icon .otk-tree-icon-art > svg",
+    ).boundingBox())!;
     expect(icon.width).toBeCloseTo(13 * size / 100, 1);
     expect(icon.height).toBeCloseTo(13 * size / 100, 1);
   }

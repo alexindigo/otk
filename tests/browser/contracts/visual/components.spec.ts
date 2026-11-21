@@ -106,7 +106,11 @@ test(
       "data-owner-subscriptions",
       "1,0",
     );
-    await expect(page.getByRole("alert")).toHaveText("Original target");
+    await expect(page.getByRole("alert")).toHaveAccessibleName(
+      "Original target",
+    );
+    await expect(page.getByRole("alert").locator(".otk-failure-reason"))
+      .toHaveText("Original target");
     await page.evaluate("styleTest.mountFeedback(false)");
     await expect(subscriptions).toHaveAttribute(
       "data-owner-subscriptions",
@@ -176,7 +180,7 @@ test(
     await scene(page, state.url, "forms");
     for (const name of ["notes", "kind"]) {
       const field = page.locator(
-        name === "notes" ? 'textarea[name="notes"]' : 'select[name="kind"]',
+        name === "notes" ? 'textarea[name="notes"]' : 'button[name="kind"]',
       );
       const before = await bounds(page, ".otk-form");
       await page.locator(".otk-form button[type=submit]").click();

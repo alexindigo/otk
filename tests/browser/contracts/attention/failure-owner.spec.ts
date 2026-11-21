@@ -76,13 +76,10 @@ test(
           entry,
         ]
       ) {
-        await expect(
-          surface.getByRole("link", {
-            name: "Failure owner fixture",
-            exact: true,
-          }),
-        )
-          .toHaveAttribute("href", `#/local/${session.id}`);
+        // The open session is already the inline target. Background notification
+        // navigation remains covered by failure-toast-native.spec.ts.
+        await expect(surface.getByRole("link")).toHaveCount(0);
+        await expect(surface).not.toContainText("Failure owner fixture");
         await expect(surface).not.toContainText(`Session ${session.id}`);
         expect(
           await surface.locator(".otk-failure-content").evaluate((el) =>
