@@ -14,14 +14,14 @@ mkdir -p -- "$output"
 for arch in x86_64 aarch64; do
   stage=$(mktemp -d "$output/.otk-$arch.XXXXXXXX")
   deno task compile "$arch-unknown-linux-gnu" "$stage/otk"
-  install -m644 packaging/systemd/otk.service LICENSE README.md "$stage/"
+  install -m644 packaging/systemd/otk.service LICENSE THIRD-PARTY-NOTICES.md README.md "$stage/"
   install -m644 defaults/otk.toml "$stage/otk.toml.example"
   (
     cd -- "$stage"
-    sha256sum otk otk.service LICENSE README.md otk.toml.example > SHA256SUMS
+    sha256sum otk otk.service LICENSE THIRD-PARTY-NOTICES.md README.md otk.toml.example > SHA256SUMS
     ZSTD_CLEVEL=19 ZSTD_NBTHREADS=2 tar --zstd -cf \
       "$output/otk-$version-$arch-linux.tar.zst" \
-      otk otk.service LICENSE README.md otk.toml.example SHA256SUMS
+      otk otk.service LICENSE THIRD-PARTY-NOTICES.md README.md otk.toml.example SHA256SUMS
   )
 done
 (

@@ -394,6 +394,11 @@ Initial/reconnect snapshots call the sink's `reset`; ordered live resize events
 call `resize` without replaying a checkpoint, preserving renderer scrollback and
 the saved primary screen while an alternate-screen program runs.
 
+The attachment retains its latest desired grid while connecting or disconnected
+and reapplies it after every attachment acknowledgement without another reset.
+An active terminal transport retires after 45 seconds without an incoming frame;
+idle and stopped transports release that liveness timer.
+
 `SessionTerminals(socket, connection, sessionID, factory?)` owns `state.list`,
 `state.selected`, `state.disconnected` and loading/error feedback through that
 same state/subscribe contract (not framework signals). `refresh`, `create`,

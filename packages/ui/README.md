@@ -673,6 +673,11 @@ lights receive projected dependency counts; their shared StatusLight description
 is `Running in terminal (N)`. Session-row and breadcrumb lights retain their
 own-session state. No view scans processes or polls.
 
+A disconnected terminal keeps its output but makes its input surface inert and
+shows an in-flow Reconnect action. Reselecting the tab retries too. Add to
+prompt uses a fence longer than every selected backtick run, preserving exact
+output.
+
 `ComposerTakeovers` renders registered `composerDocks` between takeovers and the
 composer without suspending it. The composer and dock surfaces share one width
 rule. A dock takes two thirds of the viewport height and shrinks before the

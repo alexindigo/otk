@@ -43,9 +43,9 @@ sudo install -m755 otk /usr/bin/otk
 sudo install -Dm644 otk.service /usr/lib/systemd/user/otk.service
 ```
 
-The tarball also includes `LICENSE`, this README and `otk.toml.example`. It
-needs no source checkout, separately installed Deno or dependency downloads at
-runtime. To build from source, use the shared
+The tarball also includes `LICENSE`, `THIRD-PARTY-NOTICES.md`, this README and
+`otk.toml.example`. It needs no source checkout, separately installed Deno or
+dependency downloads at runtime. To build from source, use the shared
 [compile recipe](./packaging/README.md).
 
 ### Configure and start
@@ -87,8 +87,9 @@ LAN or the Internet. The security report flags
 [DNS rebinding](./docs/security-findings.md#2-dns-rebinding),
 [TOTP guessing](./docs/security-findings.md#3-totp-guessing) and
 [Basic credential forwarding](./docs/security-findings.md#6-basic-credential-forwarding).
-All ten findings remain open and unverified. Loopback reduces exposure; it does
-not fix these findings.
+The terminal branch checks Origin on every API WebSocket upgrade, addressing
+finding 1's route-specific gap. The other findings remain open and unverified.
+Loopback reduces exposure; it does not fix those findings.
 
 Start OTK, then open `http://127.0.0.1:1502/`:
 
@@ -314,6 +315,60 @@ ID. Enabled auto-approve policy is retired on deletion and is not restored.
 | 9 | Security                                   | [Ten scanner findings](./docs/security-findings.md), six medium and four low, remain open and unverified. Keep OTK bound to localhost.                                                                                                                                                                                                                                                                                    |
 
 ## Using OTK
+
+### Terminals and running dependencies
+
+Click the terminal icon beside Attach to open a terminal box above the composer.
+It shares the composer's width and takes up to two thirds of the screen height;
+Expand uses the same dialog size as Edit prompt. Use `+` for another shell and
+the tabs to switch. Hide terminal (or the composer icon) hides the box without
+stopping shells; a tab's X terminates that terminal. Collapse returns an
+expanded terminal to the dock without reconnecting it. Escape goes to the
+terminal.
+
+Terminals belong to the session's checkout directory, including a worktree, and
+are shared by sessions in that checkout. Each records the session that created
+it. Select output and choose **Add to prompt** in the header or context menu to
+insert a fenced text chip into the session being viewed, without the clipboard.
+
+A foreground program is a running dependency: its owner's task (or ungrouped
+phantom tab) and project get an orange **Running in terminal (N)** light unless
+higher-priority attention applies. The session's own light is unchanged. An idle
+shell or exited program does not count; background jobs do not count while the
+shell remains foreground. Foreground names cannot distinguish a same-named
+nested shell from its original shell. Counts refresh about every two seconds,
+even with the terminal box hidden. Deleting or archiving the owner session does
+not stop its terminals; orphaned running terminals still count for the checkout.
+
+Shells run as the **OTK operating-system user**, with that user's filesystem and
+process permissions, not in a sandbox or behind an opencode permission prompt.
+They inherit OTK's environment except `OTK_*` and service-notification variables
+(`OTK_TERMINAL=1` is added); other environment secrets may remain accessible.
+With login disabled on a LAN address, anyone able to reach OTK from an allowed
+origin can run commands as that user. Keep the listener on localhost and enable
+login; Origin checks are not authentication or protection against DNS rebinding.
+
+The bundled `opencode-pty` daemon keeps shells across a clean OTK restart if OTK
+returns within 120 seconds. A crash or expired handoff ends them. On reload,
+complete raw replay restores both normal and full-screen output; after the 2 MiB
+raw buffer is exceeded, the checkpoint restores only the active screen, losing
+the normal screen underneath a full-screen program. Width changes can also let
+Bash redraw erase rows above a wrapped prompt. Observer resize reconciliation is
+not fully qualified. Browser-reserved shortcuts still belong to the browser, and
+the pinned renderer emits no ContextMenu key bytes.
+
+The visible tab and three recently viewed tabs stay attached; older tabs detach
+without stopping their shells. Terminal lists refresh on local actions and
+reconnection, not through cross-browser live list synchronization. Box
+visibility is browser-memory state, not persisted. Linux glibc is the supported
+daemon target; this pilot qualifies x86_64, not aarch64, Windows, macOS or musl.
+
+If needed, stop all owned terminal daemons with
+`systemctl --user stop 'otk-pty-*'`; without systemd, stop the daemon PID
+recorded in its `service.json` under OTK's state `terminals/pty/` directory.
+This stops all their shells and is an escape hatch, not routine cleanup.
+
+### Sessions and projects
 
 The production Solid UI merges projects across connected servers into an inbox.
 Each project has an always-visible roll-up light, unread name and visit clock;

@@ -65,6 +65,13 @@ Dependencies lift Inactive only while running, without changing stored policy,
 completion watermarks or session population. Missing owners hydrate by key;
 shutdown cancels and joins inventory and owner hydration before storage closes.
 
+Daemon launches use the same minimal environment in detached and systemd modes;
+the latter clears the manager's environment inside the launched unit. Terminal
+creation prepares local shell arguments before the request fence. Complete
+daemon error responses retain their identity: only proven pre-spawn failures and
+exact missing-process rejections terminate a mutation as rejected. Transport
+loss and potentially post-spawn errors remain uncertain.
+
 `InboxFeature` composes one `SessionSupervision` beside the index. Adapters
 supply fresh work and pending-input identities plus monotone proven terminal
 tokens. Neither legacy status transitions nor digest/population readiness create

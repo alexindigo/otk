@@ -32,8 +32,14 @@ bash scripts/release.sh 0.1.0-beta.2 /absolute/output/release
 This is the same script used by `.github/workflows/release.yml`. It emits
 `otk-<version>-<arch>-linux.tar.zst` for x86_64 and aarch64, plus a `SHA256SUMS`
 for the archives. Each archive contains the executable, service, license,
-README, example operator config and a payload `SHA256SUMS`. Build staging
-directories are retained beside the archives for inspection.
+README, `THIRD-PARTY-NOTICES.md`, example operator config and a payload
+`SHA256SUMS`. Build staging directories are retained beside the archives for
+inspection.
+
+Packages, including the separate `otk`, `otk-bin` and `otk-git` AUR recipes,
+must install `THIRD-PARTY-NOTICES.md` beside `LICENSE`, for example under
+`/usr/share/licenses/otk/`. Those recipe repositories are updated separately at
+release time.
 
 Release automation checks out the published tag and uploads both archives and
 the archive checksums. Its manual dispatch accepts an existing release tag for a

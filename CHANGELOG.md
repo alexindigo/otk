@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+#### Feature
+
+Checkout-shared terminal boxes open above the composer, keep multiple shell tabs
+and expand to the editor dialog size. Selected output becomes a fenced prompt
+chip in the viewed session. A separate pinned PTY daemon preserves shells across
+clean restarts. Foreground programs contribute orange running-dependency task
+and project lights without changing a session's own activity light; orphaned
+terminals still count for their checkout.
+
+#### Fix
+
+Origin admission now checks every API WebSocket upgrade rather than one route.
+Terminal browser code uses the shared plain-HTTP clipboard and hashing owners.
+
+#### Documentation
+
+Document shell permissions, restart and replay limits, and the daemon cleanup
+escape hatch. Release archives include third-party terminal licence notices;
+packages must install them beside OTK's licence.
+
 ## [0.1.0-beta.2] — 2026-10-31
 
 **Highlights.** Session lists now include all ages of history and carry their
