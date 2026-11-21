@@ -40,8 +40,12 @@ for (const kind of ["question", "permission"] as const) {
       );
     }
     const original = await primary.elementHandle();
+    // Native inventory absence can settle the same request independently of its
+    // removal/result. Delay all settlement evidence while probing pending input.
     frames.hold((frame, request) =>
-      (frame.t === "request.result" && request?.method === `${kind}.reply`) ||
+      (frame.t === "request.result" &&
+        (request?.method === `${kind}.reply` ||
+          request?.method === `${kind}.list`)) ||
       (frame.t === "content" &&
         ((frame.event as { op?: string })?.op === `${kind}.remove` ||
           kind === "question" &&
@@ -97,7 +101,9 @@ for (const kind of ["question", "permission"] as const) {
     });
     // One native request admits one reply, whatever the control's lifetime.
     expect(replies()).toHaveLength(1);
-    expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
+    expect(
+      frames.sent.filter(({ frame }) => frame.method === "session.prompt"),
+    )
       .toHaveLength(0);
     expect(before.same).toBe(true);
     expect(afterClick.same).toBe(true);

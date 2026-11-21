@@ -89,15 +89,14 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
     rightCollapsed: true,
   });
   await page.goto(state.url);
-  // Use the ordinary project route exposed by the rail, never a fixture hook.
+  // 2.47: an explicit checkout/attention target retains its helper identity.
+  // The repository's default and explicit parent link still resolve the root.
   await page.locator(
     `.otk-project-row[data-project=${
       JSON.stringify(directory)
-    }] .otk-project-open`,
+    }] .otk-project-attention`,
   ).click();
-  // Project defaults resolve moved helpers to their human owner. Explicit
-  // navigation still exposes the helper in its own checkout.
-  await expect(page).toHaveURL(new RegExp(`${root}$`));
+  await expect(page).toHaveURL(new RegExp(`${child}$`));
   await page.goto(`${state.url}/#/local/${root}/${child}`);
   await visibleOnScreen(tab(child));
   await page.reload();
