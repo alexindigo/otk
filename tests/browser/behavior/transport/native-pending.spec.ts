@@ -41,7 +41,7 @@ test.describe("native page", () => {
       await expect(
         page.getByRole("region", { name: "Transcript", exact: true }),
       ).toHaveAttribute("aria-busy", "true");
-      await expect(page.locator(".otk-messages")).toContainText(
+      await expect(page.locator(".otk-shell-progress")).toContainText(
         "Loading messages",
       );
       await expect(
@@ -76,6 +76,24 @@ test.describe("native page", () => {
     await expect(page.locator('.otk-messages [data-role="user"]')).toHaveCount(
       2,
     );
+    await info.attach("held-page-authority", {
+      body: JSON.stringify({
+        observation: await state.observe(),
+        requests: frames.sent.filter(({ frame }) =>
+          frame.method === "session.messages"
+        ),
+        received: frames.received.filter((frame) =>
+          [
+            "transcript.invalidated",
+            "load.chunk",
+            "request.result",
+            "request.rejected",
+          ]
+            .includes(frame.t)
+        ),
+      }),
+      contentType: "application/json",
+    });
     expect(
       (await state.observe<{ transport: { reads: number } }>()).transport.reads,
     ).toBe(1);

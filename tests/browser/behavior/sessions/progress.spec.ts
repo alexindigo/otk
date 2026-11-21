@@ -13,6 +13,13 @@ test("progress.count-rate-eta-and-stalled-wait", {
     rightView: "sessions",
   });
   await page.goto(`${state.url}/#/local/${session.id}`);
+  // Transcript acquisition has priority in the one shared shell slot. Close
+  // its view explicitly to inspect indexing; the next case proves page waits.
+  await expect(page.locator(".otk-shell-progress")).toHaveText(
+    "Loading messages...",
+  );
+  await page.keyboard.press("Control+k");
+  await page.locator('[data-command="session.close"]').click();
   const status = page.locator(".otk-shell-progress");
   await expect(status).toHaveText("Indexing sessions: 80 of 251");
   await state.controller.call("scenario", {
@@ -21,7 +28,7 @@ test("progress.count-rate-eta-and-stalled-wait", {
   });
   await page.clock.runFor(1100);
   await expect(status).toHaveText(
-    "Indexing sessions: 83 of 251, about 1 min left",
+    "Indexing sessions: 83 of 251, about 1m left",
   );
   await expect(page.locator(".otk-shell-progress")).toHaveCount(1);
   await expect(
@@ -37,13 +44,6 @@ test("progress.count-rate-eta-and-stalled-wait", {
   await expect(status).not.toContainText(
     /sessions\/s|reading page|crumb|summar/i,
   );
-  const pageStatus = page.getByRole("region", {
-    name: "Transcript",
-    exact: true,
-  }).getByRole("status");
-  await expect(pageStatus).toContainText("Loading messages...");
-  await page.clock.runFor(18000);
-  await expect(pageStatus).toHaveText(/Loading messages\.\.\. \d+ s/);
   for (
     const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",
@@ -80,13 +80,10 @@ test("progress.count-rate-eta-and-stalled-wait", {
   ) {
     await expect(status).toContainText(copy);
   }
-  // The shared human-duration owner promotes elapsed waits to minutes at 60 seconds.
-  await expect(status).toContainText(/No progress for 1 min/);
-  await expect(pageStatus).toHaveText(
-    /Still loading messages \(1 min\): waiting for opencode to respond/,
-  );
+  // The shared human-duration owner promotes elapsed waits at 60 seconds.
+  await expect(status).toContainText(/No progress for 1m/);
   await expect(listStatus).toHaveText(
-    /Still loading sessions \(1 min\): waiting for opencode to respond/,
+    /Still loading sessions \(1m(?: \d+(?:\.\d+)?s)?\): waiting for opencode to respond/,
   );
   const rowHeld = await page.locator(".otk-session-row").first().boundingBox();
   expect(rowHeld?.y).toBe(rowBefore?.y);
@@ -123,21 +120,19 @@ test("progress.count-rate-eta-and-stalled-wait", {
     new Date(await page.evaluate(() => Date.now()) + 12 * 86400_000),
   );
   await page.clock.runFor(1100);
-  await expect(status).toContainText("No progress for 12 days");
-  await expect(pageStatus).toHaveText(
-    "Still loading messages (12 days): waiting for opencode to respond",
-  );
+  await expect(status).toContainText("No progress for 12d");
   await expect(listStatus).toHaveText(
-    "Still loading sessions (12 days): waiting for opencode to respond",
+    /Still loading sessions \(12d(?: \d+(?:\.\d+)?[hms]){0,2}\): waiting for opencode to respond/,
   );
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "release",
   });
+  await page.goto(`${state.url}/#/local/${session.id}`);
   await expect(page.getByText("Core transcript", { exact: true }))
     .toBeVisible();
   await expect(listStatus).toHaveCount(0);
-  await expect(pageStatus).toHaveCount(0);
+  await expect(status).not.toContainText(/loading messages/i);
   expect((await page.locator(".otk-session-row").first().boundingBox())?.y)
     .toBe(rowBefore?.y);
 });
@@ -170,12 +165,16 @@ test(
       rightView: "sessions",
     });
     await page.goto(`${state.url}/#/local/${session.id}`);
+    await expect(page.locator(".otk-shell-progress")).toHaveText(
+      "Loading messages...",
+    );
     await expect(
-      page.getByRole("region", { name: "Transcript", exact: true }).getByRole(
-        "status",
-      ),
-    )
-      .toHaveText("Loading messages...");
+      page.getByRole("region", { name: "Transcript", exact: true })
+        .getByRole("status"),
+    ).toHaveCount(0);
+    await page.clock.runFor(18000);
+    await expect(page.locator(".otk-shell-progress"))
+      .toHaveText(/Loading messages\.\.\. \d+(?:\.\d+)?s/);
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "thaw",
@@ -187,7 +186,7 @@ test(
       contentType: "application/json",
     });
     const status = page.locator(".otk-shell-progress");
-    await expect(status).toHaveText("Loading messages...");
+    await expect(status).toHaveText(/Loading messages\.\.\. \d+(?:\.\d+)?s/);
     const row = page.locator(".otk-session-row").first();
     const before = await row.boundingBox();
     const bodyBefore = await page.getByText("Core transcript", { exact: true })
@@ -197,7 +196,7 @@ test(
     );
     await page.clock.runFor(1100);
     await expect(status).toHaveText(
-      /Still loading messages \(1 min\): waiting for opencode to respond/,
+      /Still loading messages \(1m(?: \d+(?:\.\d+)?s)?\): waiting for opencode to respond/,
     );
     await expect(page.locator(".otk-session-loading-row")).toContainText(
       /Still loading sessions/,
@@ -219,6 +218,13 @@ test(
         fullPage: true,
       });
     }
+    await page.clock.setFixedTime(
+      new Date(await page.evaluate(() => Date.now()) + 12 * 86400_000),
+    );
+    await page.clock.runFor(1100);
+    await expect(status).toHaveText(
+      /Still loading messages \(12d(?: \d+(?:\.\d+)?[hms]){0,2}\): waiting for opencode to respond/,
+    );
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "release",

@@ -50,12 +50,15 @@ for (const retry of [false, true]) {
       await prompt(page, "Recover the exact native response");
       await state.release(reply.gate);
       if (retry) {
-        await expect(page.locator(".otk-response-recovery")).toContainText(
+        await expect(page.locator(".otk-message [role=alert]")).toContainText(
           "Response refresh unavailable.",
         );
-        await page.locator(".otk-response-recovery button").click();
+        await page.getByRole("button", { name: "Retry response", exact: true })
+          .click();
       }
-      await expect(page.locator(".otk-response-recovery")).toHaveText(
+      await expect(
+        page.locator(".otk-message .otk-feedback-status[role=status]"),
+      ).toHaveText(
         "Refreshing response...",
       );
       await expect.poll(() => observation().then((o) => o.snapshots.length))
@@ -103,7 +106,9 @@ for (const retry of [false, true]) {
         )
       );
       expect((await observation()).points.length).toBe(firstReads);
-      await expect(page.locator(".otk-response-recovery")).toHaveText(
+      await expect(
+        page.locator(".otk-message .otk-feedback-status[role=status]"),
+      ).toHaveText(
         "Refreshing response...",
       );
       await expect.poll(visibleSource).toBe(initial.snapshots[0]);
@@ -112,7 +117,8 @@ for (const retry of [false, true]) {
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         expected,
       );
-      await expect(page.locator(".otk-response-recovery")).toHaveCount(0);
+      await expect(page.locator(".otk-message .otk-feedback-status"))
+        .toHaveCount(0);
       const native = await state.native<
         {
           info: { id: string; role: string };
@@ -129,7 +135,8 @@ for (const retry of [false, true]) {
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         expected,
       );
-      await expect(page.locator(".otk-response-recovery")).toHaveCount(0);
+      await expect(page.locator(".otk-message .otk-feedback-status"))
+        .toHaveCount(0);
       await expect(page.locator(".otk-turn-time")).toBeAttached();
       await expect(page.locator(".otk-turn-time")).not.toHaveText("streaming");
     });

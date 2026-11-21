@@ -55,7 +55,7 @@ test(
 test(
   "visual.native-field-compact-hitboxes-without-consumer-overrides",
   tags,
-  async ({ page }) => {
+  async ({ page }, info) => {
     const css = await readFile(
         new URL("../../../../packages/ui/theme.css", import.meta.url),
         "utf8",
@@ -198,6 +198,10 @@ test(
               },
             ),
         };
+      });
+      await info.attach(`raw-field-geometry-${width}`, {
+        body: JSON.stringify(result),
+        contentType: "application/json",
       });
       for (const field of result.fields) {
         expect(field.width).toBe(width);
