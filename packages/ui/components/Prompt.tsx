@@ -161,6 +161,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     session?.feedback?.clear();
     setFeedback(undefined);
     input.focus();
+    // Feature readiness follows this input's references, not every catalog.
     await ctx.ready();
     intent.require();
     const draft = change((current) => current);

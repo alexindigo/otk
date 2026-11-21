@@ -120,7 +120,11 @@ export interface HarnessCore {
   listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(
     id: string,
-    opts: { before?: MessageCursor; publish?(page: MessagePage): void },
+    opts: {
+      before?: MessageCursor;
+      retryRecovery?: boolean;
+      publish?(page: MessagePage): void;
+    },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
   /** Bounded retained history, including rows hidden by a reversible stage.

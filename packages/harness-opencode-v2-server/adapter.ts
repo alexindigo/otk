@@ -609,6 +609,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         return result;
       },
       listMessages: async (id, input, signal) => {
+        if (input.retryRecovery) this.transcript.recovery.retry(id);
         await this.#errors.retryHistory(id);
         const decorate = (page: import("@otk/protocol").MessagePage) => ({
           ...page,

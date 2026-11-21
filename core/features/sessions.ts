@@ -291,8 +291,15 @@ export function register(
     })),
     params(p) {
       if (
-        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+        Object.keys(p).some((key) =>
+          key !== "sessionID" && key !== "before" && key !== "retryRecovery"
+        )
       ) throw new HarnessError("params", "Unknown message page parameter");
+      if (
+        p.retryRecovery !== undefined && typeof p.retryRecovery !== "boolean"
+      ) {
+        throw new HarnessError("params", "Invalid response retry intent");
+      }
       const before = text(p, "before", true);
       if (
         before !== undefined &&
@@ -301,6 +308,7 @@ export function register(
       return {
         sessionID: sessionID(p)!,
         before,
+        retryRecovery: p.retryRecovery as boolean | undefined,
       };
     },
     cancelled: (p, request) =>
@@ -322,6 +330,7 @@ export function register(
         );
         const page = await ctx.harness.core.listMessages(p.sessionID, {
           before: p.before,
+          retryRecovery: p.retryRecovery,
           publish(page) {
             signal?.throwIfAborted();
             if (!ctx.execution?.key) return;

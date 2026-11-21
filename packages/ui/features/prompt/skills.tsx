@@ -27,7 +27,6 @@ export function registerSkillsPrompt(prompt: PromptRegistry): void {
       );
       return {
         overlay: picker,
-        ready: () => ctx.directoryCatalog?.ready("skills") ?? Promise.resolve(),
       };
     },
   });
