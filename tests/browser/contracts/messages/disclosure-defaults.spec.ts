@@ -51,6 +51,8 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
       "expandRecords",
       "expandSource",
       "expandCompaction",
+      "expandStepMarkers",
+      "expandSnapshots",
     ] as const
   ) {
     const input = settings.locator(`input[name=${key}]`);
@@ -73,6 +75,8 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
       "expandRecords",
       "expandSource",
       "expandCompaction",
+      "expandStepMarkers",
+      "expandSnapshots",
     ]
   ) {
     await expect(settings.locator(`input[name=${key}]`)).toBeChecked();
@@ -95,7 +99,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     });
     await expect(settings).toBeVisible();
     await expect(settings.locator("select")).toHaveCount(0);
-    await expect(settings.getByRole("checkbox")).toHaveCount(12);
+    await expect(settings.getByRole("checkbox")).toHaveCount(14);
     await expect(
       settings.getByRole("region", { name: "Tool visibility", exact: true })
         .getByRole("checkbox"),
@@ -112,6 +116,8 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         "expandRecords",
         "expandSource",
         "expandCompaction",
+        "expandStepMarkers",
+        "expandSnapshots",
       ]
     ) {
       await expect(settings.locator(`input[name=${key}]`)).not.toBeChecked();
