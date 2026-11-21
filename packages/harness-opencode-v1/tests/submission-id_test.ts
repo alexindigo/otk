@@ -10,10 +10,10 @@ Deno.test("V1 submission identities keep native shape and order within the same 
   Date.now = () => 1794751200000;
   try {
     const first = submissionID(), second = submissionID();
-    assertMatch(first, /^msg_[0-9a-f]{26}$/);
+    assertMatch(first, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
     assertEquals(
       first.slice(4, 16),
-      (BigInt(Date.now()) * 0x1000n).toString(16).slice(-12),
+      (BigInt(Date.now()) * 0x1000n + 1n).toString(16).slice(-12),
     );
     assert(second > first);
   } finally {

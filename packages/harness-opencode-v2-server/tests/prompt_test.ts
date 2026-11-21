@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import {
   type OperationContext,
   OperationFailure,
@@ -173,6 +173,23 @@ Deno.test("V2 prompt and action selections resolve the agent's model default bef
       model: { providerID: "fake", id: "scripted", variant: "high" },
     });
   }
+});
+Deno.test("V2 fallback submits and returns ascending native-format identities", async () => {
+  const f = fixture(), ids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const receipt = await f.prompt.prompt({
+      sessionID: "opcv2-ses_root",
+      mode: "normal",
+      parts: [{ kind: "text", text: "Native-compatible fallback" }],
+    }, f.operation);
+    const id = f.calls.at(-1)!.body!.id as string;
+    assertMatch(id, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
+    assertEquals(receipt, { messageID: id, state: "queued" });
+    assertEquals(f.submissions.at(-1)!.messageID, id);
+    ids.push(id);
+  }
+  assert(ids[1] > ids[0]);
+  assert(ids[2] > ids[1]);
 });
 Deno.test("V2 successful prompt returns the exact submitted native identity", async () => {
   const f = fixture();
