@@ -21,6 +21,14 @@ imports and knows no native backend.
 
 ## Composition and API
 
+Every style fix adds its check to `tests/arch/ui-conventions_test.ts`.
+Conventions are executable owner contracts, not a one-time grep sweep: Clock
+owns instants, the client duration formatter owns elapsed text, icon slots take
+components, FailurePresenter owns targets and outcome tone, and shared controls
+own their geometry. Include reject and accept fixtures so a gate catches the
+problem class without banning legitimate numeric formatting or intrinsic layout.
+Style scenes build failures through the same production presenters as the app.
+
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
 scrollport, never a shell-imposed clearance. The serving sidecar's public
@@ -179,14 +187,13 @@ StateShape owns real SVG fallback artwork for activity, supervision and
 connection indicators; their state definitions name shapes rather than font
 glyphs.
 
-SessionView never renders acquisition status inside its message flow. It
-exports the transcriptStatus projection; Shell shows it in its existing reserved
-header metadata slot, so loading and paging never displace a message. A load
-error with no messages remains in PaneState. Permission scope and failure
-Details use the same DisclosureToggle; only Tree junctions paint the masking box
-fill behind their guides. Folded interval meta joins items with the muted middle
-dot separator used by tool meta, and gives only the failure count the danger
-tone.
+SessionView never renders acquisition status inside its message flow. It exports
+the transcriptStatus projection; Shell shows it in its existing reserved header
+metadata slot, so loading and paging never displace a message. A load error with
+no messages remains in PaneState. Permission scope and failure Details use the
+same DisclosureToggle; only Tree junctions paint the masking box fill behind
+their guides. Folded interval meta joins items with the muted middle dot
+separator used by tool meta, and gives only the failure count the danger tone.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
