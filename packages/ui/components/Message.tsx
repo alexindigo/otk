@@ -5,7 +5,7 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
 import { errorFeedback, replyErrorFeedback } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
-import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
+import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import RecordKinds from "./RecordKinds.tsx";
@@ -26,7 +26,7 @@ import {
   timingExplanation,
   workingTime,
 } from "./work-log.ts";
-import MessageActions from "./MessageActions.tsx";
+import MessageFooter from "./MessageFooter.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
   Message as OtkMessage,
@@ -284,7 +284,6 @@ export default function Message(
       },
     })
   );
-  const [revealed, setRevealed] = createSignal(false);
   const target = () => ({
     ...identity(),
     source: framing().copyable || props.copyIncomplete
@@ -350,7 +349,6 @@ export default function Message(
         ]}
         class={["otk-message", {
           "otk-user-message": userBubble(),
-          "is-revealed": revealed(),
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
@@ -476,38 +474,26 @@ export default function Message(
           />
         </Show>
         <Show when={prompt()}>
-          <footer
-            class={["otk-user-meta", {
-              "otk-time-always": props.prefs.timestamps,
-            }]}
+          <MessageFooter
+            class="otk-user-meta"
+            at={props.message.time.created}
+            actions={!props.readOnly &&
+                (!props.send || props.send.phase === "committed")
+              ? { kind: "prompt", target: target() }
+              : undefined}
           >
-            <span class="otk-user-details">
-              <Clock class="otk-created-time" at={props.message.time.created} />
-              <Show when={props.send?.phase === "pending"}>
-                <ChromeMeta class="otk-send-meta">
-                  <ActivityIndicator small decorative />Sending
-                </ChromeMeta>
-              </Show>
-              <Show
-                when={props.queued &&
-                  (!props.send || props.send.phase === "committed")}
-              >
-                <ChromeMeta class="otk-queued">Queued</ChromeMeta>
-              </Show>
-            </span>
+            <Show when={props.send?.phase === "pending"}>
+              <ChromeMeta class="otk-send-meta">
+                <ActivityIndicator small decorative />Sending
+              </ChromeMeta>
+            </Show>
             <Show
-              when={!props.readOnly &&
+              when={props.queued &&
                 (!props.send || props.send.phase === "committed")}
             >
-              <MessageActions
-                kind="prompt"
-                revealed={revealed()}
-                target={target()}
-                region={() => article}
-                onReveal={setRevealed}
-              />
+              <ChromeMeta class="otk-queued">Queued</ChromeMeta>
             </Show>
-          </footer>
+          </MessageFooter>
           <Show when={props.send?.phase === "failed"}>
             <FeedbackStatus
               class="otk-send-failure"
@@ -528,22 +514,16 @@ export default function Message(
                   footerControl = control;
                 }}
                 render={() => (
-                  <footer
+                  <MessageFooter
                     ref={sourceRegion(() => props.lastID ?? props.message.id)}
-                    class={["otk-message-footer", {
-                      "otk-time-always": props.prefs.timestamps,
-                    }]}
-                  >
-                    <span class="otk-message-details">
-                      <span>
-                        {message().model.provider}/{message().model.model}
-                      </span>
+                    at={outcomeClock()?.at}
+                    actions={!props.readOnly
+                      ? { kind: "reply", target: target() }
+                      : undefined}
+                    duration={
                       <Show when={presentation().time}>
                         {(time) => (
                           <>
-                            <Show when={outcomeClock()}>
-                              {(outcome) => <Clock at={outcome().at} />}
-                            </Show>
                             <Show when={outcomeUnknown()}>
                               {(reason) => (
                                 <span class="otk-turn-time" title={reason()}>
@@ -566,38 +546,33 @@ export default function Message(
                           </>
                         )}
                       </Show>
-                      <Show when={presentation().usage}>
-                        {(usage) => (
-                          <TurnUsage
-                            summary={usage().summary}
-                            detail={() => props.usage}
-                            error={props.usageError}
-                            open={props.openUsage}
-                            control={(control) => {
-                              usageControl = control;
-                            }}
-                            showCost={props.prefs.showCost}
-                          />
-                        )}
-                      </Show>
-                      <For each={presentation().facts}>
-                        {(text) => <span>{text}</span>}
-                      </For>
-                      <Show when={message().interrupted}>
-                        <span>interrupted</span>
-                      </Show>
-                      {props.completionDetails?.()}
+                    }
+                  >
+                    <span>
+                      {message().model.provider}/{message().model.model}
                     </span>
-                    <Show when={!props.readOnly}>
-                      <MessageActions
-                        kind="reply"
-                        revealed={revealed()}
-                        target={target()}
-                        region={() => article}
-                        onReveal={setRevealed}
-                      />
+                    <Show when={presentation().usage}>
+                      {(usage) => (
+                        <TurnUsage
+                          summary={usage().summary}
+                          detail={() => props.usage}
+                          error={props.usageError}
+                          open={props.openUsage}
+                          control={(control) => {
+                            usageControl = control;
+                          }}
+                          showCost={props.prefs.showCost}
+                        />
+                      )}
                     </Show>
-                  </footer>
+                    <For each={presentation().facts}>
+                      {(text) => <span>{text}</span>}
+                    </For>
+                    <Show when={message().interrupted}>
+                      <span>interrupted</span>
+                    </Show>
+                    {props.completionDetails?.()}
+                  </MessageFooter>
                 )}
               />
             </>

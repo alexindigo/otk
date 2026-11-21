@@ -11,11 +11,10 @@ import type { Selection, TimelinePrompt } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
-import MessageActions from "./MessageActions.tsx";
+import MessageFooter from "./MessageFooter.tsx";
 import ListRow from "./ListRow.tsx";
 import { EmptyState } from "./View.tsx";
 import VirtualList from "./VirtualList.tsx";
-import Clock from "./Clock.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 
 function PromptRow(props: {
@@ -24,34 +23,24 @@ function PromptRow(props: {
   selected: boolean;
   onReveal(): void;
 }) {
-  let row!: HTMLElement;
-  const [revealed, setRevealed] = createSignal(false);
   return (
     <li>
       <ListRow
         as="div"
-        ref={[(element) => {
-          row = element;
-        }, contextTarget(() => ({ kind: "prompt", data: props.target }))]}
+        ref={contextTarget(() => ({ kind: "prompt", data: props.target }))}
         selected={props.selected}
-        class={`otk-timeline-row${revealed() ? " is-revealed" : ""}`}
+        class="otk-timeline-row"
         attributes={{ "data-timeline-prompt": props.prompt.id }}
         labelClass="otk-timeline-preview"
         labelTitle={props.target.text}
         actionClass="otk-timeline-reveal"
         activate={props.onReveal}
         trailing={
-          <span class="otk-timeline-trailing">
-            <Clock class="otk-timeline-clock" at={props.prompt.time} />
-            <MessageActions
-              class="otk-timeline-actions"
-              kind="prompt"
-              target={props.target}
-              revealed={revealed() || props.selected}
-              region={() => row}
-              onReveal={setRevealed}
-            />
-          </span>
+          <MessageFooter
+            class="otk-timeline-trailing"
+            at={props.prompt.time}
+            actions={{ kind: "prompt", target: props.target }}
+          />
         }
       >
         {props.target.text || "Prompt"}

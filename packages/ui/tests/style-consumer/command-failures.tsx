@@ -5,7 +5,7 @@ import { DEFAULT_PREFS } from "@otk/protocol";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import Palette from "../../components/Palette.tsx";
 import CommandMenu from "../../components/CommandMenu.tsx";
-import MessageActions from "../../components/MessageActions.tsx";
+import MessageFooter from "../../components/MessageFooter.tsx";
 import Toasts from "../../components/Toasts.tsx";
 import { applicationNotifications } from "../../shell/notifications.ts";
 
@@ -66,7 +66,6 @@ export default function CommandFailures() {
       actions: [{ label: "Original notification action", command: id }],
     });
   });
-  let region!: HTMLDivElement;
   return (
     <CommandProvider commands={commands}>
       <header>
@@ -108,15 +107,12 @@ export default function CommandFailures() {
           />
         </Show>
         <Show when={surface === "message"}>
-          <div ref={region}>
-            <MessageActions
-              kind="reply"
-              target={{ sessionID: "tstv1-captured", label: "Captured target" }}
-              revealed
-              region={() => region}
-              onReveal={() => {}}
-            />
-          </div>
+          <MessageFooter
+            actions={{
+              kind: "reply",
+              target: { sessionID: "tstv1-captured", label: "Captured target" },
+            }}
+          />
         </Show>
         <Show when={surface === "notification"}>
           <Toasts model={notifications.toast} onMore={() => {}} />

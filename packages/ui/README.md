@@ -817,10 +817,10 @@ No panel reads another component's DOM or maintains a second transcript store.
 
 Sessions and Timeline use the same `ListRow` frame: shared 30px height,
 selection pointer, highlight bounds, padding and leading/label/trailing slots.
-Consumers inject content and callbacks. Timeline's trailing clock/actions share
-one grid area; visibility switches on hover intent, keyboard focus or selection
-while the cell keeps the larger intrinsic width. Action hit targets do not move,
-and the label has no independent inset hover highlight.
+Consumers inject content and callbacks. Timeline's trailing slot borrows the
+same persistent MessageFooter as the transcript, with no clock/action hover
+swap. Action hit targets do not move, and the label has no independent inset
+hover highlight.
 
 ListRow's `--list-row-height` is also its editing control track. Primary
 leading, input and trailing slots share that track while validation prose wraps
@@ -1429,13 +1429,16 @@ Close keeps ordinary drafts, while successful native deletion drops the family
 drafts.
 
 The session-action owner also contributes Fork session to session targets and
-the palette, and Fork from here to completed replies. `MessageActions` renders
-available command IDs only, sharing `hoverIntent` with Popover (500ms rest,
-150ms leave, immediate focus). Prompt Copy and reply Fork/Copy reserve their
-metadata-row space while concealed. Message contributes no commands; the shared
-transcript feature owns Copy source projection. Fork results open with a joined
-`ComposerNotice` / `ForkNote` above the input; Dismiss and the first successful
-submission clear the note through the framework-free client owner.
+the palette, and Fork from here to completed replies. `MessageFooter` owns the
+shared persistent Clock, duration, metadata and action track for prompts and
+replies, also borrowed by Timeline. `MessageActions` renders available command
+IDs only, always visible in quiet metadata paint; hover/focus may raise contrast
+but never reveal hidden controls. The old timestamps preference remains
+stored/API-compatible without a redundant Display toggle. Message contributes no
+commands; the shared transcript feature owns Copy source projection. Fork
+results open with a joined `ComposerNotice` / `ForkNote` above the input;
+Dismiss and the first successful submission clear the note through the
+framework-free client owner.
 
 `registerCompactPrompt` contributes Compact while a root composer with a known
 next-prompt model is mounted. The command is shared by that session's context

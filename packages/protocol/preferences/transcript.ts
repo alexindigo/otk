@@ -47,10 +47,10 @@ export function registerTranscriptPreferences(
   });
   registry.register({
     key: "timestamps",
+    // Retain stored/API compatibility; D21 makes message clocks unconditional.
     default: false,
     validate: booleanPreference,
     label: "Always show timestamps",
-    display: { order: 1, control: { kind: "toggle" } },
   });
   registry.register({
     key: "toolDetails",

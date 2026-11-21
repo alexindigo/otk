@@ -12,20 +12,16 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 import { commandHints, useCommandPorts } from "../keyboard/context.tsx";
 import { CopyIcon, ForkIcon, RevertIcon } from "./ChromeIcons.tsx";
-import { hoverIntent } from "./hover-intent.ts";
 
 const actions = {
   prompt: ["prompt.revert", "prompt.copy"],
   reply: ["reply.fork", "reply.copy"],
 };
-/** Data-only command consumer; the message supplies its hover region and state. */
+/** Data-only command consumer; availability never depends on pointer state. */
 export default function MessageActions(props: {
   kind: "prompt" | "reply";
   class?: string;
   target: ContentTarget;
-  revealed: boolean;
-  region(): HTMLElement;
-  onReveal(value: boolean): void;
 }) {
   const ports = useCommandPorts(), hints = commandHints(ports);
   const [revision, setRevision] = createSignal(0);
@@ -40,14 +36,7 @@ export default function MessageActions(props: {
       setRevision((value) => value + 1)
     );
     setRevision((value) => value + 1);
-    const hover = hoverIntent(props.region(), {
-      open: () => props.onReveal(true),
-      close: () => props.onReveal(false),
-    });
-    return () => {
-      release();
-      hover.dispose();
-    };
+    return release;
   });
   const available = () => {
     revision();
@@ -83,9 +72,7 @@ export default function MessageActions(props: {
   };
   return (
     <span
-      class={["otk-message-action-group", props.class, {
-        "is-revealed": props.revealed,
-      }]}
+      class={["otk-message-action-group", props.class]}
     >
       <span class="otk-message-actions">
         <For each={available()} keyed={(action) => action.id}>
