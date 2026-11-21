@@ -38,7 +38,10 @@ Deno.test({
       const session = await native.createSession("Pending inventory race");
       const release = Promise.withResolvers<void>();
       resources().defer("pending inventory gate", () => release.resolve());
-      let armed = false, captured: string | undefined, inventories = 0;
+      let armed = false,
+        captured: string | undefined,
+        inventories = 0,
+        applied = 0;
       const settings = cfg(), counts: number[] = [];
       const adapter = new OpencodeV2ServerAdapter(
         {
@@ -68,6 +71,13 @@ Deno.test({
           return response;
         },
       );
+      const replacePermissions = adapter.pending.replacePermissions.bind(
+        adapter.pending,
+      );
+      adapter.pending.replacePermissions = (...args) => {
+        replacePermissions(...args);
+        if (captured) applied++;
+      };
       resources().defer("pending race adapter", () => {
         release.resolve();
         return adapter.core.stop();
@@ -92,6 +102,14 @@ Deno.test({
         },
       }, { chunks: ["Approved"] });
       await native.prompt(session.id, "Ask for approval");
+      await waitFor(() => counts.at(-1), (count) => count === 1);
+      // Pending events are keyed deltas, not inventory refresh requests. A real
+      // topology update requests the inventory while native reply stays usable.
+      const raw = await native.api.session.get({ sessionID: session.nativeID });
+      await native.api.project.update({
+        projectID: raw.projectID,
+        canonical: native.directory,
+      });
       await waitFor(() => captured, Boolean);
       const before = inventories;
       await adapter.capabilities.permissions!.replyPermission({
@@ -102,7 +120,12 @@ Deno.test({
       assertEquals(counts.at(-1), 0);
       const settled = counts.length;
       release.resolve();
-      await waitFor(() => inventories, (value) => value > before);
+      await waitFor(() => applied, (count) => count > 0);
+      console.info("Pending inventory race", {
+        before,
+        after: inventories,
+        applied,
+      });
       assertEquals(
         counts.slice(settled).filter(Boolean),
         [],
@@ -719,9 +742,11 @@ Deno.test({
             await release.promise;
           }
           if (
-            terminalRead && url.pathname === `/api/session/${target.nativeID}`
+            terminalRead && failTerminal &&
+            url.pathname === `/api/session/${target.nativeID}`
           ) {
             failTerminal = false;
+            terminalRead = false;
             readFailures++;
             await response.body?.cancel();
             throw new TypeError("fixture terminal metadata read failed");
@@ -731,15 +756,13 @@ Deno.test({
       );
       const apply = adapter.stream.ports.event;
       adapter.stream.ports.event = async (...args) => {
-        terminalRead = failTerminal &&
+        terminalRead ||= failTerminal &&
           /^session\.execution\.(succeeded|failed|interrupted)$/.test(
             args[0].type,
           );
-        try {
-          await apply(...args);
-        } finally {
-          terminalRead = false;
-        }
+        // Event dispatch queues metadata acquisition; the injection belongs to
+        // that read's lifetime, not the shorter dispatcher callback.
+        await apply(...args);
       };
       resources().defer("bootstrap finish adapter", () => adapter.core.stop());
       const starting = adapter.core.start({
@@ -906,9 +929,8 @@ Deno.test({
         () => index.getMetadata(target.id)?.attention.questions,
         (count) => count === 0,
       );
-      // Keyed settlement publishes before the inventory I/O diagnostic settles.
-      await waitFor(() => unavailable, (count) => count === 2);
-      assertEquals(unavailable, 2);
+      // Keyed settlement does not reacquire the failed location inventory.
+      assertEquals(unavailable, 1);
       inventory = "stale";
       native.proxy.disconnect();
       await waitFor(() => bootstraps, (count) => count === 3);
@@ -920,7 +942,7 @@ Deno.test({
       assert(staleReads > 0);
       assertEquals(
         unavailable,
-        2,
+        1,
         "stale inventory must decode successfully, not masquerade as unavailable",
       );
     }),

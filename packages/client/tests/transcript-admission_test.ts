@@ -1,9 +1,117 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { connectRequests } from "../../../tests/support/request-wire.ts";
+import {
+  connectRequests,
+  type FixtureRequest,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createIndex, createTranscripts, SidecarConnection } from "@otk/client";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { shellEntry } from "./shell-fixture.ts";
+
+Deno.test("streamed bodies paint without releasing admission before their metadata coverage settles", async () => {
+  const frames: FixtureRequest[] = [];
+  const connection = new SidecarConnection("http://fixture.invalid", {
+    status() {},
+    frame() {},
+  }, {
+    messages: { ...fixtureMessagePolicy, concurrency: 1 },
+  });
+  connection.send = (frame) => {
+    if (frame.t === "request") frames.push(frame);
+  };
+  connection.subscribe = () => {};
+  connection.supports = () => false;
+  connectRequests(connection.rpc);
+  const owner = createTranscripts({
+    connection: () => connection,
+    entry: () => undefined,
+  });
+  const sessions = ["s0", "s1"].map((sessionID) => ({
+    sidecarId: "scope",
+    sessionID,
+  }));
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    owner.setDemand({
+      scope: { sidecarId: "scope", directory: "/p" },
+      sessions,
+      selected: sessions[0],
+    });
+    assertEquals(frames.length, 1);
+    const request = frames[0], clock = { epoch: "source", seq: 0 };
+    const page: import("@otk/protocol").MessagePage = {
+      sessionID: "s0",
+      version: { generation: 1, revision: 0 },
+      clock,
+      from: clock,
+      session: {
+        id: "s0",
+        directory: "/p",
+        projectID: "p",
+        title: "Selected",
+        archived: false,
+        time: { created: 1, updated: 1 },
+      },
+      items: Array.from(
+        { length: 10 },
+        (_, i) => ({
+          id: `m${i}`,
+          sessionID: "s0",
+          role: "user",
+          time: { created: i },
+          parts: [],
+        }),
+      ),
+      older: null,
+      catchup: [],
+      turns: {},
+      helpers: {},
+      recovering: [],
+    };
+    const load: import("@otk/protocol").LoadCoverage = {
+      id: request.ref.key,
+      scope: { kind: "session-messages", sessionID: "s0" },
+      boundary: { kind: "page", limit: 10 },
+      generation: "source",
+      revision: 1,
+      state: "loading",
+    };
+    owner.receive("scope", {
+      t: "load.chunk",
+      request: request.ref,
+      epoch: 0,
+      load,
+      data: { kind: "message-page", page },
+    }, true);
+    await settle();
+    assertEquals(
+      owner.get(sessions[0])!.state.messageIDs.length,
+      10,
+      "atomic bodies still paint before metadata",
+    );
+    assertEquals(
+      frames.length,
+      1,
+      "unfinished metadata still owns the one admission slot",
+    );
+    replyRequest(connection.rpc, request, {
+      ...page,
+      load: { ...load, revision: 2, state: "complete" },
+    });
+    await settle();
+    assertEquals(owner.get(sessions[0])!.state.load?.state, "complete");
+    assertEquals(
+      frames.length,
+      2,
+      "settlement admits the next warm transcript",
+    );
+    assertEquals(Reflect.get(frames[1].params as object, "sessionID"), "s1");
+  } finally {
+    owner.stop();
+    connection.rpc.close();
+  }
+});
 
 Deno.test("a reduced metadata change touches only its transcript and borrowed helper consumers", () => {
   const index = createIndex();

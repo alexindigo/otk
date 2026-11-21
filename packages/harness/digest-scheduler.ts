@@ -743,7 +743,9 @@ export class DigestScheduler {
     if (
       finishing &&
       (!turn || finishing.signal.aborted ||
-        finishing.priority() < turn.priority())
+        finishing.priority() < turn.priority() ||
+        finishing.priority() === turn.priority() &&
+          finishing.order < turn.order)
     ) turn = finishing;
     const next = this.#controller.signal.aborted
       ? undefined

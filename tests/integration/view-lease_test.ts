@@ -475,6 +475,7 @@ for (const admission of ["attention", "task"]) {
       assertEquals(consumer.state.inbox.supervision?.[child.id], {
         state: admission === "attention" ? "needsYou" : "none",
         terminal: 100,
+        unseen: false,
       });
       if (admission === "task") {
         assertEquals(

@@ -16,6 +16,70 @@ const policy = {
   retryms: 10,
   busyms: 100,
 };
+test("equal-priority finishing continuations share admission order with new reads", async () => {
+  for (
+    const priority of [
+      "interactive",
+      "attention",
+      "visible",
+      "background",
+    ] as const
+  ) {
+    const scheduler = new DigestScheduler(policy, {
+      freeMemory: () => 1000,
+      sleep: () => Promise.resolve(),
+    });
+    const controller = new AbortController(),
+      credit = Promise.withResolvers<void>();
+    const seen: string[] = [];
+    const tasks: Promise<unknown>[] = [];
+    const finishing = scheduler.execute(
+      async (_signal, turn) => {
+        await turn.wait(credit.promise);
+        seen.push("publication");
+      },
+      controller.signal,
+      priority,
+      false,
+      true,
+      true,
+    );
+    tasks.push(finishing);
+    const read = (label: string) => {
+      const task = scheduler.execute(
+        () => {
+          seen.push(label);
+          return Promise.resolve();
+        },
+        controller.signal,
+        priority,
+      );
+      tasks.push(task);
+    };
+    try {
+      await scheduler.tick();
+      read("earlier");
+      credit.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      // New head probes may keep arriving, but cannot overtake an older ready
+      // publication merely because its continuation is in the finishing heap.
+      for (let i = 0; i < 8; i++) read(`later-${i}`);
+      for (let i = 0; i < 3; i++) await scheduler.tick();
+      assertEquals(
+        seen.slice(0, 3),
+        ["earlier", "publication", "later-0"],
+        priority,
+      );
+    } finally {
+      const joined = Promise.allSettled(tasks);
+      credit.resolve();
+      controller.abort();
+      await scheduler.stop();
+      await joined;
+    }
+  }
+});
 test("essential admission is independent of background memory sampling at full catalog scale", async () => {
   let samples = 0;
   const scheduler = new DigestScheduler(policy, {
