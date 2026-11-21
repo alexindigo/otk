@@ -16,6 +16,9 @@ browser-origin attacks.
 **Medium.** A trailing slash in `/api/ws/` may bypass the Origin check applied
 to `/api/ws` (`core/auth/middleware.ts`).
 
+The terminal pilot branch addresses this class by checking Origin for every
+WebSocket upgrade, independent of the API path.
+
 ## 2. DNS rebinding
 
 **Medium.** The Origin check trusts the request's authority rather than an
