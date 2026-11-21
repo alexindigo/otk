@@ -255,9 +255,10 @@ test.describe("required failure rows", () => {
           "aria-expanded",
           "false",
         );
-        await expect(row.locator(".otk-tool-toggle")).toContainText(
+        await expect(row.locator(".otk-failure-main-reason")).toHaveText(
           "Nested call failed: usage limit reached",
         );
+        await expect(row.locator(".otk-failure-main-reason")).toBeVisible();
         await expect(row.locator(".otk-tool-body")).toHaveCount(0);
       }
     },

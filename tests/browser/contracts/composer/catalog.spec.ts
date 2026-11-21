@@ -135,7 +135,8 @@ for (
         await expect(picker.locator(".otk-picker-empty")).toHaveCount(0);
         if (kind === "missing") {
           await expect(picker).not.toContainText("unavailable");
-          await picker.locator("[role=alert] button").click();
+          await picker.getByRole("button", { name: "Retry", exact: true })
+            .click();
           await expect(picker).toContainText(
             "disconnected/restored-model — unavailable",
           );
@@ -176,7 +177,8 @@ for (
           await expect(picker).not.toContainText("Refresh failed");
           await expect(picker.locator(".otk-picker-name > span").first())
             .toHaveText("Available model");
-          await picker.locator("[role=alert] button").click();
+          await picker.getByRole("button", { name: "Retry", exact: true })
+            .click();
           await expect(picker.locator("[role=alert], [role=status]"))
             .toHaveCount(0);
           expect((await observe()).calls).toBe(4);

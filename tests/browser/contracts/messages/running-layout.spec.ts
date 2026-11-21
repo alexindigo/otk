@@ -254,7 +254,7 @@ test(
     ).toBeGreaterThan(0);
     await span.locator("button").first().click();
     await scenario(state, "fail");
-    await page.locator(".otk-composer-notice").getByRole("link", {
+    await page.locator(".otk-composer-notice").getByRole("button", {
       name: "See response",
     }).click();
     await expect(page.locator('.otk-message[data-message="record-10"]'))

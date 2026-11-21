@@ -34,10 +34,10 @@ for (const kind of ["permission", "question", "form"] as const) {
         "A different response was already sent for this request",
       );
       await expect(failure).toContainText("This one was not sent");
-      await expect(
-        failure.getByRole("link", { name: "Reply target", exact: true }),
-      )
-        .toHaveAttribute("href", "#/remote/tstv1-settlement-fixture");
+      // UI conventions suppress the open session's inline self-target. The
+      // fixture's captured target and single-frame admission stay authoritative.
+      await expect(failure.getByRole("link")).toHaveCount(0);
+      await expect(failure).not.toContainText("Reply target");
       await expect(page.locator("[data-settlement-frames]")).toHaveAttribute(
         "data-settlement-frames",
         "1",
