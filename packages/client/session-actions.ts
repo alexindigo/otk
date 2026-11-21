@@ -79,6 +79,7 @@ export function createSessionActions(o: {
     & Partial<Pick<ClientSession, "transcripts">>;
   factory?: StateFactory;
   promptBlocks?(text: string): import("@otk/protocol").Block[];
+  promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   current: CurrentClient;
   revertReady?(target: Selection): Promise<void> | undefined;
   branchHistory?:
@@ -125,6 +126,7 @@ export function createSessionActions(o: {
         factory: o.factory,
         title: () => resources.entry(target.sidecarId, target.sessionID)?.title,
         transcript: () => session.transcripts?.get(target),
+        committed: o.promptCommitted,
       });
       deliveries.set(key, value);
     }

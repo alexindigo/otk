@@ -301,6 +301,35 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
   assertEquals(label.get("flex"), "1");
 });
 
+Deno.test("UI convention: overflow More keeps the first control track when required items reflow", async () => {
+  const anchored = (text: string) => {
+    const more = rules(text).find((rule) =>
+      rule.selector === ".otk-overflow-more"
+    )?.declarations;
+    return more?.get("align-self") === "start" &&
+      more.get("min-block-size") === "var(--row-compact)" &&
+      more.get("align-items") === "center";
+  };
+  assert(
+    !anchored(".otk-overflow-more { display: flex; align-items: center; }"),
+  );
+  assert(
+    anchored(
+      ".otk-overflow-more { display: flex; align-items: center; align-self: start; min-block-size: var(--row-compact); }",
+    ),
+  );
+  assert(
+    anchored(
+      await Deno.readTextFile(
+        new URL(
+          "../../packages/ui/components/OverflowRow.css",
+          import.meta.url,
+        ),
+      ),
+    ),
+  );
+});
+
 /** Syntax-aware checks are exported so their reject/accept cases stay executable.
  * Owner exceptions name real responsibilities, never individual violations. */
 export function conventionErrors(

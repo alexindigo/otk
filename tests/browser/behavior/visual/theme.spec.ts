@@ -127,7 +127,10 @@ test(
           : frame,
     );
     await page.goto(state.url);
-    await expect(page.locator(".otk-sidebar-commands")).toBeAttached();
+    // Style7 ProjectInbox owns navigation (style7fix note; decision 54).
+    await expect(
+      page.getByRole("button", { name: "Search commands", exact: true }),
+    ).toBeAttached();
     await openTheme(page);
     await choose(page, "otk-light");
     await page.getByRole("button", { name: "Save theme", exact: true }).click();

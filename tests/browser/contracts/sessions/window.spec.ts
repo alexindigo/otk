@@ -362,13 +362,15 @@ test.describe("measured Sessions", () => {
             es.every((e) => {
               const a = e.querySelector(".otk-status-light")!
                   .getBoundingClientRect(),
-                b = e.querySelector(".otk-row-title")!.getBoundingClientRect();
+                // Style7 shared ListRow label slot (style7fix note; decision 3).
+                b = e.querySelector(".otk-session-title")!
+                  .getBoundingClientRect();
               return Math.abs(a.y + a.height / 2 - b.y - b.height / 2) <= 1;
             })
           ),
         ).toBe(true);
         expect(
-          await page.locator(".otk-session-row .otk-row-title").evaluateAll(
+          await page.locator(".otk-session-row .otk-session-title").evaluateAll(
             (es) =>
               es.every((e) => getComputedStyle(e).whiteSpace === "nowrap"),
           ),

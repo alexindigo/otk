@@ -88,7 +88,8 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
     const boxes = await page.locator(".otk-session-row").evaluateAll((rows) =>
       rows.filter((r) => r.querySelector(".otk-session-cost")).map((r) => {
         const c = r.querySelector(".otk-session-cost")!.getBoundingClientRect(),
-          t = r.querySelector(".otk-row-title")!.getBoundingClientRect(),
+          // Style7 shared ListRow label slot (style7fix note; decision 3).
+          t = r.querySelector(".otk-session-title")!.getBoundingClientRect(),
           l = r.querySelector(".otk-status-light")!.getBoundingClientRect(),
           b = r.getBoundingClientRect();
         return {

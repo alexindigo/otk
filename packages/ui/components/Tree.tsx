@@ -165,7 +165,7 @@ export function TreeNode(props: {
           props.onOpen?.(event.key === "ArrowRight");
         }}
       >
-        <Show when={props.selected}>
+        <Show when={props.selected !== undefined}>
           <span class="otk-tree-selection" aria-hidden="true">
             <span class="otk-tree-selection-mark" />
           </span>
