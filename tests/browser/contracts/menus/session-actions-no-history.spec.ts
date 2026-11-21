@@ -37,6 +37,7 @@ for (
         );
         await expect(warning).toBeVisible();
         await expect(strip).toHaveAttribute("data-phase", "staged");
+        await expect(page.locator(".otk-composer-notice")).toHaveCount(0);
         await page.screenshot({
           path: info.outputPath(`revert-staged-${name}.png`),
           animations: "disabled",
@@ -62,6 +63,11 @@ for (
       });
       await expect(page.locator(".otk-send-button")).toBeEnabled();
       await input.press("Enter");
+      await expect(page.locator(".otk-permanence-choice")).toContainText(
+        "Sending makes the revert permanent",
+      );
+      await page.getByRole("button", { name: "Send anyway", exact: true })
+        .click();
       await expect.poll(async () =>
         (await state.observe<{ calls: unknown[] }>()).calls
       )

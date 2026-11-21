@@ -188,6 +188,9 @@ test("revert.identity-confirmation-preservation-and-in-flow-geometry", {
   await capture("restored");
   await page.evaluate(() => {
     const original = Storage.prototype.setItem;
+    Reflect.set(globalThis, "restoreRevertStorage", () => {
+      Storage.prototype.setItem = original;
+    });
     Storage.prototype.setItem = function (key, value) {
       if (key.startsWith("otk.branch-history")) {
         throw new DOMException("full", "QuotaExceededError");
@@ -205,7 +208,58 @@ test("revert.identity-confirmation-preservation-and-in-flow-geometry", {
   await expect(page.locator(".otk-revert-group")).toContainText("Retry");
   await expect(input).toHaveValue("First prompt kept live");
   await capture("failed");
-  expect(boundary.info.id).toBeTruthy();
+  await input.fill("Replacement after a saved copy");
+  await input.press("Enter");
+  const choice = page.locator(".otk-permanence-choice");
+  await expect(choice).toContainText("Sending makes the revert permanent");
+  await expect(choice.locator(".otk-failure-heading strong")).toHaveText(
+    "Sending makes the revert permanent",
+  );
+  await expect(input).toHaveValue("Replacement after a saved copy");
+  await capture("failed-send");
+  await choice.getByRole("button", { name: "Save copy", exact: true }).click();
+  await expect(choice).toContainText("localStorage is full");
+  await expect(choice.getByRole("button", { name: "Save copy", exact: true }))
+    .toBeEnabled();
+  await expect(input).toHaveValue("Replacement after a saved copy");
+  await page.evaluate(() => Reflect.get(globalThis, "restoreRevertStorage")());
+  await state.queue(["Replacement with a durable copy accepted."]);
+  await choice.getByRole("button", { name: "Save copy", exact: true }).click();
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Replacement with a durable copy accepted.",
+  );
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
+  const replacement = (await messages(state, source.id)).find((m) =>
+    m.parts.some((p) => p.text === "Replacement after a saved copy")
+  )!;
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith("otk.branch-history")) {
+        throw new DOMException("full", "QuotaExceededError");
+      }
+      original.call(this, key, value);
+    };
+  });
+  await request(replacement.info.id);
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  await expect(page.locator(".otk-revert-group")).toContainText("Retry");
+  await input.fill("Explicit replacement without a copy");
+  await input.press("Enter");
+  await expect(choice).toContainText("Sending makes the revert permanent");
+  await state.queue(["Explicit replacement accepted."]);
+  await choice.getByRole("button", { name: "Send anyway", exact: true })
+    .click();
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Explicit replacement accepted.",
+  );
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
+  expect(
+    (await messages(state, source.id)).some((m) =>
+      m.info.id === replacement.info.id
+    ),
+  ).toBe(false);
 });
 
 test("revert.external-stage-dismissal-and-native-commit-retirement", {

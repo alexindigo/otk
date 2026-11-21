@@ -1079,7 +1079,13 @@ nothing. A changed preview requires confirmation again. The authoritative native
 publication still settles the action, never its RPC result alone. The same owner
 ingests reverts staged by another client. Dismissal is a separate browser-stored
 choice per server, session and boundary, with no native effect; clear or commit
-retires the record. `dispose` releases its subscriptions.
+retires the record. `dispose` releases its subscriptions. The owner's published
+phase gives an active native mutation priority over background archive outcomes
+until authoritative reconciliation settles. A late save success or failure
+cannot replace an ongoing Restore with saved/failed UI. Its target-bound `ready`
+port joins authoritative publication and draft settlement, not merely native RPC
+completion. SessionActions borrows that wait and joins its own in-flight native
+boundary changes before any committing submission or Compact.
 
 After confirmation, Undo targets the last visible prompt, interrupts a working
 captured session, then remains pending until authoritative idle before
@@ -1104,25 +1110,36 @@ target for that same owner.
 
 `createBranchHistory` owns browser-local earlier branches, separately from live
 transcripts and Drafts. On a history-capable server, OTK-initiated revert
-captures every ordinary cursor page before staging the native boundary,
-including unloaded messages. `connectBranchHistory` composes its ports in the
-client. Detached archive pages use the canonical transcript owner's admission
-queue and lifetime cancellation, without changing the live paging boundary or
-projection. This precedes prompt/command, Compact and version-specific native
-commit paths. Exact selected prompts come from the plugin's `history.prompt`
-reader, independently of the 50-entry recall window; attachment references are
-resolved before deletion. Plugin-owned bounded Source previews are materialized
-too; saved Source folds never query the live native transcript. Common
-submission and Compact admission retain the current draft before dispatch. The
-archive is not native history and never restores files. Operations initiated
-elsewhere cannot recover content this browser never captured.
+captures exactly the staged identities after authoritative settlement, including
+unloaded messages. `connectBranchHistory` composes its ports in the client.
+Detached archive pages use the canonical transcript owner's admission queue and
+lifetime cancellation, without changing the live paging boundary or projection.
+Per-ID revision witnesses tolerate unrelated sequence advances and retry only
+changed captured records. This precedes prompt/command, Compact and
+version-specific native commit paths. Exact selected prompts come from the
+plugin's `history.prompt` reader, independently of the 50-entry recall window;
+attachment references are resolved before deletion. Plugin-owned bounded Source
+previews are materialized too; saved Source folds never query the live native
+transcript. Common submission and Compact admission retain the current draft
+before dispatch. The archive is not native history and never restores files.
+Operations initiated elsewhere cannot recover content this browser never
+captured.
 
 Prompt-history absence is a separate capability result, not an exception-based
-fallback. Revert and sending still proceed without archive reads or writes,
-while `preservationWarning()` supplies the visible pre-send strip notice. The
-notice is derived from the selected server's capability and the native revert
-strip, so it survives reload. A failed advertised reader or storage write still
-blocks the destructive action with its normal failure feedback.
+fallback. Revert still proceeds without archive reads or writes, while
+`preservationWarning()` supplies the visible in-flow limitation after reload.
+Before Send enters SessionDelivery, `beforeSend` captures the target, draft and
+staged boundary/IDs. An unsaved stage presents Save copy, Send anyway or Cancel.
+Save copy retries preservation; only Send anyway grants explicit discard
+consent. The invocation-scoped BranchSendPermit is revalidated after attachment
+preparation, including continued copy existence unless discard was explicitly
+chosen. Restore cancels a waiting Send. Failed saving keeps both the draft and
+choice.
+
+Pre-publication Send admission borrows an acquired, connected transcript
+baseline instead of adding an unconditional native read before the local pending
+entry. Native state and exact permit identities are still revalidated at
+dispatch.
 
 Entries are kept in this browser's localStorage, keyed by exact server URL and
 session plus a branch ID, across reloads until explicit per-branch Delete. No

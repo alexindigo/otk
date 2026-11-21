@@ -110,8 +110,8 @@ test("revert.blocked-storage-getter-keeps-shell-and-live-history-usable", {
   const input = page.locator("textarea[name=prompt]");
   await input.fill("Do not discard my replacement");
   await input.press("Enter");
-  await expect(page.getByRole("alert")).toContainText(
-    "localStorage is unavailable",
+  await expect(page.locator(".otk-permanence-choice")).toContainText(
+    "Sending makes the revert permanent",
   );
   await expect(input).toHaveValue("Do not discard my replacement");
   expect((await state.product("session.get", { sessionID: source.id })).revert)

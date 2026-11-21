@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { scrollTranscript } from "../../pages/transcript.ts";
 
 test.describe("pre-message rejection", () => {
   test.use({ profile: "composer-request-failure" });
@@ -48,6 +49,7 @@ test.describe("pre-message rejection", () => {
     // native prompt. Refusal must retain both its input and the editable draft.
     const local = page.locator('[data-role="user"][data-send-state="failed"]');
     await expect(local).toHaveCount(1);
+    await scrollTranscript(page, false);
     await expect(local).toContainText("Keep this unsent draft intact");
     expect((await state.native<{ info: { role: string } }[]>(
       `/session/${session.id}/message`,

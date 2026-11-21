@@ -113,6 +113,7 @@ export function createShellState(
     session,
     current,
     branchHistory,
+    revertReady: (target) => revert.ready(target),
     factory: solidState,
     submitted: (target, action) =>
       forkNotes.submission(

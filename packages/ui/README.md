@@ -158,9 +158,9 @@ field failures; native fields borrow that region's ID and retain field-specific
 invalid semantics. Structured facts grow there without pushing another field or
 action. Theme and keyboard dialog feedback follows their actions too. Dialogs
 and authentication forms have a stable top origin rather than re-centering when
-failure content grows. Bottom-anchored composer and rollback owners instead put
-failure content before their controls, keeping those controls at their existing
-bottom edge. Inline rename feedback keeps its separate post-control row track.
+failure content grows. Bottom-anchored composer owners instead put failure
+content before their controls, keeping those controls at their existing bottom
+edge. Inline rename feedback keeps its separate post-control row track.
 PaneState occupies a shared transcript grid cell and centres its content without
 viewport offsets. Their error paint uses semantic `danger`, separate from
 focus/action paint; Dark uses `#ff8080` and Linen/Stone `#b5141a`.
@@ -256,9 +256,9 @@ same MessageControl API.
 `ContentSlot({content})` gives an injected render factory its own mounted
 lifetime. Replacing data read by that content does not reconstruct its subtree;
 replacing or releasing the factory does. Composer and takeover notice hosts use
-the same slot, so a metadata refresh cannot reset an open rollback disclosure.
-Takeover action footers use that same factory lifetime, so pending state cannot
-replace the persistent primary control or duplicate its native event lifetime.
+the same slot, so a metadata refresh cannot reset an open notice. Takeover
+action footers use that same factory lifetime, so pending state cannot replace
+the persistent primary control or duplicate its native event lifetime.
 
 `ActionSlot` supplies one shared grid cell for an action and its pending status,
 retaining intrinsic control geometry while unavailable controls are hidden. Its
@@ -332,11 +332,11 @@ through the same `ToolOutput` owner as bash. The adapter's decoded results
 contain user content and metadata, not model-facing envelopes. Unrecognized
 formats retain verbatim fallback. Headers alone summarize operations; bodies
 contain results, metadata, diagnostics and navigation/progress actions. All UI
-noun-count labels use the shared count-label helper, including tokens, reverted
-messages, pastes and favicon attention. Optional display text preserves
-compact/locale formatting while the numeric value owns inflection. Structural
-edit, write, patch, todo and question bodies keep their typed result
-presentation; generic output retains its display preference and
+noun-count labels use the shared count-label helper, including tokens, pastes
+and favicon attention. Revert labels name identities, never counts. Optional
+display text preserves compact/locale formatting while the numeric value owns
+inflection. Structural edit, write, patch, todo and question bodies keep their
+typed result presentation; generic output retains its display preference and
 provenance-neutral truncation notice. Unknown task agents have an identity-free
 “Unknown agent” label. Bookkeeping owners render as inspectable record rows in
 the same work fold. Reply metadata combines contiguous source parts for one
@@ -690,18 +690,18 @@ owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft and intrinsic track survive the takeover. Runtime
-chrome never changes the transcript rectangle: helper presence uses a reserved
-control-height track; notices and overflowing takeovers occupy independent,
-bounded layers above the unchanged prompt track. Only draft/editor growth
-changes that track. RecordList owns record spacing and supplies topology to the
-shared Tree; views borrow canonical span identities and retained disclosure
-state rather than regrouping mounted neighbours. Background intervals share one
-outer conversation gap and compact internal record rhythm, including actionable
-breakouts. Their folded line is plain muted meta text with producer-owned counts
-and client-owned failure wording, no Activity prefix or time range.
-Footer-borrowed successful completions never add a title count. Successful
-completion-only intervals borrow a footer junction instead of adding a status
-row; direct reveal opens the same retained interval. Read-only helper
+chrome uses structural tracks: helper presence uses a reserved control-height
+track; composer notices grow in flow above the prompt, while overflowing
+takeovers keep their bounded presentation. Revert records belong to the
+transcript, not a composer overlay. RecordList owns record spacing and supplies
+topology to the shared Tree; views borrow canonical span identities and retained
+disclosure state rather than regrouping mounted neighbours. Background intervals
+share one outer conversation gap and compact internal record rhythm, including
+actionable breakouts. Their folded line is plain muted meta text with
+producer-owned counts and client-owned failure wording, no Activity prefix or
+time range. Footer-borrowed successful completions never add a title count.
+Successful completion-only intervals borrow a footer junction instead of adding
+a status row; direct reveal opens the same retained interval. Read-only helper
 transcripts mount those same attention owners; only prompt submission is
 unavailable. With no active takeover, helpers mount no empty composer. That same
 owner provides composer availability to takeover headers, so draft-kept copy
@@ -1413,27 +1413,27 @@ through the session-bound client compact port. It preserves the unsent draft and
 uses normal server-work progress and session errors, including while queued
 behind a reply.
 
-Revert to here uses the same prompt context/hover command and selected-session
+Revert from here uses the prompt context/hover command and selected-session
 client revert owner. Root idle sessions advertise it only with `revert`; queued
-prompts and read-only helpers omit it. `RolledBackStrip` replaces the transcript
-banner using exactly the same joined `ComposerNotice` frame as ForkNote. Its
-local disclosure shows bounded prompt previews, times, Copy and file counts and
-the permanence note. Restore conversation is visible outside that disclosure and
-uses the same registered action as `/restore` and the palette. Pending and
-errors remain in that composer area; rollback takes precedence over the fork
-note. Restore requires the separately advertised `restore` capability. No
-confirmation is added to the native file/conversation rollback. An independently
-advertised `revertCode` capability adds Revert code changes to the same prompt
-context menu. It uses the existing selected-session revert owner and remains
-hidden on backends without that capability. Session targets similarly offer
+prompts and read-only helpers omit it. An in-flow confirmation under the clicked
+prompt lists the actual message identities before any native mutation.
+`RevertGroup` borrows `ActivityGroup`, RecordList, Clock and the shared failure
+presenter. It renders one boundary-anchored transcript group with the full
+retained messages, collapsed by default, and Restore. Saving and failure states
+stay in its header; failures expose the reason, Retry and Restore. Dismiss
+persists per session/boundary and leaves a muted marker with context-menu
+Restore. No revert overlay covers the transcript or composer. Restore requires
+the separately advertised `restore` capability. An independently advertised
+`revertCode` capability adds Revert code changes to the same prompt context
+menu. It uses the same owner and confirmation. Session targets similarly offer
 Archive or Unarchive only with `sessionArchive`, using authoritative state and
 the shared CommandMenu. No overlay or style is added to these native actions.
 
-`SavedBranchNotice` adds Unrevert to that same joined notice. The client branch
-owner supplies its browser-local copies, measured size, deletion and
-draft-choice intents. `SavedBranches` opens the selected earlier branch inside
-the session, clearly separate from live native history, with no file
-restoration. It reuses Message in read-only mode and the normal measured
+`SavedBranchNotice` offers the saved copy from the transcript's history area.
+The client branch owner supplies its browser-local copies, measured size,
+deletion and draft-choice intents. `SavedBranches` opens the selected earlier
+branch inside the session, clearly separate from live native history, with no
+file restoration. It reuses Message in read-only mode and the normal measured
 VirtualList. Source previews are saved data; snapshot contexts have no native
 reader, live content actions or visibility lease. Live viewport
 observers/windows unmount while the saved view is open and remount through their
@@ -1448,16 +1448,20 @@ projected facts through its shared footer instead of per-indicator saved-view
 exceptions. Draft labels come from the client sentence-case source.
 
 The client owner also supplies `preservationWarning()` for servers without
-prompt history. RolledBackContent renders it outside the disclosure, so the
-limitation is visible before Send even when details are collapsed or after a
-reload. Revert, Restore and Send remain available; the view never interprets RPC
+prompt history. RevertGroup renders it outside the disclosure, so the limitation
+is visible before Send even when details are collapsed or after a reload.
+Revert, Restore and Send remain available; the view never interprets RPC
 failures as a missing capability.
 
-Primary notice content shares `ComposerNoticeRow`: disclosure, error and fork
-facts use one control-height row with the same leading icon slot and
-flex-centred content. Error reasons are plain text in that row, not paragraphs
-with independent margins or placement. The joined frame remains owned by
-ComposerNotice.
+`RevertSendChoice` renders the branch owner's invocation-specific permanence
+choice in the existing joined ComposerNotice: Save copy, Send anyway and Cancel.
+It uses informational shared feedback for the confirmation and ordinary failure
+feedback if saving fails. The draft stays intact while the choice waits.
+
+Primary notice content shares `ComposerNoticeRow`: error and fork facts use one
+control-height row with the same leading icon slot and flex-centred content.
+Error reasons are plain text in that row, not paragraphs with independent
+margins or placement. The joined frame remains owned by ComposerNotice.
 
 Undo previous prompt and Redo share that same client owner through palette
 commands and `/undo` / `/redo` aliases. Undo can interrupt root-session work

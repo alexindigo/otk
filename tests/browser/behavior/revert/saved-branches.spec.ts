@@ -288,12 +288,16 @@ test(
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Replacement blocked by quota");
     await input.press("Enter");
-    await expect(alert).toHaveCount(1);
-    await expect(alert).toContainText("Reverted from");
-    await expect(alert).not.toContainText("Quota-protected branch");
-    await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(alert).toContainText("localStorage is full");
-    await expect(alert).toContainText("Delete a saved branch");
+    const choice = page.locator(".otk-permanence-choice");
+    await expect(choice.getByRole("status")).toContainText(
+      "Sending makes the revert permanent",
+    );
+    await expect(alert).toHaveCount(0);
+    await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save copy", exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole("button", { name: "Send anyway", exact: true }))
+      .toBeVisible();
     await expect(input).toHaveValue("Replacement blocked by quota");
     expect(
       (await state.product("session.get", { sessionID: source.id })).revert,

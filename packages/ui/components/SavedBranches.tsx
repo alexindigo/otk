@@ -19,6 +19,52 @@ import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
+export function RevertSendChoice(
+  props: { owner: BranchHistory },
+): import("solid-js").Element {
+  const choice = () => props.owner.state.permanence;
+  const perform = (action: () => Promise<void>) => {
+    void action().catch((cause) => props.owner.fail(cause));
+  };
+  return (
+    <Show when={choice()}>
+      {(pending) => (
+        <div class="otk-permanence-choice">
+          <OperationFeedback feedback={errorFeedback(pending().error)!} />
+          <ComposerNoticeRow>
+            <div class="otk-control-row">
+              <button
+                type="button"
+                class="otk-pill"
+                disabled={pending().saving ||
+                  !!props.owner.preservationWarning()}
+                title={props.owner.preservationWarning()}
+                onClick={() => perform(() => props.owner.saveCopy())}
+              >
+                {pending().saving ? "Saving copy..." : "Save copy"}
+              </button>
+              <button
+                type="button"
+                class="otk-pill"
+                disabled={pending().saving}
+                onClick={() => perform(() => props.owner.sendAnyway())}
+              >
+                Send anyway
+              </button>
+              <button
+                type="button"
+                class="otk-pill"
+                onClick={() => props.owner.cancelSend()}
+              >
+                Cancel
+              </button>
+            </div>
+          </ComposerNoticeRow>
+        </div>
+      )}
+    </Show>
+  );
+}
 
 export function SavedBranchNotice(
   props: {

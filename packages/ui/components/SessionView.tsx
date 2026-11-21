@@ -32,7 +32,10 @@ import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertGroup, { RevertConfirmation } from "./RevertGroup.tsx";
-import SavedBranches, { SavedBranchNotice } from "./SavedBranches.tsx";
+import SavedBranches, {
+  RevertSendChoice,
+  SavedBranchNotice,
+} from "./SavedBranches.tsx";
 import { ForkFact } from "./ForkNote.tsx";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
@@ -275,6 +278,7 @@ export default function SessionView(props: {
           }
           : undefined}
         warning={props.branchHistory?.preservationWarning()}
+        failureVisible={!props.branchHistory?.state.permanence}
         onOpenChild={props.onOpenChild}
       />
     </Show>
@@ -286,7 +290,8 @@ export default function SessionView(props: {
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
-  const noticed = () => !!props.forkNote || !!feedback();
+  const noticed = () =>
+    !!props.forkNote || !!feedback() || !!props.branchHistory?.state.permanence;
   const branchFailureVisible = () => {
     const value = props.branchHistory?.state.error;
     return !value || value.diagnosticID !== feedback()?.diagnosticID;
@@ -294,6 +299,9 @@ export default function SessionView(props: {
   // The slot's identity is its mounted lifetime, not each feedback publication.
   const notice = () => (
     <ComposerNotice>
+      <Show when={props.branchHistory}>
+        {(owner) => <RevertSendChoice owner={owner()} />}
+      </Show>
       <Show when={feedback()}>
         {(value) => (
           <OperationFeedback

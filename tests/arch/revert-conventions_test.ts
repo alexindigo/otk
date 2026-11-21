@@ -19,8 +19,17 @@ Deno.test("revert UI keeps records and notices in flow, never in an absolute tra
   assertEquals(revertLayoutErrors(".otk-revert-group {display:flex}"), []);
 });
 Deno.test("saved-branch UI names the copy instead of counting reverted prompts or branches", async () => {
-  const source = await Deno.readTextFile(
-    "packages/ui/components/SavedBranches.tsx",
-  );
-  assertEquals(/Unrevert:\s*\{[^}]*branches\.length/.test(source), false);
+  const counted = (source: string) =>
+    /prompts? rolled back|messageCount|promptCount|Unrevert:\s*\{[^}]*branches\.length/
+      .test(source);
+  for (
+    const path of [
+      "packages/ui/components/SavedBranches.tsx",
+      "packages/ui/components/RevertGroup.tsx",
+      "packages/ui/tests/style-consumer/requests.tsx",
+    ]
+  ) assertEquals(counted(await Deno.readTextFile(path)), false, path);
+  assertEquals(counted("{count()} prompts rolled back"), true);
+  assertEquals(counted("1 prompt rolled back"), true);
+  assertEquals(counted("Reverted from <time> <first line>"), false);
 });

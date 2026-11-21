@@ -68,6 +68,10 @@ export function createFailurePresenter(): FailurePresenter {
     text: notice.facts?.reason ??
       "This feature isn't available on this server.",
   }));
+  presenter.register("revert.permanence", () => ({
+    kind: "info",
+    text: "Sending makes the revert permanent",
+  }));
   presenter.register(
     "storage.recovered",
     () => ({

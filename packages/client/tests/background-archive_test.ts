@@ -221,6 +221,19 @@ Deno.test("background archive: held save cannot delay reversible Revert, but com
   }
 });
 
+function waitForPermanence(
+  history: import("@otk/client").BranchHistory,
+): Promise<void> {
+  if (history.state.permanence) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = history.subscribe(() => {
+      if (history.state.permanence) {
+        stop();
+        resolve();
+      }
+    });
+  });
+}
 Deno.test("background archive: quota failure is FP1-visible before a committing Send can discard history", async () => {
   const f = fixture();
   let reverted = false, sent = false;
@@ -239,19 +252,11 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
       sent = true;
       return Promise.resolve();
     });
-    const rejected = assertRejects(() =>
-      sending.catch((cause) => {
-        assert(
-          f.resources.ownsFailure?.(cause),
-          "The target sink must own preservation feedback before a command can render its rejection",
-        );
-        throw cause;
-      })
-    );
+    const canceled = assertRejects(() => sending, DOMException);
     await turns();
     assertEquals(sent, false);
     f.held.resolve();
-    await rejected;
+    await waitForPermanence(f.history);
     const feedback = f.history.state.error;
     assert(feedback);
     const failure = feedback.failure;
@@ -261,11 +266,17 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     assertEquals(failure.target, { label: "" });
     assert(failure.reason.includes("localStorage is full"));
     assert(failure.recovery?.includes("Delete a saved branch"));
+    assertEquals(
+      f.options.feedback(target).current()?.diagnosticID,
+      failure.value.diagnosticID,
+    );
     assertEquals(sent, false, "No silent native commit after archive failure");
     assertEquals(
       f.drafts.current("local/selected").input,
       "Original unsent draft",
     );
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     await reverting;
@@ -364,14 +375,16 @@ Deno.test("background archive: background failure follows its target across sele
     f.history.select(target);
     assert(f.history.state.error);
     let sent = false;
-    await assertRejects(() =>
-      f.actions.submission(target)(() => {
-        sent = true;
-        return Promise.resolve();
-      })
-    );
+    const sending = f.actions.submission(target)(() => {
+      sent = true;
+      return Promise.resolve();
+    });
+    const canceled = assertRejects(() => sending, DOMException);
+    await waitForPermanence(f.history);
     assertEquals(sent, false);
     assert(f.history.state.error);
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     f.resources.stop();

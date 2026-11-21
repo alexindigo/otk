@@ -49,6 +49,12 @@ export interface BranchHistoryState {
   pending: boolean;
   error?: FailureValue;
   choice?: { branchID: string; label: string; draft: Draft };
+  permanence?: { boundaryID: string; saving: boolean; error: FailureValue };
+}
+export interface BranchSendPermit {
+  target: Selection;
+  record?: Pick<RevertInfo, "boundaryID" | "messageIDs">;
+  discard?: boolean;
 }
 export interface BranchHistory {
   readonly state: BranchHistoryState;
@@ -60,7 +66,16 @@ export interface BranchHistory {
     boundary: string,
     record?: RevertInfo,
   ): Promise<void>;
-  beforeCommit(target: Selection, label?: string): Promise<void>;
+  beforeCommit(
+    target: Selection,
+    label?: string,
+    permit?: BranchSendPermit,
+    draft?: Draft,
+  ): Promise<void>;
+  beforeSend(target: Selection): Promise<BranchSendPermit>;
+  saveCopy(): Promise<void>;
+  sendAnyway(): Promise<void>;
+  cancelSend(target?: Selection): void;
   settled(target: Selection, restored?: boolean): Promise<void>;
   open(id?: string): void;
   reuse(branchID: string, draft: Draft, label: string): void;
@@ -189,6 +204,9 @@ export function createBranchHistory(options: {
   concurrency?(target: Selection): number;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
   session(target: Selection): Promise<ContentSession>;
+  /** An acquired baseline is enough for pre-publication admission. Dispatch
+   * still reads native state and validates the invocation's exact permit. */
+  current?(target: Selection): ContentSession | undefined;
   factory?: StateFactory;
 }): BranchHistory {
   const store = (options.factory ?? createState)<BranchHistoryState>({
@@ -207,6 +225,65 @@ export function createBranchHistory(options: {
     }
   >();
   const failures = new Map<string, RequestFailure>();
+  const sends = new Map<
+    string,
+    {
+      target: Selection;
+      record: RevertInfo;
+      draft: Draft;
+      choice: NonNullable<BranchHistoryState["permanence"]>;
+      wait: ReturnType<typeof Promise.withResolvers<BranchSendPermit>>;
+    }
+  >();
+  const publishSend = (t: Selection) => {
+    if (same(selected, t)) {
+      store.update((s) => {
+        s.permanence = sends.get(draftKey(t))?.choice;
+      });
+    }
+  };
+  const cancelSend = (t = selected) => {
+    if (!t) return;
+    const pending = sends.get(draftKey(t));
+    sends.delete(draftKey(t));
+    publishSend(t);
+    pending?.wait.reject(
+      new DOMException(
+        "The staged revert changed or Send was canceled",
+        "AbortError",
+      ),
+    );
+  };
+  const matchesPermit = (
+    t: Selection,
+    permit: BranchSendPermit,
+    record: RevertInfo | undefined,
+  ) =>
+    same(permit.target, t) &&
+    permit.record?.boundaryID === record?.boundaryID &&
+    JSON.stringify(permit.record?.messageIDs) ===
+      JSON.stringify(record?.messageIDs);
+  const allowSend = async (t: Selection, discard: boolean) => {
+    const pending = sends.get(draftKey(t));
+    if (!pending) return;
+    const permit: BranchSendPermit = {
+      target: pending.target,
+      discard,
+      record: {
+        boundaryID: pending.record.boundaryID,
+        messageIDs: [...pending.record.messageIDs],
+      },
+    };
+    if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+      cancelSend(t);
+      return;
+    }
+    if (sends.get(draftKey(t)) !== pending) return;
+    sends.delete(draftKey(t));
+    clearFailure(t);
+    publishSend(t);
+    pending.wait.resolve(permit);
+  };
   const clearFailure = (t: Selection) => {
     const failure = failures.get(draftKey(t)), feedback = options.feedback?.(t);
     if (
@@ -321,8 +398,8 @@ export function createBranchHistory(options: {
       throw fail(
         t,
         quota
-          ? `The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved: this browser's localStorage is full (about 5 MB per origin). The replacement was not sent.`
-          : `The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved: browser localStorage is unavailable. The replacement was not sent.`,
+          ? `Browser localStorage is full. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved (about 5 MB per origin). The replacement was not sent.`
+          : `Browser localStorage is unavailable. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved. The replacement was not sent.`,
         "Delete a saved branch you no longer need, or free browser storage, then retry. If this branch alone is too large, keep the live conversation; it cannot fit here. Older branches were not removed.",
       );
     }
@@ -682,6 +759,9 @@ export function createBranchHistory(options: {
     retained?: CaptureDrafts,
   ): Promise<void> => {
     const key = draftKey(t), current = captures.get(key);
+    if (sends.has(key) && sends.get(key)!.record.boundaryID !== boundary) {
+      cancelSend(t);
+    }
     if (current?.boundary === boundary) return current.promise;
     current?.controller.abort();
     const controller = new AbortController();
@@ -735,7 +815,7 @@ export function createBranchHistory(options: {
     }
     options.drafts.writer(draftKey(t))(cloneDraft(value));
   };
-  return {
+  const owner: BranchHistory = {
     state: store.state,
     preservationWarning: () => {
       const target = store.state.target;
@@ -751,6 +831,7 @@ export function createBranchHistory(options: {
         s.target = selected;
         s.opened = undefined;
         s.choice = undefined;
+        s.permanence = target ? sends.get(draftKey(target))?.choice : undefined;
         s.error = target && failures.has(draftKey(target))
           ? failureValue(failures.get(draftKey(target))!)
           : undefined;
@@ -764,7 +845,32 @@ export function createBranchHistory(options: {
       }
     },
     prepare,
-    async beforeCommit(t, label: string = branchDraftLabels.beforeSending) {
+    async beforeCommit(
+      t,
+      label: string = branchDraftLabels.beforeSending,
+      permit,
+      draft,
+    ) {
+      if (permit) {
+        const record = (await options.session(t)).revert;
+        if (!matchesPermit(t, permit, record)) {
+          throw new DOMException(
+            "The staged revert changed before Send",
+            "AbortError",
+          );
+        }
+        if (
+          record && !permit.discard &&
+          !load(t).some((branch) => savedBranchMatches(branch, record))
+        ) {
+          throw fail(
+            t,
+            "The saved copy was removed before Send. The replacement was not sent.",
+            "Retry Send to save a copy or explicitly choose Send anyway.",
+          );
+        }
+        return;
+      }
       if (!supportsHistory(t)) return;
       await captures.get(draftKey(t))?.promise;
       const session = await options.session(t);
@@ -782,7 +888,7 @@ export function createBranchHistory(options: {
           "Use Restore conversation first, then revert again in this browser to save it.",
         );
       }
-      const value = structuredClone(options.drafts.current(draftKey(t)));
+      const value = cloneDraft(draft ?? options.drafts.current(draftKey(t)));
       const parts = await options.attachments(
         value.chips.map((c) => c.part),
         t.sidecarId,
@@ -798,7 +904,97 @@ export function createBranchHistory(options: {
         );
       }
     },
+    async beforeSend(t) {
+      const target = { ...t },
+        draft = cloneDraft(options.drafts.current(draftKey(t))),
+        record = (options.current?.(t) ?? await options.session(t)).revert;
+      const permit: BranchSendPermit = {
+        target,
+        record: record &&
+          { boundaryID: record.boundaryID, messageIDs: [...record.messageIDs] },
+      };
+      if (!record) return permit;
+      if (sends.has(draftKey(t))) {
+        throw new DOMException("A Send choice is already open", "AbortError");
+      }
+      try {
+        if (!supportsHistory(t)) {
+          throw new Error("This server does not provide prompt history");
+        }
+        await owner.beforeCommit(t, undefined, undefined, draft);
+        if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+          throw new DOMException("The staged revert changed", "AbortError");
+        }
+        return permit;
+      } catch (cause) {
+        if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+          throw new DOMException("The staged revert changed", "AbortError");
+        }
+        if (sends.has(draftKey(t))) {
+          throw new DOMException("A Send choice is already open", "AbortError");
+        }
+        const wait = Promise.withResolvers<BranchSendPermit>();
+        const reason = cause instanceof RequestFailure
+          ? cause.failure.facts?.reason
+          : cause instanceof Error
+          ? cause.message
+          : undefined;
+        const choice = {
+          boundaryID: record.boundaryID,
+          saving: false,
+          error: failureValue(
+            new RequestFailure({
+              code: "revert.permanence",
+              diagnosticID: randomID(),
+              retry: "new-intent",
+              facts: {
+                actionLabel: "Sending makes the revert permanent",
+                target,
+                reason: reason ??
+                  "There is no saved copy of the reverted messages in this browser.",
+                recovery:
+                  "Save a copy first, or choose Send anyway to discard those messages.",
+              },
+            }),
+          ),
+        };
+        sends.set(draftKey(t), { target, record, draft, choice, wait });
+        publishSend(t);
+        return await wait.promise;
+      }
+    },
+    async saveCopy() {
+      const pending = selected && sends.get(draftKey(selected));
+      if (!pending || pending.choice.saving) return;
+      pending.choice = { ...pending.choice, saving: true };
+      publishSend(pending.target);
+      try {
+        if (!supportsHistory(pending.target)) {
+          throw new Error("This server does not provide prompt history");
+        }
+        await owner.beforeCommit(
+          pending.target,
+          undefined,
+          undefined,
+          pending.draft,
+        );
+        await allowSend(pending.target, false);
+      } catch (cause) {
+        pending.choice = { ...pending.choice, error: failureValue(cause) };
+      } finally {
+        pending.choice = { ...pending.choice, saving: false };
+        publishSend(pending.target);
+      }
+    },
+    async sendAnyway() {
+      if (selected) await allowSend({ ...selected }, true);
+    },
+    cancelSend,
     async settled(t, restored = false) {
+      if (
+        sends.has(draftKey(t)) &&
+        (restored || !(await options.session(t)).revert)
+      ) cancelSend(t);
       if (!supportsHistory(t)) return;
       const previous = captures.get(draftKey(t));
       if (restored) {
@@ -933,6 +1129,7 @@ export function createBranchHistory(options: {
       refresh(selected);
     },
   };
+  return owner;
 }
 
 /** Keeps the exact captured text, rather than manufacturing attachment tokens. */
@@ -999,5 +1196,12 @@ export function connectBranchHistory(options: {
       }),
     session: (target) =>
       rpc(target).call("session.get", { sessionID: target.sessionID }),
+    current: (target) => {
+      const state = transcripts.get(target)?.state;
+      return state?.info && state.continuity === "ready" && !state.loading &&
+          resources.sidecars.connection(target.sidecarId).connected
+        ? { ...state.info, revert: state.content.revert ?? undefined }
+        : undefined;
+    },
   });
 }

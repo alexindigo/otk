@@ -49,6 +49,7 @@ export default function RevertGroup(props: {
     title?: string;
   };
   warning?: string;
+  failureVisible?: boolean;
   onOpenChild(id: string): void;
 }): Element {
   const boundary = () =>
@@ -58,7 +59,10 @@ export default function RevertGroup(props: {
     props.state.record?.prompt?.input.split("\n")[0] || preview(first()) ||
     boundary();
   const at = () => props.state.record?.prompt?.time ?? first()?.time.created;
-  const failure = () => errorFeedback(props.state.error);
+  const failure = () =>
+    props.failureVisible === false
+      ? undefined
+      : errorFeedback(props.state.error);
   const pending = () =>
     !!props.state.pending || props.state.phase === "staging" ||
     props.state.phase === "restoring";
