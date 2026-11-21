@@ -48,6 +48,10 @@ function fixture() {
     },
   };
   const saved = Promise.withResolvers<void>();
+  const copies: import("@otk/client").BranchHistoryState = {
+    branches: [],
+    pending: false,
+  };
   let refused = false;
   const base: ContentSession = {
     id: "a",
@@ -64,9 +68,24 @@ function fixture() {
       storage,
       status: { working: () => false, subscribe: () => () => {} },
       branchHistory: {
-        prepare: () => {
+        state: copies,
+        prepare: (_target, boundary, staged) => {
           events.push("capture");
-          return saved.promise;
+          return saved.promise.then(() => {
+            copies.branches = [{
+              id: "copy",
+              boundary,
+              created: 1,
+              session: { ...base, revert: staged },
+              messages: (staged?.messageIDs ?? []).map(prompt),
+              turns: {},
+              prompts: [],
+              drafts: [],
+              pending: true,
+              replaced: false,
+              bytes: 1,
+            }];
+          });
         },
       },
       actions: {

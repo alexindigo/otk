@@ -475,12 +475,32 @@ test("retained history RPC delegates an opaque page and rejects invalid or unsup
       await assertRejects(() => rpc.dispatch("history.messages", params));
     }
     assertEquals(calls.length, 1);
+    const scope = { messageIDs: ["prompt", "reply"], validate: true };
+    await rpc.dispatch("history.messages", { sessionID: "tstv1-one", scope });
+    assertEquals(calls[1], [
+      "tstv1-one",
+      { before: undefined, scope },
+      undefined,
+    ]);
+    for (
+      const invalid of [{ messageIDs: [""] }, { messageIDs: "prompt" }, {
+        messageIDs: [],
+        validate: "yes",
+      }]
+    ) {
+      await assertRejects(() =>
+        rpc.dispatch("history.messages", {
+          sessionID: "tstv1-one",
+          scope: invalid,
+        })
+      );
+    }
     const unsupported = new RpcRegistry(f.registry.context.harness, f.db);
     Core.registerSessions(unsupported, f.registry.context.harness);
     await assertRejects(() =>
       unsupported.dispatch("history.messages", { sessionID: "tstv1-one" })
     );
-    assertEquals(calls.length, 1);
+    assertEquals(calls.length, 2);
   } finally {
     f.inbox.close();
     f.db.close();

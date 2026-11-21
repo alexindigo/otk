@@ -589,17 +589,27 @@ Cancellation releases only the caller's wait, not canonical recovery or other
 consumers. Readiness also requires the serving transport's current `connected`
 fact and a linked native source; retained bodies do not certify either link.
 
-`snapshotPage(target,before?,signal?)` uses that canonical transcript's bounded
-admission queue for retained `history.messages` pages, without reducing them
-into the live view or opening Source folds. Native continuations distinguish
-retained archive reads from visible pages. BranchHistory owns one keyed,
-cancellable background capture after reversible Revert; its page-local
+`snapshotPage(target,before?,signal?,scope?)` uses that canonical transcript's
+bounded admission queue for retained `history.messages` pages, without reducing
+them into the live view or opening Source folds. Native continuations
+distinguish retained archive reads from visible pages. BranchHistory owns one
+keyed, cancellable background capture after reversible Revert; its page-local
 source/prompt workers use configured message concurrency and preserve exact
 payload order. Every committing submission and Compact joins preservation before
 native admission. Restore does not wait for capture and fences late saves. A
 staged session after reload reacquires its missing browser copy before
 committing. Failed saves retain FP1 action, target, reason and recovery by
 target across selection changes.
+
+A staged capture passes its fixed `messageIDs` as the snapshot scope. Each
+harness reads those native identities directly, without scanning older bodies.
+The existing replay owner supplies per-ID revision witnesses in the same epoch;
+witness-only validation acquires no bodies. Unrelated sequence advances are
+irrelevant. A changed captured identity alone is read and materialized again.
+Transient reads and changing records retry with bounded exponential backoff;
+Retry starts a fresh capture after a final failure. New archives contain exactly
+the staged identity set. Older, larger archives still count as preserved when
+they contain every identity in the record.
 
 Archive updates load the current stored branch after asynchronous reads before
 merging drafts or native bookkeeping. Reuse and explicit draft choices made

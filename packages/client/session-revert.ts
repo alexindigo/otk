@@ -14,7 +14,7 @@ import type { ContentState } from "./reduce.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
-import type { BranchHistory } from "./branch-history.ts";
+import { type BranchHistory, savedBranchMatches } from "./branch-history.ts";
 
 export interface RevertStrip {
   boundaryID: string;
@@ -89,7 +89,7 @@ export function createSessionRevert(options: {
     & Partial<Pick<SessionActions, "group">>;
   drafts: Drafts;
   branchHistory?:
-    & Pick<BranchHistory, "prepare">
+    & Pick<BranchHistory, "prepare" | "state">
     & Partial<Pick<BranchHistory, "state" | "subscribe" | "settled">>;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   server?(target: Selection): string;
@@ -167,31 +167,62 @@ export function createSessionRevert(options: {
     pending = false;
   };
   const captures = new Map<string, Promise<void>>();
-  const savedCopy = (record: RevertInfo) =>
-    options.branchHistory?.state?.branches.find((branch) =>
-      branch.pending && branch.boundary === record.boundaryID &&
-      record.messageIDs.every((id) => branch.messages.some((m) => m.id === id))
-    );
+  const savedCopy = (
+    record: RevertInfo,
+    target = options.session.state.selection,
+  ) => {
+    const state = options.branchHistory?.state;
+    if (
+      state?.target &&
+      (state.target.sidecarId !== target?.sidecarId ||
+        state.target.sessionID !== target?.sessionID)
+    ) return;
+    return state?.branches.find((branch) => savedBranchMatches(branch, record));
+  };
   const save = (target: Selection, record: RevertInfo): Promise<void> => {
     const capturedKey = `${target.sidecarId}/${target.sessionID}`;
-    const running = captures.get(capturedKey);
+    const captureKey = JSON.stringify([capturedKey, record.boundaryID]);
+    const running = captures.get(captureKey);
     if (running) return running;
     if (!options.branchHistory) return Promise.resolve();
     const completion = Promise.withResolvers<void>();
-    captures.set(capturedKey, completion.promise);
+    captures.set(captureKey, completion.promise);
     updateAt(capturedKey, (state) => {
       state.phase = "saving";
       state.error = undefined;
       state.failure = undefined;
     });
     void Promise.resolve().then(() =>
-      options.branchHistory!.prepare(target, record.boundaryID)
+      options.branchHistory!.prepare(target, record.boundaryID, record)
     ).then(() => {
       updateAt(capturedKey, (state) => {
         if (state.record?.boundaryID !== record.boundaryID) return;
-        state.phase = "saved";
-        const copy = key === capturedKey && savedCopy(record);
-        if (copy) state.messages = copy.messages;
+        if (key !== capturedKey) {
+          state.phase = "staged";
+          return;
+        }
+        const copy = savedCopy(record, target);
+        state.phase = copy ? "saved" : "failed";
+        if (!copy) {
+          state.error = failureValue(
+            new RequestFailure({
+              code: "branch-history.missing",
+              retry: "new-intent",
+              diagnosticID: randomID(),
+              facts: {
+                actionLabel: "Saving the reverted messages",
+                target,
+                reason: "No complete copy is saved in this browser.",
+                recovery: "Retry saving the copy, or Restore the conversation.",
+              },
+            }),
+          );
+        }
+        if (copy) {
+          state.messages = record.messageIDs.map((id) =>
+            copy.messages.find((m) => m.id === id)!
+          );
+        }
       });
       completion.resolve();
     }, (cause) => {
@@ -205,8 +236,8 @@ export function createSessionRevert(options: {
       });
       completion.resolve();
     }).finally(() => {
-      if (captures.get(capturedKey) === completion.promise) {
-        captures.delete(capturedKey);
+      if (captures.get(captureKey) === completion.promise) {
+        captures.delete(captureKey);
       }
     });
     return completion.promise;
@@ -253,7 +284,9 @@ export function createSessionRevert(options: {
     if (copy && flow().phase !== "restoring") {
       update((state) => {
         state.phase = "saved";
-        state.messages = copy.messages;
+        state.messages = record.messageIDs.map((id) =>
+          copy.messages.find((m) => m.id === id)!
+        );
       });
     } else if (
       flow().phase === "staged" &&

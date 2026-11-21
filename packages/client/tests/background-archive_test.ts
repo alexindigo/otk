@@ -69,6 +69,7 @@ function fixture() {
           source: { kind: "fixture", ref: "exact-source" },
         }],
         clock: { epoch: "archive", seq: 1 },
+        revisions: { boundary: 0 },
         from: { epoch: "archive", seq: 1 },
         version: { generation: 1, revision: 1 },
         older: null,

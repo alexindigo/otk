@@ -127,7 +127,10 @@ export interface HarnessCore {
    * This read must not publish bodies or change live transcript state. */
   snapshotMessages?(
     id: string,
-    opts: { before?: MessageCursor },
+    opts: {
+      before?: MessageCursor;
+      scope?: import("@otk/protocol").MessageSnapshotScope;
+    },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
   createSession(
