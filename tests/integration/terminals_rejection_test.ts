@@ -17,6 +17,9 @@ for (
     "spawn",
     "relative-spawn",
     "close-race",
+    "close-pre-send",
+    "close-read-loss",
+    "pre-send",
     "transport-loss",
     "post-spawn-error",
     "ambiguous-spawn-error",
@@ -63,28 +66,45 @@ for (
     const registry = new RpcRegistry(harness, db);
     registerTerminals(registry, host);
     let terminalID: string | undefined;
-    if (mode === "close-race") {
+    if (
+      mode === "close-race" || mode === "close-pre-send" ||
+      mode === "close-read-loss"
+    ) {
       terminalID = String((await host.create("tstv1-reject", root, 80, 24)).id);
-      const close = host.close.bind(host);
-      host.close = async (directory, id) => {
-        // Another caller removes it after RPC preflight but before host.close.
-        await daemon.request({ op: "terminate", id });
-        return await close(directory, id);
-      };
+      if (mode === "close-race") {
+        const close = host.close.bind(host);
+        host.close = async (directory, id) => {
+          // Another caller removes it after RPC preflight but before host.close.
+          await daemon.request({ op: "terminate", id });
+          return await close(directory, id);
+        };
+      } else {
+        const request = daemon.request.bind(daemon);
+        daemon.request = async (value) => {
+          if (value.op === "get") {
+            if (mode === "close-read-loss") {
+              throw new Error("lost metadata response before termination");
+            }
+            await daemon.disconnect();
+          }
+          return await request(value);
+        };
+      }
     } else if (uncertain) {
       const request = daemon.request.bind(daemon);
-      daemon.request = (value) =>
-        value.op === "create_pty"
-          ? Promise.reject(
-            mode === "transport-loss"
-              ? new Error("lost daemon response")
-              : new DaemonResponseError(
-                mode === "ambiguous-spawn-error"
-                  ? "failed to spawn terminal writer: injected post-spawn failure"
-                  : "failed to clone PTY reader: injected post-spawn failure",
-              ),
-          )
-          : request(value);
+      daemon.request = async (value) => {
+        if (value.op !== "create_pty") return await request(value);
+        if (mode === "post-spawn-error") await request(value);
+        throw (
+          mode === "transport-loss"
+            ? new Error("lost daemon response")
+            : new DaemonResponseError(
+              mode === "ambiguous-spawn-error"
+                ? "failed to spawn terminal writer: injected post-spawn failure"
+                : "failed to clone PTY reader: injected post-spawn failure",
+            )
+        );
+      };
     }
     const coordinator = new RequestCoordinator({
       registry,
@@ -106,13 +126,15 @@ for (
       intent_key: ref.key,
     };
     const prepare = host.prepareCreate.bind(host);
-    host.prepareCreate = (...args) => {
+    host.prepareCreate = async (...args) => {
       assertEquals(
         receipts.get(key)?.dispatched_at,
         null,
         "local shell preparation precedes dispatch fence",
       );
-      return prepare(...args);
+      const create = await prepare(...args);
+      if (mode === "pre-send") await daemon.disconnect();
+      return create;
     };
     const recipient = {
       send: (event: RequestEvent) => events.push(event),
@@ -139,6 +161,24 @@ for (
     if (uncertain) {
       assertEquals(record.state, "reconciling");
       assert(!events.some((e) => e.t === "request.result"));
+      if (mode === "post-spawn-error") {
+        const before = await daemon.request({ op: "list", mode: "pty" });
+        assert(before.type === "processes");
+        assertEquals(before.processes.length, 1);
+        await coordinator.accept("local", {
+          t: "request",
+          ref: { ...ref, id: crypto.randomUUID() },
+          method: "terminal.create",
+          params: { sessionID: "tstv1-reject", cols: 80, rows: 24 },
+        }, recipient);
+        await coordinator.idle();
+        const after = await daemon.request({ op: "list", mode: "pty" });
+        assert(after.type === "processes");
+        assertEquals(
+          after.processes.map((process) => process.id),
+          before.processes.map((process) => process.id),
+        );
+      }
     } else {
       const result = events.find((event) => event.t === "request.result");
       assert(
@@ -148,11 +188,21 @@ for (
       assertEquals(record.state, "failed");
       assertEquals(
         record.error_code,
-        mode === "close-race" ? "not-found" : "terminal-spawn-failed",
+        mode === "close-race"
+          ? "not-found"
+          : mode === "pre-send" || mode === "close-pre-send" ||
+              mode === "close-read-loss"
+          ? "terminal-unavailable"
+          : "terminal-spawn-failed",
       );
-      const list = await daemon.request({ op: "list", mode: "pty" });
-      assert(list.type === "processes");
-      assertEquals(list.processes, []);
+      if (mode !== "pre-send" && mode !== "close-pre-send") {
+        const list = await daemon.request({ op: "list", mode: "pty" });
+        assert(list.type === "processes");
+        assertEquals(
+          list.processes.map((process) => String(process.id)),
+          mode === "close-read-loss" ? [terminalID!] : [],
+        );
+      }
     }
   });
 }

@@ -296,6 +296,7 @@ export function terminalLinkAtPositionWithRange(
     if (!row) return null;
     return {
       isWrapped: row.isWrapContinuation,
+      wrapsToNext: row.wrapsToNext,
       translateToString: (trimRight = false) => terminalRowText(row, trimRight),
     };
   });
@@ -468,13 +469,14 @@ type TerminalMouseAction = "press" | "release" | "motion";
 
 export function resolveTerminalMouseData(
   action: TerminalMouseAction,
-  data: string,
-  previousMotionData: string,
-): { readonly send: boolean; readonly nextMotionData: string } {
-  const nextMotionData = action === "motion" ? data : "";
+  data: Uint8Array,
+  previousMotionData: Uint8Array | null,
+): { readonly send: boolean; readonly nextMotionData: Uint8Array | null } {
+  const nextMotionData = action === "motion" ? data : null;
   return {
     send: data.length > 0 &&
-      (action !== "motion" || data !== previousMotionData),
+      (action !== "motion" || data.length !== previousMotionData?.length ||
+        data.some((byte, index) => byte !== previousMotionData?.[index])),
     nextMotionData,
   };
 }
@@ -482,11 +484,11 @@ export function resolveTerminalMouseData(
 function resolveTerminalMouseTrackingState(
   previousTracking: boolean,
   tracking: boolean,
-  motionData: string,
-): { readonly tracking: boolean; readonly motionData: string } {
+  motionData: Uint8Array | null,
+): { readonly tracking: boolean; readonly motionData: Uint8Array | null } {
   return {
     tracking,
-    motionData: previousTracking === tracking ? motionData : "",
+    motionData: previousTracking === tracking ? motionData : null,
   };
 }
 
@@ -594,7 +596,7 @@ export interface GhosttyTerminalSurfaceOptions {
   readonly font?: GhosttyTerminalFont;
   /** Read after font and WASM loading. */
   readonly visible?: boolean;
-  readonly onData: (data: string) => void;
+  readonly onData: (data: string | Uint8Array) => void;
   readonly onResize: (cols: number, rows: number) => void;
   readonly onSelectionChange: () => void;
   readonly beforeKey: (event: KeyboardEvent) => boolean;
@@ -609,7 +611,7 @@ export class GhosttyTerminalSurface {
   readonly canvas: HTMLCanvasElement;
   readonly input: HTMLTextAreaElement;
   readonly scrollbar: HTMLDivElement;
-  /** The drawn grid: the shared PTY grid, clamped per axis to the measured one. */
+  /** The parser grid is PTY-owned; the canvas clips cells outside its viewport. */
   cols = 1;
   rows = 1;
 
@@ -649,6 +651,7 @@ export class GhosttyTerminalSurface {
   private scrollbarPointerId: number | null = null;
   private scrollbarPointerOffset = 0;
   private disposed = false;
+  private paintedRevision = -1;
   private resizeNotifyTimer: ReturnType<typeof globalThis.setTimeout> | null =
     null;
   private originY = CONTENT_PADDING;
@@ -717,7 +720,7 @@ export class GhosttyTerminalSurface {
     remainder: number;
     moved: boolean;
   } | null = null;
-  private lastMouseMotionData = "";
+  private lastMouseMotionData: Uint8Array | null = null;
   private mouseAnyEventTracking = false;
   private dprMedia: MediaQueryList | null = null;
   // Watch reduced motion changes to restart blink cycles that have no remaining timer.
@@ -876,7 +879,7 @@ export class GhosttyTerminalSurface {
   resetAndWrite(data: string | Uint8Array): void {
     if (this.disposed) return;
     this.cancelSynchronizedRenderTimer();
-    this.lastMouseMotionData = "";
+    this.lastMouseMotionData = null;
     this.core.resetAndWrite(data);
     this.synchronizeMouseTrackingState();
     this.cursorOn = true;
@@ -1032,9 +1035,9 @@ export class GhosttyTerminalSurface {
 
   /**
    * Other clients can share this PTY, so the server owns its grid. Drawing that grid
-   * keeps wrapping and cursor positions in step with the PTY. Each axis is clamped to
-   * this surface's own fit: the server's grid lags a local resize, and read-only
-   * observers never constrain it.
+   * keeps wrapping and cursor positions in step with the PTY even while hidden.
+   * Measurement requests a future PTY size; it never changes the parser's current
+   * canonical grid. The canvas clips a larger shared grid to its viewport.
    */
   setSharedGrid(
     grid: { readonly cols: number; readonly rows: number } | null,
@@ -1045,18 +1048,12 @@ export class GhosttyTerminalSurface {
       this.sharedGrid?.rows === grid?.rows
     ) return;
     this.sharedGrid = grid;
-    if (this.hasSize && this.applyGrid()) this.requestRender();
+    if (this.applyGrid()) this.requestRender();
   }
 
   private applyGrid(): boolean {
-    const cols = Math.min(
-      this.sharedGrid?.cols ?? this.measuredCols,
-      this.measuredCols,
-    );
-    const rows = Math.min(
-      this.sharedGrid?.rows ?? this.measuredRows,
-      this.measuredRows,
-    );
+    const cols = this.sharedGrid?.cols ?? this.measuredCols;
+    const rows = this.sharedGrid?.rows ?? this.measuredRows;
     if (cols === this.cols && rows === this.rows) return false;
     this.cols = cols;
     this.rows = rows;
@@ -1672,7 +1669,7 @@ export class GhosttyTerminalSurface {
       this.sendMouse("motion", this.buttonFromButtons(event.buttons), event);
       return;
     }
-    this.lastMouseMotionData = "";
+    this.lastMouseMotionData = null;
     if (
       !this.selectionAnchorScreen ||
       !this.canvas.hasPointerCapture(event.pointerId)
@@ -1764,7 +1761,7 @@ export class GhosttyTerminalSurface {
   }
 
   private readonly onPointerLeave = () => {
-    this.lastMouseMotionData = "";
+    this.lastMouseMotionData = null;
     this.clearHoveredLink();
   };
 
@@ -2083,8 +2080,12 @@ export class GhosttyTerminalSurface {
     this.scrollbar.addEventListener("pointerup", this.onScrollbarPointerUp);
     this.scrollbar.addEventListener("pointercancel", this.onScrollbarPointerUp);
     this.scrollbar.addEventListener("keydown", this.onScrollbarKeyDown);
-    globalThis.addEventListener("pointerup", this.onWindowPointerRelease);
-    globalThis.addEventListener("pointercancel", this.onWindowPointerRelease);
+    globalThis.addEventListener("pointerup", this.onWindowPointerRelease, true);
+    globalThis.addEventListener(
+      "pointercancel",
+      this.onWindowPointerRelease,
+      true,
+    );
   }
 
   private removeEvents(): void {
@@ -2125,10 +2126,15 @@ export class GhosttyTerminalSurface {
       this.onScrollbarPointerUp,
     );
     this.scrollbar.removeEventListener("keydown", this.onScrollbarKeyDown);
-    globalThis.removeEventListener("pointerup", this.onWindowPointerRelease);
+    globalThis.removeEventListener(
+      "pointerup",
+      this.onWindowPointerRelease,
+      true,
+    );
     globalThis.removeEventListener(
       "pointercancel",
       this.onWindowPointerRelease,
+      true,
     );
   }
 
@@ -2264,6 +2270,7 @@ export class GhosttyTerminalSurface {
       this.canvasConfigured = true;
       this.canvasDevicePixelRatio = canvasConfiguration.ratio;
     }
+    const revision = this.core.revision;
     this.snapshot = this.core.snapshot();
     // The accessible alternative is the same viewport snapshot drawn below,
     // not another terminal buffer or a source of transport authority.
@@ -2291,7 +2298,6 @@ export class GhosttyTerminalSurface {
       this.forceFullRender = true;
     }
     this.updateLinkRowStability(geometryChanged);
-    this.refreshHoveredLink();
     renderGhosttySnapshot({
       context: this.context,
       snapshot: this.snapshot,
@@ -2309,6 +2315,7 @@ export class GhosttyTerminalSurface {
         ? { selectionBackground: this.theme.selectionBackground }
         : {}),
     });
+    this.paintedRevision = revision;
     this.positionInput();
     this.renderedCursorY =
       this.cursorOn && this.snapshot.cursorVisible && this.snapshot.cursorY >= 0
@@ -2321,6 +2328,7 @@ export class GhosttyTerminalSurface {
     this.forceFullRender = false;
     // Output/replay/resize can invalidate a selection without a new gesture.
     this.options.onSelectionChange();
+    this.refreshHoveredLink();
     this.scheduleCursorBlink();
   }
 
@@ -2443,7 +2451,10 @@ export class GhosttyTerminalSurface {
     clientX: number,
     clientY: number,
   ): TerminalLinkWithRange | null {
-    if (!this.snapshot) return null;
+    // Defer live URI lookup while content is ahead of the actually painted frame.
+    if (!this.snapshot || this.paintedRevision !== this.core.revision) {
+      return null;
+    }
     const cell = terminalGridCellAt({
       bounds: this.canvas.getBoundingClientRect(),
       clientX,

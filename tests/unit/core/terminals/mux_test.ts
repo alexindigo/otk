@@ -3,7 +3,10 @@ import { assert, assertEquals } from "@std/assert";
 import { createRequestMetadata } from "@otk/protocol";
 import { TerminalMux } from "../../../../core/terminals/mux.ts";
 import { terminalGroup } from "../../../../core/terminals/ownership.ts";
-import type { DaemonConnection } from "../../../../core/terminals/daemon.ts";
+import {
+  type DaemonConnection,
+  DaemonResponseError,
+} from "../../../../core/terminals/daemon.ts";
 import type {
   Frame,
   ProcessInfo,
@@ -148,17 +151,19 @@ function fixture(autoAttach = true) {
   };
   let get: () => Promise<Response> = () =>
     Promise.resolve({ type: "process", process });
+  let interact: (request: Request, signal?: AbortSignal) => Promise<Response> =
+    () => Promise.resolve({ type: "ok" });
   const daemon = {
     get alive() {
       return alive;
     },
-    request(request: Request): Promise<Response> {
+    request(request: Request, signal?: AbortSignal): Promise<Response> {
       requests.push(request);
       if (request.op === "get") return get();
       if (request.op === "snapshot") {
         return Promise.resolve(snapshot);
       }
-      return Promise.resolve({ type: "ok" });
+      return interact(request, signal);
     },
     subscribe(
       request: Extract<Request, { op: "subscribe" }>,
@@ -197,6 +202,7 @@ function fixture(autoAttach = true) {
     snapshot: (value: Response) => snapshot = value,
     acquisitions: () => acquisitions,
     get: (run: () => Promise<Response>) => get = run,
+    interact: (run: typeof interact) => interact = run,
     gone() {
       alive = false;
       for (const listener of listeners) listener();
@@ -380,6 +386,98 @@ test("interaction waits for daemon attachment acknowledgement, not merely subscr
   assert(!f.requests.some((r) => r.op === "control" || r.op === "resize"));
   f.subscriptions[0].push(attached());
   await until(() => f.requests.some((r) => r.op === "control"));
+});
+
+test("resize acquires control atomically even when the cached controller role is stale", async () => {
+  const f = fixture();
+  f.socket.attach();
+  await until(() => f.socket.controls().some((v) => v.t === "meta"));
+  f.socket.receive({ t: "resize", ch: 1, cols: 100, rows: 30 });
+  await until(() => f.requests.some((r) => r.op === "control"));
+  await delay(0);
+  f.interact((request) =>
+    request.op === "resize"
+      ? Promise.reject(
+        new DaemonResponseError("another attachment owns control"),
+      )
+      : Promise.resolve({ type: "ok" })
+  );
+  f.socket.receive({ t: "resize", ch: 1, cols: 100, rows: 30 });
+  await until(() =>
+    f.requests.filter((r) => r.op === "control" || r.op === "resize").length ===
+      2
+  );
+  assertEquals(
+    f.requests.filter((r) => r.op === "control" || r.op === "resize").map((r) =>
+      r.op
+    ),
+    ["control", "control"],
+  );
+  await until(() =>
+    f.socket.controls().filter((v) => v.t === "resize-ack").length === 2
+  );
+  assert(!f.subscriptions[0].closed);
+});
+
+test("an interaction rejection does not retire a healthy subscription", async () => {
+  const f = fixture();
+  f.socket.attach();
+  await until(() => f.socket.controls().some((v) => v.t === "meta"));
+  f.interact(() => Promise.reject(new DaemonResponseError("request rejected")));
+  f.socket.receive({ t: "resize", ch: 1, cols: 100, rows: 30 });
+  await until(() =>
+    f.socket.controls().some((v) => v.t === "interaction-error")
+  );
+  assert(!f.subscriptions[0].closed);
+  assert(!f.socket.controls().some((v) => v.t === "detached"));
+});
+
+test("relay ingress is bounded before attachment readiness", async () => {
+  const f = fixture(false);
+  f.socket.attach();
+  await until(() => f.subscriptions.length === 1);
+  for (let i = 0; i < 17; i++) {
+    const frame = new ArrayBuffer(65536);
+    new DataView(frame).setUint32(0, 1);
+    f.socket.receive(frame);
+  }
+  assertEquals(f.socket.code, 1013);
+});
+
+test("relay close cancels an active interaction and joins it", async () => {
+  const f = fixture(), gate = deferred<Response>();
+  resources().defer(
+    "release held interaction",
+    () => gate.resolve({ type: "ok" }),
+  );
+  f.interact((_request, signal) =>
+    new Promise((resolve, reject) => {
+      gate.promise.then(resolve, reject);
+      signal?.addEventListener("abort", () => reject(signal.reason), {
+        once: true,
+      });
+    })
+  );
+  f.socket.attach();
+  await until(() => f.socket.controls().some((v) => v.t === "meta"));
+  f.socket.receive({ t: "resize", ch: 1, cols: 100, rows: 30 });
+  await until(() => f.requests.some((r) => r.op === "control"));
+  let stopped = false;
+  const stop = f.mux.stop().then(() => stopped = true);
+  await delay(20);
+  assert(
+    stopped,
+    "stop must cancel rather than wait for accepted interaction backlog",
+  );
+  await stop;
+});
+
+test("direct control replies respect the socket high-water limit", () => {
+  const f = fixture();
+  f.socket.bufferedAmount = 2 * 1024 * 1024;
+  f.socket.receive({ t: "ping" });
+  assertEquals(f.socket.code, 1013);
+  assertEquals(f.socket.sent.length, 0);
 });
 test("per-channel output budgets pause readers independently while input remains runnable", async () => {
   const f = fixture();

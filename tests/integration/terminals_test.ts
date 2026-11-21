@@ -44,6 +44,7 @@ async function application(
     failStart?: boolean;
     indexed?: boolean;
     removed?: Set<string>;
+    environment?: Record<string, string>;
   } = {},
 ) {
   const root = options.root ?? await tempDir("terminal-app-");
@@ -117,6 +118,7 @@ async function application(
     ...Deno.env.toObject(),
     SHELL: "/bin/bash",
     XDG_DATA_HOME: join(root, "data"),
+    ...options.environment,
   };
   delete environment.INVOCATION_ID;
   if (options.unavailable) environment.OTK_PTY_BIN = join(root, "missing-pty");
@@ -323,13 +325,18 @@ test("real application terminal RPC and shared socket: isolation, observer, resi
     observer.text(1, "\r\nobserver-49\r\n"),
   ]);
   assert(!observer.controls.some((c) => c.role === "controller"));
-  socket.input(2, "seq 1 2000000\r");
+  const noisyRelease = join(app.root, "fairness-release");
+  socket.input(
+    2,
+    `while [ ! -e '${noisyRelease}' ]; do printf 'noisy-active\\n'; done; seq 1 2000000\r`,
+  );
   await until(() => (socket.bytes.get(2) ?? 0) > 100000, "noisy output active");
   const started = performance.now();
   socket.input(1, "echo fair\r");
   await socket.text(1, "\r\nfair\r\n", 500);
   const fairnessLatencyMs = performance.now() - started;
   assert(fairnessLatencyMs < 500);
+  await Deno.writeTextFile(noisyRelease, "");
   await socket.text(2, "\r\n2000000\r\n", 60000);
   assert(!(socket.output.get(1) ?? "").includes("\r\n2000000\r\n"));
   console.info(
@@ -352,12 +359,20 @@ test("real application terminal RPC and shared socket: isolation, observer, resi
   );
   socket.input(1, "echo intact-$((8*8))\r");
   await socket.text(1, "\r\nintact-64\r\n");
-  const before = observer.bytes.get(1) ?? 0;
+  const pongs =
+    observer.controls.filter((control) => control.t === "pong").length;
   observer.send({ t: "detach", ch: 1 });
-  await delay(30);
-  socket.input(1, "echo after-detach\r");
-  await socket.text(1, "\r\nafter-detach\r\n");
-  assertEquals(observer.bytes.get(1) ?? 0, before);
+  observer.send({ t: "ping" });
+  await until(
+    () =>
+      observer.controls.filter((control) => control.t === "pong").length >
+        pongs,
+    "post-detach socket barrier",
+  );
+  const marker = `after-detach-${crypto.randomUUID()}`;
+  socket.input(1, `printf '\\n${marker}\\n'\r`);
+  await socket.text(1, `\r\n${marker}\r\n`);
+  assert(!(observer.output.get(1) ?? "").includes(marker));
   await observer.attach(2, a.id);
   await call("terminal.close", { sessionID: A, terminalID: a.id });
   assertEquals((await socket.control("detached", 1)).reason, "terminated");
@@ -417,6 +432,7 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     rows: 24,
   });
   let current!: WebSocket, connected = false, output = "";
+  const sized: string[] = [];
   const transport = new TerminalSocket({
     base: new URL(app.url + "/api/"),
     options: {
@@ -431,7 +447,9 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     reset() {
       output = "";
     },
-    resize() {},
+    resize(cols, rows) {
+      sized.push(`${cols}x${rows}`);
+    },
     write(bytes) {
       output += new TextDecoder().decode(bytes);
     },
@@ -447,6 +465,7 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     ).replaceAll("\r", "").split("\n");
   attachment.resize(111, 37);
   await until(() => connected, "initial size attachment");
+  await until(() => sized.includes("111x37"), "daemon applied initial size");
   attachment.input(new TextEncoder().encode("stty size\r"));
   await until(
     () => lines().includes("37 111"),
@@ -456,11 +475,27 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
   await until(() => !connected, "size transport disconnected");
   attachment.resize(132, 48);
   await until(() => connected, "size transport reattached");
+  await until(() => sized.includes("132x48"), "daemon applied reattached size");
   attachment.input(new TextEncoder().encode("stty size\r"));
   await until(
     () => lines().includes("48 132"),
     "shell sees disconnected desired size",
   );
+});
+
+test("invalid terminal cache configuration preserves application availability", async () => {
+  const app = await application({
+    environment: { HOME: "relative", XDG_DATA_HOME: "relative" },
+  });
+  const health = await fetch(app.url + "/api/health");
+  assertEquals(health.status, 200);
+  await health.body?.cancel();
+  const client = await rpc(app.url);
+  const failure = await assertRejects(
+    () => client.conn.rpc.call("terminal.list", { sessionID: A }),
+    RequestFailure,
+  );
+  assertEquals(failure.failure.code, "terminal-unavailable");
 });
 
 test("terminal socket validates membership, channel count and policy limits", async () => {

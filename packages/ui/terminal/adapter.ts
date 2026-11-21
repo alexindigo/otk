@@ -33,7 +33,8 @@ export function terminalInput(
   input: (bytes: Uint8Array) => void,
 ): GhosttyTerminalSurfaceOptions["onData"] {
   const encoder = new TextEncoder();
-  return (text) => input(encoder.encode(text));
+  return (data) =>
+    input(typeof data === "string" ? encoder.encode(data) : data);
 }
 
 function rgb(hex: string): GhosttyColor {

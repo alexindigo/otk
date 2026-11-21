@@ -12,6 +12,7 @@ export interface TerminalLinkMatch {
 
 export interface TerminalBufferLineLike {
   readonly isWrapped?: boolean;
+  readonly wrapsToNext?: boolean;
   translateToString(trimRight?: boolean): string;
 }
 
@@ -51,7 +52,7 @@ const SCHEME_URL_PATTERN =
   /(?<![A-Za-z\d+.-])[+-]?[A-Za-z][A-Za-z\d+.-]+:\/\/[^\s"'`<>]+/gu;
 
 function trimClosingDelimiters(value: string, kind: TerminalLinkKind): string {
-  let output = value.replace(
+  const output = value.replace(
     kind === "path"
       ? TRAILING_PATH_PUNCTUATION_PATTERN
       : TRAILING_PUNCTUATION_PATTERN,
@@ -59,19 +60,19 @@ function trimClosingDelimiters(value: string, kind: TerminalLinkKind): string {
   );
   if (output.length === 0) return output;
 
-  const trimUnbalanced = (open: string, close: string) => {
-    while (output.endsWith(close)) {
-      const opens = output.split(open).length - 1;
-      const closes = output.split(close).length - 1;
-      if (opens >= closes) return;
-      output = output.slice(0, -1);
-    }
-  };
-
-  trimUnbalanced("(", ")");
-  trimUnbalanced("[", "]");
-  trimUnbalanced("{", "}");
-  return output;
+  const pairs = new Map([[")", "("], ["]", "["], ["}", "{"]]);
+  const counts = new Map<string, number>();
+  for (const char of output) {
+    if ("()[]{}".includes(char)) counts.set(char, (counts.get(char) ?? 0) + 1);
+  }
+  let end = output.length;
+  while (end > 0) {
+    const close = output[end - 1], open = pairs.get(close);
+    if (!open || (counts.get(open) ?? 0) >= (counts.get(close) ?? 0)) break;
+    counts.set(close, counts.get(close)! - 1);
+    end--;
+  }
+  return output.slice(0, end);
 }
 
 function overlaps(
@@ -187,7 +188,9 @@ export function collectWrappedTerminalLinkLine(
 
     const nextLine = getLine(currentBufferLineNumber);
     const hasWrappedContinuation = nextLine?.isWrapped === true;
-    const text = currentLine.translateToString(!hasWrappedContinuation);
+    const text = currentLine.translateToString(
+      !hasWrappedContinuation && !currentLine.wrapsToNext,
+    );
 
     segments.push({
       bufferLineNumber: currentBufferLineNumber,

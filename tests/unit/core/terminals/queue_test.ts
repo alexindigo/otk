@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
 import { PtyDaemon } from "../../../../core/terminals/daemon.ts";
 import type { Request } from "../../../../core/terminals/frames.ts";
-import { resources, tempDir, test } from "../../../support/resources.ts";
+import {
+  bounded,
+  resources,
+  tempDir,
+  test,
+} from "../../../support/resources.ts";
 
-test("ordinary requests are one-shot, ordered per terminal, coalesced and independent", async () => {
+async function fixture() {
   const root = await tempDir("pty-q-");
   const name = "otk-pty-test",
     runtimeDir = join(root, "r"),
@@ -88,6 +93,12 @@ test("ordinary requests are one-shot, ordered per terminal, coalesced and indepe
         await reply(conn, { type: "ok" });
         // Returning closes this connection: reusing it would fail the next call.
       }
+    } catch (error) {
+      if (
+        !(error instanceof Deno.errors.BadResource ||
+          error instanceof Deno.errors.BrokenPipe ||
+          error instanceof Deno.errors.ConnectionReset)
+      ) throw error;
     } finally {
       connections.delete(conn);
       try {
@@ -99,7 +110,9 @@ test("ordinary requests are one-shot, ordered per terminal, coalesced and indepe
     try {
       for await (const conn of listener) {
         connections.add(conn);
-        handlers.push(handle(conn));
+        const handling = handle(conn);
+        void handling.catch(() => {});
+        handlers.push(handling);
       }
     } catch (error) {
       if (!(error instanceof Deno.errors.BadResource)) throw error;
@@ -121,17 +134,30 @@ test("ordinary requests are one-shot, ordered per terminal, coalesced and indepe
     signal: new AbortController().signal,
   });
   resources().defer("stop queue owner", () => daemon.shutdown());
-  const input = (text: string) =>
-    daemon.request({
+  const input = (text: string, signal?: AbortSignal): Promise<unknown> =>
+    Reflect.apply(daemon.request, daemon, [{
       op: "input",
       id: 1,
       attachment_id: "a",
       cols: 80,
       rows: 24,
       data_base64: encodeBase64(text),
-    });
+    }, signal]);
+  return { daemon, input, started, release, observed };
+}
+
+test("ordinary requests are one-shot, ordered per terminal, coalesced and independent", async () => {
+  const { daemon, input, started, release, observed } = await fixture();
   const a = input("A");
-  await started;
+  await bounded(
+    "first queue request",
+    Promise.race([
+      started,
+      a.then(() => {
+        throw new Error("First input completed before its gate");
+      }),
+    ]),
+  );
   const b = input("B"), c = input("C");
   const resize = daemon.request({
     op: "resize",
@@ -161,5 +187,75 @@ test("ordinary requests are one-shot, ordered per terminal, coalesced and indepe
     ordered.every((r) =>
       r.op !== "input" || decodeBase64(r.data_base64).length <= 65536
     ),
+  );
+});
+
+test("daemon ingress rejects a backlog beyond the transport's high-water window", async () => {
+  const f = await fixture();
+  const outcomes: string[] = [];
+  const work = Array.from(
+    { length: 17 },
+    () =>
+      f.input("x".repeat(65536)).then(
+        () => outcomes.push("sent"),
+        () => outcomes.push("rejected"),
+      ),
+  );
+  await bounded("first input admitted", f.started);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert(
+    outcomes.includes("rejected"),
+    "a 1 MiB transport window cannot retain seventeen 64 KiB requests",
+  );
+  f.release();
+  await Promise.all(work);
+});
+
+test("cancellation retires queued input before the active request completes", async () => {
+  const f = await fixture();
+  const a = f.input("A");
+  void a.catch(() => {});
+  await bounded(
+    "first input admitted",
+    Promise.race([
+      f.started,
+      a.then(() => {
+        throw new Error("First input completed before its gate");
+      }),
+    ]),
+  );
+  const abort = new AbortController();
+  const rejected = assertRejects(() => f.input("B", abort.signal));
+  abort.abort();
+  await bounded("cancel queued input", rejected, 1000);
+  f.release();
+  await a;
+  assertEquals(
+    f.observed.filter((r) => r.op === "input").map((r) =>
+      new TextDecoder().decode(decodeBase64(r.data_base64))
+    ),
+    ["A"],
+  );
+});
+
+test("cancelling coalesced input preserves another caller's queued bytes", async () => {
+  const f = await fixture();
+  const a = f.input("A");
+  void a.catch(() => {});
+  await bounded("first input admitted", f.started);
+  const abort = new AbortController();
+  const b = assertRejects(() => f.input("B", abort.signal));
+  const c = assertRejects(() => f.input("C", abort.signal));
+  const d = f.input("D", new AbortController().signal);
+  void d.catch(() => {});
+  abort.abort();
+  await bounded("coalesced cancellation", Promise.all([b, c]));
+  f.release();
+  await Promise.all([a, d]);
+  assertEquals(
+    f.observed.filter((request) => request.op === "input").map((request) =>
+      new TextDecoder().decode(decodeBase64(request.data_base64))
+    ),
+    ["A", "D"],
   );
 });

@@ -423,7 +423,7 @@ export function renderGhosttySnapshot(options: {
     } else {
       const cell = cells[snapshot.cursorX];
       context.fillRect(left, top, width, height);
-      if (cell?.text) {
+      if (cell?.text && !cell.invisible) {
         context.fillStyle = cssColor(snapshot.background);
         if (isSolidPowerlineSeparator(cell.text)) {
           fillSolidPowerlineSeparator(

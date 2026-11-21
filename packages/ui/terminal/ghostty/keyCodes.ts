@@ -3,28 +3,31 @@ import { isMacPlatform } from "./platform.ts";
 import { ghosttyKeyboardCodes } from "./key-names.ts";
 
 // From T3 packages/shared/src/keybindings.ts, same source revision.
-const US_SHIFTED_TO_UNSHIFTED_KEYS: ReadonlyMap<string, string> = new Map([
-  ["!", "1"],
-  ["@", "2"],
-  ["#", "3"],
-  ["$", "4"],
-  ["%", "5"],
-  ["^", "6"],
-  ["&", "7"],
-  ["*", "8"],
-  ["(", "9"],
-  [")", "0"],
-  ["~", "`"],
-  ["_", "-"],
-  ["+", "="],
-  ["{", "["],
-  ["}", "]"],
-  ["|", "\\"],
-  [":", ";"],
-  ['"', "'"],
-  ["<", ","],
-  [">", "."],
-  ["?", "/"],
+const US_SHIFTED_TO_UNSHIFTED_KEYS: ReadonlyMap<
+  string,
+  readonly [string, string]
+> = new Map([
+  ["!", ["1", "Digit1"]],
+  ["@", ["2", "Digit2"]],
+  ["#", ["3", "Digit3"]],
+  ["$", ["4", "Digit4"]],
+  ["%", ["5", "Digit5"]],
+  ["^", ["6", "Digit6"]],
+  ["&", ["7", "Digit7"]],
+  ["*", ["8", "Digit8"]],
+  ["(", ["9", "Digit9"]],
+  [")", ["0", "Digit0"]],
+  ["~", ["`", "Backquote"]],
+  ["_", ["-", "Minus"]],
+  ["+", ["=", "Equal"]],
+  ["{", ["[", "BracketLeft"]],
+  ["}", ["]", "BracketRight"]],
+  ["|", ["\\", "Backslash"]],
+  [":", [";", "Semicolon"]],
+  ['"', ["'", "Quote"]],
+  ["<", [",", "Comma"]],
+  [">", [".", "Period"]],
+  ["?", ["/", "Slash"]],
 ]);
 
 const codeToGhosttyKey = new Map<string, number>(
@@ -89,8 +92,8 @@ export function ghosttyUnshiftedCodepoint(
   }
   if (/^[A-Z]$/u.test(event.key)) return event.key.charCodeAt(0) + 32;
   if (event.shiftKey) {
-    const unshiftedCharacter = US_SHIFTED_TO_UNSHIFTED_KEYS.get(event.key);
-    if (unshiftedCharacter) return unshiftedCharacter.codePointAt(0) ?? 0;
+    const unshifted = US_SHIFTED_TO_UNSHIFTED_KEYS.get(event.key);
+    if (unshifted?.[1] === event.code) return unshifted[0].codePointAt(0) ?? 0;
     const lowercase = event.key.toLowerCase();
     if (lowercase !== event.key && [...lowercase].length === 1) {
       return lowercase.codePointAt(0) ?? 0;

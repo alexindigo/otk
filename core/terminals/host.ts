@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAbsolute, join } from "@std/path";
 import { embeddedPtyBinary, resolvePtyBinary } from "./binary.ts";
-import { DaemonResponseError, PtyDaemon, readHandoff } from "./daemon.ts";
+import {
+  DaemonNotSentError,
+  DaemonResponseError,
+  PtyDaemon,
+  readHandoff,
+} from "./daemon.ts";
 import { hasSystemd, shellEnvironment, shellProgram } from "./env.ts";
-import type { ProcessInfo } from "./frames.ts";
+import type { ProcessInfo, Request, Response } from "./frames.ts";
 import { terminalGroup, terminalOwner } from "./ownership.ts";
 import { TerminalTracking } from "./tracking.ts";
 
@@ -24,9 +29,22 @@ export class TerminalRejected extends Error {
     );
   }
 }
+async function sendRequest(
+  daemon: PtyDaemon,
+  request: Request,
+): Promise<Response> {
+  try {
+    return await daemon.request(request);
+  } catch (cause) {
+    if (cause instanceof DaemonNotSentError) {
+      throw new TerminalRejected("terminal-unavailable", cause);
+    }
+    throw cause;
+  }
+}
 export interface TerminalHostOptions {
   statePath: string;
-  dataDir: string;
+  dataDir: string | (() => string);
   environment: Readonly<Record<string, string>>;
   signal: AbortSignal;
   publishRows?: number;
@@ -83,7 +101,9 @@ export class TerminalHost {
     try {
       const env = this.#environment;
       const binary = await resolvePtyBinary(
-        this.options.dataDir,
+        typeof this.options.dataDir === "function"
+          ? this.options.dataDir()
+          : this.options.dataDir,
         embeddedPtyBinary(),
         env.OTK_PTY_BIN,
       );
@@ -112,7 +132,7 @@ export class TerminalHost {
   async list(directory: string): Promise<ProcessInfo[]> {
     const daemon = await this.daemon();
     if (this.#stopped) throw new TerminalUnavailable();
-    const reply = await daemon.request({ op: "list", mode: "pty" });
+    const reply = await sendRequest(daemon, { op: "list", mode: "pty" });
     if (reply.type !== "processes") {
       throw new Error("Expected daemon process list");
     }
@@ -155,7 +175,7 @@ export class TerminalHost {
       if (this.#stopped) throw new TerminalUnavailable();
       let reply;
       try {
-        reply = await daemon.request(request);
+        reply = await sendRequest(daemon, request);
       } catch (cause) {
         // Protocol 8 also reports errors after spawning (reader/actor setup).
         // Only openpty/spawn failures prove that no shell was started.
@@ -188,15 +208,26 @@ export class TerminalHost {
   }
   async close(directory: string, id: number): Promise<void> {
     const daemon = await this.daemon();
+    let reply;
     try {
-      const reply = await daemon.request({ op: "get", id });
+      reply = await sendRequest(daemon, { op: "get", id });
+    } catch (cause) {
+      if (cause instanceof TerminalRejected) throw cause;
       if (
-        reply.type !== "process" ||
-        terminalOwner(reply.process.group_id)?.dir !== directory
-      ) {
-        throw new TerminalRejected("not-found");
-      }
-      await daemon.request({ op: "terminate", id });
+        cause instanceof DaemonResponseError &&
+        cause.message === `process ${id} not found`
+      ) throw new TerminalRejected("not-found", cause);
+      // This is a preparatory read: no terminate request has entered transport.
+      throw new TerminalUnavailable(cause);
+    }
+    if (
+      reply.type !== "process" ||
+      terminalOwner(reply.process.group_id)?.dir !== directory
+    ) {
+      throw new TerminalRejected("not-found");
+    }
+    try {
+      await sendRequest(daemon, { op: "terminate", id });
     } catch (cause) {
       if (
         cause instanceof DaemonResponseError &&

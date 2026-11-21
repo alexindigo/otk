@@ -230,7 +230,7 @@ export async function startApplication(
     registerRevert(rpc, backend);
     terminals = await TerminalHost.start({
       statePath: cfg.state.path,
-      dataDir: terminalDataDirectory(environment),
+      dataDir: () => terminalDataDirectory(environment),
       environment,
       signal: options.signal ?? new AbortController().signal,
       publishRows: cfg.digest.publishrows,
