@@ -2,6 +2,7 @@
 import {
   type Message,
   type NativeSourceView,
+  type Part,
   sourceEntries,
 } from "@otk/protocol";
 import { type FailureValue, failureValue } from "./failure-features.ts";
@@ -20,7 +21,7 @@ export interface NativeSourceOwner {
 }
 export interface NativeSources {
   get(ref: string): NativeSourceOwner;
-  changed(messageID: string, partID?: string): void;
+  changed(messageID: string, partID?: string, next?: Message | Part): void;
   sync(): void;
   invalidate(): void;
   clear(): void;
@@ -165,13 +166,20 @@ export function createNativeSources(options: {
   };
   return {
     get,
-    changed(messageID: string, partID?: string) {
-      for (const entry of entries.values()) {
+    changed(messageID: string, partID?: string, next?: Message | Part) {
+      for (const [ref, entry] of entries) {
         if (entry.message?.id !== messageID) continue;
         if (
           partID === undefined || entry.path === "" ||
           entry.path === `p:${partID}` || entry.path.startsWith(`p:${partID}/`)
         ) {
+          const before = location(entry.message, ref);
+          const after = next &&
+            [...sourceEntries(next)].find((source) => source.ref === ref);
+          if (
+            before?.revision !== undefined &&
+            after?.revision === before.revision && after.path === before.path
+          ) continue;
           entry.invalidate();
         }
       }
@@ -193,7 +201,9 @@ export function createNativeSources(options: {
           entry.path = next.path;
           if (
             moved ||
-            JSON.stringify(next.owner) !== JSON.stringify(previous?.owner)
+            (next.revision !== undefined && previous?.revision !== undefined
+              ? next.revision !== previous.revision
+              : JSON.stringify(next.owner) !== JSON.stringify(previous?.owner))
           ) {
             entry.invalidate();
           }

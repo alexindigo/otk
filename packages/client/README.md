@@ -400,7 +400,9 @@ Native Source previews have one transcript-owned per-reference resource.
 does not read. Structural ownership follows the current path when an opaque
 reference moves. Accepted changes invalidate the matching structural owner
 without decoding plugin references; open demand refreshes automatically and
-coalesces pending replacements. Obsolete results cannot publish. Unchanged
+coalesces pending replacements. Producer-owned exact-source revisions distinguish
+equal replays from raw-only changes; sources without a revision retain conservative
+invalidation. Obsolete results cannot publish. Unchanged
 remounts and themes reuse both successful and failed outcomes; Retry explicitly
 refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.

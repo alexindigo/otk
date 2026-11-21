@@ -57,6 +57,7 @@ export function referenceSources<T extends Message | Part>(
     holder.source = {
       kind: source.kind,
       ref: ref(path),
+      ...(source.revision !== undefined ? { revision: source.revision } : {}),
       ...(part?.kind === "external" && part.content &&
           source.payload !== undefined
         ? { payload: source.payload }
@@ -71,10 +72,16 @@ export function* sourceEntries(value: Message | Part): Generator<{
   ref: string;
   path: string;
   owner: object;
+  revision?: string;
 }> {
   for (const { holder, path } of holders(value)) {
     if (holder.source?.ref) {
-      yield { ref: holder.source.ref, path, owner: holder };
+      yield {
+        ref: holder.source.ref,
+        path,
+        owner: holder,
+        revision: holder.source.revision,
+      };
     }
   }
 }

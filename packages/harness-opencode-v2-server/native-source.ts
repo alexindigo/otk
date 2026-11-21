@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
+import { createHash } from "node:crypto";
 import {
   type Message,
   type NativeSource,
@@ -30,6 +31,7 @@ export function nativeSource(
     limit = 16384;
   return {
     kind: `opencode-v2/${kind}`,
+    revision: createHash("sha256").update(source).digest("hex"),
     preview: new TextDecoder().decode(bytes.subarray(0, limit), {
       stream: bytes.length > limit,
     }),
