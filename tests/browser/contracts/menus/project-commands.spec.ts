@@ -9,7 +9,9 @@ test("menus.retired-project-command-keeps-mutation-without-late-navigation", {
   tag: ["@menus", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await openSession(state, page, "tstv1-otk");
-  await page.locator(".otk-sidebar-commands button").first().click();
+  // Style7 ProjectInbox owns navigation (style7fix note; decision 54).
+  await page.getByRole("button", { name: "Search commands", exact: true })
+    .click();
   await page.locator("input[name=command-search]").fill("task.rename");
   await paletteCommand(page, "task.rename").click();
   const dialog = page.getByRole("dialog", { name: "New task", exact: true });
@@ -32,7 +34,8 @@ test("menus.retired-project-command-keeps-mutation-without-late-navigation", {
   await expect(dialog).toHaveCount(0);
   expect(page.url()).toBe(target);
   // A still-current owner must retain the normal create-and-select behavior.
-  await page.locator(".otk-sidebar-commands button").first().click();
+  await page.getByRole("button", { name: "Search commands", exact: true })
+    .click();
   await page.locator("input[name=command-search]").fill("task.rename");
   await paletteCommand(page, "task.rename").click();
   await expect(dialog).toBeVisible();

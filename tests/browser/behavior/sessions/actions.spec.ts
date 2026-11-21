@@ -33,8 +33,9 @@ async function deletedDetails(page: Page, id: string, title: string) {
     "aria-label",
     new RegExp("^Deleted session, "),
   );
-  await expect(row.locator(".otk-row-title")).toHaveText(title);
-  await expect(row.locator(".otk-row-title")).toHaveCSS(
+  // Style7 shared ListRow label slot (style7fix note; decision 3).
+  await expect(row.locator(".otk-session-title")).toHaveText(title);
+  await expect(row.locator(".otk-session-title")).toHaveCSS(
     "text-decoration-line",
     /line-through/,
   );
@@ -379,7 +380,7 @@ test(
       await page.keyboard.insertText(`Renamed from ${origin}`);
       await page.keyboard.press("Enter");
       await expect(editor).toHaveCount(0);
-      await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+      await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
         .toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
@@ -417,10 +418,10 @@ test(
     await page.locator(".otk-title-editor input").fill("Committed on blur");
     await page.locator("textarea[name=prompt]").click();
     await expect(page.locator(".otk-title-editor")).toHaveCount(0);
-    await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
       .toHaveText("Committed on blur");
     await page.reload();
-    await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
       .toHaveText("Committed on blur");
   },
 );

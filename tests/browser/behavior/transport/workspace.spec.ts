@@ -143,7 +143,9 @@ test("transport.incremental-markdown", {
     await page.locator(".otk-session-crumb[aria-current] .otk-crumb-title")
       .textContent()
   ).toBe(
-    await page.locator(`[data-session="${id}"] .otk-row-title`).textContent(),
+    // Style7 shared ListRow label slot (style7fix note; decision 3).
+    await page.locator(`[data-session="${id}"] .otk-session-title`)
+      .textContent(),
   );
 });
 
