@@ -197,7 +197,9 @@ test(
         );
         contained(g);
         expect(g.body.scroll).toBeGreaterThan(g.body.height);
-        await page.locator(".otk-display-menu :popover-open .otk-surface-body")
+        await page.locator(
+          ".otk-display-menu :popover-open > .otk-surface > .otk-surface-scroll > .otk-surface-body",
+        )
           .evaluate((el) => el.scrollTop = el.scrollHeight);
         expect(
           await page.locator(
