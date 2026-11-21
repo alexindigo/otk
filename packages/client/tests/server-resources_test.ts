@@ -304,7 +304,7 @@ function fixture(
   const calls: unknown[] = [], order: string[] = [];
   const listReads: {
     input: import("@otk/protocol").SessionListInput;
-    intent?: import("@otk/protocol").IntentIdentity;
+    intent?: import("../requests.ts").ClientIntent;
     resolve(page: import("@otk/protocol").SessionListPage): void;
   }[] = [];
   const store = createState<{ list: SidecarState[] }>({

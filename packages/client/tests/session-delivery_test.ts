@@ -165,7 +165,7 @@ Deno.test("rejected native send leaves failure and draft settlement to the reque
 Deno.test("pending input is visible before acknowledgement and commits by identity before result", async () => {
   const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
   const entry = {
-    intent: { clientID: "tab", key: "send-key", window: "window" },
+    intent: { clientID: "tab", key: "send-key" },
     message: pendingMessage("msg_local", "opcv2-root", [{
       kind: "text",
       text: "Sent now",
@@ -209,7 +209,7 @@ Deno.test("unacknowledged send has bounded visible failure; Retry observes witho
     sends++;
     return acknowledgement.promise;
   }, {
-    intent: { clientID: "tab", key: "send-key", window: "window" },
+    intent: { clientID: "tab", key: "send-key" },
     message: pendingMessage("msg_timeout", "opcv2-root", [{
       kind: "text",
       text: "Keep me",
@@ -243,7 +243,7 @@ Deno.test("a local pending body cannot satisfy native admission or suppress read
   await f.owner.send(
     () => Promise.resolve({ messageID: "msg_pending", state: "accepted" }),
     {
-      intent: { clientID: "tab", key: "send-key", window: "window" },
+      intent: { clientID: "tab", key: "send-key" },
       message: pendingMessage("msg_pending", "opcv2-root", [{
         kind: "text",
         text: "Native source still missing",
@@ -277,7 +277,7 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
           },
         }),
       ), {
-      intent: { clientID: "tab", key: "send-key", window: "window" },
+      intent: { clientID: "tab", key: "send-key" },
       message: pendingMessage("msg_failure", "opcv2-root", [{
         kind: "text",
         text: "Retained",
