@@ -24,7 +24,7 @@ for (
   test(
     `revert.style8-${contract}`,
     { tag: ["@revert", "@isolated"] },
-    async ({ isolatedState: state, page }) => {
+    async ({ isolatedState: state, page }, info) => {
       test.setTimeout(180_000);
       const source = await state.native<{ id: string }>("/session", "POST", {
         title: "Revert ownership contract",
@@ -110,6 +110,32 @@ for (
         await page.locator("textarea[name=prompt]").press("Enter");
         const choice = page.locator(".otk-permanence-choice");
         await expect(choice).toBeVisible();
+        // An explicit Send choice grows in flow, unlike asynchronous runtime
+        // feedback. Its composer still begins exactly at the transcript edge.
+        await expect(page.locator(".otk-composer-feedback")).toHaveCSS(
+          "position",
+          "relative",
+        );
+        const transcript = await page.locator(".otk-messages").boundingBox();
+        const dock = await page.locator(".otk-composer-dock").boundingBox();
+        expect(transcript!.y + transcript!.height).toBe(dock!.y);
+        const choiceBox = await choice.boundingBox();
+        const inputBox = await page.locator(".otk-composer-input")
+          .boundingBox();
+        expect(choiceBox!.y + choiceBox!.height).toBeLessThanOrEqual(
+          inputBox!.y,
+        );
+        for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          await info.attach(`send-choice-${theme}`, {
+            body: await page.screenshot({ fullPage: true }),
+            contentType: "image/png",
+          });
+        }
         await choice.getByRole("button", { name: "Cancel", exact: true })
           .click();
         await expect(choice).toHaveCount(0);
