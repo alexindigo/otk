@@ -768,3 +768,117 @@ Deno.test("session terminal state stays invocation-current with a deferred bindi
     f.socket.stop();
   }
 });
+
+Deno.test("wire lifetime: reentrant lag selection acquires one replacement and close revokes every output path", async () => {
+  const f = fixture(),
+    owner = new SessionTerminals(f.socket, f.conn, "tstv1-a"),
+    target = sink();
+  let armed = false;
+  owner.subscribe((state) => {
+    if (armed && state.disconnected.includes("1")) {
+      armed = false;
+      owner.show("1", target);
+    }
+  });
+  try {
+    const attachment = owner.show("1", target);
+    const socket = f.sockets[0];
+    socket.open();
+    await flush();
+    socket.snapshot(1);
+    armed = true;
+    socket.message({ t: "detached", ch: 1, reason: "lagging" });
+    assertEquals(socket.controls("attach").map((value) => value.ch), [1, 2]);
+    socket.snapshot(2);
+    attachment.close();
+    const count = target.events.length;
+    for (const ch of [1, 2, 3]) {
+      socket.snapshot(ch);
+      socket.bytes(ch, "after-close");
+    }
+    assertEquals(target.events.length, count);
+    assert(!attachment.retained);
+  } finally {
+    owner.dispose();
+    f.socket.stop();
+  }
+});
+
+Deno.test("wire lifetime: reset retirement cannot publish readiness or send saved resize", () => {
+  const f = fixture(), target = sink();
+  const attachment = f.socket.attach("tstv1-a", "1", {
+    ...target,
+    reset: () => attachment.close(),
+  });
+  try {
+    attachment.resize(100, 30);
+    const socket = f.sockets[0];
+    socket.open();
+    socket.snapshot(1);
+    assertEquals(socket.controls("resize"), []);
+    assert(!target.metas.some((meta) => meta.connected === true));
+    socket.bytes(1, "retired");
+    assertEquals(target.events, []);
+  } finally {
+    f.socket.stop();
+  }
+});
+
+Deno.test("wire lifetime: readiness callback retirement fences the remaining snapshot metadata", () => {
+  const f = fixture(), target = sink();
+  const attachment = f.socket.attach("tstv1-a", "1", {
+    ...target,
+    meta(change) {
+      target.meta(change);
+      if (change.connected) attachment.close();
+    },
+  });
+  try {
+    f.sockets[0].open();
+    f.sockets[0].snapshot(1);
+    assert(!target.metas.some((meta) => meta.title === "shell"));
+    assert(!attachment.retained);
+  } finally {
+    f.socket.stop();
+  }
+});
+
+Deno.test("list lifetime: superseding a read during pruning preserves the next retained renderer", async () => {
+  const f = fixture(),
+    owner = new SessionTerminals(f.socket, f.conn, "tstv1-a");
+  let armed = false, replacement: Promise<void> | undefined;
+  owner.subscribe((state) => {
+    if (armed && state.disconnected.includes("1")) {
+      armed = false;
+      f.setRead(() => Promise.resolve([info("2")]));
+      replacement = owner.refresh();
+    }
+  });
+  try {
+    owner.show("1", sink());
+    const target = sink(), second = owner.show("2", target);
+    const socket = f.sockets[0];
+    socket.open();
+    await flush();
+    socket.snapshot(1);
+    socket.snapshot(2);
+    f.setRead(() => Promise.resolve([]));
+    armed = true;
+    await owner.refresh();
+    await replacement;
+    assert(replacement, "the release callback started a replacement read");
+    assert(
+      second.retained,
+      "obsolete pruning must not detach the second renderer",
+    );
+    assertEquals(owner.state.retained, ["2"]);
+    assertEquals(owner.state.list.map((row) => row.id), ["2"]);
+    socket.bytes(2, "still-live");
+    assertEquals(target.events.at(-1), ["write", [
+      ...new TextEncoder().encode("still-live"),
+    ]]);
+  } finally {
+    owner.dispose();
+    f.socket.stop();
+  }
+});
