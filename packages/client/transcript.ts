@@ -275,41 +275,46 @@ export function createTranscript(
     before: string | undefined,
     signal: AbortSignal,
     retryRecovery = false,
+    reading: () => void = () => {},
   ) => {
     const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
     const intent = rpc.intent();
     const early = Promise.withResolvers<MessagePage & { load: LoadCoverage }>();
-    const pending: NonNullable<typeof boundaryRead> = {
-      intent,
-      epoch: sidecar.viewEpoch,
-      before,
-      revision: -1,
-      prompt: state.latestPrompt?.id,
-      deliver: early.resolve,
-    };
-    boundaryRead = pending;
-    void rpc.call("session.messages", {
-      sessionID: target.sessionID,
-      before,
-      ...(retryRecovery ? { retryRecovery: true } : {}),
-    }, {
-      intent,
-      signal,
-    }).then((page) => {
-      if (signal.aborted || boundaryRead !== pending) {
-        early.reject(
-          signal.reason ??
-            new DOMException("Message boundary was replaced", "AbortError"),
-        );
-        return;
-      }
-      if (!pending.streamed) early.resolve(page);
-      else {
-        pending.complete = page;
-        finishCoverage();
-      }
-    }).catch((error) => {
-      if (!pending.streamed) early.reject(error);
+    let pending: NonNullable<typeof boundaryRead> | undefined;
+    // Atomic body delivery may paint early, but the admitted native read owns
+    // its slot through metadata coverage. Otherwise warm bodies admit an
+    // unbounded population of unfinished interactive metadata publications.
+    void acquire(() => {
+      reading();
+      const request: NonNullable<typeof boundaryRead> = pending = {
+        intent,
+        epoch: sidecar.viewEpoch,
+        before,
+        revision: -1,
+        prompt: state.latestPrompt?.id,
+        deliver: early.resolve,
+      };
+      boundaryRead = request;
+      return rpc.call("session.messages", {
+        sessionID: target.sessionID,
+        before,
+        ...(retryRecovery ? { retryRecovery: true } : {}),
+      }, { intent, signal }).then((page) => {
+        if (signal.aborted || boundaryRead !== request) {
+          early.reject(
+            signal.reason ??
+              new DOMException("Message boundary was replaced", "AbortError"),
+          );
+          return;
+        }
+        if (!request.streamed) early.resolve(page);
+        else {
+          request.complete = page;
+          finishCoverage();
+        }
+      });
+    }, signal).catch((error) => {
+      if (!pending?.streamed) early.reject(error);
       else if (!signal.aborted && boundaryRead === pending) {
         setState((draft) => {
           draft.pageError = failureValue(error);
@@ -720,10 +725,14 @@ export function createTranscript(
         }
       };
       refreshAttention(false);
-      const page = await acquire(() => {
-        readStage("reading", progressGeneration);
-        return readBoundary(undefined, abort.signal, retryRecovery);
-      }, abort.signal);
+      const page = await readBoundary(
+        undefined,
+        abort.signal,
+        retryRecovery,
+        () => {
+          readStage("reading", progressGeneration);
+        },
+      );
       const info = page.session, messages = page.items;
       if (boundaryRead) {
         boundaryRead.deliver = undefined;
@@ -1646,12 +1655,13 @@ export function createTranscript(
             }`;
             readLabel = "Loading earlier messages";
             readStage("queued", progressGeneration);
-            const page = await acquire(
+            const page = await readBoundary(
+              before,
+              controller!.signal,
+              false,
               () => {
                 readStage("reading", progressGeneration);
-                return readBoundary(before, controller!.signal);
               },
-              controller!.signal,
             );
             if (!current(id, request)) return;
             if (boundaryRead) boundaryRead.deliver = undefined;

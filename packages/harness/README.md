@@ -234,7 +234,9 @@ external charge to adapt row quotas.
 Ready requested turns precede idle batches and continuations even when an idle
 entry has an attention hint and the requested read has visible priority. The
 existing finishing queue still drains bounded committed publication and cleanup
-at its inherited rank; cancellation retains its cleanup precedence.
+at its inherited rank, sharing ready-admission order with requested turns at the
+same rank so continuous reads cannot starve publication. Cancellation retains
+its cleanup precedence.
 
 Explicit transient read callbacks can opt into `interruptible: true`. Urgent
 native I/O then cancels their lower-priority acquisition, joins settlement and

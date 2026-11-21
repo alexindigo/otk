@@ -577,7 +577,10 @@ index. No helper RPC, child transcript cache or timer belongs to the view.
 active scope/screen demand, `interact` refreshes that scope's clock, and
 `preload` gives an attention scope its temporary lease. Resources wait for an
 explicit/welcomed policy. One shared queue bounds page reads per server and
-prioritizes selection, attention and recently interacted scopes. Hydration
+prioritizes selection, attention and recently interacted scopes. Atomic body
+pushes can paint before scalar metadata, but the shared admission slot belongs
+to the full page request until coverage completes or it retires. Warm hydration
+cannot turn early painting into unbounded unfinished metadata. Hydration
 publishes newest10 before acquiring next10. `viewport({first,last})` uses native
 message identities to refill at `MESSAGE_ADMISSION_WATERMARK` (20), with a
 ten-message reserve; `ensure(id)` follows the same cursor chain and `pin(ids)`
