@@ -51,7 +51,9 @@ export const inboxProjects: typeof inbox.inboxProjects = (
     ...args,
   );
 export const createTabs: typeof tabs = (...args) => {
-  const model = tabs(...args);
+  // Legacy scenarios test membership/rank keys synchronously. Timing has its
+  // own clock-controlled contract in settled-task-order_test.ts.
+  const model = tabs(args[0], args[1], args[2], args[3] ?? { settleMs: 0 });
   return {
     ...model,
     update(input: TabInput) {

@@ -169,6 +169,15 @@ coalesce complete-baseline recovery and stale baselines cannot replace newer
 accepted state. Action receipts settle operations; only this stream owns current
 task membership.
 
+Presentation order uses `createSettledOrder`: rank and recency settle
+independently for five seconds. Needs-you escalation is immediate, except short
+permission-only states retain the 500 ms presentation grace. Supervision and
+lamp facts stay live. The tabs model owns the strip and Sessions task-group
+permutation; structural Sessions refreshes borrow that same interaction hold.
+Sidebar recency uses the same ordering contract. Counted holds retain
+pointer/focus and portalled-origin targets until every borrower releases them;
+new mandatory rows remain visible.
+
 Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
 preserves originating sidecar IDs and valid partial histories when another
 source definitively rejects. If every requested source definitively rejects, it

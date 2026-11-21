@@ -489,6 +489,7 @@ export default function Shell(
             projectMetadata: resources.projectMetadata,
             metadataEntry: resources.metadataEntry,
             sessionRows: resources.sessionRows,
+            holdTaskOrder: resources.holdTaskOrder,
             sessionRowsReady: resources.sessionRowsReady,
             sessionRowsLoading: resources.sessionRowsLoading,
             sessionRowsStatus: resources.sessionRowsStatus,
@@ -550,6 +551,7 @@ export default function Shell(
               </button>
             </Show>
             <ProjectInbox
+              holdOrder={resources.holdProjectOrder}
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
               servers={sidecars.state.list}
