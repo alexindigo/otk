@@ -883,14 +883,16 @@ export async function lights(
           "blocked",
           "working",
           "finished",
+          "dependencies",
           "none",
           "working",
         ]);
-        expect(lamps.map((l) => l.size)).toEqual([10, 10, 10, 10, 8]);
-        expect(lamps.slice(0, 4).map((l) => l.label)).toEqual([
+        expect(lamps.map((l) => l.size)).toEqual([10, 10, 10, 10, 10, 8]);
+        expect(lamps.slice(0, 5).map((l) => l.label)).toEqual([
           "Needs you",
           "Working",
           "Finished, not seen",
+          "Running in terminal",
           "No known activity",
         ]);
         for (const lamp of lamps) {
@@ -969,12 +971,18 @@ export async function lights(
             expect(v).toBeGreaterThanOrEqual(i === 0 || i % 2 ? 4.5 : 3)
           );
         }
-        expect(lamps.slice(0, 4).map((l) => l.glyph)).toEqual([
+        expect(lamps.slice(0, 5).map((l) => l.glyph)).toEqual([
           "\u00d7",
           "\u25d0",
           "\u2713",
+          "",
           "\u25cb",
         ]);
+        await expect(
+          page.locator(
+            '[data-theme-lamps] [data-state="dependencies"] .otk-lamp-dependency-shape path',
+          ),
+        ).toHaveAttribute("d", "M6 1 11 6 6 11 1 6ZM4 6h4");
         const connections = await page.locator(
           "[data-theme-connections] .otk-connection-light",
         ).evaluateAll((els) =>

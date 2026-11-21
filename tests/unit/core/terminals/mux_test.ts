@@ -204,6 +204,37 @@ function fixture(autoAttach = true) {
   };
 }
 
+for (const end of ["detach", "stop"]) {
+  test(`relay ${end} cancels a held checkout identity read before joining its jobs`, async () => {
+    let started = false, aborted = false;
+    const mux = new TerminalMux({
+      daemon: () => {
+        throw new Error("Checkout identity must resolve before daemon access");
+      },
+      onGone: () => () => {},
+    }, (_id, signal) =>
+      new Promise((_resolve, reject) => {
+        started = true;
+        signal.addEventListener("abort", () => {
+          aborted = true;
+          reject(signal.reason);
+        }, { once: true });
+      }));
+    resources().defer("held identity relay", () => mux.stop());
+    const socket = new Socket();
+    mux.accept(socket as unknown as WebSocket);
+    socket.attach();
+    await until(() => started);
+    if (end === "detach") {
+      socket.receive({ t: "detach", ch: 1 });
+      await until(() => aborted);
+    }
+    await mux.stop();
+    assertEquals(aborted, true);
+    assertEquals(socket.code, 1001);
+  });
+}
+
 for (const missing of [false, true]) {
   test(`subscription EOF confirms ${missing ? "terminated" : "lagging"} with get, never an exit`, async () => {
     const f = fixture();

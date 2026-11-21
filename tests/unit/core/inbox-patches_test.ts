@@ -17,6 +17,116 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
+import type { TerminalChange } from "../../../core/terminals/tracking.ts";
+
+Deno.test("running dependencies use scoped admission and keep Inactive policy unchanged", async () => {
+  const path = await Deno.makeTempDir();
+  const db = new OtkDb(path, [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  stores.projects.add("local", "/p");
+  stores.projects.inactive("local", "/p", true);
+  const index = new IndexStore(), id = "tstv1-terminal-owner";
+  index.upsertMetadata({
+    id,
+    directory: "/p",
+    projectID: "p",
+    title: "Terminal owner",
+    archived: false,
+    status: "idle",
+    timeCreated: 1,
+    timeUpdated: 1,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  });
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "local",
+    () => Promise.resolve([]),
+  );
+  let listener: (change: TerminalChange) => void = () => {};
+  const source = {
+    counts: {
+      sessions: new Map<string, number>(),
+      checkouts: new Map<string, number>(),
+    },
+    owners: (_directory: string) => [...source.counts.sessions.keys()],
+    listen(changed: (change: TerminalChange) => void) {
+      listener = changed;
+      return () => {
+        listener = () => {};
+      };
+    },
+  };
+  feature.terminalDependencies(source);
+  const leased = new Set<string>();
+  const view = { epoch: 1, directory: "/p", crumbs: [], rows: [] };
+  const projection = feature.open(() => view, "dependency-view", () => leased);
+  const frames: ServerFrame[] = [];
+  projection.listen((frame) => frames.push(frame));
+  const publish = (running: number) => {
+    source.counts = {
+      sessions: new Map(running ? [[id, running]] : []),
+      checkouts: new Map(running ? [["/p", running]] : []),
+    };
+    listener({
+      ...source.counts,
+      changedSessions: [id],
+      changedCheckouts: ["/p"],
+    });
+  };
+  try {
+    await projection.snapshot!();
+    publish(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(feature.keys(view), [id]);
+    assertEquals(index.hierarchy.node(id)?.mandatory, true);
+    assertEquals(feature.summaries.values.get("/p")?.status, "dependencies");
+    assertEquals(stores.projects.find("local", "/p")?.inactive, true);
+    leased.add(id);
+    projection.entriesChanged?.([id]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const values = frames.filter((frame) => frame.t === "inbox.patch").flatMap((
+      frame,
+    ) => frame.ops).filter((op) => op.op === "supervision").map((op) =>
+      op.value
+    );
+    assertEquals(
+      values.some((value) =>
+        value?.dependencies?.running === 1 && value.state === "none"
+      ),
+      true,
+    );
+    publish(0);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(feature.keys(view), []);
+    assertEquals(index.hierarchy.node(id)?.mandatory, false);
+    assertEquals(feature.summaries.values.get("/p")?.status, "none");
+    assertEquals(stores.projects.find("local", "/p")?.inactive, true);
+  } finally {
+    await feature.stopDependencies();
+    projection.close?.();
+    feature.close();
+    db.close();
+    await Deno.remove(path, { recursive: true });
+  }
+});
 
 Deno.test("inbox admission reconciliation flushes queued live finishes before replay", async () => {
   const path = await Deno.makeTempDir();

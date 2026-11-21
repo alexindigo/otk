@@ -5,6 +5,7 @@ export const LIGHT_STATES = {
   blocked: { label: "Needs you", shape: "×" },
   working: { label: "Working", shape: "◐" },
   finished: { label: "Finished, not seen", shape: "✓" },
+  dependencies: { label: "Running in terminal", shape: "diamond" },
   none: { label: "No known activity", shape: "○" },
 } as const;
 export type LightState = keyof typeof LIGHT_STATES;

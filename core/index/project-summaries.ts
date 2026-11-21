@@ -31,6 +31,24 @@ export class ProjectSummaries {
     }
   >();
   #locationForms: Readonly<Record<string, number>> = {};
+  #terminalScopes: ReadonlyMap<string, number> = new Map();
+  #terminalCounts = new Map<string, number>();
+  terminalDependencies(values: ReadonlyMap<string, number>): void {
+    this.#terminalScopes = values;
+    const dirty = this.#reconcileTerminals();
+    this.#flush(dirty);
+    this.retain(this.#known);
+  }
+  #reconcileTerminals(): Set<string> {
+    const next = new Map<string, number>();
+    for (const [scope, count] of this.#terminalScopes) {
+      const leaf = this.leaf(scope);
+      next.set(leaf, (next.get(leaf) ?? 0) + count);
+    }
+    const dirty = new Set([...this.#terminalCounts.keys(), ...next.keys()]);
+    this.#terminalCounts = next;
+    return dirty;
+  }
   locationForms(values: Readonly<Record<string, number>>): void {
     const affected = new Set([
       ...Object.keys(this.#locationForms),
@@ -140,6 +158,7 @@ export class ProjectSummaries {
     this.#retained = new Set(
       [...this.#known].map((directory) => this.leaf(directory)),
     );
+    for (const directory of this.#reconcileTerminals()) dirty.add(directory);
     return [...affected].map((id) => this.#sessions.get(id)!.entry);
   }
   #flush(dirty: Set<string>): void {
@@ -182,7 +201,7 @@ export class ProjectSummaries {
       if (
         entries.size || this.#retained.has(directory) ||
         this.#leafSeeds.has(directory) || this.#leaves.has(directory) ||
-        this.#locationForms[directory]
+        this.#locationForms[directory] || this.#terminalCounts.get(directory)
       ) {
         this.#publish(directory);
         continue;
@@ -331,6 +350,7 @@ export class ProjectSummaries {
       last = totals?.last ?? 0;
     const previous = this.values.get(directory);
     const locationForms = this.#locationForms[directory] ?? 0;
+    const dependencies = this.#terminalCounts.get(directory) ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
       : locationForms
@@ -341,7 +361,8 @@ export class ProjectSummaries {
     const status = locationForms
       ? "blocked"
       : PROJECT_STATUS_PRIORITY.find((s) =>
-        (totals?.statuses.get(s) ?? 0) > 0
+        (totals?.statuses.get(s) ?? 0) > 0 ||
+        s === "dependencies" && dependencies > 0
       ) ??
         "none";
     const knownCount = this.#catalog;
@@ -371,6 +392,7 @@ export class ProjectSummaries {
         }
         : {}),
       ...(locationForms ? { locationForms } : {}),
+      ...(dependencies ? { dependencies } : {}),
       hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
       status,
       sessionCount: seed
@@ -419,6 +441,14 @@ export class ProjectSummaries {
       ? {
         ...direct,
         direct,
+        ...(summaries.some((s) => s.dependencies)
+          ? {
+            dependencies: summaries.reduce(
+              (n, s) => n + (s.dependencies ?? 0),
+              0,
+            ),
+          }
+          : {}),
         ...(summaries.some((s) => s.locationForms)
           ? {
             locationForms: summaries.reduce(
@@ -456,6 +486,7 @@ export class ProjectSummaries {
     if (
       this.#seeded && summary.hasSessions === false &&
       !summary.locationForms &&
+      !summary.dependencies &&
       !this.#retained.has(directory) &&
       !this.#projects.get(directory)?.size
     ) {

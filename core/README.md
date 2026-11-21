@@ -54,6 +54,17 @@ ancestor changes and view replacement do not require a later task mutation.
 
 ## Evidence-based session supervision
 
+TerminalHost owns checkout-local PTYs through versioned daemon group metadata,
+including their creating session. Its completion-scheduled 2000 ms inventory
+refresh runs only while a daemon exists, independently of browser attachments.
+SessionSupervision carries running-terminal dependency counts separately from
+each session's own evidence. InboxFeature publishes those facts through its
+ordinary scoped supervision stream; ProjectSummaries counts every running PTY
+once at its checkout, including orphaned owners, and rolls it into its repo.
+Dependencies lift Inactive only while running, without changing stored policy,
+completion watermarks or session population. Missing owners hydrate by key;
+shutdown cancels and joins inventory and owner hydration before storage closes.
+
 `InboxFeature` composes one `SessionSupervision` beside the index. Adapters
 supply fresh work and pending-input identities plus monotone proven terminal
 tokens. Neither legacy status transitions nor digest/population readiness create

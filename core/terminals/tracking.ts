@@ -35,6 +35,7 @@ export class TerminalTracking {
   #controller = new AbortController();
   #listeners = new Set<(change: TerminalChange) => void>();
   #processes: readonly ProcessInfo[] = [];
+  #owners = new Map<string, readonly string[]>();
   #counts: TerminalCounts = { sessions: new Map(), checkouts: new Map() };
   #pending?: Promise<void>;
   #cancel?: () => void;
@@ -51,6 +52,9 @@ export class TerminalTracking {
   }
   get processes(): readonly ProcessInfo[] {
     return this.#processes;
+  }
+  owners(directory: string): readonly string[] {
+    return this.#owners.get(directory) ?? [];
   }
   listen(listener: (change: TerminalChange) => void): () => void {
     this.#listeners.add(listener);
@@ -70,6 +74,7 @@ export class TerminalTracking {
     this.#cancel?.();
     this.#cancel = undefined;
     this.#processes = [];
+    this.#owners.clear();
     this.#publish({ sessions: new Map(), checkouts: new Map() });
   }
   #publish(next: TerminalCounts): void {
@@ -108,6 +113,7 @@ export class TerminalTracking {
           const sessions = new Map<string, number>(),
             checkouts = new Map<string, number>();
           const processes: ProcessInfo[] = [];
+          const owners = new Map<string, Set<string>>();
           for (let i = 0; i < reply.processes.length; i++) {
             if (i && i % this.batch === 0) {
               await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -123,12 +129,18 @@ export class TerminalTracking {
             if (!terminalRunning(process)) continue;
             sessions.set(owner.session, (sessions.get(owner.session) ?? 0) + 1);
             checkouts.set(owner.dir, (checkouts.get(owner.dir) ?? 0) + 1);
+            const ids = owners.get(owner.dir) ?? new Set<string>();
+            ids.add(owner.session);
+            owners.set(owner.dir, ids);
           }
           if (
             !signal.aborted && daemon === this.#daemon &&
             revision === this.#revision
           ) {
             this.#processes = processes;
+            this.#owners = new Map(
+              [...owners].map(([directory, ids]) => [directory, [...ids]]),
+            );
             this.#publish({ sessions, checkouts });
           }
         } catch (cause) {

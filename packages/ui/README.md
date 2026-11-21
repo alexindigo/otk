@@ -1289,6 +1289,11 @@ command palette; it has no project-search field or separate scan control.
 
 ## Semantic themes
 
+The shared `dependencies` light is orange (`lamp-dependencies`), distinct from
+amber unseen-finished, with a diamond SVG in reduced colours. It is aggregate
+attention, not the session's own lamp or working animation. Dependency counts
+come from client task/project projections; no view enumerates PTYs or polls.
+
 Agent colours arrive as neutral hex values or semantic roles. The shared
 presentation resolver maps roles into this consumer's theme for reply metadata,
 agent triggers and picker rows; native adapters and client state carry no CSS.

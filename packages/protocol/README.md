@@ -83,6 +83,15 @@ these helpers.
 
 ## Public API
 
+Supervision optionally carries `dependencies: { running: number }` independently
+of its unchanged own-session state and native completion token. Aggregate
+`ProjectStatus` adds `dependencies` between working and none; scalar project
+facts carry optional checkout-based `dependencies` counts. TerminalInfo may
+include `checkout` and `ownerSessionID`; existing session-targeted terminal RPCs
+resolve that session's authoritative checkout. These additions use the existing
+inbox envelopes and protocol 20 with the paired bundled client, not a claim of
+compatibility with an older lamp renderer. No seen or storage contract changes.
+
 `SessionHierarchyNode` separates global `familyID`/`rootID` and ancestry
 coverage from checkout-local `anchorID`/`projectDirectory`, nearest task
 ownership and mandatory visibility. Core publishes it on index metadata, session

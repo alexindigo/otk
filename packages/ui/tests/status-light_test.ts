@@ -62,6 +62,21 @@ Deno.test("session lights render the supervision projection and default to No kn
     "×",
     "◐",
     "✓",
+    "diamond",
     "○",
   ]);
+  assertEquals(
+    sessionLight(entry, {
+      seen: {},
+      finishes: {},
+      supervision: {
+        [entry.id]: {
+          state: "none",
+          terminal: 0,
+          dependencies: { running: 2 },
+        },
+      },
+    }),
+    "none",
+  );
 });

@@ -10,12 +10,13 @@ import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
 import {
   ageing,
+  aggregateStatus,
   attentionStatus,
+  dependencyCount,
   INBOX_STATUS_PRIORITY,
   type InboxChanges,
   type InboxProject,
   type InboxStatus,
-  inboxStatus,
   projectDirectory,
   unread,
   visitTime,
@@ -49,12 +50,14 @@ export function createProjectProjection(o: {
     directory: string;
     status: InboxStatus;
     unread: boolean;
+    dependencies: number;
   }>();
   const repoSessions = new Map<string, Set<string>>();
   const projects = new Map<string, {
     members: Map<string, MergedMetadata>;
     counts: Record<InboxStatus, number>;
     unread: number;
+    dependencies: number;
     record?: ProjectRecord;
     summary?: ProjectSummary;
     discovered: boolean;
@@ -106,6 +109,7 @@ export function createProjectProjection(o: {
           INBOX_STATUS_PRIORITY.map((status) => [status, 0]),
         ) as Record<InboxStatus, number>,
         unread: 0,
+        dependencies: 0,
         discovered: false,
         operation: operationStates.get(directory),
         tasks: [],
@@ -127,6 +131,7 @@ export function createProjectProjection(o: {
         !!(p.members.size || p.tasks.length || p.record?.inactive ||
           p.discovered ||
           p.summary?.hasSessions || p.summary?.locationForms ||
+          p.summary?.dependencies ||
           (p.summary?.sessionCount ?? 0) > 0 ||
           p.summary && p.summary.hasSessions === undefined);
       if (!present && !p.tasks.length) {
@@ -150,11 +155,13 @@ export function createProjectProjection(o: {
     for (const id of ids) {
       const before = sessions.get(id), entry = o.entry(id);
       const directory = entry && resolve(entry.directory, entry.projectID);
-      const status = entry && inboxStatus(entry, inbox);
+      const status = entry && aggregateStatus(entry, inbox);
+      const dependencies = entry ? dependencyCount(entry, inbox) : 0;
       const unseen = !!entry && unread(entry, inbox);
       if (
         before?.entry === entry && before?.status === status &&
-        before?.unread === unseen && before?.directory === directory
+        before?.unread === unseen && before?.directory === directory &&
+        before?.dependencies === dependencies
       ) continue;
       changed.add(id);
       if (before) {
@@ -168,6 +175,7 @@ export function createProjectProjection(o: {
         ) p.structure = undefined;
         p.counts[before.status]--;
         p.unread -= Number(before.unread);
+        p.dependencies -= before.dependencies;
         if (!entry || directory !== before.directory) {
           p.members.delete(id);
           p.ids = undefined;
@@ -189,11 +197,13 @@ export function createProjectProjection(o: {
         p.members.set(id, entry);
         p.counts[status!]++;
         p.unread += Number(unseen);
+        p.dependencies += dependencies;
         sessions.set(id, {
           entry,
           directory: directory!,
           status: status!,
           unread: unseen,
+          dependencies,
         });
         dirty.add(directory!);
       } else sessions.delete(id);
@@ -449,10 +459,11 @@ export function createProjectProjection(o: {
         summary?.status === "finished";
       const record = p.record;
       // Decision 55: a removed checkout's part of the project is archived,
-      // unless it still has live evidence (working) or needs the user.
+      // unless it still has live evidence, running dependencies or needs the user.
       const archived = summary?.availability === "removed" &&
         !!summary.topology?.parentDirectory &&
-        status !== "working" && status !== "blocked";
+        status !== "working" && status !== "blocked" &&
+        status !== "dependencies" && !(summary.dependencies ?? p.dependencies);
       const inactive = archived || !!record?.inactive && status === "none";
       const hasSessions = summary?.hasSessions ??
         (summary?.sessionCount != null
@@ -491,6 +502,9 @@ export function createProjectProjection(o: {
             : "discovered",
           inactive,
           status,
+          dependencies: summaryReady
+            ? summary.dependencies ?? 0
+            : p.dependencies,
           unread,
           visitText: text,
           ageing: age,

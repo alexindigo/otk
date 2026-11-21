@@ -33,6 +33,7 @@ interface Channel {
   rows: number;
   controller: boolean;
   active: boolean;
+  abort: AbortController;
   queue: Item[];
   queued: number;
   resume?: () => void;
@@ -52,7 +53,10 @@ export class TerminalMux implements TerminalSockets {
   #stopped = false;
   constructor(
     private host: TerminalRelayHost,
-    private directory: (sessionID: string) => Promise<string>,
+    private directory: (
+      sessionID: string,
+      signal: AbortSignal,
+    ) => Promise<string>,
   ) {
     this.#unlisten = host.onGone(() => {
       for (const relay of this.#sockets) relay.gone();
@@ -92,7 +96,10 @@ class Relay {
   constructor(
     private socket: WebSocket,
     private host: TerminalRelayHost,
-    private directory: (sessionID: string) => Promise<string>,
+    private directory: (
+      sessionID: string,
+      signal: AbortSignal,
+    ) => Promise<string>,
     private closed: () => void,
   ) {
     socket.binaryType = "arraybuffer";
@@ -131,6 +138,7 @@ class Relay {
   }
   #remove(channel: Channel): void {
     channel.active = false;
+    channel.abort.abort();
     if (channel.connection) channel.daemon?.release(channel.connection);
     channel.connection = undefined;
     channel.resume?.();
@@ -223,6 +231,7 @@ class Relay {
         rows: 24,
         controller: false,
         active: true,
+        abort: new AbortController(),
         queue: [],
         queued: 0,
         ready: Promise.resolve(),
@@ -307,7 +316,10 @@ class Relay {
     }
   }
   async #attach(channel: Channel): Promise<void> {
-    const directory = await this.directory(channel.session);
+    const directory = await this.directory(
+      channel.session,
+      channel.abort.signal,
+    );
     const daemon = await this.host.daemon();
     if (!channel.active || !this.#open) return;
     channel.daemon = daemon;

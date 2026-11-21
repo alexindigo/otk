@@ -7,6 +7,7 @@ import {
   TerminalUnavailable,
 } from "../terminals/host.ts";
 import type { ProcessInfo } from "../terminals/frames.ts";
+import { terminalOwner } from "../terminals/ownership.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import {
@@ -21,6 +22,12 @@ import { completionReceipt } from "./session-receipts.ts";
 export function terminalInfo(process: ProcessInfo): TerminalInfo {
   if (!process.pty) throw new Error("Expected PTY metadata");
   return {
+    ...(terminalOwner(process.group_id)
+      ? {
+        checkout: terminalOwner(process.group_id)!.dir,
+        ownerSessionID: terminalOwner(process.group_id)!.session,
+      }
+      : {}),
     id: String(process.id),
     title: process.pty.title,
     foreground: process.pty.foreground_process,

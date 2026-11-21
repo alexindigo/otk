@@ -114,3 +114,21 @@ Deno.test("client consumers never reconstruct activity from metadata or completi
     "finished",
   );
 });
+
+Deno.test("terminal dependencies remain independent of native freshness and own-session state", () => {
+  const owner = new SessionSupervision();
+  let running = 2;
+  owner.dependencies(() => running);
+  owner.freshness(false);
+  const value = owner.session(entry(), 0);
+  assertEquals(value.state, "none");
+  assertEquals(value.dependencies, { running: 2 });
+  assertEquals(owner.status(value), "dependencies");
+  assertEquals(
+    owner.session({ ...entry(), deleted: { at: 1, how: "provider" } }, 0)
+      .dependencies,
+    undefined,
+  );
+  running = 0;
+  assertEquals(owner.status(owner.session(entry(), 0)), "none");
+});

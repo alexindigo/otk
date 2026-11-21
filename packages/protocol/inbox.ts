@@ -48,6 +48,7 @@ export const PROJECT_STATUS_PRIORITY = [
   "blocked",
   "finished",
   "working",
+  "dependencies",
   "none",
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
@@ -67,6 +68,8 @@ export interface ProjectTopology {
   parentDirectory?: string;
 }
 export interface ProjectSummaryFacts {
+  /** Running PTYs in this checkout, including those with a deleted owner. */
+  dependencies?: number;
   /** Pending location-owned forms; not fabricated sessions or session counts. */
   locationForms?: number;
   directory: string;

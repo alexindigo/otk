@@ -861,6 +861,15 @@ checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
 
+Running-terminal dependencies are separate supervision facts. `inboxStatus`
+keeps each session's own lamp unchanged; `aggregateStatus`, `rollup` and
+`dependencyCount` supply task/phantom/project activity. `dependencies` ranks
+below working and above none. Positive counts retain an ungrouped phantom and
+lift Inactive; zero retires dependency-only attention immediately. No terminal
+completion/seen latch is created. Scalar summaries include orphaned PTYs without
+inventing sessions, and keyed projection caches invalidate on count-only
+changes.
+
 `fitOverflow({keys,widths,available,required,preferred?,moreWidth,gap})`
 projects one measured snapshot into ordered visible/overflow identities.
 Required values never enter overflow, even if their labels must shrink.

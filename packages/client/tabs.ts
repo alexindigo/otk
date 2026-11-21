@@ -10,7 +10,12 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import { INBOX_STATUS_PRIORITY, type InboxStatus, rollup } from "./inbox.ts";
+import {
+  dependencyCount,
+  INBOX_STATUS_PRIORITY,
+  type InboxStatus,
+  rollup,
+} from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
@@ -26,6 +31,7 @@ export interface InboxTab {
   sessions: string[];
   preview: boolean;
   status: InboxStatus;
+  dependencies?: number;
 }
 export interface TabInput {
   /** Invalidation identity for source-free handles from the project projection. */
@@ -211,6 +217,10 @@ export function createTabs(
       title: task.name,
       sessions: [...task.sessions],
       preview: false,
+      dependencies: (families.get(task.id) ?? []).reduce(
+        (n, entry) => n + dependencyCount(entry, inbox),
+        0,
+      ),
       status: attentionStatus(
         taskActivity?.[task.id],
         rollup(
@@ -243,6 +253,7 @@ export function createTabs(
           sessions: [entry.id],
           preview: store.state.preview === entry.id,
           status,
+          dependencies: dependencyCount(entry, inbox),
         });
       }
     }

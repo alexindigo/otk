@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./StatusLight.css" with { type: "text" };
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { LIGHT_STATES, type LightState } from "./status-light.ts";
 import {
   type AttentionLampScope,
@@ -49,7 +49,20 @@ export default function StatusLight(props: {
       <span class="otk-lamp-glow" aria-hidden="true" />
       <span class="otk-lamp-body" aria-hidden="true" />
       <span class="otk-lamp-shape" aria-hidden="true">
-        {LIGHT_STATES[state()].shape}
+        <Show
+          when={state() === "dependencies"}
+          fallback={LIGHT_STATES[state()].shape}
+        >
+          <svg
+            class="otk-lamp-dependency-shape"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M6 1 11 6 6 11 1 6ZM4 6h4" />
+          </svg>
+        </Show>
       </span>
     </span>
   );

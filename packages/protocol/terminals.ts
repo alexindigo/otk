@@ -2,6 +2,8 @@
 import type { RequestMetadata } from "./request-metadata.ts";
 
 export interface TerminalInfo {
+  checkout?: string;
+  ownerSessionID?: string;
   id: string;
   title: string;
   foreground: string | null;
