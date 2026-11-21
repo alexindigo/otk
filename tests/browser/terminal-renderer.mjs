@@ -60,6 +60,7 @@ try {
       "scrollbar",
       "scrollbar-accessibility",
       "hover",
+      "selection-blink",
     ]
   ) {
     await page.goto(url);
@@ -188,6 +189,45 @@ try {
             },
             undefined,
             { timeout: 1500 },
+          );
+        }
+      } else if (test === "selection-blink") {
+        await page.emulateMedia({ reducedMotion: "no-preference" });
+        await page.clock.install();
+        await page.evaluate(() =>
+          globalThis.terminalFixture.prepareSelection()
+        );
+        await page.clock.runFor(64);
+        const before = await page.evaluate(() => ({
+          ...globalThis.terminalFixture.selections[0],
+        }));
+        assert(before.text.includes("selected-output"));
+        await page.clock.runFor(1100);
+        assert.deepEqual(
+          await page.evaluate(() => globalThis.terminalFixture.selections[0]),
+          before,
+          "idle cursor paints must not reformat the selection",
+        );
+        for (
+          const action of [
+            "selectionOutput",
+            "selectionReplay",
+            "selectionResize",
+          ]
+        ) {
+          const prior = await page.evaluate(() =>
+            globalThis.terminalFixture.selections[0].notifications
+          );
+          await page.evaluate(
+            (action) => globalThis.terminalFixture[action](),
+            action,
+          );
+          await page.clock.runFor(64);
+          assert(
+            await page.evaluate(() =>
+              globalThis.terminalFixture.selections[0].notifications
+            ) > prior,
+            action + " must notify the selection consumer",
           );
         }
       } else if (test === "hover") {

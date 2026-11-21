@@ -2302,6 +2302,7 @@ export class GhosttyTerminalSurface {
       this.canvasDevicePixelRatio = canvasConfiguration.ratio;
     }
     const revision = this.core.revision;
+    const contentChanged = this.paintedRevision !== revision;
     this.snapshot = this.core.snapshot();
     // The accessible alternative is the same viewport snapshot drawn below,
     // not another terminal buffer or a source of transport authority.
@@ -2362,7 +2363,7 @@ export class GhosttyTerminalSurface {
     }
     this.forceFullRender = false;
     // Output/replay/resize can invalidate a selection without a new gesture.
-    this.options.onSelectionChange();
+    if (contentChanged) this.options.onSelectionChange();
     this.refreshHoveredLink();
     this.scheduleCursorBlink();
   }
