@@ -147,7 +147,7 @@ test.describe("actual tool forms", () => {
         "Read the fixture only.",
       );
     } else {await expect(page.locator("[data-tool=read]")).toContainText(
-        "↳ Loaded",
+        "Loaded src/AGENTS.md",
       );}
     await runNativeTool(state, page, s.id, "read", {
       filePath: state.directory + "/src",

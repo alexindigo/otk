@@ -39,7 +39,12 @@ for (const scenario of ["lifetime", "source"] as const) {
       "false",
     );
     expect(await counts()).toEqual({});
-    await expect(row("absent").getByRole("button")).toHaveCount(0);
+    // WP16 still discloses the record's exact clock even without source bytes.
+    // Opening that outer record must not invent a Source fold or encode a preview.
+    await toggle("absent").click();
+    await expect(row("absent").locator("[data-record-time]")).toBeVisible();
+    await expect(row("absent").locator(".otk-native-source")).toHaveCount(0);
+    expect(await counts()).toEqual({});
     if (scenario === "source") {
       await toggle("explicit").click();
       await expect(row("explicit").locator("pre")).toHaveText(

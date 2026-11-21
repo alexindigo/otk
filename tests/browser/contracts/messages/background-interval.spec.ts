@@ -25,9 +25,10 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
   await expect(page.locator('[data-message="background-1"]')).toBeVisible();
   const original = await interval.elementHandle();
   await action(state, "release");
-  await expect(interval.locator(".otk-record-summary")).toHaveText(
-    "1 permission",
-  );
+  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+    .toHaveText(
+      "1 permission",
+    );
   await action(state, "freeze");
   await action(state, "release");
   await action(state, "succeed");
@@ -45,8 +46,10 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
       original,
     ),
   ).toBe(true);
-  const summary = interval.locator(".otk-record-summary").first();
-  await expect(summary).toHaveText("2 permissions, 3 runs, 2 helpers finished");
+  const summary = interval.locator(
+    ".otk-record-group-toggle > .otk-chrome-meta",
+  ).first();
+  await expect(summary).toHaveText("2 permissions, 2 helpers finished");
   await expect(interval.locator(".otk-record-group-time")).toHaveCount(0);
   const root = page.locator(
     '.otk-virtual-list[aria-label="Transcript messages"]',
@@ -85,7 +88,10 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
     await expect(interval.locator(".otk-message[data-role=context]"))
       .toHaveCount(7);
     await expect(
-      interval.getByRole("button", { name: "Open task", exact: true }),
+      interval.getByRole("button", {
+        name: "Open Open task session",
+        exact: true,
+      }),
     ).toHaveCount(2);
     const records = await interval.locator(".otk-message[data-role=context]")
       .evaluateAll((elements) =>
@@ -112,7 +118,7 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
     await interval.locator(".otk-record-group-toggle").first().click();
   }
   await action(state, "fail");
-  await page.locator(".otk-composer-notice").getByRole("link", {
+  await page.locator(".otk-composer-notice").getByRole("button", {
     name: "See response",
   }).click();
   await expect(page.locator('[data-message="background-7"]')).toBeFocused();
@@ -142,7 +148,7 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
   await footer.click();
   await expect(page.locator("[data-background-interval]")).toHaveCount(0);
   await action(state, "fail");
-  await page.locator(".otk-composer-notice").getByRole("link", {
+  await page.locator(".otk-composer-notice").getByRole("button", {
     name: "See response",
   }).click();
   await expect(page.locator('[data-message="background-1"]')).toBeFocused();
@@ -157,15 +163,16 @@ test("messages.pending-breakout-reveal-and-settlement-retain-the-frame", {
   const interval = page.locator("[data-background-interval]");
   const key = await interval.getAttribute("data-background-interval");
   await action(state, "fail");
-  await page.locator(".otk-composer-notice").getByRole("link", {
+  await page.locator(".otk-composer-notice").getByRole("button", {
     name: "See response",
   }).click();
   await expect(page.locator('[data-message="background-1"]')).toBeFocused();
   await action(state, "release");
   await expect(interval).toHaveAttribute("data-background-interval", key!);
-  await expect(interval.locator(".otk-record-summary")).toHaveText(
-    "1 permission",
-  );
+  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+    .toHaveText(
+      "1 permission",
+    );
 });
 
 test("messages.failure-separates-safe-stretches-inside-one-background-frame", {
@@ -185,15 +192,16 @@ test("messages.failure-separates-safe-stretches-inside-one-background-frame", {
   const interval = page.locator("[data-background-interval]");
   await expect(interval).toHaveCount(1);
   await expect(interval.locator(".otk-native-record.is-error")).toHaveCount(1);
-  await expect(interval.locator(".otk-record-summary")).toHaveText([
-    "1 permission, 1 run",
-    "1 run",
-  ]);
+  // Issue 2.42 keeps one chronological frame rather than partitioning stretches;
+  // UI conventions omit footer completions and count the failed breakout once.
+  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+    .toHaveText("1 permission · 1 failed");
   const key = await interval.getAttribute("data-background-interval");
   await action(state, "stop");
   await expect(interval).toHaveAttribute("data-background-interval", key!);
   await expect(interval.locator(".otk-native-record.is-error")).toHaveCount(0);
-  await expect(interval.locator(".otk-record-summary")).toHaveText(
-    "2 permissions, 2 runs",
-  );
+  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+    .toHaveText(
+      "2 permissions",
+    );
 });
