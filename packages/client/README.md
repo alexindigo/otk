@@ -1460,6 +1460,13 @@ Explicit pins remain materialized even when a borrowed window has zero visible
 height. An optional source-free measurement map preserves sizes across a
 window's virtual unmount without retaining its content.
 
+`measure(key, height, inlineSize?)` also records a row's inline footprint.
+`inlineSize()` is the acquired collection's maximum, independent of the visible
+range. An optional third numeric cache preserves it across nested unmounts. Key
+removal and measurement-identity replacement revoke both dimensions;
+`clearInline()` revokes inline measurements for a content reflow without
+discarding vertical anchors.
+
 `measured(key)` distinguishes recorded geometry from an equal-valued estimate.
 Zero-height rows are valid recorded geometry, so bookkeeping with no rendered
 height can release its measurement lease without being promoted to a source.

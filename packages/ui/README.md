@@ -842,6 +842,17 @@ waits for mounted, stable measured geometry and invokes its injected focus
 callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
 expose source-free navigation without consumer DOM access.
 
+Windowing preserves inline footprint as well as block extent. A zero-block-size
+normal-flow sizing track retains the largest measured row width even after its
+content retires. Intrinsically sized consumers, including message bubbles, keep
+their complete acquired footprint instead of sizing to whichever nested rows are
+currently visible. Content revisions, viewport width and font metrics renew that
+footprint by remeasuring acquired rows through the same measurement leases;
+scrolling alone never revokes it. Short and image-only content stays intrinsic.
+The content boundary declares intrinsic sizing, inherited by nested windows.
+Constrained reading lanes retain normal range-only materialization; acquiring
+source for Copy never eagerly renders their offscreen reply segments.
+
 One root-shared position owner in `viewport.ts` alone writes the viewport's
 scroll position. Every borrowed window registers identity geometry from
 `createWindow` and requests layout/reveal/restoration intents; it never restores

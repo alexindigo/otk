@@ -380,6 +380,7 @@ export default function Message(
             >
               <ContentWindow
                 items={frame().groups}
+                intrinsic={userBubble() && !frame().transcript}
                 scope={frame().id}
                 key={(group) => group.id}
                 label="Reply segments"
