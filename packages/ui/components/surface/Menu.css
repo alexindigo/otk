@@ -20,14 +20,8 @@
   border: 0;
   border-top: 1px solid var(--overlay-border);
 }
-.otk-menu-items .otk-menu-destructive {
-  color: var(--otk-status-error);
-}
 .otk-menu-items + [role="alert"] {
   max-width: 28rem;
   contain: inline-size;
   margin: 0;
-}
-.otk-menu-items .is-armed {
-  color: var(--otk-attention);
 }

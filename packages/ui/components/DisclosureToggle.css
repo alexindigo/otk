@@ -49,3 +49,14 @@
 .otk-disclosure-icon path {
   stroke: currentColor;
 }
+.otk-disclosure-toggle.otk-tree-toggle {
+  --disclosure-gutter: var(--tree-box-size);
+  grid-template-columns: var(--disclosure-gutter);
+  gap: 0;
+  inline-size: var(--disclosure-gutter);
+  block-size: var(--disclosure-gutter);
+  padding: 0;
+  border-radius: 0;
+  color: var(--otk-fg-3);
+  background: transparent;
+}

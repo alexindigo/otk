@@ -6,6 +6,7 @@ import {
 } from "./connection-light.ts";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import "./ConnectionStatus.css" with { type: "text" };
 
 export default function ConnectionStatus(
   props: {
@@ -13,21 +14,28 @@ export default function ConnectionStatus(
     compact?: boolean;
     onSettings?(): void;
     subgrid?: boolean;
+    unlabelled?: boolean;
   },
 ) {
+  const classes = () =>
+    [
+      "otk-connection-status",
+      props.subgrid ? "is-subgrid" : "",
+      props.unlabelled ? "is-unlabelled" : "",
+    ].filter(Boolean).join(" ");
   return (
     <Show when={connectionFeedback(props.connection)}>
       {(feedback) => (
         <Show
           when={feedback().failure}
           fallback={
-            <ChromeMeta class="otk-connection-status" role="status">
+            <ChromeMeta class={classes()} role="status">
               {feedback().text}
             </ChromeMeta>
           }
         >
           <FeedbackStatus
-            class="otk-connection-status"
+            class={classes()}
             subgrid={props.subgrid}
             compact={props.compact}
             feedback={{

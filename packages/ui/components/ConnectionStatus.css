@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-connection-status {
+  min-inline-size: 0;
+}
+.otk-connection-status.is-subgrid {
+  grid-column: 2;
+}
+.otk-connection-status.is-subgrid.is-unlabelled {
+  grid-area: 1 / 2;
+}
+.otk-connection-status.is-subgrid.has-failure {
+  grid-column: 1 / -1;
+}
+.otk-connection-status.is-subgrid.is-unlabelled.has-failure {
+  grid-row: 2;
+}

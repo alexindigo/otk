@@ -65,7 +65,7 @@ export function commandHints(ports: CommandPorts): {
       : ports.commands.keys(id);
     return [...new Set(values.filter(Boolean))].map((key) =>
       key.split("+").map((part) => part === "Escape" ? "Esc" : part).join("+")
-    ).join(" / ");
+    ).join(" or ");
   };
   return {
     keys,

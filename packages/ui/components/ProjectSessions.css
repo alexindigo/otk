@@ -67,7 +67,12 @@
 .otk-session-cost {
   flex: none;
 }
-.otk-session-row.is-deleted:not(.is-editing) .otk-row-title {
+.otk-session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.otk-session-row.is-deleted:not(.is-editing) .otk-session-title {
   color: var(--deleted-fg);
   text-decoration: line-through;
 }

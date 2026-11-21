@@ -9,7 +9,7 @@ import {
   useContext,
 } from "solid-js";
 import ContentSlot from "./ContentSlot.tsx";
-import DisclosureToggle, { DisclosureIcon } from "./DisclosureToggle.tsx";
+import DisclosureToggle, { DisclosureLabel } from "./DisclosureToggle.tsx";
 
 type Branch = { last: boolean; outgoing?: boolean };
 const BranchContext = createContext<Branch | null>(null);
@@ -125,6 +125,9 @@ export function TreeNode(props: {
   /** The junction labels the header's sole button, rather than adding another. */
   toggleHeader?: boolean;
   outgoing?: boolean;
+  compact?: boolean;
+  selected?: boolean;
+  leadingRow?: boolean;
   header(connected: boolean, toggleID: string): Element;
   feedback?(): Element;
   body?(): Element;
@@ -144,6 +147,9 @@ export function TreeNode(props: {
         "is-outgoing": outgoing(),
         "has-body": visible(),
         "has-header-toggle": props.toggleHeader,
+        "is-compact": props.compact,
+        "has-selection": props.selected,
+        "has-leading-row": props.leadingRow,
       }]}
       data-tree-node=""
     >
@@ -159,6 +165,11 @@ export function TreeNode(props: {
           props.onOpen?.(event.key === "ArrowRight");
         }}
       >
+        <Show when={props.selected}>
+          <span class="otk-tree-selection" aria-hidden="true">
+            <span class="otk-tree-selection-mark" />
+          </span>
+        </Show>
         <Junction
           class={branch ? "otk-tree-own otk-tree-incoming" : "otk-tree-own"}
           toggle={!!props.onOpen &&
@@ -168,27 +179,27 @@ export function TreeNode(props: {
             when={props.onOpen &&
               ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
           >
-            <Show
-              when={props.toggleHeader}
-              fallback={
-                <DisclosureToggle
-                  class="otk-tree-toggle otk-tree-control"
-                  label={props.label ??
-                    (props.open ? "Collapse branch" : "Expand branch")}
-                  open={props.open}
-                  onOpen={(open) => props.onOpen?.(open)}
-                />
-              }
-            >
-              <label
-                class="otk-tree-toggle"
-                for={toggleID}
-                aria-label={props.label}
-                aria-hidden="true"
+            <span class="otk-tree-toggle-slot">
+              <Show
+                when={props.toggleHeader}
+                fallback={
+                  <DisclosureToggle
+                    class="otk-tree-control"
+                    variant="tree"
+                    label={props.label ??
+                      (props.open ? "Collapse branch" : "Expand branch")}
+                    open={props.open}
+                    onOpen={(open) => props.onOpen?.(open)}
+                  />
+                }
               >
-                <DisclosureIcon open={props.open} />
-              </label>
-            </Show>
+                <DisclosureLabel
+                  for={toggleID}
+                  label={props.label}
+                  open={props.open}
+                />
+              </Show>
+            </span>
           </Show>
         </Junction>
         <div class="otk-tree-label" id={headerID}>

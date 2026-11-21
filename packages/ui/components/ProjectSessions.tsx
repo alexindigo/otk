@@ -410,7 +410,7 @@ export default function ProjectSessions(props: {
                             />
                           </span>
                         }
-                        labelClass="otk-row-title"
+                        labelClass="otk-session-title"
                         trailing={
                           <>
                             <Show when={row().session.status === "retry"}>

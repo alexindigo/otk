@@ -64,6 +64,8 @@ export function SectionHeader(props: {
         : `${props.label}, ${props.count}`);
   return (
     <TreeNode
+      compact={props.compact}
+      leadingRow={props.sidebar}
       toggleHeader={!props.compact || !!props.leading}
       class={[
         "otk-section-tree",

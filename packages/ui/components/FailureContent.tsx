@@ -54,6 +54,7 @@ export default function FailureContent(props: {
   return (
     <FailureSignal
       as="div"
+      placement="gutter"
       enabled={props.signal !== false && !props.failure.reference &&
         props.failure.tone !== "neutral"}
       informational={props.failure.tone === "info"}

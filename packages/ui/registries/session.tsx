@@ -43,7 +43,7 @@ export interface SessionPorts {
   feedback?: FeedbackOwner;
   sessionID(): string;
   /** Name of the captured send destination, supplied by the selection owner. */
-  composerTarget?(): string;
+  composerTarget?(): { task?: string; session: string };
   failureTarget?(): import("@otk/protocol").FailureTarget;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;

@@ -73,7 +73,10 @@ export function sessionPorts(o: {
             ? session.state.info.title
             : target.sessionID);
       const task = o.tabs?.()?.taskFor(target.sessionID);
-      return task && task.name !== title ? `${task.name} / ${title}` : title;
+      return {
+        task: task && task.name !== title ? task.name : undefined,
+        session: title,
+      };
     },
     failureTarget: () => ({
       ...target,

@@ -43,9 +43,25 @@
 .otk-composer-target {
   flex: 1;
   min-inline-size: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
-.otk-composer-activity > .otk-live-work {
+.otk-composer-live-slot {
   flex: none;
+}
+.otk-composer-task {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+.otk-composer-destination {
+  flex: 0 0 auto;
+  max-inline-size: 100%;
+}
+.otk-composer-chevron {
+  flex: none;
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
 }
 .otk-composer-activity-slot {
   block-size: calc(var(--control-size) + var(--space-2));

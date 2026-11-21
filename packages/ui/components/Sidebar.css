@@ -58,11 +58,11 @@
     margin: 0;
     font-weight: 400;
   }
-  .otk-new-session {
+  .otk-legacy-new-session {
     padding: 0 var(--space-2);
     flex: 0 0 auto;
   }
-  .otk-session-row {
+  .otk-legacy-session-row {
     display: grid;
     grid-template-columns: minmax(0,1fr) auto;
     gap: var(--space-2);

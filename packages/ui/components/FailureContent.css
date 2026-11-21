@@ -22,15 +22,6 @@
 .otk-failure-content > .otk-failure-controls {
   grid-column: 1 / -1;
 }
-/* The gutter track holds the stripe; painting it takes no inline space. */
-.otk-failure-content.otk-failure-signal {
-  border: 0;
-  padding-inline-start: 0;
-  box-shadow: inset 2px 0 0 var(--danger);
-}
-.otk-failure-content.otk-failure-signal.is-informational {
-  box-shadow: inset 2px 0 0 var(--otk-fg-3);
-}
 .otk-failure-heading {
   display: flex;
   align-items: baseline;

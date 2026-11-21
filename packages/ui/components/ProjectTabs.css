@@ -60,14 +60,19 @@
   flex: none;
 }
 .otk-breadcrumb-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
   color: var(--otk-fg-3);
   font-size: var(--text-ui);
 }
+.otk-task-crumbs,
+.otk-session-crumb {
+  --crumb-minimum: calc(6ch + var(--control-size) + var(--chrome-inset));
+}
 .otk-task-crumbs {
+  flex: 1 1 20em;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-1);
@@ -94,6 +99,7 @@
   min-width: 0;
 }
 .otk-crumb-title {
+  min-inline-size: 6ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -156,6 +162,7 @@
 .otk-session-crumb {
   flex-shrink: 1;
   height: var(--control-size);
+  min-inline-size: var(--crumb-minimum);
 }
 .otk-crumb-measure {
   display: flex;

@@ -14,6 +14,7 @@ export default function SidebarRow(props: {
   meta?: Element;
   feedback?: Element;
   compact?: boolean;
+  detailedMeta?: boolean;
   action?: Omit<ComponentProps<"button">, "children">;
 }): Element {
   const native = nativeAttributes(() => props.action ?? {});
@@ -23,7 +24,11 @@ export default function SidebarRow(props: {
         <span class="otk-sidebar-slot otk-sidebar-icon">
           <Show when={props.avatar}>
             {(avatar) => (
-              <ProjectAvatar name={avatar().name} color={avatar().color} />
+              <ProjectAvatar
+                size="compact"
+                name={avatar().name}
+                color={avatar().color}
+              />
             )}
           </Show>
         </span>
@@ -32,29 +37,36 @@ export default function SidebarRow(props: {
     );
   }
   return (
-    <span class={["otk-sidebar-row", { "is-compact": props.compact }]}>
-      <span class="otk-sidebar-slot otk-sidebar-lamp">{props.lamp}</span>
-      <Show
-        when={props.action}
-        fallback={
-          <span class="otk-sidebar-row-main">
-            <Main />
-          </span>
-        }
-      >
-        <button
-          ref={native.ref}
-          {...native.attributes}
-          type="button"
-          class={["otk-sidebar-row-main", props.action?.class]}
+    <span
+      class={["otk-sidebar-row", {
+        "is-compact": props.compact,
+        "has-detailed-meta": props.detailedMeta,
+      }]}
+    >
+      <span class="otk-sidebar-row-grid">
+        <span class="otk-sidebar-slot otk-sidebar-lamp">{props.lamp}</span>
+        <Show
+          when={props.action}
+          fallback={
+            <span class="otk-sidebar-row-main">
+              <Main />
+            </span>
+          }
         >
-          <Main />
-        </button>
-      </Show>
-      <span class="otk-sidebar-slot otk-sidebar-meta">{props.meta}</span>
-      <Show when={props.feedback}>
-        <span class="otk-sidebar-row-feedback">{props.feedback}</span>
-      </Show>
+          <button
+            ref={native.ref}
+            {...native.attributes}
+            type="button"
+            class={["otk-sidebar-row-main", props.action?.class]}
+          >
+            <Main />
+          </button>
+        </Show>
+        <span class="otk-sidebar-slot otk-sidebar-meta">{props.meta}</span>
+        <Show when={props.feedback}>
+          <span class="otk-sidebar-row-feedback">{props.feedback}</span>
+        </Show>
+      </span>
     </span>
   );
 }

@@ -7,13 +7,14 @@
   gap: var(--space-1);
   min-inline-size: 0;
   overflow: clip;
-  block-size: var(--row-compact);
+  min-block-size: var(--row-compact);
 }
 .otk-overflow-row.has-overflow {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 .otk-overflow-items {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: inherit;
   min-inline-size: 0;

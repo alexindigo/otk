@@ -49,6 +49,8 @@ export default function Dialog(props: {
       }}
     >
       <Surface
+        layout="dialog"
+        fullHeight={props.size === "editor"}
         title={
           <>
             <h2>{props.title}</h2>

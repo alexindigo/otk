@@ -4,6 +4,7 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  max-inline-size: 100%;
 }
 .otk-composer-model > span {
   min-width: 0;
@@ -23,10 +24,10 @@
   border-radius: var(--radius-control);
   padding: var(--space-1) var(--space-2);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .otk-prompt-setting:hover {
   background: var(--otk-hover);
-}
-.otk-prompt-model-label {
-  display: flex;
 }

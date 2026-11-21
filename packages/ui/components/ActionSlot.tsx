@@ -27,6 +27,7 @@ export default function ActionSlot(props: {
     >
       <div class="otk-action-slot-control">{props.children}</div>
       <FeedbackStatus
+        class="otk-action-slot-feedback"
         focusable
         feedback={props.feedback}
         ref={(element) => {

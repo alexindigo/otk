@@ -16,18 +16,38 @@ export function DisclosureIcon(props: { open?: boolean }): Element {
   );
 }
 
+/** Decorative junction for a header's existing button; shares the same owned
+ * tree geometry as the independent disclosure button. */
+export function DisclosureLabel(
+  props: { open?: boolean; for: string; label?: string },
+): Element {
+  return (
+    <label
+      class="otk-disclosure-toggle otk-tree-toggle"
+      for={props.for}
+      aria-label={props.label}
+      aria-hidden="true"
+    >
+      <DisclosureIcon open={props.open} />
+    </label>
+  );
+}
+
 /** One focus target and one SVG vocabulary for tree and independent disclosures. */
 export default function DisclosureToggle(props: {
   open?: boolean;
   label: string;
   class?: string;
+  variant?: "tree";
   children?: Element;
   onOpen(open: boolean): void;
 }): Element {
   return (
     <button
       type="button"
-      class={["otk-disclosure-toggle", props.class]}
+      class={["otk-disclosure-toggle", props.class, {
+        "otk-tree-toggle": props.variant === "tree",
+      }]}
       aria-label={props.label}
       aria-expanded={props.open ? "true" : "false"}
       onClick={() => props.onOpen(!props.open)}

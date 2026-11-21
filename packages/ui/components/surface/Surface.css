@@ -59,3 +59,30 @@
   padding: 0;
   gap: var(--menu-block-inset);
 }
+.otk-surface.is-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.otk-surface.is-dialog {
+  max-height: none;
+}
+.otk-surface.is-popover {
+  min-height: 0;
+  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
+}
+.otk-surface.is-full-height {
+  height: 100%;
+  max-height: none;
+}
+.otk-surface[data-signal] {
+  border-left: 3px solid var(--otk-success);
+}
+.otk-surface[data-signal=error] {
+  border-left-color: var(--danger);
+}
+.otk-surface[data-signal=attention] {
+  border-left-color: var(--otk-attention);
+}
+.otk-surface.has-static-children .otk-surface-body > * {
+  flex-shrink: 0;
+}
