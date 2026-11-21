@@ -129,6 +129,7 @@ export default function CommandMenu(props: {
     setPending(item.key);
     const facts = commandFailureFacts(action);
     props.beforeRun?.();
+    menu.activateOrigin?.();
     const origin = document.activeElement;
     onSettled(() => {
       // A command may hand focus to its consumer synchronously. Pending paint
@@ -179,6 +180,7 @@ export default function CommandMenu(props: {
             clear();
           },
           contains: control.contains,
+          activateOrigin: control.activateOrigin,
         });
       }}
       onOpen={() => {

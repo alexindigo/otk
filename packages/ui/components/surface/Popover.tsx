@@ -21,6 +21,8 @@ export interface PopoverControl {
   open(anchor?: PointAnchor, reason?: PopoverOpenReason): void;
   close(focus?: () => void): void;
   contains(target: Node): boolean;
+  /** Notify the retained origin that its captured action was activated. */
+  activateOrigin?(): void;
 }
 export interface PointAnchor {
   x: number;
@@ -84,6 +86,7 @@ export default function Popover(props: {
   let releaseHoverPanel: (() => void) | undefined;
   let stopWatching: (() => void) | undefined;
   let releaseOrigin: (() => void)[] = [];
+  let activateOrigin: (() => void)[] = [];
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
   const release = () => {
     invocation++;
@@ -101,6 +104,7 @@ export default function Popover(props: {
     previewFocus = undefined;
     const retained = releaseOrigin;
     releaseOrigin = [];
+    activateOrigin = [];
     // Dismissal's synchronous focus return owns the row before its surface pin ends.
     queueMicrotask(() => {
       for (const release of retained) release();
@@ -139,10 +143,11 @@ export default function Popover(props: {
     const origin = at?.origin ?? trigger;
     for (const release of releaseOrigin) release();
     releaseOrigin = [];
+    activateOrigin = [];
     origin?.dispatchEvent(
       new CustomEvent("otk-context-retain", {
         bubbles: true,
-        detail: { release: releaseOrigin },
+        detail: { release: releaseOrigin, activate: activateOrigin },
       }),
     );
     setPoint(at);
@@ -202,6 +207,11 @@ export default function Popover(props: {
   props.control?.({
     open: show,
     close: dismiss,
+    activateOrigin: () => {
+      const callbacks = activateOrigin;
+      activateOrigin = [];
+      for (const activate of callbacks) activate();
+    },
     contains: (target) =>
       panel?.matches(":popover-open") && panel.contains(target),
   });
