@@ -207,7 +207,6 @@ export default function FailureLayout() {
             intent: {
               clientID: "style",
               key: "metadata-send",
-              window: "window",
             },
           }}
         />

@@ -132,7 +132,6 @@ export default function UiConventions() {
                     phase: "failed",
                     intent: {
                       clientID: "review",
-                      window: "review",
                       key: outcome(),
                     },
                     message,
