@@ -58,12 +58,16 @@ export async function toolScript(
   await state.queue([reply]);
 }
 
-/** Explicitly open mounted work groups before addressing their lazy children. */
+/** Explicitly open mounted activity/work groups before addressing lazy children. */
 export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
-  await expect(scope.locator(".otk-work-fold").first()).toBeAttached();
+  await expect(
+    scope.locator(".otk-work-fold, .otk-record-group-toggle").first(),
+  ).toBeAttached();
   // Opening a group can retire other virtual rows. Reacquire the next closed
   // group instead of retaining population indexes across geometry changes.
-  const closed = scope.locator('.otk-work-fold[aria-expanded="false"]');
+  const closed = scope.locator(
+    '.otk-work-fold[aria-expanded="false"], .otk-record-group-toggle[aria-expanded="false"]',
+  );
   while (true) {
     // Expanding a predecessor can leave the next fold mounted only for its
     // pending measurement. Reveal its source through the native viewport before
@@ -71,14 +75,20 @@ export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
     const selector = await closed.evaluateAll((buttons) => {
       const button = buttons[0];
       if (!button) return;
-      const message = button.closest("[data-message]")!,
+      const message = button.closest("[data-message]"),
         row = button.closest("[data-virtual-key]")!;
-      return `[data-message=${
-        JSON.stringify(message.getAttribute("data-message"))
-      }] ` +
+      return (message
+        ? `[data-message=${
+          JSON.stringify(message.getAttribute("data-message"))
+        }] `
+        : "") +
         `[data-virtual-key=${
           JSON.stringify(row.getAttribute("data-virtual-key"))
-        }] .otk-work-fold`;
+        }] ${
+          button.matches(".otk-work-fold")
+            ? ".otk-work-fold"
+            : ".otk-record-group-toggle"
+        }`;
     });
     if (!selector) break;
     await revealAcquired(page, selector);
@@ -125,7 +135,9 @@ export async function revealTool(page: Page, selector: string) {
   // Historical callers may already have acquired this source. Moving to the
   // tail would retire their target before the same reveal can retain it.
   if (!await row.count()) {
-    const closed = page.locator('.otk-work-fold[aria-expanded="false"]');
+    const closed = page.locator(
+      '.otk-work-fold[aria-expanded="false"], .otk-record-group-toggle[aria-expanded="false"]',
+    );
     await expect.poll(async () => {
       await scrollTranscript(page, true);
       if (await closed.count()) await openWorkLogs(page);

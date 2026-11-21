@@ -87,7 +87,7 @@ test(
             const style = getComputedStyle(strip);
             const actions = Array.from(
               strip.querySelectorAll<HTMLButtonElement>(
-                ".otk-task-new, .otk-topbar-end button",
+                ".otk-task-new, .otk-topbar-end .otk-display-trigger",
               ),
             ).map((control) => {
               const r = control.getBoundingClientRect();

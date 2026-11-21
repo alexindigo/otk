@@ -315,7 +315,7 @@ Deno.test("supervision's paired outcome reaches finish notifications before inde
       ],
     });
     assertEquals(notes.map((note) => [note.title, note.kind]), [[
-      "Session failed",
+      "Running session failed for root: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
       "error",
     ]]);
   } finally {
@@ -352,7 +352,10 @@ Deno.test("finish notifications use terminal outcome before separate error obser
     });
     assertEquals(notes.map((note) => [note.title, note.kind]), [
       outcome === "failed"
-        ? ["Session failed", "error"]
+        ? [
+          "Running session failed for tstv1-review: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
+          "error",
+        ]
         : outcome === "succeeded"
         ? ["Session done", "done"]
         : outcome === "interrupted"
@@ -372,7 +375,10 @@ Deno.test("finish notifications use terminal outcome before separate error obser
           },
         }],
       });
-      assertEquals(notes.at(-1)?.title, "Session failed");
+      assertEquals(
+        notes.at(-1)?.title,
+        "Running session failed for tstv1-review: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
+      );
       assertEquals(notes.at(-1)?.id, "remote/tstv1-review/outcome/failed");
       assertEquals(retracted, [notes[0].id]);
     }

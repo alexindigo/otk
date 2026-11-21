@@ -2,9 +2,9 @@
 import { assertEquals } from "@std/assert";
 import { SessionIndex } from "@otk/harness";
 import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
-import type { V2Event } from "../../packages/harness-opencode-v2-server/stream.ts";
-import { cfg } from "../support/config.ts";
-import { bounded, tempDir, test } from "../support/resources.ts";
+import type { V2Event } from "../stream.ts";
+import { cfg } from "../../../tests/support/config.ts";
+import { bounded, tempDir, test } from "../../../tests/support/resources.ts";
 
 async function fixture() {
   const root = await tempDir("dispatch-lag-"), settings = cfg();

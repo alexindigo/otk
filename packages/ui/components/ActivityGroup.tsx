@@ -12,6 +12,7 @@ import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
 import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
+import ContentSlot from "./ContentSlot.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -133,7 +134,15 @@ export default function ActivityGroup(props: {
                 </Show>
               </header>
             )}
-            body={() => open() ? props.body() : props.breakouts?.()}
+            body={() => (
+              <Show
+                when={open() ? props.body : undefined}
+                keyed
+                fallback={<ContentSlot content={props.breakouts} />}
+              >
+                {(body) => body()}
+              </Show>
+            )}
           />
         </Show>
       </section>

@@ -47,7 +47,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   });
   await prompt(page, "Show timestamp behavior");
   // WP2: reply identity owns its live clock and full localized timestamp.
-  const time = page.locator(".otk-reply-start > time");
+  const time = page.locator(".otk-reply-start > .otk-chrome-meta > time");
   await expect(time).toBeAttached();
   await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
     "first output",
@@ -91,7 +91,9 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await time.hover();
   const geometry = await page.evaluate(() => {
     const header = document.querySelector(".otk-reply-start")!,
-      time = header.querySelector<HTMLTimeElement>(":scope > time")!,
+      time = header.querySelector<HTMLTimeElement>(
+        ":scope > .otk-chrome-meta > time",
+      )!,
       agent = header.querySelector(".otk-entity-pill")!,
       h = header.getBoundingClientRect(),
       a = agent.getBoundingClientRect(),
@@ -104,7 +106,9 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
       agentCenter: a.y + a.height / 2,
       timeCenter: t.y + t.height / 2,
       title: time.title,
-      expected: new Date(time.dateTime).toLocaleString(),
+      expected: new Date(time.dateTime).toLocaleString(undefined, {
+        timeZoneName: "short",
+      }),
       color: getComputedStyle(time).color,
       headerColor: getComputedStyle(header).color,
     };

@@ -2,6 +2,7 @@
 import { expect, type Locator } from "@playwright/test";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { scrollTranscript } from "../../pages/transcript.ts";
 
 async function geometry(nodes: Locator) {
   const facts = await nodes.evaluateAll((nodes) =>
@@ -57,6 +58,8 @@ async function geometry(nodes: Locator) {
         last: node.classList.contains("is-last"),
         outgoing: node.classList.contains("is-outgoing"),
         box: b ? [b.x + b.width / 2, b.y + b.height / 2] : undefined,
+        boxTop: b?.top,
+        boxBottom: b?.bottom,
         boxSize: b ? [b.width, b.height] : undefined,
         stroke: svg
           ? getComputedStyle(svg.querySelector("rect")!).stroke
@@ -79,6 +82,7 @@ async function geometry(nodes: Locator) {
           : label.left,
         parentBottom: firstChild === node ? parentHeading?.bottom : undefined,
         upper: u.bottom,
+        lowerStart: lower.getBoundingClientRect().top,
         lower: style.backgroundImage,
         incoming: incomingBox
           ? [incomingBox.x + incomingBox.width / 2, incomingBox.y]
@@ -127,7 +131,12 @@ async function geometry(nodes: Locator) {
     expect(Math.abs(fact.connector[2] - fact.junction[1])).toBeLessThanOrEqual(
       1,
     );
-    expect(Math.abs(fact.upper - fact.junction[1])).toBeLessThanOrEqual(1);
+    // UI convention: guides meet the junction's edges, never run underneath
+    // artwork and rely on a background mask to hide the overlap.
+    expect(Math.abs(fact.upper - (fact.boxTop ?? fact.junction[1])))
+      .toBeLessThanOrEqual(1);
+    expect(Math.abs(fact.lowerStart - (fact.boxBottom ?? fact.junction[1])))
+      .toBeLessThanOrEqual(1);
     expect(fact.incomingLower === "none").toBe(fact.last);
     if (fact.parentAxis !== undefined) {
       expect(Math.abs(fact.levelStep! - fact.indent)).toBeLessThanOrEqual(1);
@@ -154,17 +163,17 @@ async function geometry(nodes: Locator) {
 
 async function scaledGeometry(nodes: Locator) {
   try {
-    for (const size of ["10px", "18px"]) {
+    for (const size of ["0.8", "1.3"]) {
       await nodes.page().evaluate(
         (size) =>
-          document.documentElement.style.setProperty("--icon-compact", size),
+          document.documentElement.style.setProperty("--otk-scale", size),
         size,
       );
       await geometry(nodes);
     }
   } finally {
     await nodes.page().evaluate(() =>
-      document.documentElement.style.removeProperty("--icon-compact")
+      document.documentElement.style.removeProperty("--otk-scale")
     );
   }
 }
@@ -256,7 +265,12 @@ test.describe("project tree", () => {
     await page.keyboard.press("ArrowLeft");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(row(root + "/worktrees/feature-two")).toHaveCount(0);
-    await expect(row(root + "/worktrees/feature-one")).toBeVisible();
+    // Decision 59: collapse hides all children, including mandatory activity.
+    await expect(row(root + "/worktrees/feature-one")).toHaveCount(0);
+    await expect(
+      row(directory).getByRole("img", { name: "Working", exact: true }),
+    )
+      .toBeVisible();
     await expect.poll(async () =>
       (await state.product("prefs.get", {})).shellLayout.projectCollapsed
         ?.[JSON.stringify(["local", directory])]
@@ -383,9 +397,11 @@ test.describe("outgoing tree", () => {
   }, async ({ isolatedState: state, page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
+    await scrollTranscript(page, false);
     const closed = page.locator(
       '.otk-record-group-toggle[aria-expanded="false"]',
     );
+    await expect(closed.first()).toBeVisible();
     while (await closed.count()) await closed.first().click();
     const outgoing = page.locator('[data-message="context"] .otk-tree-node');
     await expect(outgoing.first()).toHaveClass(/is-outgoing/);

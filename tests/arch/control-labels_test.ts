@@ -98,7 +98,7 @@ Deno.test("button-like controls inherit one shared label and shrink policy", asy
     const selector of [
       "button",
       ".otk-pill",
-      ".otk-tool-error-toggle",
+      ".otk-disclosure-toggle",
       ".otk-tab-open",
       '[role="button"]',
       ".outer > button:hover",

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../../support/resources.ts";
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { Harness } from "@otk/harness";
@@ -7,10 +7,10 @@ import type { IndexEntry, PermissionRequest, ServerFrame } from "@otk/protocol";
 import { OperationFailure } from "@otk/protocol";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { IndexStore, RpcRegistry } from "../../../core/mod.ts";
-import { fixture } from "../../support/config.ts";
-import { waitFor } from "../../support/opencode.ts";
-import { V2Client } from "../../../packages/harness-opencode-v2-server/client.ts";
-import { V2Pending } from "../../../packages/harness-opencode-v2-server/pending.ts";
+import { fixture } from "../../../tests/support/config.ts";
+import { waitFor } from "../../../tests/support/opencode.ts";
+import { V2Client } from "../client.ts";
+import { V2Pending } from "../pending.ts";
 
 const entry = (id: string, parentID?: string): IndexEntry => ({
   id,

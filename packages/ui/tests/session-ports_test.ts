@@ -175,6 +175,7 @@ Deno.test("session ports capture target once while capability and resource gette
       sessionID: "unleased",
       turnID: "historical",
       timing: { state: "known", start: 100, end: 2100, workingMs: 2000 },
+      outcomeTime: { state: "known", at: 2200, source: "completed" },
     });
   for (
     const [generation, activity] of [["first", "working"], [
@@ -200,7 +201,8 @@ Deno.test("session ports capture target once while capability and resource gette
     });
     assertEquals(ports.entry("unleased"), undefined);
     assertEquals(facts().session.status, activity);
-    assertEquals(facts().reply?.completed.value, 2100);
+    assertEquals(facts().reply?.working.value, 2000);
+    assertEquals(facts().reply?.completed.value, 2200);
   }
   resources.stop();
 });

@@ -49,7 +49,7 @@ for (const outcome of ["disabled", "refused", "sent"] as const) {
       const refused = intent.state.feedback?.failure;
       const observed = {
         disabled: !before.available && before.reason !== undefined,
-        refused: !!refused?.action && !!refused.target.label &&
+        refused: !!refused?.action && !!refused.value.facts?.target?.label &&
           !!refused.reason && !!refused.recovery,
         sent: delivery.state.receipts.some((receipt) =>
           receipt.messageID === "native-user-id" && receipt.phase === "queued"
