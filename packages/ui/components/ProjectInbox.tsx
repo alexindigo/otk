@@ -410,7 +410,7 @@ export default function ProjectInbox(props: {
     async (value: boolean) => {
       await discoveredDisclosure.set(value);
     },
-    { arguments: { type: "local" } },
+    { arguments: { type: "boolean" } },
   );
   function Row(
     row: { project: ProjectRow; connected?: boolean },
