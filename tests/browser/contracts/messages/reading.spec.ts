@@ -66,7 +66,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await expect(page.locator("[data-tool=bash] .otk-tool-state")).not
     .toContainText("completed");
   await expect(page.locator(".otk-reasoning-heading")).toHaveText(
-    "Thought for 4.0s",
+    "Thought for 4s",
   );
   await expect(page.locator("[data-tool=edit] .otk-tool-target")).toHaveText(
     "source.ts",
@@ -84,7 +84,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   for (
     const value of [
       "test/reported-model",
-      "6.0s",
+      "6s",
       "interrupted",
       "76 tokens · $0.25",
     ]

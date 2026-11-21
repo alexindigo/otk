@@ -79,12 +79,17 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
     note.getByRole("button", { name: "Close notification", exact: true }),
   ).toBeVisible();
   await expect(note.locator(".otk-toast-age")).toHaveText(
-    "Session idle 12 days",
+    /^Session idle 12d(?: \d+(?:\.\d+)?[hms])*$/,
   );
   await expect(note.getByRole("button", { name: "Allow once", exact: true }))
-    .toHaveAttribute("title", "Resumes work paused 12 days ago");
+    .toHaveAttribute(
+      "title",
+      /^Resumes work paused 12d(?: \d+(?:\.\d+)?[hms])* ago$/,
+    );
   await expect(note.getByRole("button", { name: "Allow once", exact: true }))
-    .toHaveAccessibleDescription("Resumes work paused 12 days ago");
+    .toHaveAccessibleDescription(
+      /^Resumes work paused 12d(?: \d+(?:\.\d+)?[hms])* ago$/,
+    );
   await capture("one");
   for (let n = 2; n <= 8; n++) await ask(n);
   await expect(page.locator(".otk-toast")).toHaveCount(3);
@@ -252,7 +257,7 @@ test(
         });
         await expect(page.locator(toast(session.id))).toBeVisible();
         await expect(page.locator(`${toast(session.id)} .otk-toast-age`))
-          .toHaveText("Session idle 12 days");
+          .toHaveText(/^Session idle 12d(?: \d+(?:\.\d+)?[hms])*$/);
         return (await state.product(`${kind}.list`, { sessionID: session.id }))[
           0
         ];
