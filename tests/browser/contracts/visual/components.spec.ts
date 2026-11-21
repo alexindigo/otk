@@ -219,7 +219,7 @@ test(
     await scene(page, state.url, "requests");
     for (const width of [1280, 800]) {
       await page.setViewportSize({ width, height: 700 });
-      let baseline: unknown;
+      let baseline: number[][] | undefined;
       for (const feedback of ["clear", "pending", "error"]) {
         await page.evaluate(`styleTest.feedback('${feedback}')`);
         const g = await page.evaluate(() => {
@@ -227,14 +227,8 @@ test(
             const r = el.getBoundingClientRect();
             return [r.x, r.y, r.width, r.height];
           };
-          const pane = document.querySelector(".request-feedback-pane")!,
-            items = Array.from(pane.querySelectorAll("p,button")).map((el) =>
-              el.getBoundingClientRect()
-            );
-          const left = Math.min(...items.map((r) => r.left)),
-            right = Math.max(...items.map((r) => r.right)),
-            top = Math.min(...items.map((r) => r.top)),
-            bottom = Math.max(...items.map((r) => r.bottom));
+          const pane = document.querySelector(".request-feedback-pane")!;
+          const content = pane.querySelector(".otk-pane-state-content")!;
           const operation = document.querySelector(".otk-operation-feedback")!;
           return {
             boxes: [
@@ -242,7 +236,7 @@ test(
               rect(document.querySelector("#task-feedback")!),
             ],
             pane: rect(pane),
-            content: [left, top, right - left, bottom - top],
+            content: rect(content),
             centres: Array.from(operation.children).map((el) => {
               const r = el.getBoundingClientRect();
               return r.y + r.height / 2;
@@ -251,6 +245,11 @@ test(
               document.querySelectorAll('[disabled],[aria-disabled="true"]')
                 .length,
             colour: getComputedStyle(operation).color,
+            signal: operation.querySelector(".otk-failure-signal")
+              ? getComputedStyle(
+                operation.querySelector(".otk-failure-signal")!,
+              ).boxShadow
+              : undefined,
           };
         });
         expect(g.disabled).toBe(0);
@@ -262,8 +261,18 @@ test(
         ).toBeLessThan(1);
         expect(Math.max(...g.centres) - Math.min(...g.centres)).toBeLessThan(1);
         if (feedback === "clear") baseline = g.boxes;
-        else expect(g.boxes).toEqual(baseline);
-        if (feedback === "error") expect(g.colour).toBe("rgb(255, 128, 128)");
+        else {
+          expect(g.boxes[0]).toEqual(baseline![0]);
+          // Structured facts grow within the feedback's normal-flow track;
+          // its origin/width and the concerned input do not shift.
+          expect(g.boxes[1].slice(0, 3)).toEqual(baseline![1].slice(0, 3));
+          expect(g.boxes[1][3]).toBeGreaterThanOrEqual(baseline![1][3]);
+        }
+        if (feedback === "error") {
+          // Failure content keeps foreground text; its shared signal owns danger.
+          expect(g.colour).toBe("rgb(230, 234, 239)");
+          expect(g.signal).toBe("rgb(255, 128, 128) 2px 0px 0px 0px inset");
+        }
       }
     }
   },

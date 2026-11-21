@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, Message } from "@otk/protocol";
 import * as timingProtocol from "@otk/protocol";
+import { duration } from "../../../../packages/client/format.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -179,7 +180,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   expect(segmentMs).toBeDefined();
   await expect(page.locator(".otk-work-fold .otk-work-label").first())
     .toHaveText(
-      `Worked for ${(segmentMs! / 1000).toFixed(1)}s`,
+      `Worked for ${duration(segmentMs!)}`,
     );
   // Bookkeeping after the answer has no segment clock, even with a known turn.
   await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");

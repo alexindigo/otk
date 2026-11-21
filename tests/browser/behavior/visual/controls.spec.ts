@@ -3,7 +3,6 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
 import {
-  labelTextBounds,
   type TaskMarkerGeometry,
   taskMarkerGeometry,
 } from "../../../support/control-geometry.ts";
@@ -13,6 +12,7 @@ interface NativeBox {
   padding: number;
   right: number;
   parentRight: number;
+  line: number;
 }
 interface LabelBox {
   gap: number;
@@ -29,6 +29,30 @@ interface NativeGeometry {
   labels: LabelBox[];
   selects: SelectBox[];
   tasks: TaskMarkerGeometry[];
+}
+function checkboxGeometry(root: string) {
+  return Array.from(
+    document.querySelectorAll<HTMLInputElement>(`${root} input[type=checkbox]`),
+  ).map((el) => {
+    const label = el.closest("label")!,
+      text = label.querySelector(".otk-control-label")!,
+      r = el.getBoundingClientRect(),
+      t = text.getBoundingClientRect(),
+      p = label.getBoundingClientRect(),
+      style = getComputedStyle(el);
+    return {
+      name: el.name,
+      width: r.width,
+      height: r.height,
+      line: parseFloat(getComputedStyle(label).lineHeight),
+      padding: parseFloat(style.paddingLeft),
+      right: t.right,
+      controlRight: r.right,
+      parentRight: p.right,
+      gap: t.left - r.right,
+      centers: Math.abs(r.y + r.height / 2 - t.y - t.height / 2),
+    };
+  });
 }
 test(
   "visual.real-display-markdown-native-checkbox-select-and-settings-fields",
@@ -87,7 +111,7 @@ test(
     await page.locator(".otk-display-menu > button").click();
     await expect(page.locator(".otk-display-menu fieldset")).toBeEnabled();
     const g = await page.evaluate<NativeGeometry>(
-      `(()=>{const textBounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:(${taskMarkerGeometry})()};})()`,
+      `(()=>{const controls=(${checkboxGeometry})('.otk-display-menu');return {controls:controls.map(c=>({...c,right:c.controlRight})),labels:controls,selects:[...document.querySelectorAll('.otk-display-menu .otk-select')].map(el=>{const trigger=el.querySelector('button'),r=trigger.getBoundingClientRect(),row=el.closest('.otk-preference-control'),t=row.querySelector(':scope > .otk-control-label').getBoundingClientRect(),p=row.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(trigger).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.querySelector('input[type=hidden]').value};}),tasks:(${taskMarkerGeometry})()};})()`,
     );
     const display = await state.product("prefs.get", {});
     expect(display.diffStyle).toBe("auto");
@@ -95,15 +119,14 @@ test(
     expect(g.labels.length).toBeGreaterThan(0);
     for (const c of g.controls) {
       expect(c.width).toBeGreaterThan(0);
-      expect(c.width).toBeLessThanOrEqual(18);
+      expect(c.width).toBe(c.line);
       expect(c.height).toBeGreaterThan(0);
-      expect(c.height).toBeLessThanOrEqual(18);
+      expect(c.height).toBe(c.line);
       expect(c.padding).toBe(0);
       expect(c.right).toBeLessThanOrEqual(c.parentRight);
     }
     for (const l of g.labels) {
-      expect(l.gap).toBeGreaterThanOrEqual(9.05);
-      expect(l.gap).toBeLessThanOrEqual(15);
+      expect(Math.abs(l.gap - 8)).toBeLessThanOrEqual(.05);
       expect(l.centers).toBeLessThanOrEqual(.5);
       expect(l.right).toBeLessThanOrEqual(l.parentRight + .5);
     }
@@ -162,7 +185,7 @@ test(
     const notification = await page.evaluate<
       (NativeBox & LabelBox & { name: string })[]
     >(
-      `(()=>{const textBounds=${labelTextBounds};return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=textBounds(el),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),right:s.right,parentRight:p.right};});})()`,
+      `(${checkboxGeometry})('.otk-notification-settings')`,
     );
     expect(notification.map((c: { name: string }) => c.name)).toEqual([
       "notify.toast",
@@ -172,12 +195,11 @@ test(
     ]);
     for (const c of notification) {
       expect(c.width).toBeGreaterThan(0);
-      expect(c.width).toBeLessThanOrEqual(18);
+      expect(c.width).toBe(c.line);
       expect(c.height).toBeGreaterThan(0);
-      expect(c.height).toBeLessThanOrEqual(18);
+      expect(c.height).toBe(c.line);
       expect(c.padding).toBe(0);
-      expect(c.gap).toBeGreaterThanOrEqual(9.7);
-      expect(c.gap).toBeLessThanOrEqual(15);
+      expect(Math.abs(c.gap - 8)).toBeLessThanOrEqual(.05);
       expect(c.centers).toBeLessThanOrEqual(.5);
       expect(c.right).toBeLessThanOrEqual(c.parentRight + .5);
     }
