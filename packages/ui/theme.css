@@ -235,11 +235,6 @@ p {
 }
 input[type=radio] {
   accent-color: var(--otk-fg-2);
-  inline-size: var(--text-ui);
-  block-size: var(--text-ui);
-  flex: none;
-  margin: var(--space-1) calc(3 * var(--otk-unit)) calc(3 * var(--otk-unit))
-    var(--space-1);
 }
 code,
 pre,
