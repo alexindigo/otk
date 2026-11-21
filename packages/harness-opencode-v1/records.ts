@@ -7,6 +7,7 @@ import {
 } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import { HarnessError } from "@otk/harness";
+import { createHash } from "node:crypto";
 import type { Info, RawPart } from "./types.ts";
 import { preview } from "./previews.ts";
 import type { NativeMessage } from "./messages.ts";
@@ -98,6 +99,7 @@ export function nativeSource(
   const text = typeof raw === "string" ? raw : JSON.stringify(raw) ?? "";
   return {
     kind: `opencode-v1/${kind}`,
+    revision: createHash("sha256").update(text).digest("hex"),
     preview: value.text,
     bytes: new TextEncoder().encode(text).length,
     truncated: value.truncated,

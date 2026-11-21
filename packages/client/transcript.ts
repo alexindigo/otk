@@ -366,8 +366,9 @@ export function createTranscript(
       : undefined;
     // Native source can change even when its neutral presentation is equal.
     // Structural location, not decoding an opaque ref, identifies this owner.
-    if (op.op === "message.upsert") sources.changed(op.message.id);
-    else if (
+    if (op.op === "message.upsert") {
+      sources.changed(op.message.id, undefined, op.message);
+    } else if (
       "messageID" in op && op.messageID !== undefined &&
       ["part.upsert", "part.remove", "part.blocks", "message.clock"].includes(
         op.op,
@@ -380,6 +381,7 @@ export function createTranscript(
           : "partID" in op
           ? op.partID
           : undefined,
+        op.op === "part.upsert" ? op.part : undefined,
       );
     }
     const recordBefore = projection.state.records;

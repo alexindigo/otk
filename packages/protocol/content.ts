@@ -321,6 +321,8 @@ export type DisclosureCategory =
 export interface NativeSource {
   kind: string;
   ref?: string;
+  /** Producer-owned exact-source witness, independent of neutral presentation. */
+  revision?: string;
   preview?: string;
   bytes?: number;
   truncated?: boolean;
