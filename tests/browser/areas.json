@@ -78,6 +78,11 @@
       "fixture-lifetime_test.ts",
       "fixture-readiness_test.ts",
       "provider-cache_test.ts"
+    ],
+    "terminal": [
+      "terminals_daemon_test.ts",
+      "terminals_test.ts",
+      "terminals_rejection_test.ts"
     ]
   },
   "areas": [

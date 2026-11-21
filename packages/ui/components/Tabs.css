@@ -16,7 +16,8 @@
   color: var(--otk-fg-3);
 }
 .otk-tabs-strip {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 /* Only the panels scroll; the strip above and the actions below stay put. */
 .otk-tabs-panels {

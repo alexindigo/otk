@@ -47,7 +47,7 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   const url = `http://127.0.0.1:${server.address().port}`;
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const test of ["hidden", "links", "conceal"]) {
+  for (const test of ["hidden", "links", "conceal", "tabs"]) {
     await page.goto(url);
     await page.waitForFunction(() =>
       document.documentElement.dataset.ready === "true"
@@ -69,6 +69,24 @@ try {
             fullPage: true,
           });
         }
+      } else if (test === "tabs") {
+        const geometry = await page.evaluate(() =>
+          globalThis.terminalFixture.tabs()
+        );
+        assert.deepEqual(geometry.styles, {
+          header: "flex",
+          strip: "flex",
+          wrap: "wrap",
+          shrink: "1",
+        });
+        assert(
+          geometry.strip.right <= geometry.header.right + .5,
+          "noncompact tab strip must fit its header",
+        );
+        assert(
+          Math.max(...geometry.rows) > Math.min(...geometry.rows),
+          "noncompact tabs must wrap",
+        );
       } else if (test === "conceal") {
         const canvas = page.locator("#visible canvas");
         await page.evaluate(() => globalThis.terminalFixture.concealed("X"));

@@ -2276,7 +2276,11 @@ export class GhosttyTerminalSurface {
     // not another terminal buffer or a source of transport authority.
     this.canvas.setAttribute(
       "aria-label",
-      this.snapshot.rowData.map((row) => row.text).join("\n").trimEnd() ||
+      this.snapshot.rowData.map((row) =>
+        row.cells.map((cell) => cell.invisible ? " " : cell.text || " ").join(
+          "",
+        ).trimEnd()
+      ).join("\n").trimEnd() ||
         "Terminal output",
     );
     if (!this.blinkEnabled()) this.cursorOn = true;

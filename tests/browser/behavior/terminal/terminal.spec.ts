@@ -34,11 +34,15 @@ async function screenAndScrollback(page: Page): Promise<string> {
     rows.unshift(await text(page));
   }
   if (await bar.isVisible()) {
-    const end = Number(await bar.getAttribute("aria-valuemax"));
     await page.mouse.wheel(0, 10000000);
-    await expect.poll(async () =>
-      Number(await bar.getAttribute("aria-valuenow"))
-    ).toBe(end);
+    // A canonical resize can settle during the gesture. Bottom is the live
+    // position/max pair, not a maximum captured under the preceding grid.
+    await expect.poll(() =>
+      bar.evaluate((node) =>
+        Number(node.getAttribute("aria-valuenow")) ===
+          Number(node.getAttribute("aria-valuemax"))
+      )
+    ).toBe(true);
   }
   return rows.join("\n");
 }
@@ -276,6 +280,18 @@ test(
   "terminal.retained-tabs-one-shared-socket-selection-to-transcript-and-close",
   { tag: "@terminal" },
   async ({ state, page }) => {
+    // Exercise the non-rounded advance retained by the renderer, not a lucky
+    // integer-width font installed in this particular browser image.
+    await page.addInitScript(() => {
+      const measure = CanvasRenderingContext2D.prototype.measureText;
+      CanvasRenderingContext2D.prototype.measureText = function (text) {
+        const metrics = measure.call(this, text);
+        if (text === "M") {
+          Object.defineProperty(metrics, "width", { value: 7.2 });
+        }
+        return metrics;
+      };
+    });
     const wire = observe(page), id = await open(state, page, "Terminal tabs");
     try {
       await command(page, "printf 'terminal-%s\\n' one");
@@ -305,12 +321,24 @@ test(
       await expect.poll(() => text(page)).toMatch(
         /^terminal-```-selected-output\n/,
       );
-      const canvas = await viewport(page).boundingBox();
-      await page.mouse.move(canvas!.x + 7, canvas!.y + 12);
-      await page.mouse.down();
-      await page.mouse.move(canvas!.x + 4 + 27.5 * 7, canvas!.y + 12, {
-        steps: 15,
+      const measured = await viewport(page).evaluate((element) => {
+        const canvas = element as HTMLCanvasElement;
+        return {
+          box: canvas.getBoundingClientRect().toJSON(),
+          cell: canvas.getContext("2d")!.measureText("M").width,
+        };
       });
+      expect(measured.cell).toBe(7.2);
+      const canvas = measured.box;
+      await page.mouse.move(canvas.x + 4 + measured.cell / 2, canvas.y + 12);
+      await page.mouse.down();
+      await page.mouse.move(
+        canvas.x + 4 + 27.5 * measured.cell,
+        canvas.y + 12,
+        {
+          steps: 15,
+        },
+      );
       await page.mouse.up();
       await expect(
         page.getByRole("button", { name: "Add to prompt", exact: true }),
@@ -393,6 +421,29 @@ test(
     }
   },
 );
+
+test("terminal.concealed-output-is-not-exposed-in-accessible-text", {
+  tag: "@terminal",
+}, async ({ state, page }) => {
+  const id = await open(state, page, "Terminal concealment");
+  try {
+    await command(page, "stty -echo");
+    await command(
+      page,
+      "printf '\\033[3J\\033[2J\\033[H\\033[8mconcealed-sentinel\\033[0m visible-%s\\n' marker; stty echo",
+    );
+    await expect(viewport(page)).toHaveAttribute(
+      "aria-label",
+      /visible-marker/,
+    );
+    await expect(viewport(page)).not.toHaveAttribute(
+      "aria-label",
+      /concealed-sentinel/,
+    );
+  } finally {
+    await cleanup(state, id);
+  }
+});
 
 test("terminal.large-output-completes-and-page-remains-interactive", {
   tag: "@terminal",
@@ -654,12 +705,13 @@ for (
 test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
   tag: "@terminal",
 }, async ({ state, page }) => {
-  // Observe the real WASM reset export without adding a product-only test port.
+  // Checkpoint reset now replaces the engine. Observe its real constructor,
+  // without adding a product-only port, to detect any destructive restore.
   await page.addInitScript(() => {
     const instantiate = WebAssembly.instantiate;
-    let resets = 0;
-    Object.defineProperty(globalThis, "__terminalResets", {
-      get: () => resets,
+    let engines = 0;
+    Object.defineProperty(globalThis, "__terminalEngines", {
+      get: () => engines,
     });
     Object.defineProperty(WebAssembly, "instantiate", {
       value: async (...args: unknown[]) => {
@@ -667,15 +719,15 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
         const instance = result instanceof WebAssembly.Instance
           ? result
           : result.instance;
-        if (typeof instance.exports.ghostty_terminal_reset !== "function") {
+        if (typeof instance.exports.ghostty_terminal_new !== "function") {
           return result;
         }
         const exports = {
           ...instance.exports,
-          ghostty_terminal_reset: (...values: unknown[]) => {
-            resets++;
+          ghostty_terminal_new: (...values: unknown[]) => {
+            engines++;
             return Reflect.apply(
-              instance.exports.ghostty_terminal_reset as CallableFunction,
+              instance.exports.ghostty_terminal_new as CallableFunction,
               undefined,
               values,
             );
@@ -705,10 +757,10 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
       /expansion-filler-80/,
     );
     expect(await screenAndScrollback(page)).toContain("before-expansion");
-    const resets = await page.evaluate(() =>
-      Reflect.get(globalThis, "__terminalResets")
+    const engines = await page.evaluate(() =>
+      Reflect.get(globalThis, "__terminalEngines")
     );
-    expect(resets).toBeGreaterThan(0);
+    expect(engines).toBeGreaterThan(0);
     const terminalID =
       (await state.product("terminal.list", { sessionID: id }))[0].id;
     await page.getByRole("button", { name: "Expand terminal", exact: true })
@@ -742,8 +794,8 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
     expect(wire.detaches).toBe(0);
     expect(wire.restores).toEqual(["replay"]);
     expect(
-      await page.evaluate(() => Reflect.get(globalThis, "__terminalResets")),
-    ).toBe(resets);
+      await page.evaluate(() => Reflect.get(globalThis, "__terminalEngines")),
+    ).toBe(engines);
     expect(
       (await state.product("terminal.list", { sessionID: id })).map((info) =>
         info.id

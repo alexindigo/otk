@@ -93,6 +93,12 @@ export function createTerminalPanel(
   };
   const unlisten = terminals.subscribe(() => {
     const selected = terminals.state.selected;
+    if (intent && !terminals.state.list.some((item) => item.id === intent)) {
+      intent = "";
+      store.update((state) => {
+        state.preparing = "";
+      });
+    }
     if (!intent && selected && selected !== observed) select(selected);
     observed = selected;
     display();

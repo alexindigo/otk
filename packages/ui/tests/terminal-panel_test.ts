@@ -1,10 +1,48 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
-import { terminalPrompt, terminalTabs } from "../features/terminal/model.ts";
+import {
+  createTerminalPanel,
+  terminalPrompt,
+  terminalTabs,
+} from "../features/terminal/model.ts";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { CommandHub } from "@otk/client";
 import { insertChip, serialize } from "../components/prompt/model.ts";
 import type { TerminalInfo } from "@otk/protocol";
+import type { SidecarConnection } from "@otk/client";
+import type { ThemeEngine } from "../theme/engine.ts";
+
+Deno.test("removing a pending terminal selection prepares the authoritative fallback", async () => {
+  const terminal = (id: string): TerminalInfo => ({
+    id,
+    title: id,
+    foreground: null,
+    cols: 80,
+    rows: 24,
+    status: "running",
+    exitCode: null,
+    startedAt: 0,
+  });
+  let list = [terminal("1"), terminal("2")];
+  const connection = {
+    base: new URL("http://fixture/api/"),
+    options: {},
+    rpc: { call: () => Promise.resolve(list) },
+  } as unknown as SidecarConnection;
+  const theme = { subscribe: () => () => {} } as unknown as ThemeEngine;
+  const panel = createTerminalPanel(connection, "tstv1-a", theme, () => {});
+  try {
+    await panel.start();
+    assertEquals(panel.state.preparing, "1");
+    list = [terminal("2")];
+    await panel.terminals.refresh();
+    assertEquals(panel.terminals.state.selected, "2");
+    assertEquals(panel.state.preparing, "2");
+    assertEquals(panel.wants("1"), false);
+  } finally {
+    panel.dispose();
+  }
+});
 
 Deno.test("terminal Add to prompt preserves exact fenced selection and bounded label", () => {
   const text = "original output\n  indented\n";
