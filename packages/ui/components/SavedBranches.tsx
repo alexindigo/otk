@@ -92,16 +92,21 @@ export function SavedBranchNotice(
           Saving earlier branch...
         </ComposerNoticeRow>
       </Show>
-      <Show when={props.navigationVisible !== false && state().branches.length}>
-        <ComposerNoticeRow icon={RevertIcon}>
-          <button
-            type="button"
-            class="otk-pill"
-            onClick={() => props.owner.open(state().branches[0].id)}
-          >
-            Saved earlier branches
-          </button>
-        </ComposerNoticeRow>
+      <Show
+        when={props.navigationVisible !== false &&
+          state().branches.find((branch) => !branch.pending && branch.replaced)}
+      >
+        {(branch) => (
+          <ComposerNoticeRow icon={RevertIcon}>
+            <button
+              type="button"
+              class="otk-pill"
+              onClick={() => props.owner.open(branch().id)}
+            >
+              Saved earlier branches
+            </button>
+          </ComposerNoticeRow>
+        )}
       </Show>
       <Show when={state().choice}>
         {(choice) => (
@@ -189,11 +194,6 @@ export default function SavedBranches(
                 viewport = element;
               }}
             >
-              <SavedBranchNotice
-                owner={props.owner}
-                statusVisible={false}
-                navigationVisible={false}
-              />
               <div class="otk-saved-header">
                 <p>
                   {saved().replaced

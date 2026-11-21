@@ -94,7 +94,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       )
     ).toBe(true);
     await expect(
-      page.getByRole("button", { name: /Saved earlier branches/ }),
+      page.getByRole("button", { name: "Open copy", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".otk-revert-warning"))
       .toHaveCount(0);

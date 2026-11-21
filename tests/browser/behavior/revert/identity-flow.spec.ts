@@ -182,6 +182,7 @@ test("revert.identity-confirmation-preservation-and-in-flow-geometry", {
   await rightClick(page, ".otk-revert-group");
   await pick(page, "Restore conversation");
   await expect(page.locator(".otk-revert-group")).toHaveCount(0);
+  await scrollTranscript(page, true);
   await expect(page.locator(".otk-messages")).toContainText(
     "Last prompt in the earlier branch",
   );

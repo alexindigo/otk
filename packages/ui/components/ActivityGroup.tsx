@@ -70,6 +70,7 @@ export default function ActivityGroup(props: {
             header={(_connected, toggleID) => (
               <FailureSignal
                 as="div"
+                placement="gutter"
                 enabled={props.failed === true}
                 class="otk-record-group-heading"
               >

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID } from "@otk/protocol";
+import { isCancellation, randomID } from "@otk/protocol";
 import type {
   FailureFacts,
   FailureTarget,
@@ -325,7 +325,9 @@ export function failureFeedback(
   diagnostic: (id: string, cause: unknown) => void = () => {},
   context?: FailureFacts,
 ): Feedback | undefined {
-  if (cause instanceof RequestReleased) return undefined;
+  if (cause instanceof RequestReleased || isCancellation(cause)) {
+    return undefined;
+  }
   if (cause instanceof FeedbackFailure) return cause.feedback;
   const failure = cause instanceof RequestFailure
     ? contextualFailure(cause.failure, context)

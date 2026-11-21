@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { copyText } from "../clipboard.ts";
-import { errorFeedback } from "@otk/client";
-import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
@@ -575,12 +573,6 @@ export default function Shell(
                     {navigation.state.selectionNotice}
                   </ChromeMeta>
                 </div>
-              </Show>
-              <Show when={error()}>
-                <FeedbackStatus
-                  class="otk-global-error"
-                  feedback={errorFeedback(error())}
-                />
               </Show>
               <Show
                 when={settings()}
