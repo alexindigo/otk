@@ -63,7 +63,8 @@ test("request admission bounds active input and replay while bounded reconnect b
     },
   });
   await coordinator.start();
-  tracker.connect(coordinator.window(), policy.resumebatch);
+  const window = coordinator.window();
+  tracker.connect(window, policy.resumebatch);
   try {
     const operations = Array.from(
       { length: 64 },
@@ -95,7 +96,9 @@ test("request admission bounds active input and replay while bounded reconnect b
     tracker.disconnect();
     consumer = { ...consumer, lease: { ...consumer.lease, id: "replacement" } };
     const reconnectStart = frames.length;
-    tracker.connect(coordinator.window(), policy.resumebatch);
+    // Reattaching inside one server window resumes, rather than renewing reads
+    // into a newly-created window as after a server replacement.
+    tracker.connect(window, policy.resumebatch);
     await Promise.all(deliveries);
     const resumes = frames.slice(reconnectStart).filter((frame) =>
       frame.t === "request.resume"
