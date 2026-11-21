@@ -41,9 +41,8 @@ test.describe("actual tool forms", () => {
         "aria-expanded",
         "false",
       );
-      await expect(row.locator(".otk-tool-toggle")).toContainText(
-        "Exited with code 7",
-      );
+      await expect(row.locator(".otk-tool-toggle")).toContainText("Failed");
+      await expect(row.getByRole("alert")).toContainText("Exited with code 7");
       await expect(row).toHaveClass(/is-error/);
       await expect(row.locator(".otk-tool-body")).toHaveCount(0);
     }
@@ -130,6 +129,10 @@ test.describe("actual tool forms", () => {
     await expandTool(page, "[data-tool=read]");
     if (state.controller.info!.version.startsWith("2.")) {
       // Decisions 1/18 keep discovered instructions as a collapsed, inspectable record.
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/synthetic"]',
+      );
       const instructions = page.locator(
         '[data-native-record="opencode-v2/synthetic"]',
       ).filter({ hasText: "Loaded src/AGENTS.md" });
@@ -253,6 +256,7 @@ test.describe("tool permission/error states", () => {
     await state.queue(["Missing file handled."]);
     await prompt(page, "Show a tool error");
     await openWorkLogs(page);
+    await revealAcquired(page, "[data-tool=read][data-tool-status=error]");
     await expect(page.locator("[data-tool=read][data-tool-status=error]"))
       .toBeAttached();
     await expect(page.locator(".otk-message-flow")).toContainText(
@@ -262,8 +266,12 @@ test.describe("tool permission/error states", () => {
       "data-status",
       "idle",
     );
-    await page.locator("[data-tool=read] .otk-tool-error-toggle").click();
-    await expect(page.locator(".otk-tool-error")).toContainText(
+    const failedRead = page.locator("[data-tool=read][data-tool-status=error]");
+    await failedRead.getByRole("button", {
+      name: "Details",
+      exact: true,
+    }).click();
+    await expect(failedRead.getByRole("alert")).toContainText(
       "File not found",
     );
     await expect.poll(async () => {

@@ -34,7 +34,10 @@ test("messages.definitive-independent-rejection-has-one-session-pointer", {
     body: await page.screenshot({ fullPage: true }),
     contentType: "image/png",
   });
-  await pointer.getByRole("link").click();
+  await pointer.getByRole("button", {
+    name: "See the session error",
+    exact: true,
+  }).click();
   await expect(record.locator("xpath=ancestor::article")).toBeFocused();
 });
 
@@ -65,7 +68,10 @@ test(
       body: await page.screenshot({ fullPage: true }),
       contentType: "image/png",
     });
-    await pointer.getByRole("link").click();
+    await pointer.getByRole("button", {
+      name: "Not sent - see the error above",
+      exact: true,
+    }).click();
     await expect(record.locator("xpath=ancestor::article")).toBeFocused();
     await page.reload();
     await expect(record).toHaveCount(1);

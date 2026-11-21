@@ -42,9 +42,15 @@ function entry(id = "session", directory = "/p"): IndexEntry {
 Deno.test("admitted finishes advance an existing clock silently while live and baseline recovery still complete", () => {
   const f = fixture();
   const completions: number[] = [];
+  const origins: unknown[] = [];
   const stop = f.resources.observeEntries("local", (event) => {
     for (const change of event.changes) {
-      if (change.completedAt) completions.push(change.completedAt);
+      if (change.completedAt) {
+        origins.push([change.completedAt, change.completionOrigin]);
+        if (change.completionOrigin !== "historical") {
+          completions.push(change.completedAt);
+        }
+      }
     }
   });
   try {
@@ -66,6 +72,7 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
       ops: [{ op: "upsert", entry: entry() }],
     });
     completions.length = 0;
+    origins.length = 0;
     f.receive("local", {
       t: "inbox.patch",
       generation: "finishes",
@@ -103,9 +110,13 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
     });
     assertEquals(
       completions,
-      [30, 40],
-      "Baseline recovery retains its existing behavior",
+      [30],
+      "Baseline recovery seeds its clock without a fresh alert",
     );
+    assertEquals(origins, [[20, "historical"], [30, "live"], [
+      40,
+      "historical",
+    ]]);
   } finally {
     stop();
     f.resources.stop();

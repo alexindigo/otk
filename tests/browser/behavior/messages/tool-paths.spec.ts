@@ -83,6 +83,10 @@ test("messages.project-and-outside-tool-paths-reload", {
       if (kind === "read" && !outside) {
         if (state.controller.info!.version.startsWith("2.")) {
           // Decisions 1/18 retain full instructions behind their native record disclosure.
+          await revealAcquired(
+            page,
+            '[data-native-record="opencode-v2/synthetic"]',
+          );
           const instructions = page.locator(
             '[data-native-record="opencode-v2/synthetic"]',
           ).filter({ hasText: "Loaded src/AGENTS.md" });

@@ -206,7 +206,8 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     const failure = feedback.failure;
     assert(failure);
     assertEquals(failure.action, "Saving an earlier branch");
-    assert(failure.target.label);
+    assertEquals(failure.value.facts?.target?.sessionID, target.sessionID);
+    assertEquals(failure.target, { label: "" });
     assert(failure.reason.includes("localStorage is full"));
     assert(failure.recovery?.includes("Delete a saved branch"));
     assertEquals(sent, false, "No silent native commit after archive failure");

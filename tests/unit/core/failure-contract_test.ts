@@ -45,7 +45,9 @@ Deno.test("a new failure code presents its facts without code registration", () 
       recovery: "Choose another title",
     },
   };
-  const feedback = createFailurePresenter().present(failure);
+  const feedback = createFailurePresenter().present(failure, {
+    surface: "notification",
+  });
   for (
     const fact of [
       "Renaming session",

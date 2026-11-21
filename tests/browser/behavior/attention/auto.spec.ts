@@ -313,10 +313,16 @@ test(
     await scenario(state, "fail", root.nativeID);
     await page.reload();
     await expect(rows).toHaveCount(5);
-    await expect(activity.locator(".otk-error")).toContainText(
-      "Native policy refused the permission reply. Review this request before trying again.",
+    const failedReply = activity.getByRole("alert");
+    await failedReply.getByRole("button", { name: "Details", exact: true })
+      .click();
+    await expect(failedReply).toContainText(
+      "Native policy refused the permission reply.",
     );
-    await expect(activity.locator(".otk-error")).not.toContainText(
+    await expect(failedReply).toContainText(
+      "Review this request before trying again.",
+    );
+    await expect(failedReply).not.toContainText(
       "Stored failure fixture",
     );
     await expect(activity).toContainText(

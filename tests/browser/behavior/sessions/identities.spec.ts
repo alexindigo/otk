@@ -86,7 +86,11 @@ test(
     const failure = page.locator(".otk-global-error");
     await expect(failure).toHaveCount(1);
     await expect(failure).toHaveAttribute("role", "alert");
-    await expect(failure).toContainText("Opening session link failed for OTK");
+    await expect(failure).toHaveAccessibleName(
+      /^Opening session link failed for OTK:/,
+    );
+    await expect(failure).toContainText("Opening session link failed");
+    await expect(failure.locator(".otk-failure-target")).toHaveText("OTK");
     await expect(failure).toContainText(
       "This session link is from an older version. Open Sessions to choose a session.",
     );

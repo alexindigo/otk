@@ -143,7 +143,9 @@ export function deliveryContract(
     } else {native.exec(
         "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,time_created INTEGER,data TEXT); CREATE INDEX messages_session ON message(session_id,id); CREATE TABLE part(id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,data TEXT); CREATE INDEX parts_session ON part(session_id,id);",
       );}
-    derived.exec(Deno.readTextFileSync(migrations.migrations.at(-1)!.sql));
+    for (const migration of migrations.migrations) {
+      derived.exec(Deno.readTextFileSync(migration.sql));
+    }
     const add = (
       id: string,
       n: number,

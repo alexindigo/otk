@@ -115,10 +115,11 @@ test("revert.saved-branch-survives-send-and-reload", {
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
   // WP2: saved reply facts live on its scoped identity, not an absent footer.
-  await expect(saved.locator(".otk-reply-start > time")).toHaveAttribute(
-    "datetime",
-    /\d{4}-/,
-  );
+  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+    .toHaveAttribute(
+      "datetime",
+      /\d{4}-/,
+    );
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -144,10 +145,11 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
-  await expect(saved.locator(".otk-reply-start > time")).toHaveAttribute(
-    "datetime",
-    /\d{4}-/,
-  );
+  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+    .toHaveAttribute(
+      "datetime",
+      /\d{4}-/,
+    );
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -266,7 +268,8 @@ test(
     const alert = page.getByRole("alert");
     await expect(alert).toHaveCount(1);
     await expect(alert).toContainText("Saving an earlier branch");
-    await expect(alert).toContainText("Quota-protected branch");
+    await expect(alert).not.toContainText("Quota-protected branch");
+    await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
     await expect(alert).toContainText("were not saved");
     await expect(alert).toContainText("localStorage is full");
     await expect(alert).toContainText("Delete a saved branch");
@@ -279,7 +282,8 @@ test(
     await input.press("Enter");
     await expect(alert).toHaveCount(1);
     await expect(alert).toContainText("Saving an earlier branch");
-    await expect(alert).toContainText("Quota-protected branch");
+    await expect(alert).not.toContainText("Quota-protected branch");
+    await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
     await expect(alert).toContainText("localStorage is full");
     await expect(alert).toContainText("Delete a saved branch");
     await expect(input).toHaveValue("Replacement blocked by quota");

@@ -12,7 +12,10 @@ test(
       kind: "setup",
     });
     await page.goto(url);
-    await expect(page.locator("select[name=type]")).toHaveValue("password");
+    await expect(page.locator("button[name=type]")).toHaveAccessibleName(
+      "Sign-in method: Password",
+    );
+    await expect(page.locator("input[name=type]")).toHaveValue("password");
     await expect(page.locator(".otk-app [disabled]")).toHaveCount(0);
     await page.locator("input[name=username]").fill("geometry-user");
     await page.locator("input[name=password]").fill("geometry-password");
@@ -74,7 +77,12 @@ test(
     await page.locator(".otk-auth-view button[type=submit]").click();
     // The auth owner already gives the next step in the credential reason.
     const failure = page.locator(".otk-auth-view [role=alert]");
-    await expect(failure).toContainText("Signing in failed for This server");
+    await expect(failure).toHaveAccessibleName(
+      /^Signing in failed for This server:/,
+    );
+    await expect(failure.locator(".otk-failure-target")).toHaveText(
+      "This server",
+    );
     await expect(failure).toContainText(
       "Check your username and password",
     );
@@ -135,7 +143,12 @@ test(
     await card.locator("button[type=submit]").click();
     const failure = card.getByRole("alert");
     await expect(failure).toHaveCount(1);
-    await expect(failure).toContainText("Signing in failed for Remote agent");
+    await expect(failure).toHaveAccessibleName(
+      /^Signing in failed for Remote agent:/,
+    );
+    await expect(failure.locator(".otk-failure-target")).toHaveText(
+      "Remote agent",
+    );
     await expect(failure).toContainText("Check your username and password");
     await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
     await expect(failure).not.toContainText("bootstrap.login");
@@ -158,8 +171,13 @@ test(
     }
     await card.locator("input[name=password]").fill("secret");
     await card.locator("button[type=submit]").click();
-    await expect(page.locator(".otk-sidecar-card [data-connection]"))
-      .toHaveText(["connected", "connected"]);
+    await expect(
+      page.locator(".otk-sidecar-card [data-connection]")
+        .getByRole("img", {
+          name: /^Connected\..*: connected; agent service connected$/,
+        }),
+    )
+      .toHaveCount(2);
     await page.locator(".otk-view-header button").click();
     await page.locator(
       `[data-server]:not([data-server=local]) .otk-project-open`,

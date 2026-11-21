@@ -256,7 +256,11 @@ Deno.test("branch history quota uses FP1 action target reason recovery and leave
   const failure = f.owner.state.error;
   assert(failure);
   assertEquals(failure.failure?.action, "Saving an earlier branch");
-  assert(failure.failure?.target.label);
+  assertEquals(
+    failure.failure?.value.facts?.target?.sessionID,
+    target.sessionID,
+  );
+  assertEquals(failure.failure?.target, { label: "" });
   assert(failure.failure?.reason.includes("not saved"));
   assert(failure.failure?.reason.includes("bytes"));
   assert(failure.failure?.recovery?.includes("Delete a saved branch"));

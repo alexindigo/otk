@@ -117,7 +117,7 @@ Deno.test("snapshot and live context never replace composer or Undo selection", 
     });
   try {
     owner.temperature("screen");
-    for (let i = 0; i < 40; i++) await Promise.resolve();
+    await owner.refetch();
     assertEquals(owner.state.latestPrompt, {
       id: prompt.id,
       agent: prompt.agent,

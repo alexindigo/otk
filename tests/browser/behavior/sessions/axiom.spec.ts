@@ -30,7 +30,11 @@ test.describe("inactive supervision", () => {
         await row.locator(".otk-menu-items button").click();
         await expect(row).toHaveCount(0);
       }
-      await expect(page.locator(".otk-inactive-toggle")).toContainText("(3)");
+      await expect(page.locator(".otk-inactive-toggle")).toHaveAccessibleName(
+        "Inactive, 3",
+      );
+      await expect(page.locator(".otk-inactive-toggle .otk-chrome-meta"))
+        .toHaveText("3");
       await activity(state, "tstv1-otk", "hold");
       await activity(state, "tstv1-atmosphera", "thaw");
       await activity(state, "tstv1-globnotes", "hold");

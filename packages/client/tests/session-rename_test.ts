@@ -30,9 +30,12 @@ Deno.test("rename owns cancellation, unchanged titles, retry and stale completio
     "OTK has no further details",
   );
   assertEquals(
-    owner.state.error && owner.state.error.failure?.target.label,
+    owner.state.error && owner.state.error.failure?.value.facts?.target?.label,
     "Original",
   );
+  assertEquals(owner.state.error && owner.state.error.failure?.target, {
+    label: "",
+  });
   assertEquals(owner.state.editing?.origin, "chip");
   fail = false;
   const commit = owner.commit(" New ");

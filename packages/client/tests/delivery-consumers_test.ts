@@ -79,7 +79,7 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
   );
   const helper: IndexEntry = {
     ...shellEntry("helper", "/p", "root"),
-    activity: { terminal: 100, outcome: "succeeded" },
+    activity: { terminal: 0 },
   };
   f.resources.receive("local", {
     t: "index.snapshot",
@@ -99,6 +99,11 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
     },
   });
   const owner = new SessionSupervision();
+  helper.activity = {
+    terminal: 100,
+    outcome: "succeeded",
+    terminalOrigin: "live",
+  };
   let revision = 0;
   const publish = () =>
     f.resources.receive("local", {

@@ -11,7 +11,7 @@ Deno.test("binary on state binds pressed semantics without selection marks", () 
   }
 });
 
-Deno.test("toggle consumers cannot acquire selection marks; native switches and disclosures stay distinct from panel choices", async () => {
+Deno.test("toggle consumers cannot acquire selection marks; shared checkboxes and disclosures stay distinct from panel choices", async () => {
   const read = (path: string) =>
     Deno.readTextFile(new URL(`../${path}`, import.meta.url));
   const auto = await read("features/prompt/approvals.tsx");
@@ -22,7 +22,10 @@ Deno.test("toggle consumers cannot acquire selection marks; native switches and 
     /<label class="otk-preference-toggle">[\s\S]*?<\/label>/,
   )?.[0];
   assert(binary);
-  assert(binary.includes('type="checkbox"'));
+  assert(binary.includes("<Checkbox"));
+  const checkbox = await read("components/Checkbox.tsx");
+  assert(checkbox.includes('type="checkbox"'));
+  assert(!/selection\(|data-otk-selection/.test(checkbox));
   assert(!/selection\(|data-otk-selection/.test(binary));
   assert(controls.includes('control().kind === "segmented"'));
   assert(controls.includes('data-otk-selection="horizontal"'));

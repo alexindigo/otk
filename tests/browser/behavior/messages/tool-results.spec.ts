@@ -117,7 +117,7 @@ test(
       .toHaveJSProperty("textContent", "2\n3");
     await expect(page.locator("[data-tool=read] [data-tool-result-meta]"))
       .toHaveText(
-        v2 ? "2–3 · More available" : "2–3 of 4 lines · More available",
+        v2 ? "2-3 · More available" : "2-3 of 4 lines · More available",
       );
     await revealAcquired(page, "[data-search-mode=list]");
     await expect(

@@ -87,8 +87,7 @@ for (const kind of ["permission", "question", "form"] as const) {
       const feedback = owner.current()!;
       assertEquals(feedback.kind, "error");
       assertEquals(feedback.failure?.target, {
-        label: "Reply target",
-        href: `#/remote/${sessionID}`,
+        label: "",
       });
       assertEquals(
         feedback.failure?.value.diagnosticID,

@@ -15,10 +15,13 @@ async function connect(page: Page, url: string) {
   await page.locator("input[name=label]").fill("History remote sidecar");
   await page.locator(".otk-settings-content > .otk-form button[type=submit]")
     .click();
-  await expect(page.locator(".otk-sidecar-card [data-connection]")).toHaveText([
-    "connected",
-    "connected",
-  ]);
+  await expect(
+    page.locator(".otk-sidecar-card [data-connection]")
+      .getByRole("img", {
+        name: /^Connected\..*: connected; agent service connected$/,
+      }),
+  )
+    .toHaveCount(2);
   await page.locator(".otk-settings .otk-view-header button").click();
 }
 test(

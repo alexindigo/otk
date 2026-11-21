@@ -39,7 +39,7 @@ test("messages.edit-write-patch-native-files-geometry", {
   const diff = page.locator("[data-tool=edit] .otk-diff");
   await expect(diff).toHaveAttribute("aria-label", "Modified edit.ts");
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await page.locator("button[name=diffStyle]").click();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "split");
@@ -57,7 +57,7 @@ test("messages.edit-write-patch-native-files-geometry", {
     JSON.stringify(geometry),
   ).toBe(true);
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await page.locator("button[name=diffStyle]").click();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
@@ -65,11 +65,14 @@ test("messages.edit-write-patch-native-files-geometry", {
   await expect(diff).not.toHaveClass(/otk-diff-wrap/);
   await page.locator(".otk-display-menu > button").click();
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await page.locator("button[name=diffStyle]").click();
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
-  await expect(page.locator("select[name=diffStyle]")).toHaveValue("auto");
+  await expect(page.locator("button[name=diffStyle]")).toHaveAccessibleName(
+    "Diff style: Auto",
+  );
+  await expect(page.locator("input[name=diffStyle]")).toHaveValue("auto");
   await page.locator(".otk-display-menu > button").click();
   const wideViewport = await page.locator(".otk-session-view").evaluate(
     (element) =>
