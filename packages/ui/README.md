@@ -184,11 +184,11 @@ its retained target sink; independent/local failures keep their own in-flow
 feedback. No component infers ownership from error prose or a method name.
 
 Import from `@otk/ui`. `createUiRegistries()` creates empty `tools`, `parts`,
-`prompt`, `dialogs`, `panels`, `takeovers` and legacy `docks` collections.
-Choose feature-owned `register*` functions in your composition root, then
-provide the collection through `UiProvider`. Registration rejects duplicate IDs;
-distinct consumers have independent collections. Register before mounting.
-Registries import no implementations.
+`prompt`, `dialogs`, `panels`, `takeovers`, `composerDocks` and legacy `docks`
+collections. Choose feature-owned `register*` functions in your composition
+root, then provide the collection through `UiProvider`. Registration rejects
+duplicate IDs; distinct consumers have independent collections. Register before
+mounting. Registries import no implementations.
 
 `tools.register(name, Component)` receives `ToolProps`: the live protocol call,
 display preferences, width, directory, waiting state and an injected child-open
@@ -651,6 +651,54 @@ client session. The hidden `transcript.reveal` command belongs to the mounted
 SessionView; Message exposes a reveal control that scrolls and focuses its own
 bubble, while the viewport suspends tail following for that explicit navigation.
 No panel reads another component's DOM or maintains a second transcript store.
+
+`registerTerminalDock` contributes the session Terminal box without a backend
+capability gate; unavailable terminal RPCs produce its muted fallback. Its plain
+model borrows `SessionTerminals` for list, selection and four-sink retention.
+The list is shared by authoritative checkout, while box intent, attachments and
+selection stay per viewing session. New shells record the viewer as owner; Add
+to prompt writes to that viewer, not the shell's original owner. Renderer
+instances follow terminal identity, not tab ordinal. Hidden retained surfaces
+receive bytes without drawing; leaving the session releases its sinks. The
+shell's connection lifetime owns the shared lazy terminal socket independently
+of dock mounts. `registerTerminalPrompt` contributes the adjacent composer icon
+and toggles the client's per-session box intent. `registerTerminalDialog` uses
+the existing editor-size dialog host. One Portal content lifetime moves the same
+mounted renderer between dock and dialog without another attachment.
+`ShellPorts.addToPrompt` appends a text chip through the existing session draft
+writer and focuses the prompt through its command port. Selection uses the
+surface's exact text, never the system clipboard. Only the terminal adapter
+knows both client sinks and the vendored Ghostty surface API. Task and project
+lights receive projected dependency counts; their shared StatusLight description
+is `Running in terminal (N)`. Session-row and breadcrumb lights retain their
+own-session state. No view scans processes or polls.
+
+A disconnected terminal keeps its output but makes its input surface inert and
+shows an in-flow Reconnect action. Reselecting the tab retries too. Add to
+prompt uses a fence longer than every selected backtick run, preserving exact
+output.
+
+`ComposerTakeovers` renders registered `composerDocks` between takeovers and the
+composer without suspending it. The composer and dock surfaces share one width
+rule. A dock takes two thirds of the viewport height and shrinks before the
+composer. Expanded Terminal uses the Editor dialog's size by construction;
+closing that dialog collapses back to the dock. Closing the box releases its
+channels but not its shells. Open/expanded intent is per-session client memory,
+not persisted. Native terminal focus keeps Escape, including inside the dialog.
+The hide control uses a down chevron and the name Hide terminal; tab X controls
+terminate their shells. The generic dialog host has no per-dialog close-label
+port, so its Close header control still collapses Terminal back to the dock. The
+transcript wrapper clips its owned content to its allocated track, including
+when the dock leaves less height than the scrollport's padding; transcript paint
+and hit targets cannot extend into the composer dock.
+
+`Tabs` accepts optional stable tab IDs, close callbacks and trailing actions;
+its compact lane scrolls horizontally. Each compact tab fits within that lane,
+with a shrinking shared label slot and a reserved close control; full titles
+remain accessible and in the tooltip. The terminal's native input declares
+`data-otk-keyboard="local"`, a shared ownership boundary respected by global
+keymap, Escape and keyboard context-menu dispatch. Pointer context menus still
+belong to the sole shell-root context owner.
 
 Sessions and Timeline use the same `ListRow` frame: shared 30px height,
 selection pointer, highlight bounds, padding and leading/label/trailing slots.
@@ -1251,6 +1299,11 @@ search command while mounted and visible. The sidebar's Search control opens the
 command palette; it has no project-search field or separate scan control.
 
 ## Semantic themes
+
+The shared `dependencies` light is orange (`lamp-dependencies`), distinct from
+amber unseen-finished, with a diamond SVG in reduced colours. It is aggregate
+attention, not the session's own lamp or working animation. Dependency counts
+come from client task/project projections; no view enumerates PTYs or polls.
 
 Agent colours arrive as neutral hex values or semantic roles. The shared
 presentation resolver maps roles into this consumer's theme for reply metadata,

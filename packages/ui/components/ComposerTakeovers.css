@@ -8,11 +8,26 @@
   max-height: 100%;
   box-sizing: border-box;
 }
-.otk-composer {
-  --prompt-input-outline: none;
+.otk-composer,
+.otk-composer-surface {
   width: 100%;
   max-width: var(--lane-width);
   margin-inline: auto;
+  box-sizing: border-box;
+}
+.otk-composer-surface {
+  height: calc(100dvh * 2 / 3);
+  flex: 0 1 calc(100dvh * 2 / 3);
+  min-height: 0;
+  display: flex;
+  margin-bottom: 8px;
+}
+.otk-composer-surface[hidden] {
+  display: none;
+}
+.otk-composer {
+  --prompt-input-outline: none;
+  flex: 0 0 auto;
   min-height: 0;
   background: var(--otk-bg-elevated);
   border: 1px solid var(--otk-border);

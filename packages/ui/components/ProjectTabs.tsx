@@ -479,6 +479,7 @@ export default function ProjectTabs(props: {
                         <StatusLight
                           small
                           state={tab().status}
+                          dependencies={tab().dependencies}
                           attention={{
                             server: props.project.sidecarId,
                             family: {

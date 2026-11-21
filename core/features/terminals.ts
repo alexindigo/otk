@@ -7,6 +7,7 @@ import {
   TerminalUnavailable,
 } from "../terminals/host.ts";
 import type { ProcessInfo } from "../terminals/frames.ts";
+import { terminalOwner } from "../terminals/ownership.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import {
@@ -21,6 +22,12 @@ import { completionReceipt } from "./session-receipts.ts";
 export function terminalInfo(process: ProcessInfo): TerminalInfo {
   if (!process.pty) throw new Error("Expected PTY metadata");
   return {
+    ...(terminalOwner(process.group_id)
+      ? {
+        checkout: terminalOwner(process.group_id)!.dir,
+        ownerSessionID: terminalOwner(process.group_id)!.session,
+      }
+      : {}),
     id: String(process.id),
     title: process.pty.title,
     foreground: process.pty.foreground_process,
@@ -84,8 +91,12 @@ export function registerTerminals(rpc: RpcRegistry, host?: TerminalHost): void {
   rpc.register("terminal.list", {
     params: session,
     execution: readExecution((p: { sessionID: string }) => p),
-    handler: (_ctx, p) =>
-      available(async () => (await host.list(p.sessionID)).map(terminalInfo)),
+    handler: (ctx, p) =>
+      available(async () =>
+        (await host.list(await ctx.sessionDirectory(p.sessionID))).map(
+          terminalInfo,
+        )
+      ),
   });
   rpc.register("terminal.create", {
     params: (p) => ({
@@ -101,9 +112,7 @@ export function registerTerminals(rpc: RpcRegistry, host?: TerminalHost): void {
       recover: async (_ctx, record) => {
         if (record.receipt_kind === metadata.kind) {
           const { id } = metadata.restore(record);
-          const process = (await host.list(record.scope_session!)).find((p) =>
-            String(p.id) === id
-          );
+          const process = await host.owned(record.scope_session!, Number(id));
           if (process) {
             return { state: "complete", result: terminalInfo(process) };
           }
@@ -137,7 +146,9 @@ export function registerTerminals(rpc: RpcRegistry, host?: TerminalHost): void {
       closed,
     ),
     async handler(ctx, p) {
-      const processes = await available(() => host.list(p.sessionID));
+      const directory = await ctx.sessionDirectory(p.sessionID);
+      const ready = available(() => host.list(directory));
+      const processes = await (ctx.execution?.wait?.(ready) ?? ready);
       if (!processes.some((process) => String(process.id) === p.terminalID)) {
         throw new OperationFailure(
           "rejected",
@@ -146,7 +157,7 @@ export function registerTerminals(rpc: RpcRegistry, host?: TerminalHost): void {
         );
       }
       return nativeEffect(ctx, async () => {
-        await available(() => host.close(p.sessionID, Number(p.terminalID)));
+        await available(() => host.close(directory, Number(p.terminalID)));
         return null;
       }, closed);
     },

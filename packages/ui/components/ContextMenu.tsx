@@ -2,6 +2,7 @@
 import { onCleanup, onSettled } from "solid-js";
 import type { ContextTarget } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { localKeyboard } from "../keyboard/ownership.ts";
 import {
   browserContextTargets,
   nativeTextContext,
@@ -99,7 +100,10 @@ export default function ContextMenu(
       if (!rightPressed) finish();
     };
     const keyboard = (event: KeyboardEvent) => {
-      if (event.isComposing || event.repeat || event.defaultPrevented) return;
+      if (
+        event.isComposing || event.repeat || event.defaultPrevented ||
+        localKeyboard(event.target)
+      ) return;
       if (
         event.key !== "ContextMenu" &&
         !(event.key === "F10" && event.shiftKey && !event.ctrlKey &&

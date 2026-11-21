@@ -6,6 +6,10 @@ import type { IndexMetadata, ProjectStatus, Supervision } from "@otk/protocol";
 export class SessionSupervision {
   #fresh = true;
   #permissions?: (id: string) => number;
+  #dependencies: (id: string) => number = () => 0;
+  dependencies(lookup: (id: string) => number): void {
+    this.#dependencies = lookup;
+  }
   freshness(fresh: boolean): void {
     this.#fresh = fresh;
   }
@@ -36,13 +40,21 @@ export class SessionSupervision {
       : terminal > acknowledged
       ? "finishedUnseen"
       : "none";
-    return { state, terminal, ...(outcome ? { outcome } : {}) };
+    const running = this.#dependencies(entry.id);
+    return {
+      state,
+      terminal,
+      ...(outcome ? { outcome } : {}),
+      ...(running ? { dependencies: { running } } : {}),
+    };
   }
   status(value: Supervision): ProjectStatus {
     return value.state === "needsYou"
       ? "blocked"
       : value.state === "finishedUnseen"
       ? "finished"
+      : value.state === "none" && value.dependencies?.running
+      ? "dependencies"
       : value.state;
   }
 }

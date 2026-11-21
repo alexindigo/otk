@@ -3,7 +3,11 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { RequestFailure, SidecarConnection, TerminalSocket } from "@otk/client";
 import type { Harness } from "@otk/harness";
-import type { ContentSession, TerminalInfo } from "@otk/protocol";
+import type {
+  ContentSession,
+  IndexMetadata,
+  TerminalInfo,
+} from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { PtyDaemon, readHandoff } from "../../core/terminals/daemon.ts";
 import { embeddedPtyBinary } from "../../core/terminals/binary.ts";
@@ -11,7 +15,7 @@ import { bounded, resources, tempDir, test } from "../support/resources.ts";
 import { cfg } from "../support/config.ts";
 import { originFetch } from "../support/request-wire.ts";
 
-const A = "tstv1-terminal-a", B = "tstv1-terminal-b";
+const A = "tstv1-terminal-a", B = "tstv1-terminal-b", C = "tstv1-terminal-c";
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 async function until(
@@ -38,6 +42,8 @@ async function application(
     unavailable?: boolean;
     root?: string;
     failStart?: boolean;
+    indexed?: boolean;
+    removed?: Set<string>;
     environment?: Record<string, string>;
   } = {},
 ) {
@@ -49,6 +55,7 @@ async function application(
   settings.auth.secretkey = "test-terminal-signing-key";
   settings.auth.username = "tester";
   settings.auth.password = "test-only-not-used-to-login";
+  const removed = options.removed ?? new Set<string>();
   const session = (id: string): ContentSession => ({
     id,
     directory: root,
@@ -56,6 +63,22 @@ async function application(
     title: "Terminal test",
     archived: false,
     time: { created: 1, updated: 1 },
+  });
+  const metadata = (id: string): IndexMetadata => ({
+    id,
+    directory: root,
+    projectID: "test",
+    title: id,
+    archived: false,
+    status: "idle",
+    timeCreated: 1,
+    timeUpdated: 1,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
   });
   const backend: Harness = {
     capabilities: {},
@@ -67,16 +90,19 @@ async function application(
           return Promise.reject(new Error("terminal-test startup failure"));
         }
         sink.connection("connected");
-        sink.indexReset([]);
+        sink.indexReset(options.indexed ? [A, B].map(metadata) : []);
+        sink.bootstrapComplete();
         return Promise.resolve();
       },
       stop: () => Promise.resolve(),
       subscriptions() {},
       identities: (ids) =>
         Promise.resolve(
-          ids.filter((id) => id === A || id === B).map((id) => ({
+          ids.filter((id) =>
+            !removed.has(id) && (id === A || id === B || id === C)
+          ).map((id) => ({
             id,
-            directory: root,
+            directory: id === C ? join(root, "other-checkout") : root,
           })),
         ),
       getSession: (id) => Promise.resolve(session(id)),
@@ -102,6 +128,17 @@ async function application(
     fromFileUrl(new URL("../../web/dist/", import.meta.url)),
     { environment },
   );
+  const remove = (id: string) => {
+    removed.add(id);
+    app.index.applyDigest({
+      id,
+      revision: 1,
+      summary: { state: "ready", revision: 1, messageCount: 0 },
+      turns: { upsert: {}, remove: [] },
+      deleted: { at: 2, how: "provider" },
+    });
+  };
+  for (const id of removed) remove(id);
   const stop = resources().defer(
     "terminal application and handed-off daemon",
     async () => {
@@ -123,6 +160,8 @@ async function application(
     app,
     stop,
     url: `http://127.0.0.1:${app.server.addr.port}`,
+    removed,
+    remove,
   };
 }
 async function rpc(url: string) {
@@ -467,17 +506,28 @@ test("terminal socket validates membership, channel count and policy limits", as
     rows: 24,
   });
   const socket = await Probe.open(app.url);
-  socket.send({ t: "attach", ch: 1, session: B, terminal: a.id });
+  socket.send({ t: "attach", ch: 1, session: C, terminal: a.id });
   assertEquals((await socket.control("error", 1)).code, "not-found");
   const wrongClose = await assertRejects(
     () =>
       client.conn.rpc.call("terminal.close", {
-        sessionID: B,
+        sessionID: C,
         terminalID: a.id,
       }),
     RequestFailure,
   );
   assertEquals(wrongClose.failure.code, "not-found");
+  assertEquals(
+    (await client.conn.rpc.call("terminal.list", { sessionID: B })).map((p) =>
+      p.id
+    ),
+    [a.id],
+  );
+  const shared = await Probe.open(app.url);
+  await shared.attach(1, a.id, B);
+  shared.input(1, "echo shared-$((6*9))\r");
+  await shared.text(1, "\r\nshared-54\r\n");
+  await shared.stop();
   socket.send({ t: "attach", ch: 2, session: A, terminal: "999999" });
   assertEquals((await socket.control("error", 2)).code, "not-found");
   for (let ch = 3; ch < 19; ch++) await socket.attach(ch, a.id);
@@ -545,8 +595,21 @@ test("application teardown hands terminals to the next real application composit
   const attached = await Probe.open(next.url);
   await attached.attach(1, a.id);
   const snapshot = await attached.control("snapshot", 1);
-  assert(
-    typeof snapshot.checkpoint === "string" && snapshot.checkpoint.length > 0,
+  assert(snapshot.restore === "replay" || snapshot.restore === "checkpoint");
+  assert(typeof snapshot.checkpoint === "string");
+  if (snapshot.restore === "checkpoint") assert(snapshot.checkpoint.length > 0);
+  else assertEquals(snapshot.checkpoint, "");
+  await until(
+    () =>
+      (atob(snapshot.checkpoint as string) + (attached.output.get(1) ?? ""))
+        .includes("retained-81"),
+    "handoff restored prior output through the reported attach path",
+  );
+  console.info(
+    JSON.stringify({
+      handoffRestore: snapshot.restore,
+      retainedOutput: "retained-81",
+    }),
   );
   attached.input(1, "echo reclaimed-$((9*10))\r");
   await attached.text(1, "\r\nreclaimed-90\r\n");
@@ -566,4 +629,87 @@ test("application startup failure does not dispose core-owned storage twice", as
     !(failure instanceof AggregateError),
     "startup cleanup must retain the original cause without duplicate storage disposal",
   );
+});
+
+test("checkout dependency publication observes owner counts, orphan-only projects and restart without a browser attachment", async () => {
+  const app = await application({ indexed: true }), client = await rpc(app.url);
+  client.conn.view({ directory: app.root, selected: A, rows: [B], crumbs: [] });
+  const task = await client.conn.rpc.call("tasks.create", {
+    directory: app.root,
+    name: "Owner task",
+    sessions: [A],
+  });
+  const a = await client.conn.rpc.call("terminal.create", {
+    sessionID: A,
+    cols: 80,
+    rows: 24,
+  });
+  const b = await client.conn.rpc.call("terminal.create", {
+    sessionID: B,
+    cols: 80,
+    rows: 24,
+  });
+  assertEquals([a.ownerSessionID, b.ownerSessionID, a.checkout, b.checkout], [
+    A,
+    B,
+    app.root,
+    app.root,
+  ]);
+  const socket = await Probe.open(app.url);
+  await socket.attach(1, a.id, B);
+  await socket.attach(2, b.id, A);
+  socket.input(1, "printf 'running-%s\\n' owner-a; sleep 60\r");
+  socket.input(2, "printf 'running-%s\\n' owner-b; sleep 60\r");
+  await socket.text(1, "\r\nrunning-owner-a\r\n");
+  await socket.text(2, "\r\nrunning-owner-b\r\n");
+  async function summary(
+    conn: SidecarConnection,
+    directory: string,
+    count: number,
+  ) {
+    const end = Date.now() + 8000;
+    for (;;) {
+      const inbox = (await conn.rpc.call("inbox.get", {})).inbox;
+      if ((inbox.summaries?.[directory]?.dependencies ?? 0) === count) {
+        return inbox;
+      }
+      assert(
+        Date.now() < end,
+        `expected ${count} terminal dependencies; got ${
+          JSON.stringify(inbox.summaries)
+        }`,
+      );
+      await delay(25);
+    }
+  }
+  await socket.stop();
+  const active = await summary(client.conn, app.root, 2);
+  assertEquals(active.summaries?.[app.root]?.status, "dependencies");
+  assertEquals(active.supervision?.[A]?.state, "none");
+  assertEquals(active.supervision?.[A]?.dependencies?.running, 1);
+  assertEquals(active.supervision?.[B]?.dependencies?.running, 1);
+  assert(active.tasks.some((row) => row.id === task.id));
+  const control = await Probe.open(app.url);
+  await control.attach(1, a.id, B);
+  control.input(1, "\x03");
+  await summary(client.conn, app.root, 1);
+  control.input(1, "sleep 60\r");
+  await summary(client.conn, app.root, 2);
+  await control.stop();
+  app.remove(A);
+  app.remove(B);
+  const orphaned = await summary(client.conn, app.root, 2);
+  assertEquals(orphaned.summaries?.[app.root]?.sessionCount, 0);
+  assertEquals(orphaned.summaries?.[app.root]?.status, "dependencies");
+  await app.app.stop();
+  await client.stop();
+  const next = await application({
+    root: app.root,
+    indexed: true,
+    removed: app.removed,
+  });
+  const nextClient = await rpc(next.url);
+  const recovered = await summary(nextClient.conn, next.root, 2);
+  assertEquals(recovered.summaries?.[next.root]?.sessionCount, 0);
+  assertEquals(recovered.summaries?.[next.root]?.status, "dependencies");
 });

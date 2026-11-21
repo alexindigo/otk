@@ -54,6 +54,11 @@ export interface GlobalSurfaceDefinition {
   capability?: CapabilityName;
   component(): Element;
 }
+export interface ComposerDockDefinition {
+  id: string;
+  capability?: CapabilityName;
+  component(): Element;
+}
 /** Open collections; consumers select features, machinery knows no implementations. */
 export class SurfaceRegistry<
   T extends { id: string; capability?: CapabilityName },

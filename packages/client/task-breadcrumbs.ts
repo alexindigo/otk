@@ -6,7 +6,7 @@ import type {
   TaskRecord,
 } from "@otk/protocol";
 import { projectSessionHierarchy } from "@otk/protocol";
-import { inboxStatus, type OperationAttention } from "./inbox.ts";
+import { aggregateStatus, type OperationAttention } from "./inbox.ts";
 export interface TaskCrumb {
   id: string;
   helper: boolean;
@@ -72,7 +72,7 @@ export function taskBreadcrumbs(
       const { entry: child, depth } = stack.pop()!;
       if (visited.has(child.id) || !belongs(child)) continue;
       visited.add(child.id);
-      const status = inboxStatus(child, inbox);
+      const status = aggregateStatus(child, inbox);
       if (status !== "none") {
         result.push({ id: child.id, helper: true, depth });
       }

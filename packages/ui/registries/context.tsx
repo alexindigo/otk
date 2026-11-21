@@ -4,6 +4,7 @@ import { createContext, type Element, useContext } from "solid-js";
 import { DockRegistry, PartRegistry, ToolRegistry } from "./renderers.ts";
 import { PromptRegistry } from "./prompt.ts";
 import {
+  type ComposerDockDefinition,
   DialogRegistry,
   type GlobalSurfaceDefinition,
   type PanelDefinition,
@@ -20,6 +21,7 @@ export interface UiRegistries {
   dialogs: DialogRegistry;
   panels: SurfaceRegistry<PanelDefinition>;
   takeovers: SurfaceRegistry<TakeoverDefinition>;
+  composerDocks: SurfaceRegistry<ComposerDockDefinition>;
   global: SurfaceRegistry<GlobalSurfaceDefinition>;
 }
 export function createUiRegistries(): UiRegistries {
@@ -31,6 +33,7 @@ export function createUiRegistries(): UiRegistries {
     dialogs: new DialogRegistry(),
     panels: new SurfaceRegistry(),
     takeovers: new SurfaceRegistry(),
+    composerDocks: new SurfaceRegistry(),
     global: new SurfaceRegistry(),
   };
 }

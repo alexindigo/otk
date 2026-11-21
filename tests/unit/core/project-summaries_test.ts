@@ -43,6 +43,36 @@ Deno.test("location forms retain empty worktree attention and roll it into the r
   assertEquals(owner.values.get("/repo")?.status, "blocked");
   assertEquals(owner.values.get("/repo")?.sessionCount, 0);
 });
+
+Deno.test("checkout dependencies retain orphan-only leaves and roll up once without changing population", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  owner.seed(["/repo", "/leaf"].map((directory) => ({
+    directory,
+    hasSessions: false,
+    sessionCount: 0,
+    lastActivity: null,
+    authority: "current" as const,
+    topology: {
+      repoID: "repo",
+      canonicalRoot: "/repo",
+      leafDirectory: directory,
+      ...(directory === "/leaf" ? { parentDirectory: "/repo" } : {}),
+    },
+  })));
+  owner.terminalDependencies(new Map([["/repo", 1], ["/leaf", 2]]));
+  owner.retain([]);
+  assertEquals(owner.values.get("/leaf")?.dependencies, 2);
+  assertEquals(owner.values.get("/repo")?.dependencies, 3);
+  assertEquals(owner.values.get("/repo")?.direct?.dependencies, 1);
+  assertEquals(owner.values.get("/repo")?.status, "dependencies");
+  assertEquals(owner.values.get("/repo")?.sessionCount, 0);
+  owner.authority("stale");
+  assertEquals(owner.values.get("/repo")?.status, "dependencies");
+  owner.terminalDependencies(new Map());
+  assertEquals(owner.values.get("/repo")?.dependencies, undefined);
+  assertEquals(owner.values.has("/repo"), false);
+  assertEquals(owner.values.has("/leaf"), false);
+});
 Deno.test("unknown population retains last-known discovery without inventing empty-session projects", () => {
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
   owner.seed([{

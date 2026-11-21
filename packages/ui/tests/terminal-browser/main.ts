@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { GhosttyTerminalSurface } from "../../terminal/ghostty/surface.ts";
 import { terminalSink } from "../../terminal/adapter.ts";
+import "../../components/Tabs.css" with { type: "text" };
 
 const mounts = [
   document.querySelector<HTMLElement>("#visible")!,
@@ -8,10 +9,14 @@ const mounts = [
 ];
 const links: string[] = [];
 const input: string[] = [];
+const selections: { notifications: number; text: string }[] = [];
 const hover: { text: string | null; at: number }[] = [];
 let clipboardRead: ((text: string) => void) | undefined;
 const surfaces: GhosttyTerminalSurface[] = [];
 for (const mount of mounts) {
+  const index = selections.length;
+  const selection = { notifications: 0, text: "" };
+  selections.push(selection);
   Object.assign(mount.style, {
     width: "1000px",
     height: "600px",
@@ -30,7 +35,10 @@ for (const mount of mounts) {
         );
       },
       onResize() {},
-      onSelectionChange() {},
+      onSelectionChange() {
+        selection.notifications++;
+        selection.text = surfaces[index]?.getSelection() ?? "";
+      },
       beforeKey: () => true,
       onLinkActivate: (link) => links.push(link),
       canActivateLink: () => true,
@@ -45,6 +53,21 @@ Object.assign(globalThis, {
     links,
     input,
     hover,
+    selections,
+    prepareSelection() {
+      sinks[0].reset(100, 30, encode("\x1b[?25h\x1b[1 qselected-output"));
+      surfaces[0].focus();
+      surfaces[0].selectAll();
+    },
+    selectionOutput() {
+      surfaces[0].write("next-output");
+    },
+    selectionReplay() {
+      sinks[0].reset(100, 30, encode("replacement"));
+    },
+    selectionResize() {
+      sinks[0].resize(90, 25);
+    },
     startPaste() {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -152,6 +175,48 @@ Object.assign(globalThis, {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       );
+    },
+    tabs() {
+      // Exercise the shared stylesheet against the header/strip/item structure
+      // rendered by Tabs, without depending on application panel composition.
+      const tabs = document.createElement("section"),
+        header = document.createElement("div"),
+        strip = document.createElement("div");
+      tabs.className = "otk-tabs";
+      tabs.style.width = "220px";
+      header.className = "otk-tabs-header";
+      strip.className = "otk-tabs-strip";
+      for (
+        const label of [
+          "First long tab",
+          "Second long tab",
+          "Third long tab",
+          "Fourth long tab",
+        ]
+      ) {
+        const item = document.createElement("div"),
+          button = document.createElement("button");
+        item.className = "otk-tabs-item";
+        button.textContent = label;
+        item.append(button);
+        strip.append(item);
+      }
+      header.append(strip);
+      tabs.append(header);
+      document.body.prepend(tabs);
+      return {
+        styles: {
+          header: getComputedStyle(header).display,
+          strip: getComputedStyle(strip).display,
+          wrap: getComputedStyle(strip).flexWrap,
+          shrink: getComputedStyle(strip).flexShrink,
+        },
+        header: header.getBoundingClientRect().toJSON(),
+        strip: strip.getBoundingClientRect().toJSON(),
+        rows: [...strip.children].map((item) =>
+          item.getBoundingClientRect().top
+        ),
+      };
     },
     dispose() {
       for (const surface of surfaces) surface.dispose();

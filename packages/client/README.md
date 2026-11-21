@@ -385,10 +385,19 @@ The connection owner calls `releaseTerminalBoxes` when removed or stopped.
 `TerminalSocket(connection)` is one lazy `/api/terminal` transport per sidecar.
 It shares numbered channels, decodes base64 checkpoints, frames input with the
 channel prefix and reconnects retained channels from fresh snapshots. Reuse the
-connection's injected socket factory for authenticated native consumers.
+connection's injected socket factory for authenticated native consumers. The
+relay restores complete raw output when available, otherwise an active-screen
+checkpoint; its initial snapshot reports `restore: "replay" | "checkpoint"`. Raw
+replay follows the empty reset through the same ordered byte stream as live
+output. Truncated checkpoint fallback cannot recover the inactive normal screen.
 Initial/reconnect snapshots call the sink's `reset`; ordered live resize events
 call `resize` without replaying a checkpoint, preserving renderer scrollback and
 the saved primary screen while an alternate-screen program runs.
+
+The attachment retains its latest desired grid while connecting or disconnected
+and reapplies it after every attachment acknowledgement without another reset.
+An active terminal transport retires after 45 seconds without an incoming frame;
+idle and stopped transports release that liveness timer.
 
 `SessionTerminals(socket, connection, sessionID, factory?)` owns `state.list`,
 `state.selected`, `state.disconnected` and loading/error feedback through that
@@ -856,6 +865,15 @@ integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
+
+Running-terminal dependencies are separate supervision facts. `inboxStatus`
+keeps each session's own lamp unchanged; `aggregateStatus`, `rollup` and
+`dependencyCount` supply task/phantom/project activity. `dependencies` ranks
+below working and above none. Positive counts retain an ungrouped phantom and
+lift Inactive; zero retires dependency-only attention immediately. No terminal
+completion/seen latch is created. Scalar summaries include orphaned PTYs without
+inventing sessions, and keyed projection caches invalidate on count-only
+changes.
 
 `fitOverflow({keys,widths,available,required,preferred?,moreWidth,gap})`
 projects one measured snapshot into ordered visible/overflow identities.

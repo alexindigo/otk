@@ -40,6 +40,9 @@ import {
   registerSlashPrompt,
   registerTaskDialogs,
   registerTaskTool,
+  registerTerminalDialog,
+  registerTerminalDock,
+  registerTerminalPrompt,
   registerTextPart,
   registerTimelinePanel,
   registerTodoTool,
@@ -84,6 +87,7 @@ export function applicationUi(): UiRegistries {
   registerHistoryPrompt(ui.prompt);
   registerPastePrompt(ui.prompt);
   registerAttachmentsPrompt(ui.prompt);
+  registerTerminalPrompt(ui.prompt);
   registerEditorPrompt(ui.prompt);
   registerEditorDialog(ui.dialogs);
   registerAutoApprovePrompt(ui.prompt);
@@ -99,6 +103,8 @@ export function applicationUi(): UiRegistries {
   registerSessionsPanel(ui.panels);
   registerTimelinePanel(ui.panels);
   registerActivityPanel(ui.panels);
+  registerTerminalDock(ui.composerDocks);
+  registerTerminalDialog(ui.dialogs);
   return ui;
 }
 

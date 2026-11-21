@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
-import { LIGHT_STATES, sessionLight } from "../components/status-light.ts";
+import {
+  LIGHT_STATES,
+  lightDescription,
+  sessionLight,
+} from "../components/status-light.ts";
+Deno.test("shared dependency descriptions show the projected count without replacing higher states", () => {
+  assertEquals(lightDescription("dependencies", 1), "Running in terminal (1)");
+  assertEquals(lightDescription("dependencies", 3), "Running in terminal (3)");
+  assertEquals(lightDescription("working", 3), "Working");
+  assertEquals(lightDescription("none", 0), "No known activity");
+});
 Deno.test("session lights render the supervision projection and default to No known activity", () => {
   const entry: IndexEntry = {
     id: "session",
@@ -62,6 +72,21 @@ Deno.test("session lights render the supervision projection and default to No kn
     "×",
     "◐",
     "✓",
+    "diamond",
     "○",
   ]);
+  assertEquals(
+    sessionLight(entry, {
+      seen: {},
+      finishes: {},
+      supervision: {
+        [entry.id]: {
+          state: "none",
+          terminal: 0,
+          dependencies: { running: 2 },
+        },
+      },
+    }),
+    "none",
+  );
 });
