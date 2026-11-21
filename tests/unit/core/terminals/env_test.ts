@@ -56,6 +56,15 @@ test("shell and daemon environments have independent injected projections", asyn
     await shellProgram({ USER: "root", PATH: bin }),
     "/bin/sh",
   );
+  await Deno.writeTextFile(
+    `${bin}/getent`,
+    "#!/bin/sh\nprintf 'root:x:0:0:root:/root:/configured-login-shell\\n'\n",
+  );
+  assertEquals(
+    await shellProgram({ USER: "root", PATH: bin }),
+    "/configured-login-shell",
+    "the lookup must run rather than coincidentally using the /bin/sh fallback",
+  );
   assertEquals(terminalDataDirectory(source), "/data/otk");
   assertEquals(
     terminalDataDirectory({ HOME: "/home/tester" }),

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAbsolute, join } from "@std/path";
 import { embeddedPtyBinary, resolvePtyBinary } from "./binary.ts";
-import { DaemonResponseError, PtyDaemon, readHandoff } from "./daemon.ts";
+import {
+  DaemonNotSentError,
+  DaemonResponseError,
+  PtyDaemon,
+  readHandoff,
+} from "./daemon.ts";
 import { hasSystemd, shellEnvironment, shellProgram } from "./env.ts";
 import type { ProcessInfo } from "./frames.ts";
 
@@ -147,6 +152,9 @@ export class TerminalHost {
       try {
         reply = await daemon.request(request);
       } catch (cause) {
+        if (cause instanceof DaemonNotSentError) {
+          throw new TerminalRejected("terminal-unavailable", cause);
+        }
         // Protocol 8 also reports errors after spawning (reader/actor setup).
         // Only openpty/spawn failures prove that no shell was started.
         // Unqualified shell names can collide with the daemon's thread setup

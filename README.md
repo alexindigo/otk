@@ -561,6 +561,10 @@ a library does not require the OTK application. The browser bundler maps bare
 kit names to the declared public entries; UI resources resolve from pinned
 library exports.
 
+Before terminal tests on a clean checkout, fetch the pinned daemon with
+`deno task pty:fetch x86_64-unknown-linux-gnu` (use `aarch64-unknown-linux-gnu`
+on ARM64). This is also required by the terminal binary-extraction unit test.
+
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.
 `deno task test:arch` enforces extracted package boundaries and

@@ -50,6 +50,14 @@ export async function readRegistration(
 /** A complete daemon rejection, distinct from a lost or malformed response. */
 export class DaemonResponseError extends Error {}
 
+/** Acquisition failed before a request could enter the transport. */
+export class DaemonNotSentError extends Error {
+  override name = "DaemonNotSentError";
+  constructor(cause?: unknown) {
+    super("Daemon request was not sent", { cause });
+  }
+}
+
 export class DaemonConnection {
   #decoder = new FrameDecoder();
   #frames: Frame[] = [];
@@ -134,7 +142,7 @@ export async function readHandoff(
       value.runtimeDir !== o.runtimeDir ||
       !/^otk-pty-[a-zA-Z0-9-]+$/.test(value.name) ||
       typeof value.ticket !== "string" ||
-      !Number.isSafeInteger(value.expiresAt) || value.expiresAt <= Date.now()
+      !Number.isSafeInteger(value.expiresAt) || value.expiresAt < 0
     ) {
       await removeMissingOK(o.handoffFile);
       return undefined;
@@ -343,6 +351,8 @@ export class PtyDaemon {
         const reply = new Promise<Response>((resolve, reject) =>
           this.#ownerReply = { resolve, reject }
         );
+        // Owner loss can reject while its write is still outstanding.
+        void reply.catch(() => {});
         try {
           await this.owner.send(this.registration.token, request);
         } catch (error) {
@@ -355,12 +365,25 @@ export class PtyDaemon {
     this.#ownerSerial = work.catch(() => {});
     return work;
   }
-  async #oneShot(request: Request): Promise<Response> {
-    if (!this.alive) throw new Error("Daemon is gone");
-    const conn = await DaemonConnection.connect(this.registration.socket);
+  async #acquire(): Promise<DaemonConnection> {
+    let conn: DaemonConnection | undefined;
+    try {
+      if (!this.alive) throw new Error("Daemon is gone");
+      conn = await DaemonConnection.connect(this.registration.socket);
+      if (!this.alive) throw new Error("Daemon is gone");
+    } catch (cause) {
+      conn?.close();
+      throw new DaemonNotSentError(cause);
+    }
+    // Register before yielding, so owner retirement sees every acquired socket.
     this.#connections.add(conn);
+    return conn;
+  }
+  async #oneShot(request: Request): Promise<Response> {
+    const conn = await this.#acquire();
     try {
       return await bounded(conn, async () => {
+        if (!this.alive) throw new DaemonNotSentError();
         await conn.send(this.registration.token, request);
         return await conn.response();
       });
@@ -422,16 +445,16 @@ export class PtyDaemon {
   async subscribe(
     request: Extract<Request, { op: "subscribe" }>,
   ): Promise<DaemonConnection> {
-    if (!this.alive) throw new Error("Daemon is gone");
-    const conn = await DaemonConnection.connect(this.registration.socket);
+    const conn = await this.#acquire();
     try {
+      if (!this.alive) throw new DaemonNotSentError();
       await bounded(conn, () => conn.send(this.registration.token, request));
+      if (!this.alive) throw new Error("Daemon owner disconnected");
+      return conn;
     } catch (error) {
-      conn.close();
+      this.release(conn);
       throw error;
     }
-    this.#connections.add(conn);
-    return conn;
   }
   release(conn: DaemonConnection): void {
     conn.close();
