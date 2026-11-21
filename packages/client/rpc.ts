@@ -8,7 +8,6 @@ import {
 import type {
   ClientFrame,
   FailureFacts,
-  IntentIdentity,
   RequestEvent,
   RequestMetadataRegistry,
   RpcMethod,
@@ -17,6 +16,7 @@ import type {
   ServerFrame,
 } from "@otk/protocol";
 import {
+  type ClientIntent,
   IntentGroups,
   type Operation,
   type RequestOptions,
@@ -99,7 +99,7 @@ export class Rpc {
         kind: (method) => metadata.get(method)?.kind ?? "mutation",
       });
   }
-  intent(): IntentIdentity {
+  intent(): ClientIntent {
     return this.requests.intent();
   }
   start<M extends RpcMethod>(
@@ -148,7 +148,7 @@ export class Rpc {
           t: "request",
           ref: {
             ...intent,
-            window: intent.window || randomID(),
+            window: randomID(),
             id: randomID(),
           },
           method,

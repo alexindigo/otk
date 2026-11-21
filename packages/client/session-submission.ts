@@ -12,7 +12,8 @@ export interface SessionSubmission {
   ): Promise<T>;
 }
 
-/** Bind identity and owners before asynchronous admission; never read selection. */
+/** Bind identity and owners before asynchronous admission; never read selection.
+ * Child identities carry no window: the request owner binds current welcome at dispatch. */
 export function createSessionSubmission({
   sessionID,
   directory,

@@ -28,9 +28,12 @@ import {
   RequestReleased,
 } from "./failures.ts";
 
+/** Preparation reserves identity, not transport authority. Welcome owns windows. */
+export type ClientIntent = Omit<IntentIdentity, "window">;
+
 export interface RequestOptions {
   signal?: AbortSignal;
-  intent?: IntentIdentity;
+  intent?: ClientIntent;
   owner?: string;
   origin?: import("@otk/protocol").RequestOrigin;
   facts?: import("@otk/protocol").FailureFacts;
@@ -220,7 +223,16 @@ export class RequestTracker {
     if (frame.t === "request") {
       const item = this.#pending.get(frame.ref.key);
       if (item && item.principal !== this.#principal) return;
-      if (item) item.submitted = true;
+      if (item && !item.submitted) {
+        // Only this dispatch boundary supplies admission authority. Composed
+        // intents may have waited through any number of replacement welcomes.
+        const window = item.state.method.startsWith("bootstrap.")
+          ? "bootstrap"
+          : this.#window?.id ?? "";
+        item.state = { ...item.state, ref: { ...item.state.ref, window } };
+        frame = { ...frame, ref: item.state.ref };
+        item.submitted = true;
+      }
     }
     try {
       this.options.send(frame);
@@ -369,21 +381,21 @@ export class RequestTracker {
     params: unknown,
     options: RequestOptions = {},
   ): Operation<unknown> {
+    const intent = options.intent ?? this.intent();
+    const prior = this.#pending.get(intent.key);
     const ref: RequestRef = {
-      ...(options.intent ??
-        {
-          clientID: this.clientID,
-          key: randomID(),
-          window: this.#window?.id ?? "",
-        }),
+      clientID: intent.clientID,
+      key: intent.key,
+      // A submitted operation retains its receipt authority across reconnects.
+      // New work receives a window only when it is actually dispatched.
+      window: prior?.state.ref.window ??
+        (method.startsWith("bootstrap.") ? "bootstrap" : ""),
       id: randomID(),
       ...(options.intent?.origin ?? options.origin
         ? { origin: options.intent?.origin ?? options.origin }
         : {}),
     };
-    if (!ref.window && this.#window) ref.window = this.#window.id;
     const canonical = canonicalRequest(params);
-    const prior = this.#pending.get(ref.key);
     if (
       prior && prior.state.ref.clientID === ref.clientID &&
       prior.state.ref.window === ref.window && prior.state.method === method &&
@@ -708,11 +720,17 @@ export class RequestTracker {
       ) this.#pending.delete(key);
     }
   }
-  intent(): IntentIdentity {
+  /** Match streamed delivery against dispatched authority, never a captured seed. */
+  matches(intent: ClientIntent, ref: IntentIdentity): boolean {
+    const current = this.#pending.get(intent.key)?.state.ref;
+    return !!current && ref.key === intent.key &&
+      ref.clientID === intent.clientID && ref.clientID === current.clientID &&
+      ref.window === current.window;
+  }
+  intent(): ClientIntent {
     return {
       clientID: this.clientID,
       key: randomID(),
-      window: this.#window?.id ?? "",
     };
   }
   connectionFor(key: string, connection: OperationState["connection"]): void {
@@ -739,12 +757,16 @@ export class RequestTracker {
 
 /** Child keys are allocated once and remain bound to their captured group. */
 export class IntentGroup {
-  #steps = new Map<string, IntentIdentity>();
-  constructor(readonly identity: IntentIdentity) {}
-  step(name: string): IntentIdentity {
+  #steps = new Map<string, ClientIntent>();
+  constructor(readonly identity: ClientIntent) {}
+  step(name: string): ClientIntent {
     let step = this.#steps.get(name);
     if (!step) {
-      step = { ...this.identity, key: randomID() };
+      step = {
+        clientID: this.identity.clientID,
+        key: randomID(),
+        ...(this.identity.origin ? { origin: this.identity.origin } : {}),
+      };
       this.#steps.set(name, step);
     }
     return step;
@@ -757,7 +779,7 @@ export class IntentGroup {
 /** Reserve a composed intent before any preparation or deferred UI publication. */
 export class IntentGroups {
   #pending = new Map<string, Promise<unknown>>();
-  constructor(readonly identity: () => IntentIdentity) {}
+  constructor(readonly identity: () => ClientIntent) {}
   run<T>(key: string, action: (group: IntentGroup) => Promise<T>): Promise<T> {
     const prior = this.#pending.get(key);
     if (prior) return prior as Promise<T>;

@@ -5,7 +5,6 @@ import {
   compareTranscriptVersion,
   type ContentClock,
   ContentDeliveryDiagnostics,
-  type IntentIdentity,
   type LatestPrompt,
   type LoadCoverage,
   MESSAGE_PAGE_SIZE,
@@ -189,7 +188,7 @@ export function createTranscript(
   let readFacts: import("@otk/protocol").ProgressFacts | undefined;
   let readLabel = "Loading messages";
   let boundaryRead: {
-    intent: IntentIdentity;
+    intent: import("./requests.ts").ClientIntent;
     epoch: number;
     before?: string;
     revision: number;
@@ -1281,9 +1280,10 @@ export function createTranscript(
         const pending = boundaryRead;
         if (
           !pending || frame.epoch !== pending.epoch ||
-          frame.request.key !== pending.intent.key ||
-          frame.request.clientID !== pending.intent.clientID ||
-          frame.request.window !== pending.intent.window ||
+          !connection(sidecarId).rpc.requests.matches(
+            pending.intent,
+            frame.request,
+          ) ||
           frame.data.kind !== "message-page"
         ) return;
         if (frame.data.page && !pending.streamed) {
