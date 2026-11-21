@@ -357,6 +357,12 @@ small {
   min-width: 0;
   gap: calc(8 * var(--otk-unit));
 }
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item::before {
+  content: none;
+}
 :root [data-otk-selection=horizontal].otk-selection-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

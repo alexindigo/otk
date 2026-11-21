@@ -17,7 +17,12 @@ import ControlValue, { ControlIcon } from "./ControlValue.tsx";
 import "./ProjectChip.css" with { type: "text" };
 
 export function ProjectAvatar(
-  props: { name: string; icon?: string; color?: string },
+  props: {
+    name: string;
+    icon?: string;
+    color?: string;
+    size?: "control" | "compact";
+  },
 ): Element {
   const [failed, setFailed] = createSignal<string>();
   const initial = () =>
@@ -26,7 +31,11 @@ export function ProjectAvatar(
       .toLocaleUpperCase() ?? "";
   return (
     <span
-      class={["otk-project-avatar", { "has-color": !!props.color }]}
+      class={["otk-project-avatar", {
+        "has-color": !!props.color,
+        "is-control-size": props.size === "control",
+        "is-compact-size": props.size === "compact",
+      }]}
       style={{ "--project-color": props.color }}
       aria-hidden="true"
     >

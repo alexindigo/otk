@@ -60,8 +60,10 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       "data-project-availability",
       "removed",
     );
-    await expect(row(directory).locator(".otk-project-availability"))
-      .toHaveText("removed");
+    await expect(
+      row(directory).locator(".otk-sidebar-meta .otk-project-availability"),
+    )
+      .toHaveText(/^removed \u00b7 .+$/);
     await expect(row(directory).locator(".otk-project-open"))
       .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
@@ -101,15 +103,32 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
           .getBoundingClientRect();
         const label = element.querySelector(".otk-project-availability")!
           .getBoundingClientRect();
+        const meta = element.querySelector(".otk-sidebar-meta")!
+          .getBoundingClientRect();
         return {
           nameCenter: name.y + name.height / 2,
           labelCenter: label.y + label.height / 2,
           height: element.getBoundingClientRect().height,
+          stacked: meta.y >= name.bottom - .5,
+          nameBottom: name.bottom,
+          metaTop: meta.y,
+          nameRight: name.right,
+          metaLeft: meta.x,
         };
       });
-      expect(Math.abs(geometry.nameCenter - geometry.labelCenter))
-        .toBeLessThanOrEqual(1);
-      expect(geometry.height).toBe(32);
+      if (geometry.stacked) {
+        expect(geometry.metaTop).toBeGreaterThanOrEqual(
+          geometry.nameBottom - .5,
+        );
+      } else {
+        expect(Math.abs(geometry.nameCenter - geometry.labelCenter))
+          .toBeLessThanOrEqual(1);
+        expect(geometry.metaLeft).toBeGreaterThanOrEqual(
+          geometry.nameRight - .5,
+        );
+        expect(geometry.height).toBe(32);
+      }
+      expect(geometry.height).toBeGreaterThanOrEqual(32);
     }
     await page.screenshot({
       path: info.outputPath(`ph1-${label}-removed.png`),

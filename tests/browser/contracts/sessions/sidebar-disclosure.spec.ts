@@ -32,9 +32,9 @@ test.describe("sidebar disclosure intent", () => {
       return document.elementFromPoint(
         box.x + box.width / 2,
         box.y + box.height / 2,
-      )?.closest("button")?.className;
+      )?.closest("button")?.classList.contains("otk-tree-toggle");
     });
-    expect(pointer).toBe("otk-tree-toggle");
+    expect(pointer).toBe(true);
     await toggle.locator("svg").click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(row(root + "/worktrees/feature-two")).toHaveCount(0);

@@ -58,6 +58,7 @@ export default function ConnectionBadge(props: {
         <ConnectionStatus
           connection={props.sidecar}
           subgrid
+          unlabelled={props.label === false}
           compact={props.compact}
           onSettings={props.onSettings}
         />

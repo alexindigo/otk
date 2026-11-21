@@ -10,3 +10,29 @@
   align-items: center;
   gap: var(--space-2);
 }
+.otk-form-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.otk-form-control input:not([type=checkbox]) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.otk-form-custom,
+.otk-form-boolean,
+.otk-form-external {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.otk-form-custom input {
+  flex: 1;
+  min-width: 0;
+}
+.otk-form-external {
+  flex-wrap: wrap;
+}

@@ -21,16 +21,9 @@
   color: inherit;
   text-align: start;
 }
-.otk-connection > .otk-connection-status {
-  grid-column: 2;
-  min-inline-size: 0;
-}
 .otk-connection.is-unlabelled > .otk-connection-heading {
   grid-area: 1 / 1;
   grid-template-columns: 1fr;
-}
-.otk-connection.is-unlabelled > .otk-connection-status {
-  grid-area: 1 / 2;
 }
 .otk-connection.is-lamp-only {
   grid-template-columns: var(--control-size);
@@ -40,12 +33,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* A failure spans the row: its signal gutter is the lamp track, so its text
-   starts on the server label's edge. */
-.otk-connection > .otk-connection-status.has-failure {
-  grid-column: 1 / -1;
-}
-.otk-connection.is-unlabelled > .otk-connection-status.has-failure {
-  grid-row: 2;
 }

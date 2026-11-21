@@ -21,19 +21,34 @@ imports and knows no native backend.
 
 ## Composition and API
 
-Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. Project
-inbox rows and its section headers borrow `SidebarRow`: nonshrinking
-lamp/artwork/metadata columns and a shrinkable, ellipsized label. Missing
-artwork retains its slot. `Tree` alone owns disclosure and nesting; selection
-paints in the shared heading inset, outside the content tracks, without
-consuming a column. Per-kind offsets, absolute positioning and replacement row
-tracks are rejected. Conventions are executable owner contracts, not a one-time
-grep sweep: Clock owns instants, the client duration formatter owns elapsed
-text, icon slots take components, FailurePresenter owns targets and outcome
-tone, and shared controls own their geometry. Include reject and accept fixtures
-so a gate catches the problem class without banning legitimate numeric
-formatting or intrinsic layout. Style scenes build failures through the same
-production presenters as the app.
+Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. A
+component's stylesheet owns its internal classes; a consumer uses public props,
+class slots or its own grid track, never a selector reaching into a child. The
+syntax-aware style-boundary check inventories native classes, state bindings and
+every DisclosureToggle caller, rather than naming a few consumers.
+DisclosureToggle's `tree` variant owns the compact box; Tree positions its slot.
+Surface likewise owns its fill/popover layout and signal variants.
+
+Project inbox rows and section headers borrow `SidebarRow`: scaled lamp/artwork
+tracks, a shrinkable single-line label and intrinsic metadata. Empty metadata
+consumes no track. Narrow rows reflow the metadata as a whole beneath the label;
+availability stays with visit metadata, not inside the shrinking name. Missing
+artwork retains its slot. `Tree` alone owns disclosure, nesting and compact
+flattening; its selected heading paints the mark outside the row highlight in
+both column and rail. The real-app geometry contract uses the removed/sidebar/
+catalog profiles at 200/298px and 100/125% text in all three themes. It measures
+painted SVGs and lamp bodies, full section names and at least 6ch of project
+names, in addition to the same shared contract on the style scene. The composer
+destination port returns task/session facts separately; the view borrows
+ChevronIcon and ChromeMeta, yielding the task name before the destination
+session. Per-kind offsets, absolute row positioning and replacement row tracks
+are rejected. Conventions are executable owner contracts, not a one-time grep
+sweep: Clock owns instants, the client duration formatter owns elapsed text,
+icon slots take components, FailurePresenter owns targets and outcome tone, and
+shared controls own their geometry. Include reject and accept fixtures so a gate
+catches the problem class without banning legitimate numeric formatting or
+intrinsic layout. Style scenes build failures through the same production
+presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
@@ -102,9 +117,11 @@ their current measured width; other values use their inert measurement frames.
 More occupies a separate trailing grid track, so editor blur cannot move its
 pointer target between press and release as the live chip width changes.
 ResizeObserver and font completion belong to this component. The client owns
-`fitOverflow` and ancestry preference. Breadcrumbs retain single-line
-required-frame shrinking. Task tabs instead use the horizontal `ScrollRegion`:
-one chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
+`fitOverflow` and ancestry preference. A consumer-supplied item minimum belongs
+to the frame; required frames reflow as whole controls rather than clipping
+their readable labels. Breadcrumb metadata yields to its own line under
+pressure. Task tabs instead use the horizontal `ScrollRegion`: one
+chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
 labels and a thin hover scrollbar. Vertical wheel deltas scroll horizontally
 unless Ctrl/Meta is held. Selection and lane resize reveal the active tab.
 `EdgeTriangle` owns a centred control-height slot and renders only available
@@ -1084,9 +1101,10 @@ TreeNode disclosure and SectionHeaderMeta's adjacent label/count slots, with the
 rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
 `--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
 record summaries/counts, running-work elapsed time and project annotations use
-that same owner. Project metadata borrows the elastic label slot, yielding
-before the project name. Counts and annotations have no parentheses. The
-hierarchy projection supplies artwork eligibility, never section-local depth.
+that same owner. Project metadata borrows SidebarRow's intrinsic metadata slot
+and reflows below the label under pressure. Counts and annotations have no
+parentheses. The hierarchy projection supplies artwork eligibility, never
+section-local depth.
 
 ## Example
 

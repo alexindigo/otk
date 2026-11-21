@@ -1,7 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-native-record.is-error .otk-tool-state {
-  color: var(--otk-fg-2);
-}
 .otk-native-parameters {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

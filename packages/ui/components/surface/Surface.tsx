@@ -6,6 +6,10 @@ import { type Element, Show } from "solid-js";
 /** Internal boundary and flow owner. Only overlay specialisations use this. */
 export default function Surface(props: {
   density?: "menu";
+  layout?: "fill" | "popover" | "dialog";
+  fullHeight?: boolean;
+  signal?: "success" | "error" | "attention";
+  staticChildren?: boolean;
   scrollable?: boolean;
   title?: Element;
   actions?: Element;
@@ -13,7 +17,15 @@ export default function Surface(props: {
 }): Element {
   return (
     <div
-      class={["otk-surface", { "otk-surface-menu": props.density === "menu" }]}
+      class={["otk-surface", {
+        "otk-surface-menu": props.density === "menu",
+        "is-fill": props.layout === "fill" || props.layout === "dialog",
+        "is-dialog": props.layout === "dialog",
+        "is-popover": props.layout === "popover",
+        "is-full-height": props.fullHeight,
+        "has-static-children": props.staticChildren,
+      }]}
+      data-signal={props.signal}
     >
       <Show when={props.title}>
         <header class="otk-surface-title">{props.title}</header>

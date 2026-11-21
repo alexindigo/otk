@@ -9,6 +9,7 @@ export default function FailureSignal(props: {
   class?: string;
   enabled?: boolean;
   informational?: boolean;
+  placement?: "gutter";
   children: Element;
 }): Element {
   const Frame = dynamic(() => props.as ?? "span");
@@ -17,6 +18,7 @@ export default function FailureSignal(props: {
       class={[props.class, {
         "otk-failure-signal": props.enabled !== false,
         "is-informational": props.informational,
+        "is-gutter": props.placement === "gutter",
       }]}
     >
       {props.children}

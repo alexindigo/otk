@@ -336,6 +336,7 @@ export default function Popover(props: {
             }}
           >
             <Surface
+              layout="popover"
               density={props.density}
               title={props.title ? <h2>{props.title}</h2> : undefined}
             >

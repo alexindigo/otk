@@ -6,3 +6,11 @@
 .otk-failure-signal.is-informational {
   border-inline-start-color: var(--otk-fg-3);
 }
+.otk-failure-signal.is-gutter {
+  border: 0;
+  padding-inline-start: 0;
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+.otk-failure-signal.is-gutter.is-informational {
+  box-shadow: inset 2px 0 0 var(--otk-fg-3);
+}

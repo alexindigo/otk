@@ -14,10 +14,6 @@
   min-height: 0;
   margin-inline: auto;
 }
-.otk-takeover > .otk-surface {
-  flex: 1 1 auto;
-  min-height: 0;
-}
 .otk-takeover.is-noticed {
   --overlay-radius: 0 0 var(--radius-composer) var(--radius-composer);
 }

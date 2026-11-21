@@ -10,7 +10,18 @@ export default function Toast(props: {
 }): Element {
   return (
     <article class="otk-toast" data-note={props.id} data-kind={props.kind}>
-      <Surface>{props.children}</Surface>
+      <Surface
+        layout="fill"
+        scrollable={false}
+        staticChildren
+        signal={props.kind === "error"
+          ? "error"
+          : ["permission", "question"].includes(props.kind)
+          ? "attention"
+          : "success"}
+      >
+        {props.children}
+      </Surface>
     </article>
   );
 }

@@ -67,7 +67,8 @@ export default function RightPanel(props: {
             <button
               type="button"
               {...selection({
-                class: "otk-icon-button",
+                class: "otk-icon-button" +
+                  (input.rail ? " otk-panel-rail-button" : ""),
                 kind: "selected",
                 selected: active()?.id === view().id,
               })}

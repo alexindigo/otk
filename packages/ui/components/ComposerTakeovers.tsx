@@ -9,6 +9,7 @@ import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
 export default function ComposerTakeovers(
   props: {
@@ -29,6 +30,12 @@ export default function ComposerTakeovers(
   const first = () =>
     available().find((item) => item.active?.(session) ?? true)?.id;
   const hasComposer = () => !props.readOnly;
+  const target = () =>
+    session.composerTarget?.() ??
+      {
+        session: session.entry(session.sessionID())?.title ??
+          session.sessionID(),
+      };
   return (
     <ComposerProvider available={hasComposer}>
       <Show when={hasComposer() || active() || work().length}>
@@ -38,23 +45,35 @@ export default function ComposerTakeovers(
         >
           <div class="otk-composer-activity-slot">
             <div class="otk-composer-activity" aria-label="Message destination">
-              <ChromeMeta
-                class="otk-composer-target otk-control-label"
-                title={session.composerTarget?.() ??
-                  session.entry(session.sessionID())?.title ??
-                  session.sessionID()}
+              <span
+                class="otk-composer-target"
+                title={[target().task, target().session].filter(Boolean).join(
+                  ": ",
+                )}
               >
-                {session.composerTarget?.() ??
-                  session.entry(session.sessionID())?.title ??
-                  session.sessionID()}
-              </ChromeMeta>
-              <LiveWork
-                items={work()}
-                owner={session.liveWork}
-                onOpen={(id) =>
-                  void commands.run("session.child", id).catch(fail)}
-                onError={fail}
-              />
+                <Show when={target().task}>
+                  {(task) => (
+                    <>
+                      <ChromeMeta class="otk-composer-task otk-control-label">
+                        {task()}
+                      </ChromeMeta>
+                      <ChevronIcon class="otk-composer-chevron" />
+                    </>
+                  )}
+                </Show>
+                <ChromeMeta class="otk-composer-destination otk-control-label">
+                  {target().session}
+                </ChromeMeta>
+              </span>
+              <span class="otk-composer-live-slot">
+                <LiveWork
+                  items={work()}
+                  owner={session.liveWork}
+                  onOpen={(id) =>
+                    void commands.run("session.child", id).catch(fail)}
+                  onError={fail}
+                />
+              </span>
             </div>
           </div>
           <ScrollRegion

@@ -130,9 +130,9 @@ const cases: [Parameters<typeof conventionErrors>[0], string, string][] = [
   [
     "disclosure",
     "Fixture.css",
-    ".otk-permission-scope { grid-template-columns: 19px auto; gap: 0 }",
+    ".otk-disclosure-toggle { grid-template-columns: 19px auto; gap: 0 }",
   ],
-  ["disclosure", "Fixture.css", ".otk-failure-details { padding-left: 8px }"],
+  ["disclosure", "Fixture.css", ".otk-disclosure-icon { padding-left: 8px }"],
   [
     "duration",
     "Fixture.tsx",

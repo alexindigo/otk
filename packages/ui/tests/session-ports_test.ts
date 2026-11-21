@@ -110,7 +110,7 @@ Deno.test("session ports capture target once while capability and resource gette
   target.sessionID = "mutated";
   session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   assertEquals(ports.sessionID(), "original");
-  assertEquals(ports.composerTarget!(), "Title");
+  assertEquals(ports.composerTarget!(), { task: undefined, session: "Title" });
   resources.receive("local", {
     t: "inbox.snapshot",
     generation: "target",
@@ -130,7 +130,10 @@ Deno.test("session ports capture target once while capability and resource gette
       pathTemplates: [],
     },
   });
-  assertEquals(ports.composerTarget!(), "Selected task / Title");
+  assertEquals(ports.composerTarget!(), {
+    task: "Selected task",
+    session: "Title",
+  });
   assertEquals(await ports.directory(), "/original");
   await ports.rpc("session.abort", { sessionID: ports.sessionID() });
   await ports.act(() => Promise.resolve());

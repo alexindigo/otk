@@ -2,6 +2,7 @@
 import { Show } from "solid-js";
 import Form, { Credentials } from "./Form.tsx";
 import AuthColumn from "./AuthColumn.tsx";
+import { metaList } from "./ChromeMeta.tsx";
 export default function Login(
   props: {
     label: string;
@@ -10,9 +11,9 @@ export default function Login(
   },
 ): import("solid-js").Element {
   return (
-    <AuthColumn title={`Log in · ${props.label}`}>
+    <AuthColumn title={metaList(["Log in", props.label])}>
       <Form
-        title={`Log in · ${props.label}`}
+        title={metaList(["Log in", props.label])}
         submitLabel="Log in"
         pendingLabel="Signing in..."
         onSubmit={(data) =>

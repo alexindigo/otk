@@ -28,6 +28,7 @@ const FormContext = createContext<
 export default function Form(
   props: {
     title: string;
+    spacious?: boolean;
     submitLabel: string;
     pendingLabel?: string;
     /** Borrow an operation whose lifetime is longer than this mounted form. */
@@ -88,7 +89,10 @@ export default function Form(
   return (
     <FormContext value={context}>
       <form
-        class={["otk-form", { "is-pending": pending() }]}
+        class={["otk-form", {
+          "is-pending": pending(),
+          "is-spacious": props.spacious,
+        }]}
         onSubmit={submit}
         aria-busy={pending() ? "true" : undefined}
       >

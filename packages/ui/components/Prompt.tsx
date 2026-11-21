@@ -39,7 +39,7 @@ import {
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import type { PromptChoices } from "../registries/prompt.ts";
-import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
+import { ModelLabel, PromptSetting, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
@@ -408,17 +408,18 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             when={features.some((feature) => feature.settings)}
             fallback={
               <>
-                <span class="otk-prompt-setting">
+                <PromptSetting>
                   {selectionLabel(
                     ctx.nextSelection().agent.value,
                     "Default agent",
                   )}
-                </span>
-                <ModelLabel
-                  class="otk-prompt-setting"
-                  provider={ctx.nextSelection().model.providerName}
-                  name={ctx.nextSelection().model.name}
-                />
+                </PromptSetting>
+                <PromptSetting>
+                  <ModelLabel
+                    provider={ctx.nextSelection().model.providerName}
+                    name={ctx.nextSelection().model.name}
+                  />
+                </PromptSetting>
               </>
             }
           >

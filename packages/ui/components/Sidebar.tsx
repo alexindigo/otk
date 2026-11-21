@@ -106,7 +106,7 @@ export default function Sidebar(
                       </h3>
                       <button
                         type="button"
-                        class="otk-new-session"
+                        class="otk-legacy-new-session"
                         aria-label={`New session in ${group().directory}`}
                         disabled={sidecar().status !== "connected"}
                         onClick={() =>
@@ -127,7 +127,7 @@ export default function Sidebar(
                         <button
                           type="button"
                           {...selection({
-                            class: "otk-session-row",
+                            class: "otk-legacy-session-row",
                             kind: "current",
                             selected: props.selected ===
                               sessionKey(entry().sidecarId, entry().id),
