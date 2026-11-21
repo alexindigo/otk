@@ -4,7 +4,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
-test("messages.native-final-clock-hover-ax-preference-restart", {
+test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   tag: ["@messages", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
   const session = await state.native<{ id: string }>("/session", "POST", {
@@ -124,12 +124,14 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   );
   await page.mouse.move(10, 10);
   for (const role of ["user"]) {
-    const created = page.locator(`[data-role=${role}] .otk-created-time`);
-    await expect(created).toHaveCSS("visibility", "hidden");
+    const created = page.locator(
+      `[data-role=${role}] .otk-message-footer time`,
+    );
+    await expect(created).toHaveCSS("visibility", "visible");
     await page.locator(`[data-role=${role}] .otk-user-bubble`).hover();
     await expect(created).toHaveCSS("visibility", "visible");
     await page.mouse.move(10, 10);
-    await expect(created).toHaveCSS("visibility", "hidden");
+    await expect(created).toHaveCSS("visibility", "visible");
   }
   const style = await page.evaluate(() => {
     const canvas = document.createElement("canvas");
@@ -154,7 +156,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
     };
     return {
       roleInk: color(document.querySelector(".otk-user-bubble")!),
-      createdInk: color(document.querySelector(".otk-created-time")!),
+      createdInk: color(document.querySelector(".otk-user-meta time")!),
     };
   });
   expect(style.createdInk).toBeLessThan(style.roleInk);
@@ -187,16 +189,15 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
     await expect(page.locator(selector)).toBeFocused();
   }
   await page.locator(".otk-user-bubble").focus();
-  await expect(page.locator("[data-role=user] .otk-created-time"))
+  await expect(page.locator("[data-role=user] .otk-message-footer time"))
     .toHaveCSS("visibility", "visible");
   await page.locator(".otk-display-menu > button").click();
-  await expect(page.locator(".otk-display-menu")).toContainText(
-    "Always show timestamps",
-  );
-  await page.locator("input[name=timestamps]").click();
+  await expect(page.locator("input[name=timestamps]")).toHaveCount(0);
+  // Older saved/API values remain readable, but can no longer hide metadata.
+  await state.product("prefs.set", { key: "timestamps", value: true });
   await page.mouse.move(10, 10);
   await expect.poll(() =>
-    page.locator(".otk-created-time").evaluateAll((rows) =>
+    page.locator(".otk-user-meta time").evaluateAll((rows) =>
       rows.length === 1 &&
       rows.every((e) => getComputedStyle(e).visibility === "visible")
     )
@@ -205,7 +206,7 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await page.reload();
   await expect(time).toHaveAttribute("datetime", completed!);
   await expect.poll(() =>
-    page.locator(".otk-created-time").evaluateAll((rows) =>
+    page.locator(".otk-user-meta time").evaluateAll((rows) =>
       rows.length === 1 &&
       rows.every((e) => getComputedStyle(e).visibility === "visible")
     )

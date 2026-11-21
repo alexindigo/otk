@@ -44,7 +44,9 @@ async function geometry(page: Page, responsiveHeader = false) {
         ],
         top: pane.scrollTop,
         extent: pane.scrollHeight,
-        footer: rect(pane.querySelector(".otk-message-footer")),
+        footer: rect(
+          pane.querySelector("[data-role=assistant] .otk-message-footer"),
+        ),
         work: rect(pane.querySelector(".otk-work-fold")),
         execution: rect(pane.querySelector(".otk-tool-line")),
         thumb: rect(

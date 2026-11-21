@@ -192,7 +192,9 @@ test(
           source = Array.from(pane.querySelectorAll(".otk-text")).find((e) =>
             e.textContent === "Projection step 101."
           ),
-          footer = pane.querySelector(".otk-message-footer");
+          footer = pane.querySelector(
+            "[data-role=assistant] .otk-message-footer",
+          );
         if (!source || !footer) return false;
         const a = source.getBoundingClientRect(),
           z = footer.getBoundingClientRect();
@@ -235,7 +237,8 @@ test(
     await page.locator('[data-message-command="reply.copy"]').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(markers.join("\n\n"));
-    await expect(page.locator(".otk-message-footer")).toHaveCount(1);
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toHaveCount(1);
     await expect(
       // Decisions 1/20 keep idle separate; whole-reply Copy still acquires all 205 segments.
       page.locator("[data-message][data-role=assistant]").getByRole("list", {

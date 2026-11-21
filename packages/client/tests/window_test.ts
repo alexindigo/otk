@@ -2,6 +2,42 @@
 import { assert, assertEquals } from "@std/assert";
 import { createWindow } from "@otk/client";
 
+Deno.test("window inline footprint survives range retirement and shared-cache remounts", () => {
+  const heights = new Map<string, number>(), widths = new Map<string, number>();
+  let revision = "lane-100";
+  const make = () =>
+    createWindow(heights, (key) => `${revision}:${key}`, widths);
+  const window = make();
+  window.update(["prose", "image"], () => 30);
+  window.measure("prose", 200, 600);
+  window.measure("image", 198, 230);
+  assertEquals(window.range(201, 50).visibleKeys, ["image"]);
+  assertEquals(window.inlineSize(), 600);
+  const remounted = make();
+  remounted.update(["prose", "image"], () => 30);
+  assertEquals(remounted.inlineSize(), 600);
+  remounted.update(["image"], () => 30);
+  assertEquals(remounted.inlineSize(), 230);
+  revision = "lane-125";
+  remounted.update(["image"], () => 30);
+  assertEquals(remounted.inlineSize(), 0);
+  remounted.measure("image", 247.5, 287.5);
+  assertEquals(remounted.inlineSize(), 287.5);
+  remounted.clearInline();
+  assertEquals(remounted.inlineSize(), 0);
+  assertEquals(remounted.size("image"), 247.5);
+});
+
+Deno.test("a new source measurement revokes its previous inline contribution", () => {
+  let source = "old";
+  const window = createWindow(new Map(), (key) => `${source}:${key}`);
+  window.update(["text"], () => 30);
+  window.measure("text", 100, 600);
+  source = "replacement";
+  window.measure("text", 30, 120);
+  assertEquals(window.inlineSize(), 120);
+});
+
 Deno.test("zero extent retains a materialization frontier without rendering the whole collection", () => {
   const window = createWindow();
   const keys = Array.from({ length: 10000 }, (_, i) => `empty-${i}`);

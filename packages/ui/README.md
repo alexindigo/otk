@@ -817,10 +817,10 @@ No panel reads another component's DOM or maintains a second transcript store.
 
 Sessions and Timeline use the same `ListRow` frame: shared 30px height,
 selection pointer, highlight bounds, padding and leading/label/trailing slots.
-Consumers inject content and callbacks. Timeline's trailing clock/actions share
-one grid area; visibility switches on hover intent, keyboard focus or selection
-while the cell keeps the larger intrinsic width. Action hit targets do not move,
-and the label has no independent inset hover highlight.
+Consumers inject content and callbacks. Timeline's trailing slot borrows the
+same persistent MessageFooter as the transcript, with no clock/action hover
+swap. Action hit targets do not move, and the label has no independent inset
+hover highlight.
 
 ListRow's `--list-row-height` is also its editing control track. Primary
 leading, input and trailing slots share that track while validation prose wraps
@@ -841,6 +841,17 @@ lifetime, with live data in nested bindings. `control.reveal(key, options)`
 waits for mounted, stable measured geometry and invokes its injected focus
 callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
 expose source-free navigation without consumer DOM access.
+
+Windowing preserves inline footprint as well as block extent. A zero-block-size
+normal-flow sizing track retains the largest measured row width even after its
+content retires. Intrinsically sized consumers, including message bubbles, keep
+their complete acquired footprint instead of sizing to whichever nested rows are
+currently visible. Content revisions, viewport width and font metrics renew that
+footprint by remeasuring acquired rows through the same measurement leases;
+scrolling alone never revokes it. Short and image-only content stays intrinsic.
+The content boundary declares intrinsic sizing, inherited by nested windows.
+Constrained reading lanes retain normal range-only materialization; acquiring
+source for Copy never eagerly renders their offscreen reply segments.
 
 One root-shared position owner in `viewport.ts` alone writes the viewport's
 scroll position. Every borrowed window registers identity geometry from
@@ -1418,13 +1429,16 @@ Close keeps ordinary drafts, while successful native deletion drops the family
 drafts.
 
 The session-action owner also contributes Fork session to session targets and
-the palette, and Fork from here to completed replies. `MessageActions` renders
-available command IDs only, sharing `hoverIntent` with Popover (500ms rest,
-150ms leave, immediate focus). Prompt Copy and reply Fork/Copy reserve their
-metadata-row space while concealed. Message contributes no commands; the shared
-transcript feature owns Copy source projection. Fork results open with a joined
-`ComposerNotice` / `ForkNote` above the input; Dismiss and the first successful
-submission clear the note through the framework-free client owner.
+the palette, and Fork from here to completed replies. `MessageFooter` owns the
+shared persistent Clock, duration, metadata and action track for prompts and
+replies, also borrowed by Timeline. `MessageActions` renders available command
+IDs only, always visible in quiet metadata paint; hover/focus may raise contrast
+but never reveal hidden controls. The old timestamps preference remains
+stored/API-compatible without a redundant Display toggle. Message contributes no
+commands; the shared transcript feature owns Copy source projection. Fork
+results open with a joined `ComposerNotice` / `ForkNote` above the input;
+Dismiss and the first successful submission clear the note through the
+framework-free client owner.
 
 `registerCompactPrompt` contributes Compact while a root composer with a known
 next-prompt model is mounted. The command is shared by that session's context

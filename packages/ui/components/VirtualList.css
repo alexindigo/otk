@@ -39,3 +39,9 @@
 .otk-virtual-measure {
   user-select: none;
 }
+.otk-virtual-inline {
+  block-size: 0;
+  max-inline-size: 100%;
+  pointer-events: none;
+  user-select: none;
+}

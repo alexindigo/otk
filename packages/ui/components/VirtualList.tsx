@@ -32,6 +32,7 @@ export const LIST_OVERSCAN = 5;
 interface WindowContext {
   element(): HTMLElement | undefined;
   materialized(): boolean;
+  intrinsic(): boolean;
   path: string;
   measurements(path: string): Map<string, number>;
   materializers: Set<() => boolean>;
@@ -50,6 +51,7 @@ export function ContentWindow<T>(props: {
   label: string;
   scope?: string;
   measurementKey?(value: T): string;
+  intrinsic?: boolean;
   role?: "content" | "segment" | "line" | "metadata";
   control?(control: VirtualListControl): void;
   render(value: () => T): Element;
@@ -72,6 +74,7 @@ export function ContentWindow<T>(props: {
         keys={keys()}
         label={props.label}
         scope={props.scope}
+        intrinsic={props.intrinsic}
         samples={[{
           role: "content",
           class: `otk-window-${props.role ?? "content"}-estimate`,
@@ -114,6 +117,7 @@ export default function VirtualList(props: {
   measurements?(path: string): Map<string, number>;
   measurementKey?(key: string): string;
   revision?: unknown;
+  intrinsic?: boolean;
   overscan?: number;
   viewport?(): HTMLElement | undefined;
   render(key: string): Element;
@@ -126,6 +130,7 @@ export default function VirtualList(props: {
   control?(control: VirtualListControl): void;
 }): Element {
   const parent = useContext(Viewport);
+  const intrinsic = () => props.intrinsic ?? parent?.intrinsic() ?? false;
   const initialPosition = untrack(() =>
     props.position &&
     ({ scrollTop: props.position.scrollTop, anchor: props.position.anchor })
@@ -148,10 +153,13 @@ export default function VirtualList(props: {
   }`;
   // Retained numeric sizes are valid only under the metrics that produced them.
   // This also fences caches borrowed after an unmounted window changes scale.
-  let metrics = getComputedStyle(document.documentElement).fontSize;
+  let metrics = `${getComputedStyle(document.documentElement).fontSize}:${
+    props.viewport?.()?.clientWidth ?? parent?.element()?.clientWidth ?? 0
+  }`;
   const model = createWindow(
     measurements(path),
     (key) => `${metrics}:${props.measurementKey?.(key) ?? key}`,
+    measurements(`${path}/inline`),
   );
   const [top, setTop] = createSignal(0), [height, setHeight] = createSignal(0);
   const [version, setVersion] = createSignal(0),
@@ -162,6 +170,13 @@ export default function VirtualList(props: {
   const [selected, setSelected] = createSignal<string[]>([]),
     [reveals, setReveals] = createSignal<string[]>([]);
   const [attachments, setAttachments] = createSignal<string[]>([]);
+  const [reflow, setReflow] = createSignal<string[]>([]);
+  const renewFootprint = (keys: readonly string[]) => {
+    const included = new Set(props.keys);
+    setReflow((pending) =>
+      [...new Set([...pending, ...keys])].filter((key) => included.has(key))
+    );
+  };
   const attachmentLeases = new Map<string, number>();
   const [all, setAll] = createSignal<readonly string[]>();
   const materialized = () => !!all() || !!parent?.materialized();
@@ -266,8 +281,12 @@ export default function VirtualList(props: {
           if (count > 0) continue;
           const element = elements.get(key);
           if (element?.isConnected) {
-            changed =
-              model.measure(key, element.getBoundingClientRect().height) ||
+            const bounds = element.getBoundingClientRect();
+            changed = model.measure(
+              key,
+              bounds.height,
+              Math.max(bounds.width, element.scrollWidth),
+            ) ||
               changed;
             measuring.delete(key);
             released = true;
@@ -277,6 +296,10 @@ export default function VirtualList(props: {
           } else pending = true;
         }
         if (changed || released) refresh();
+        if (
+          reflow().length && !measuring.size &&
+          reflow().every((key) => model.measured(key))
+        ) setReflow([]);
         sync();
         if (
           ready() && currentKeys && !measuring.size &&
@@ -337,6 +360,10 @@ export default function VirtualList(props: {
       // Presentation changes can revoke a measured extent without changing keys.
       // Rebuild the index before range demand, including formerly empty rows.
       if (currentKeys) {
+        if (intrinsic()) {
+          renewFootprint(currentKeys.filter((key) => model.measured(key)));
+        }
+        model.clearInline();
         model.update(currentKeys, (key) =>
           estimates.get(props.role?.(key) ?? "row") ?? props.estimate ?? 1);
         refresh();
@@ -404,6 +431,7 @@ export default function VirtualList(props: {
       ...selected(),
       ...reveals(),
       ...attachments(),
+      ...reflow(),
       ...measuring.keys(),
       ...focus() ? [focus()!] : [],
       ...all() ?? (parent?.materialized() ? props.keys : []),
@@ -458,6 +486,15 @@ export default function VirtualList(props: {
             : undefined;
         });
         changing();
+        if (intrinsic() && !initialized) {
+          // Establish complete-content intrinsic geometry once, before retiring
+          // any of it. Afterwards only source/lane/font revisions renew it.
+          // Constrained reading lanes already have stable inline geometry.
+          model.clearInline();
+          renewFootprint(next);
+        } else if (intrinsic()) {
+          renewFootprint(next.filter((key) => !model.measured(key)));
+        }
         model.update(
           next,
           (key) =>
@@ -615,8 +652,17 @@ export default function VirtualList(props: {
     observer = new ResizeObserver((entries) => {
       selection();
       transaction(() => {
-        const nextMetrics = getComputedStyle(document.documentElement).fontSize;
+        const nextMetrics = `${
+          getComputedStyle(document.documentElement).fontSize
+        }:${root.clientWidth}`;
         if (nextMetrics !== metrics) {
+          // Materialization is not layout authority. Re-measure the previously
+          // acquired footprint when its lane/font changes, never when it scrolls.
+          if (intrinsic()) {
+            renewFootprint(
+              (currentKeys ?? []).filter((key) => model.measured(key)),
+            );
+          }
           metrics = nextMetrics;
           for (const [role, element] of samples) {
             estimates.set(role, element.getBoundingClientRect().height);
@@ -790,6 +836,7 @@ export default function VirtualList(props: {
             element: viewport,
             materialized: () =>
               !!parent?.materialized() || !!all()?.includes(input.key),
+            intrinsic,
             measurements,
             materializers,
             hold: () => holdMeasurement(input.key),
@@ -817,6 +864,7 @@ export default function VirtualList(props: {
       value={{
         element: viewport,
         materialized,
+        intrinsic,
         measurements,
         materializers,
         hold: parent?.hold,
@@ -852,6 +900,11 @@ export default function VirtualList(props: {
             )}
           </For>
         </div>
+        <div
+          class="otk-virtual-inline"
+          aria-hidden="true"
+          style={{ "inline-size": `${(version(), model.inlineSize())}px` }}
+        />
         <For each={items()} keyed={(item) => item.key}>
           {(item) => (
             <>

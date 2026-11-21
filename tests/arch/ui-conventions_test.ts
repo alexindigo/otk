@@ -207,7 +207,8 @@ type Rule =
   | "presentation"
   | "settings-name"
   | "list-order"
-  | "sidebar-row";
+  | "sidebar-row"
+  | "message-footer";
 const owners: Record<Rule, string> = {
   clock:
     "Local date/time formatting belongs to Clock (including precise records)",
@@ -238,6 +239,8 @@ const owners: Record<Rule, string> = {
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
   "sidebar-row":
     "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
+  "message-footer":
+    "D21: MessageFooter owns persistent time/actions; message metadata is never hover-only",
 };
 const containsStringType = (node: t.Node): boolean => {
   if (node.type === "TSStringKeyword") return true;
@@ -366,6 +369,13 @@ export function conventionErrors(
   if (path.endsWith(".css")) {
     for (const { selector, declarations: d } of rules(text)) {
       if (
+        rule === "message-footer" &&
+        /otk-(?:message-(?:footer|details|action)|user-meta|created-time|timeline-(?:clock|actions))/
+          .test(selector) &&
+        (d.get("visibility") === "hidden" || d.get("display") === "none" ||
+          /^(?:0|0\.0+)$/.test(d.get("opacity") ?? ""))
+      ) fail(selector);
+      if (
         rule === "sidebar-row" &&
         /otk-(?:sidebar-(?:row|slot|lamp|icon|label|selection)|project-(?:row|open|name-line|marker|attention))/
           .test(selector)
@@ -468,6 +478,25 @@ export function conventionErrors(
       ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
         .slice(1)
       : specifier;
+  if (rule === "message-footer") {
+    for (const node of source.all) {
+      if (node.type !== "JSXOpeningElement" || !source.live(node)) continue;
+      const imported = source.imported(node.name);
+      if (
+        source.attr(node, "data-message-command") &&
+        path !== "packages/ui/components/MessageActions.tsx"
+      ) fail("handwritten message action control");
+      if (
+        modulePath(imported?.module ?? "").endsWith("/MessageActions.tsx") &&
+        path !== "packages/ui/components/MessageFooter.tsx"
+      ) fail("message actions outside MessageFooter");
+      if (
+        source.string(source.attr(node, "class"))?.includes(
+          "otk-message-footer",
+        ) && path !== "packages/ui/components/MessageFooter.tsx"
+      ) fail("handwritten message footer");
+    }
+  }
   if (rule === "sidebar-row") {
     const openings = source.all.filter((node): node is t.JSXOpeningElement =>
       node.type === "JSXOpeningElement" && source.live(node)
@@ -960,6 +989,49 @@ Deno.test("UI convention: list ordering rejects activity/state keys and accepts 
       text,
     );
   }
+});
+
+Deno.test("UI convention: message footer rejects concealed metadata and independent action owners", () => {
+  for (
+    const text of [
+      ".otk-message-actions {opacity: 0}",
+      ".otk-created-time {visibility: hidden}",
+      ".otk-user-meta {display:none}",
+      ".otk-timeline-clock {visibility:hidden}",
+    ]
+  ) {
+    assert(conventionErrors("message-footer", "Fixture.css", text).length > 0);
+  }
+  assert(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/Message.tsx",
+      'import Actions from "./MessageActions.tsx"; const view=<Actions />;',
+    ).length > 0,
+  );
+  assert(
+    conventionErrors(
+      "message-footer",
+      "Fixture.tsx",
+      '<button data-message-command="prompt.copy"><CopyIcon /></button>',
+    ).length > 0,
+  );
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "Fixture.css",
+      ".otk-message-actions {color: var(--otk-fg-3)} .otk-message-actions:hover {color: inherit}",
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/MessageFooter.tsx",
+      'import Actions from "./MessageActions.tsx"; const view=<Actions />;',
+    ),
+    [],
+  );
 });
 
 /** Positive data flow into fixture consumers, not a token-presence obligation. */

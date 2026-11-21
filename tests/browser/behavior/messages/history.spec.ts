@@ -239,12 +239,16 @@ isolatedTest.describe("configured message details", () => {
     );
     await expect(page.locator(".otk-queued")).toHaveCount(0);
     await expect.poll(() =>
-      page.locator(".otk-message-footer").evaluateAll((footers) =>
+      page.locator("[data-role=assistant] .otk-message-footer").evaluateAll((
+        footers,
+      ) =>
         footers.length > 0 &&
         footers.every((footer) => /\ds/.test(footer.textContent!))
       )
     ).toBe(true);
-    const footers = await page.locator(".otk-message-footer").allTextContents();
+    const footers = await page.locator(
+      "[data-role=assistant] .otk-message-footer",
+    ).allTextContents();
     expect(
       footers.every((footer) => /\ds/.test(footer)),
     ).toBe(true);

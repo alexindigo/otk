@@ -302,62 +302,26 @@ export async function remainder(
     const reply = page.locator("[data-role=assistant]").first();
     await expect(reply.locator(".otk-message-actions")).toHaveCSS(
       "opacity",
-      "0",
+      "1",
     );
-    await reply.evaluate((el) => {
-      el.addEventListener(
-        "mouseenter",
-        () =>
-          el.setAttribute("data-theme-hover-start", String(performance.now())),
-        { once: true },
-      );
-      el.addEventListener(
-        "mouseleave",
-        () =>
-          el.setAttribute("data-theme-leave-start", String(performance.now())),
-        { once: true },
-      );
-      const observer = new MutationObserver(() => {
-        if (el.classList.contains("is-revealed")) {
-          el.setAttribute(
-            "data-theme-hover-open",
-            String(
-              performance.now() -
-                Number(el.getAttribute("data-theme-hover-start")),
-            ),
-          );
-        } else if (el.hasAttribute("data-theme-leave-start")) {
-          el.setAttribute(
-            "data-theme-hover-close",
-            String(
-              performance.now() -
-                Number(el.getAttribute("data-theme-leave-start")),
-            ),
-          );
-          observer.disconnect();
-        }
-      });
-      observer.observe(el, { attributes: true, attributeFilter: ["class"] });
-    });
-    await reply.locator(".otk-message-content").hover();
-    await expect.poll(async () =>
-      Number(await reply.getAttribute("data-theme-hover-open"))
-    ).toBeGreaterThanOrEqual(500);
     const fixed = await bounds(page, "[data-role=assistant]");
+    await reply.locator(".otk-message-content").hover();
     expect(
       await reply.locator(".otk-message-footer").evaluate((footer) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
-          b = footer.querySelector(".otk-last-output-time")!
+          b = footer.querySelector("time")!.parentElement!
             .getBoundingClientRect();
-        return b.left - a.right ===
-          parseFloat(getComputedStyle(footer).columnGap);
+        return b.right <= a.left &&
+          Math.abs(b.y + b.height / 2 - a.y - a.height / 2) < .5;
       }),
     ).toBe(true);
     await page.mouse.move(1, 1);
     await expect(reply).not.toHaveClass(/is-revealed/);
-    expect(Number(await reply.getAttribute("data-theme-hover-close")))
-      .toBeGreaterThanOrEqual(150);
+    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
+      "opacity",
+      "1",
+    );
     expect(await bounds(page, "[data-role=assistant]")).toEqual(fixed);
     for (const theme of themes) {
       await paint(theme);
@@ -419,51 +383,45 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
-      const clock = page.locator(".otk-last-output-time").first();
+      const clock = reply.locator(".otk-message-footer time").first();
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
-      const date = page.locator(".otk-last-output-date").first();
-      await expect(date).toHaveCSS("visibility", "hidden");
+      await expect(clock).toHaveCSS("visibility", "visible");
       const rect = await clock.boundingBox();
       await clock.hover();
-      await expect(date).toHaveCSS("visibility", "visible");
       const g = await clock.evaluate((el) => {
         const footer = el.closest(".otk-message-footer")!,
-          date = footer.querySelector(".otk-last-output-date")!,
-          d = date.getBoundingClientRect(),
           t = el.getBoundingClientRect(),
           f = footer.getBoundingClientRect();
         return {
-          date: date.textContent!.trim(),
-          expected: new Date((el as HTMLTimeElement).dateTime)
-            .toLocaleDateString(),
-          gap: t.left - d.right,
-          centers: Math.abs(d.y + d.height / 2 - t.y - t.height / 2),
-          right: Math.abs(f.right - t.right),
+          title: el.getAttribute("title"),
+          expected: new Date((el as HTMLTimeElement).dateTime).toLocaleString(
+            undefined,
+            { timeZoneName: "short" },
+          ),
+          contained: t.left >= f.left && t.right <= f.right,
           left: t.left,
           width: t.width,
           color: getComputedStyle(footer).color === getComputedStyle(el).color,
         };
       });
-      expect(g.date).toBe(g.expected);
-      expect(g.gap).toBeGreaterThan(0);
-      expect(g.centers).toBeLessThan(.5);
-      expect(g.right).toBeLessThan(.5);
+      expect(g.title).toBe(g.expected);
+      expect(g.contained).toBe(true);
       expect(g.color).toBe(true);
       expect(Math.abs(g.left - rect!.x)).toBeLessThan(.5);
       expect(Math.abs(g.width - rect!.width)).toBeLessThan(.5);
       await shot(`timestamps-hover-${theme.id}`);
       for (const role of ["user", "assistant"]) {
-        const trigger = page.locator(`[data-role=${role}] .otk-created-trigger`)
+        const created = page.locator(
+          `[data-role=${role}] .otk-message-footer time`,
+        )
           .first();
-        const created = page.locator(`[data-role=${role}] .otk-created-time`)
-          .first();
-        await trigger.scrollIntoViewIfNeeded();
-        await trigger.hover();
+        await created.scrollIntoViewIfNeeded();
+        await created.hover();
         await expect(created).toHaveCSS("visibility", "visible");
         await shot(`timestamps-created-${role}-${theme.id}`);
         await page.mouse.move(1, 1);
-        await expect(created).toHaveCSS("visibility", "hidden");
+        await expect(created).toHaveCSS("visibility", "visible");
       }
       const ink = await page.evaluate(() => {
         const canvas = document.createElement("canvas");
@@ -485,8 +443,8 @@ export async function remainder(
             .reduce((a, b) => a + b, 0);
         };
         return [
-          color(document.querySelector(".otk-created-time")!),
-          color(document.querySelector(".otk-created-trigger")!),
+          color(document.querySelector(".otk-user-meta time")!),
+          color(document.querySelector(".otk-user-bubble")!),
         ];
       });
       if (theme.id === "otk-dark") expect(ink[0]).toBeLessThan(ink[1]);
@@ -495,9 +453,9 @@ export async function remainder(
       const forkBox = await fork.boundingBox();
       await page.keyboard.press("Tab");
       for (const action of ["focus", "blur", "hover", "leave"]) {
-        const agent = reply.locator(".otk-message-agent");
+        const control = reply.locator('[data-message-command="reply.copy"]');
         if (action === "focus") {
-          await agent.evaluate((el) =>
+          await control.evaluate((el) =>
             (el as HTMLElement).focus({ preventScroll: true })
           );
         }
@@ -506,13 +464,13 @@ export async function remainder(
             (el as HTMLElement).focus({ preventScroll: true })
           );
         }
-        if (action === "hover") await agent.hover();
+        if (action === "hover") await control.hover();
         if (action === "leave") await page.mouse.move(1, 1);
         await expect.poll(() =>
-          reply.locator(".otk-created-time").evaluate((el) =>
-            getComputedStyle(el).display !== "none"
+          reply.locator(".otk-message-footer time").evaluate((el) =>
+            getComputedStyle(el).visibility === "visible"
           )
-        ).toBe(action === "focus" || action === "hover");
+        ).toBe(true);
         expect(await fork.boundingBox()).toEqual(forkBox);
       }
       const copy = page.locator(

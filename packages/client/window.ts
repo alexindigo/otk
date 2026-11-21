@@ -14,9 +14,12 @@ export interface WindowRange {
 export function createWindow(
   measured: Map<string, number> = new Map(),
   measurementKey: (key: string) => string = (key) => key,
+  inlineMeasured: Map<string, number> = new Map(),
 ): {
   update(keys: readonly string[], estimate: (key: string) => number): void;
-  measure(key: string, size: number): boolean;
+  measure(key: string, size: number, inlineSize?: number): boolean;
+  inlineSize(): number;
+  clearInline(): void;
   invalidate(key: string): boolean;
   offset(key: string): number | undefined;
   size(key: string): number;
@@ -37,6 +40,16 @@ export function createWindow(
     sizes: number[] = [];
   let estimateSize: (key: string) => number = () => 1;
   const cacheKeys = new Map<string, string>();
+  let inlineSize = 0;
+  const inlineExtent = () => {
+    inlineSize = 0;
+    for (const key of keys) {
+      inlineSize = Math.max(
+        inlineSize,
+        inlineMeasured.get(measurementKey(key)) ?? 0,
+      );
+    }
+  };
   const add = (i: number, delta: number) => {
     for (i++; i < sums.length; i += i & -i) sums[i] += delta;
   };
@@ -69,6 +82,10 @@ export function createWindow(
       for (const key of measured.keys()) {
         if (!retainedKeys.has(key)) measured.delete(key);
       }
+      for (const key of inlineMeasured.keys()) {
+        if (!retainedKeys.has(key)) inlineMeasured.delete(key);
+      }
+      inlineExtent();
       sizes = keys.map((key) =>
         measured.get(measurementKey(key)) ?? Math.max(1, estimate(key))
       );
@@ -80,15 +97,30 @@ export function createWindow(
         if (parent < sums.length) sums[parent] += sums[i];
       }
     },
-    measure(key, size) {
+    measure(key, size, width) {
       const i = positions.get(key);
+      if (i === undefined || !Number.isFinite(size) || size < 0) return false;
+      let inlineChanged = false;
+      if (
+        i !== undefined && width !== undefined && Number.isFinite(width) &&
+        width >= 0
+      ) {
+        const cacheKey = measurementKey(key),
+          previous = inlineMeasured.get(cacheKey);
+        inlineChanged = previous !== width;
+        inlineMeasured.set(cacheKey, width);
+        if (width >= inlineSize) inlineSize = width;
+        else if (previous === inlineSize) inlineExtent();
+      }
       if (
         i === undefined || !Number.isFinite(size) || size < 0 ||
         (sizes[i] === size && measured.has(measurementKey(key)))
-      ) return false;
+      ) return inlineChanged;
       const cacheKey = measurementKey(key), previous = cacheKeys.get(key);
       if (previous !== undefined && previous !== cacheKey) {
         measured.delete(previous);
+        inlineMeasured.delete(previous);
+        inlineExtent();
       }
       cacheKeys.set(key, cacheKey);
       measured.set(cacheKey, size);
@@ -102,11 +134,18 @@ export function createWindow(
         return false;
       }
       const size = Math.max(1, estimateSize(key));
+      inlineMeasured.delete(measurementKey(key));
+      inlineExtent();
       add(i, size - sizes[i]);
       sizes[i] = size;
       return true;
     },
     offset,
+    inlineSize: () => inlineSize,
+    clearInline() {
+      inlineMeasured.clear();
+      inlineSize = 0;
+    },
     size: (key) => sizes[positions.get(key) ?? -1] ?? 0,
     measured: (key) => positions.has(key) && measured.has(measurementKey(key)),
     total: () => prefix(keys.length),
