@@ -69,7 +69,6 @@ const lampConsumers = new Set([
 ]);
 const urgencyConsumers = new Set([
   "core/features/navigation-default.ts",
-  "packages/client/tab-urgency.ts",
 ]);
 function crossedOwners(path: string, text: string): string[] {
   if (path === "packages/protocol/inbox.ts") return [];

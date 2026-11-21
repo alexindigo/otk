@@ -275,6 +275,67 @@ Deno.test("turning parent-task inheritance off refreshes native hierarchy before
     f.resources.stop();
   }
 });
+Deno.test("sidebar identities stay ordered through state/recency ticks, explicit moves reorder and arrivals append", () => {
+  const f = fixture();
+  const inbox = metadata();
+  inbox.projects.push({ ...inbox.projects[0], directory: "/q", order: 1 });
+  inbox.discovered = ["/new-discovered"];
+  const summary = (
+    directory: string,
+    status: "working" | "blocked" | "finished",
+    lastActivity: number,
+  ) => ({
+    directory,
+    status,
+    lastActivity,
+    sessionCount: 1,
+    unseenCount: 0,
+    hasSessions: true,
+    authority: "current" as const,
+  });
+  let revision = 0;
+  const publish = () =>
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "order",
+      revision: revision++,
+      inbox: structuredClone(inbox),
+    });
+  const ids = () =>
+    f.resources.projects(Date.now()).filter((row) => row.sidecarId === "local")
+      .map((row) => row.directory);
+  try {
+    inbox.summaries = {
+      "/p": summary("/p", "working", 100),
+      "/q": summary("/q", "blocked", 1),
+    };
+    publish();
+    const initial = ids();
+    assertEquals(initial, ["/p", "/q", "/new-discovered"]);
+    for (const status of ["working", "blocked", "finished"] as const) {
+      for (let tick = 0; tick < 10; tick++) {
+        inbox.summaries["/q"] = summary("/q", status, 100000 + tick);
+        inbox.summaries["/p"] = summary("/p", status, tick);
+        publish();
+        assertEquals(ids(), initial);
+      }
+    }
+    inbox.projects[0].order = 1;
+    inbox.projects[1].order = 0;
+    publish();
+    assertEquals(ids(), ["/q", "/p", "/new-discovered"]);
+    inbox.summaries["/arrival"] = summary("/arrival", "blocked", 9999999);
+    publish();
+    assertEquals(ids(), ["/q", "/p", "/new-discovered", "/arrival"]);
+    delete inbox.summaries["/q"];
+    inbox.projects = inbox.projects.filter((p) => p.directory !== "/q");
+    publish();
+    assertEquals(ids(), ["/p", "/new-discovered", "/arrival"]);
+  } finally {
+    f.resources.stop();
+  }
+});
+
 function metadata(): InboxSnapshot {
   return {
     projects: [{

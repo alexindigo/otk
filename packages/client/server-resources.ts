@@ -56,7 +56,7 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
-import { createSettledOrder } from "./settled-order.ts";
+import { createStableOrder } from "./stable-order.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -179,11 +179,9 @@ export function createServerResources(o: {
 }): ServerResources {
   const factory = o.factory ?? createState;
   const projectOrderClock = factory({ revision: 0 });
-  const projectOrder = createSettledOrder<{
+  const projectOrder = createStableOrder<{
     id: string;
     row: ProjectProjectionRow & { sidecarId: string; label: string };
-    priority: number;
-    activity: number;
   }>(() => projectOrderClock.update((s) => s.revision++));
   const lifetimeClock = factory({ revision: 0 });
   const requestSubscriptions = new Map<string, () => void>();
@@ -1103,31 +1101,16 @@ export function createServerResources(o: {
             labelledRows.set(row, labelled);
           }
           return labelled;
-        }).sort((a, b) => a.order - b.order);
-      }).sort((a, b) => {
-        const rank = { tracked: 0, index: 1, template: 2 };
-        if (a.source === "tracked" && b.source === "tracked") return 0;
-        return rank[a.source ?? "tracked"] - rank[b.source ?? "tracked"] ||
-          a.order - b.order ||
-          projectName(a.directory).localeCompare(projectName(b.directory)) ||
-          a.directory.localeCompare(b.directory) ||
-          a.label.localeCompare(b.label);
+        });
       });
-      const rank = { tracked: 0, index: 1, template: 2 };
       return projectHierarchy(
         projectOrder.order(
-          rows.map((row, i) => ({
+          rows.map((row) => ({
             id: JSON.stringify([row.sidecarId, row.directory]),
             row,
-            priority: rank[row.source ?? "tracked"],
-            activity: row.source === "tracked" ? -i : -row.order,
           })),
           (row) => ({
-            priority: row.priority,
-            activity: row.activity,
-            tie: `${
-              projectName(row.row.directory)
-            }\0${row.row.directory}\0${row.row.label}`,
+            position: row.row.source === "tracked" ? row.row.order : undefined,
           }),
         ).map((item) => item.row),
       );

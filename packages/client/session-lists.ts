@@ -146,6 +146,7 @@ export function createSessionLists(
           directory: info.directory,
           parentID: info.parentID,
           title: info.title,
+          timeCreated: info.time.created,
           hierarchy: info.hierarchy,
         });
       }
@@ -276,6 +277,7 @@ export function createSessionLists(
             id: item.id,
             directory: item.directory,
             title: item.title,
+            timeCreated: item.timeCreated,
             parentID: item.parentID,
             hierarchy: item.hierarchy,
           });

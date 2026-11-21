@@ -174,14 +174,15 @@ coalesce complete-baseline recovery and stale baselines cannot replace newer
 accepted state. Action receipts settle operations; only this stream owns current
 task membership.
 
-Presentation order uses `createSettledOrder`: rank and recency settle
-independently for five seconds. Needs-you escalation is immediate, except short
-permission-only states retain the 500 ms presentation grace. Supervision and
-lamp facts stay live. The tabs model owns the strip and Sessions task-group
-permutation; structural Sessions refreshes borrow that same interaction hold.
-Sidebar recency uses the same ordering contract. Counted holds retain
-pointer/focus and portalled-origin targets until every borrower releases them;
-new mandatory rows remain visible.
+Presentation order uses `createStableOrder`: saved positions seed task/project
+order, otherwise immutable creation or source discovery order seeds the list.
+Existing identities never move on activity, state, title or refresh. New rows
+append; only changed saved positions reorder existing positioned slots. The tabs
+model owns the strip and Sessions task-group permutation. Sidebar rows borrow
+the same contract within their repository topology. Counted holds retain
+departing pointer/focus and portalled-origin targets until every borrower
+releases them; arrivals append without displacing those targets. Lamps stay
+live.
 
 Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
 preserves originating sidecar IDs and valid partial histories when another
@@ -405,9 +406,9 @@ Native Source previews have one transcript-owned per-reference resource.
 does not read. Structural ownership follows the current path when an opaque
 reference moves. Accepted changes invalidate the matching structural owner
 without decoding plugin references; open demand refreshes automatically and
-coalesces pending replacements. Producer-owned exact-source revisions distinguish
-equal replays from raw-only changes; sources without a revision retain conservative
-invalidation. Obsolete results cannot publish. Unchanged
+coalesces pending replacements. Producer-owned exact-source revisions
+distinguish equal replays from raw-only changes; sources without a revision
+retain conservative invalidation. Obsolete results cannot publish. Unchanged
 remounts and themes reuse both successful and failed outcomes; Retry explicitly
 refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.
@@ -952,9 +953,8 @@ framework or item count folding threshold. The UI retains stable frames and
 supplies measured widths.
 
 Breadcrumbs use the one-line shrinking contract, with independent More controls
-for omitted identities. Task strips render the client-owned urgency/recency
-order directly in a horizontal scroll lane, without overflow fitting or
-wrapping.
+for omitted identities. Task strips render the client-owned stable saved order
+directly in a horizontal scroll lane, without overflow fitting or wrapping.
 
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
 confirmation policy. Release reads the invocation-current draft through
@@ -1236,10 +1236,9 @@ Navigation instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished
 but unseen, working, none. Never use display order to choose the most urgent
 session, or urgency to paint a rollup. Project and task lights consume
 supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs sort by attention urgency, not their
-aggregate lamp colour, then newest family `timeUpdated`, with identity as a
-stable tie-break. Stored task order remains available for future pinning; it
-does not drive the strip. Discovery retains its recency/name order.
+attention until acknowledged. Task tabs use saved task order, and phantoms use
+immutable creation order. Discovery retains source inventory order when it has
+no saved position or native creation clock. Activity never orders these lists.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
