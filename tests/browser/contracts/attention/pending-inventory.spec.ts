@@ -24,13 +24,19 @@ for (const kind of ["form", "permission"] as const) {
         lease: state.lease.lease,
         action: kind === "form" ? "hold" : "freeze",
       });
+      const reason = kind === "form"
+        ? "Could not refresh pending forms."
+        : "Could not refresh pending permissions.";
+      const notice = page.locator(".otk-toast").filter({
+        hasText: reason,
+      });
+      await expect(notice).toBeVisible();
+      await notice.getByRole("button", { name: "Details", exact: true })
+        .click();
       await expect(
-        page.getByText(
-          kind === "form"
-            ? "Could not refresh pending forms."
-            : "Could not refresh pending permissions.",
-          { exact: false },
-        ).first(),
+        notice.locator(".otk-failure-detail-body").getByText(reason, {
+          exact: true,
+        }),
       ).toBeVisible();
       const retained = kind === "form"
         ? await state.product("form.list", {
