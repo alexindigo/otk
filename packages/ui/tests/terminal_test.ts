@@ -246,6 +246,8 @@ for (
     "mouse",
     "hyperlink",
     "selection",
+    "viewport-to-screen",
+    "screen-to-viewport",
   ] as const
 ) {
   Deno.test(`temporary WASM ${operation} allocations retire when a later allocation throws`, async () => {
@@ -313,7 +315,11 @@ for (
                   anyButtonPressed: true,
                 });
               } else if (operation === "hyperlink") core.hyperlinkAt(0, 0);
-              else core.selectionText();
+              else if (operation === "viewport-to-screen") {
+                core.viewportPointToScreen(0, 0);
+              } else if (operation === "screen-to-viewport") {
+                core.screenPointToViewport(0, 0);
+              } else core.selectionText();
             },
             Error,
             "injected allocation failure",
@@ -338,3 +344,15 @@ for (
     }
   });
 }
+
+Deno.test("surface input inventory has one lifecycle admission owner", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../terminal/ghostty/surface.ts", import.meta.url),
+  );
+  const calls = [...source.matchAll(/this\.options\.onData\s*\(/g)];
+  assertEquals(calls.length, 1, "every input path must use sendInput");
+  const owner = source.match(/private sendInput\([\s\S]*?\n {2}}/);
+  assert(owner);
+  assert(owner[0].includes("this.options.onData("));
+  assert(owner[0].includes("this.inputAdmission"));
+});

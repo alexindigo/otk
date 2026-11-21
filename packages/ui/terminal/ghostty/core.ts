@@ -1171,9 +1171,11 @@ export class GhosttyTerminalCore {
   ): { x: number; y: number } | null {
     this.ensureActive();
     const ref = this.gridRef(col, row, fromTag);
-    const point = this.pointFromGridRef(ref, toTag);
-    this.runtime.free(ref, this.runtime.layout("GhosttyGridRef").size);
-    return point;
+    try {
+      return this.pointFromGridRef(ref, toTag);
+    } finally {
+      this.runtime.free(ref, this.runtime.layout("GhosttyGridRef").size);
+    }
   }
 
   dispose(): void {

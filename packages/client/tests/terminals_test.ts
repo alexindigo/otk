@@ -804,6 +804,42 @@ Deno.test("wire lifetime: reentrant lag selection acquires one replacement and c
   }
 });
 
+for (const synchronousSnapshot of [false, true]) {
+  Deno.test(`connection publication: replacement binding preserves disconnected until snapshot (${synchronousSnapshot})`, async () => {
+    const f = fixture(),
+      owner = new SessionTerminals(f.socket, f.conn, "tstv1-a");
+    let armed = false;
+    const target = sink();
+    const attachment = owner.show("1", {
+      ...target,
+      meta(change) {
+        target.meta(change);
+        if (armed && change.connected === false) {
+          armed = false;
+          attachment.reconnect();
+          if (synchronousSnapshot) f.sockets[0].snapshot(2);
+        }
+      },
+    });
+    try {
+      const socket = f.sockets[0];
+      socket.open();
+      await flush();
+      socket.snapshot(1);
+      assertEquals(owner.state.disconnected, []);
+      armed = true;
+      socket.message({ t: "detached", ch: 1, reason: "lagging" });
+      assertEquals(socket.controls("attach").map((value) => value.ch), [1, 2]);
+      assertEquals(owner.state.disconnected, synchronousSnapshot ? [] : ["1"]);
+      if (!synchronousSnapshot) socket.snapshot(2);
+      assertEquals(owner.state.disconnected, []);
+    } finally {
+      owner.dispose();
+      f.socket.stop();
+    }
+  });
+}
+
 Deno.test("wire lifetime: reset retirement cannot publish readiness or send saved resize", () => {
   const f = fixture(), target = sink();
   const attachment = f.socket.attach("tstv1-a", "1", {
