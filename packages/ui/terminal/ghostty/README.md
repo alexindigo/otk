@@ -19,3 +19,11 @@ client sink bridge lives one directory above in adapter.ts.
 Clipboard shortcuts borrow OTK's shared clipboard owner: copy retains its
 plain-HTTP fallback and optional programmatic paste reads fall back to native
 paste events when unavailable or denied. No secure-only API is read here.
+
+Checkpoint replacement creates a fresh engine lifetime, including the parser and
+UTF-8 decoder; the pinned reset export clears only terminal state. Every new
+engine installs the same no-op PTY writer. The PTY grid is applied even to a
+hidden surface, independently of viewport measurement. Mouse reports remain
+bytes through the surface and input adapter. Link activation is deferred when
+the live content revision is ahead of the painted frame. The standalone browser
+contract and its guest-only command are in `../../tests/terminal-browser/`.

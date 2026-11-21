@@ -28,11 +28,84 @@ Deno.test("terminal key ABI preserves all 176 pinned T3 names and mappings", asy
   }
 });
 
+for (
+  const [name, prefix] of [["CSI", "\x1b["], [
+    "UTF-8",
+    new Uint8Array([0xe2, 0x82]),
+  ]] as const
+) {
+  Deno.test(`checkpoint replacement discards partial ${name} parser state`, async () => {
+    const core = await GhosttyTerminalCore.create(80, 24, 7, 14, theme);
+    try {
+      core.write(prefix);
+      core.resetAndWrite("AHello");
+      const snapshot = core.snapshot();
+      assertEquals(snapshot.rowData[0].text, "AHello");
+      assertEquals(snapshot.cursorX, 6);
+      assertEquals(snapshot.cursorY, 0);
+      core.resetAndWrite("BHello");
+      assertEquals(core.snapshot().rowData[0].text, "BHello");
+    } finally {
+      core.dispose();
+    }
+  });
+}
+
+Deno.test("pinned X10 coordinates survive the user-input adapter as raw bytes", async () => {
+  const core = await GhosttyTerminalCore.create(120, 30, 7, 14, theme);
+  try {
+    core.write("\x1b[?1000h");
+    const report = core.encodeMouse({
+      action: "press",
+      button: 1,
+      mods: 0,
+      x: 95 * 7,
+      y: 0,
+      screenWidth: 120 * 7,
+      screenHeight: 30 * 14,
+      cellWidth: 7,
+      cellHeight: 14,
+      paddingLeft: 0,
+      paddingRight: 0,
+      paddingTop: 0,
+      paddingBottom: 0,
+      anyButtonPressed: true,
+    });
+    let sent: Uint8Array = new Uint8Array();
+    const input = terminalInput((bytes) => sent = bytes);
+    Reflect.apply(input!, undefined, [report]);
+    assertEquals([...sent], [27, 91, 77, 32, 128, 33]);
+  } finally {
+    core.dispose();
+  }
+});
+
 const theme: GhosttyTheme = {
   background: { r: 20, g: 20, b: 20 },
   foreground: { r: 230, g: 230, b: 230 },
   cursor: { r: 255, g: 77, b: 0 },
 };
+
+Deno.test("Kitty disambiguation retains supplementary Unicode text", async () => {
+  const core = await GhosttyTerminalCore.create(80, 24, 7, 14, theme);
+  try {
+    core.write("\x1b[>1u");
+    const key = String.fromCodePoint(0x1f600);
+    const event = {
+      key,
+      code: "",
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      isComposing: false,
+      getModifierState: () => false,
+    };
+    assertEquals(Reflect.apply(core.encodeKey, core, [event]), key);
+  } finally {
+    core.dispose();
+  }
+});
 
 Deno.test("terminal renderer suppresses actual WASM ESC[6n replies through live and replay paths", async () => {
   const fetch = globalThis.fetch;
@@ -54,29 +127,41 @@ Deno.test("terminal renderer suppresses actual WASM ESC[6n replies through live 
     };
     const input: Uint8Array[] = [];
     const userInput = terminalInput((bytes) => input.push(bytes));
-    const core = await GhosttyTerminalCore.create(80, 24, 8, 16, theme);
-    runtime.attachPtyWriter = attach;
+    let core: GhosttyTerminalCore | undefined;
     try {
+      const terminal = core = await GhosttyTerminalCore.create(
+        80,
+        24,
+        8,
+        16,
+        theme,
+      );
       const sink = terminalSink({
         setSharedGrid: (grid) => {
-          if (grid) core.resize(grid.cols, grid.rows, 8, 16);
+          if (grid) terminal.resize(grid.cols, grid.rows, 8, 16);
         },
-        resetAndWrite: (bytes) => core.resetAndWrite(bytes),
-        write: (bytes) => core.write(bytes),
+        resetAndWrite: (bytes) => terminal.resetAndWrite(bytes),
+        write: (bytes) => terminal.write(bytes),
       }, () => {});
       sink.write(new TextEncoder().encode("\x1b[6n"));
       assert(
         generated.includes("\x1b[1;1R"),
         "WASM really generated a cursor reply",
       );
+      generated.length = 0;
       sink.reset(80, 24, new TextEncoder().encode("\x1b[6n"));
+      assert(
+        generated.includes("\x1b[1;1R"),
+        "checkpoint replay generated a fresh reply",
+      );
       assertEquals(input, []);
       userInput("echo user\r");
       assertEquals(input.map((bytes) => new TextDecoder().decode(bytes)), [
         "echo user\r",
       ]);
     } finally {
-      core.dispose();
+      runtime.attachPtyWriter = attach;
+      core?.dispose();
     }
   } finally {
     globalThis.fetch = fetch;
@@ -92,6 +177,7 @@ Deno.test("terminal selection is exact text, survives byte-split UTF-8 and reset
     core.setSelection({ x: 0, y: 0 }, { x: 12, y: 0 });
     assertEquals(core.selectionText(), "selected caf\u00e9");
     core.resetAndWrite(new TextEncoder().encode("replacement"));
+    assertEquals(core.selectionText(), "");
     core.setSelection({ x: 0, y: 0 }, { x: 10, y: 0 });
     assertEquals(core.selectionText(), "replacement");
     assertEquals(core.snapshot().rowData[0].text, "replacement");
@@ -114,6 +200,7 @@ Deno.test("terminal sink live resize preserves primary and alternate screen stat
     sink.reset(80, 24, encode("retained-primary\r\n"));
     sink.write(encode("\x1b[?1049hretained-alternate"));
     sink.resize(120, 40);
+    assertEquals([core.snapshot().cols, core.snapshot().rows], [120, 40]);
     assert(
       core.snapshot().rowData.some((row) =>
         row.text.includes("retained-alternate")
@@ -126,6 +213,7 @@ Deno.test("terminal sink live resize preserves primary and alternate screen stat
       ),
     );
     sink.resize(80, 24);
+    assertEquals([core.snapshot().cols, core.snapshot().rows], [80, 24]);
     assert(
       core.snapshot().rowData.some((row) =>
         row.text.includes("retained-primary")
