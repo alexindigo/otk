@@ -7,6 +7,36 @@ test.use({
   timezoneId: "America/Los_Angeles",
 });
 
+test("visual.record-tree-content-gutter-preserves-both-artwork-axes", {
+  tag: ["@visual", "@isolated", "@messages"],
+}, async ({ isolatedState: state, page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+    await page.goto(`${state.url}/?scene=uiconv&surface=record-tree`);
+    await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
+    await page.evaluate(
+      (theme) =>
+        (globalThis as unknown as { styleTest: { theme(id: string): void } })
+          .styleTest.theme(theme),
+      theme,
+    );
+    for (const record of await page.locator(".otk-native-record").all()) {
+      await record.locator(".otk-tool-toggle").press("ArrowRight");
+      const axes = await record.evaluate((el) => {
+        const art = el.querySelector(".otk-tree-icon-art")!
+          .getBoundingClientRect();
+        const guide = el.querySelector(".otk-tree-incoming")!
+          .getBoundingClientRect();
+        return { art: art.x + art.width / 2, guide: guide.x + guide.width / 2 };
+      });
+      expect(
+        Math.abs(axes.art - axes.guide),
+        `${theme} ${await record.textContent()}`,
+      ).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
 test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
   tag: ["@visual", "@isolated", "@messages"],
 }, async ({ isolatedState: state, page }) => {
@@ -96,7 +126,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       for (const failure of await page.locator(".otk-failure-content").all()) {
         const edges = await failure.evaluate((el) =>
           Array.from(el.querySelectorAll(
-            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action",
+            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-failure-detail-toggle",
           )).filter((node) => node.getClientRects().length).map((node) =>
             node.getBoundingClientRect().left
           )
@@ -109,6 +139,47 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
             1,
           );
         }
+      }
+      for (
+        const record of await page.locator(
+          ".otk-tool-line:has(.otk-failure-content.is-record)",
+        ).all()
+      ) {
+        const edges = await record.evaluate((el) => {
+          const heading = Array.from(
+            el.querySelector(".otk-tool-state")!.children,
+          ).find((child) => !child.classList.contains("otk-tree-icon"))!;
+          return [
+            heading,
+            el.querySelector(".otk-failure-main-reason")!,
+            el.querySelector(".otk-failure-detail-toggle")!,
+          ].map((node) => node.getBoundingClientRect().left);
+        });
+        expect(
+          Math.max(...edges) - Math.min(...edges),
+          `${surface}/${theme} record heading and failure edge`,
+        ).toBeLessThanOrEqual(1);
+      }
+      for (
+        const toggle of await page.locator(".otk-disclosure-toggle:visible")
+          .all()
+      ) {
+        const gaps = await toggle.evaluate((el) => {
+          const slot = el.querySelector(".otk-disclosure-icon")!
+            .getBoundingClientRect();
+          const icon = el.querySelector(".otk-disclosure-icon svg")!
+            .getBoundingClientRect();
+          return [
+            icon.left - slot.left,
+            slot.right - icon.right,
+            icon.top - slot.top,
+            slot.bottom - icon.bottom,
+          ];
+        });
+        expect(
+          Math.max(...gaps) - Math.min(...gaps),
+          `${surface}/${theme} disclosure gaps`,
+        ).toBeLessThanOrEqual(1);
       }
       if (surface === "main") {
         await expect(page.locator('[data-tool="bash"] .otk-failure-heading'))

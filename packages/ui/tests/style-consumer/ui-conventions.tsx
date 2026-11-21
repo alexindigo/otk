@@ -15,6 +15,7 @@ import Clock from "../../components/Clock.tsx";
 import ChromeMeta from "../../components/ChromeMeta.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "../../components/Tree.tsx";
 import StatusLight from "../../components/StatusLight.tsx";
+import { UnknownPart } from "../../components/parts/UnknownPart.tsx";
 import "../../components/RightPanel.css" with { type: "text" };
 import { registerTextPart } from "../../components/parts/TextPart.tsx";
 import { registerFetchTool } from "../../components/tools/FetchTool.tsx";
@@ -40,6 +41,39 @@ export default function UiConventions() {
       registerGenericTool,
     ]
   ) register(registries.tools);
+  if (surface === "record-tree") {
+    return (
+      <section class="error-review-run">
+        <h2>Record artwork and guide axes</h2>
+        <For each={[false, true]} keyed={(outgoing) => String(outgoing)}>
+          {(outgoing) => (
+            <UnknownPart
+              part={{
+                kind: "external",
+                id: outgoing() ? "outgoing-record" : "incoming-record",
+                name: "consumer/record-axis",
+                activity: {
+                  layout: "row",
+                  category: "record",
+                  tone: "normal",
+                  kindLabel: "Record",
+                  title: outgoing() ? "Outgoing record" : "Incoming record",
+                  direction: outgoing() ? "outgoing" : undefined,
+                  icon: { name: "warning", label: "Record artwork" },
+                },
+              }}
+              recordTime={at}
+              prefs={DEFAULT_PREFS}
+              streaming={false}
+              permissions={[]}
+              onOpenChild={() => {}}
+              user={false}
+            />
+          )}
+        </For>
+      </section>
+    );
+  }
   if (surface === "send") {
     const message: UserMessage = {
       id: "pending",

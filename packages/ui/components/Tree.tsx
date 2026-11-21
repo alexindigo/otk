@@ -21,8 +21,14 @@ export function TreeIcon(
   props: { children?: Element; class?: string },
 ): Element {
   const stem = useContext(IconStemContext);
+  const outgoing = useContext(DirectionContext);
   return (
-    <span class={["otk-tree-icon", props.class, { "has-stem": stem() }]}>
+    <span
+      class={["otk-tree-icon", props.class, {
+        "has-stem": stem(),
+        "is-outgoing": outgoing,
+      }]}
+    >
       <span class="otk-tree-icon-stem" aria-hidden="true" />
       <span class="otk-tree-icon-art">
         {props.children}

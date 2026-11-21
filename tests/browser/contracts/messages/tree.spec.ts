@@ -30,7 +30,9 @@ async function geometry(nodes: Locator) {
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon",
+        // The content gutter can be wider than the native junction cell. The
+        // child guide follows the artwork axis, not the gutter's outer box.
+        ":scope > .otk-tree-heading .otk-tree-icon-art",
       )?.getBoundingClientRect();
       const parentJunction = parent?.querySelector(
         ":scope > .otk-tree-heading > .otk-tree-own",

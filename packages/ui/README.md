@@ -158,9 +158,13 @@ consumers borrow that same optional-recovery presentation.
 FailureContent owns the neutral reason and recovery text, available action and
 initially collapsed DisclosureToggle Details disclosure. Its record placement
 borrows the surrounding row's action/target heading rather than repeating it.
-Standalone feedback retains its heading. Its two-track grid owns the disclosure
-gutter and content; record placement borrows the row's artwork gap, and unmarked
-toast headings have no gutter inset. Error colour belongs to the shared
+Standalone feedback retains its heading. DisclosureToggle owns a control-height
+square gutter and the shared disclosure-layout grid: headings, reasons, actions
+and Details labels share its content edge, independently of whether a signal is
+painted. Toast messages borrow that same grid and failure content borrows its
+subgrid without size containment. Record headers borrow the same content gutter;
+TreeIcon keeps its artwork and guide in the native tree-indent cell, with any
+remaining gutter in a trailing track. Error colour belongs to the shared
 FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
 its surface edge. Compact callers and containers at or below 320px show the
 heading and controls, with complete reasons inside Details. The shared

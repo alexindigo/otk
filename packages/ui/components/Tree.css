@@ -109,10 +109,13 @@
 .otk-tree-icon {
   font-size: var(--tree-icon-size);
   display: grid;
-  grid-template: 1fr auto 1fr / 1fr 1fr;
-  inline-size: var(--tree-indent);
-  min-inline-size: var(--tree-indent);
-  flex: 0 0 var(--tree-indent);
+  /* The junction keeps its native axis. A borrowed content gutter adds only
+     a trailing track, so record headers and failure facts share a text edge. */
+  grid-template: 1fr auto 1fr / repeat(2, calc(var(--tree-indent) / 2))
+    minmax(0, 1fr);
+  inline-size: var(--tree-content-gutter, var(--tree-indent));
+  min-inline-size: var(--tree-content-gutter, var(--tree-indent));
+  flex: 0 0 var(--tree-content-gutter, var(--tree-indent));
   align-self: stretch;
   color: var(--otk-fg-3);
 }
@@ -128,6 +131,16 @@
   place-self: center;
   display: grid;
   place-items: center;
+}
+.otk-tree-icon.is-outgoing {
+  grid-template-columns: minmax(0, 1fr) repeat(2, calc(var(--tree-indent) / 2));
+}
+.otk-tree-icon.is-outgoing > .otk-tree-icon-art {
+  grid-column: 2 / 4;
+}
+.otk-tree-icon.is-outgoing > .otk-tree-icon-stem {
+  grid-column: 3;
+  justify-self: start;
 }
 .otk-tree-icon-art > svg {
   inline-size: var(--tree-icon-size);
