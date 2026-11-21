@@ -82,7 +82,7 @@ Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested 
 });
 
 for (const prefix of ["opcv1", "opcv2"]) {
-  Deno.test(`INV-D ${prefix}: preferred child and cold fallback resolve to their human root`, async () => {
+  Deno.test(`INV-D ${prefix}: remembered child stays exact and only a fresh default resolves to its human root`, async () => {
     const f = shellFixture();
     const root = shellEntry(`${prefix}-root`, "/repo");
     const child = shellEntry(`${prefix}-child`, "/repo", root.id);
@@ -92,14 +92,14 @@ for (const prefix of ["opcv1", "opcv2"]) {
       assertEquals(await f.resources.projectSession(project), root.id);
       assertEquals(
         await f.resources.projectSession(project, child.id),
-        root.id,
+        child.id,
       );
     } finally {
       f.resources.stop();
     }
   });
 
-  Deno.test(`INV-D ${prefix}: project click resolves saved child to its human root route`, async () => {
+  Deno.test(`INV-D ${prefix}: project click restores the exact saved child route`, async () => {
     const f = shellFixture();
     const root = shellEntry(`${prefix}-root`, "/repo");
     const child = shellEntry(`${prefix}-child`, "/repo", root.id);
@@ -148,8 +148,8 @@ for (const prefix of ["opcv1", "opcv2"]) {
       f.resources.receive("local", { t: "prefs", prefs });
       nav.openProject({ sidecarId: "local", directory: "/repo" });
       await new Promise((resolve) => setTimeout(resolve, 0));
-      assertEquals(f.session.state.selection?.sessionID, root.id);
-      assertEquals(location.hash, `#/local/${root.id}`);
+      assertEquals(f.session.state.selection?.sessionID, child.id);
+      assertEquals(location.hash, `#/local/${root.id}/${child.id}`);
     } finally {
       nav.stop();
       f.resources.stop();

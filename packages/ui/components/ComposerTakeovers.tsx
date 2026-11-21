@@ -8,6 +8,7 @@ import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
 export default function ComposerTakeovers(
   props: {
@@ -36,17 +37,25 @@ export default function ComposerTakeovers(
           data-read-only={props.readOnly ? "true" : "false"}
         >
           <div class="otk-composer-activity-slot">
-            <Show when={work().length}>
-              <div class="otk-composer-activity">
-                <LiveWork
-                  items={work()}
-                  owner={session.liveWork}
-                  onOpen={(id) =>
-                    void commands.run("session.child", id).catch(fail)}
-                  onError={fail}
-                />
-              </div>
-            </Show>
+            <div class="otk-composer-activity" aria-label="Message destination">
+              <ChromeMeta
+                class="otk-composer-target otk-control-label"
+                title={session.composerTarget?.() ??
+                  session.entry(session.sessionID())?.title ??
+                  session.sessionID()}
+              >
+                {session.composerTarget?.() ??
+                  session.entry(session.sessionID())?.title ??
+                  session.sessionID()}
+              </ChromeMeta>
+              <LiveWork
+                items={work()}
+                owner={session.liveWork}
+                onOpen={(id) =>
+                  void commands.run("session.child", id).catch(fail)}
+                onError={fail}
+              />
+            </div>
           </div>
           <ScrollRegion
             frameClass="otk-composer-notice-layer"

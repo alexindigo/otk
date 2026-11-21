@@ -125,20 +125,19 @@ Deno.test("explicit checkout and repository attention targets never redirect to 
   );
 });
 
-Deno.test("navigation default resolves urgency and child memory to human roots, then newest root across scopes", async () => {
+Deno.test("project memory preserves exact selection before attention and fresh defaults", async () => {
   const f = fixture(), input = { directory: "/repo", preferred: "tstv1-child" };
   f.states.set("tstv1-old", "working");
   f.states.set("tstv1-new", "finished");
   f.states.set("tstv1-child", "blocked");
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
   f.states.delete("tstv1-child");
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-new");
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
   f.states.delete("tstv1-new");
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
-  assertEquals(f.reads, [], "proven attention ancestry needs no native read");
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
   f.reads.length = 0;
   f.states.clear();
-  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-old");
+  assertEquals(await f.resolver.resolve(f.core, input), "tstv1-child");
   assertEquals(f.reads, [["tstv1-child"]]);
   f.reads.length = 0;
   assertEquals(
@@ -169,6 +168,27 @@ Deno.test("navigation default rejects missing, foreign and deleted memories, exc
     await f.resolver.resolve(f.core, {
       directory: "/repo",
       preferred: "tstv1-child",
+    }),
+    "tstv1-new",
+  );
+});
+
+Deno.test("archive retains memory and explicit attention alone overrides a remembered destination", async () => {
+  const f = fixture();
+  f.rows[0].archived = true;
+  f.states.set("tstv1-new", "blocked");
+  assertEquals(
+    await f.resolver.resolve(f.core, {
+      directory: "/repo",
+      preferred: "tstv1-old",
+    }),
+    "tstv1-old",
+  );
+  assertEquals(
+    await f.resolver.resolve(f.core, {
+      directory: "/repo",
+      preferred: "tstv1-old",
+      attention: true,
     }),
     "tstv1-new",
   );
@@ -221,7 +241,7 @@ for (const change of ["deleted", "moved", "parented"] as const) {
 
 for (const ancestry of ["missing", "cyclic"] as const) {
   for (const candidate of ["attention", "remembered"] as const) {
-    Deno.test(`navigation rejects ${ancestry} ${candidate} ancestry and opens newest proven root`, async () => {
+    Deno.test(`navigation preserves explicit memory but rejects ${ancestry} default ${candidate} ancestry`, async () => {
       const f = fixture();
       f.rows[2].parentID = ancestry === "missing"
         ? "tstv1-absent"
@@ -231,9 +251,9 @@ for (const ancestry of ["missing", "cyclic"] as const) {
       assertEquals(
         await f.resolver.resolve(f.core, {
           directory: "/repo",
-          preferred: f.rows[2].id,
+          ...(candidate === "remembered" ? { preferred: f.rows[2].id } : {}),
         }),
-        "tstv1-new",
+        candidate === "remembered" ? f.rows[2].id : "tstv1-new",
       );
     });
   }
@@ -249,7 +269,6 @@ Deno.test("navigation with no proven human root returns no default, never a help
   assertEquals(
     await f.resolver.resolve(f.core, {
       directory: "/repo",
-      preferred: "tstv1-child",
     }),
     null,
   );
@@ -271,6 +290,7 @@ Deno.test("navigation uses late proven ancestry rather than returning an unresol
   const f = fixture();
   f.rows[2].parentID = "tstv1-late";
   f.hierarchy.entry(f.rows[2]);
+  f.states.set(f.rows[2].id, "blocked");
   const identities = f.core.identities.bind(f.core);
   f.core.identities = async (ids, signal) => {
     if (ids.includes("tstv1-late")) {
@@ -281,7 +301,6 @@ Deno.test("navigation uses late proven ancestry rather than returning an unresol
   assertEquals(
     await f.resolver.resolve(f.core, {
       directory: "/repo",
-      preferred: f.rows[2].id,
     }),
     "tstv1-late",
   );

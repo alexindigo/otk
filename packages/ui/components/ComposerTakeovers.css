@@ -31,11 +31,20 @@
 .otk-composer-activity {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
   inline-size: 100%;
   max-inline-size: var(--lane-width);
+  min-block-size: var(--control-size);
   margin-inline: auto;
   padding-block-end: var(--space-2);
+  flex: none;
+}
+.otk-composer-target {
+  flex: 1;
+  min-inline-size: 0;
+}
+.otk-composer-activity > .otk-live-work {
   flex: none;
 }
 .otk-composer-activity-slot {

@@ -52,7 +52,7 @@ export default function LiveWork(props: {
     <Show when={props.items.length}>
       <Popover
         class="otk-live-work"
-        triggerClass="otk-live-work-trigger otk-pill"
+        triggerClass="otk-live-work-trigger"
         label="Running work"
         triggerLabel={`Running work: ${runningWorkLabel(props.items)}`}
         title="Running work"
@@ -67,9 +67,9 @@ export default function LiveWork(props: {
         trigger={
           <>
             <StatusLight small state="working" />
-            <span class="otk-control-label">
+            <ChromeMeta class="otk-control-label">
               {runningWorkLabel(props.items)}
-            </span>
+            </ChromeMeta>
           </>
         }
       >
