@@ -203,6 +203,7 @@ Deno.test("turning parent-task inheritance off refreshes native hierarchy before
         parentID: "root",
         directory: project.directory,
         title: "Child",
+        timeCreated: 1,
         hierarchy: {
           familyID: "root",
           rootID: "root",
@@ -275,6 +276,70 @@ Deno.test("turning parent-task inheritance off refreshes native hierarchy before
     f.resources.stop();
   }
 });
+Deno.test("live Sessions context overlays preserve creation order when a page row becomes mandatory", async () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  const a = {
+    ...entry("a"),
+    timeCreated: 10,
+    status: "idle" as const,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  };
+  const b = { ...a, id: "b", timeCreated: 20 };
+  const inbox = metadata();
+  inbox.tasks = [];
+  inbox.finishes = {};
+  inbox.seen = {};
+  inbox.supervision = {
+    a: { state: "none", terminal: 0 },
+    b: { state: "none", terminal: 0 },
+  };
+  try {
+    f.receive("local", { t: "index.snapshot", rev: 0, entries: [a, b] });
+    f.resources.scope(project);
+    const publish = (revision: number) =>
+      f.receive("local", {
+        t: "inbox.snapshot",
+        generation: "creation",
+        revision,
+        epoch: f.connections.get("local")!.viewEpoch,
+        inbox: structuredClone(inbox),
+      });
+    publish(0);
+    f.resources.sessionRows(project);
+    const read = f.listReads[0];
+    read.resolve({
+      items: [a, b],
+      older: null,
+      load: {
+        id: read.intent!.key,
+        scope: { kind: "project-sessions", directory: "/p", query: "" },
+        boundary: { kind: "page", limit: 20 },
+        generation: "native",
+        revision: 1,
+        state: "complete",
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const ids = () =>
+      f.resources.sessionRows(project).filter((row) => row.kind === "session")
+        .map((row) => row.id);
+    assertEquals(ids(), ["a", "b"]);
+    inbox.supervision!.b = { state: "working", terminal: 0 };
+    publish(1);
+    assertEquals(ids(), ["a", "b"]);
+    inbox.supervision!.a = { state: "needsYou", terminal: 0 };
+    publish(2);
+    assertEquals(ids(), ["a", "b"]);
+  } finally {
+    f.resources.stop();
+  }
+});
+
 Deno.test("sidebar identities stay ordered through state/recency ticks, explicit moves reorder and arrivals append", () => {
   const f = fixture();
   const inbox = metadata();
@@ -619,7 +684,12 @@ Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects n
   for (const read of f.listReads) {
     read.resolve({
       items: read.input.directory === "/tree/src"
-        ? [{ id: "tstv1-idle", directory: "/tree/src", title: "Idle nested" }]
+        ? [{
+          id: "tstv1-idle",
+          directory: "/tree/src",
+          title: "Idle nested",
+          timeCreated: 1,
+        }]
         : [],
       older: null,
       load: {
@@ -696,7 +766,12 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
   });
   const read = f.listReads[0];
   read.resolve({
-    items: [{ id: "session", title: "Session", directory: "/p" }],
+    items: [{
+      id: "session",
+      title: "Session",
+      directory: "/p",
+      timeCreated: 1,
+    }],
     older: "page-2",
     load: {
       id: read.intent!.key,

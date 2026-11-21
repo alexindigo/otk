@@ -414,6 +414,7 @@ export function createServerResources(o: {
           id: entry.id,
           directory: entry.directory,
           title: entry.title,
+          timeCreated: entry.timeCreated,
           parentID: entry.parentID,
           retained: !!entry.deleted,
           hierarchy: entry.hierarchy,
