@@ -2,6 +2,17 @@
 import { RequestFailure } from "@otk/client";
 import { randomID } from "@otk/protocol";
 
+/** Optional shortcut read. Native paste remains available when unavailable or
+ * refused, including on plain HTTP where no programmatic read API exists. */
+export async function readText(): Promise<string | undefined> {
+  if (!globalThis.isSecureContext || !navigator.clipboard?.readText) return;
+  try {
+    return await navigator.clipboard.readText();
+  } catch {
+    return undefined;
+  }
+}
+
 /** One browser write boundary. Rejections are structured FP1 failures so every
  * existing action surface can display action, target, reason and next step. */
 export async function copyText(

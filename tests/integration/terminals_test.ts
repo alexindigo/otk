@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
-import { RequestFailure, SidecarConnection } from "@otk/client";
+import { RequestFailure, SidecarConnection, TerminalSocket } from "@otk/client";
 import type { Harness } from "@otk/harness";
 import type { ContentSession, TerminalInfo } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
@@ -383,6 +383,65 @@ test("terminal admission: auth and Origin precede daemon access; unavailable RPC
   const health = await fetch(unavailable.url + "/api/health");
   assertEquals(health.status, 200);
   await health.body?.cancel();
+});
+
+test("terminal attachment desired dimensions reach the actual PTY after initial open and reconnect", async () => {
+  const app = await application(), client = await rpc(app.url);
+  const terminal = await client.conn.rpc.call("terminal.create", {
+    sessionID: A,
+    cols: 80,
+    rows: 24,
+  });
+  let current!: WebSocket, connected = false, output = "";
+  const sized: string[] = [];
+  const transport = new TerminalSocket({
+    base: new URL(app.url + "/api/"),
+    options: {
+      socket: (url) =>
+        current = Reflect.construct(WebSocket, [url, {
+          headers: { Origin: app.url },
+        }]) as WebSocket,
+    },
+  });
+  resources().defer("stop size transport", () => transport.stop());
+  const attachment = transport.attach(A, terminal.id, {
+    reset() {
+      output = "";
+    },
+    resize(cols, rows) {
+      sized.push(`${cols}x${rows}`);
+    },
+    write(bytes) {
+      output += new TextDecoder().decode(bytes);
+    },
+    meta(value) {
+      if (value.connected !== undefined) connected = value.connected;
+    },
+  });
+  const lines = () =>
+    output.replace(
+      // deno-lint-ignore no-control-regex -- Match shell output, not VT mode changes around stty.
+      /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)/g,
+      "",
+    ).replaceAll("\r", "").split("\n");
+  attachment.resize(111, 37);
+  await until(() => connected, "initial size attachment");
+  await until(() => sized.includes("111x37"), "daemon applied initial size");
+  attachment.input(new TextEncoder().encode("stty size\r"));
+  await until(
+    () => lines().includes("37 111"),
+    "shell sees initial desired size",
+  );
+  current.close();
+  await until(() => !connected, "size transport disconnected");
+  attachment.resize(132, 48);
+  await until(() => connected, "size transport reattached");
+  await until(() => sized.includes("132x48"), "daemon applied reattached size");
+  attachment.input(new TextEncoder().encode("stty size\r"));
+  await until(
+    () => lines().includes("48 132"),
+    "shell sees disconnected desired size",
+  );
 });
 
 test("invalid terminal cache configuration preserves application availability", async () => {
