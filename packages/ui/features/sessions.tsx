@@ -36,6 +36,7 @@ export function registerSessionsPanel(
             return (
               <ProjectSessions
                 project={project}
+                holdOrder={() => shell.holdTaskOrder?.(project) ?? (() => {})}
                 ready={shell.inbox(sidecarId).state.ready &&
                   shell.sessionRowsReady(project)}
                 loading={shell.sessionRowsLoading(project)}

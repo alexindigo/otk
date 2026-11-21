@@ -3,6 +3,7 @@ import type {
   InboxSnapshot,
   IndexEntry,
   IndexMetadata,
+  SessionListRow,
   TaskRecord,
 } from "@otk/protocol";
 import {
@@ -16,7 +17,8 @@ import {
   rollup,
   sessionAttentionStates,
 } from "./inbox.ts";
-import { sortTabsByUrgency } from "./tab-urgency.ts";
+import { createTabOrder } from "./tab-urgency.ts";
+import type { SettledOrderOptions } from "./settled-order.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
@@ -74,6 +76,9 @@ export interface ClientTabs {
   /** Naming for the selected task/phantom, independent of the tab population. */
   selectedTitle(): string | undefined;
   tasks(): readonly TaskRecord[];
+  orderRows(rows: readonly SessionListRow[]): SessionListRow[];
+  /** Pointer, keyboard and portalled interactions share this ordering lifetime. */
+  holdOrder(): () => void;
   crumbs(): TaskCrumb[];
   /** Open-session identity and known ancestor links, independent of activity. */
   path(): TaskCrumb[];
@@ -114,6 +119,7 @@ export function createTabs(
   ) => Promise<TaskRecord>,
   factory: StateFactory = createState,
   sources?: TabSources,
+  orderOptions?: SettledOrderOptions,
 ): ClientTabs {
   const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
@@ -146,6 +152,10 @@ export function createTabs(
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
+  const ordering = createTabOrder<InboxTab>(() => {
+    cachedTabs = undefined;
+    store.update((s) => s.revision++);
+  }, orderOptions);
   let cachedCrumbs: TaskCrumb[] = [],
     cachedPath: TaskCrumb[] = [],
     cachedFamily: FamilyCrumb[] = [],
@@ -267,7 +277,7 @@ export function createTabs(
         });
       }
     }
-    return cachedTabs = sortTabsByUrgency(
+    return cachedTabs = ordering.tabs(
       result,
       (tab) =>
         tab.kind === "task"
@@ -279,6 +289,22 @@ export function createTabs(
           ]
           : sessionAttentionStates(byID.get(tab.id)!, inbox),
       activity,
+      (tab) => {
+        const members = tab.kind === "task"
+          ? families.get(tab.id) ?? []
+          : [byID.get(tab.id)!];
+        const blocked = members.filter((entry) =>
+          sessionAttentionStates(entry, inbox).includes("blocked")
+        );
+        return blocked.length > 0 &&
+          blocked.every((entry) =>
+            entry.operationStatus !== "blocked" &&
+            !entry.activity?.inputs?.keys.length &&
+            !entry.attention.questions &&
+            !entry.attention.error &&
+            !!entry.activity?.permissions?.keys.length
+          );
+      },
     );
   }
   const lookup = (id: string) => {
@@ -354,7 +380,16 @@ export function createTabs(
     tasks() {
       void store.state.revision;
       prepare();
-      return tasks;
+      const order = new Map(tabs().map((tab, i) => [tab.id, i]));
+      return [...tasks].sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    },
+    holdOrder() {
+      tabs();
+      return ordering.hold();
+    },
+    orderRows(rows) {
+      void store.state.revision;
+      return ordering.sequence("sessions", rows, (row) => row.key);
     },
     entry(id) {
       void store.state.revision;
@@ -478,6 +513,7 @@ export function createTabs(
       if (stopped) return;
       if (next.version !== undefined && input === next) return;
       const changedProject = next.directory !== input.directory;
+      if (changedProject) ordering.reset();
       input = next;
       derived = undefined;
       prepare();
@@ -567,7 +603,7 @@ export function createTabs(
           (selection.kind === "task"
             ? tab.kind === "task"
             : tab.kind === "phantom")
-        )
+        ) || selection.kind === "task" && !taskByID.has(selection.id)
       ) throw new Error("Unknown tab");
       const task = selection.kind === "task"
         ? input.inbox.tasks.find((t) => t.id === selection.id)
@@ -683,6 +719,7 @@ export function createTabs(
     stop() {
       if (stopped) return;
       stopped = true;
+      ordering.stop();
       selectionRevision++;
       for (const waiters of taskWaiters.values()) {
         for (const resolve of waiters) resolve(false);

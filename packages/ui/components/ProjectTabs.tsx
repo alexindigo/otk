@@ -61,6 +61,7 @@ import OverflowRow from "./OverflowRow.tsx";
 import { breadcrumbRows } from "./list-presentation.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
+import { orderInteraction } from "./order-interaction.ts";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -91,6 +92,10 @@ export default function ProjectTabs(props: {
   actions: TaskActions;
 }): import("solid-js").Element {
   const { commands } = useCommandPorts();
+  const orderInput = orderInteraction(
+    () => props.model.holdOrder(),
+    () => props.model,
+  );
   const [error, setError] = createSignal<FailureValue>("");
   const crumbFeedbackID = createUniqueId();
   const tasks = () => props.model.tasks();
@@ -369,6 +374,7 @@ export default function ProjectTabs(props: {
     );
   return (
     <section
+      ref={orderInput}
       class="otk-project-tabs"
       aria-label="Project tabs"
       data-reserve-trailing={props.reserveTrailing ? "true" : undefined}

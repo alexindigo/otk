@@ -56,6 +56,7 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
+import { createSettledOrder } from "./settled-order.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -93,6 +94,8 @@ export interface ServerResources {
   frecencyCatalog(id: string, directory: string): FrecencyCatalogLease;
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
+  holdTaskOrder(project: ProjectSelection): () => void;
+  holdProjectOrder(): () => void;
   taskActions(project: ProjectSelection): TaskActions;
   entry(sidecarId: string, sessionID: string): IndexEntry | undefined;
   server(id: string): SidecarState | undefined;
@@ -175,6 +178,13 @@ export function createServerResources(o: {
   ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
+  const projectOrderClock = factory({ revision: 0 });
+  const projectOrder = createSettledOrder<{
+    id: string;
+    row: ProjectProjectionRow & { sidecarId: string; label: string };
+    priority: number;
+    activity: number;
+  }>(() => projectOrderClock.update((s) => s.revision++));
   const lifetimeClock = factory({ revision: 0 });
   const requestSubscriptions = new Map<string, () => void>();
   const requests = (id: string) => {
@@ -955,6 +965,12 @@ export function createServerResources(o: {
     approvals,
     forms: (id) => requests(id).forms(),
     tabs,
+    holdTaskOrder(p) {
+      const model = tabs(p);
+      model.update(tabInput(p));
+      return model.holdOrder();
+    },
+    holdProjectOrder: () => projectOrder.hold(),
     entry,
     server,
     connected,
@@ -1051,7 +1067,10 @@ export function createServerResources(o: {
         key = JSON.stringify([p.sidecarId, p.directory]);
       let tree = trees.get(key);
       if (!tree) trees.set(key, tree = createSessionTree());
-      return tree.rows(
+      const model = tabs(p);
+      model.update(tabInput(p));
+      const taskOrder = model.tabs().map((tab) => tab.id);
+      return model.orderRows(tree.rows(
         [...new Map(
           lists.flatMap((list) =>
             listOwner(p.sidecarId).structures(list, listContext(p))
@@ -1063,7 +1082,8 @@ export function createServerResources(o: {
         projectOwner(p.sidecarId).scopes(
           projectOwner(p.sidecarId).resolve(p.directory),
         ),
-      );
+        taskOrder,
+      ));
     },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
@@ -1072,6 +1092,7 @@ export function createServerResources(o: {
       return (names.get(name) ?? 0) > 1;
     },
     projects: (now, ageing) => {
+      void projectOrderClock.state.revision;
       const rows = sidecars.state.list.flatMap((s) => {
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
@@ -1092,7 +1113,24 @@ export function createServerResources(o: {
           a.directory.localeCompare(b.directory) ||
           a.label.localeCompare(b.label);
       });
-      return projectHierarchy(rows);
+      const rank = { tracked: 0, index: 1, template: 2 };
+      return projectHierarchy(
+        projectOrder.order(
+          rows.map((row, i) => ({
+            id: JSON.stringify([row.sidecarId, row.directory]),
+            row,
+            priority: rank[row.source ?? "tracked"],
+            activity: row.source === "tracked" ? -i : -row.order,
+          })),
+          (row) => ({
+            priority: row.priority,
+            activity: row.activity,
+            tie: `${
+              projectName(row.row.directory)
+            }\0${row.row.directory}\0${row.row.label}`,
+          }),
+        ).map((item) => item.row),
+      );
     },
     tabSnapshot(p) {
       const input = tabInput(p);
@@ -1192,6 +1230,7 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      projectOrder.stop();
       for (const release of requestSubscriptions.values()) release();
       requestSubscriptions.clear();
       if (stopped) return;

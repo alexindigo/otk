@@ -41,6 +41,7 @@ export interface ShellPorts {
   projectMetadata: import("@otk/client").ServerResources["projectMetadata"];
   metadataEntry: import("@otk/client").ServerResources["metadataEntry"];
   sessionRows: import("@otk/client").ServerResources["sessionRows"];
+  holdTaskOrder?: import("@otk/client").ServerResources["holdTaskOrder"];
   sessionRowsReady: import("@otk/client").ServerResources["sessionRowsReady"];
   sessionRowsLoading:
     import("@otk/client").ServerResources["sessionRowsLoading"];
