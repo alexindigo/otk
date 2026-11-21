@@ -33,7 +33,7 @@ Deno.test("@load @sessions list demand fences replacement/reconnect chunks, reta
     id: string,
     generation = "source",
   ): SessionListPage => ({
-    items: [{ id, title: id, directory: input.directory }],
+    items: [{ id, title: id, directory: input.directory, timeCreated: 1 }],
     older: "older",
     load: {
       id: reads[at].intent.key,
@@ -130,7 +130,12 @@ Deno.test("@sessions page replacement preserves the acquired window and retained
     }) as never;
   const owner = createSessionLists(rpc, () => 1);
   const input = { directory: "/project", limit: 2 };
-  const item = (id: string) => ({ id, title: id, directory: input.directory });
+  const item = (id: string) => ({
+    id,
+    title: id,
+    directory: input.directory,
+    timeCreated: 1,
+  });
   const reply = (at: number, ids: string[], older: string | null) =>
     reads[at].resolve({
       items: ids.map(item),
@@ -212,7 +217,12 @@ Deno.test("hierarchy refresh invalidates inactive cached lists without I/O until
   const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
   const finish = (at: number, title: string) =>
     reads[at].resolve({
-      items: [{ id: "child", directory: input.directory, title }],
+      items: [{
+        id: "child",
+        directory: input.directory,
+        title,
+        timeCreated: 1,
+      }],
       older: null,
       load: {
         id: reads[at].intent.key,
@@ -262,7 +272,12 @@ Deno.test("reactivating an invalidated inactive list cannot join its old in-flig
   const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
   const finish = (at: number, title: string) =>
     reads[at].resolve({
-      items: [{ id: "child", directory: input.directory, title }],
+      items: [{
+        id: "child",
+        directory: input.directory,
+        title,
+        timeCreated: 1,
+      }],
       older: null,
       load: {
         id: reads[at].intent.key,
