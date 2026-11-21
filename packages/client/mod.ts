@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export * from "./project-editor.ts";
+export * from "./record-folds.ts";
 export * from "./project-disclosure.ts";
 export * from "./project-placement.ts";
 export { supervisionStatus } from "./inbox.ts";

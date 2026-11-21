@@ -7,10 +7,30 @@ import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
+import { foldRecords } from "../../packages/client/record-folds.ts";
 import {
   codeSeparatorErrors,
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
+
+Deno.test("UI convention: folded record counts are neutral metadata, not per-kind hidden rows", async () => {
+  const source = await Deno.readTextFile(
+    "packages/ui/components/RecordKinds.tsx",
+  );
+  assert(source.includes("<ChromeMeta>{fold().label}</ChromeMeta>"));
+  assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
+  const values = foldRecords([1, 2], () => ({
+    kindLabel: "fixture",
+    title: "Unrelated producer",
+    layout: "row",
+    tone: "normal",
+    category: "record",
+    fold: true,
+    summary: { kind: "fixture", noun: "fact", plural: "facts" },
+  }), () => false);
+  assertEquals(values.visible, []);
+  assertEquals(values.folds[0].label, "2 facts");
+});
 
 Deno.test("UI convention: component styles never target another component's internals, including every disclosure caller", async () => {
   const files = new Map(

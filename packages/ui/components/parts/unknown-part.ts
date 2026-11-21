@@ -25,6 +25,7 @@ export function unknownPartPresentation(part: Part): PartPresentation {
     ? source?.payload
     : undefined;
   return {
+    activity: part.kind === "external" && !part.failure ? activity : undefined,
     ...(part.kind === "external" && part.failure
       ? { failure: part.failure }
       : {}),
