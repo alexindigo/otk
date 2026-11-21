@@ -6,8 +6,11 @@ owns UTF-8 SHA-256 with a dependency-free fallback when Web Crypto is absent.
 Request fingerprints retain their exact stored/equality format. Highlighting
 also borrows SHA-256, retaining the same local cache keys rather than
 introducing a second hashing algorithm. The browser-capabilities architecture
-gate follows the browser import/worker graph and prevents direct secure-only API
-access.
+gate follows runtime imports and worker URLs. It checks `crypto.randomUUID` (use
+`randomID`), `crypto.subtle` (allowed only in `packages/protocol/hash.ts`) and
+`navigator.clipboard` (allowed only in `packages/ui/clipboard.ts`). It is not a
+complete secure-context API inventory: other APIs, such as
+`navigator.storage.estimate()`, still need a separate plain-HTTP assessment.
 
 `PROMPT_HISTORY_LIMIT` owns the global recall candidate/retention window.
 `MAX_UPLOAD_BYTES` owns the immutable per-upload limit; `AttachmentPolicy`

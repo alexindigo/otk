@@ -14,7 +14,7 @@ export function browserGraph(files: ReadonlyMap<string, string>): Set<string> {
     if (result.has(path) || !/\.[cm]?[jt]sx?$/.test(path)) continue;
     result.add(path);
     const source = new Source(files.get(path)!, path);
-    const specifiers = dependencySpecifiers(source.text);
+    const specifiers = dependencySpecifiers(source.text, { runtime: true });
     for (const node of source.all) {
       if (node.type === "NewExpression" && source.name(node.callee) === "URL") {
         const specifier = source.string(node.arguments[0]);
@@ -39,7 +39,7 @@ export function capabilityErrors(path: string, text: string): string[] {
   const errors = new Set<string>();
   for (const node of source.all) {
     const name = source.name(node)?.replace(
-      /^(?:globalThis|window|self)\./,
+      /^(?:(?:globalThis|window|self)\.)+/,
       "",
     );
     if (name === "crypto.randomUUID") errors.add("use protocol randomID");
@@ -76,6 +76,8 @@ Deno.test("capability gate follows aliases, computed access, barrels and workers
     const code of [
       "crypto.randomUUID()",
       "window.crypto['randomUUID']()",
+      "globalThis.window.crypto.randomUUID()",
+      "globalThis.window.navigator.clipboard.writeText('x')",
       "const c = globalThis.crypto; c.randomUUID()",
       "const { randomUUID: id } = crypto; id()",
       "crypto?.subtle?.digest('SHA-256', bytes)",
@@ -86,13 +88,44 @@ Deno.test("capability gate follows aliases, computed access, barrels and workers
     new Map([
       [
         "web/src/main.ts",
-        "export * from '@otk/extra'; new Worker(new URL('./worker.ts', import.meta.url));",
+        "export * from '@otk/extra'; new Worker(new URL('../../packages/extra/worker.ts', import.meta.url));",
       ],
       ["packages/extra/mod.ts", "export * from './nested.ts'"],
       ["packages/extra/nested.ts", "crypto.randomUUID()"],
-      ["web/src/worker.ts", "crypto.subtle.digest('SHA-256', bytes)"],
+      ["packages/extra/worker.ts", "crypto.subtle.digest('SHA-256', bytes)"],
     ]),
   );
   assert(graph.has("packages/extra/nested.ts"));
-  assert(graph.has("web/src/worker.ts"));
+  assert(graph.has("packages/extra/worker.ts"));
+});
+
+Deno.test("browser graph excludes erased types but keeps runtime and mixed imports", () => {
+  const graph = browserGraph(
+    new Map([
+      [
+        "web/src/main.ts",
+        `
+      import type { A } from '../../core/types.ts';
+      export type { B } from '../../core/types.ts';
+      export type * from '../../core/types.ts';
+      import { type C } from '../../core/types.ts';
+      export { type D } from '../../core/types.ts';
+      type E = import('../../core/types.ts').E;
+      import '../../core/side-effect.ts';
+      import { type F, value } from '../../core/mixed.ts';
+      export { value as other } from '../../core/value.ts';
+    `,
+      ],
+      ["core/types.ts", "crypto.subtle.digest('SHA-256', bytes)"],
+      ["core/side-effect.ts", "export {}"],
+      ["core/mixed.ts", "export const value = 1"],
+      ["core/value.ts", "export const value = 1"],
+    ]),
+  );
+  assert(!graph.has("core/types.ts"));
+  for (
+    const path of ["core/side-effect.ts", "core/mixed.ts", "core/value.ts"]
+  ) {
+    assert(graph.has(path), path);
+  }
 });
