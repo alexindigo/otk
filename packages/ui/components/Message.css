@@ -5,6 +5,7 @@
   overflow-wrap: anywhere;
 }
 .otk-user-message {
+  container: otk-failure / inline-size;
   --user-column: 80%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--user-column));
@@ -99,5 +100,6 @@
   gap: var(--space-1);
 }
 .otk-send-failure {
-  justify-self: stretch;
+  justify-self: end;
+  inline-size: fit-content;
 }

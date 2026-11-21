@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-connection {
+  container: otk-failure / inline-size;
   display: grid;
   grid-template-columns: var(--control-size) minmax(0, 1fr);
   align-items: center;
@@ -42,7 +43,9 @@
 }
 /* A failure spans the row: its signal gutter is the lamp track, so its text
    starts on the server label's edge. */
-.otk-connection:not(.is-unlabelled) > .otk-connection-status.has-failure {
+.otk-connection > .otk-connection-status.has-failure {
   grid-column: 1 / -1;
-  --failure-gutter: calc(var(--control-size) + var(--space-2));
+}
+.otk-connection.is-unlabelled > .otk-connection-status.has-failure {
+  grid-row: 2;
 }

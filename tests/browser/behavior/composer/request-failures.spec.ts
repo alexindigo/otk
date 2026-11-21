@@ -24,22 +24,25 @@ test.describe("pre-message rejection", () => {
     for (
       const text of [
         "Sending prompt failed",
-        "Configuration rejected before send",
         "opencode.config.ts",
         "Required",
         "Invalid",
         "HTTP 400",
       ]
     ) await expect(failure).toContainText(text);
+    await expect(failure.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(failure).not.toContainText(
+      "Configuration rejected before send",
+    );
     await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
-    await expect(editor).toHaveValue("Keep this unsent draft intact");
     const notice = page.locator(".otk-operation-feedback");
     await expect(notice).toHaveText("Not sent - see the error above");
     await expect(notice).not.toContainText("opencode.config.ts");
     await expect(notice).not.toContainText("HTTP 400");
-    await notice.getByRole("link", { name: "Not sent - see the error above" })
+    await notice.getByRole("button", { name: "Not sent - see the error above" })
       .click();
     await expect(failure.locator("xpath=ancestor::article")).toBeFocused();
+    await expect(editor).toHaveValue("Keep this unsent draft intact");
     await expect(page.locator('[data-role="user"]')).toHaveCount(0);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });

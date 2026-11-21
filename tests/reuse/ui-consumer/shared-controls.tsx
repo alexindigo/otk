@@ -1135,7 +1135,18 @@ export default function SharedControls(
   ui.panels.register({
     id: "probe",
     title: "Probe panel",
-    icon: "P",
+    icon: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect
+          x="3"
+          y="3"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+        />
+      </svg>
+    ),
     component: () => <p>Independent panel content</p>,
   });
   ui.prompt.register({

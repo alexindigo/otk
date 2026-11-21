@@ -89,25 +89,14 @@ export default function PreferenceControls(
                         fallback={
                           <Select
                             containerClass="otk-preference-select"
+                            label={row().label}
                             name={row().key}
                             aria-label={row().label}
                             value={String(props.prefs[row().key])}
-                            onChange={(event) => {
-                              const field = event.currentTarget,
-                                value = field.value;
-                              change(row().key, value, () => {
-                                field.value = String(props.prefs[row().key]);
-                              });
-                            }}
-                          >
-                            <For each={options()}>
-                              {(option) => (
-                                <option value={option.value}>
-                                  {option.label}
-                                </option>
-                              )}
-                            </For>
-                          </Select>
+                            options={options()}
+                            onValue={(value) =>
+                              change(row().key, value, () => {})}
+                          />
                         }
                       >
                         <div

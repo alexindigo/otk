@@ -68,11 +68,12 @@ Markdown tasks use the shared non-interactive TaskMarker, not disabled native
 checkboxes. Its Done/Not done image name and glyph share one input, and its
 square slot derives from the prose line height. The list owns a two-column
 marker/content grid, keeping the marker centred on the first content line.
-`Select` retains one native value/focus target under a noninteractive decorative
-slot. FormSelect, preferences and ListPicker borrow these owners, including the
-composer's injected trigger content. Callers supply content/classes, never arrow
-offsets. Select's `containerClass` styles the whole control through a
-caller-owned slot; ordinary native attributes still address the native select.
+`Select` receives typed options and a value/change port. Its hidden form value
+and shared ListPicker menu replace the browser-native menu. FormSelect and
+preferences borrow that owner. ListPicker's trigger borrows ControlValue,
+including the composer's injected content. Callers supply content/classes, never
+arrow offsets. Select's `containerClass` styles the whole control; the trigger's
+name and field descriptions travel through the Popover-owned attribute port.
 Form fills its owning body; AuthColumn and Dialog's `form` role share
 `--form-width`. Dialog registrations forward `form`, `standard` or `editor` size
 without dispatching IDs. Editor content flexes inside that viewport-bounded
@@ -170,6 +171,15 @@ ConnectionStatus grid on every surface. A containing title replaces its label;
 otherwise the single state line shares that label's column. Quiet connection
 copy borrows ChromeMeta.
 
+FailurePresenter receives the current view and suppresses that session's target
+on every inline surface; notifications and genuinely cross-session targets keep
+navigation. Retained-record reveals are callback-backed buttons, not self-links.
+Its discriminated outcome/tone contract makes pending presentations neutral.
+FailureContent's subgrid and intrinsic sizing modes borrow containment from the
+bounded parent frame, so containment cannot erase inherited or content-sized
+tracks. The client duration owner formats work, loading, idle and live-work
+elapsed values identically.
+
 Failure records contribute their public failure through the part registry. The
 reply's legacy assistant error is a fallback only when its retained execution
 record is absent, so a quota reason is rendered once without prose matching.
@@ -182,18 +192,20 @@ does not compute run timing or change footer timing evidence.
 Clock also owns prompt, Timeline, activity, rollback, saved-branch and entity
 completion instants. Full date/zone tooltips use clockTitle. Interface progress
 and truncation text uses ASCII three dots. Attachment failures retain filename
-identity in their feedback and semantic error borders on the individual chip.
-StateShape owns real SVG fallback artwork for activity, supervision and
-connection indicators; their state definitions name shapes rather than font
-glyphs.
+identity through the same attachmentFailure builder used by style scenes; their
+feedback owns the signal, without a second error outline on the chip. StateShape
+owns real SVG fallback artwork for activity, supervision and connection
+indicators; their state definitions name shapes rather than font glyphs.
 
 SessionView never renders acquisition status inside its message flow. It exports
 the transcriptStatus projection; Shell shows it in its existing reserved header
 metadata slot, so loading and paging never displace a message. A load error with
 no messages remains in PaneState. Permission scope and failure Details use the
-same DisclosureToggle; only Tree junctions paint the masking box fill behind
-their guides. Folded interval meta joins items with the muted middle dot
-separator used by tool meta, and gives only the failure count the danger tone.
+same DisclosureToggle, which owns its tracks, gap and inline padding. Tree
+guides end at the junction cell; no box/artwork paints a background mask. Folded
+interval meta borrows ChromeMeta's shared metaList join, also used by
+tool/footer meta. All metadata stays plain muted; failure breakouts own the
+signal.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
@@ -258,21 +270,21 @@ collapsed summary and status/permission/error frame, so external renderers
 receive the same behavior. An optional third `presentation(call)` registration
 argument supplies `{icon, verb, target?, summary?, category?}` with the caller's
 directory as a second context argument; path-owning features supply relative
-targets. Icons accept strings or feature-owned SVG render functions. The shared
-frame has no concrete tool list. The path presenter keeps project descendants
-relative and outside paths absolute; body labels use `ToolPath` with the same
-directory input, including instruction, working-directory and diff labels.
-Structured result paths use that presenter inside `ToolOutput`; file contents
-use the same `Code` owner as writes, with native first-line numbering and
-extension-based highlighting. Grep results carry path, line and text. Custom
-tool consumers can import `ToolPath` and `relativeTarget` from the public UI
-entry to share the same body and header presentation. The presentation context
-also supplies preferences: edit/patch/write owners start collapsed unless
-Display's persisted Expand file changes by default toggle is on. Headers retain
-paths and reported change counts; explicit disclosure choices stay owned by the
-shared client disclosure owner. Helper cards start collapsed. Typed tool modules
-use `tools.registerTyped(kind, Component)`, whose call type derives from the
-open protocol `ToolKinds` map. Separate registration namespaces let an external
+targets. Icons accept feature-owned render components only. The shared frame has
+no concrete tool list. The path presenter keeps project descendants relative and
+outside paths absolute; body labels use `ToolPath` with the same directory
+input, including instruction, working-directory and diff labels. Structured
+result paths use that presenter inside `ToolOutput`; file contents use the same
+`Code` owner as writes, with native first-line numbering and extension-based
+highlighting. Grep results carry path, line and text. Custom tool consumers can
+import `ToolPath` and `relativeTarget` from the public UI entry to share the
+same body and header presentation. The presentation context also supplies
+preferences: edit/patch/write owners start collapsed unless Display's persisted
+Expand file changes by default toggle is on. Headers retain paths and reported
+change counts; explicit disclosure choices stay owned by the shared client
+disclosure owner. Helper cards start collapsed. Typed tool modules use
+`tools.registerTyped(kind, Component)`, whose call type derives from the open
+protocol `ToolKinds` map. Separate registration namespaces let an external
 `edit` coexist with typed OTK `edit` without either renderer receiving the
 other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
@@ -731,14 +743,14 @@ content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
 legends are layout-neutral grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
-right-panel views. Icons may be strings or feature-owned render functions; the
-host does not dispatch concrete view icons. `RightPanel` mounts available
-registrations with a neutral icon strip, keyboard/pointer resizing (280–480px,
-320 default) and injected layout persistence. Unknown or unavailable stored view
-IDs fall back to the first available view without overwriting the stored
-preference. `registerSessionsPanel` contributes the project-local, task-grouped
-searchable parent/child tree. Its feature adapter reads common `ShellPorts`
-resources; the panel knows no views.
+right-panel views. Icons are feature-owned render components; the host does not
+dispatch concrete view icons. `RightPanel` mounts available registrations with a
+neutral icon strip, keyboard/pointer resizing (280–480px, 320 default) and
+injected layout persistence. Unknown or unavailable stored view IDs fall back to
+the first available view without overwriting the stored preference.
+`registerSessionsPanel` contributes the project-local, task-grouped searchable
+parent/child tree. Its feature adapter reads common `ShellPorts` resources; the
+panel knows no views.
 
 RightPanel's body owns one content column for headings, feature content and
 empty/loading/error feedback, including adapter fallbacks and host failures.

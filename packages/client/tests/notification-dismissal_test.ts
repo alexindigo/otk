@@ -59,9 +59,9 @@ Deno.test("dismissal follows the request identity across republish and reconnect
 
 Deno.test("request age uses session activity, labels it honestly and describes stale resumption", () => {
   assertEquals(requestIdle(1, 12 * 86400_000 + 1), {
-    label: "Session idle 12 days",
-    resume: "Resumes work paused 12 days ago",
+    label: "Session idle 12d",
+    resume: "Resumes work paused 12d ago",
   });
-  assertEquals(requestIdle(1, 86400_000 + 1), { label: "Session idle 1 day" });
+  assertEquals(requestIdle(1, 86400_000 + 1), { label: "Session idle 1d" });
   assertEquals(requestIdle(undefined, Date.now()), {});
 });

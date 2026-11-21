@@ -16,24 +16,6 @@
   flex-direction: column;
   gap: var(--space-2);
 }
-.otk-form-choice {
-  display: grid;
-}
-.otk-form-choice > * {
-  grid-area: 1 / 1;
-  min-inline-size: 0;
-}
-.otk-form-choice-value,
-.otk-form-choice.is-pending > .otk-form-choice-input {
-  visibility: hidden;
-}
-.otk-form-choice.is-pending > .otk-form-choice-value {
-  visibility: visible;
-}
-.otk-form-choice-value {
-  height: var(--form-control-size);
-  padding-block: 0;
-}
 .otk-form input:not([type=checkbox]),
 .otk-form button[type=submit] {
   height: var(--form-control-size);

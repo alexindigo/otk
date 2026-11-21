@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import type { ComponentProps } from "@solidjs/web";
 import "./ListPicker.css" with { type: "text" };
 import {
   createEffect,
@@ -46,6 +47,10 @@ export default function ListPicker<T = string>(props: {
   triggerColor?: string;
   trigger?: Element;
   triggerClass?: string;
+  triggerAttributes?: Pick<
+    ComponentProps<"button">,
+    "name" | "aria-describedby" | "aria-invalid"
+  >;
   groups: readonly PickerGroup<T>[];
   selected?: string;
   search?: string;
@@ -56,7 +61,7 @@ export default function ListPicker<T = string>(props: {
   class?: string;
   onPick(value: T): void;
   onOpen?(): void;
-  focusAfterPick(): void;
+  focusAfterPick?(): void;
   control?(control: ListPickerControl): void;
 }): Element {
   const id = createUniqueId();
@@ -157,6 +162,7 @@ export default function ListPicker<T = string>(props: {
           </ControlValue>
         )}
       triggerClass={`otk-control-trigger ${props.triggerClass ?? ""}`}
+      triggerAttributes={props.triggerAttributes}
       class={`otk-list-picker ${props.class ?? ""}`}
       control={(control) => {
         popover = control;

@@ -57,6 +57,7 @@ export default function ConnectionBadge(props: {
       <Show when={props.status !== false}>
         <ConnectionStatus
           connection={props.sidecar}
+          subgrid
           compact={props.compact}
           onSettings={props.onSettings}
         />

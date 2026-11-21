@@ -28,7 +28,8 @@ Deno.test("session observation projection keeps routing and withholds credential
   )!;
   assert(!JSON.stringify(projected).includes(secret));
   assertEquals(
-    createFailurePresenter().present(projected).failure?.target.href,
+    createFailurePresenter().present(projected, { surface: "notification" })
+      .failure?.target.href,
     "#/remote/tstv1-session",
   );
 });

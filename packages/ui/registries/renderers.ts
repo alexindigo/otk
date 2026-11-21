@@ -48,7 +48,7 @@ export interface ToolProps {
 }
 export type ToolRenderer = (props: ToolProps) => Element;
 export interface ToolPresentation {
-  icon: string | (() => Element);
+  icon: () => Element;
   verb: string;
   target?: string;
   entity?: { label: string; sessionID?: string };
@@ -136,7 +136,7 @@ export class ToolRegistry {
     return this.#presentations.get(
       call.tool === "external" ? `external:${call.name}` : `typed:${call.tool}`,
     )?.(call, context) ?? {
-      icon: "◇",
+      icon: () => null,
       verb: call.tool === "external" ? call.name : call.tool,
       summary: call.tool === "external"
         ? call.summary === call.name ? undefined : call.summary || undefined

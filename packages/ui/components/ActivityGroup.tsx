@@ -10,7 +10,7 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import type { Preferences } from "@otk/protocol";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
@@ -88,23 +88,14 @@ export default function ActivityGroup(props: {
                       </span>
                     }
                   >
-                    <Show
-                      when={props.group.title || !props.group.failureTitle}
-                    >
-                      <ChromeMeta class="otk-control-label">
-                        {props.group.silent
+                    <ChromeMeta class="otk-control-label">
+                      {metaList([
+                        props.group.silent
                           ? "Completion details"
-                          : props.group.title || "Details"}
-                      </ChromeMeta>
-                    </Show>
-                    <Show when={props.group.failureTitle}>
-                      <Show when={props.group.title}>
-                        <ChromeMeta aria-hidden="true">·</ChromeMeta>
-                      </Show>
-                      <ChromeMeta class="otk-control-label otk-record-group-failures">
-                        {props.group.failureTitle}
-                      </ChromeMeta>
-                    </Show>
+                          : props.group.title,
+                        props.group.failureTitle,
+                      ]) || "Details"}
+                    </ChromeMeta>
                   </Show>
                   <Show when={props.group.detail}>
                     <span

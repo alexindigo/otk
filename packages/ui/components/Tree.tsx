@@ -47,6 +47,7 @@ function Junction(
     class?: string;
     through?: boolean;
     tip?: boolean;
+    toggle?: boolean;
     children?: Element;
   },
 ): Element {
@@ -55,6 +56,7 @@ function Junction(
       class={["otk-tree-junction", props.class, {
         "is-through": props.through,
         "is-tip": props.tip ?? true,
+        "has-toggle": props.toggle,
       }]}
     >
       <span class="otk-tree-upper" aria-hidden="true" />
@@ -153,6 +155,8 @@ export function TreeNode(props: {
       >
         <Junction
           class={branch ? "otk-tree-own otk-tree-incoming" : "otk-tree-own"}
+          toggle={!!props.onOpen &&
+            ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
         >
           <Show
             when={props.onOpen &&

@@ -19,7 +19,7 @@ import { nativeAttributes } from "./native-attributes.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
-import Select from "./Select.tsx";
+import Select, { type SelectProps } from "./Select.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 const FormContext = createContext<
   | { pending(): boolean; feedback(): Feedback | undefined; feedbackID: string }
@@ -189,37 +189,17 @@ export function FormTextarea(props: ComponentProps<"textarea">): Element {
   );
 }
 export function FormSelect(
-  props: ComponentProps<"select"> & { pending?: boolean },
+  props: SelectProps & { pending?: boolean },
 ): Element {
-  const field = formField(() => props.name, () => props["aria-describedby"]),
-    form = field.form,
-    native = nativeAttributes(() => ({ ...props, pending: undefined }));
-  let select!: HTMLSelectElement;
-  const label = () => {
-    pending();
-    return select?.selectedOptions[0]?.textContent ?? String(props.value ?? "");
-  };
-  const pending = () => form?.pending() || props.pending;
+  const field = formField(() => props.name, () => props["aria-describedby"]);
   return (
     <>
-      <span class={["otk-form-choice", { "is-pending": pending() }]}>
-        <Select
-          {...native.attributes}
-          containerClass="otk-form-choice-input"
-          ref={[props.ref, native.ref, (element) => select = element]}
-          aria-describedby={field.description}
-          aria-invalid={field.invalid}
-        >
-          {props.children}
-        </Select>
-        <input
-          class="otk-form-choice-value"
-          value={label()}
-          readonly
-          aria-label={props.name}
-          aria-describedby={field.description}
-        />
-      </span>
+      <Select
+        {...props}
+        readonly={field.form?.pending() || props.pending || props.readonly}
+        aria-describedby={field.description}
+        aria-invalid={field.invalid}
+      />
       <Show when={!field.form}>
         <FieldFeedback id={field.id} feedback={field.feedback()} />
       </Show>

@@ -19,15 +19,17 @@ export default function FeedbackStatus(props: {
   compact?: boolean;
   time?: number;
   placement?: "record";
+  subgrid?: boolean;
+  intrinsic?: boolean;
   onReveal?(messageID: string): void;
 }): Element {
   const feedback = () => errorFeedback(props.feedback ?? props.error);
   const native = nativeAttributes(() =>
     feedbackState({
       feedback: feedback(),
-      class: `otk-feedback-status ${props.singleLine ? "is-single-line" : ""} ${
-        props.class ?? ""
-      }`,
+      class: `otk-feedback-status ${props.subgrid ? "uses-subgrid" : ""} ${
+        props.singleLine ? "is-single-line" : ""
+      } ${props.class ?? ""}`,
     })
   );
   return (
@@ -51,6 +53,8 @@ export default function FeedbackStatus(props: {
               compact={props.compact}
               time={props.time}
               placement={props.placement}
+              subgrid={props.subgrid}
+              intrinsic={props.intrinsic}
               action={feedback()?.action}
               onReveal={props.onReveal}
             />

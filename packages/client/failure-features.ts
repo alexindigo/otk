@@ -56,7 +56,7 @@ export function createFailurePresenter(): FailurePresenter {
           sidecarId: target.sidecarId ?? "local",
           directory: target.directory,
         })
-        : "#/",
+        : undefined,
     }),
   });
   presenter.register(
@@ -145,6 +145,13 @@ export function failureValue(
   context?: FailureFacts,
 ): FailureValue {
   return actionFeedback(cause, context) ?? "";
+}
+/** The attachment is the failed subject, not the session that contains it. */
+export function attachmentFailure(cause: unknown, name: string): FailureValue {
+  const facts = { actionLabel: "Reading attachment", target: { label: name } };
+  return typeof cause === "string"
+    ? errorFeedback(cause, facts) ?? ""
+    : failureValue(cause, facts);
 }
 /** A feature-authored validation reason or an already-owned failure value. */
 export function errorFeedback(

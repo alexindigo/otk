@@ -114,10 +114,10 @@ export default function ThemePicker(props: {
         Light theme used by System
         <FormSelect
           name="systemLightTheme"
+          label="Light theme used by System"
           value={props.systemLightTheme}
           pending={!props.ready || pending()}
-          onChange={async (event) => {
-            const select = event.currentTarget, id = select.value;
+          onValue={async (id) => {
             if (!props.ready || pending()) return;
             setPending(true);
             onSettled(() => status?.focus());
@@ -132,25 +132,15 @@ export default function ThemePicker(props: {
               }
             } finally {
               if (active) {
-                select.value = props.systemLightTheme;
                 setPending(false);
               }
             }
           }}
-        >
-          <Show
-            when={!lightThemes.some((theme) =>
-              theme.id === props.systemLightTheme
-            )}
-          >
-            <option value={props.systemLightTheme} hidden>
-              Unavailable
-            </option>
-          </Show>
-          <For each={lightThemes} keyed={(theme) => theme.id}>
-            {(theme) => <option value={theme().id}>{theme().label}</option>}
-          </For>
-        </FormSelect>
+          options={lightThemes.map((theme) => ({
+            value: theme.id,
+            label: theme.label,
+          }))}
+        />
         <Show
           when={!lightThemes.some((theme) =>
             theme.id === props.systemLightTheme

@@ -6,10 +6,8 @@ import type {
   PublicFailure,
   RequestProgress,
 } from "@otk/protocol";
-export interface FailurePresentation {
+interface FailureContent {
   value: PublicFailure;
-  /** An unavailable optional feature is information, not a failed action. */
-  tone?: "info";
   action: string;
   heading: string;
   target: { label: string; href?: string };
@@ -23,6 +21,14 @@ export interface FailurePresentation {
   /** A retained record owns the facts; another surface only points to it. */
   reference?: { messageID: string; label: string };
 }
+/** Outcome and visual signal cannot disagree, even for independent consumers. */
+export type FailurePresentation =
+  & FailureContent
+  & (
+    | { kind: "pending"; tone: "neutral" }
+    | { kind: "info"; tone: "info" }
+    | { kind: "error"; tone: "error" }
+  );
 /** Plain words when no owner published a reason; never jargon. */
 export const GENERIC_FAILURE_REASON = "OTK has no further details";
 export interface Feedback {
@@ -118,11 +124,12 @@ export class FailurePresenter {
         (facts.target?.sidecarId ?? "local");
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
-    const target = retained && placement !== "record" &&
+    const target =
+      placement !== "record" && placement.surface !== "notification" &&
         sameView(facts.target, placement.view)
-      ? { label: "" }
-      : this.context.target?.(facts.target ?? {}) ??
-        { label: facts.target?.label ?? "OTK" };
+        ? { label: "" }
+        : this.context.target?.(facts.target ?? {}) ??
+          { label: facts.target?.label ?? "OTK" };
     const known = [facts.reason, enrichment?.text].find((text) => text?.trim());
     const reason = known ?? GENERIC_FAILURE_REASON;
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
@@ -140,6 +147,11 @@ export class FailurePresenter {
     // this action and cause can supply a useful next step.
     const recovery = facts.recovery?.trim() || undefined;
     const presentation: FailurePresentation = {
+      ...(pending
+        ? { kind: "pending", tone: "neutral" } as const
+        : informational
+        ? { kind: "info", tone: "info" } as const
+        : { kind: "error", tone: "error" } as const),
       value: failure,
       action,
       heading,
@@ -148,7 +160,6 @@ export class FailurePresenter {
       recovery,
       count: 1,
       occurrences: [failure.diagnosticID],
-      ...(informational ? { tone: "info" as const } : {}),
       ...(known ? {} : { generic: true }),
       ...(facts.record && reference
         ? {
@@ -321,6 +332,6 @@ export function failureFeedback(
     : localFailure(cause, diagnostic, context);
   return presenter.place(failure, {
     surface: "feedback",
-    view: failure.facts?.target,
+    view: context?.target ?? failure.facts?.target,
   });
 }

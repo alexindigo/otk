@@ -63,11 +63,11 @@ const ChangesIcon = () => (
 
 /** Every fact/action has the same leading icon and text tracks. */
 function ProjectMenuRow(
-  props: { icon: Element; label: string; accessory?: Element },
+  props: { icon: () => Element; label: string; accessory?: Element },
 ): Element {
   return (
     <>
-      <ControlIcon>{props.icon}</ControlIcon>
+      <ControlIcon>{props.icon()}</ControlIcon>
       <ControlValue accessory={props.accessory}>
         <span class="otk-control-label" title={props.label}>{props.label}</span>
       </ControlValue>
@@ -103,7 +103,7 @@ export default function ProjectChip(props: {
   );
   const submenu = (
     label: string,
-    icon: Element,
+    icon: () => Element,
     action: string,
     value: string,
   ) => (
@@ -120,7 +120,7 @@ export default function ProjectChip(props: {
         class="otk-project-chip-menu-row"
         onClick={() => copy(value)}
       >
-        <ProjectMenuRow icon={<CopyIcon />} label={action} />
+        <ProjectMenuRow icon={CopyIcon} label={action} />
       </button>
     </Menu>
   );
@@ -156,31 +156,30 @@ export default function ProjectChip(props: {
           <Show when={props.project?.repository}>
             {(label) => (
               <div class="otk-project-chip-menu-row">
-                <ProjectMenuRow icon={<FolderIcon />} label={label()} />
+                <ProjectMenuRow icon={FolderIcon} label={label()} />
               </div>
             )}
           </Show>
           <Show when={props.repository?.branch}>
-            {(branch) =>
-              submenu(branch(), <BranchIcon />, "Copy branch", branch())}
+            {(branch) => submenu(branch(), BranchIcon, "Copy branch", branch())}
           </Show>
           <Show when={props.repository?.changes}>
             {(changes) => (
               <div class="otk-project-chip-menu-row">
-                <ProjectMenuRow icon={<ChangesIcon />} label={changes()} />
+                <ProjectMenuRow icon={ChangesIcon} label={changes()} />
               </div>
             )}
           </Show>
           <Show when={props.project?.machine}>
             {(label) => (
               <div class="otk-project-chip-menu-row">
-                <ProjectMenuRow icon={<MachineIcon />} label={label()} />
+                <ProjectMenuRow icon={MachineIcon} label={label()} />
               </div>
             )}
           </Show>
           <Show when={props.directory}>
             {(directory) =>
-              submenu(directory(), <FolderIcon />, "Copy path", directory())}
+              submenu(directory(), FolderIcon, "Copy path", directory())}
           </Show>
           <Show when={props.onEdit}>
             <button
@@ -190,7 +189,7 @@ export default function ProjectChip(props: {
                 props.onEdit?.(() => menu.close());
               }}
             >
-              <ProjectMenuRow icon={<SettingsIcon />} label="Edit project" />
+              <ProjectMenuRow icon={SettingsIcon} label="Edit project" />
             </button>
           </Show>
         </div>

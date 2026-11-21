@@ -13,9 +13,25 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
   await page.setViewportSize({ width: 1440, height: 1100 });
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     for (
-      const surface of ["main", "interval", "reconnect", "settings", "footer"]
+      const surface of [
+        "main",
+        "interval",
+        "reconnect",
+        "settings",
+        "footer",
+        "send",
+        "icons",
+        "tree",
+        "forms",
+      ]
     ) {
-      const scene = surface === "main" ? "error-surfaces" : "failure-layout";
+      const scene = surface === "main"
+        ? "error-surfaces"
+        : ["send", "icons", "tree"].includes(surface)
+        ? "uiconv"
+        : surface === "forms"
+        ? "forms"
+        : "failure-layout";
       await page.goto(`${state.url}/?scene=${scene}&surface=${surface}`);
       await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
       await page.evaluate((theme) => {
@@ -27,18 +43,61 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       await page.evaluate(() => document.fonts.ready);
       await expect(
         page.locator(
-          ".otk-failure-content details, .otk-failure-content summary",
+          "details, summary, select",
         ),
       ).toHaveCount(0);
       const overflow = await page.locator(".otk-failure-content").evaluateAll((
         elements,
       ) => elements.filter((el) => el.scrollWidth > el.clientWidth + 1).length);
       expect(overflow).toBe(0);
+      for (
+        const details of await page.locator(".otk-failure-details:visible")
+          .all()
+      ) {
+        const trailing = await details.evaluate((el) => {
+          const text = document.createRange();
+          text.selectNodeContents(
+            el.querySelector(".otk-failure-detail-toggle")!,
+          );
+          return el.getBoundingClientRect().right -
+            text.getBoundingClientRect().right;
+        });
+        expect(trailing).toBeGreaterThan(1);
+      }
+      for (
+        const connection of await page.locator(".otk-connection:visible").all()
+      ) {
+        const geometry = await connection.evaluate((el) => {
+          const box = (selector: string) =>
+            el.querySelector(selector)?.getBoundingClientRect();
+          const lamp = box(".otk-connection-light"),
+            details = box(".otk-disclosure-icon");
+          const style = getComputedStyle(el);
+          return {
+            axes: lamp && details
+              ? Math.abs(
+                lamp.x + lamp.width / 2 - details.x - details.width / 2,
+              )
+              : 0,
+            headings: Array.from(el.querySelectorAll(".otk-failure-heading"))
+              .map((heading) =>
+                Math.abs(
+                  heading.getBoundingClientRect().left -
+                    el.getBoundingClientRect().left -
+                    parseFloat(style.gridTemplateColumns) -
+                    parseFloat(style.columnGap),
+                )
+              ),
+          };
+        });
+        expect(geometry.axes).toBeLessThanOrEqual(1);
+        expect(geometry.headings.every((offset) => offset <= 1)).toBe(true);
+      }
       for (const failure of await page.locator(".otk-failure-content").all()) {
         const edges = await failure.evaluate((el) =>
-          [...el.querySelectorAll(
+          Array.from(el.querySelectorAll(
             ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action",
-          )].filter((node) => node.getClientRects().length).map((node) =>
+          )).filter((node) => node.getClientRects().length).map((node) =>
             node.getBoundingClientRect().left
           )
         );
@@ -74,6 +133,8 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-signal"))
           .toHaveCount(0);
+        await expect(page.locator(".otk-toast .otk-failure-target"))
+          .toHaveText("Error presentation review");
         const toastEdges = await page.locator(
           ".otk-toast-title, .otk-toast .otk-failure-heading",
         ).evaluateAll((elements) =>
@@ -94,27 +155,40 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         await expect(toggle).toHaveAttribute("aria-expanded", "false");
       }
       if (surface === "interval") {
-        await expect(page.locator(".otk-record-group-failures")).toHaveText(
-          "2 failed",
-        );
         await expect(page.locator(".otk-record-group-heading").first())
-          .toHaveText("1 permission·2 failed");
+          .toHaveText("1 permission · 2 failed");
         await expect(page.locator(".otk-native-record .otk-failure-heading"))
           .toHaveCount(0);
         await expect(page.locator(".otk-tool-brief")).toHaveCount(0);
         await expect(page.locator(".otk-failure-reason:visible")).toHaveCount(
           2,
         );
-        const colors = await page.locator(".otk-record-group-failures")
-          .evaluate((el) => ({
-            actual: getComputedStyle(el).color,
-            meta: getComputedStyle(
-              el.closest(".otk-record-group-heading")!.querySelector(
-                ".otk-chrome-meta",
-              )!,
-            ).color,
-          }));
-        expect(colors.actual).not.toBe(colors.meta);
+        const colors = await page.locator(
+          ".otk-record-group-heading .otk-chrome-meta",
+        ).first()
+          .evaluate((el) => {
+            const canonical = document.createElement("span");
+            canonical.className = "otk-chrome-meta";
+            el.after(canonical);
+            const result = {
+              actual: getComputedStyle(el).color,
+              meta: getComputedStyle(canonical).color,
+              weight: getComputedStyle(el).fontWeight,
+            };
+            canonical.remove();
+            return result;
+          });
+        expect(colors.actual).toBe(colors.meta);
+        expect(colors.weight).toBe("400");
+        const record = page.locator(".otk-native-record").first();
+        await record.locator(".otk-tool-toggle").first().press("ArrowRight");
+        await expect(record.locator("[data-record-time]")).toHaveAttribute(
+          "datetime",
+          "2026-11-20T09:23:00.000Z",
+        );
+        await expect(record.locator("[data-record-time]")).toHaveText(
+          /Nov 20, 2026.*1:23:00\.000 AM PST/,
+        );
       }
       if (surface === "reconnect") {
         const geometry = await page.locator(".otk-server-connection").evaluate(
@@ -162,6 +236,63 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ]);
         await expect(page.getByText("No time recorded", { exact: true }))
           .toBeVisible();
+      }
+      if (surface === "send") {
+        const pending = page.locator('[data-message="unknown"]');
+        await expect(pending.locator(".otk-failure-signal")).toHaveCount(0);
+        await expect(pending.locator(".otk-failure-heading")).toHaveText(
+          "Checking whether sending prompt finished",
+        );
+        await expect(page.locator(".otk-send-failure .otk-failure-target"))
+          .toHaveCount(0);
+        for (const message of await page.locator(".otk-user-message").all()) {
+          const edge = await message.evaluate((el) => ({
+            bubble:
+              el.querySelector(".otk-user-bubble")!.getBoundingClientRect()
+                .right,
+            feedback:
+              el.querySelector(".otk-send-failure")!.getBoundingClientRect()
+                .right,
+          }));
+          expect(Math.abs(edge.bubble - edge.feedback)).toBeLessThanOrEqual(1);
+        }
+      }
+      if (surface === "icons") {
+        await expect(page.locator(".otk-tool-state .otk-tree-icon-art svg"))
+          .toHaveCount(6);
+        await expect(page.locator(".otk-todos .otk-state-shape")).toHaveCount(
+          4,
+        );
+        await expect(
+          page.locator(".otk-state-shape text, .otk-tree-icon-art text"),
+        ).toHaveCount(0);
+        await expect(
+          page.getByText(
+            "Loading messages... 1m 5s / Worked for 1m 5s / Live work 1m 5s",
+          ),
+        ).toBeVisible();
+        await expect(page.locator("time").filter({ hasText: ".107" }))
+          .toHaveText(/Nov 20, 2026.*1:23:00\.107 AM PST/);
+      }
+      if (surface === "tree") {
+        const fills = await page.locator(".otk-tree-toggle rect").evaluateAll((
+          elements,
+        ) => elements.map((el) => getComputedStyle(el).fill));
+        expect(fills.length).toBeGreaterThan(0);
+        expect(fills.every((fill) => fill === "none")).toBe(true);
+      }
+      if (surface === "forms") {
+        await page.getByRole("button", { name: "Kind: Alpha", exact: true })
+          .click();
+        await page.getByRole("button", { name: "Beta", exact: true }).press(
+          "Enter",
+        );
+        await expect(
+          page.getByRole("button", { name: "Kind: Beta", exact: true }),
+        ).toBeFocused();
+        await expect(page.locator("input[type=hidden][name=kind]")).toHaveValue(
+          "beta",
+        );
       }
     }
   }

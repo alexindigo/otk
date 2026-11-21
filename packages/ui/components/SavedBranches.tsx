@@ -37,12 +37,12 @@ export function SavedBranchNotice(
         <OperationFeedback feedback={errorFeedback(state().error)!} />
       </Show>
       <Show when={state().pending}>
-        <ComposerNoticeRow icon={<RevertIcon />} role="status">
+        <ComposerNoticeRow icon={RevertIcon} role="status">
           Saving earlier branch...
         </ComposerNoticeRow>
       </Show>
       <Show when={state().branches.length}>
-        <ComposerNoticeRow icon={<RevertIcon />}>
+        <ComposerNoticeRow icon={RevertIcon}>
           <button
             type="button"
             class="otk-pill"

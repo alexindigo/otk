@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { SearchIcon } from "../ChromeIcons.tsx";
 import type { WebSearchCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import ToolOutput from "./ToolOutput.tsx";
@@ -7,7 +8,7 @@ export function registerWebSearchTool(tools: ToolRegistry): void {
     "websearch",
     (props) => <WebSearchTool call={props.call} />,
     (call) => ({
-      icon: "⌕",
+      icon: SearchIcon,
       verb: "Search web",
       target: call.query,
       summary: call.provider,

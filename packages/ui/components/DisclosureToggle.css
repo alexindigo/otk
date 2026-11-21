@@ -5,9 +5,11 @@
 }
 .otk-disclosure-toggle {
   display: grid;
-  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
+  grid-template-columns: var(--disclosure-gutter, var(--tree-indent)) auto;
+  column-gap: var(--space-2);
   align-items: center;
   padding: 0;
+  padding-inline-end: var(--space-2);
   border: 0;
   min-inline-size: 0;
   text-align: start;

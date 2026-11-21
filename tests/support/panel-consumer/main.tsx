@@ -12,7 +12,11 @@ theme.start();
 ui.panels.register({
   id: "external-view",
   title: "External view",
-  icon: "◇",
+  icon: () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 3 9 9-9 9-9-9Z" fill="none" stroke="currentColor" />
+    </svg>
+  ),
   component: () => {
     const shell = useShellPorts();
     return (
@@ -23,7 +27,11 @@ ui.panels.register({
 ui.panels.register({
   id: "unavailable",
   title: "Unavailable view",
-  icon: "?",
+  icon: () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+    </svg>
+  ),
   capability: "resources",
   component: () => <p data-unavailable>Should be hidden</p>,
 });

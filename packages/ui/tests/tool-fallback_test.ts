@@ -13,8 +13,12 @@ Deno.test("unknown tool presentation has one name and only distinct detail", () 
     time: {},
   };
   for (const summary of ["", "custom"]) {
-    assertEquals(registry.presentation({ ...call, summary }), {
-      icon: "\u25c7",
+    const { icon, ...presentation } = registry.presentation({
+      ...call,
+      summary,
+    });
+    assertEquals(icon(), null);
+    assertEquals(presentation, {
       verb: "custom",
       summary: undefined,
     });

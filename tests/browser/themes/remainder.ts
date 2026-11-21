@@ -115,7 +115,7 @@ export async function remainder(
           "readOnly",
           true,
         );
-        await expect(page.locator(".otk-form-choice-value")).toHaveValue(
+        await expect(page.locator(".otk-select-value")).toHaveValue(
           "Alpha",
         );
         await page.evaluate(`styleTest.fieldFailure('${name}')`);

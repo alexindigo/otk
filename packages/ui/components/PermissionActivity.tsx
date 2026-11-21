@@ -77,7 +77,10 @@ export default function PermissionActivity(props: {
                 <FeedbackStatus
                   compact
                   feedback={entry().failure
-                    ? presentFailure(entry().failure!, "record")
+                    ? presentFailure(entry().failure!, {
+                      surface: "record",
+                      view: entry().failure!.facts?.target,
+                    })
                     : errorFeedback("The response could not be sent", {
                       actionLabel: "Sending permission response",
                       target: {

@@ -84,7 +84,10 @@ Deno.test("failure fallback borrows its remote origin and keeps captured native 
     label: "Later title",
   });
   assert(value);
-  const shown = createFailurePresenter().describe(value).failure!;
+  const shown = createFailurePresenter().describe(value, {
+    surface: "record",
+    view: { sidecarId: "remote", sessionID: "opcv1-ses_other" },
+  }).failure!;
   assertEquals(shown.target.label, "Captured title");
   assertEquals(shown.target.href, "#/remote/opcv1-ses_failure");
   assertEquals(unknownPartPresentation(part).required, true);
