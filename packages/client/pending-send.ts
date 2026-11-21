@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  Block,
-  IntentIdentity,
-  Part,
-  PromptPart,
-  UserMessage,
-} from "@otk/protocol";
+import type { Block, Part, PromptPart, UserMessage } from "@otk/protocol";
 import type { Feedback } from "./failures.ts";
+import type { ClientIntent } from "./requests.ts";
 
 /** Local input belongs to its transcript entry, not a view or a receipt notice. */
 export interface PendingSend {
-  intent: IntentIdentity;
+  intent: ClientIntent;
   message: UserMessage;
   phase: "pending" | "failed" | "committed";
   feedback?: Feedback;
@@ -18,7 +13,7 @@ export interface PendingSend {
 }
 
 /** Native-compatible sortable identity, captured alongside the request identity. */
-export function pendingMessageID(intent: IntentIdentity): string {
+export function pendingMessageID(intent: ClientIntent): string {
   return `msg_${(BigInt(Date.now()) * 0x1000n).toString(16).slice(-12)}${
     intent.key.replaceAll(/[^a-zA-Z0-9]/g, "").slice(-14).padEnd(14, "0")
   }`;

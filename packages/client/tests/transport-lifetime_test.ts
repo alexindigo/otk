@@ -127,7 +127,12 @@ Deno.test("restart 503s at admission and request-events reconnect automatically 
       pending.state.ref.window !== oldWindow,
       "WP14 renews the pending read",
     );
-    assertEquals(connection.rpc.intent().window, pending.state.ref.window);
+    const fresh = connection.rpc.start("usage.get", {
+      sessionID: "fresh",
+      turnID: "user",
+    });
+    assertEquals(fresh.state.ref.window, pending.state.ref.window);
+    fresh.release();
     replyRequest(connection.rpc, {
       t: "request",
       ref: pending.state.ref,

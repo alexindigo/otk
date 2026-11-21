@@ -193,12 +193,10 @@ export class HttpRequests {
     input?: unknown,
     options: RequestOptions = {},
   ): Operation<R> {
-    const ref = options.intent ??
-      {
-        clientID: this.tracker.clientID,
-        key: randomID(),
-        window: "bootstrap",
-      };
+    const ref = {
+      ...(options.intent ?? this.tracker.intent()),
+      window: "bootstrap",
+    };
     if (!this.#deliveries.has(ref.key)) {
       this.#deliveries.set(ref.key, {
         secret: Array.from(

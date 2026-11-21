@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
-  IntentIdentity,
   ServerFrame,
   SessionListInput,
   SessionListPage,
   SessionStructure,
 } from "@otk/protocol";
 import type { Rpc } from "./rpc.ts";
+import type { ClientIntent } from "./requests.ts";
 import { SESSION_LIST_SIZE, sessionListKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import { createProgress } from "./progress.ts";
@@ -39,7 +39,7 @@ export function createSessionLists(
       goal: number;
     };
     pending?: {
-      intent: IntentIdentity;
+      intent: ClientIntent;
       epoch: number;
       abort: AbortController;
       before?: string;
@@ -332,9 +332,7 @@ export function createSessionLists(
         const pending = list.pending;
         if (
           !pending || frame.epoch !== pending.epoch ||
-          frame.request.key !== pending.intent.key ||
-          frame.request.clientID !== pending.intent.clientID ||
-          frame.request.window !== pending.intent.window
+          !rpc.requests.matches(pending.intent, frame.request)
         ) continue;
         if (frame.load.revision <= pending.revision) continue;
         if (frame.data.offset === 0) pending.chunks = [];

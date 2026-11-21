@@ -5,9 +5,81 @@ import {
   createSessionSubmission,
   createTabs,
   type InboxRpc,
+  IntentGroup,
+  RequestTracker,
   type TabInput,
 } from "@otk/client";
-import type { TaskRecord } from "@otk/protocol";
+import type { RequestControl, TaskRecord } from "@otk/protocol";
+
+Deno.test("composed Send dispatches under the fresh welcome after restart during admission", async () => {
+  const sent: RequestControl[] = [];
+  let current = "old-window";
+  const tracker = new RequestTracker({
+    send(frame) {
+      sent.push(frame);
+      if (frame.t !== "request") return;
+      if (frame.ref.window !== current) {
+        tracker.receive({
+          t: "request.rejected",
+          ref: frame.ref,
+          error: {
+            code: "request.expired",
+            retry: "none",
+            diagnosticID: "retired",
+          },
+        });
+        return;
+      }
+      tracker.receive({
+        t: "request.accepted",
+        ref: frame.ref,
+        seq: 0,
+        acceptedAt: Date.now(),
+        retentionUntil: Date.now() + 100000,
+        replayed: false,
+      });
+      tracker.receive({
+        t: "request.result",
+        ref: frame.ref,
+        seq: 1,
+        outcome: {
+          ok: true,
+          result: { messageID: "composed", state: "accepted" },
+        },
+      });
+    },
+    kind: () => "mutation",
+  });
+  tracker.connect({ id: current, expiresAt: Date.now() + 100000 }, 8);
+  const directory = Promise.withResolvers<string>();
+  const submit = createSessionSubmission({
+    sessionID: "opcv2-ses_composed",
+    group: () => new IntentGroup(tracker.intent()),
+    directory: () => directory.promise,
+    tabs: () => ({ send: (_id, action) => action() }),
+    inbox: { act: (_directory, action) => action() },
+  });
+  const send = submit((options) =>
+    tracker.start("session.prompt", {
+      sessionID: "opcv2-ses_composed",
+      mode: "normal",
+      parts: [{ kind: "text", text: "Composed before restart" }],
+    }, options).result
+  );
+  assertEquals(sent, []);
+  tracker.disconnect();
+  current = "fresh-window";
+  tracker.connect({ id: current, expiresAt: Date.now() + 100000 }, 8);
+  directory.resolve("/original");
+  assertEquals(await send, { messageID: "composed", state: "accepted" });
+  assertEquals(
+    sent.filter((frame) => frame.t === "request").map((frame) =>
+      frame.ref.window
+    ),
+    [current],
+  );
+  tracker.stop();
+});
 
 function fixture() {
   const calls: unknown[] = [];
