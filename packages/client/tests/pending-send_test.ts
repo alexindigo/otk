@@ -51,6 +51,19 @@ Deno.test("agent decoration cannot commit local input or suppress definite refus
   }
 });
 
+Deno.test("pre-dispatch refusal removes only a local send, never native identity evidence", () => {
+  const p = createTranscriptProjection();
+  p.send({ intent, message: message(), phase: "pending" });
+  p.cancelSend("msg_send");
+  assertEquals(p.state.replyIDs, []);
+  assertEquals(p.entry("msg_send"), undefined);
+  p.send({ intent, message: message(), phase: "pending" });
+  p.apply({ op: "message.upsert", message: message() });
+  p.cancelSend("msg_send");
+  assertEquals(p.entry("msg_send")?.send?.phase, "committed");
+  assertEquals(p.committed("msg_send"), true);
+});
+
 Deno.test("failure and explicit Retry update the same transcript entry", () => {
   const p = createTranscriptProjection();
   const entry = { intent, message: message(), phase: "pending" as const };
