@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { sha256 } from "@otk/protocol";
 import {
   GhosttyTerminalCore,
@@ -223,3 +223,118 @@ Deno.test("terminal sink live resize preserves primary and alternate screen stat
     core.dispose();
   }
 });
+
+Deno.test("published terminal frames retain their rows and cursor across subsequent snapshots", async () => {
+  const core = await GhosttyTerminalCore.create(80, 24, 7, 14, theme);
+  try {
+    core.write("A");
+    const first = core.snapshot();
+    core.write("B");
+    const next = core.snapshot();
+    assertEquals(next.rowData[0].text, "AB");
+    assertEquals(first.rowData[0].text, "A");
+    assertEquals([first.cursorX, next.cursorX], [1, 2]);
+  } finally {
+    core.dispose();
+  }
+});
+
+for (
+  const operation of [
+    "paste",
+    "key",
+    "mouse",
+    "hyperlink",
+    "selection",
+  ] as const
+) {
+  Deno.test(`temporary WASM ${operation} allocations retire when a later allocation throws`, async () => {
+    const core = await GhosttyTerminalCore.create(120, 30, 7, 14, theme);
+    const runtime = await loadGhosttyRuntime(), call = runtime.call;
+    try {
+      core.write(
+        "\x1b[?1000h\x1b]8;;https://example.test/\x1b\\link\x1b]8;;\x1b\\",
+      );
+      core.setSelection({ x: 0, y: 0 }, { x: 3, y: 0 });
+      for (
+        const failAt of operation === "mouse" || operation === "hyperlink"
+          ? [1, 2, 3, 4]
+          : [1, 2, 3]
+      ) {
+        let allocations = 0;
+        const active = new Map<number, { free: string; size?: number }>();
+        runtime.call = function (name, ...args) {
+          const free = name === "ghostty_wasm_alloc_u8_array"
+            ? "ghostty_wasm_free_u8_array"
+            : name === "ghostty_wasm_alloc_usize"
+            ? "ghostty_wasm_free_usize"
+            : undefined;
+          if (free && ++allocations === failAt) {
+            throw new Error("injected allocation failure");
+          }
+          const result = call.call(this, name, ...args);
+          if (free && result) {
+            active.set(result, {
+              free,
+              size: name.endsWith("u8_array") ? Number(args[0]) : undefined,
+            });
+          }
+          if (
+            name === "ghostty_wasm_free_u8_array" ||
+            name === "ghostty_wasm_free_usize"
+          ) active.delete(Number(args[0]));
+          return result;
+        };
+        try {
+          assertThrows(
+            () => {
+              if (operation === "paste") core.encodePaste("paste-input");
+              else if (operation === "key") {
+                Reflect.apply(core.encodeKey, core, [{
+                  key: "a",
+                  code: "KeyA",
+                  getModifierState: () => false,
+                }]);
+              } else if (operation === "mouse") {
+                core.encodeMouse({
+                  action: "press",
+                  button: 1,
+                  mods: 0,
+                  x: 7,
+                  y: 0,
+                  screenWidth: 840,
+                  screenHeight: 420,
+                  cellWidth: 7,
+                  cellHeight: 14,
+                  paddingLeft: 0,
+                  paddingRight: 0,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  anyButtonPressed: true,
+                });
+              } else if (operation === "hyperlink") core.hyperlinkAt(0, 0);
+              else core.selectionText();
+            },
+            Error,
+            "injected allocation failure",
+          );
+          assertEquals(
+            active.size,
+            0,
+            `allocation ${failAt} leaked earlier ${operation} buffers`,
+          );
+        } finally {
+          runtime.call = call;
+          // Red proofs must not contaminate the shared real WASM heap.
+          for (const [pointer, item] of active) {
+            if (item.size === undefined) call.call(runtime, item.free, pointer);
+            else call.call(runtime, item.free, pointer, item.size);
+          }
+        }
+      }
+    } finally {
+      runtime.call = call;
+      core.dispose();
+    }
+  });
+}

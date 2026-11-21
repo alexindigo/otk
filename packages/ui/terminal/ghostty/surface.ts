@@ -26,6 +26,7 @@ const symbolsFontUrl = new URL(
   import.meta.url,
 );
 const SELECTION_MULTI_CLICK_INTERVAL_MS = 500;
+let nextSurfaceID = 0;
 
 const DEFAULT_TERMINAL_FONT_SIZE = 12;
 const MIN_TERMINAL_FONT_SIZE = 6;
@@ -682,6 +683,7 @@ export class GhosttyTerminalSurface {
   private hoveredLink: TerminalLinkWithRange | null = null;
   private hoverPointer: { x: number; y: number } | null = null;
   private linkHoverCandidate: TerminalLinkWithRange | null = null;
+  private linkHoverChangedAt = 0;
   private linkHoverTimer: ReturnType<typeof globalThis.setTimeout> | null =
     null;
   private linkRowStability: Array<{
@@ -772,10 +774,11 @@ export class GhosttyTerminalSurface {
     options: GhosttyTerminalSurfaceOptions,
   ): Promise<GhosttyTerminalSurface> {
     const canvas = document.createElement("canvas");
+    canvas.id = `otk-terminal-output-${++nextSurfaceID}`;
     canvas.className = "otk-ghostty-canvas";
-    canvas.style.touchAction = "pan-x pinch-zoom";
     canvas.setAttribute("role", "img");
     canvas.setAttribute("aria-label", "Terminal output");
+    canvas.style.touchAction = "pan-x pinch-zoom";
 
     const input = document.createElement("textarea");
     input.className = "otk-ghostty-input";
@@ -792,6 +795,7 @@ export class GhosttyTerminalSurface {
     scrollbar.setAttribute("role", "scrollbar");
     scrollbar.setAttribute("aria-label", "Terminal scrollback");
     scrollbar.setAttribute("aria-orientation", "vertical");
+    scrollbar.setAttribute("aria-controls", canvas.id);
     scrollbar.tabIndex = 0;
     scrollbar.hidden = true;
     const scrollbarThumb = document.createElement("div");
@@ -852,6 +856,7 @@ export class GhosttyTerminalSurface {
     this.forceFullRender = true;
     this.scrollbarDirty = true;
     if (!visible) {
+      this.retirePaste();
       this.linkActivationRequestId += 1;
       this.clearHoveredLink();
       this.linkRowStability = [];
@@ -1101,9 +1106,13 @@ export class GhosttyTerminalSurface {
     readText: () => Promise<string>,
     isCurrent: () => boolean = () => true,
   ): Promise<void> {
+    if (this.disposed || !this.visible || !isCurrent()) return;
     const token = ++this.pasteShortcutToken;
     const text = await readText();
-    if (this.disposed || this.pasteShortcutToken !== token || !isCurrent()) {
+    if (
+      this.disposed || !this.visible || this.pasteShortcutToken !== token ||
+      !isCurrent()
+    ) {
       return;
     }
     this.pasteShortcutToken += 1;
@@ -1218,6 +1227,7 @@ export class GhosttyTerminalSurface {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.retirePaste();
     this.clearHoveredLink();
     this.stopObservingResize();
     document.fonts.removeEventListener("loadingdone", this.onFontsLoaded);
@@ -1252,7 +1262,13 @@ export class GhosttyTerminalSurface {
     }
   }
 
+  private retirePaste(): void {
+    this.pasteShortcutToken++;
+    this.pasteShortcutGesture = null;
+  }
+
   private readonly onKeyDown = (event: KeyboardEvent) => {
+    if (this.disposed || !this.visible) return;
     // A consumed repeat still owes the original encoded press a release.
     if (!event.repeat) this.encodedKeyCodes.delete(event.code);
     if (isTerminalAltGraphText(event) || !this.options.beforeKey(event)) return;
@@ -1342,7 +1358,10 @@ export class GhosttyTerminalSurface {
         const token = ++this.pasteShortcutToken;
         void readText().then(
           (text) => {
-            if (this.disposed || this.pasteShortcutToken !== token) return;
+            if (
+              this.disposed || !this.visible ||
+              this.pasteShortcutToken !== token
+            ) return;
             this.pasteShortcutToken += 1;
             if (!text) return;
             if (this.pasteShortcutGesture === gesture) gesture.readText = text;
@@ -1454,6 +1473,7 @@ export class GhosttyTerminalSurface {
   private readonly onPaste = (event: ClipboardEvent) => {
     // Default textarea insertion would bypass bracketed-paste encoding through onInput.
     event.preventDefault();
+    if (this.disposed || !this.visible) return;
     const data = event.clipboardData?.getData("text/plain") ?? "";
     if (data.length === 0) return;
     if (data === this.pasteShortcutGesture?.readText) {
@@ -1783,28 +1803,35 @@ export class GhosttyTerminalSurface {
 
   private updateLinkHover(link: TerminalLinkWithRange | null): void {
     if (!this.options.onLinkHover) return;
-    if (
-      link
-        ? isSameTerminalLink(link, this.linkHoverCandidate)
-        : this.linkHoverCandidate === null
-    ) {
-      return;
-    }
-    this.linkHoverCandidate = link;
-    if (this.linkHoverTimer !== null) {
-      globalThis.clearTimeout(this.linkHoverTimer);
-      this.linkHoverTimer = null;
-    }
-    this.options.onLinkHover(null);
-    if (link !== null) {
-      const now = performance.now();
-      let changedAt = 0;
+    const now = performance.now();
+    let changedAt = 0;
+    if (link) {
       for (let y = link.range.start.y; y <= link.range.end.y; y++) {
         changedAt = Math.max(
           changedAt,
           this.linkRowStability[y]?.changedAt ?? now,
         );
       }
+    }
+    if (
+      (link
+        ? isSameTerminalLink(link, this.linkHoverCandidate)
+        : this.linkHoverCandidate === null) &&
+      changedAt === this.linkHoverChangedAt
+    ) {
+      return;
+    }
+    this.linkHoverCandidate = link;
+    this.linkHoverChangedAt = changedAt;
+    if (this.linkHoverTimer !== null) {
+      globalThis.clearTimeout(this.linkHoverTimer);
+      this.linkHoverTimer = null;
+    }
+    this.options.onLinkHover(null);
+    if (this.disposed || !this.visible || this.linkHoverCandidate !== link) {
+      return;
+    }
+    if (link !== null) {
       const delay = Math.max(
         0,
         TERMINAL_LINK_HOVER_DELAY_MS - (now - changedAt),
@@ -1815,6 +1842,10 @@ export class GhosttyTerminalSurface {
       }
       this.linkHoverTimer = globalThis.setTimeout(() => {
         this.linkHoverTimer = null;
+        if (
+          this.disposed || !this.visible || this.linkHoverCandidate !== link ||
+          this.linkHoverChangedAt !== changedAt
+        ) return;
         this.options.onLinkHover?.(link.text);
       }, delay);
     }
@@ -2138,9 +2169,9 @@ export class GhosttyTerminalSurface {
     );
   }
 
-  private scrollViewport(deltaRows: number): void {
+  private scrollViewport(deltaRows: number, observed?: GhosttyScrollbar): void {
     let delta = Math.trunc(deltaRows);
-    const state = this.readScrollbarState();
+    const state = observed ?? this.readScrollbarState();
     if (state !== null) {
       const maxOffset = Math.max(0, state.total - state.len);
       const offset = Math.max(0, Math.min(state.offset + delta, maxOffset));
@@ -2155,7 +2186,7 @@ export class GhosttyTerminalSurface {
   }
 
   private scrollbarToPointer(clientY: number, bounds: DOMRect): void {
-    const state = this.scrollbarState;
+    const state = this.readScrollbarState();
     if (state === null) return;
     const offset = terminalScrollbarOffsetAtPointer(
       state,
@@ -2163,7 +2194,7 @@ export class GhosttyTerminalSurface {
       clientY - bounds.top,
       this.scrollbarPointerOffset,
     );
-    this.scrollViewport(offset - state.offset);
+    this.scrollViewport(offset - state.offset, state);
   }
 
   private updateScrollbar(): void {

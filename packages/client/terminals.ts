@@ -35,11 +35,17 @@ interface Channel {
   session: string;
   terminal: string;
   sink: TerminalSink;
-  ch?: number;
+  wire?: Wire;
+  revision: number;
   ready: boolean;
   blocked: boolean;
   lastLag?: number;
   size?: { cols: number; rows: number };
+}
+interface Wire {
+  readonly channel: Channel;
+  readonly socket: WebSocket;
+  readonly number: number;
 }
 export type TerminalSocketEvent =
   | { kind: "refresh"; session?: string }
@@ -54,7 +60,7 @@ export type TerminalSocketEvent =
 export class TerminalSocket {
   #socket?: WebSocket;
   #channels = new Set<Channel>();
-  #wire = new Map<number, Channel>();
+  #wire = new Map<number, Wire>();
   #listeners = new Set<(event: TerminalSocketEvent) => void>();
   #next = 1;
   #attempt = 0;
@@ -81,17 +87,21 @@ export class TerminalSocket {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
-  #emit(event: TerminalSocketEvent): void {
-    for (const listener of this.#listeners) listener(event);
+  #emit(event: TerminalSocketEvent, current = () => true): void {
+    for (const listener of this.#listeners) {
+      if (!current()) return;
+      listener(event);
+    }
   }
   #connected(channel: Channel, connected: boolean): void {
+    const revision = channel.revision;
     channel.sink.meta({ connected });
     this.#emit({
       kind: "connection",
       session: channel.session,
       terminal: channel.terminal,
       connected,
-    });
+    }, () => channel.revision === revision);
   }
   attach(
     session: string,
@@ -105,6 +115,7 @@ export class TerminalSocket {
       sink,
       ready: false,
       blocked: false,
+      revision: 0,
     };
     this.#channels.add(channel);
     this.#wake();
@@ -117,14 +128,16 @@ export class TerminalSocket {
         return channels.has(channel);
       },
       input: (bytes) => {
-        if (!channel.ready || channel.ch === undefined) return;
+        const wire = channel.wire;
+        if (!channel.ready || !wire || !this.#owns(wire)) return;
         // The mux's 64 KiB limit includes the four-byte prefix, not just input.
         for (let at = 0; at < bytes.length; at += 65532) {
           const chunk = bytes.subarray(at, at + 65532);
           const frame = new Uint8Array(4 + chunk.length);
-          new DataView(frame.buffer).setUint32(0, channel.ch, false);
+          if (!this.#owns(wire)) return;
+          new DataView(frame.buffer).setUint32(0, wire.number, false);
           frame.set(chunk, 4);
-          this.#socket?.send(frame);
+          wire.socket.send(frame);
         }
       },
       resize: (cols, rows) => {
@@ -135,12 +148,12 @@ export class TerminalSocket {
           throw new RangeError("Expected terminal size in cells");
         }
         channel.size = { cols, rows };
-        if (channel.ready && channel.ch !== undefined) {
-          this.#send({ t: "resize", ch: channel.ch, cols, rows });
+        if (channel.ready && channel.wire && this.#owns(channel.wire)) {
+          this.#send({ t: "resize", ch: channel.wire.number, cols, rows });
         }
       },
       reconnect: () => {
-        if (!this.#channels.has(channel) || channel.ch !== undefined) return;
+        if (!this.#channels.has(channel) || channel.wire) return;
         channel.blocked = false;
         channel.lastLag = undefined;
         this.#wake();
@@ -163,24 +176,40 @@ export class TerminalSocket {
     this.#idle = undefined;
   }
   #bind(channel: Channel): void {
-    channel.ch = this.#next++;
+    const socket = this.#socket;
+    if (
+      this.#stopped || !this.#channels.has(channel) || channel.wire ||
+      channel.blocked || socket?.readyState !== WebSocket.OPEN
+    ) return;
+    const wire: Wire = { channel, socket, number: this.#next++ };
+    channel.wire = wire;
+    channel.revision++;
     channel.ready = false;
-    this.#wire.set(channel.ch, channel);
+    this.#wire.set(wire.number, wire);
     this.#send({
       t: "attach",
-      ch: channel.ch,
+      ch: wire.number,
       session: channel.session,
       terminal: channel.terminal,
     });
     this.#watch();
   }
+  #owns(wire: Wire): boolean {
+    return !this.#stopped && this.#socket === wire.socket &&
+      this.#channels.has(wire.channel) && wire.channel.wire === wire &&
+      this.#wire.get(wire.number) === wire;
+  }
   #unbind(channel: Channel): void {
-    if (channel.ch !== undefined) {
-      this.#send({ t: "detach", ch: channel.ch });
-      this.#wire.delete(channel.ch);
-    }
-    channel.ch = undefined;
+    const wire = channel.wire;
+    channel.wire = undefined;
+    channel.revision++;
     channel.ready = false;
+    if (wire) {
+      this.#wire.delete(wire.number);
+      if (this.#socket === wire.socket) {
+        this.#send({ t: "detach", ch: wire.number });
+      }
+    }
     this.#connected(channel, false);
   }
   #drop(channel: Channel): void {
@@ -217,15 +246,23 @@ export class TerminalSocket {
       socket.close();
     }
     this.#wire.clear();
-    for (const channel of this.#channels) {
-      channel.ch = undefined;
+    // Revoke the complete old transport before callbacks can reacquire one.
+    const retired = [...this.#channels].map((channel) => {
+      channel.wire = undefined;
+      channel.revision++;
       channel.ready = false;
-      this.#connected(channel, false);
+      return { channel, revision: channel.revision };
+    });
+    for (const { channel, revision } of retired) {
+      if (channel.revision === revision) this.#connected(channel, false);
     }
   }
   #lost(): void {
     this.#retire();
-    if (this.#stopped || ![...this.#channels].some((c) => !c.blocked)) return;
+    if (
+      this.#stopped || this.#socket ||
+      ![...this.#channels].some((c) => !c.blocked)
+    ) return;
     this.#retry = this.#clock.schedule(() => {
       this.#retry = undefined;
       this.#connect();
@@ -290,8 +327,10 @@ export class TerminalSocket {
   #message(data: unknown): void {
     if (data instanceof ArrayBuffer) {
       if (data.byteLength < 4) return;
-      const channel = this.#wire.get(new DataView(data).getUint32(0, false));
-      if (channel?.ready) channel.sink.write(new Uint8Array(data, 4));
+      const wire = this.#wire.get(new DataView(data).getUint32(0, false));
+      if (wire && this.#owns(wire) && wire.channel.ready) {
+        wire.channel.sink.write(new Uint8Array(data, 4));
+      }
       return;
     }
     if (typeof data !== "string") return;
@@ -306,20 +345,23 @@ export class TerminalSocket {
       this.#emit({ kind: "refresh" });
       return;
     }
-    const channel = this.#wire.get(message.ch);
-    if (!channel) return;
+    const wire = this.#wire.get(message.ch);
+    if (!wire || !this.#owns(wire)) return;
+    const channel = wire.channel;
     switch (message.t) {
       case "snapshot": {
         // P2 sends checkpoint_base64 as the JSON checkpoint string.
         const raw = atob(message.checkpoint);
         const checkpoint = Uint8Array.from(raw, (c) => c.charCodeAt(0));
         channel.sink.reset(message.cols, message.rows, checkpoint);
+        if (!this.#owns(wire)) return;
         channel.ready = true;
         if (channel.size) {
-          this.#send({ t: "resize", ch: channel.ch, ...channel.size });
+          this.#send({ t: "resize", ch: wire.number, ...channel.size });
         }
         this.#attempt = 0;
         this.#connected(channel, true);
+        if (!this.#owns(wire)) return;
         channel.sink.meta({
           title: message.title,
           foreground: message.foreground,
@@ -345,11 +387,13 @@ export class TerminalSocket {
         this.#emit({ kind: "refresh", session: channel.session });
         break;
       case "detached": {
-        this.#unbind(channel);
         if (message.reason === "terminated") {
           this.#drop(channel);
           this.#emit({ kind: "refresh", session: channel.session });
-        } else {
+          break;
+        }
+        this.#unbind(channel);
+        if (this.#channels.has(channel) && !channel.wire) {
           const now = this.#clock.now();
           if (channel.lastLag !== undefined && now - channel.lastLag < 10_000) {
             channel.blocked = true;
@@ -452,22 +496,28 @@ export class SessionTerminals {
     if (!this.#alive) return;
     this.#read?.abort();
     const read = this.#read = new AbortController();
+    const current = () =>
+      this.#alive && this.#read === read && !read.signal.aborted;
     const changes = this.#readChanges = new Map();
     this.#update((state) => {
       state.loading = true;
       state.error = "";
     });
     try {
-      if (read.signal.aborted) return;
+      if (!current()) return;
       const list = await this.conn.rpc.call("terminal.list", {
         sessionID: this.sessionID,
       }, read.signal);
-      if (!this.#alive || this.#read !== read) return;
+      if (!current()) return;
       const ids = new Set(list.map((item) => item.id));
-      for (const [id, lease] of this.#retained) {
-        if (!ids.has(id) || !lease.attachment.retained) this.#release(id);
+      for (const [id, lease] of [...this.#retained]) {
+        if (!current()) return;
+        if (
+          this.#retained.get(id) === lease &&
+          (!ids.has(id) || !lease.attachment.retained)
+        ) this.#release(id);
       }
-      if (!this.#alive || this.#read !== read) return;
+      if (!current()) return;
       this.#update((state) => {
         state.list = list.map((info) => liveInfo(info, changes.get(info.id)));
         state.disconnected = state.disconnected.filter((id) => ids.has(id));

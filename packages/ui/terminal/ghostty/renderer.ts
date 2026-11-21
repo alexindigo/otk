@@ -153,7 +153,7 @@ function fillGhosttyRunText(
       baseline,
       cellWidth * 2,
     );
-    context.textAlign = "start";
+    context.textAlign = "left";
     segment = segmentEnd + 2;
   }
 }
@@ -267,6 +267,7 @@ export function renderGhosttySnapshot(options: {
   }
 
   context.textBaseline = "alphabetic";
+  context.textAlign = "left";
   for (const rowIndex of rowsToDraw) {
     const row = snapshot.rowData[rowIndex];
     if (!row) continue;
@@ -437,14 +438,14 @@ export function renderGhosttySnapshot(options: {
           );
         } else {
           context.font = fontForCell(cell, fontSize, fontFamily);
-          context.textAlign = wide ? "center" : "start";
+          context.textAlign = wide ? "center" : "left";
           context.fillText(
             cell.text,
             wide ? left + metrics.width : left,
             top + metrics.baseline,
             width,
           );
-          context.textAlign = "start";
+          context.textAlign = "left";
         }
       }
     }

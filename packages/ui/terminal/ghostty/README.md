@@ -27,3 +27,12 @@ hidden surface, independently of viewport measurement. Mouse reports remain
 bytes through the surface and input adapter. Link activation is deferred when
 the live content revision is ahead of the painted frame. The standalone browser
 contract and its guest-only command are in `../../tests/terminal-browser/`.
+
+Temporary WASM buffers are operation-owned and released after both success and
+failure, including nested text/byte encoding and query buffers. Published frame
+row arrays remain stable across later snapshots. Hover and scroll gestures use
+their current painted-row and viewport witnesses. Hiding or disposing a surface
+revokes pending clipboard paste intent without stopping its retained output
+parser. The scrollbar names the unique accessible output canvas it controls;
+terminal cells use physical left alignment independently of surrounding UI
+direction.
