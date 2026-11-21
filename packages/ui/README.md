@@ -920,6 +920,16 @@ event's release callbacks. No session action or overlay is implemented by the
 viewport. Session rows retain named group context and their position/set-size
 semantics even when adjacent rows or headings are unmounted.
 
+Ordering holds protect the preceding pointer/focus choice, not the effects of an
+explicit activation. Native click/input retires that local ordering interaction;
+menu activation uses the same origin event's activation callbacks. A native
+modal takes the interaction from the underlying inert document, retiring its
+ordering holds too. The surface still retains its viewport pin until dismissal.
+Programmatic focus return cannot revive the old ordering hold; a new pointer or
+keyboard intent starts another. Selection, search and membership can therefore
+change without retaining stale interactive rows, while automatic changes remain
+held during a live choice.
+
 `SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
 corner reservation, leading controls, scrolling body and optional footer. The
 shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
