@@ -21,21 +21,26 @@ for (
     async ({ isolatedState: state, page }, info) => {
       await state.product("prefs.set", { key: "theme", value: theme });
       await page.goto(`${state.url}/#/local/tstv1-core`);
-      const strip = page.getByRole("complementary", {
-        name: "Rolled-back prompts",
-      });
-      const warning = strip.locator(".otk-rollback-preservation-warning");
+      const strip = page.locator(".otk-revert-group");
+      const warning = strip.locator(".otk-revert-warning");
       const revert = async () => {
         await page.locator(".otk-user-bubble").click({ button: "right" });
         await page.getByRole("menuitem", {
           name: "Revert code changes",
           exact: true,
         }).click();
-        await expect(strip).toContainText("1 prompt rolled back");
+        await page.getByRole("button", { name: "Confirm revert", exact: true })
+          .click();
+        await expect(strip).toHaveAttribute("data-boundary", "prompt-v4");
         await expect(warning).toHaveText(
           "This branch can't be kept after you send (this server doesn't provide prompt history).",
         );
         await expect(warning).toBeVisible();
+        await expect(strip).toHaveAttribute("data-phase", "staged");
+        await page.screenshot({
+          path: info.outputPath(`revert-staged-${name}.png`),
+          animations: "disabled",
+        });
       };
       await revert();
       await page.reload();
@@ -63,9 +68,10 @@ for (
         .toContainEqual(["prompt", "tstv1-core"]);
       await expect(strip).toHaveCount(0);
       await expect(page.getByRole("alert")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /Unrevert:/ })).toHaveCount(
-        0,
-      );
+      await expect(page.getByRole("button", { name: /Saved earlier branches/ }))
+        .toHaveCount(
+          0,
+        );
       expect(
         await page.evaluate(() =>
           Object.keys(localStorage).filter((key) =>

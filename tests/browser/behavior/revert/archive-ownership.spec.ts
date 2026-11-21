@@ -23,8 +23,10 @@ test("revert.saved-branch-switch-releases-excluded-reply-borrows", {
   );
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ }),
+    page.getByRole("button", { name: /Saved earlier branches/ }),
   ).toBeVisible();
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) =>
@@ -53,7 +55,7 @@ test("revert.saved-branch-switch-releases-excluded-reply-borrows", {
   await page.reload();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ })
+  await page.getByRole("button", { name: /Saved earlier branches/ })
     .click();
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
@@ -98,6 +100,8 @@ test("revert.blocked-storage-getter-keeps-shell-and-live-history-usable", {
   );
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   const restore = page.getByRole("button", {
     name: "Restore conversation",
     exact: true,

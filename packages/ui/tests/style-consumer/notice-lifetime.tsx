@@ -57,10 +57,20 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
     listeners.forEach((listener) => listener());
   };
   const drafts = createDrafts(solidState), write = drafts.writer("notice");
-  const operation = solidState<SessionRevertState>({ pending: "undo" });
+  const operation = solidState<SessionRevertState>({
+    pending: "undo",
+    phase: "staging",
+    record: {
+      boundaryID: "prompt",
+      messageIDs: ["prompt"],
+      files: [],
+      prompt: { input: "Captured prompt", mode: "normal", parts: [], time: 1 },
+    },
+  });
   styleTest.failRollback = () =>
     operation.update((state) => {
       state.pending = undefined;
+      state.phase = "failed";
       state.error = errorFeedback(
         "The requested change was refused. Your input is kept. Review the target and try again when it is available. END OF REASON",
         {
@@ -78,7 +88,10 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
     retry: () => Promise.resolve(),
     dismiss() {},
     revertTo: () => Promise.resolve(),
-    restore: () => Promise.resolve(),
+    restore: () => {
+      setRestores(restores() + 1);
+      return Promise.resolve();
+    },
     undo: () => Promise.resolve(),
     redo: () => Promise.resolve(),
     hasPrompt: () => true,
@@ -88,6 +101,7 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
   styleTest.resetNotice = () => {
     operation.update((state) => {
       state.pending = "undo";
+      state.phase = "staging";
     });
     value = undefined;
     listeners.forEach((listener) => listener());
@@ -95,6 +109,7 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
   styleTest.settleNotice = () =>
     operation.update((state) => {
       state.pending = undefined;
+      state.phase = "saved";
     });
   const [restores, setRestores] = createSignal(0);
   const [strip, setStrip] = createSignal<RevertStrip>({
@@ -103,8 +118,17 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
     preview: "Captured prompt",
     files: [],
   });
-  styleTest.refreshNotice = () =>
+  styleTest.refreshNotice = () => {
     setStrip({ ...strip(), messageIDs: [...strip().messageIDs] });
+    operation.update((state) => {
+      if (state.record) {
+        state.record = {
+          ...state.record,
+          messageIDs: [...state.record.messageIDs],
+        };
+      }
+    });
+  };
   const { commands } = useCommandPorts();
   onSettled(() =>
     commands.register({

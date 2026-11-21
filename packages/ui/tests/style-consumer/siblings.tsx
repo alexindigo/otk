@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import WorkLog from "../../components/WorkLog.tsx";
 import Settings from "../../components/Settings.tsx";
-import RolledBackStrip from "../../components/RolledBackStrip.tsx";
+import RevertGroup from "../../components/RevertGroup.tsx";
+import { DEFAULT_PREFS } from "@otk/protocol";
 import Sidebar from "../../components/Sidebar.tsx";
 export default function Scene() {
   return (
@@ -12,13 +13,28 @@ export default function Scene() {
           workingMs={4200}
           body={() => <p>Owned work content</p>}
         />
-        <RolledBackStrip
-          state={{}}
-          strip={{
-            boundaryID: "boundary",
-            messageIDs: ["boundary", "reply"],
-            preview: "Boundary prompt",
-            files: [{ path: "src/owner.ts", additions: 3, deletions: 1 }],
+        <RevertGroup
+          group={{
+            key: "revert:boundary",
+            title: "Reverted",
+            members: [],
+            revision: 0,
+          }}
+          prefs={DEFAULT_PREFS}
+          onOpenChild={() => {}}
+          state={{
+            phase: "saved",
+            record: {
+              boundaryID: "boundary",
+              messageIDs: ["boundary", "reply"],
+              prompt: {
+                input: "Boundary prompt",
+                mode: "normal",
+                parts: [],
+                time: 1,
+              },
+              files: [{ path: "src/owner.ts", additions: 3, deletions: 1 }],
+            },
           }}
         />
       </section>

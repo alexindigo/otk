@@ -21,7 +21,18 @@ export default function Notices(props: { prefs: Preferences }) {
   const [mode, setMode] = createSignal("strip");
   const drafts = createDrafts(solidState),
     write = drafts.writer("theme-notice");
-  const operation = solidState<SessionRevertState>({});
+  const record = {
+    boundaryID: "prompt",
+    messageIDs: ["prompt"],
+    files: [],
+    prompt: {
+      input: "Captured prompt",
+      mode: "normal" as const,
+      parts: [],
+      time: 1,
+    },
+  };
+  const operation = solidState<SessionRevertState>({ phase: "saved", record });
   const commands = new CommandHub();
   const rollback: SessionRevert = {
     state: operation.state,
@@ -59,6 +70,12 @@ export default function Notices(props: { prefs: Preferences }) {
     setMode(value);
     operation.update((state) => {
       state.pending = value === "pending" ? "revert" : undefined;
+      state.record = value === "fork" ? undefined : record;
+      state.phase = value === "pending"
+        ? "staging"
+        : value === "error"
+        ? "failed"
+        : "saved";
       state.error = value === "error"
         ? errorFeedback("The requested rollback is no longer available", {
           actionLabel: "Rolling back conversation",

@@ -21,7 +21,12 @@ import SelectionContent from "./SelectionContent.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
 
 export function SavedBranchNotice(
-  props: { owner: BranchHistory; failureVisible?: boolean },
+  props: {
+    owner: BranchHistory;
+    failureVisible?: boolean;
+    statusVisible?: boolean;
+    navigationVisible?: boolean;
+  },
 ) {
   const state = () => props.owner.state;
   const perform = (action: () => void) => {
@@ -36,20 +41,19 @@ export function SavedBranchNotice(
       <Show when={props.failureVisible !== false && state().error}>
         <OperationFeedback feedback={errorFeedback(state().error)!} />
       </Show>
-      <Show when={state().pending}>
+      <Show when={props.statusVisible !== false && state().pending}>
         <ComposerNoticeRow icon={RevertIcon} role="status">
           Saving earlier branch...
         </ComposerNoticeRow>
       </Show>
-      <Show when={state().branches.length}>
+      <Show when={props.navigationVisible !== false && state().branches.length}>
         <ComposerNoticeRow icon={RevertIcon}>
           <button
             type="button"
             class="otk-pill"
             onClick={() => props.owner.open(state().branches[0].id)}
           >
-            Unrevert: {state().branches.length} saved earlier{" "}
-            {state().branches.length === 1 ? "branch" : "branches"}
+            Saved earlier branches
           </button>
         </ComposerNoticeRow>
       </Show>
@@ -139,6 +143,11 @@ export default function SavedBranches(
                 viewport = element;
               }}
             >
+              <SavedBranchNotice
+                owner={props.owner}
+                statusVisible={false}
+                navigationVisible={false}
+              />
               <div class="otk-saved-header">
                 <p>
                   {saved().replaced

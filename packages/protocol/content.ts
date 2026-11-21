@@ -418,7 +418,6 @@ export interface AssistantMessage {
 /** A native action boundary, independent of prompt/recall/queue identity. */
 export interface RevertBoundary {
   messageID: string;
-  affected: { messages: number; prompts: number };
 }
 export interface ContextMessage {
   id: string;

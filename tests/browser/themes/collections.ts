@@ -1750,18 +1750,20 @@ export async function collections456(input: Inputs) {
             );
           }
           if (name === "revert") {
-            await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-              "1 prompt rolled back",
+            await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+              "data-boundary",
+              "prompt",
             );
             const joined = await page.evaluate(() => {
-              const a = document.querySelector(".otk-composer-notice")!
+              const group = document.querySelector(".otk-revert-group")!;
+              const a = document.querySelector(".otk-messages")!
                   .getBoundingClientRect(),
-                b = document.querySelector(".otk-composer-input")!
+                b = document.querySelector(".otk-composer-dock")!
                   .getBoundingClientRect();
               return [
-                a.left === b.left,
-                a.right === b.right,
-                Math.abs(a.bottom - b.top) <= 1,
+                !!group.closest(".otk-messages"),
+                getComputedStyle(group).position !== "absolute",
+                a.bottom <= b.top + 1,
               ];
             });
             expect(joined).toEqual([true, true, true]);
@@ -1773,8 +1775,9 @@ export async function collections456(input: Inputs) {
                     .getBoundingClientRect().top
               ),
             ).toBe(true);
-            await page.locator(".otk-rollback-disclosure").click();
-            await expect(page.locator(".otk-rollback-details")).toContainText(
+            await page.locator(".otk-revert-group .otk-record-group-toggle")
+              .click();
+            await expect(page.locator(".otk-revert-records")).toContainText(
               "revert.txt",
             );
           }
@@ -1805,13 +1808,15 @@ export async function collections456(input: Inputs) {
           await page.evaluate(
             "styleTest.resetNotice();styleTest.settleNotice()",
           );
-          const disclosure = page.locator(".otk-rollback-disclosure");
+          const disclosure = page.locator(
+            ".otk-revert-group .otk-record-group-toggle",
+          );
           // Publications retain disclosure state across theme paints.
           if (await disclosure.getAttribute("aria-expanded") !== "true") {
             await disclosure.click();
           }
           await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-          await expect(page.locator(".otk-rollback-footer button"))
+          await expect(page.locator(".otk-revert-restore"))
             .toBeVisible();
         }
         if (scene === "feedback-owners") {
@@ -1976,15 +1981,22 @@ export async function collections456(input: Inputs) {
             "flex",
           );
           await expect(page.locator(".otk-empty")).toHaveCSS("padding", "12px");
-          const disclosure = page.locator(".otk-rollback-disclosure");
+          const disclosure = page.locator(
+            ".otk-revert-group .otk-record-group-toggle",
+          );
           if (await disclosure.getAttribute("aria-expanded") !== "true") {
             await disclosure.click();
           }
-          await expect(page.locator(".otk-rollback-file")).toHaveCount(1);
-          const colors = await page.evaluate(() =>
+          const file = page.locator(".otk-revert-records .otk-control-row")
+            .filter({ has: page.locator(".otk-path") });
+          await expect(file).toHaveCount(1);
+          await expect(file.locator(".otk-path")).toHaveText("src/owner.ts");
+          await expect(file.locator(".otk-diff-add")).toHaveText("+3");
+          await expect(file.locator(".otk-diff-del")).toHaveText("\u22121");
+          const colors = await file.evaluate((element) =>
             [".otk-path", ".otk-diff-add", ".otk-diff-del"].map((selector) =>
               getComputedStyle(
-                document.querySelector(".otk-rollback-file " + selector)!,
+                element.querySelector(selector)!,
               ).color
             )
           );
@@ -1995,7 +2007,7 @@ export async function collections456(input: Inputs) {
           await page.locator(".otk-work-fold").click();
           await expect(page.locator(".otk-work-body")).toBeVisible();
           await disclosure.click();
-          await expect(page.locator(".otk-rollback-file")).toHaveCount(0);
+          await expect(file).toHaveCount(0);
         }
         await shot(`public-${scene}-${theme.id}-1280`);
       }

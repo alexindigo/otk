@@ -57,7 +57,7 @@ Deno.test("neutral activity survives the content-operation JSON wire with unknow
         payload: "  <flux>\n**Full response**\n</flux>\n",
       },
     }],
-    revert: { messageID: "context", affected: { messages: 3, prompts: 1 } },
+    revert: { messageID: "context" },
   };
   const op: ContentOp = { op: "message.upsert", message };
   const decoded: ContentOp = JSON.parse(JSON.stringify(op));

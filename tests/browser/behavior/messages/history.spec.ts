@@ -156,7 +156,7 @@ test("messages.revert-files-counted-strip-reload", {
         page?.ok === true && page.result?.session?.revert?.boundaryID === user;
     })
   ).toBe(true);
-  await expect(page.locator(".otk-rolled-back-strip")).toContainText(
+  await expect(page.locator(".otk-revert-group")).toContainText(
     "Reverted from",
   );
   // Decisions 1/20 preserve pre-prompt native controls; revert removes real prompts/replies.
@@ -176,16 +176,17 @@ test("messages.revert-files-counted-strip-reload", {
     } else await expect(page.locator("[data-message]")).toHaveCount(0);
   };
   await reverted();
-  await page.locator(".otk-rollback-disclosure").click();
-  await expect(page.locator(".otk-rollback-details")).toContainText(
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await expect(page.locator(".otk-revert-records")).toContainText(
     "revert.txt",
   );
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "before\n",
   );
   await page.reload();
-  await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-    "1 prompt rolled back",
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-boundary",
+    user,
   );
   await reverted();
 });

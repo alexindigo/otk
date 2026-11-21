@@ -13,6 +13,7 @@ import {
 } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
+import type { SessionRevertState } from "./session-revert.ts";
 import type { PendingSend } from "./pending-send.ts";
 import {
   createRecordProjection,
@@ -52,6 +53,55 @@ export const replyKey = (message: Message): string =>
       message.role === "context" && message.replyTo !== undefined)
     ? `reply:${message.replyTo ?? message.id}`
     : message.id;
+export const revertRecordKey = (boundaryID: string) => `revert:${boundaryID}`;
+export const revertFlowBoundary = (
+  state: SessionRevertState,
+): string | undefined =>
+  state.record?.boundaryID ??
+    (state.phase === "staging" ? state.confirmation?.messageID : undefined);
+/** Display-only adjunct. Retained records never enter live body/sync ownership. */
+export function createRevertRecordProjection(): (
+  source: Pick<TranscriptProjectionState, "records" | "repliesByID">,
+  state: SessionRevertState,
+) => RecordProjection {
+  let revision = 0, previous: unknown[] = [];
+  return (source, state) => {
+    const boundaryID = revertFlowBoundary(state);
+    if (!boundaryID) return source.records;
+    const signature = [
+      source.records,
+      state.messages,
+      state.phase,
+      state.dismissed,
+      state.error,
+      boundaryID,
+    ];
+    if (signature.some((value, at) => value !== previous[at])) {
+      revision++;
+      previous = signature;
+    }
+    const key = revertRecordKey(boundaryID), messages = state.messages ?? [];
+    const anchor = messages.find((m) => m.id === boundaryID);
+    const members = [...new Set(messages.map(replyKey))];
+    const group = { key, members, title: "Reverted", revision };
+    const keys = [...source.records.keys];
+    const at = keys.findIndex((id) => {
+      const first = source.records.groups[id]?.members[0] ?? id;
+      const message = source.repliesByID[first]?.message;
+      return message &&
+        (anchor ? compareMessages(message, anchor) > 0 : state.record?.prompt &&
+          message.time.created > state.record.prompt.time);
+    });
+    keys.splice(at < 0 ? keys.length : at, 0, key);
+    return {
+      ...source.records,
+      keys,
+      revision: source.records.revision + revision,
+      groups: { ...source.records.groups, [key]: group },
+      revisions: { ...source.records.revisions, [key]: revision },
+    };
+  };
+}
 const compare = compareMessages;
 const dictionary = <T>(): Record<string, T> => Object.create(null);
 /** Explicit neutral activity facts, shared by queue admission and presentation. */

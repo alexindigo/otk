@@ -53,14 +53,14 @@ export function revertPresentation(
   const sameFailure = feedback?.diagnosticID &&
     state.failure?.diagnosticID === feedback.diagnosticID;
   const sameBranchFailure = branchFailure && branchFailure.diagnosticID &&
-    state.failure?.diagnosticID === branchFailure.diagnosticID;
+    feedback?.diagnosticID === branchFailure.diagnosticID;
   const ownsPending = sameRequest && state.pending &&
     feedback?.kind === "pending" && !feedback.failure;
   return {
-    state: (!ownsPending && sameRequest) || sameFailure || sameBranchFailure
-      ? { ...state, pending: undefined, error: undefined }
-      : state,
-    feedback: ownsPending ? undefined : feedback,
+    state,
+    feedback: ownsPending || sameRequest || sameFailure || sameBranchFailure
+      ? undefined
+      : feedback,
   };
 }
 export interface SessionRevert {
@@ -90,7 +90,9 @@ export function createSessionRevert(options: {
   drafts: Drafts;
   branchHistory?:
     & Pick<BranchHistory, "prepare" | "state">
-    & Partial<Pick<BranchHistory, "state" | "subscribe" | "settled">>;
+    & Partial<
+      Pick<BranchHistory, "subscribe" | "settled" | "preservationWarning">
+    >;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   server?(target: Selection): string;
   status: {
@@ -185,6 +187,7 @@ export function createSessionRevert(options: {
     const running = captures.get(captureKey);
     if (running) return running;
     if (!options.branchHistory) return Promise.resolve();
+    if (options.branchHistory.preservationWarning?.()) return Promise.resolve();
     const completion = Promise.withResolvers<void>();
     captures.set(captureKey, completion.promise);
     updateAt(capturedKey, (state) => {
@@ -492,7 +495,9 @@ export function createSessionRevert(options: {
     update((state) => {
       state.phase = "confirming";
       state.confirmation = { kind, messageID };
-      state.messages = at < 0 ? [] : structuredClone(messages.slice(at));
+      state.messages = at < 0
+        ? []
+        : JSON.parse(JSON.stringify(messages.slice(at)));
       state.error = undefined;
       state.failure = undefined;
     });
@@ -521,7 +526,7 @@ export function createSessionRevert(options: {
           JSON.stringify(flow().messages?.map((m) => m.id))
       ) {
         update((state) => {
-          state.messages = structuredClone(current);
+          state.messages = JSON.parse(JSON.stringify(current));
         });
         return;
       }
