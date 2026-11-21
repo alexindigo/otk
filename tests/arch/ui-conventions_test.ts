@@ -20,7 +20,8 @@ type Rule =
   | "meta-list"
   | "failure-signal"
   | "presentation"
-  | "settings-name";
+  | "settings-name"
+  | "list-order";
 const owners: Record<Rule, string> = {
   clock:
     "Local date/time formatting belongs to Clock (including precise records)",
@@ -47,6 +48,8 @@ const owners: Record<Rule, string> = {
     "FailurePresentation is produced by the client presenter, never reconstructed by a view or fixture",
   "settings-name":
     "One surface name: navigation says Settings / servers, matching Settings",
+  "list-order":
+    "Decision 60: list order uses saved positions or creation, never activity, recency or state",
 };
 const containsStringType = (node: t.Node): boolean => {
   if (node.type === "TSStringKeyword") return true;
@@ -276,6 +279,44 @@ export function conventionErrors(
     fail("navigation label");
   }
   for (const node of source.all) {
+    if (rule === "list-order") {
+      const orderingOwner =
+        /packages\/client\/(?:stable-order|tabs|inbox|project-projection|server-resources|session-tree|index)\.ts$/
+          .test(path);
+      const dynamic = (input: t.Node): boolean => {
+        const resolved = source.value(input) ?? input;
+        return source.all.some((child) =>
+          child.start! >= resolved.start! && child.end! <= resolved.end! &&
+          (child.type === "Identifier" || child.type === "StringLiteral") &&
+          /activity|recency|status|stateBand|urgency|priority|rank|timeUpdated|lastVisit|^state$/i
+            .test(
+              child.type === "Identifier" ? child.name : child.value,
+            )
+        );
+      };
+      if (
+        node.type === "CallExpression" &&
+        node.callee.type === "MemberExpression" &&
+        ["sort", "toSorted", "order"].includes(
+          property(node.callee.property) ?? "",
+        ) &&
+        (orderingOwner ||
+          /tasks|projects|checkouts|tabs|siblings/i.test(
+            source.name(node.callee.object) ?? "",
+          )) &&
+        node.arguments.slice(property(node.callee.property) === "order" ? 1 : 0)
+          .some((arg) => dynamic(arg))
+      ) {
+        fail(`dynamic list ordering on line ${node.loc?.start.line}`);
+      }
+      if (
+        orderingOwner && node.type === "ObjectProperty" &&
+        ["order", "position", "created"].includes(property(node.key) ?? "") &&
+        dynamic(node.value)
+      ) {
+        fail(`dynamic order facts on line ${node.loc?.start.line}`);
+      }
+    }
     if (
       rule === "presentation" &&
       !["packages/client/failures.ts", "packages/client/failure-features.ts"]
@@ -535,6 +576,39 @@ function staticText(source: Source, node: t.Node): string | undefined {
   }
   return source.string(value);
 }
+
+Deno.test("UI convention: list ordering rejects activity/state keys and accepts saved moves and creation", () => {
+  for (
+    const text of [
+      "tasks.sort((a,b) => b.timeUpdated-a.timeUpdated);",
+      "const byRecency = (a,b) => b.lastActivity-a.lastActivity; projects.sort(byRecency);",
+      "owner.order(rows, row => ({position: rank[row.status]}));",
+      "const row = {order: -summary.lastActivity};",
+      "checkouts.toSorted((a,b) => urgentStatus(a)-urgentStatus(b));",
+      "tasks.sort((a,b) => a.state-b.state);",
+    ]
+  ) {
+    assert(
+      conventionErrors("list-order", "packages/client/inbox.ts", text).length >
+        0,
+      text,
+    );
+  }
+  for (
+    const text of [
+      "tasks.sort((a,b) => a.order-b.order);",
+      "entries.sort((a,b) => a.timeCreated-b.timeCreated);",
+      "owner.order(rows, row => ({position:row.order,created:row.timeCreated}));",
+      "const lamps = rollupStatus(working,finished);",
+    ]
+  ) {
+    assertEquals(
+      conventionErrors("list-order", "packages/client/inbox.ts", text),
+      [],
+      text,
+    );
+  }
+});
 
 /** Positive data flow into fixture consumers, not a token-presence obligation. */
 export function fixtureFeedbackErrors(text: string): string[] {

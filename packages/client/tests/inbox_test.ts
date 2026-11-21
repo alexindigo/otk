@@ -279,10 +279,10 @@ Deno.test("phantom rule 1: all ungrouped working, blocked and unseen-finished se
     });
     tabs.update({ directory: "/p", entries, inbox });
     assertEquals(tabs.tabs().map((t) => t.id), [
+      "task",
+      "busy",
       "blocked",
       "finished",
-      "busy",
-      "task",
     ]);
   }
 });
@@ -305,14 +305,14 @@ Deno.test("phantom rule 2: a single preview replaces idle previews but cannot re
   });
   tabs.preview("a");
   tabs.preview("b");
-  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "b", "task"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["task", "b", "busy"]);
   tabs.preview("busy");
   tabs.preview("a");
   assertEquals(tabs.tabs().filter((t) => t.preview).map((t) => t.id), ["a"]);
   assert(tabs.tabs().some((t) => t.id === "busy"));
   tabs.preview("grouped");
   assertEquals(tabs.state.selected, { kind: "task", id: "task" });
-  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "task"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["task", "busy"]);
 });
 Deno.test("phantom rule 3: pin, double-click and sending promote to a title-named task through an injected port", async () => {
   for (const action of ["pin", "double-click", "send"]) {

@@ -476,11 +476,7 @@ export function createProjectProjection(o: {
             added: false,
             inactive: false,
             lastVisit: 0,
-            order: p.summary
-              ? -(p.summary.lastActivity ?? 0)
-              : p.members.size
-              ? -Math.max(...[...p.members.values()].map((e) => e.timeUpdated))
-              : 0,
+            order: 0,
           }),
           source: record ? "tracked" : p.summary?.hasSessions ||
               (p.summary?.sessionCount ?? p.members.size) > 0 ||

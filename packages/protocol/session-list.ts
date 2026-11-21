@@ -70,10 +70,12 @@ export interface LoadChunk {
   };
 }
 /** Current-project row discovery has no status, marks, digests or history. */
-export type SessionStructure = Pick<
-  IndexMetadata,
-  "id" | "directory" | "parentID" | "title" | "hierarchy"
->;
+export type SessionStructure =
+  & Pick<
+    IndexMetadata,
+    "id" | "directory" | "parentID" | "title" | "hierarchy"
+  >
+  & Partial<Pick<IndexMetadata, "timeCreated">>;
 export type SessionListRow =
   | { key: string; kind: "heading"; group: string; title: string }
   | {

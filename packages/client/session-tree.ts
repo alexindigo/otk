@@ -66,7 +66,9 @@ export function sessionTree<T extends SessionStructure>(
   taskOrder?: readonly string[],
 ): SessionTreeGroup<T>[] {
   const scopes = new Set(directories);
-  const sessions = entries.filter((e) => scopes.has(e.directory));
+  const sessions = entries.filter((e) => scopes.has(e.directory)).sort((a, b) =>
+    (a.timeCreated ?? 0) - (b.timeCreated ?? 0)
+  );
   const byID = new Map(sessions.map((e) => [e.id, e]));
   const nodes = entries.every((entry) => entry.hierarchy)
     ? undefined

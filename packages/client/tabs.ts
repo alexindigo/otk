@@ -11,14 +11,8 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import {
-  type InboxStatus,
-  inboxStatus,
-  rollup,
-  sessionAttentionStates,
-} from "./inbox.ts";
-import { createTabOrder } from "./tab-urgency.ts";
-import type { SettledOrderOptions } from "./settled-order.ts";
+import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
+import { createStableOrder } from "./stable-order.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
@@ -119,7 +113,6 @@ export function createTabs(
   ) => Promise<TaskRecord>,
   factory: StateFactory = createState,
   sources?: TabSources,
-  orderOptions?: SettledOrderOptions,
 ): ClientTabs {
   const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
@@ -152,10 +145,10 @@ export function createTabs(
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
-  const ordering = createTabOrder<InboxTab>(() => {
+  const ordering = createStableOrder<InboxTab>(() => {
     cachedTabs = undefined;
     store.update((s) => s.revision++);
-  }, orderOptions);
+  });
   let cachedCrumbs: TaskCrumb[] = [],
     cachedPath: TaskCrumb[] = [],
     cachedFamily: FamilyCrumb[] = [],
@@ -231,11 +224,6 @@ export function createTabs(
     const { inbox, taskActivity } = input;
     // Nearest explicit membership owns the whole inherited family. Helpers can
     // contribute work/attention, but cannot create a competing phantom tab.
-    const activity = (id: string) =>
-      byID.get(id)?.timeUpdated ?? (families.get(id) ?? []).reduce(
-        (time, entry) => Math.max(time, entry.timeUpdated),
-        0,
-      );
     const result: InboxTab[] = tasks.map((task) => ({
       kind: "task",
       id: task.id,
@@ -277,34 +265,14 @@ export function createTabs(
         });
       }
     }
-    return cachedTabs = ordering.tabs(
+    return cachedTabs = ordering.order(
       result,
-      (tab) =>
-        tab.kind === "task"
-          ? [
-            taskActivity?.[tab.id],
-            ...(families.get(tab.id) ?? []).flatMap((entry) =>
-              sessionAttentionStates(entry, inbox)
-            ),
-          ]
-          : sessionAttentionStates(byID.get(tab.id)!, inbox),
-      activity,
-      (tab) => {
-        const members = tab.kind === "task"
-          ? families.get(tab.id) ?? []
-          : [byID.get(tab.id)!];
-        const blocked = members.filter((entry) =>
-          sessionAttentionStates(entry, inbox).includes("blocked")
-        );
-        return blocked.length > 0 &&
-          blocked.every((entry) =>
-            entry.operationStatus !== "blocked" &&
-            !entry.activity?.inputs?.keys.length &&
-            !entry.attention.questions &&
-            !entry.attention.error &&
-            !!entry.activity?.permissions?.keys.length
-          );
-      },
+      (tab) => ({
+        position: taskByID.get(tab.id)?.order,
+        created: tab.kind === "phantom"
+          ? byID.get(tab.id)?.timeCreated
+          : undefined,
+      }),
     );
   }
   const lookup = (id: string) => {

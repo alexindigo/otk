@@ -7,9 +7,7 @@ import { activity } from "../../pages/sessions.ts";
 test.use({ profile: "contract-sessions-tabs" });
 test(
   "sessions.settled-order-shared-by-strip-and-groups-and-frozen-during-interaction",
-  {
-    tag: ["@sessions", "@contracts", "@isolated"],
-  },
+  { tag: ["@sessions", "@contracts", "@isolated"] },
   async ({ isolatedState: state, page }) => {
     test.setTimeout(90000);
     const a = await state.product("tasks.create", {
@@ -33,67 +31,48 @@ test(
       page.locator("[data-session-group]").evaluateAll((nodes) =>
         nodes.map((n) => n.getAttribute("data-session-group"))
       ).then((ids) => ids.filter((id) => id === a.id || id === b.id));
-    await expect(tab(a.id).locator(".otk-status-light")).toHaveAttribute(
-      "data-state",
-      "working",
-    );
     await page.mouse.move(500, 400);
     await expect.poll(order).toEqual([a.id, b.id]);
+    await expect.poll(groups).toEqual([a.id, b.id]);
     await activity(state, "tstv1-second", "hold");
     await expect(tab(b.id).locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "working",
     );
-    await activity(state, "tstv1-second", "release");
-    await activity(state, "tstv1-second", "hold");
-    await expect.poll(order).toEqual([a.id, b.id]);
     await tab(b.id).hover();
+    await page.waitForTimeout(6000);
+    await page.mouse.move(500, 400);
+    expect(await order()).toEqual([a.id, b.id]);
+    expect(await groups()).toEqual([a.id, b.id]);
+    await activity(state, "tstv1-second", "release");
     await page.waitForTimeout(6000);
     expect(await order()).toEqual([a.id, b.id]);
     expect(await groups()).toEqual([a.id, b.id]);
-    await page.mouse.move(500, 400);
+    // Only the existing explicit move contract may change position.
+    const tasks = await state.product("tasks.list", {
+      directory: state.directory,
+    });
+    const ids = tasks.map((task) => task.id);
+    const ai = ids.indexOf(a.id), bi = ids.indexOf(b.id);
+    [ids[ai], ids[bi]] = [ids[bi], ids[ai]];
+    await state.product("tasks.reorder", { directory: state.directory, ids });
     await expect.poll(order).toEqual([b.id, a.id]);
     await expect.poll(groups).toEqual([b.id, a.id]);
-    // A second borrower (the right-hand list) freezes the same permutation.
-    await page.locator(`[data-session-group="${b.id}"]`).hover();
-    await activity(state, "tstv1-second", "release");
-    const marks = await state.product("sessions.finishes", {});
-    await state.product("sessions.seen", {
-      sessionID: "tstv1-second",
-      terminal: marks["tstv1-second"],
+    const c = await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Order new",
+      sessions: [],
     });
-    await page.waitForTimeout(6000);
-    expect(await order()).toEqual([b.id, a.id]);
-    expect(await groups()).toEqual([b.id, a.id]);
-    await page.mouse.move(500, 400);
-    await expect.poll(order).toEqual([a.id, b.id]);
-    await expect.poll(groups).toEqual([a.id, b.id]);
-    // Keyboard focus is an interaction too, independently of the pointer.
-    await tab(b.id).focus();
-    await activity(state, "tstv1-second", "hold");
-    await page.waitForTimeout(6000);
-    expect(await order()).toEqual([a.id, b.id]);
-    await page.locator("textarea[name=prompt]").focus();
+    await expect(tab(c.id)).toBeVisible();
+    expect(
+      await page.locator("[data-tab]").evaluateAll((nodes) =>
+        nodes.map((n) => n.getAttribute("data-tab"))
+      ).then((ids) =>
+        ids.filter((id) => id === a.id || id === b.id || id === c.id)
+      ),
+    ).toEqual([b.id, a.id, c.id]);
+    await page.reload();
     await expect.poll(order).toEqual([b.id, a.id]);
-    // Portalled context menus retain their originating list's interaction hold.
-    await tab(b.id).click({ button: "right" });
-    const menu = page.locator(
-      ':popover-open [role="menu"][aria-label="Context menu"]',
-    );
-    await expect(menu).toBeVisible();
-    await menu.hover();
-    await activity(state, "tstv1-second", "release");
-    const finalMarks = await state.product("sessions.finishes", {});
-    await state.product("sessions.seen", {
-      sessionID: "tstv1-second",
-      terminal: finalMarks["tstv1-second"],
-    });
-    await page.waitForTimeout(6000);
-    await expect(menu).toBeVisible();
-    expect(await order()).toEqual([b.id, a.id]);
-    await page.keyboard.press("Escape");
-    await page.locator("textarea[name=prompt]").focus();
-    await page.mouse.move(500, 400);
-    await expect.poll(order).toEqual([a.id, b.id]);
+    await expect.poll(groups).toEqual([b.id, a.id]);
   },
 );
