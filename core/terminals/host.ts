@@ -24,7 +24,7 @@ export class TerminalRejected extends Error {
 }
 export interface TerminalHostOptions {
   statePath: string;
-  dataDir: string;
+  dataDir: string | (() => string);
   environment: Readonly<Record<string, string>>;
   signal: AbortSignal;
 }
@@ -73,7 +73,9 @@ export class TerminalHost {
     try {
       const env = this.#environment;
       const binary = await resolvePtyBinary(
-        this.options.dataDir,
+        typeof this.options.dataDir === "function"
+          ? this.options.dataDir()
+          : this.options.dataDir,
         embeddedPtyBinary(),
         env.OTK_PTY_BIN,
       );

@@ -38,6 +38,7 @@ async function application(
     unavailable?: boolean;
     root?: string;
     failStart?: boolean;
+    environment?: Record<string, string>;
   } = {},
 ) {
   const root = options.root ?? await tempDir("terminal-app-");
@@ -91,6 +92,7 @@ async function application(
     ...Deno.env.toObject(),
     SHELL: "/bin/bash",
     XDG_DATA_HOME: join(root, "data"),
+    ...options.environment,
   };
   delete environment.INVOCATION_ID;
   if (options.unavailable) environment.OTK_PTY_BIN = join(root, "missing-pty");
@@ -368,6 +370,21 @@ test("terminal admission: auth and Origin precede daemon access; unavailable RPC
   const health = await fetch(unavailable.url + "/api/health");
   assertEquals(health.status, 200);
   await health.body?.cancel();
+});
+
+test("invalid terminal cache configuration preserves application availability", async () => {
+  const app = await application({
+    environment: { HOME: "relative", XDG_DATA_HOME: "relative" },
+  });
+  const health = await fetch(app.url + "/api/health");
+  assertEquals(health.status, 200);
+  await health.body?.cancel();
+  const client = await rpc(app.url);
+  const failure = await assertRejects(
+    () => client.conn.rpc.call("terminal.list", { sessionID: A }),
+    RequestFailure,
+  );
+  assertEquals(failure.failure.code, "terminal-unavailable");
 });
 
 test("terminal socket validates membership, channel count and policy limits", async () => {
