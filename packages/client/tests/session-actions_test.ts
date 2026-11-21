@@ -371,7 +371,7 @@ Deno.test("session actions prompt captures invocation target and enters submissi
   const captured =
     actions.delivery({ sidecarId: "local", sessionID: "selected" }).state
       .receipts[0];
-  assertMatch(captured.messageID!, /^msg_[0-9a-f]{26}$/);
+  assertMatch(captured.messageID!, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
   await admitted.promise;
   f.session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   f.reply((_id, method, params) =>

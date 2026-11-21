@@ -1,5 +1,15 @@
 # @otk/protocol
 
+`ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
+time/counter characters followed by fourteen base62 random characters. Browser
+pending sends and both native prompt fallbacks share this owner and encoding,
+compatible with opencode's ascending identifiers. Counter overflow and clock
+rollback retain local creation order. Native-created identities remain
+unchanged; parts and sessions without caller IDs continue to use native API
+generation. The architecture gate rejects private native-prefix encoders and
+submission random-ID fallbacks. Request, diagnostic and local UI UUIDs are
+separate.
+
 `randomID()` is the shared RFC 4122 v4 identity owner for browser code. It uses
 `crypto.getRandomValues`, available on plain HTTP as well as HTTPS. `sha256()`
 owns UTF-8 SHA-256 with a dependency-free fallback when Web Crypto is absent.
