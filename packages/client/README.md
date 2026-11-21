@@ -414,7 +414,8 @@ refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.
 
 Usage refreshes during a held read retain only the latest demand, clearing an
-obsolete successor when demand returns to its admitted witness.
+obsolete successor when demand returns to its admitted witness. Summary equality
+uses canonical JSON values, never a producer's property insertion order.
 
 ## Public API
 

@@ -15,6 +15,8 @@ import type { ToastsModel } from "../features/notify/toast.ts";
 import Toast from "./surface/Toast.tsx";
 import RequestAge from "./RequestAge.tsx";
 import FailureContent from "./FailureContent.tsx";
+import { feedbackState } from "./feedback-state.ts";
+import { nativeAttributes } from "./native-attributes.ts";
 export default function Toasts(
   props: { model: ToastsModel; detail?(note: Note): Element; onMore(): void },
 ): import("solid-js").Element {
@@ -81,78 +83,101 @@ export default function Toasts(
         each={items().slice(offset(), offset() + limit())}
         keyed={(item) => item.note.id}
       >
-        {(item) => (
-          <Toast id={item().note.id} kind={item().note.kind}>
-            <header class="otk-toast-header">
-              <div class="otk-toast-message otk-disclosure-layout">
-                <Show
-                  when={notificationFailure(item().note)}
-                  fallback={
-                    <>
-                      <strong
-                        class="otk-toast-title otk-control-label"
-                        title={item().note.title}
-                      >
-                        {item().note.title}
-                      </strong>
-                      <Show when={item().note.body}>
-                        <span
-                          class="otk-toast-body otk-control-label"
-                          title={item().note.body}
-                        >
-                          {item().note.body}
-                        </span>
-                      </Show>
-                    </>
-                  }
+        {(item) => {
+          const feedback = nativeAttributes(() => {
+            const semantics = feedbackState({
+              feedback: {
+                kind: item().note.kind === "error" ? "error" : "info",
+                text: item().note.title,
+              },
+            });
+            // Toast owns its surface paint; feedback owns the announcement.
+            return {
+              role: semantics.role,
+              "aria-atomic": semantics["aria-atomic"],
+            };
+          });
+          return (
+            <Toast id={item().note.id} kind={item().note.kind}>
+              <header class="otk-toast-header">
+                <div
+                  class="otk-toast-message otk-disclosure-layout"
+                  {...feedback.attributes}
+                  ref={feedback.ref}
+                  aria-label={item().note.title}
                 >
-                  {(failure) => (
-                    <FailureContent
-                      compact
-                      subgrid
-                      signal={false}
-                      failure={failure()}
-                    />
-                  )}
-                </Show>
-              </div>
-              <button
-                type="button"
-                class="otk-icon-button otk-toast-close"
-                aria-label="Close notification"
-                title="Dismiss notification"
-                onClick={() => item().delivery.dismiss()}
-              >
-                <CloseIcon />
-              </button>
-            </header>
-            <Show when={item().note.context}>
-              <RequestAge class="otk-toast-age" label={item().note.context!} />
-            </Show>
-            {props.detail?.(item().note)}
-            <div class="otk-toast-actions">
-              <For each={item().note.actions}>
-                {(action) => (
-                  <button
-                    type="button"
-                    title={action.description}
-                    aria-description={action.description}
-                    onClick={() => void item().delivery.invoke(action)}
+                  <Show
+                    when={notificationFailure(item().note)}
+                    fallback={
+                      <>
+                        <strong
+                          class="otk-toast-title otk-control-label"
+                          title={item().note.title}
+                        >
+                          {item().note.title}
+                        </strong>
+                        <Show when={item().note.body}>
+                          <span
+                            class="otk-toast-body otk-control-label"
+                            title={item().note.body}
+                          >
+                            {item().note.body}
+                          </span>
+                        </Show>
+                      </>
+                    }
                   >
-                    {action.label}
-                  </button>
-                )}
-              </For>
-              <button
-                type="button"
-                class="otk-toast-dismiss"
-                onClick={() => item().delivery.dismiss()}
-              >
-                Dismiss
-              </button>
-            </div>
-          </Toast>
-        )}
+                    {(failure) => (
+                      <FailureContent
+                        compact
+                        subgrid
+                        signal={false}
+                        failure={failure()}
+                      />
+                    )}
+                  </Show>
+                </div>
+                <button
+                  type="button"
+                  class="otk-icon-button otk-toast-close"
+                  aria-label="Close notification"
+                  title="Dismiss notification"
+                  onClick={() => item().delivery.dismiss()}
+                >
+                  <CloseIcon />
+                </button>
+              </header>
+              <Show when={item().note.context}>
+                <RequestAge
+                  class="otk-toast-age"
+                  label={item().note.context!}
+                />
+              </Show>
+              {props.detail?.(item().note)}
+              <div class="otk-toast-actions">
+                <For each={item().note.actions}>
+                  {(action) => (
+                    <button
+                      type="button"
+                      title={action.description}
+                      aria-description={action.description}
+                      onClick={() => void item().delivery.invoke(action)}
+                    >
+                      {action.label}
+                    </button>
+                  )}
+                </For>
+                <button
+                  type="button"
+                  class="otk-toast-dismiss"
+                  onClick={() => item().delivery.dismiss()}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </Toast>
+          );
+        }}
       </For>
       <Show when={items().length > limit()}>
         <button
