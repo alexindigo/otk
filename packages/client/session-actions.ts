@@ -391,7 +391,7 @@ export function createSessionActions(o: {
       );
       const send = (captured: IntentGroup): Promise<void> =>
         delivery(target).send(
-          () =>
+          (dispatch) =>
             submission(target, captured)(async (options) => {
               const prepared = await attachments(parts, target.sidecarId);
               const transcript = session.transcripts?.get(target);
@@ -410,6 +410,7 @@ export function createSessionActions(o: {
                   },
                 });
               }
+              dispatch();
               return await rpc.call("session.prompt", {
                 sessionID: target.sessionID,
                 messageID,

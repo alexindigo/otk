@@ -11,6 +11,11 @@ unresolved input stays owned by its entry. The ten-second observation bound
 starts at Send. Timeout Retry only reacquires existing source; definitive
 refusal offers an explicit send retry.
 
+The delivery callback marks the native dispatch boundary. A refusal before that
+boundary retires only the unsubmitted local entry, retaining the draft and its
+preparation owner's feedback. Native identity evidence still wins over late
+refusal; dispatched failures retain their original entry and Retry action.
+
 `SessionActions` also owns source-free, session-bound submission receipts.
 Native acceptance carries a message identity; only the canonical transcript can
 admit it, and only the viewport can report its presentation. The ten-second

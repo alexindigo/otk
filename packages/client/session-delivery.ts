@@ -30,7 +30,7 @@ export interface SessionDelivery {
   };
   subscribe(listener: () => void): () => void;
   send(
-    action: () => Promise<PromptReceipt | null>,
+    action: (dispatch: () => void) => Promise<PromptReceipt | null>,
     entry?: PendingSend,
   ): Promise<void>;
   /** The viewport reports real visible native sources through its existing port. */
@@ -203,8 +203,9 @@ export function createSessionDelivery(input: {
         timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
       }
       let result: PromptReceipt | null;
+      let dispatched = false;
       try {
-        result = await action();
+        result = await action(() => dispatched = true);
       } catch (cause) {
         clear(id);
         if (entry) {
@@ -213,42 +214,48 @@ export function createSessionDelivery(input: {
             transcript?.projection.committed(entry.message.id) ||
             receipt?.phase === "admitted" || store.state.last?.id === id
           ) return;
-          const classified = errorFeedback(failureValue(cause, {
-            actionLabel: "Sending prompt",
-            target: { ...input.target, label: input.title() },
-          })) ?? presentFailure({
-            code: "send.released",
-            retry: "new-intent",
-            diagnosticID: id,
-            facts: {
+          if (!dispatched) {
+            // The draft and preparation owner's feedback remain authoritative.
+            // No native Send exists to retain or retry in the transcript.
+            transcript?.cancelSend?.(entry.message.id);
+          } else {
+            const classified = errorFeedback(failureValue(cause, {
               actionLabel: "Sending prompt",
               target: { ...input.target, label: input.title() },
-              reason: "The send was released before completion.",
-            },
-          });
-          // This transcript entry is the failure surface, not a composer pointer.
-          const feedback = classified.failure
-            ? presentFailure(classified.failure.value, {
-              surface: "record",
-              view: input.target,
-            })
-            : classified;
-          const retry = () => {
-            if (
-              cause instanceof RequestFailure &&
-              (cause.failure.facts?.outcome === "unknown" ||
-                cause.failure.facts?.outcome === "unavailable")
-            ) {
-              void owner.reload();
-            } else entry.retry?.();
-          };
-          transcript?.send?.({
-            ...entry,
-            phase: "failed",
-            feedback: feedback &&
-              { ...feedback, action: { label: "Retry", run: retry } },
-            retry,
-          });
+            })) ?? presentFailure({
+              code: "send.released",
+              retry: "new-intent",
+              diagnosticID: id,
+              facts: {
+                actionLabel: "Sending prompt",
+                target: { ...input.target, label: input.title() },
+                reason: "The send was released before completion.",
+              },
+            });
+            // This transcript entry is the failure surface, not a composer pointer.
+            const feedback = classified.failure
+              ? presentFailure(classified.failure.value, {
+                surface: "record",
+                view: input.target,
+              })
+              : classified;
+            const retry = () => {
+              if (
+                cause instanceof RequestFailure &&
+                (cause.failure.facts?.outcome === "unknown" ||
+                  cause.failure.facts?.outcome === "unavailable")
+              ) {
+                void owner.reload();
+              } else entry.retry?.();
+            };
+            transcript?.send?.({
+              ...entry,
+              phase: "failed",
+              feedback: feedback &&
+                { ...feedback, action: { label: "Retry", run: retry } },
+              retry,
+            });
+          }
         }
         commit((s) => {
           s.receipts = s.receipts.filter((r) => r.id !== id);
