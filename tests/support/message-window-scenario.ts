@@ -97,7 +97,116 @@ export async function messageWindowScenario(profile: Profile) {
         }],
       }],
     }));
-  const f = await inboxBrowserFixture(root, [], { [sessionID]: messages });
+  const geometry: Record<string, Message[]> = {};
+  for (
+    const [name, text] of [
+      [
+        "atmosphera",
+        "Please review this image alongside the complete prompt. ".repeat(10),
+      ],
+      ["globnotes", ""],
+      ["luch", "A short prompt"],
+    ]
+  ) {
+    const id = `tstv1-${name}`;
+    geometry[id] = [{
+      id: "geometry-prompt",
+      sessionID: id,
+      role: "user",
+      time: { created: 1795291200000 },
+      parts: [
+        ...(text
+          ? [{
+            id: "geometry-text",
+            kind: "text" as const,
+            synthetic: false,
+            blocks: [{
+              b: "paragraph" as const,
+              inline: [{ i: "text" as const, text }],
+            }],
+          }]
+          : []),
+        ...(name !== "luch"
+          ? [{
+            id: "geometry-image",
+            kind: "file" as const,
+            name: "geometry.svg",
+            path: "geometry.svg",
+            mime: "image/svg+xml",
+            url: "data:image/svg+xml," +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="230" height="198"><rect width="230" height="198" fill="#234651"/><circle cx="115" cy="99" r="65" fill="#e8ae65"/></svg>',
+              ),
+          }]
+          : []),
+      ],
+    }, {
+      id: "geometry-reply",
+      sessionID: id,
+      role: "assistant",
+      replyTo: "geometry-prompt",
+      agent: "build",
+      model: { provider: "test", model: "test" },
+      time: { created: 1795291201000, completed: 1795291202000 },
+      outcomeTime: { state: "known", at: 1795291202000, source: "completed" },
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      parts: [{
+        id: "geometry-answer",
+        kind: "text",
+        synthetic: false,
+        blocks: Array.from(
+          { length: 24 },
+          (_, i) => ({
+            b: "paragraph",
+            inline: [{
+              i: "text",
+              text:
+                `Review line ${i}: the image and prompt retain their inline position while reading.`,
+            }],
+          }),
+        ),
+      }],
+    }];
+  }
+  geometry["tstv1-other-finished"] = geometry["tstv1-luch"].map((message) => ({
+    ...message,
+    sessionID: "tstv1-other-finished",
+    parts: message.role === "assistant"
+      ? [{
+        id: "short-answer",
+        kind: "text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{
+            i: "text",
+            text:
+              "The image is clear. Both messages keep their time and actions visible.",
+          }],
+        }],
+      }]
+      : message.parts,
+  }));
+  geometry["tstv1-inline-tail"] = [
+    geometry["tstv1-atmosphera"][0],
+    geometry["tstv1-other-finished"][1],
+  ].map((message) => ({ ...message, sessionID: "tstv1-inline-tail" }));
+  const f = await inboxBrowserFixture(root, [], {
+    [sessionID]: messages,
+    ...geometry,
+  });
+  f.add({
+    ...f.entries[0],
+    id: "tstv1-inline-tail",
+    title: "Inline footprint",
+  });
   const client = new WsClient(f.url);
   await client.connect(f.entries[0].directory);
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });

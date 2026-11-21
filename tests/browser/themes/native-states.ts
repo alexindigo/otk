@@ -143,9 +143,10 @@ export async function nativeStates({
       await shot(`native-interrupt-confirmation-${theme.id}`);
     }
     await page.keyboard.press("Escape");
-    await expect(page.locator(".otk-message-footer")).toContainText(
-      "interrupted",
-    );
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toContainText(
+        "interrupted",
+      );
     for (const theme of themes) {
       await paint(theme);
       // An interruption is terminal evidence acknowledged by this open view.

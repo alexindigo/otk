@@ -251,7 +251,8 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect.poll(() =>
     rows.evaluateAll((rows) => rows.map((row) => row.children.length))
   ).toEqual([9, 9, 9]);
-  await expect(page.locator(".otk-message-footer")).not.toContainText("$");
+  await expect(page.locator("[data-role=assistant] .otk-message-footer")).not
+    .toContainText("$");
   await expect(page.locator(".otk-context-meter")).not.toHaveAttribute(
     "data-cost",
   );

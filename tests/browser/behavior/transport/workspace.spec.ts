@@ -171,9 +171,10 @@ test("transport.interrupt-confirmation", {
   ).toHaveText("Esc again to interrupt");
   await expectPrimaryBlocked(composerSend(page), "Write a message");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".otk-message-footer")).toContainText(
-    "interrupted",
-  );
+  await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+    .toContainText(
+      "interrupted",
+    );
   await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
     "data-status",
     "idle",
