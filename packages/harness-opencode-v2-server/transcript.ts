@@ -114,8 +114,10 @@ interface LiveShell {
   task: Promise<void>;
 }
 interface HistoryCheck {
+  pending?: boolean;
   anchor?: string;
   head?: NativeHead;
+  checkpoint?: NativeHead;
   controller: AbortController;
   task?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
@@ -333,6 +335,7 @@ export class Transcript {
   #armHistory(id: string, work: HistoryCheck): void {
     if (
       !this.#checking || work.timer !== undefined || work.task ||
+      work.pending ||
       this.#history.get(id) !== work || !this.#subscriptions.has(id)
     ) return;
     work.timer = setTimeout(() => {
@@ -354,6 +357,10 @@ export class Transcript {
       };
       this.#history.set(id, work);
     }
+    if (work.pending) {
+      work.pending = false;
+      work.anchor = anchor;
+    }
     this.#armHistory(id, work);
   }
   #repairHistory(id: string, target?: string): void {
@@ -364,6 +371,7 @@ export class Transcript {
     }
     work.dirty = true;
     if (target) work.targets.add(target);
+    if (work.pending) return;
     else this.#publish(id, { op: "stream.reconcile" });
     // Repairs are owned and joined, but never wait in the serial SSE handler.
     queueMicrotask(() => {
@@ -373,7 +381,7 @@ export class Transcript {
   /** Compare native history, independently of native-event dispatch progress. */
   check(id: string): Promise<void> {
     const work = this.#history.get(id), baseline = this.#baselines.get(id);
-    if (!work || !baseline || !this.#subscriptions.has(id)) {
+    if (!work || work.pending || !baseline || !this.#subscriptions.has(id)) {
       return Promise.resolve();
     }
     if (work.task) return work.task;
@@ -431,6 +439,9 @@ export class Transcript {
             signal.throwIfAborted();
             this.#acceptFacts(baseline, facts);
             for (const raw of rows) {
+              // Fine replacement owns its missing source, including failed
+              // checkpoints. History discovery cannot become an implicit Retry.
+              if (this.recovery.owns(id, raw.id)) continue;
               const context = facts.contexts[raw.id];
               if (!context) {
                 throw new HarnessError(
@@ -459,7 +470,9 @@ export class Transcript {
           };
           // In-place changes may target an older, acquired native identity.
           for (const target of targets) {
-            if (baseline.contexts.has(target)) {
+            if (
+              baseline.contexts.has(target) && !this.recovery.owns(id, target)
+            ) {
               await publish([
                 await this.reader.get(id, target, signal),
               ]);
@@ -471,6 +484,11 @@ export class Transcript {
               ? undefined
               : last?.id === work.anchor
               ? last
+              : this.recovery.owns(id, work.anchor) ||
+                  work.checkpoint?.id === work.anchor &&
+                    (head.id !== work.anchor ||
+                      JSON.stringify(work.checkpoint) === JSON.stringify(head))
+              ? undefined
               : await this.reader.get(id, work.anchor, signal);
           } catch (error) {
             if (errorTag(error) !== "MessageNotFoundError") throw error;
@@ -481,7 +499,7 @@ export class Transcript {
           }
           if (anchor) await publish([anchor]);
           if (
-            !anchor ||
+            !work.anchor ||
             (this.#client ?? this.options.client()).service.version !== "2.2.6"
           ) {
             let cursor: string | undefined = cutoff
@@ -506,8 +524,8 @@ export class Transcript {
               cursor = page.next;
               await new Promise<void>((resolve) => setTimeout(resolve, 0));
             } while (true);
-          } else if (anchor.id !== head.id) {
-            let cursor: string | undefined = nativeForwardCursor(anchor.id);
+          } else if (work.anchor !== head.id) {
+            let cursor: string | undefined = nativeForwardCursor(work.anchor);
             do {
               const page = await this.reader.forward(id, cursor, signal);
               const end = page.items.findIndex((r) => r.id === head.id);
@@ -623,7 +641,29 @@ export class Transcript {
       concurrency: options.policy.recoveryconcurrency,
       pending: options.policy.recoverypending,
       wanted: (id) => this.#subscriptions.has(id),
-      read: (id, message, signal) => this.reader.get(id, message, signal),
+      read: async (id, message, signal) => {
+        const work = this.#history.get(id);
+        let witness: NativeHead | null = null;
+        if (work && this.options.digest) {
+          try {
+            // Capture before the body read: a later native edit must advance
+            // this witness and remain visible to history's ordinary repair.
+            witness = await this.options.digest.read("opcv2.transcript.head", {
+              sessionID: id,
+              cutoff: this.#baselines.get(id)?.raw.revert?.messageID,
+            }, { owner: `v2-recovery:${id}`, priority: "user", signal });
+          } catch (error) {
+            signal.throwIfAborted();
+            this.options.diagnostic(error);
+          }
+        }
+        const raw = await this.reader.get(id, message, signal);
+        signal.throwIfAborted();
+        if (work && this.#history.get(id) === work && witness?.id === message) {
+          work.checkpoint = witness;
+        }
+        return raw;
+      },
       emit: async (id, raw, _parts, _generation, terminal, signal) => {
         const baseline = await this.#baseline(id, signal),
           facts = await this.#facts({
@@ -1179,6 +1219,17 @@ export class Transcript {
     // The retained execution outcome owns failed-idle presentation on both
     // snapshot and live paths. Do not project a second native activity record.
     if (raw.type === "idle" && raw.outcome === "failed") return;
+    if (raw.type === "compaction" && raw.status === "running") {
+      const current = this.#compactions.get(id);
+      if (current?.id === raw.id) {
+        // Compaction deltas own source just as assistant streams do. A native
+        // unfinished checkpoint cannot erase that prefix or reopen its terminal.
+        if (current.status !== "running") raw = current;
+        else if (current.summary.startsWith(raw.summary)) {
+          raw = { ...raw, summary: current.summary };
+        }
+      }
+    }
     if (raw.type === "assistant") {
       const current = this.#live.get(raw.id);
       if (
@@ -1351,6 +1402,19 @@ export class Transcript {
       );
     }
     const capture = this.replay.capture(id);
+    if (
+      !snapshot && !token && this.#subscriptions.has(id) &&
+      !this.#history.has(id)
+    ) {
+      // The first canonical page is already the repair owner until its boundary
+      // settles. Accumulate hints here instead of cancelling it with reconcile.
+      this.#history.set(id, {
+        pending: true,
+        controller: new AbortController(),
+        dirty: false,
+        targets: new Set(),
+      });
+    }
     try {
       baseline ??= await this.#baseline(id, signal);
       const owner = baseline;
@@ -1822,7 +1886,6 @@ export class Transcript {
         }
       }
       owner.prompt = result.prompt;
-      this.recovery.retry(id);
       publish?.(result);
       if (!cached && this.options.digest && page.items.length) {
         const oldest = page.items.reduce((a, b) =>
@@ -2995,21 +3058,26 @@ export class Transcript {
           return;
         }
         if (event.type.endsWith(".started")) {
+          // A native page can expose the empty block before its start event is
+          // dispatched. Only an event-owned append source consumes that start;
+          // an HTTP checkpoint is replacement authority, never an append seed.
+          if (previous) return;
           if (
-            live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
-          ) return;
-          live?.raw.content.push(
-            kind === "text" ? { type: "text", text: "" } : {
-              type: "reasoning",
-              text: "",
-              ...(d.native === undefined ? {} : {
-                native: record(d.native) as NonNullable<
-                  NativeMessage["metadata"]
-                >,
-              }),
-              time: { created: event.created ?? Date.now() },
-            },
-          );
+            !live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
+          ) {
+            live?.raw.content.push(
+              kind === "text" ? { type: "text", text: "" } : {
+                type: "reasoning",
+                text: "",
+                ...(d.native === undefined ? {} : {
+                  native: record(d.native) as NonNullable<
+                    NativeMessage["metadata"]
+                  >,
+                }),
+                time: { created: event.created ?? Date.now() },
+              },
+            );
+          }
           this.buffers.upsert(id, messageID, shell, "");
           if (acquired) {
             this.#publish(id, {

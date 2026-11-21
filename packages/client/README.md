@@ -559,6 +559,11 @@ scoped, clocked invalidation when the producer loses bounded fine recovery keys;
 the same resource coalesces a replacement page. Neither operation creates
 another body cache or an append seed from HTTP.
 
+Only explicit `refetch()` carries `retryRecovery` on its message-page intent.
+Initial acquisition, older pages and automatic continuity repair do not retry
+failed native replacement reads. Page installation preserves unavailable
+recovery state instead of presenting a failed checkpoint as still reading.
+
 Canonical transcripts bind task-part identities to the shared reduced child
 index's `digest.helper`. Borrowed digest and standalone `task.progress` delivery
 use the same identity/revision reducer, so equal progress cannot apply twice.

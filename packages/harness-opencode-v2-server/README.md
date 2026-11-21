@@ -249,6 +249,14 @@ worker read channel, acquire no unviewed histories and stop/join with the
 transcript subscription. Only scalar coverage is retained, never a second body
 cache.
 
+Fine recovery owns its keyed point checkpoints, including unavailable reads;
+history observation cannot silently retry or replace that ownership. An initial
+held page accumulates repair hints until its boundary settles instead of
+invalidating its own acquisition. HTTP content never consumes a later native
+append start; only an event-owned stream buffer does. The existing compaction
+owner likewise retains live summary prefixes and terminal lifecycle against
+older unfinished native checkpoints.
+
 `delivery.ts` recognizes only materialized synthetic subagent reports and
 completed foreground calls whose result metadata is completed. Background
 launches, enqueue and job removal do not qualify. Native parent/child identity,

@@ -187,10 +187,14 @@ export class NotificationTriggers {
       // Native terminal evidence can precede its view-scoped inbox publication.
       // An acknowledgement of an older terminal cannot acknowledge this run.
       const nativeLive = !!entry.before && current?.terminalOrigin === "live" &&
-        (current.terminal ?? 0) > (entry.before.activity?.terminal ?? 0);
+        ((current.terminal ?? 0) > (entry.before.activity?.terminal ?? 0) ||
+          current.terminal === entry.before.activity?.terminal &&
+            entry.before.activity?.terminalOrigin !== "live");
       if (
         current && entry.completedAt &&
-        entry.completedAt >= (current.terminal ?? 0)
+        entry.completedAt >= (current.terminal ?? 0) &&
+        !(nativeLive && entry.completedAt === current.terminal &&
+          entry.completionOrigin !== "live")
       ) {
         current.terminal = entry.completedAt;
         current.outcome = entry.completedOutcome;
@@ -314,12 +318,24 @@ export class NotificationTriggers {
     const finished = !historical && completedAt !== undefined &&
       completedAt > 0 &&
       (completedAt > (priorFinish?.terminal ?? 0) ||
-        completedAt === priorFinish?.terminal && outcome !== undefined &&
-          outcome !== priorFinish.outcome);
+        completedAt === priorFinish?.terminal &&
+          (outcome !== undefined && outcome !== priorFinish.outcome ||
+            entry.terminalOrigin === "live" &&
+              priorFinish.terminalOrigin !== "live"));
     if (completedAt && (baseline || entry.status === "idle")) {
       state.finishes.set(
         session,
-        latestTerminal(priorFinish, { terminal: completedAt, outcome }),
+        latestTerminal(priorFinish, {
+          terminal: completedAt,
+          outcome,
+          // Baselines consume their known edge. Later history cannot consume a
+          // not-yet-observed live edge or make an observed one fresh again.
+          terminalOrigin: baseline ||
+              completedAt === priorFinish?.terminal &&
+                priorFinish.terminalOrigin === "live"
+            ? "live"
+            : entry.terminalOrigin,
+        }),
       );
     }
     const acknowledged = !!entry.terminal && entry.unseen === false;

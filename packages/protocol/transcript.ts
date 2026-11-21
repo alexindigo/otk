@@ -83,11 +83,18 @@ export interface MessagePage {
     { summary?: Derived<UsageSummary>; boundary: ReplyBoundary }
   >;
   helpers: Record<string, HelperSummary>;
-  recovering: { messageID: string; partID: string; generation: number }[];
+  recovering: {
+    messageID: string;
+    partID: string;
+    generation: number;
+    state?: "recovering" | "unavailable";
+  }[];
 }
 export interface MessagePageInput {
   sessionID: string;
   before?: MessageCursor;
+  /** Explicit user retry, never implied by paging or baseline acquisition. */
+  retryRecovery?: boolean;
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {

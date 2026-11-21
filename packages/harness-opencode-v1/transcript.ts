@@ -132,7 +132,6 @@ export class Transcript {
       retire?(id?: string): void;
       recovering?(id: string): MessagePage["recovering"];
       scopedRecovery?(id: string): boolean;
-      retryRecovery?(id: string): void;
       reconciled?(id: string, messageID: string, partID?: string): void;
       buffers: StreamBuffers;
       reader: Messages;
@@ -437,7 +436,6 @@ export class Transcript {
     }
     const capture = replay.capture(id);
     try {
-      if (!snapshot && !token) this.options.retryRecovery?.(id);
       baseline ??= await this.#read(id, signal);
       const owner = baseline;
       signal = AbortSignal.any([signal, owner.controller.signal]);

@@ -219,15 +219,24 @@ export class MessageRecovery {
       }
     }
   }
+  owns(session: string, message: string): boolean {
+    return this.#owners.has(this.#key(session, message));
+  }
   snapshot(
     session: string,
-  ): { messageID: string; partID: string; generation: number }[] {
+  ): {
+    messageID: string;
+    partID: string;
+    generation: number;
+    state?: "unavailable";
+  }[] {
     return [...this.#owners.values()].filter((o) => o.session === session)
       .flatMap((o) =>
         [...o.parts].map((partID) => ({
           messageID: o.message,
           partID,
           generation: o.generation,
+          ...(o.failed ? { state: "unavailable" as const } : {}),
         }))
       );
   }

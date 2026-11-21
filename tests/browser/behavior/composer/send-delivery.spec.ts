@@ -7,6 +7,40 @@ import {
   paragraphTop,
 } from "../../pages/paragraph-source.ts";
 
+test("composer.plain-send-does-not-await-unreferenced-catalogs", {
+  tag: ["@composer", "@messages", "@readiness"],
+}, async ({ state, page }) => {
+  const session = await state.native<{ id: string }>("/session", "POST", {
+    title: "Independent plain send",
+  });
+  const frames = await wire(page);
+  frames.hold((frame) =>
+    frame.t === "catalog.chunk" &&
+    ["commands", "skills", "agents", "models"].includes(String(frame.kind))
+  );
+  await openSession(state, page, session.id);
+  await expect.poll(() =>
+    [...new Set(frames.held.map(({ frame }) => frame.kind))].sort()
+  )
+    .toEqual(["agents", "commands", "models", "skills"]);
+  await state.queue(["Plain reply without catalog readiness."]);
+  try {
+    await prompt(page).fill("An ordinary prompt with no catalog reference.");
+    await page.locator(".otk-prompt button[type=submit]").click();
+    await expect(page.locator('[data-role="user"]')).toContainText(
+      "An ordinary prompt with no catalog reference.",
+    );
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Plain reply without catalog readiness.",
+    );
+    expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
+      .toHaveLength(1);
+    expect(frames.held.length).toBeGreaterThan(0);
+  } finally {
+    frames.release();
+  }
+});
+
 test(
   "composer.busy-image-send-keeps-queued-prompt-and-all-later-live-ops-visible",
   {
@@ -148,7 +182,12 @@ test(
     await page.locator(".otk-prompt button[type=submit]").click();
     const entry = page.locator('[data-send-state="pending"]');
     await expect(entry).toContainText("Show this prompt right away");
-    expect(performance.now() - start).toBeLessThan(1000);
+    const sendLatency = performance.now() - start;
+    await info.attach("send-boundary-marks", {
+      body: JSON.stringify({ sendLatencyMs: sendLatency }),
+      contentType: "application/json",
+    });
+    expect(sendLatency).toBeLessThan(1000);
     await expect(entry.locator(".otk-send-meta")).toContainText("Sending");
     await expect(entry.getByRole("img", { name: "Sending", exact: true }))
       .toHaveCount(0);

@@ -96,7 +96,7 @@ export interface TranscriptState {
   load?: LoadCoverage;
   pageError?: FailureValue;
   session?: ContentSession;
-  recovering: { messageID: string; partID: string; generation: number }[];
+  recovering: MessagePage["recovering"];
   view?: "content" | "deleted";
   catalogReady?: boolean;
   deleted?: IndexEntry;
@@ -267,7 +267,11 @@ export function createTranscript(
     if (readFacts) readStage("ready", readFacts.generation, page.items.length);
     queueMicrotask(reserve);
   };
-  const readBoundary = (before: string | undefined, signal: AbortSignal) => {
+  const readBoundary = (
+    before: string | undefined,
+    signal: AbortSignal,
+    retryRecovery = false,
+  ) => {
     const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
     const intent = rpc.intent();
     const early = Promise.withResolvers<MessagePage & { load: LoadCoverage }>();
@@ -280,7 +284,11 @@ export function createTranscript(
       deliver: early.resolve,
     };
     boundaryRead = pending;
-    void rpc.call("session.messages", { sessionID: target.sessionID, before }, {
+    void rpc.call("session.messages", {
+      sessionID: target.sessionID,
+      before,
+      ...(retryRecovery ? { retryRecovery: true } : {}),
+    }, {
       intent,
       signal,
     }).then((page) => {
@@ -666,7 +674,7 @@ export function createTranscript(
       });
     }
   };
-  const refetch = async () => {
+  const refetch = async (retryRecovery = false) => {
     if (!selected) return;
     if (!policy()) return;
     clearTimeout(retry);
@@ -710,7 +718,7 @@ export function createTranscript(
       refreshAttention(false);
       const page = await acquire(() => {
         readStage("reading", progressGeneration);
-        return readBoundary(undefined, abort.signal);
+        return readBoundary(undefined, abort.signal, retryRecovery);
       }, abort.signal);
       const info = page.session, messages = page.items;
       if (boundaryRead) {
@@ -1257,7 +1265,7 @@ export function createTranscript(
         trim();
       };
     },
-    refetch,
+    refetch: () => refetch(true),
     latestPrompt: () => state.latestPrompt,
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
@@ -1695,7 +1703,7 @@ export function createTranscript(
                   metadata = reduceRecovery(metadata, {
                     op: "stream.recovery",
                     ...recovering,
-                    state: "recovering",
+                    state: recovering.state ?? "recovering",
                   });
                 }
               }

@@ -575,12 +575,15 @@ Features may contribute `settings()` content to the existing footer and one
 `selection(draft)` projection. `PromptContext.nextSelection()` reads that shared
 projection (or the client fallback for smaller compositions). Prompt captures
 `{agent, model, variant}` from the mode-aware client projection after
-contributed `ready()` work and pre-submit hooks, re-reading the current draft
-before capture, then passes it to every `submit(draft, parts, selection)` hook,
-and to the third argument of `PromptProps.onSubmit(parts, mode, selection)`.
-Successful completion clears only the identical submitted draft through
-`clearDraft`; `submitted` receives the captured selection and whether a feature
-handled the send.
+input-referenced readiness and pre-submit hooks, then passes it to every
+`submit(draft, parts, selection)` hook, and to the third argument of
+`PromptProps.onSubmit(parts, mode, selection)`. Ordinary Send does not join
+unrelated catalog readiness. A parsed slash input acquires its commands through
+that feature's readiness/pre-submit hooks; pickers retain their own readiness
+work. Unknown catalog metadata preserves current selections. Successful
+completion clears only the identical submitted draft through `clearDraft`;
+`submitted` receives the captured selection and whether a feature handled the
+send.
 
 `registerComposerPickers` renders and binds the framework-free client composer
 owner through `solidState`, common typed session ports and the host preference
