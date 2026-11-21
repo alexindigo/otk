@@ -735,7 +735,14 @@ and focus stay with the UI adapter. `historyDraft` and `PromptHistory` expose
 the metadata-only projection and cursor for independent consumers.
 
 `recordRecentModel(recent, sentModel)` returns a deduplicated most-recent-first
-list (max 10) after a successful send, using the submission's captured model.
+list (max 10) after a successful send. The shipped shell's `createModelRecency`
+serializes preference writes from its own canonical native prompt admissions,
+using the model actually applied by the backend. Unknown pre-send defaults never
+require catalog waits or lose recency. The delivery owner fences admission by
+the captured native identity and reports its applied model once, independently
+of composer replacement or receipt presentation. Native queue/admission may
+precede model metadata; an identity-only bookkeeping obligation survives until
+that metadata arrives. Historical and unrelated prompts do not record recency.
 `toggleFavouriteModel(favourites, model)` toggles exact provider/model pairs,
 putting additions first (max 50; a full list keeps existing favourites). These
 helpers own no persistence: callers save `models.recent` and `models.favourite`

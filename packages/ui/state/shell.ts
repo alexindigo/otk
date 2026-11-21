@@ -56,6 +56,7 @@ export function createShellState(
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
     promptBlocks?(text: string): import("@otk/protocol").Block[];
+    promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   },
 ): ShellState {
   const index = createIndex();
@@ -109,6 +110,7 @@ export function createShellState(
   });
   const actions = createSessionActions({
     promptBlocks: o.promptBlocks,
+    promptCommitted: o.promptCommitted,
     resources,
     session,
     current,

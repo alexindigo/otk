@@ -42,7 +42,9 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
       if (item.orientation === "vertical") {
         expect([item.w, item.h]).toEqual([3, 14]);
         expect(item.centred).toBeLessThanOrEqual(.5);
-        expect(item.start).toBe(3);
+        // Style7 finding 5 places Tree's mark outside the row highlight.
+        // notes/2026-11-21-style7fix.md; decisions 33/54 retain state/paint ownership.
+        expect(item.start).toBe(item.external ? 0 : 3);
       } else {
         expect(item.h).toBe(2);
         expect([item.start, item.end, item.bottom]).toEqual([8, 8, 0]);

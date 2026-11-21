@@ -115,7 +115,9 @@ and inert. More renders independent controls rather than adopting row nodes.
 Fitting cannot move or replace a focused required frame. Required frames use
 their current measured width; other values use their inert measurement frames.
 More occupies a separate trailing grid track, so editor blur cannot move its
-pointer target between press and release as the live chip width changes.
+pointer target between press and release as the live chip width changes. Its
+control-height track aligns to the first item row, not the centre of a changing
+wrapped item collection, so ending an editor cannot shift it vertically either.
 ResizeObserver and font completion belong to this component. The client owns
 `fitOverflow` and ancestry preference. A consumer-supplied item minimum belongs
 to the frame; required frames reflow as whole controls rather than clipping
@@ -696,15 +698,17 @@ its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome uses structural tracks: helper presence uses a reserved control-height
 track; composer notices grow in flow above the prompt, while overflowing
 takeovers keep their bounded presentation. Revert records belong to the
-transcript, not a composer overlay. RecordList owns record spacing and supplies
-topology to the shared Tree; views borrow canonical span identities and retained
-disclosure state rather than regrouping mounted neighbours. Background intervals
-share one outer conversation gap and compact internal record rhythm, including
-actionable breakouts. Their folded line is plain muted meta text with
-producer-owned counts and client-owned failure wording, no Activity prefix or
-time range. Footer-borrowed successful completions never add a title count.
-Successful completion-only intervals borrow a footer junction instead of adding
-a status row; direct reveal opens the same retained interval. Read-only helper
+transcript, not a composer overlay. Required breadcrumb controls separately
+reflow the header under pressure, preserving readable titles rather than
+clipping them. RecordList owns record spacing and supplies topology to the
+shared Tree; views borrow canonical span identities and retained disclosure
+state rather than regrouping mounted neighbours. Background intervals share one
+outer conversation gap and compact internal record rhythm, including actionable
+breakouts. Their folded line is plain muted meta text with producer-owned counts
+and client-owned failure wording, no Activity prefix or time range.
+Footer-borrowed successful completions never add a title count. Successful
+completion-only intervals borrow a footer junction instead of adding a status
+row; direct reveal opens the same retained interval. Read-only helper
 transcripts mount those same attention owners; only prompt submission is
 unavailable. With no active takeover, helpers mount no empty composer. That same
 owner provides composer availability to takeover headers, so draft-kept copy
@@ -1205,6 +1209,11 @@ Horizontal items reserve a 2px bottom grid track with an always-present
 `::after`, inset 8px from both ends. Only the state class paints the marks.
 Neither decoration uses positioning; selection never changes box size. Hover
 alone only fills; reduced colours retains both indicators.
+
+Project rows borrow Tree's permanent external mark instead of a second row
+pseudo-element. Its 3x14px box stays at the heading's outer edge in column and
+rail, outside the row highlight; only the selected node paints it. Unselected
+marks retain the same geometry. The row's selection binding still owns ARIA.
 
 Binary buttons use the same state-binding module's `toggle({on, class?})`, which
 owns `is-on` and `aria-pressed` together. Shared theme paint supplies the

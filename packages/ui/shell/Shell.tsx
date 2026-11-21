@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { copyText } from "../clipboard.ts";
+import { createModelRecency } from "@otk/client";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
@@ -87,6 +88,7 @@ export default function Shell(
     api: props.api,
     policy: props.policy,
     promptBlocks: props.promptBlocks,
+    promptCommitted: (message) => recentModel(message),
   });
   const {
     sidecars,
@@ -100,6 +102,11 @@ export default function Shell(
   const draftKey = actions.key;
   const draft = () => drafts.get(draftKey());
   const toggles = createToggles(resources.setPreference);
+  const recentModel = createModelRecency({
+    get: () => toggles.state.prefs["models.recent"],
+    set: (value) => resources.setPreference("models.recent", value),
+    fail: (cause) => navigation.fail(cause),
+  });
   const attentionPaint = attentionPresentation(
     resources,
     () => toggles.state.prefs.animationsOff,
