@@ -12,8 +12,10 @@ deno run -A npm:vite@8.2.0 build --config packages/ui/tests/terminal-browser/vit
 node tests/browser/terminal-renderer.mjs "$PWD/.test-state/terminal-browser"
 ```
 
-Expected output is one `passed` JSON record for each of `hidden`, `links` and
-`conceal`, then exit 0. An optional third argument is a guest artifact directory
-for full screenshots. Hidden checkpoints must match a measured surface, link
-activation cannot use a live URI ahead of the painted frame, and a focused block
-cursor must not reveal concealed text.
+Expected output is one `passed` JSON record per contract, then exit 0. Contracts
+cover hidden grids, painted links, concealment, hidden clipboard reads, both
+native/read paste deduplication orders, RTL cell alignment, scrollbar drag and
+accessibility, and painted-row hover deadlines. An optional third argument is a
+guest artifact directory for full screenshots. Hidden checkpoints must match a
+measured surface, link activation cannot use a live URI ahead of the painted
+frame, and a focused block cursor must not reveal concealed text.

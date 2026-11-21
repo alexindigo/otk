@@ -47,7 +47,20 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   const url = `http://127.0.0.1:${server.address().port}`;
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const test of ["hidden", "links", "conceal"]) {
+  for (
+    const test of [
+      "hidden",
+      "links",
+      "conceal",
+      "paste-hidden",
+      "paste-native-first",
+      "paste-read-first",
+      "rtl",
+      "scrollbar",
+      "scrollbar-accessibility",
+      "hover",
+    ]
+  ) {
     await page.goto(url);
     await page.waitForFunction(() =>
       document.documentElement.dataset.ready === "true"
@@ -69,6 +82,121 @@ try {
             fullPage: true,
           });
         }
+      } else if (test.startsWith("paste-")) {
+        await page.evaluate(() => globalThis.terminalFixture.startPaste());
+        if (test === "paste-hidden") {
+          await page.evaluate(() => globalThis.terminalFixture.hide());
+          await page.evaluate(() =>
+            globalThis.terminalFixture.completePaste("background-input")
+          );
+          assert.deepEqual(
+            await page.evaluate(() => globalThis.terminalFixture.input),
+            [],
+          );
+        } else if (test === "paste-native-first") {
+          await page.evaluate(() =>
+            globalThis.terminalFixture.nativePaste("once")
+          );
+          await page.evaluate(() =>
+            globalThis.terminalFixture.completePaste("once")
+          );
+          assert.deepEqual(
+            await page.evaluate(() => globalThis.terminalFixture.input),
+            ["once"],
+          );
+        } else {
+          await page.evaluate(() =>
+            globalThis.terminalFixture.completePaste("once")
+          );
+          await page.evaluate(() =>
+            globalThis.terminalFixture.nativePaste("once")
+          );
+          assert.deepEqual(
+            await page.evaluate(() => globalThis.terminalFixture.input),
+            ["once"],
+          );
+        }
+      } else if (test === "rtl") {
+        const canvas = page.locator("#visible canvas");
+        await page.evaluate(() => globalThis.terminalFixture.direction("ltr"));
+        const ltr = await canvas.evaluate((element) => element.toDataURL());
+        await page.evaluate(() => globalThis.terminalFixture.direction("rtl"));
+        assert.equal(
+          await canvas.evaluate((element) => element.toDataURL()) === ltr,
+          true,
+          "terminal text uses physical left alignment independently of surrounding direction",
+        );
+      } else if (test === "scrollbar" || test === "scrollbar-accessibility") {
+        await page.evaluate(() => globalThis.terminalFixture.scrollback());
+        const bar = page.locator("#visible [role=scrollbar]");
+        if (test === "scrollbar-accessibility") {
+          const relations = await page.locator("[role=scrollbar]").evaluateAll((
+            nodes,
+          ) =>
+            nodes.map((bar) => {
+              const id = bar.getAttribute("aria-controls"),
+                target = id && document.getElementById(id);
+              return {
+                id,
+                accessible: !!target &&
+                  target.getAttribute("aria-hidden") !== "true",
+                role: target && target.getAttribute("role"),
+              };
+            })
+          );
+          assert(
+            relations.every((item) =>
+              item.id && item.accessible && item.role === "img"
+            ),
+          );
+          assert.equal(
+            new Set(relations.map((item) => item.id)).size,
+            relations.length,
+          );
+        } else {
+          const box = await bar.boundingBox();
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 5);
+          await page.mouse.down();
+          await page.evaluate(() => globalThis.terminalFixture.armScrollMove());
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+          await page.mouse.up();
+          await page.waitForFunction(
+            () => {
+              const bar = document.querySelector("#visible [role=scrollbar]");
+              const now = Number(bar.getAttribute("aria-valuenow")),
+                max = Number(bar.getAttribute("aria-valuemax"));
+              return now > 0 && now < max / 2;
+            },
+            undefined,
+            { timeout: 1500 },
+          );
+        }
+      } else if (test === "hover") {
+        await page.clock.install();
+        await page.evaluate(() => globalThis.terminalFixture.prepareLink());
+        await page.clock.runFor(32);
+        const box = await page.locator("#visible canvas").boundingBox();
+        await page.mouse.move(box.x + 12, box.y + 10);
+        await page.clock.runFor(160);
+        await page.evaluate(() => globalThis.terminalFixture.changeLinkRow());
+        await page.clock.runFor(200);
+        assert.equal(
+          await page.evaluate(() =>
+            globalThis.terminalFixture.hover.filter((item) =>
+              item.text !== null
+            ).length
+          ),
+          0,
+          "row changes revoke the pending hover deadline",
+        );
+        await page.clock.runFor(100);
+        assert(
+          await page.evaluate(() =>
+            globalThis.terminalFixture.hover.some((item) =>
+              item.text === "https://a.test/"
+            )
+          ),
+        );
       } else if (test === "conceal") {
         const canvas = page.locator("#visible canvas");
         await page.evaluate(() => globalThis.terminalFixture.concealed("X"));
