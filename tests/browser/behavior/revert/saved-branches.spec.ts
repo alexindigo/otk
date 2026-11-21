@@ -4,6 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
 import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
+import { pick, rightClick } from "../../pages/menus.ts";
 
 test.use({
   profile: "revert-native",
@@ -225,8 +226,8 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
     .click();
   await expect(input).toHaveValue("Current edited draft");
   await page.reload();
-  await page.getByRole("button", { name: /Saved earlier branches/ })
-    .click();
+  await rightClick(page, ".otk-messages");
+  await pick(page, "Saved earlier branches");
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
     exact: true,
@@ -279,6 +280,7 @@ test(
     await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
     await expect(alert).toContainText("were not saved");
     await expect(alert).toContainText("localStorage is full");
+    await alert.locator(".otk-record-group-toggle").click();
     await alert.getByRole("button", { name: "Details", exact: true }).click();
     await expect(alert).toContainText("Delete a saved branch");
     expect(

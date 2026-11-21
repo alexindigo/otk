@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { rules } from "./styles.ts";
+import { productionSources } from "./analysis.ts";
 
 export function revertLayoutErrors(css: string): string[] {
   return rules(css).filter(({ selector, declarations }) =>
@@ -9,10 +10,11 @@ export function revertLayoutErrors(css: string): string[] {
   ).map(({ selector }) => selector);
 }
 Deno.test("revert UI keeps records and notices in flow, never in an absolute transcript overlay", async () => {
-  const css = await Deno.readTextFile(
-    "packages/ui/components/ComposerTakeovers.css",
-  );
-  assertEquals(revertLayoutErrors(css), []);
+  for (const [path, css] of await productionSources()) {
+    if (path.startsWith("packages/ui/components/") && path.endsWith(".css")) {
+      assertEquals(revertLayoutErrors(css), [], path);
+    }
+  }
   assertEquals(revertLayoutErrors(".otk-revert-group {position:absolute}"), [
     ".otk-revert-group",
   ]);

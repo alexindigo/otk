@@ -1432,13 +1432,15 @@ menu. It uses the same owner and confirmation. Session targets similarly offer
 Archive or Unarchive only with `sessionArchive`, using authoritative state and
 the shared CommandMenu. No overlay or style is added to these native actions.
 
-`SavedBranchNotice` offers the saved copy from the transcript's history area.
-The client branch owner supplies its browser-local copies, measured size,
-deletion and draft-choice intents. `SavedBranches` opens the selected earlier
-branch inside the session, clearly separate from live native history, with no
-file restoration. It reuses Message in read-only mode and the normal measured
-VirtualList. Source previews are saved data; snapshot contexts have no native
-reader, live content actions or visibility lease. Live viewport
+The active revert offers Open copy from its own group. Dismiss hides that action
+with the rest of the header, and Restore leaves no saved-copy row in the
+transcript. `SavedBranchNotice` offers past committed copies from the composer
+notice area. The client branch owner supplies its browser-local copies, measured
+size, deletion and draft-choice intents. `SavedBranches` opens the selected
+earlier branch inside the session, clearly separate from live native history,
+with no file restoration. It reuses Message in read-only mode and the normal
+measured VirtualList. Source previews are saved data; snapshot contexts have no
+native reader, live content actions or visibility lease. Live viewport
 observers/windows unmount while the saved view is open and remount through their
 ordinary position owner on return. Canonical session data, lights, unsent
 composer and navigation keep their existing owners. Prompt/draft reuse retains

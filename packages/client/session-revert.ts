@@ -38,6 +38,8 @@ export interface SessionRevertState {
   messages?: Message[];
   confirmation?: { kind: "revert" | "code" | "undo"; messageID: string };
   dismissed?: boolean;
+  /** Explicit archive deletion keeps native staging, without recreating the copy. */
+  copyRemoved?: boolean;
   pending?: RevertIntent;
   error?: FailureValue;
   key?: string;
@@ -192,6 +194,7 @@ export function createSessionRevert(options: {
     captures.set(captureKey, completion.promise);
     updateAt(capturedKey, (state) => {
       state.phase = "saving";
+      state.copyRemoved = undefined;
       state.error = undefined;
       state.failure = undefined;
     });
@@ -278,6 +281,7 @@ export function createSessionRevert(options: {
         state.error = undefined;
         state.failure = undefined;
         state.dismissed = dismissed(target, record.boundaryID);
+        state.copyRemoved = undefined;
         state.messages = options.session.state.content.messages.filter((m) =>
           record.messageIDs.includes(m.id)
         );
@@ -291,8 +295,14 @@ export function createSessionRevert(options: {
           copy.messages.find((m) => m.id === id)!
         );
       });
+    } else if (flow().phase === "saved") {
+      update((state) => {
+        state.phase = "staged";
+        state.copyRemoved = true;
+      });
     } else if (
       flow().phase === "staged" &&
+      !flow().copyRemoved &&
       options.session.state.continuity === "ready" &&
       !options.session.state.loading
     ) {

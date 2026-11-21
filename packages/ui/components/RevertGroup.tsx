@@ -23,6 +23,7 @@ import RecordList from "./RecordList.tsx";
 import { contextTarget } from "./context-target.ts";
 import { blocksText } from "./parts/text.ts";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
+import { useUiRegistries } from "../registries/context.tsx";
 
 function preview(message: RecordMessage | undefined): string {
   return message?.parts.map((part) =>
@@ -50,6 +51,7 @@ export default function RevertGroup(props: {
   };
   warning?: string;
   failureVisible?: boolean;
+  onOpenCopy?(): void;
   onOpenChild(id: string): void;
 }): Element {
   const boundary = () =>
@@ -145,18 +147,26 @@ export default function RevertGroup(props: {
             </Show>
             <Show when={props.state.phase === "saved"}>
               <ChromeMeta>Copy saved</ChromeMeta>
+              <Show when={props.onOpenCopy}>
+                <button
+                  type="button"
+                  class="otk-pill"
+                  onClick={() => props.onOpenCopy?.()}
+                >
+                  Open copy
+                </button>
+              </Show>
             </Show>
-            <Show when={failure()?.failure}>
-              {(value) => (
-                <div class="otk-revert-failure">
-                  <FailureContent
-                    failure={value()}
-                    compact
-                    placement="record"
-                    signal={false}
-                  />
-                </div>
-              )}
+            <Show
+              when={props.state.phase === "staged" && props.state.copyRemoved}
+            >
+              <button
+                type="button"
+                class="otk-pill"
+                onClick={() => void props.owner?.retry()}
+              >
+                Save copy
+              </button>
             </Show>
             <Show when={props.state.phase === "failed" && props.state.record}>
               <button
@@ -191,6 +201,15 @@ export default function RevertGroup(props: {
         body={() => (
           <TranscriptSnapshot>
             <div class="otk-revert-records">
+              <Show when={failure()?.failure}>
+                {(value) => (
+                  <FailureContent
+                    failure={value()}
+                    placement="record"
+                    signal={false}
+                  />
+                )}
+              </Show>
               <For each={props.state.record?.files}>
                 {(file) => (
                   <div class="otk-control-row">
@@ -250,6 +269,20 @@ export default function RevertGroup(props: {
 }
 
 export function RevertConfirmation(props: { owner: SessionRevert }): Element {
+  const { tools } = useUiRegistries();
+  const kindLabel = (message: RecordMessage) => {
+    if (message.role === "user") return "Prompt";
+    if (message.role === "assistant") return "Reply";
+    return message.parts.map((part) =>
+      part.kind === "tool"
+        ? tools.presentation(part.call).verb
+        : part.kind === "external"
+        ? part.activity?.title ?? part.name
+        : part.kind === "unknown"
+        ? part.label
+        : part.kind
+    ).filter(Boolean).join(", ") || "Context";
+  };
   return (
     <section
       class="otk-revert-confirmation"
@@ -261,11 +294,7 @@ export function RevertConfirmation(props: { owner: SessionRevert }): Element {
         {(message) => (
           <div class="otk-revert-preview-row" data-revert-message={message.id}>
             <ChromeMeta>
-              {message.role === "user"
-                ? "Prompt"
-                : message.role === "assistant"
-                ? "Reply"
-                : "Context"}
+              {kindLabel(message)}
             </ChromeMeta>
             <Clock at={message.time.created} />
             <span

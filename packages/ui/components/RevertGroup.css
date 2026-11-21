@@ -19,10 +19,6 @@
   min-inline-size: 0;
   flex: 1;
 }
-.otk-revert-failure {
-  min-inline-size: 0;
-  flex: 1;
-}
 .otk-revert-records {
   min-inline-size: 0;
 }

@@ -59,6 +59,7 @@ import {
   revertFlowBoundary,
   revertPresentation,
   revertRecordKey,
+  savedBranchMatches,
   sessionComposerFeedback,
   sessionResult,
   type SessionUsageOwner,
@@ -279,6 +280,14 @@ export default function SessionView(props: {
           : undefined}
         warning={props.branchHistory?.preservationWarning()}
         failureVisible={!props.branchHistory?.state.permanence}
+        onOpenCopy={props.branchHistory && rollbackState().record
+          ? () => {
+            const branch = props.branchHistory!.state.branches.find((branch) =>
+              savedBranchMatches(branch, rollbackState().record!)
+            );
+            if (branch) props.branchHistory!.open(branch.id);
+          }
+          : undefined}
         onOpenChild={props.onOpenChild}
       />
     </Show>
@@ -291,7 +300,13 @@ export default function SessionView(props: {
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
   const noticed = () =>
-    !!props.forkNote || !!feedback() || !!props.branchHistory?.state.permanence;
+    !!props.forkNote || !!feedback() ||
+    !!props.branchHistory?.state.permanence ||
+    !!props.branchHistory?.state.choice ||
+    !!props.branchHistory?.state.error && !rollbackState().record ||
+    !!props.branchHistory?.state.branches.some((branch) =>
+      !branch.pending && branch.replaced
+    );
   const branchFailureVisible = () => {
     const value = props.branchHistory?.state.error;
     return !value || value.diagnosticID !== feedback()?.diagnosticID;
@@ -300,7 +315,16 @@ export default function SessionView(props: {
   const notice = () => (
     <ComposerNotice>
       <Show when={props.branchHistory}>
-        {(owner) => <RevertSendChoice owner={owner()} />}
+        {(owner) => (
+          <>
+            <RevertSendChoice owner={owner()} />
+            <SavedBranchNotice
+              owner={owner()}
+              failureVisible={branchFailureVisible() && !rollbackState().record}
+              statusVisible={false}
+            />
+          </>
+        )}
       </Show>
       <Show when={feedback()}>
         {(value) => (
@@ -335,6 +359,25 @@ export default function SessionView(props: {
   let following: ReturnType<typeof followViewport> | undefined;
   const [geometry, setGeometry] = createSignal<ViewportSnapshot>();
   const commandPorts = useCommandPorts(), hints = commandHints(commandPorts);
+  ownedCommand(commandPorts, {
+    id: "session.savedBranches",
+    title: "Saved earlier branches",
+    category: "Session",
+    scope: "session",
+    arguments: { type: "object", optional: true },
+    context: { kind: "session", order: 26 },
+    enabled: (_ctx, target?: { sidecarId?: string; sessionID?: string }) =>
+      (!target ||
+        target.sidecarId === props.sidecarId &&
+          target.sessionID === props.info?.id) &&
+      !!props.branchHistory?.state.branches.some((branch) => !branch.pending),
+    run: () => {
+      const branch = props.branchHistory?.state.branches.find((branch) =>
+        !branch.pending
+      );
+      if (branch) props.branchHistory!.open(branch.id);
+    },
+  });
   const latest = ownedCommand(commandPorts, {
     id: "transcript.latest",
     name: "latest",
@@ -365,6 +408,30 @@ export default function SessionView(props: {
   let followIntent = true;
   let window: VirtualListControl | undefined;
   let source: ReturnType<typeof sourceViewport> | undefined;
+  createEffect(() => ({
+    boundary: revertFlowBoundary(rollbackState()),
+    phase: rollbackState().phase,
+  }), (next, previous) => {
+    if (
+      !next.boundary || next.phase === "confirming" ||
+      next.boundary === previous?.boundary && previous.phase !== "confirming"
+    ) return;
+    onSettled(() => {
+      following?.pause();
+      void window?.reveal(revertRecordKey(next.boundary!), { align: "nearest" })
+        .catch((cause) => {
+          if (!isCancellation(cause)) {
+            setRevealError(failureValue(cause, {
+              actionLabel: "Revealing the staged revert",
+              target: failureTarget(),
+              reason: "The reverted messages could not be brought into view.",
+              recovery:
+                "Use Jump to latest to see the revert and its Restore action.",
+            }));
+          }
+        });
+    });
+  });
   const regions = new Map<HTMLElement, { id: string; release?: () => void }>();
   const attachSource = (element: HTMLElement, id: string) => {
     const region = { id, release: source?.attach(element, id) };
@@ -957,16 +1024,6 @@ export default function SessionView(props: {
                               />
                             );
                           }}
-                        </Show>
-                        <Show when={props.branchHistory}>
-                          {(owner) => (
-                            <SavedBranchNotice
-                              owner={owner()}
-                              failureVisible={branchFailureVisible() &&
-                                !rollbackState().record}
-                              statusVisible={!rollbackState().record}
-                            />
-                          )}
                         </Show>
                         <MessageDelivery owner={sessionPorts?.delivery} />
                       </div>

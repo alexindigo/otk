@@ -26,7 +26,7 @@ test("revert.saved-branch-switch-releases-excluded-reply-borrows", {
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: /Saved earlier branches/ }),
+    page.getByRole("button", { name: "Open copy", exact: true }),
   ).toBeVisible();
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) =>
@@ -55,7 +55,7 @@ test("revert.saved-branch-switch-releases-excluded-reply-borrows", {
   await page.reload();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.getByRole("button", { name: /Saved earlier branches/ })
+  await page.getByRole("button", { name: "Open copy", exact: true })
     .click();
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
