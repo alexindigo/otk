@@ -16,8 +16,8 @@ const message = (id: string): Message => ({
   parts: [],
 });
 const reverted = (id: string): RevertInfo => ({
-  messageID: id,
-  messageCount: id === "p1" ? 2 : 1,
+  boundaryID: id,
+  messageIDs: id === "p1" ? ["p1", "p2"] : [id],
   files: [],
   prompt: {
     input: id,

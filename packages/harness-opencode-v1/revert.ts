@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-export const REVERT_PROMPT_LIMIT = 50;
 import type { RevertCapability } from "@otk/harness";
 import type { ContentSession, RestoreCapability } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
-export const revertPreview = (text: string): string =>
-  text.replace(/\s+/g, " ").trim().slice(0, 200);
 export function revert(
   client: Client,
   directory: Directory,

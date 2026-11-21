@@ -27,7 +27,9 @@ function fixture() {
   const session = () => ({
     ...shellInfo("selected"),
     ...(staged
-      ? { revert: { messageID: "boundary", messageCount: 1, files: [] } }
+      ? {
+        revert: { boundaryID: "boundary", messageIDs: ["boundary"], files: [] },
+      }
       : {}),
   });
   const options = {

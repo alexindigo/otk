@@ -145,19 +145,19 @@ test("messages.revert-files-counted-strip-reload", {
   await expect.poll(() =>
     frames.received.some((frame) => {
       const event = frame.event as
-        | { op?: string; messageCount?: number }
+        | { op?: string; boundaryID?: string }
         | undefined;
       const page = frame.outcome as {
         ok?: boolean;
-        result?: { session?: { revert?: { messageCount: number } } };
+        result?: { session?: { revert?: { boundaryID: string } } };
       } | undefined;
       return frame.t === "content" && event?.op === "session.revert" &&
-          event.messageCount === 1 ||
-        page?.ok === true && page.result?.session?.revert?.messageCount === 1;
+          event.boundaryID === user ||
+        page?.ok === true && page.result?.session?.revert?.boundaryID === user;
     })
   ).toBe(true);
   await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-    "1 prompt rolled back",
+    "Reverted from",
   );
   // Decisions 1/20 preserve pre-prompt native controls; revert removes real prompts/replies.
   const reverted = async () => {

@@ -72,8 +72,8 @@ function fixture() {
             {
               ...info(),
               revert: {
-                messageID: id,
-                messageCount: 1,
+                boundaryID: id,
+                messageIDs: [id],
                 files: [],
                 prompt: history(id),
               },
@@ -95,8 +95,8 @@ function fixture() {
         : { id: id === "p2" ? "p1" : "p2" };
       state.content.revert = id
         ? {
-          messageID: id,
-          messageCount: id === "p1" ? 2 : 1,
+          boundaryID: id,
+          messageIDs: id === "p1" ? ["p1", "p2"] : [id],
           files: [],
           prompt: history(id),
         }
@@ -144,7 +144,7 @@ Deno.test("undo recalls only into empty/owned drafts and redo clears only owned 
     assertEquals(f.drafts.current("local/a").input, "p2");
     assertEquals(f.drafts.current("local/a").chips[0].part.kind, "file");
     assertEquals(
-      f.session.state.content.revert?.messageID,
+      f.session.state.content.revert?.boundaryID,
       "p2",
       "The fixture publishes authoritative rollback separately from its RPC",
     );
@@ -191,8 +191,8 @@ Deno.test("undo and redo preserve newer edits, unsaved editors and retired draft
         {
           ...info(),
           revert: {
-            messageID: "p2",
-            messageCount: 1,
+            boundaryID: "p2",
+            messageIDs: ["p2"],
             files: [],
             prompt: history("p2"),
           },

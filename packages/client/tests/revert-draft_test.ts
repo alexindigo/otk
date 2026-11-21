@@ -32,8 +32,8 @@ function fixture() {
     archived: false,
   };
   const revert = {
-    messageID: "old-prompt",
-    messageCount: 1,
+    boundaryID: "old-prompt",
+    messageIDs: ["old-prompt"],
     files: [],
     prompt: {
       input: "Recalled old prompt",

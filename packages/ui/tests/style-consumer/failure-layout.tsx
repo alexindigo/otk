@@ -248,14 +248,9 @@ export default function FailureLayout() {
         <RolledBackStrip
           state={{}}
           strip={{
-            count: 1,
+            boundaryID: "earlier",
+            messageIDs: ["earlier"],
             preview: "Earlier prompt",
-            prompts: [{
-              messageID: "earlier",
-              preview: "Earlier prompt",
-              time: at - 60000,
-            }],
-            more: 0,
             files: [],
           }}
         />

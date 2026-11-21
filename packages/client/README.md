@@ -1055,6 +1055,11 @@ retain the whole grouped reply.
 `compact(target, model)` captures the session/server and explicit next-prompt
 model through the same non-submitting `act` owner, without task promotion.
 
+Revert state is identified by `boundaryID` and its fixed native `messageIDs`,
+never a prompt count. The reducer admits a context-only boundary. Legacy saved
+browser archives normalize their real record identities only on read, without
+rewriting stored data.
+
 `revert(target, messageID)` and `restore(target)` use the same captured-target
 `act` owner. `createSessionRevert({session, actions, drafts, status, factory?})`
 serializes selected-session revert/restore/undo/redo intents, exposes

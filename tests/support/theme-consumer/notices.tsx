@@ -114,14 +114,9 @@ export default function Notices(props: { prefs: Preferences }) {
             rollback={rollback}
             strip={mode() === "strip"
               ? {
-                count: 1,
+                boundaryID: "prompt",
+                messageIDs: ["prompt"],
                 preview: "Captured prompt",
-                prompts: [{
-                  messageID: "prompt",
-                  preview: "Captured prompt",
-                  time: 1,
-                }],
-                more: 0,
                 files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
               }
               : undefined}

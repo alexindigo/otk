@@ -15,10 +15,9 @@ export default function Scene() {
         <RolledBackStrip
           state={{}}
           strip={{
-            count: 2,
+            boundaryID: "boundary",
+            messageIDs: ["boundary", "reply"],
             preview: "Boundary prompt",
-            prompts: [],
-            more: 2,
             files: [{ path: "src/owner.ts", additions: 3, deletions: 1 }],
           }}
         />

@@ -341,10 +341,11 @@ RPC.
 
 `restore` is a separately advertised capability: `restore(sessionID)` and
 `session.restore` return the authoritative session after unreverting. Legacy
-`revert` alone never implies Restore support. `RevertInfo` and live
-`session.revert` operations optionally carry oldest-first `prompts` (at most 50,
-200-character whitespace-collapsed previews) and a metadata-only boundary
-`prompt: HistoryEntry` for draft recall. Older peers can omit both fields.
+`revert` alone never implies Restore support. `RevertInfo` carries `boundaryID`,
+the fixed native-ordered `messageIDs` resolved for that stage, and `files`.
+Context records and replies belong to that identity set too. There is no prompt
+count or capped preview inventory; later appends cannot join an existing record.
+The metadata-only boundary `prompt: HistoryEntry` still supports draft recall.
 
 The optional `history` capability includes exact selected-prompt
 `entry(sessionID,

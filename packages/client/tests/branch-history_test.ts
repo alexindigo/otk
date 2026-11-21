@@ -55,7 +55,7 @@ function fixture() {
       Promise.resolve({
         ...info(t.sessionID),
         ...(staged
-          ? { revert: { messageID: "2", messageCount: 1, files: [] } }
+          ? { revert: { boundaryID: "2", messageIDs: ["2"], files: [] } }
           : {}),
       }),
     page: (t: typeof target, before?: string): Promise<MessagePage> => {
@@ -128,6 +128,23 @@ function fixture() {
     calls: () => calls,
   };
 }
+Deno.test("legacy saved branches decode message identity without rewriting stored data", async () => {
+  const f = fixture();
+  await f.owner.prepare(target, "2");
+  const key = [...f.values.keys()][0];
+  const stored = JSON.parse(f.values.get(key)!);
+  stored.session.revert = { messageID: "2", messageCount: 1, files: [] };
+  const raw = JSON.stringify(stored);
+  f.values.set(key, raw);
+  const reader = createBranchHistory(f.options);
+  reader.select(target);
+  assertEquals(reader.state.branches[0].session.revert, {
+    boundaryID: "2",
+    messageIDs: ["2"],
+    files: [],
+  });
+  assertEquals(f.values.get(key), raw);
+});
 Deno.test("branch history saves complete retained pages and checkpoints edited draft before commit", async () => {
   const f = fixture();
   f.drafts.writer("server/a")({

@@ -296,12 +296,11 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
   if (op.op === "session.revert") {
     return {
       ...state,
-      revert: op.messageID && op.messageCount
+      revert: op.boundaryID
         ? {
-          messageID: op.messageID,
-          messageCount: op.messageCount,
+          boundaryID: op.boundaryID,
+          messageIDs: op.messageIDs,
           files: op.files,
-          ...(op.prompts === undefined ? {} : { prompts: op.prompts }),
           ...(op.prompt === undefined ? {} : { prompt: op.prompt }),
         }
         : null,

@@ -756,7 +756,7 @@ Deno.test("rollback boundary resolution uses the authoritative page directory an
   assertEquals(page.items.length, 10);
   assertEquals(page.items.every((message) => message.id < "m10"), true);
   assertEquals(page.prompt?.id, "m09");
-  assertEquals(page.session.revert?.messageID, "m10");
+  assertEquals(page.session.revert?.boundaryID, "m10");
   assertEquals(
     f.reads.filter((url) => url.pathname === "/session/s/message/m10").length,
     1,
@@ -987,7 +987,11 @@ Deno.test("an independent session lookup joins newer rollback authority instead 
       Promise.resolve({
         ...mapSession(value),
         revert: value.revert &&
-          { messageID: value.revert.messageID, messageCount: 1, files: [] },
+          {
+            boundaryID: value.revert.messageID,
+            messageIDs: [value.revert.messageID],
+            files: [],
+          },
       }),
     decorate: (message) => message,
     summaries: () => ({}),
@@ -996,7 +1000,7 @@ Deno.test("an independent session lookup joins newer rollback authority instead 
   const reading = transcript.session("opcv1-s");
   transcript.observe({ ...raw, revert: { messageID: "cutoff" } });
   held.resolve(raw);
-  assertEquals((await reading).revert?.messageID, "cutoff");
+  assertEquals((await reading).revert?.boundaryID, "cutoff");
 });
 
 Deno.test("native transcript authority versions change for rollback/restore and producer resets, never ordinary metadata or demand release", async () => {

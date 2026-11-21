@@ -93,14 +93,13 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
     });
   const [restores, setRestores] = createSignal(0);
   const [strip, setStrip] = createSignal<RevertStrip>({
-    count: 1,
+    boundaryID: "prompt",
+    messageIDs: ["prompt"],
     preview: "Captured prompt",
-    prompts: [{ messageID: "prompt", preview: "Captured prompt", time: 1 }],
-    more: 0,
     files: [],
   });
   styleTest.refreshNotice = () =>
-    setStrip({ ...strip(), prompts: [...strip().prompts] });
+    setStrip({ ...strip(), messageIDs: [...strip().messageIDs] });
   const { commands } = useCommandPorts();
   onSettled(() =>
     commands.register({

@@ -38,16 +38,17 @@ export async function sessionActionsScenario(history = true) {
       ...session,
       revert: messageID
         ? {
-          messageID,
-          messageCount: 1,
+          boundaryID: messageID,
+          messageIDs: [messageID],
           files: code
             ? [{ path: "src/session.ts", additions: 2, deletions: 1 }]
             : [],
-          prompts: [{
-            messageID,
-            preview: input,
+          prompt: {
+            input,
+            mode: "normal",
+            parts: [{ kind: "text", text: input }],
             time: 1,
-          }],
+          },
         }
         : undefined,
     };

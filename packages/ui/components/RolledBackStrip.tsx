@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RolledBackStrip.css" with { type: "text" };
-import Clock from "./Clock.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { RevertStrip, SessionRevert } from "@otk/client";
-import { countLabel } from "@otk/client";
 import ComposerNotice, { ComposerNoticeRow } from "./ComposerNotice.tsx";
-import { ChevronDownIcon, CopyIcon, RevertIcon } from "./ChromeIcons.tsx";
+import { ChevronDownIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
-import { copyContent } from "../features/transcript-context.tsx";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import OperationFeedback from "./OperationFeedback.tsx";
 /** View-local disclosure; operation state and projection belong to the client. */
@@ -94,7 +91,7 @@ export function RolledBackContent(
               }
             >
               <strong>
-                {countLabel(strip().count, "prompt")} rolled back
+                Reverted from
               </strong>
               <span
                 class="otk-control-label otk-control-grow otk-rollback-preview"
@@ -110,35 +107,6 @@ export function RolledBackContent(
             </Show>
             <Show when={expanded()}>
               <div class="otk-rollback-details">
-                <For
-                  each={strip().prompts}
-                  keyed={(prompt) => prompt.messageID}
-                >
-                  {(prompt) => (
-                    <div class="otk-rollback-prompt">
-                      <span
-                        class="otk-control-label otk-control-grow"
-                        title={prompt().preview}
-                      >
-                        {prompt().preview}
-                      </span>
-                      <Clock at={prompt().time} />
-                      <button
-                        type="button"
-                        class="otk-icon-button"
-                        aria-label="Copy rolled-back prompt"
-                        title="Copy rolled-back prompt"
-                        onClick={() =>
-                          void perform(() => copyContent(prompt().preview))}
-                      >
-                        <CopyIcon />
-                      </button>
-                    </div>
-                  )}
-                </For>
-                <Show when={strip().more}>
-                  <p class="otk-muted">and {strip().more} more</p>
-                </Show>
                 <For each={strip().files} keyed={(file) => file.path}>
                   {(file) => (
                     <div class="otk-rollback-file">

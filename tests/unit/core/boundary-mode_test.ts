@@ -39,7 +39,11 @@ test("a boundary ID cannot certify file mode; lost Restore reconciles only throu
     const base = await harness.core.getSession("tstv1-s");
     let current: ContentSession = {
       ...base,
-      revert: { messageID: "same-boundary", messageCount: 1, files: [] },
+      revert: {
+        boundaryID: "same-boundary",
+        messageIDs: ["same-boundary"],
+        files: [],
+      },
     };
     harness.core.getSession = () => Promise.resolve(current);
     const rpc = new RpcRegistry(harness, db);

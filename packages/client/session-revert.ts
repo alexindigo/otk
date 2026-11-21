@@ -10,10 +10,9 @@ import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
 
 export interface RevertStrip {
-  count: number;
+  boundaryID: string;
+  messageIDs: string[];
   preview: string;
-  prompts: NonNullable<RevertInfo["prompts"]>;
-  more: number;
   files: RevertInfo["files"];
 }
 type RevertIntent = "revert" | "code" | "restore" | "undo" | "redo";
@@ -136,7 +135,7 @@ export function createSessionRevert(options: {
     const interrupt = group?.options("interrupt", captured.sessionID);
     const change = group?.options("boundary", captured.sessionID);
     const stopping = kind === "undo" && options.status.working(captured);
-    const previousBoundary = options.session.state.content.revert?.messageID;
+    const previousBoundary = options.session.state.content.revert?.boundaryID;
     const previousEpoch = options.session.state.clock?.epoch;
     const active = () => {
       observe();
@@ -181,18 +180,18 @@ export function createSessionRevert(options: {
           kind === "code",
         )
         : await options.actions.restore(captured, change);
-      if (result.revert) transaction?.staged(result.revert.messageID);
+      if (result.revert) transaction?.staged(result.revert.boundaryID);
       nativeCleared = (kind === "restore" || kind === "redo") && !result.revert;
       if (!active()) return;
       // RPC completion admits the mutation. The selected transcript remains
       // authoritative, including a resync that is still reading its messages.
-      const boundary = result.revert?.messageID;
+      const boundary = result.revert?.boundaryID;
       await waitFor(
         () => {
           const state = options.session.state;
           if (
             state.loading || state.continuity !== "ready" ||
-            state.content.revert?.messageID !== boundary
+            state.content.revert?.boundaryID !== boundary
           ) return false;
           if (
             boundary === previousBoundary && kind !== "code" &&
@@ -249,12 +248,10 @@ export function createSessionRevert(options: {
     strip(content) {
       const revert = content.revert;
       if (!revert) return;
-      const prompts = revert.prompts ?? [];
       return {
-        count: revert.messageCount,
-        preview: prompts[0]?.preview ?? "",
-        prompts,
-        more: Math.max(0, revert.messageCount - prompts.length),
+        boundaryID: revert.boundaryID,
+        messageIDs: revert.messageIDs,
+        preview: revert.prompt?.input.split("\n")[0] ?? revert.boundaryID,
         files: revert.files,
       };
     },

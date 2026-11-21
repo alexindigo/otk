@@ -113,8 +113,25 @@ function decode(raw: string): SavedBranch {
   ) {
     throw new Error("Invalid saved branch");
   }
+  // Old archives retain real records: normalize the read projection by identity,
+  // never by their old count, without rewriting the stored browser data.
+  const revert = value.session.revert;
+  const legacyBoundary = revert && Reflect.get(revert, "messageID");
+  const at = value.messages.findIndex((m) => m.id === legacyBoundary);
+  const session =
+    revert && !revert.boundaryID && typeof legacyBoundary === "string"
+      ? {
+        ...value.session,
+        revert: {
+          boundaryID: legacyBoundary,
+          messageIDs: at < 0 ? [] : value.messages.slice(at).map((m) => m.id),
+          files: revert.files,
+        },
+      }
+      : value.session;
   return {
     ...value,
+    session,
     drafts: value.drafts.map((d) => ({
       label: branchDraftLabel(d.label),
       value: d.defaultVariant ? { ...d.value, variant: undefined } : d.value,
@@ -370,7 +387,7 @@ export function createBranchHistory(options: {
         initial ??= page;
         if (
           (page.session.revert &&
-            (drafts.restored || page.session.revert.messageID !== boundary)) ||
+            (drafts.restored || page.session.revert.boundaryID !== boundary)) ||
           page.clock.epoch !== initial.clock.epoch ||
           page.clock.seq !== initial.clock.seq
         ) {
@@ -445,7 +462,7 @@ export function createBranchHistory(options: {
       if (
         final.clock.epoch !== initial!.clock.epoch ||
         final.clock.seq !== initial!.clock.seq ||
-        final.session.revert?.messageID !== initial!.session.revert?.messageID
+        final.session.revert?.boundaryID !== initial!.session.revert?.boundaryID
       ) {
         throw fail(
           t,
@@ -611,7 +628,7 @@ export function createBranchHistory(options: {
       let branch = load(t).find((b) => b.pending);
       // A reload can retire the in-memory capture, never the native staged tail.
       if (!branch) {
-        await prepare(t, session.revert.messageID);
+        await prepare(t, session.revert.boundaryID);
         branch = load(t).find((b) => b.pending);
       }
       if (!branch) {

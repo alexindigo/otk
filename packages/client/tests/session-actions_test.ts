@@ -44,7 +44,11 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     );
@@ -90,7 +94,11 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     )
