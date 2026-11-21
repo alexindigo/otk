@@ -78,6 +78,7 @@ export async function wire(
 export async function openSession(state: TestState, page: Page, id: string) {
   await observeTranscript(page.context());
   await state.product("layout.patch", {
+    leftCollapsed: false,
     rightCollapsed: false,
     rightView: "sessions",
   });

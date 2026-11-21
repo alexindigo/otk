@@ -78,7 +78,8 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
   await page.getByRole("button", { name: "Long failure", exact: true }).click();
   const toast = page.locator(".otk-toast");
   await expect(toast).toHaveCount(1);
-  const region = toast.locator(".otk-scroll");
+  await toast.getByRole("button", { name: "Details", exact: true }).click();
+  const region = toast.locator(".otk-failure-detail-body");
   expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
     true,
   );
@@ -96,7 +97,10 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
     const header = el.querySelector("header")!.getBoundingClientRect();
     const actions = el.querySelector(".otk-toast-actions")!
       .getBoundingClientRect();
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(
+      el.querySelector(".otk-failure-detail-body")!,
+      NodeFilter.SHOW_TEXT,
+    );
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const index = node.textContent!.indexOf("END OF REASON");
       if (index < 0) continue;
