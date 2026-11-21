@@ -175,6 +175,17 @@ test(
       .boundingBox();
     const chipBounds = await page.locator(".otk-live-work-trigger")
       .boundingBox();
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`runtime-notice-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
     expect(noticeBounds!.y + noticeBounds!.height).toBeLessThanOrEqual(
       chipBounds!.y + 1,
     );

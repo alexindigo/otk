@@ -82,8 +82,15 @@ test(
       "Qualified session reply.",
     );
     await page.goto(`${state.url}/#/local/${native.id}`);
-    // FP1 retains the compatibility reason inside its complete failure contract.
-    const failure = page.locator(".otk-global-error");
+    // Style8 removed the duplicate banner. The sole Notifications presentation
+    // retains FP1's entire action/target/reason/accessibility contract.
+    const failure = page.getByRole("region", {
+      name: "Notifications",
+      exact: true,
+    })
+      .locator(".otk-toast-message").filter({
+        hasText: "Opening session link failed",
+      });
     await expect(failure).toHaveCount(1);
     await expect(failure).toHaveAttribute("role", "alert");
     await expect(failure).toHaveAccessibleName(

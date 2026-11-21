@@ -696,49 +696,50 @@ session state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome uses structural tracks: helper presence uses a reserved control-height
-track; composer notices grow in flow above the prompt, while overflowing
-takeovers keep their bounded presentation. Revert records belong to the
-transcript, not a composer overlay. Required breadcrumb controls separately
-reflow the header under pressure, preserving readable titles rather than
-clipping them. RecordList owns record spacing and supplies topology to the
-shared Tree; views borrow canonical span identities and retained disclosure
-state rather than regrouping mounted neighbours. Background intervals share one
-outer conversation gap and compact internal record rhythm, including actionable
-breakouts. Their folded line is plain muted meta text with producer-owned counts
-and client-owned failure wording, no Activity prefix or time range.
-Footer-borrowed successful completions never add a title count. Successful
-completion-only intervals borrow a footer junction instead of adding a status
-row; direct reveal opens the same retained interval. Read-only helper
-transcripts mount those same attention owners; only prompt submission is
-unavailable. With no active takeover, helpers mount no empty composer. That same
-owner provides composer availability to takeover headers, so draft-kept copy
-appears only when the open session offers a composer. Permission docks and
-notifications share RequestAge presentation and the client's requestIdle
-formatter/resumption threshold, using the asking session's activity clock rather
-than request age. Permission and question surfaces replace the composer with a
-raised, bordered, 20px-radius Takeover and a common blocked-light header.
-Consumer-supplied session location names the project/task; question tabs/options
-use shared underline/pointer primitives. Static keyboard hints are in titles,
-Keys and the palette, not the surface. Question step/collapse changes focus a
-visible option or review action; leaving an own-answer field focuses Answer.
-Arrival does not focus an answer action. Takeover layout sections are
-programmatic-only landmarks, not Tab stops. The prompt restores its own input
-when a takeover releases focus to the document, while preserving focus the
-reader moved elsewhere. Shared focus paint admits semantic controls and
-explicitly marked visible content (message/date reveals), never layout wrappers
-or programmatic-only targets, including browser-focusable scroll containers.
-Actual keyboard controls retain visible focus. The composer's rounded border
-owns focus-within rather than a second textarea rectangle; own-answer input
-focuses its visible row. ComposerTakeovers delegates field paint through
-`--prompt-input-outline`; without that enclosing box, a standalone Prompt
-retains its own field focus outline. Permission takeovers and notification
-toasts share one PermissionSummary: exact tool, command/working directory, edit
-file paths/counts or generic target and requested patterns. Notification
-enrichment carries the neutral request alongside its originating action through
-the hub's opaque detail port. A permission-owned adapter supplies injected toast
-content; the generic hub and toast host know no permission schema. Permission
-and question owners preserve dirty state through reconnects. The legacy `Docks`
-API remains independently reusable for existing consumers.
+track; runtime feedback uses the dock's independent notice slot above that
+track, so arrival cannot resize the transcript. Explicit user-owned Send/draft
+choices opt into normal flow through `noticeFlow`, while overflowing takeovers
+keep their bounded presentation. Revert records belong to the transcript, not a
+composer overlay. Required breadcrumb controls separately reflow the header
+under pressure, preserving readable titles rather than clipping them. RecordList
+owns record spacing and supplies topology to the shared Tree; views borrow
+canonical span identities and retained disclosure state rather than regrouping
+mounted neighbours. Background intervals share one outer conversation gap and
+compact internal record rhythm, including actionable breakouts. Their folded
+line is plain muted meta text with producer-owned counts and client-owned
+failure wording, no Activity prefix or time range. Footer-borrowed successful
+completions never add a title count. Successful completion-only intervals borrow
+a footer junction instead of adding a status row; direct reveal opens the same
+retained interval. Read-only helper transcripts mount those same attention
+owners; only prompt submission is unavailable. With no active takeover, helpers
+mount no empty composer. That same owner provides composer availability to
+takeover headers, so draft-kept copy appears only when the open session offers a
+composer. Permission docks and notifications share RequestAge presentation and
+the client's requestIdle formatter/resumption threshold, using the asking
+session's activity clock rather than request age. Permission and question
+surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
+a common blocked-light header. Consumer-supplied session location names the
+project/task; question tabs/options use shared underline/pointer primitives.
+Static keyboard hints are in titles, Keys and the palette, not the surface.
+Question step/collapse changes focus a visible option or review action; leaving
+an own-answer field focuses Answer. Arrival does not focus an answer action.
+Takeover layout sections are programmatic-only landmarks, not Tab stops. The
+prompt restores its own input when a takeover releases focus to the document,
+while preserving focus the reader moved elsewhere. Shared focus paint admits
+semantic controls and explicitly marked visible content (message/date reveals),
+never layout wrappers or programmatic-only targets, including browser-focusable
+scroll containers. Actual keyboard controls retain visible focus. The composer's
+rounded border owns focus-within rather than a second textarea rectangle;
+own-answer input focuses its visible row. ComposerTakeovers delegates field
+paint through `--prompt-input-outline`; without that enclosing box, a standalone
+Prompt retains its own field focus outline. Permission takeovers and
+notification toasts share one PermissionSummary: exact tool, command/working
+directory, edit file paths/counts or generic target and requested patterns.
+Notification enrichment carries the neutral request alongside its originating
+action through the hub's opaque detail port. A permission-owned adapter supplies
+injected toast content; the generic hub and toast host know no permission
+schema. Permission and question owners preserve dirty state through reconnects.
+The legacy `Docks` API remains independently reusable for existing consumers.
 
 Context part renderers receive their original canonical message clock through
 `recordTime`. The fallback shows it, including milliseconds and the local zone,
@@ -1616,16 +1617,18 @@ Consumers select `registerToastChannel`, `registerOsChannel`,
 client hub. Registrations own their presentation and teardown; they import no
 application, RPC implementation or native backend. `Toasts` renders the returned
 toast model: information/done chips expire after six seconds, keyed input chips
-are active and errors sticky. Toast owns a non-scrolling Surface body. The
-viewport-fitted stack shows at most three cards, newest first, and delegates its
-overflow row to an injected Sessions-opening callback. Opening that view
-detaches the stack so it cannot cover the session lamps. Each card has a square
-top-right close slot and a trailing Dismiss action. Both dismiss presentation;
-action buttons use delivery-scoped public command IDs. Permission details use
-the shared summary's compact, single-line target with the full text in its
-title. Session activity labels and stale-resume descriptions come from the
-client formatter. Attention is cleared by actual viewing/resolution, not by
-dismissal or command promise completion.
+are active and errors sticky. Each message borrows the shared feedback binding's
+alert/status semantics and names itself with the owner's complete notification
+text. Toast owns a non-scrolling Surface body. The viewport-fitted stack shows
+at most three cards, newest first, and delegates its overflow row to an injected
+Sessions-opening callback. Opening that view detaches the stack so it cannot
+cover the session lamps. Each card has a square top-right close slot and a
+trailing Dismiss action. Both dismiss presentation; action buttons use
+delivery-scoped public command IDs. Permission details use the shared summary's
+compact, single-line target with the full text in its title. Session activity
+labels and stale-resume descriptions come from the client formatter. Attention
+is cleared by actual viewing/resolution, not by dismissal or command promise
+completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

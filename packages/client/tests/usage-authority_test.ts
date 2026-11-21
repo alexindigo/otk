@@ -241,6 +241,66 @@ for (const change of ["revision", "source"] as const) {
   });
 }
 
+// A summary is a wire value. Property insertion order is not newer usage.
+Deno.test("equal usage summaries with reordered wire fields share one acquisition", async () => {
+  const entry = shellEntry("s"), version = { generation: 2, revision: 3 };
+  const value = detail(version);
+  entry.digest.turns.turn = knownDerived(value.summary, "source", 1);
+  const f = fixture(entry);
+  try {
+    const pending = f.owner.load(target);
+    await flush();
+    const reordered = {
+      ...value.summary,
+      tokens: {
+        cache: { write: 0, read: 0 },
+        reasoning: 0,
+        output: 1,
+        input: 7,
+      },
+    };
+    entry.digest.turns.turn = knownDerived(reordered, "source", 1);
+    f.owner.receive("server", { t: "index.patch", rev: 1, ops: [] });
+    f.reads[0].result.resolve(value);
+    await pending;
+    await flush();
+    assertEquals(f.reads.length, 1);
+    f.owner.receive("server", { t: "index.patch", rev: 2, ops: [] });
+    await flush();
+    assertEquals(f.reads.length, 1);
+    assertEquals(f.owner.get(target)?.summary, value.summary);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("a settled usage result covers a later equal index summary in another wire order", async () => {
+  const entry = shellEntry("s"), version = { generation: 2, revision: 3 };
+  const value = detail(version);
+  entry.digest.turns.turn = knownDerived(
+    detail(version, 1).summary,
+    "source",
+    1,
+  );
+  const f = fixture(entry);
+  try {
+    const pending = f.owner.load(target);
+    await flush();
+    f.reads[0].result.resolve(value);
+    await pending;
+    const reordered = Object.fromEntries(
+      Object.entries(value.summary).reverse(),
+    ) as typeof value.summary;
+    entry.digest.turns.turn = knownDerived(reordered, "source", 2);
+    f.owner.receive("server", { t: "index.patch", rev: 1, ops: [] });
+    await flush();
+    assertEquals(f.reads.length, 1);
+    assertEquals(f.owner.get(target)?.summary, value.summary);
+  } finally {
+    f.stop();
+  }
+});
+
 for (const covered of [true, false]) {
   Deno.test(`same-source summary publication ${covered ? "covered by" : "newer than"} a held usage result ${covered ? "joins" : "refreshes"} it`, async () => {
     const entry = shellEntry("s"), version = { generation: 2, revision: 3 };
