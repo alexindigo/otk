@@ -180,7 +180,12 @@ export function TreeNode(props: {
                 />
               }
             >
-              <label class="otk-tree-toggle" for={toggleID} aria-hidden="true">
+              <label
+                class="otk-tree-toggle"
+                for={toggleID}
+                aria-label={props.label}
+                aria-hidden="true"
+              >
                 <DisclosureIcon open={props.open} />
               </label>
             </Show>
