@@ -61,6 +61,7 @@ export class TerminalSocket {
   #retry?: () => void;
   #idle?: () => void;
   #liveness?: () => void;
+  #handshake?: () => void;
   #lastFrame = 0;
   #stopped = false;
   #clock: TerminalClock;
@@ -201,6 +202,8 @@ export class TerminalSocket {
     }
   }
   #retire(): void {
+    this.#handshake?.();
+    this.#handshake = undefined;
     this.#liveness?.();
     this.#liveness = undefined;
     const socket = this.#socket;
@@ -256,9 +259,17 @@ export class TerminalSocket {
       return;
     }
     const current = () => this.#socket === socket && !this.#stopped;
+    // A silent opening socket owns the same 45-second progress deadline as an
+    // established transport, and expires through the same retirement path.
+    this.#handshake = this.#clock.schedule(() => {
+      this.#handshake = undefined;
+      if (current()) this.#lost();
+    }, 45_000);
     socket.binaryType = "arraybuffer";
     socket.onopen = () => {
       if (!current()) return;
+      this.#handshake?.();
+      this.#handshake = undefined;
       this.#lastFrame = this.#clock.now();
       this.#next = 1;
       for (const channel of this.#channels) {
@@ -371,6 +382,19 @@ export interface SessionTerminalsState {
   error: FailureValue;
 }
 
+function liveInfo(info: TerminalInfo, change?: TerminalMeta): TerminalInfo {
+  if (!change) return info;
+  return {
+    ...info,
+    ...(change.title !== undefined ? { title: change.title } : {}),
+    ...(change.foreground !== undefined
+      ? { foreground: change.foreground }
+      : {}),
+    ...(change.status !== undefined ? { status: change.status } : {}),
+    ...(change.exited !== undefined ? { exitCode: change.exited } : {}),
+  };
+}
+
 /** Session-owned list and four renderer leases; disposal leaves shells running. */
 export class SessionTerminals {
   #current: SessionTerminalsState = {
@@ -383,6 +407,8 @@ export class SessionTerminals {
   #store;
   #alive = true;
   #read?: AbortController;
+  #readChanges = new Map<string, TerminalMeta>();
+  #show = 0;
   #unlisten: () => void;
   #retained = new Map<
     string,
@@ -426,6 +452,7 @@ export class SessionTerminals {
     if (!this.#alive) return;
     this.#read?.abort();
     const read = this.#read = new AbortController();
+    const changes = this.#readChanges = new Map();
     this.#update((state) => {
       state.loading = true;
       state.error = "";
@@ -437,11 +464,12 @@ export class SessionTerminals {
       }, read.signal);
       if (!this.#alive || this.#read !== read) return;
       const ids = new Set(list.map((item) => item.id));
-      for (const id of this.#retained.keys()) {
-        if (!ids.has(id)) this.#release(id);
+      for (const [id, lease] of this.#retained) {
+        if (!ids.has(id) || !lease.attachment.retained) this.#release(id);
       }
+      if (!this.#alive || this.#read !== read) return;
       this.#update((state) => {
-        state.list = list;
+        state.list = list.map((info) => liveInfo(info, changes.get(info.id)));
         state.disconnected = state.disconnected.filter((id) => ids.has(id));
         if (!state.selected || !ids.has(state.selected)) {
           state.selected = list[0]?.id;
@@ -456,6 +484,7 @@ export class SessionTerminals {
     } finally {
       if (this.#alive && this.#read === read) {
         this.#read = undefined;
+        this.#readChanges.clear();
         this.#update((state) => {
           state.loading = false;
         });
@@ -497,15 +526,21 @@ export class SessionTerminals {
   }
   show(id: string, sink: TerminalSink): TerminalAttachment {
     if (!this.#alive) throw new Error("Session terminals are disposed");
+    const show = ++this.#show;
     let lease = this.#retained.get(id);
     if (lease && (lease.sink !== sink || !lease.attachment.retained)) {
       this.#release(id);
       lease = undefined;
     }
     if (lease) {
-      this.#retained.delete(id);
       lease.attachment.reconnect();
     } else {
+      while (this.#retained.size >= 4) {
+        this.#release(this.#retained.keys().next().value!);
+      }
+      if (!this.#alive || show !== this.#show) {
+        throw new Error("Terminal selection was retired");
+      }
       lease = {
         sink,
         attachment: this.socket.attach(this.sessionID, id, {
@@ -513,23 +548,16 @@ export class SessionTerminals {
           resize: (cols, rows) => sink.resize(cols, rows),
           write: (bytes) => sink.write(bytes),
           meta: (change) => {
+            if (!this.#alive) return;
+            if (this.#read) {
+              this.#readChanges.set(id, {
+                ...this.#readChanges.get(id),
+                ...change,
+              });
+            }
             this.#update((state) => {
               state.list = state.list.map((info) =>
-                info.id !== id ? info : {
-                  ...info,
-                  ...(change.title !== undefined
-                    ? { title: change.title }
-                    : {}),
-                  ...(change.foreground !== undefined
-                    ? { foreground: change.foreground }
-                    : {}),
-                  ...(change.status !== undefined
-                    ? { status: change.status }
-                    : {}),
-                  ...(change.exited !== undefined
-                    ? { exitCode: change.exited }
-                    : {}),
-                }
+                info.id !== id ? info : liveInfo(info, change)
               );
             });
             sink.meta(change);
@@ -537,10 +565,12 @@ export class SessionTerminals {
         }),
       };
     }
-    this.#retained.set(id, lease);
-    while (this.#retained.size > 4) {
-      this.#release(this.#retained.keys().next().value!);
+    if (!this.#alive || show !== this.#show) {
+      lease.attachment.close();
+      return lease.attachment;
     }
+    this.#retained.delete(id);
+    this.#retained.set(id, lease);
     this.#update((state) => {
       state.selected = id;
       state.retained = [...this.#retained.keys()];
@@ -550,6 +580,7 @@ export class SessionTerminals {
   dispose(): void {
     this.#alive = false;
     this.#read?.abort();
+    this.#readChanges.clear();
     this.#unlisten();
     for (const id of this.#retained.keys()) this.#release(id);
   }

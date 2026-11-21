@@ -479,6 +479,7 @@ Deno.test("terminated and natural exit refresh lists without reattach; gone refr
     assertEquals(owner.state.selected, "2");
     assert(b.metas.some((m) => m.exited === 3 && m.status === "exited"));
     assertEquals(owner.state.list[0].exitCode, 3);
+    assert(!owner.state.retained.includes("2"));
     assertEquals(s.controls("attach").length, 3);
     assertEquals(f.calls.filter((v) => v.method === "terminal.list").length, 4);
     f.setList([]);
@@ -531,6 +532,107 @@ Deno.test("lag retries once with a fresh channel; second lag within 10 s stays d
     f.clock.tick(10000);
     next.message({ t: "detached", ch: 2, reason: "lagging" });
     assertEquals(next.controls("attach").map((v) => v.ch), [1, 2, 3]);
+  } finally {
+    owner.dispose();
+    f.socket.stop();
+  }
+});
+
+Deno.test("silent CONNECTING transport expires and releases its handshake deadline", () => {
+  const f = fixture();
+  try {
+    f.socket.attach("tstv1-a", "1", sink());
+    f.clock.tick(44_999);
+    assertEquals(f.sockets[0].closed, 0);
+    f.clock.tick(1);
+    assertEquals(f.sockets[0].closed, 1);
+    f.clock.tick(1000);
+    assertEquals(f.sockets.length, 2);
+    f.sockets[1].open();
+    f.sockets[1].snapshot(1);
+    f.clock.tick(44_999);
+    assertEquals(f.sockets[1].closed, 0);
+    f.socket.stop();
+    assertEquals(f.clock.jobs.size, 0);
+  } finally {
+    f.socket.stop();
+  }
+});
+
+Deno.test("reentrant disposal during initial metadata cannot retain the new lease", () => {
+  const f = fixture(),
+    owner = new SessionTerminals(f.socket, f.conn, "tstv1-a"),
+    target = sink();
+  let disposed = false;
+  owner.subscribe(() => {
+    if (disposed) return;
+    disposed = true;
+    owner.dispose();
+  });
+  try {
+    const attachment = owner.show("1", target);
+    assert(!attachment.retained);
+    assertEquals(owner.state.retained, []);
+    f.sockets[0]?.open();
+    f.sockets[0]?.snapshot(1);
+    f.sockets[0]?.bytes(1, "after-dispose");
+    assertEquals(target.events, []);
+  } finally {
+    owner.dispose();
+    f.socket.stop();
+  }
+});
+
+Deno.test("LRU replacement releases its shared mux slot before attaching", async () => {
+  const f = fixture(),
+    owners = Array.from(
+      { length: 4 },
+      (_, index) => new SessionTerminals(f.socket, f.conn, "tstv1-" + index),
+    );
+  try {
+    for (const owner of owners) {
+      for (let id = 1; id <= 4; id++) owner.show(String(id), sink());
+    }
+    const socket = f.sockets[0];
+    socket.open();
+    await flush();
+    const start = socket.sent.length;
+    owners[0].show("5", sink());
+    assertEquals(
+      socket.sent.slice(start).filter((data): data is string =>
+        typeof data === "string"
+      ).map((data) => JSON.parse(data).t),
+      ["detach", "attach"],
+    );
+  } finally {
+    for (const owner of owners) owner.dispose();
+    f.socket.stop();
+  }
+});
+
+Deno.test("live metadata received during a list read wins over its stale result", async () => {
+  const f = fixture(),
+    owner = new SessionTerminals(f.socket, f.conn, "tstv1-a");
+  try {
+    await owner.refresh();
+    owner.show("1", sink());
+    const socket = f.sockets[0];
+    socket.open();
+    await flush();
+    let reply!: (value: TerminalInfo[]) => void;
+    const result = new Promise<TerminalInfo[]>((resolve) => reply = resolve);
+    f.setRead(() => result);
+    const refresh = owner.refresh();
+    socket.message({
+      t: "meta",
+      ch: 1,
+      title: "live-title",
+      foreground: "less",
+    });
+    reply([info("1")]);
+    await refresh;
+    assertEquals(owner.state.list[0].title, "live-title");
+    assertEquals(owner.state.list[0].foreground, "less");
   } finally {
     owner.dispose();
     f.socket.stop();

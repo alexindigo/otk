@@ -393,6 +393,7 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     rows: 24,
   });
   let current!: WebSocket, connected = false, output = "";
+  const sized: string[] = [];
   const transport = new TerminalSocket({
     base: new URL(app.url + "/api/"),
     options: {
@@ -407,7 +408,9 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     reset() {
       output = "";
     },
-    resize() {},
+    resize(cols, rows) {
+      sized.push(`${cols}x${rows}`);
+    },
     write(bytes) {
       output += new TextDecoder().decode(bytes);
     },
@@ -423,6 +426,7 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
     ).replaceAll("\r", "").split("\n");
   attachment.resize(111, 37);
   await until(() => connected, "initial size attachment");
+  await until(() => sized.includes("111x37"), "daemon applied initial size");
   attachment.input(new TextEncoder().encode("stty size\r"));
   await until(
     () => lines().includes("37 111"),
@@ -432,6 +436,7 @@ test("terminal attachment desired dimensions reach the actual PTY after initial 
   await until(() => !connected, "size transport disconnected");
   attachment.resize(132, 48);
   await until(() => connected, "size transport reattached");
+  await until(() => sized.includes("132x48"), "daemon applied reattached size");
   attachment.input(new TextEncoder().encode("stty size\r"));
   await until(
     () => lines().includes("48 132"),
