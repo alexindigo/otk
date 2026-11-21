@@ -4,6 +4,11 @@ import { dirname, isAbsolute, join } from "@std/path";
 import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
 import { daemonEnvironment } from "./env.ts";
 import {
+  TERMINAL_INPUT_MAX,
+  TerminalIngress,
+  TerminalIngressOverload,
+} from "./ingress.ts";
+import {
   encodeRequest,
   type Frame,
   FrameDecoder,
@@ -57,6 +62,7 @@ export class DaemonNotSentError extends Error {
     super("Daemon request was not sent", { cause });
   }
 }
+export class DaemonOverloadedError extends DaemonNotSentError {}
 
 export class DaemonConnection {
   #decoder = new FrameDecoder();
@@ -213,6 +219,8 @@ export async function spawnDaemon(
 type Job = {
   request: Request;
   settle: { resolve: (v: Response) => void; reject: (e: unknown) => void }[];
+  signal?: AbortSignal;
+  unlisten?: () => void;
 };
 
 export class PtyDaemon {
@@ -221,6 +229,7 @@ export class PtyDaemon {
   #alive = true;
   #connections = new Set<DaemonConnection>();
   #queues = new Map<number, Job[]>();
+  #ingress = new TerminalIngress();
   #ownerReply?: {
     resolve: (v: Response) => void;
     reject: (e: unknown) => void;
@@ -341,6 +350,14 @@ export class PtyDaemon {
       this.#ownerReply = undefined;
       for (const conn of this.#connections) conn.close();
       this.#connections.clear();
+      for (const queue of this.#queues.values()) {
+        for (const job of queue.splice(0)) {
+          job.unlisten?.();
+          for (const waiter of job.settle) {
+            waiter.reject(new DaemonNotSentError());
+          }
+        }
+      }
       this.#finish();
     }
   }
@@ -365,12 +382,14 @@ export class PtyDaemon {
     this.#ownerSerial = work.catch(() => {});
     return work;
   }
-  async #acquire(): Promise<DaemonConnection> {
+  async #acquire(signal?: AbortSignal): Promise<DaemonConnection> {
     let conn: DaemonConnection | undefined;
     try {
       if (!this.alive) throw new Error("Daemon is gone");
+      signal?.throwIfAborted();
       conn = await DaemonConnection.connect(this.registration.socket);
       if (!this.alive) throw new Error("Daemon is gone");
+      signal?.throwIfAborted();
     } catch (cause) {
       conn?.close();
       throw new DaemonNotSentError(cause);
@@ -379,38 +398,63 @@ export class PtyDaemon {
     this.#connections.add(conn);
     return conn;
   }
-  async #oneShot(request: Request): Promise<Response> {
-    const conn = await this.#acquire();
+  async #oneShot(request: Request, signal?: AbortSignal): Promise<Response> {
+    const conn = await this.#acquire(signal);
     try {
       return await bounded(conn, async () => {
-        if (!this.alive) throw new DaemonNotSentError();
+        if (!this.alive || signal?.aborted) throw new DaemonNotSentError();
         await conn.send(this.registration.token, request);
         return await conn.response();
-      });
+      }, signal);
     } finally {
       conn.close();
       this.#connections.delete(conn);
     }
   }
-  request(request: Request): Promise<Response> {
-    if (!("id" in request)) return this.#oneShot(request);
+  request(request: Request, signal?: AbortSignal): Promise<Response> {
+    if (!this.alive || signal?.aborted) {
+      return Promise.reject(new DaemonNotSentError(signal?.reason));
+    }
+    if (!("id" in request)) return this.#oneShot(request, signal);
     const id = request.id;
     if (
-      request.op === "input" && decodeBase64(request.data_base64).length > 65536
-    ) return Promise.reject(new Error("Input exceeds 64 KiB"));
-    return new Promise((resolve, reject) => {
+      request.op === "input" &&
+      decodeBase64(request.data_base64).length > TERMINAL_INPUT_MAX
+    ) {
+      return Promise.reject(
+        new DaemonNotSentError(new Error("Input exceeds 64 KiB")),
+      );
+    }
+    let bytes: number;
+    try {
+      bytes = encodeRequest(this.registration.token, request).byteLength;
+    } catch (cause) {
+      return Promise.reject(new DaemonNotSentError(cause));
+    }
+    let release: () => void;
+    try {
+      release = this.#ingress.admit(bytes);
+    } catch (cause) {
+      return Promise.reject(
+        cause instanceof TerminalIngressOverload
+          ? new DaemonOverloadedError(cause)
+          : cause,
+      );
+    }
+    const work = new Promise<Response>((resolve, reject) => {
       const existing = this.#queues.get(id);
       if (existing) {
         const tail = existing.at(-1);
         if (
           request.op === "input" && tail?.request.op === "input" &&
+          tail.signal === signal &&
           tail.request.attachment_id === request.attachment_id &&
           tail.request.cols === request.cols &&
           tail.request.rows === request.rows
         ) {
           const a = decodeBase64(tail.request.data_base64),
             b = decodeBase64(request.data_base64);
-          if (a.length + b.length <= 65536) {
+          if (a.length + b.length <= TERMINAL_INPUT_MAX) {
             const bytes = new Uint8Array(a.length + b.length);
             bytes.set(a);
             bytes.set(b, a.length);
@@ -422,19 +466,41 @@ export class PtyDaemon {
             return;
           }
         }
-        existing.push({ request, settle: [{ resolve, reject }] });
+        const job: Job = { request, signal, settle: [{ resolve, reject }] };
+        existing.push(job);
+        this.#cancelQueued(existing, job);
       } else {
-        const queue = [{ request, settle: [{ resolve, reject }] }];
+        const job: Job = { request, signal, settle: [{ resolve, reject }] };
+        const queue = [job];
         this.#queues.set(id, queue);
+        this.#cancelQueued(queue, job);
         void this.#drain(id, queue);
       }
     });
+    return work.finally(release);
+  }
+  #cancelQueued(queue: Job[], job: Job): void {
+    const signal = job.signal;
+    if (!signal) return;
+    const cancel = () => {
+      const at = queue.indexOf(job);
+      if (at < 0) return;
+      queue.splice(at, 1);
+      job.unlisten?.();
+      for (const waiter of job.settle) {
+        waiter.reject(new DaemonNotSentError(signal.reason));
+      }
+    };
+    job.unlisten = () => signal.removeEventListener("abort", cancel);
+    signal.addEventListener("abort", cancel, { once: true });
+    if (signal.aborted) cancel();
   }
   async #drain(id: number, queue: Job[]): Promise<void> {
     while (queue.length) {
       const job = queue.shift()!;
+      job.unlisten?.();
       try {
-        const reply = await this.#oneShot(job.request);
+        const reply = await this.#oneShot(job.request, job.signal);
         for (const s of job.settle) s.resolve(reply);
       } catch (error) {
         for (const s of job.settle) s.reject(error);
@@ -444,12 +510,18 @@ export class PtyDaemon {
   }
   async subscribe(
     request: Extract<Request, { op: "subscribe" }>,
+    signal?: AbortSignal,
   ): Promise<DaemonConnection> {
-    const conn = await this.#acquire();
+    const conn = await this.#acquire(signal);
     try {
-      if (!this.alive) throw new DaemonNotSentError();
-      await bounded(conn, () => conn.send(this.registration.token, request));
+      if (!this.alive || signal?.aborted) throw new DaemonNotSentError();
+      await bounded(
+        conn,
+        () => conn.send(this.registration.token, request),
+        signal,
+      );
       if (!this.alive) throw new Error("Daemon owner disconnected");
+      signal?.throwIfAborted();
       return conn;
     } catch (error) {
       this.release(conn);

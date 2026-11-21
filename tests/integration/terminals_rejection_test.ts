@@ -17,6 +17,8 @@ for (
     "spawn",
     "relative-spawn",
     "close-race",
+    "close-pre-send",
+    "close-read-loss",
     "pre-send",
     "transport-loss",
     "post-spawn-error",
@@ -64,14 +66,30 @@ for (
     const registry = new RpcRegistry(harness, db);
     registerTerminals(registry, host);
     let terminalID: string | undefined;
-    if (mode === "close-race") {
+    if (
+      mode === "close-race" || mode === "close-pre-send" ||
+      mode === "close-read-loss"
+    ) {
       terminalID = String((await host.create("tstv1-reject", root, 80, 24)).id);
-      const close = host.close.bind(host);
-      host.close = async (directory, id) => {
-        // Another caller removes it after RPC preflight but before host.close.
-        await daemon.request({ op: "terminate", id });
-        return await close(directory, id);
-      };
+      if (mode === "close-race") {
+        const close = host.close.bind(host);
+        host.close = async (directory, id) => {
+          // Another caller removes it after RPC preflight but before host.close.
+          await daemon.request({ op: "terminate", id });
+          return await close(directory, id);
+        };
+      } else {
+        const request = daemon.request.bind(daemon);
+        daemon.request = async (value) => {
+          if (value.op === "get") {
+            if (mode === "close-read-loss") {
+              throw new Error("lost metadata response before termination");
+            }
+            await daemon.disconnect();
+          }
+          return await request(value);
+        };
+      }
     } else if (uncertain) {
       const request = daemon.request.bind(daemon);
       daemon.request = async (value) => {
@@ -172,14 +190,18 @@ for (
         record.error_code,
         mode === "close-race"
           ? "not-found"
-          : mode === "pre-send"
+          : mode === "pre-send" || mode === "close-pre-send" ||
+              mode === "close-read-loss"
           ? "terminal-unavailable"
           : "terminal-spawn-failed",
       );
-      if (mode !== "pre-send") {
+      if (mode !== "pre-send" && mode !== "close-pre-send") {
         const list = await daemon.request({ op: "list", mode: "pty" });
         assert(list.type === "processes");
-        assertEquals(list.processes, []);
+        assertEquals(
+          list.processes.map((process) => String(process.id)),
+          mode === "close-read-loss" ? [terminalID!] : [],
+        );
       }
     }
   });

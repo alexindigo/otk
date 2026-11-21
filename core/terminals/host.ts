@@ -8,7 +8,7 @@ import {
   readHandoff,
 } from "./daemon.ts";
 import { hasSystemd, shellEnvironment, shellProgram } from "./env.ts";
-import type { ProcessInfo } from "./frames.ts";
+import type { ProcessInfo, Request, Response } from "./frames.ts";
 
 export class TerminalUnavailable extends Error {
   readonly code = "terminal-unavailable";
@@ -25,6 +25,19 @@ export class TerminalRejected extends Error {
         : "Terminal operation rejected",
       { cause },
     );
+  }
+}
+async function sendRequest(
+  daemon: PtyDaemon,
+  request: Request,
+): Promise<Response> {
+  try {
+    return await daemon.request(request);
+  } catch (cause) {
+    if (cause instanceof DaemonNotSentError) {
+      throw new TerminalRejected("terminal-unavailable", cause);
+    }
+    throw cause;
   }
 }
 export interface TerminalHostOptions {
@@ -107,7 +120,7 @@ export class TerminalHost {
   async list(sessionID: string): Promise<ProcessInfo[]> {
     const daemon = await this.daemon();
     if (this.#stopped) throw new TerminalUnavailable();
-    const reply = await daemon.request({ op: "list", mode: "pty" });
+    const reply = await sendRequest(daemon, { op: "list", mode: "pty" });
     if (reply.type !== "processes") {
       throw new Error("Expected daemon process list");
     }
@@ -150,11 +163,8 @@ export class TerminalHost {
       if (this.#stopped) throw new TerminalUnavailable();
       let reply;
       try {
-        reply = await daemon.request(request);
+        reply = await sendRequest(daemon, request);
       } catch (cause) {
-        if (cause instanceof DaemonNotSentError) {
-          throw new TerminalRejected("terminal-unavailable", cause);
-        }
         // Protocol 8 also reports errors after spawning (reader/actor setup).
         // Only openpty/spawn failures prove that no shell was started.
         // Unqualified shell names can collide with the daemon's thread setup
@@ -177,12 +187,23 @@ export class TerminalHost {
   }
   async close(sessionID: string, id: number): Promise<void> {
     const daemon = await this.daemon();
+    let reply;
     try {
-      const reply = await daemon.request({ op: "get", id });
-      if (reply.type !== "process" || reply.process.group_id !== sessionID) {
-        throw new TerminalRejected("not-found");
-      }
-      await daemon.request({ op: "terminate", id });
+      reply = await sendRequest(daemon, { op: "get", id });
+    } catch (cause) {
+      if (cause instanceof TerminalRejected) throw cause;
+      if (
+        cause instanceof DaemonResponseError &&
+        cause.message === `process ${id} not found`
+      ) throw new TerminalRejected("not-found", cause);
+      // This is a preparatory read: no terminate request has entered transport.
+      throw new TerminalUnavailable(cause);
+    }
+    if (reply.type !== "process" || reply.process.group_id !== sessionID) {
+      throw new TerminalRejected("not-found");
+    }
+    try {
+      await sendRequest(daemon, { op: "terminate", id });
     } catch (cause) {
       if (
         cause instanceof DaemonResponseError &&

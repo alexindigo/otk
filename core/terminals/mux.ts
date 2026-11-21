@@ -2,8 +2,17 @@
 import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
 import { isSessionID } from "@otk/protocol";
 import type { TerminalHost } from "./host.ts";
-import type { DaemonConnection, PtyDaemon } from "./daemon.ts";
+import {
+  type DaemonConnection,
+  DaemonOverloadedError,
+  type PtyDaemon,
+} from "./daemon.ts";
 import type { Response } from "./frames.ts";
+import {
+  TERMINAL_INPUT_MAX,
+  TERMINAL_SOCKET_HIGH,
+  TerminalIngress,
+} from "./ingress.ts";
 
 export interface TerminalSockets {
   accept(socket: WebSocket): void;
@@ -18,11 +27,12 @@ export interface TerminalRelayHost {
 }
 const CHUNK = 16 * 1024;
 const CHANNEL_BUDGET = 256 * 1024;
-const SOCKET_HIGH = 1024 * 1024;
+const SOCKET_HIGH = TERMINAL_SOCKET_HIGH;
 const SOCKET_LOW = 256 * 1024;
 const encoder = new TextEncoder();
 type Control = Record<string, unknown>;
 type Item = { data: string | Uint8Array; size: number; final?: boolean };
+type Interaction = { run: () => Promise<void>; release: () => void };
 interface Channel {
   ch: number;
   id: number;
@@ -32,6 +42,9 @@ interface Channel {
   rows: number;
   controller: boolean;
   active: boolean;
+  abort: AbortController;
+  attached: boolean;
+  pending: Interaction[];
   queue: Item[];
   queued: number;
   resume?: () => void;
@@ -77,6 +90,8 @@ class Relay {
   #channels = new Map<number, Channel>();
   #used = new Set<number>();
   #jobs = new Set<Promise<unknown>>();
+  #ingress = new TerminalIngress();
+  #attachments = new TerminalIngress();
   #open = true;
   #wake?: () => void;
   #pump: Promise<void>;
@@ -116,6 +131,10 @@ class Relay {
   }
   #send(message: Control): void {
     if (this.#open && this.socket.readyState === WebSocket.OPEN) {
+      if (this.socket.bufferedAmount > SOCKET_HIGH) {
+        this.#close(1013, "Terminal receiver is not draining");
+        return;
+      }
       this.socket.send(JSON.stringify(message));
     }
   }
@@ -125,6 +144,8 @@ class Relay {
   }
   #remove(channel: Channel): void {
     channel.active = false;
+    channel.abort.abort();
+    for (const job of channel.pending.splice(0)) job.release();
     if (channel.connection) channel.daemon?.release(channel.connection);
     channel.connection = undefined;
     channel.resume?.();
@@ -160,7 +181,7 @@ class Relay {
   }
   #message(data: unknown): void {
     if (data instanceof ArrayBuffer) {
-      if (data.byteLength < 4 || data.byteLength > 64 * 1024) {
+      if (data.byteLength < 4 || data.byteLength > TERMINAL_INPUT_MAX) {
         throw new Error("Input size");
       }
       const channel = this.#channels.get(
@@ -168,7 +189,7 @@ class Relay {
       );
       if (!channel?.active) return;
       const bytes = new Uint8Array(data, 4);
-      this.#interact(channel, async () => {
+      this.#interact(channel, data.byteLength, async () => {
         await channel.daemon!.request({
           op: "input",
           id: channel.id,
@@ -176,7 +197,7 @@ class Relay {
           cols: channel.cols,
           rows: channel.rows,
           data_base64: encodeBase64(bytes),
-        });
+        }, channel.abort.signal);
         channel.controller = true;
       });
       return;
@@ -208,6 +229,8 @@ class Relay {
         this.#send({ t: "error", ch, code: "too-many" });
         return;
       }
+      const release = this.#admit(4096, this.#attachments);
+      if (!release) return;
       const channel: Channel = {
         ch,
         id: Number(message.terminal),
@@ -217,18 +240,31 @@ class Relay {
         rows: 24,
         controller: false,
         active: true,
+        abort: new AbortController(),
+        attached: false,
+        pending: [],
         queue: [],
         queued: 0,
         ready: Promise.resolve(),
       };
       this.#channels.set(ch, channel);
-      channel.ready = this.#attach(channel).catch(() => {
+      channel.ready = this.#attach(channel).then(() => {
+        if (!channel.active || !this.#open) return;
+        channel.attached = true;
+        for (const job of channel.pending.splice(0)) {
+          this.#dispatch(channel, job);
+        }
+      }).catch((cause) => {
         if (this.#open && channel.active) {
+          if (cause instanceof DaemonOverloadedError) {
+            this.#close(1013, "Terminal ingress overloaded");
+            return;
+          }
           this.#send({ t: "error", ch, code: "not-found" });
           this.#remove(channel);
           this.#channels.delete(ch);
         }
-      });
+      }).finally(release);
       this.#track(channel.ready);
       return;
     }
@@ -246,34 +282,65 @@ class Relay {
       this.#channels.delete(ch);
       this.#signal();
     } else {
-      this.#interact(channel, async () => {
+      this.#interact(channel, 4096, async () => {
         channel.cols = message.cols;
         channel.rows = message.rows;
         await channel.daemon!.request({
-          op: channel.controller ? "resize" : "control",
+          op: "control",
           id: channel.id,
           attachment_id: channel.attachment,
-          cols: channel.cols,
-          rows: channel.rows,
-        });
+          cols: message.cols,
+          rows: message.rows,
+        }, channel.abort.signal);
         channel.controller = true;
+        // Acceptance is not a canonical grid event. Control need not emit
+        // Resized for an unchanged grid; only the subscription owns that stream.
+        this.#control(channel, {
+          t: "resize-ack",
+          cols: message.cols,
+          rows: message.rows,
+        });
       });
     }
   }
-  #interact(channel: Channel, run: () => Promise<void>): void {
+  #admit(bytes: number, budget = this.#ingress): (() => void) | undefined {
+    try {
+      return budget.admit(bytes);
+    } catch {
+      this.#close(1013, "Terminal ingress overloaded");
+    }
+  }
+  #interact(channel: Channel, bytes: number, run: () => Promise<void>): void {
     // The daemon owns per-terminal ordering/coalescing across browser sockets.
     // Do not put input behind the output reader or output scheduler.
+    const release = this.#admit(bytes);
+    if (!release) return;
+    const job = { run, release };
+    if (!channel.attached) channel.pending.push(job);
+    else this.#dispatch(channel, job);
+  }
+  #dispatch(channel: Channel, job: Interaction): void {
+    if (!channel.active || !this.#open) {
+      job.release();
+      return;
+    }
     this.#track(
-      channel.ready.then(async () => {
-        if (channel.active && this.#open) await run();
-      }).catch(async () => {
+      job.run().catch((cause) => {
         if (channel.active && this.#open) {
-          await this.#subscriptionEnded(channel);
+          if (cause instanceof DaemonOverloadedError) {
+            this.#close(1013, "Terminal ingress overloaded");
+          } else if (!channel.daemon?.alive) this.gone();
+          else this.#control(channel, { t: "interaction-error" });
         }
-      }),
+      }).finally(job.release),
     );
   }
   #control(channel: Channel, message: Control, final = false): void {
+    if (!this.#open || (!channel.active && !final)) return;
+    if (channel.queued >= CHANNEL_BUDGET && !final) {
+      this.#close(1013, "Terminal receiver is not draining");
+      return;
+    }
     const data = JSON.stringify({ ...message, ch: channel.ch });
     const size = encoder.encode(data).length;
     channel.queue.push({ data, size, final });
@@ -304,7 +371,10 @@ class Relay {
     const daemon = await this.host.daemon();
     if (!channel.active || !this.#open) return;
     channel.daemon = daemon;
-    const snapshot = await daemon.request({ op: "snapshot", id: channel.id });
+    const snapshot = await daemon.request(
+      { op: "snapshot", id: channel.id },
+      channel.abort.signal,
+    );
     if (
       snapshot.type !== "snapshot" ||
       snapshot.process.group_id !== channel.session || !snapshot.process.pty
@@ -331,7 +401,7 @@ class Relay {
       attachment_id: channel.attachment,
       role: "observer",
       takeover: false,
-    });
+    }, channel.abort.signal);
     if (!channel.active || !this.#open) {
       daemon.release(connection);
       return;
