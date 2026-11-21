@@ -58,6 +58,8 @@ export function createTranscriptInteraction(): TranscriptInteraction {
       outgoing: defaults.expandOutgoing,
       compaction: defaults.expandCompaction,
       record: defaults.expandRecords,
+      stepMarkers: false,
+      snapshots: false,
       source: defaults.expandSource,
     };
     return categories[category];

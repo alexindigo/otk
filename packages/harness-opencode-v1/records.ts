@@ -202,6 +202,13 @@ export function recordPart(part: RawPart): ExternalPart {
     case "snapshot":
       activity.title = "Snapshot";
       activity.detail = part.snapshot;
+      activity.category = "snapshots";
+      activity.fold = true;
+      activity.summary = {
+        kind: "snapshot",
+        noun: "snapshot",
+        plural: "snapshots",
+      };
       break;
     case "patch":
       activity.title = "Changed files";
@@ -226,10 +233,24 @@ export function recordPart(part: RawPart): ExternalPart {
       break;
     case "step-start":
       activity.title = "Step started";
+      activity.category = "stepMarkers";
+      activity.fold = true;
+      activity.summary = {
+        kind: "step-marker",
+        noun: "step marker",
+        plural: "step markers",
+      };
       break;
     case "step-finish":
       activity.title = "Step finished";
       activity.detail = part.reason;
+      activity.category = "stepMarkers";
+      activity.fold = true;
+      activity.summary = {
+        kind: "step-marker",
+        noun: "step marker",
+        plural: "step markers",
+      };
       break;
   }
   return { ...common, activity };
