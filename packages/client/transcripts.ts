@@ -49,6 +49,7 @@ export interface TranscriptsOwner {
     target: BodyTarget,
     before?: string,
     signal?: AbortSignal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<import("@otk/protocol").MessagePage>;
   receive(sidecar: string, frame: ServerFrame, accepted: boolean): void;
   removeServer(sidecar: string): void;
@@ -298,8 +299,8 @@ export function createTranscripts(o: {
       reconcile();
     },
     get: (target) => resources.get(key(target))?.owner,
-    snapshotPage: (target, before, signal) =>
-      resource(target).snapshotPage(before, signal),
+    snapshotPage: (target, before, signal, scope) =>
+      resource(target).snapshotPage(before, signal, scope),
     receive(server, frame, accepted) {
       if (stopped || !accepted) return;
       const requests = o.connection(server).attention;

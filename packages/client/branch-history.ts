@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { randomID } from "@otk/protocol";
-import { compareMessages, isRealPrompt } from "@otk/protocol";
+import {
+  compareMessages,
+  isRealPrompt,
+  MESSAGE_PAGE_SIZE,
+} from "@otk/protocol";
 import type {
   ContentSession,
   HistoryEntry,
@@ -9,6 +13,7 @@ import type {
   NativeSource,
   NativeSourceView,
   PromptPart,
+  RevertInfo,
 } from "@otk/protocol";
 import type { Draft, Drafts } from "./drafts.ts";
 import { sessionKey } from "./index.ts";
@@ -44,14 +49,33 @@ export interface BranchHistoryState {
   pending: boolean;
   error?: FailureValue;
   choice?: { branchID: string; label: string; draft: Draft };
+  permanence?: { boundaryID: string; saving: boolean; error: FailureValue };
+}
+export interface BranchSendPermit {
+  target: Selection;
+  record?: Pick<RevertInfo, "boundaryID" | "messageIDs">;
+  discard?: boolean;
 }
 export interface BranchHistory {
   readonly state: BranchHistoryState;
   /** A capability limitation, not a failed preservation attempt. */
   preservationWarning(): string | undefined;
   select(target: Selection | undefined): void;
-  prepare(target: Selection, boundary: string): Promise<void>;
-  beforeCommit(target: Selection, label?: string): Promise<void>;
+  prepare(
+    target: Selection,
+    boundary: string,
+    record?: RevertInfo,
+  ): Promise<void>;
+  beforeCommit(
+    target: Selection,
+    label?: string,
+    permit?: BranchSendPermit,
+    draft?: Draft,
+  ): Promise<void>;
+  beforeSend(target: Selection): Promise<BranchSendPermit>;
+  saveCopy(): Promise<void>;
+  sendAnyway(): Promise<void>;
+  cancelSend(target?: Selection): void;
   settled(target: Selection, restored?: boolean): Promise<void>;
   open(id?: string): void;
   reuse(branchID: string, draft: Draft, label: string): void;
@@ -77,6 +101,15 @@ const draftKey = (t: Selection) => sessionKey(t.sidecarId, t.sessionID);
 const occupied = (d: Draft) => hasDraftContent(d) || !!d.editor;
 const sameDraft = (a: Draft, b: Draft) =>
   JSON.stringify(storedDraft("", a)) === JSON.stringify(storedDraft("", b));
+export function savedBranchMatches(
+  branch: SavedBranch,
+  record: RevertInfo,
+): boolean {
+  return branch.pending && branch.boundary === record.boundaryID &&
+    record.messageIDs.every((id) =>
+      branch.messages.some((message) => message.id === id)
+    );
+}
 function storedDraft(label: string, value: Draft): StoredDraft {
   return {
     label: branchDraftLabel(label),
@@ -113,8 +146,25 @@ function decode(raw: string): SavedBranch {
   ) {
     throw new Error("Invalid saved branch");
   }
+  // Old archives retain real records: normalize the read projection by identity,
+  // never by their old count, without rewriting the stored browser data.
+  const revert = value.session.revert;
+  const legacyBoundary = revert && Reflect.get(revert, "messageID");
+  const at = value.messages.findIndex((m) => m.id === legacyBoundary);
+  const session =
+    revert && !revert.boundaryID && typeof legacyBoundary === "string"
+      ? {
+        ...value.session,
+        revert: {
+          boundaryID: legacyBoundary,
+          messageIDs: at < 0 ? [] : value.messages.slice(at).map((m) => m.id),
+          files: revert.files,
+        },
+      }
+      : value.session;
   return {
     ...value,
+    session,
     drafts: value.drafts.map((d) => ({
       label: branchDraftLabel(d.label),
       value: d.defaultVariant ? { ...d.value, variant: undefined } : d.value,
@@ -139,6 +189,7 @@ export function createBranchHistory(options: {
     target: Selection,
     before?: string,
     signal?: AbortSignal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<MessagePage>;
   prompt(
     target: Selection,
@@ -153,6 +204,9 @@ export function createBranchHistory(options: {
   concurrency?(target: Selection): number;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
   session(target: Selection): Promise<ContentSession>;
+  /** An acquired baseline is enough for pre-publication admission. Dispatch
+   * still reads native state and validates the invocation's exact permit. */
+  current?(target: Selection): ContentSession | undefined;
   factory?: StateFactory;
 }): BranchHistory {
   const store = (options.factory ?? createState)<BranchHistoryState>({
@@ -167,9 +221,69 @@ export function createBranchHistory(options: {
       promise: Promise<void>;
       boundary: string;
       drafts: CaptureDrafts;
+      record?: RevertInfo;
     }
   >();
   const failures = new Map<string, RequestFailure>();
+  const sends = new Map<
+    string,
+    {
+      target: Selection;
+      record: RevertInfo;
+      draft: Draft;
+      choice: NonNullable<BranchHistoryState["permanence"]>;
+      wait: ReturnType<typeof Promise.withResolvers<BranchSendPermit>>;
+    }
+  >();
+  const publishSend = (t: Selection) => {
+    if (same(selected, t)) {
+      store.update((s) => {
+        s.permanence = sends.get(draftKey(t))?.choice;
+      });
+    }
+  };
+  const cancelSend = (t = selected) => {
+    if (!t) return;
+    const pending = sends.get(draftKey(t));
+    sends.delete(draftKey(t));
+    publishSend(t);
+    pending?.wait.reject(
+      new DOMException(
+        "The staged revert changed or Send was canceled",
+        "AbortError",
+      ),
+    );
+  };
+  const matchesPermit = (
+    t: Selection,
+    permit: BranchSendPermit,
+    record: RevertInfo | undefined,
+  ) =>
+    same(permit.target, t) &&
+    permit.record?.boundaryID === record?.boundaryID &&
+    JSON.stringify(permit.record?.messageIDs) ===
+      JSON.stringify(record?.messageIDs);
+  const allowSend = async (t: Selection, discard: boolean) => {
+    const pending = sends.get(draftKey(t));
+    if (!pending) return;
+    const permit: BranchSendPermit = {
+      target: pending.target,
+      discard,
+      record: {
+        boundaryID: pending.record.boundaryID,
+        messageIDs: [...pending.record.messageIDs],
+      },
+    };
+    if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+      cancelSend(t);
+      return;
+    }
+    if (sends.get(draftKey(t)) !== pending) return;
+    sends.delete(draftKey(t));
+    clearFailure(t);
+    publishSend(t);
+    pending.wait.resolve(permit);
+  };
   const clearFailure = (t: Selection) => {
     const failure = failures.get(draftKey(t)), feedback = options.feedback?.(t);
     if (
@@ -284,8 +398,8 @@ export function createBranchHistory(options: {
       throw fail(
         t,
         quota
-          ? `The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved: this browser's localStorage is full (about 5 MB per origin). The replacement was not sent.`
-          : `The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved: browser localStorage is unavailable. The replacement was not sent.`,
+          ? `Browser localStorage is full. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved (about 5 MB per origin). The replacement was not sent.`
+          : `Browser localStorage is unavailable. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved. The replacement was not sent.`,
         "Delete a saved branch you no longer need, or free browser storage, then retry. If this branch alone is too large, keep the live conversation; it cannot fit here. Older branches were not removed.",
       );
     }
@@ -308,6 +422,7 @@ export function createBranchHistory(options: {
     boundary: string,
     signal: AbortSignal,
     drafts: CaptureDrafts,
+    record?: RevertInfo,
   ) => {
     signal.throwIfAborted();
     if (!supportsHistory(t)) return;
@@ -334,7 +449,10 @@ export function createBranchHistory(options: {
       signal.throwIfAborted();
       const existing = load(t);
       const pending = existing.find((b) => b.pending);
-      if (pending && session?.revert) return;
+      if (
+        pending && session?.revert &&
+        (!record || savedBranchMatches(pending, record))
+      ) return;
       for (const previous of existing.filter((b) => b.pending)) {
         previous.pending = false;
         save(t, previous);
@@ -364,22 +482,7 @@ export function createBranchHistory(options: {
           ),
         );
       };
-      do {
-        const page = await options.page(t, cursor, signal);
-        signal.throwIfAborted();
-        initial ??= page;
-        if (
-          (page.session.revert &&
-            (drafts.restored || page.session.revert.messageID !== boundary)) ||
-          page.clock.epoch !== initial.clock.epoch ||
-          page.clock.seq !== initial.clock.seq
-        ) {
-          throw fail(
-            t,
-            "The conversation changed before its earlier branch could be saved. The replacement was not sent.",
-            "Restore the pending conversation if needed, then retry Revert when it is settled.",
-          );
-        }
+      const enrich = async (page: MessagePage) => {
         const references = new Map<string, { source?: NativeSource }[]>();
         for (const message of page.items) {
           const holders: { source?: NativeSource }[] = [message];
@@ -409,49 +512,181 @@ export function createBranchHistory(options: {
             holder.source = { ...saved, ...view };
           }
         });
-        messages.push(...page.items);
-        Object.assign(turns, page.turns);
-        const entries = new Map<string, HistoryEntry>();
+        const entries: SavedBranch["prompts"] = [];
         await parallel(page.items.filter(isRealPrompt), async (message) => {
           const entry = await options.prompt(t, message.id, signal);
           signal.throwIfAborted();
           if (!entry) {
-            throw fail(
-              t,
-              "An earlier prompt could not be saved exactly. The replacement was not sent.",
-              "Restore access to the original prompt and its attachments, then retry.",
-            );
+            throw new Error("An original prompt is no longer available");
           }
           entry.parts = await options.attachments(entry.parts, t.sidecarId);
           signal.throwIfAborted();
-          entries.set(message.id, entry);
+          entries.push({ messageID: message.id, entry });
         });
-        for (const message of page.items) {
-          const entry = entries.get(message.id);
-          if (entry) prompts.push({ messageID: message.id, entry });
-        }
-        cursor = page.older ?? undefined;
-        if (cursor && seen.has(cursor)) {
+        return entries;
+      };
+      const backoff = async (attempt: number) => {
+        signal.throwIfAborted();
+        await new Promise<void>((resolve, reject) => {
+          const stop = () => {
+            clearTimeout(timer);
+            reject(signal.reason);
+          };
+          const timer = setTimeout(() => {
+            signal.removeEventListener("abort", stop);
+            resolve();
+          }, Math.min(1000, 100 * 2 ** attempt));
+          signal.addEventListener("abort", stop, { once: true });
+        });
+      };
+      let refreshCapture: (() => Promise<void>) | undefined;
+      if (record) {
+        const rows = new Map<string, Message>(),
+          entries = new Map<string, HistoryEntry>(),
+          revisions: Record<string, number> = {};
+        const check = (page: MessagePage, ids: string[]) => {
+          initial ??= page;
+          if (
+            page.clock.epoch !== initial.clock.epoch ||
+            page.session.revert?.boundaryID !==
+              initial.session.revert?.boundaryID ||
+            (page.session.revert &&
+              page.session.revert.boundaryID !== record.boundaryID) ||
+            !page.revisions || ids.some((id) =>
+              !Number.isSafeInteger(page.revisions![id]) ||
+              page.revisions![id] < 0
+            )
+          ) {
+            throw new Error("The staged archive epoch changed");
+          }
+        };
+        const batches = function* (ids: string[]) {
+          for (let at = 0; at < ids.length; at += MESSAGE_PAGE_SIZE) {
+            yield ids.slice(at, at + MESSAGE_PAGE_SIZE);
+          }
+        };
+        const acquire = async (ids: string[]) => {
+          for (const batch of batches(ids)) {
+            let attempt = 0;
+            while (true) {
+              try {
+                const page = await options.page(t, undefined, signal, {
+                  messageIDs: batch,
+                });
+                signal.throwIfAborted();
+                check(page, batch);
+                if (
+                  page.items.length !== batch.length ||
+                  batch.some((id) =>
+                    !page.items.some((m) => m.id === id)
+                  )
+                ) throw new Error("A reverted record is no longer available");
+                const prompts = await enrich(page);
+                for (const item of page.items) rows.set(item.id, item);
+                for (const id of batch) {
+                  delete revisions[id];
+                  entries.delete(id);
+                  revisions[id] = page.revisions![id];
+                }
+                for (const item of prompts) {
+                  entries.set(item.messageID, item.entry);
+                }
+                Object.assign(turns, page.turns);
+                break;
+              } catch (cause) {
+                signal.throwIfAborted();
+                if (attempt >= 3) throw cause;
+                await backoff(attempt++);
+              }
+            }
+          }
+        };
+        const validate = async () => {
+          let attempt = 0;
+          while (true) {
+            try {
+              const page = await options.page(t, undefined, signal, {
+                messageIDs: record.messageIDs,
+                validate: true,
+              });
+              signal.throwIfAborted();
+              check(page, record.messageIDs);
+              return record.messageIDs.filter((id) =>
+                page.revisions![id] !== revisions[id]
+              );
+            } catch (cause) {
+              signal.throwIfAborted();
+              if (attempt >= 3) throw cause;
+              await backoff(attempt++);
+            }
+          }
+        };
+        await acquire(record.messageIDs);
+        refreshCapture = async () => {
+          let attempt = 0;
+          while (true) {
+            const changed = await validate();
+            if (!changed.length) break;
+            if (attempt >= 3) {
+              throw new Error("Reverted records are still changing");
+            }
+            await backoff(attempt++);
+            await acquire(changed);
+          }
+          messages.length = 0;
+          prompts.length = 0;
+          for (const id of record.messageIDs) {
+            messages.push(rows.get(id)!);
+            const entry = entries.get(id);
+            if (entry) prompts.push({ messageID: id, entry });
+          }
+        };
+        await refreshCapture();
+      } else {do {
+          const page = await options.page(t, cursor, signal);
+          signal.throwIfAborted();
+          initial ??= page;
+          if (
+            (page.session.revert &&
+              (drafts.restored ||
+                page.session.revert.boundaryID !== boundary)) ||
+            page.clock.epoch !== initial.clock.epoch ||
+            page.clock.seq !== initial.clock.seq
+          ) {
+            throw fail(
+              t,
+              "The conversation changed before its earlier branch could be saved. The replacement was not sent.",
+              "Restore the pending conversation if needed, then retry Revert when it is settled.",
+            );
+          }
+          prompts.push(...await enrich(page));
+          messages.push(...page.items);
+          Object.assign(turns, page.turns);
+          cursor = page.older ?? undefined;
+          if (cursor && seen.has(cursor)) {
+            throw fail(
+              t,
+              "The earlier branch could not be read completely. The replacement was not sent.",
+              "Reload this session, then retry Revert.",
+            );
+          }
+          if (cursor) seen.add(cursor);
+        } while (cursor);}
+      if (!record) {
+        const final = await options.page(t, undefined, signal);
+        signal.throwIfAborted();
+        if (
+          final.clock.epoch !== initial!.clock.epoch ||
+          final.clock.seq !== initial!.clock.seq ||
+          final.session.revert?.boundaryID !==
+            initial!.session.revert?.boundaryID
+        ) {
           throw fail(
             t,
-            "The earlier branch could not be read completely. The replacement was not sent.",
-            "Reload this session, then retry Revert.",
+            "The conversation changed while saving its earlier branch. The replacement was not sent.",
+            "Retry Revert when the conversation is settled.",
           );
         }
-        if (cursor) seen.add(cursor);
-      } while (cursor);
-      const final = await options.page(t, undefined, signal);
-      signal.throwIfAborted();
-      if (
-        final.clock.epoch !== initial!.clock.epoch ||
-        final.clock.seq !== initial!.clock.seq ||
-        final.session.revert?.messageID !== initial!.session.revert?.messageID
-      ) {
-        throw fail(
-          t,
-          "The conversation changed while saving its earlier branch. The replacement was not sent.",
-          "Retry Revert when the conversation is settled.",
-        );
       }
       // Resolve history-backed draft chips too; no source-only attachment survives deletion.
       const materialize = async (draft: Draft) => {
@@ -470,7 +705,7 @@ export function createBranchHistory(options: {
         boundary,
         created: Date.now(),
         session: initial!.session,
-        messages: messages.sort(compareMessages),
+        messages: record ? messages : messages.sort(compareMessages),
         turns,
         prompts,
         drafts: [],
@@ -492,6 +727,7 @@ export function createBranchHistory(options: {
         );
       }
       signal.throwIfAborted();
+      await refreshCapture?.();
       save(t, branch, false, true);
       if (
         drafts.restored?.edited && same(selected, t) &&
@@ -519,10 +755,15 @@ export function createBranchHistory(options: {
   const prepare = (
     t: Selection,
     boundary: string,
+    record?: RevertInfo,
     retained?: CaptureDrafts,
   ): Promise<void> => {
     const key = draftKey(t), current = captures.get(key);
-    if (current) return current.promise;
+    if (sends.has(key) && sends.get(key)!.record.boundaryID !== boundary) {
+      cancelSend(t);
+    }
+    if (current?.boundary === boundary) return current.promise;
+    current?.controller.abort();
     const controller = new AbortController();
     const atRevert = cloneDraft(options.drafts.current(key));
     const drafts = retained ??
@@ -531,7 +772,7 @@ export function createBranchHistory(options: {
         original: options.drafts.reverts.get(key)?.before ?? atRevert,
       };
     const promise = Promise.resolve().then(() =>
-      capture(t, boundary, controller.signal, drafts)
+      capture(t, boundary, controller.signal, drafts, record)
     ).catch((cause) => {
       if (controller.signal.aborted) return;
       const error = cause instanceof RequestFailure ? cause : fail(
@@ -553,7 +794,7 @@ export function createBranchHistory(options: {
       controller.abort();
       if (captures.get(key)?.controller === controller) captures.delete(key);
     });
-    captures.set(key, { controller, promise, boundary, drafts });
+    captures.set(key, { controller, promise, boundary, drafts, record });
     return promise;
   };
   const reuse = (id: string, value: Draft, label: string) => {
@@ -574,7 +815,7 @@ export function createBranchHistory(options: {
     }
     options.drafts.writer(draftKey(t))(cloneDraft(value));
   };
-  return {
+  const owner: BranchHistory = {
     state: store.state,
     preservationWarning: () => {
       const target = store.state.target;
@@ -590,6 +831,7 @@ export function createBranchHistory(options: {
         s.target = selected;
         s.opened = undefined;
         s.choice = undefined;
+        s.permanence = target ? sends.get(draftKey(target))?.choice : undefined;
         s.error = target && failures.has(draftKey(target))
           ? failureValue(failures.get(draftKey(target))!)
           : undefined;
@@ -603,16 +845,41 @@ export function createBranchHistory(options: {
       }
     },
     prepare,
-    async beforeCommit(t, label: string = branchDraftLabels.beforeSending) {
+    async beforeCommit(
+      t,
+      label: string = branchDraftLabels.beforeSending,
+      permit,
+      draft,
+    ) {
+      if (permit) {
+        const record = (await options.session(t)).revert;
+        if (!matchesPermit(t, permit, record)) {
+          throw new DOMException(
+            "The staged revert changed before Send",
+            "AbortError",
+          );
+        }
+        if (
+          record && !permit.discard &&
+          !load(t).some((branch) => savedBranchMatches(branch, record))
+        ) {
+          throw fail(
+            t,
+            "The saved copy was removed before Send. The replacement was not sent.",
+            "Retry Send to save a copy or explicitly choose Send anyway.",
+          );
+        }
+        return;
+      }
       if (!supportsHistory(t)) return;
       await captures.get(draftKey(t))?.promise;
       const session = await options.session(t);
       if (!session.revert) return;
-      let branch = load(t).find((b) => b.pending);
+      let branch = load(t).find((b) => savedBranchMatches(b, session.revert!));
       // A reload can retire the in-memory capture, never the native staged tail.
       if (!branch) {
-        await prepare(t, session.revert.messageID);
-        branch = load(t).find((b) => b.pending);
+        await prepare(t, session.revert.boundaryID, session.revert);
+        branch = load(t).find((b) => savedBranchMatches(b, session.revert!));
       }
       if (!branch) {
         throw fail(
@@ -621,7 +888,7 @@ export function createBranchHistory(options: {
           "Use Restore conversation first, then revert again in this browser to save it.",
         );
       }
-      const value = structuredClone(options.drafts.current(draftKey(t)));
+      const value = cloneDraft(draft ?? options.drafts.current(draftKey(t)));
       const parts = await options.attachments(
         value.chips.map((c) => c.part),
         t.sidecarId,
@@ -637,7 +904,97 @@ export function createBranchHistory(options: {
         );
       }
     },
+    async beforeSend(t) {
+      const target = { ...t },
+        draft = cloneDraft(options.drafts.current(draftKey(t))),
+        record = (options.current?.(t) ?? await options.session(t)).revert;
+      const permit: BranchSendPermit = {
+        target,
+        record: record &&
+          { boundaryID: record.boundaryID, messageIDs: [...record.messageIDs] },
+      };
+      if (!record) return permit;
+      if (sends.has(draftKey(t))) {
+        throw new DOMException("A Send choice is already open", "AbortError");
+      }
+      try {
+        if (!supportsHistory(t)) {
+          throw new Error("This server does not provide prompt history");
+        }
+        await owner.beforeCommit(t, undefined, undefined, draft);
+        if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+          throw new DOMException("The staged revert changed", "AbortError");
+        }
+        return permit;
+      } catch (cause) {
+        if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
+          throw new DOMException("The staged revert changed", "AbortError");
+        }
+        if (sends.has(draftKey(t))) {
+          throw new DOMException("A Send choice is already open", "AbortError");
+        }
+        const wait = Promise.withResolvers<BranchSendPermit>();
+        const reason = cause instanceof RequestFailure
+          ? cause.failure.facts?.reason
+          : cause instanceof Error
+          ? cause.message
+          : undefined;
+        const choice = {
+          boundaryID: record.boundaryID,
+          saving: false,
+          error: failureValue(
+            new RequestFailure({
+              code: "revert.permanence",
+              diagnosticID: randomID(),
+              retry: "new-intent",
+              facts: {
+                actionLabel: "Sending makes the revert permanent",
+                target,
+                reason: reason ??
+                  "There is no saved copy of the reverted messages in this browser.",
+                recovery:
+                  "Save a copy first, or choose Send anyway to discard those messages.",
+              },
+            }),
+          ),
+        };
+        sends.set(draftKey(t), { target, record, draft, choice, wait });
+        publishSend(t);
+        return await wait.promise;
+      }
+    },
+    async saveCopy() {
+      const pending = selected && sends.get(draftKey(selected));
+      if (!pending || pending.choice.saving) return;
+      pending.choice = { ...pending.choice, saving: true };
+      publishSend(pending.target);
+      try {
+        if (!supportsHistory(pending.target)) {
+          throw new Error("This server does not provide prompt history");
+        }
+        await owner.beforeCommit(
+          pending.target,
+          undefined,
+          undefined,
+          pending.draft,
+        );
+        await allowSend(pending.target, false);
+      } catch (cause) {
+        pending.choice = { ...pending.choice, error: failureValue(cause) };
+      } finally {
+        pending.choice = { ...pending.choice, saving: false };
+        publishSend(pending.target);
+      }
+    },
+    async sendAnyway() {
+      if (selected) await allowSend({ ...selected }, true);
+    },
+    cancelSend,
     async settled(t, restored = false) {
+      if (
+        sends.has(draftKey(t)) &&
+        (restored || !(await options.session(t)).revert)
+      ) cancelSend(t);
       if (!supportsHistory(t)) return;
       const previous = captures.get(draftKey(t));
       if (restored) {
@@ -664,7 +1021,7 @@ export function createBranchHistory(options: {
               { original: transaction!.before, atRevert: current };
             // Restore retires the old stage, not the promised draft/archive copy.
             // Reacquire restored history under a fresh clock without blocking it.
-            void prepare(t, boundary, {
+            void prepare(t, boundary, previous?.record, {
               ...drafts,
               restored: {
                 current,
@@ -772,6 +1129,7 @@ export function createBranchHistory(options: {
       refresh(selected);
     },
   };
+  return owner;
 }
 
 /** Keeps the exact captured text, rather than manufacturing attachment tokens. */
@@ -822,8 +1180,8 @@ export function connectBranchHistory(options: {
     title: (target) =>
       resources.entry(target.sidecarId, target.sessionID)?.title,
     feedback: (target) => rpc(target).feedback(target.sessionID),
-    page: (target, before, signal) =>
-      transcripts.snapshotPage(target, before, signal),
+    page: (target, before, signal, scope) =>
+      transcripts.snapshotPage(target, before, signal, scope),
     concurrency: (target) =>
       resources.sidecars.connection(target.sidecarId).messages?.concurrency ??
         1,
@@ -838,5 +1196,12 @@ export function connectBranchHistory(options: {
       }),
     session: (target) =>
       rpc(target).call("session.get", { sessionID: target.sessionID }),
+    current: (target) => {
+      const state = transcripts.get(target)?.state;
+      return state?.info && state.continuity === "ready" && !state.loading &&
+          resources.sidecars.connection(target.sidecarId).connected
+        ? { ...state.info, revert: state.content.revert ?? undefined }
+        : undefined;
+    },
   });
 }

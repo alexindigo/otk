@@ -65,8 +65,7 @@ export function createDraftReverts(drafts: {
           write((draft) => {
             if (
               draft !== invocation ||
-              ((captured.edited || !captured.recalled) &&
-                (hasDraftContent(draft) || draft.editor))
+              captured.edited && (hasDraftContent(draft) || !!draft.editor)
             ) return draft;
             captured.recalled = true;
             return replaceDraftContent(draft, content);

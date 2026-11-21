@@ -98,9 +98,12 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
     );
     // Native revert stages three user rows at/after the boundary: two prompts
     // and the user's shell run, whose user row carries only synthetic text.
-    const staged = (await oc.request<{ info: Info; parts: RawPart[] }[]>(
+    const allStaged = await oc.request<{ info: Info; parts: RawPart[] }[]>(
       `/session/${parent.id}/message?limit=200`,
-    )).filter((m) => m.info.role === "user" && m.info.id >= users[1]);
+    );
+    const staged = allStaged.filter((m) =>
+      m.info.role === "user" && m.info.id >= users[1]
+    );
     assertEquals(staged.length, 3);
     const shellUser = staged.find((m) => m.info.id === shell.info.parentID)!;
     assert(shellUser.parts.length > 0);
@@ -143,13 +146,13 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
         },
       );
       adapters.push(adapter);
-      // The strip counts rolled-back prompts. Content-proven prompt identity
-      // (NT4; plan 3.1: context never anchors a revert count) excludes the
-      // synthetic-only shell row, as V2 counts only `user` prompts, never
-      // `shell` records. SQL and the bounded API fallback agree.
+      // Membership includes prompts, synthetic rows and replies by native identity.
       const revert = (await adapter.core.getSession(parent.id)).revert;
-      assertEquals(revert?.messageCount, 2);
-      assertEquals(revert?.prompts?.map((p) => p.messageID), users.slice(1));
+      assertEquals(revert?.boundaryID, users[1]);
+      assertEquals(
+        revert?.messageIDs,
+        allStaged.filter((m) => m.info.id >= users[1]).map((m) => m.info.id),
+      );
       const frecency = new Frecency(store, frecencyOptions);
       const rpc = new RpcRegistry(adapter, store);
       registerFrecency(rpc, adapter, frecency);

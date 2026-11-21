@@ -17,6 +17,11 @@ Deno.test("code revert and archive contributions require independent capabilitie
   const revert: SessionRevert = {
     state: {},
     matches: () => true,
+    ready: () => undefined,
+    confirm: () => Promise.resolve(),
+    cancel() {},
+    retry: () => Promise.resolve(),
+    dismiss() {},
     revertTo: (id, code) => {
       calls.push([id, code]);
       return Promise.resolve();
@@ -54,11 +59,11 @@ Deno.test("code revert and archive contributions require independent capabilitie
     });
   const session = () =>
     commands.contextActions({ kind: "session", data: target });
-  assertEquals(prompt().map((c) => c.title), ["Revert to here"]);
+  assertEquals(prompt().map((c) => c.title), ["Revert from here"]);
   assertEquals(session().some((c) => c.id === "session.archive"), false);
   available = true;
   assertEquals(prompt().map((c) => c.title), [
-    "Revert to here",
+    "Revert from here",
     "Revert code changes",
   ]);
   await commands.runContext(
@@ -101,6 +106,11 @@ Deno.test("pending Restore has one descriptive registry action for palette, slas
     revert: {
       state: {},
       matches: () => true,
+      ready: () => undefined,
+      confirm: () => Promise.resolve(),
+      cancel() {},
+      retry: () => Promise.resolve(),
+      dismiss() {},
       revertTo: () => Promise.resolve(),
       undo: () => Promise.resolve(),
       redo: () => Promise.resolve(),

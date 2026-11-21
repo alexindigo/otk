@@ -20,7 +20,7 @@ import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
 import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
-import type { BranchHistory } from "./branch-history.ts";
+import type { BranchHistory, BranchSendPermit } from "./branch-history.ts";
 import {
   createSessionDelivery,
   type SessionDelivery,
@@ -80,11 +80,41 @@ export function createSessionActions(o: {
   factory?: StateFactory;
   promptBlocks?(text: string): import("@otk/protocol").Block[];
   current: CurrentClient;
-  branchHistory?: Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">;
+  revertReady?(target: Selection): Promise<void> | undefined;
+  branchHistory?:
+    & Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">
+    & Partial<Pick<BranchHistory, "beforeSend">>;
   /** Wrap the common submission lifetime, including shell/native commands. */
   submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
 }): SessionActions {
   const { resources, session, current } = o;
+  // Native boundary changes and committing submissions share this admission
+  // boundary. A Send cannot inspect an old native stage while Revert is in flight.
+  const mutations = new Map<string, Promise<ContentSession>>();
+  const changeBoundary = (
+    target: Selection,
+    action: () => Promise<ContentSession>,
+  ) => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const previous = mutations.get(key);
+    const promise = (async () => {
+      await previous;
+      return await action();
+    })().finally(() => {
+      if (mutations.get(key) === promise) mutations.delete(key);
+    });
+    mutations.set(key, promise);
+    return promise;
+  };
+  const boundaryReady = (target: Selection): Promise<void> | undefined => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const reconciliation = o.revertReady?.(target);
+    if (!mutations.has(key) && !reconciliation) return;
+    return (async () => {
+      while (mutations.has(key)) await mutations.get(key);
+      await reconciliation;
+    })();
+  };
   const deliveries = new Map<string, SessionDelivery>();
   const delivery = (target: Selection) => {
     const key = sessionKey(target.sidecarId, target.sessionID);
@@ -144,6 +174,7 @@ export function createSessionActions(o: {
   const submission = (
     target: Selection,
     captured?: IntentGroup,
+    permit?: BranchSendPermit,
   ): SessionSubmission =>
     createSessionSubmission({
       sessionID: target.sessionID,
@@ -164,7 +195,13 @@ export function createSessionActions(o: {
             );
           }
           return (async () => {
-            await o.branchHistory?.beforeCommit(target);
+            const changing = boundaryReady(target);
+            if (changing) await changing;
+            const allowed = permit ??
+              await o.branchHistory?.beforeSend?.(target);
+            if (!permit) {
+              await o.branchHistory?.beforeCommit(target, undefined, allowed);
+            }
             try {
               return await action();
             } finally {
@@ -301,6 +338,8 @@ export function createSessionActions(o: {
     },
     async compact(target, model) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      const changing = boundaryReady(target);
+      if (changing) await changing;
       await act(
         target,
         async () => {
@@ -345,38 +384,35 @@ export function createSessionActions(o: {
     },
     revert(target, messageID, options, code = false) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      return act(
-        target,
-        async () => {
-          const result = await rpc.call(
-            code ? "session.revertCode" : "session.revert",
-            {
-              sessionID: target.sessionID,
-              messageID,
-            },
-            options,
-          );
-          // Staging is reversible. Preservation gates the next committing send,
-          // while its owner retains any background failure through FP1.
-          if (result.revert) {
-            void o.branchHistory?.prepare(target, messageID).catch(() => {});
-          }
-          return result;
-        },
-      );
+      return changeBoundary(target, () =>
+        act(
+          target,
+          async () => {
+            const result = await rpc.call(
+              code ? "session.revertCode" : "session.revert",
+              {
+                sessionID: target.sessionID,
+                messageID,
+              },
+              options,
+            );
+            return result;
+          },
+        ));
     },
     restore(target, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      return act(
-        target,
-        async () => {
-          const result = await rpc.call("session.restore", {
-            sessionID: target.sessionID,
-          }, options);
-          await o.branchHistory?.settled(target, true);
-          return result;
-        },
-      );
+      return changeBoundary(target, () =>
+        act(
+          target,
+          async () => {
+            const result = await rpc.call("session.restore", {
+              sessionID: target.sessionID,
+            }, options);
+            await o.branchHistory?.settled(target, true);
+            return result;
+          },
+        ));
     },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();
@@ -389,10 +425,15 @@ export function createSessionActions(o: {
         parts,
         o.promptBlocks,
       );
-      const send = (captured: IntentGroup): Promise<void> =>
-        delivery(target).send(
+      const send = async (captured: IntentGroup): Promise<void> => {
+        const changing = boundaryReady(target);
+        if (changing) await changing;
+        const permit = o.branchHistory?.beforeSend
+          ? await o.branchHistory.beforeSend(target)
+          : undefined;
+        return delivery(target).send(
           (dispatch) =>
-            submission(target, captured)(async (options) => {
+            submission(target, captured, permit)(async (options) => {
               const prepared = await attachments(parts, target.sidecarId);
               const transcript = session.transcripts?.get(target);
               const pending = transcript?.projection.entry(messageID)?.send;
@@ -409,6 +450,9 @@ export function createSessionActions(o: {
                     ).parts,
                   },
                 });
+              }
+              if (permit) {
+                await o.branchHistory?.beforeCommit(target, undefined, permit);
               }
               dispatch();
               return await rpc.call("session.prompt", {
@@ -430,6 +474,7 @@ export function createSessionActions(o: {
             },
           },
         );
+      };
       await send(group);
     },
     async abort(target = current.context().selection, options) {

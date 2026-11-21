@@ -48,6 +48,8 @@ test("revert.saved-branch-survives-send-and-reload", {
   await input.fill("Original unsent draft");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Restore conversation", exact: true }),
   ).toBeVisible();
@@ -61,7 +63,7 @@ test("revert.saved-branch-survives-send-and-reload", {
       m.info.id === oldPrompt.info.id
     ),
   ).toBe(false);
-  await page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ })
+  await page.getByRole("button", { name: /Saved earlier branches/ })
     .click();
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
@@ -141,7 +143,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("Saved prompt: Keep this exact prompt");
   await expect(saved).not.toContainText("saved prompt:");
   await page.reload();
-  await page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ })
+  await page.getByRole("button", { name: /Saved earlier branches/ })
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
@@ -162,7 +164,8 @@ test("revert.saved-branch-survives-send-and-reload", {
   await saved.getByRole("button", { name: "Delete saved branch", exact: true })
     .click();
   await expect(saved).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Unrevert:/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Saved earlier branches/ }))
+    .toHaveCount(0);
   await expect(page.locator(".otk-messages")).toContainText(
     "The replacement reply.",
   );
@@ -202,6 +205,8 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
   await input.fill("Original draft before revert");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   const restore = page.getByRole("button", {
     name: "Restore conversation",
     exact: true,
@@ -220,7 +225,7 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
     .click();
   await expect(input).toHaveValue("Current edited draft");
   await page.reload();
-  await page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ })
+  await page.getByRole("button", { name: /Saved earlier branches/ })
     .click();
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
@@ -265,13 +270,16 @@ test(
     });
     await page.locator(".otk-user-bubble").focus();
     await page.locator('[data-message-command="prompt.revert"]').click();
+    await page.getByRole("button", { name: "Confirm revert", exact: true })
+      .click();
     const alert = page.getByRole("alert");
     await expect(alert).toHaveCount(1);
-    await expect(alert).toContainText("Saving an earlier branch");
+    await expect(alert).toContainText("Reverted from");
     await expect(alert).not.toContainText("Quota-protected branch");
     await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
     await expect(alert).toContainText("were not saved");
     await expect(alert).toContainText("localStorage is full");
+    await alert.getByRole("button", { name: "Details", exact: true }).click();
     await expect(alert).toContainText("Delete a saved branch");
     expect(
       (await state.product("session.get", { sessionID: source.id })).revert,
@@ -280,12 +288,16 @@ test(
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Replacement blocked by quota");
     await input.press("Enter");
-    await expect(alert).toHaveCount(1);
-    await expect(alert).toContainText("Saving an earlier branch");
-    await expect(alert).not.toContainText("Quota-protected branch");
-    await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(alert).toContainText("localStorage is full");
-    await expect(alert).toContainText("Delete a saved branch");
+    const choice = page.locator(".otk-permanence-choice");
+    await expect(choice.getByRole("status")).toContainText(
+      "Sending makes the revert permanent",
+    );
+    await expect(alert).toHaveCount(0);
+    await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save copy", exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole("button", { name: "Send anyway", exact: true }))
+      .toBeVisible();
     await expect(input).toHaveValue("Replacement blocked by quota");
     expect(
       (await state.product("session.get", { sessionID: source.id })).revert,

@@ -32,8 +32,8 @@ function fixture() {
     archived: false,
   };
   const revert = {
-    messageID: "old-prompt",
-    messageCount: 1,
+    boundaryID: "old-prompt",
+    messageIDs: ["old-prompt"],
     files: [],
     prompt: {
       input: "Recalled old prompt",
@@ -62,8 +62,9 @@ function fixture() {
     });
   const run = async (action: () => Promise<void>, staged: boolean) => {
     const work = action();
+    const confirmed = staged ? owner.confirm() : work;
     publish(staged);
-    await work;
+    await confirmed;
   };
   return {
     session,

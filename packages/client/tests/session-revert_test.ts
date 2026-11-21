@@ -56,7 +56,8 @@ export function revertFixture() {
 Deno.test("revert owner serializes intents without optimistic content and retires old selection results", async () => {
   const f = revertFixture(), held = Promise.withResolvers<ContentSession>();
   f.result(held.promise);
-  const pending = f.owner.revertTo("prompt");
+  await f.owner.revertTo("prompt");
+  const pending = f.owner.confirm();
   assertEquals(f.owner.state.pending, "revert");
   assertEquals(f.state.content.revert, null);
   await f.owner.restore();
@@ -78,30 +79,28 @@ Deno.test("revert owner serializes intents without optimistic content and retire
   assertEquals(f.state.content.revert, null);
   f.owner.dispose();
 });
-Deno.test("strip projects authoritative counts, bounded prompts and files including older-server fallback", () => {
+Deno.test("strip projects the boundary and exact message identities without counts", () => {
   const f = revertFixture();
   const revert: RevertInfo = {
-    messageID: "p",
-    messageCount: 52,
+    boundaryID: "p",
+    messageIDs: ["p", "context", "reply"],
     files: [{ path: "a.ts", additions: 2, deletions: 1 }],
-    prompts: [{ messageID: "p", preview: "Boundary preview", time: 1 }],
   };
   const strip = f.owner.strip({ ...client.emptyContent(), revert });
   assert(strip);
   assertEquals(strip, {
-    count: 52,
-    preview: "Boundary preview",
-    prompts: revert.prompts,
-    more: 51,
+    boundaryID: "p",
+    messageIDs: revert.messageIDs,
+    preview: "p",
     files: revert.files,
   });
   assertEquals(f.owner.strip(client.emptyContent()), undefined);
   assertEquals(
     f.owner.strip({
       ...client.emptyContent(),
-      revert: { messageID: "p", messageCount: 2, files: [] },
-    })?.more,
-    2,
+      revert: { boundaryID: "p", messageIDs: ["p"], files: [] },
+    })?.boundaryID,
+    "p",
   );
   f.owner.dispose();
 });

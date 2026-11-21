@@ -8,7 +8,6 @@ import type { UsageMessage } from "@otk/protocol";
 import { reportedNumber, reportedTokens } from "./usage-values.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { runningDirectories, terminalSessions } from "./db-hints.ts";
-import { promptEvidenceSQL } from "./records.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
 export class BootstrapDb {
   #db: DatabaseSync | null = null;
@@ -109,41 +108,21 @@ export class BootstrapDb {
       return;
     }
   }
-  /** One scalar result, never message/part JSON or transcript content. */
-  revertedUserCount(id: string, cutoff: string): number | undefined {
+  /** Native-order stage membership, scalar IDs only, no prompt/body projection. */
+  revertedMessageIDs(id: string, cutoff: string): string[] | undefined {
     id = ids.decode(id);
     if (!this.#db) return;
     try {
-      return Number(
-        this.#db.prepare(`
-      SELECT count(*) AS count FROM message m
-      WHERE m.session_id = ? AND m.id >= ? AND json_extract(m.data, '$.role') = 'user' AND ${promptEvidenceSQL()}
-    `).get(id, cutoff)!.count,
-      );
-    } catch {
-      return;
-    }
-  }
-  /** First non-synthetic text or attachment labels, oldest first, bounded rows. */
-  revertedPrompts(
-    id: string,
-    cutoff: string,
-    limit: number,
-  ): { messageID: string; time: number; text: string }[] | undefined {
-    id = ids.decode(id);
-    if (!this.#db) return;
-    try {
-      return this.#db.prepare(
-        `SELECT m.id, json_extract(m.data,'$.time.created') AS time,
-        coalesce((SELECT json_extract(p.data,'$.text') FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='text' AND coalesce(json_extract(p.data,'$.synthetic'),0)=0 ORDER BY p.id LIMIT 1),
-          (SELECT group_concat(json_extract(p.data,'$.filename'), ', ') FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='file'),
-          (SELECT 'Compacted conversation' FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='compaction' LIMIT 1), '') AS text
-        FROM message m WHERE m.session_id=? AND m.id>=? AND json_extract(m.data,'$.role')='user' AND ${promptEvidenceSQL()} ORDER BY m.id LIMIT ?`,
-      ).all(id, cutoff, limit).map((row) => ({
-        messageID: String(row.id),
-        time: Number(row.time),
-        text: String(row.text),
-      }));
+      const result: string[] = [];
+      let after = "";
+      for (;;) {
+        const page = this.#db.prepare(
+          "SELECT id FROM message WHERE session_id=? AND id>=? AND id>? ORDER BY id LIMIT 100",
+        ).all(id, cutoff, after).map((row) => String(row.id));
+        result.push(...page);
+        if (page.length < 100) return result;
+        after = page.at(-1)!;
+      }
     } catch {
       return;
     }

@@ -9,7 +9,7 @@ import {
   shellTask,
 } from "./shell-fixture.ts";
 
-Deno.test("branch preservation follows reversible revert and precedes every shared submission and Compact", async () => {
+Deno.test("revert RPC never starts capture; preservation still precedes every shared submission and Compact", async () => {
   const f = shellFixture(), events: string[] = [];
   const actions = client.createSessionActions({
     ...f,
@@ -44,14 +44,19 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     );
   });
   const target = { sidecarId: "local", sessionID: "selected" };
   await actions.revert(target, "boundary");
-  assertEquals(events.slice(0, 2), ["session.revert", "save-branch"]);
+  assertEquals(events.includes("save-branch"), false);
+  assertEquals(events[0], "session.revert");
   events.length = 0;
   const compact = actions.compact(target, { provider: "p", model: "m" });
   await compactEntered.promise;
@@ -90,7 +95,11 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     )
@@ -118,6 +127,128 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     [],
   );
   f.resources.stop();
+});
+
+Deno.test("a permanence choice waits before pending-send publication and captures its original target", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  const entered = Promise.withResolvers<void>(),
+    choice = Promise.withResolvers<client.BranchSendPermit>();
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+    )
+  );
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      settled: () => Promise.resolve(),
+      beforeCommit: () => Promise.resolve(),
+      beforeSend: () => {
+        entered.resolve();
+        return choice.promise;
+      },
+    },
+  });
+  const sending = actions.prompt([{
+    kind: "text",
+    text: "Captured invocation",
+  }], {});
+  await entered.promise;
+  assertEquals(actions.delivery(target).state.receipts, []);
+  assertEquals(f.calls.some((call) => call[1] === "session.prompt"), false);
+  f.session.state.selection = { sidecarId: "local", sessionID: "other" };
+  choice.resolve({ target });
+  await sending;
+  const call = f.calls.find((call) => call[1] === "session.prompt")!;
+  assertEquals((call[2] as { sessionID: string }).sessionID, "selected");
+  actions.stop();
+  f.resources.stop();
+});
+
+for (const kind of ["revert", "restore"] as const) {
+  Deno.test(`Send preservation waits for the captured ${kind} mutation`, async () => {
+    const f = shellFixture();
+    const target = { sidecarId: "local", sessionID: "selected" };
+    f.entries("local", [shellEntry("selected")]);
+    const entered = Promise.withResolvers<void>();
+    const native = Promise.withResolvers<ReturnType<typeof shellInfo>>();
+    let preserving = false;
+    f.reply((_id, method) => {
+      if (method === `session.${kind}`) {
+        entered.resolve();
+        return native.promise;
+      }
+      return Promise.resolve(
+        method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+      );
+    });
+    const actions = client.createSessionActions({
+      ...f,
+      branchHistory: {
+        prepare: () => Promise.resolve(),
+        settled: () => Promise.resolve(),
+        beforeCommit: () => Promise.resolve(),
+        beforeSend: () => {
+          preserving = true;
+          return Promise.resolve({ target });
+        },
+      },
+    });
+    const changing = kind === "revert"
+      ? actions.revert(target, "boundary")
+      : actions.restore(target);
+    await entered.promise;
+    const sending = actions.prompt([{ kind: "text", text: "Replacement" }], {});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeSettlement = preserving;
+    const receipts = [...actions.delivery(target).state.receipts];
+    native.resolve(shellInfo("selected"));
+    await changing;
+    await sending;
+    assertEquals(preserving, true);
+    actions.stop();
+    f.resources.stop();
+    assertEquals(beforeSettlement, false);
+    assertEquals(receipts, []);
+  });
+}
+
+Deno.test("Send joins the revert owner's publication wait before checking preservation", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  const ready = Promise.withResolvers<void>();
+  let preserving = false;
+  const actions = client.createSessionActions({
+    ...f,
+    revertReady: () => ready.promise,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      settled: () => Promise.resolve(),
+      beforeCommit: () => Promise.resolve(),
+      beforeSend: () => {
+        preserving = true;
+        return Promise.resolve({ target });
+      },
+    },
+  });
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+    )
+  );
+  const sending = actions.prompt([{ kind: "text", text: "Replacement" }], {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const admittedEarly = preserving;
+  ready.resolve();
+  await sending;
+  actions.stop();
+  f.resources.stop();
+  assertEquals(admittedEarly, false);
+  assertEquals(preserving, true);
 });
 
 Deno.test("session actions resolve directory from index then matching selected info then authoritative RPC", async () => {

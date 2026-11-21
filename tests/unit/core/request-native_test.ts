@@ -140,7 +140,11 @@ test("every native feature fences its backend effect, checkpoints only metadata 
         revert: (_id, messageID, operation) =>
           effect("session.revertCode", operation, {
             ...base,
-            revert: { messageID, messageCount: 1, files: [] },
+            revert: {
+              boundaryID: messageID,
+              messageIDs: [messageID],
+              files: [],
+            },
           }),
       },
       revert: {
@@ -148,8 +152,8 @@ test("every native feature fences its backend effect, checkpoints only metadata 
           effect("session.revert", operation, {
             ...base,
             revert: {
-              messageID,
-              messageCount: 1,
+              boundaryID: messageID,
+              messageIDs: [messageID],
               files: [],
               prompt: {
                 input: "private prompt must never be stored",

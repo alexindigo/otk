@@ -77,7 +77,7 @@ export default function ComposerTakeovers(
             </div>
           </div>
           <ScrollRegion
-            frameClass="otk-composer-notice-layer"
+            frameClass="otk-composer-feedback"
             hidden={!hasComposer() || active()}
           >
             <ContentSlot content={!active() ? props.notice : undefined} />

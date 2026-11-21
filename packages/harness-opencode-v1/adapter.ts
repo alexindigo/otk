@@ -51,7 +51,6 @@ import {
 import { MessageClocks } from "./message-clocks.ts";
 import {
   eventRecord,
-  isPrompt,
   isPromptPart,
   parseSourceRef,
   RecordProjection,
@@ -85,12 +84,7 @@ import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
 import { type PendingPermission, permissions } from "./permissions.ts";
-import {
-  restore,
-  revert,
-  REVERT_PROMPT_LIMIT,
-  revertPreview,
-} from "./revert.ts";
+import { restore, revert } from "./revert.ts";
 import { historyEntry } from "./history.ts";
 import { sessionActions } from "./session-actions.ts";
 import { sessionDirectory } from "./directory.ts";
@@ -158,6 +152,10 @@ export class OpencodeV1Adapter implements Harness {
   #clocks: MessageClocks;
   #selectionIntents = new SelectionIntents();
   #revertReads = new Map<string, AbortController>();
+  #revertRecords = new Map<string, {
+    boundaryID: string;
+    record: Promise<RevertInfo>;
+  }>();
   get #stopped(): boolean {
     return !this.#run || this.#run.controller.signal.aborted;
   }
@@ -1088,6 +1086,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#idle.clear();
     this.#selectionIntents.clear();
     this.#reverts.clear();
+    this.#revertRecords.clear();
     this.#transcript.release();
     this.#retired.clear();
     this.#attention.reset([], [], []);
@@ -1156,41 +1155,64 @@ export class OpencodeV1Adapter implements Harness {
     const id = ids.encode(session.id);
     if (!session.revert) {
       this.#reverts.delete(id);
+      this.#revertRecords.delete(id);
       return;
     }
     if (this.buffers.subscribed(id)) {
       this.#reverts.set(id, session.revert.messageID);
       this.#tasks.cutoff(id, session.revert.messageID);
     }
-    let messageCount = this.#db.revertedUserCount(
-      id,
-      session.revert.messageID,
-    );
-    const projected = this.#db.revertedPrompts(
-      id,
-      session.revert.messageID,
-      REVERT_PROMPT_LIMIT,
-    );
+    const previous = this.#revertRecords.get(id);
+    if (previous?.boundaryID === session.revert.messageID) {
+      const files = session.revert.diff
+        ? parseDiff(session.revert.diff)
+        : mapDiffs(session.summary?.diffs || []);
+      return {
+        ...await previous.record,
+        files: files.map(({ path, additions, deletions }) => ({
+          path,
+          additions,
+          deletions,
+        })),
+      };
+    }
+    const record = this.#resolveRevert(session, signal, priority);
+    this.#revertRecords.set(id, {
+      boundaryID: session.revert.messageID,
+      record,
+    });
+    try {
+      return await record;
+    } catch (error) {
+      if (this.#revertRecords.get(id)?.record === record) {
+        this.#revertRecords.delete(id);
+      }
+      throw error;
+    }
+  }
+  async #resolveRevert(
+    session: Session,
+    signal: AbortSignal | undefined,
+    priority: import("@otk/harness").ProviderReadOptions["priority"],
+  ): Promise<RevertInfo> {
+    const id = ids.encode(session.id), boundaryID = session.revert!.messageID;
+    let messageIDs = this.#db.revertedMessageIDs(id, boundaryID);
+    if (!messageIDs?.includes(boundaryID)) messageIDs = undefined;
     let prompt: import("@otk/protocol").HistoryEntry | undefined;
     try {
       prompt = await this.#history.entry(
         id,
-        session.revert.messageID,
+        boundaryID,
         signal,
         priority,
       );
     } catch (error) {
       signal?.throwIfAborted();
       // An unavailable native DB retains the existing API fallback boundary.
-      if (messageCount !== undefined && projected) throw error;
+      if (messageIDs !== undefined) throw error;
     }
-    let prompts = projected?.map(({ text, ...row }) => ({
-      ...row,
-      preview: revertPreview(text),
-    }));
-    if (messageCount === undefined || !prompts) {
-      messageCount = 0;
-      const bounded: NonNullable<RevertInfo["prompts"]> = [];
+    if (messageIDs === undefined) {
+      messageIDs = [];
       let boundary: import("./messages.ts").NativeMessage | undefined;
       let command: string | undefined;
       for await (
@@ -1198,7 +1220,7 @@ export class OpencodeV1Adapter implements Harness {
       ) {
         if (
           message.info.role === "assistant" &&
-          message.info.parentID === session.revert.messageID
+          message.info.parentID === boundaryID
         ) {
           const input = message.parts.find((p) =>
             p.type === "tool" && p.tool === "bash"
@@ -1206,31 +1228,13 @@ export class OpencodeV1Adapter implements Harness {
           if (typeof input === "string") command = input;
         }
         if (
-          isPrompt(message.info, message.parts) &&
-          message.info.id >= session.revert.messageID
+          message.info.id >= boundaryID
         ) {
-          messageCount++;
-          const text = message.parts.find((p) =>
-            p.type === "text" && !p.synthetic
-          )?.text ?? (message.parts.filter((p) =>
-            p.type === "file"
-          ).map((p) => p.filename ?? "attachment").join(", ") ||
-            (message.parts.some((p) =>
-                p.type === "compaction"
-              )
-              ? "Compacted conversation"
-              : ""));
-          bounded.push({
-            messageID: message.info.id,
-            time: message.info.time.created,
-            preview: revertPreview(text),
-          });
-          bounded.sort((a, b) => a.messageID.localeCompare(b.messageID));
-          if (bounded.length > REVERT_PROMPT_LIMIT) bounded.pop();
-          if (message.info.id === session.revert.messageID) boundary = message;
+          messageIDs.push(message.info.id);
+          if (message.info.id === boundaryID) boundary = message;
         }
       }
-      prompts = bounded;
+      messageIDs.sort();
       if (boundary) {
         const shell = boundary.parts.some((p) =>
           p.type === "text" && p.synthetic &&
@@ -1244,13 +1248,12 @@ export class OpencodeV1Adapter implements Harness {
         );
       }
     }
-    const files = session.revert.diff
-      ? parseDiff(session.revert.diff)
+    const files = session.revert!.diff
+      ? parseDiff(session.revert!.diff)
       : mapDiffs(session.summary?.diffs || []);
     return {
-      messageID: session.revert.messageID,
-      messageCount,
-      prompts,
+      boundaryID,
+      messageIDs,
       prompt,
       files: files.map(({ path, additions, deletions }) => ({
         path,
@@ -2136,6 +2139,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#tasks.dispose(id);
     this.#colors.release(id);
     this.#reverts.delete(id);
+    this.#revertRecords.delete(id);
     this.#recovery.release(id);
     this.#clocks.release(id);
     this.#releaseRevert(id);
@@ -2425,7 +2429,10 @@ export class OpencodeV1Adapter implements Harness {
         if (session.revert) {
           this.#reverts.set(mapped.id, session.revert.messageID);
           this.#tasks.cutoff(mapped.id, session.revert.messageID);
-        } else this.#reverts.delete(mapped.id);
+        } else {
+          this.#reverts.delete(mapped.id);
+          this.#revertRecords.delete(mapped.id);
+        }
         const local = new AbortController();
         this.#revertReads.set(mapped.id, local);
         const signal = AbortSignal.any([controller.signal, local.signal]);
@@ -2439,10 +2446,9 @@ export class OpencodeV1Adapter implements Harness {
           ) return;
           sink.content(mapped.id, {
             op: "session.revert",
-            messageID: revert?.messageID,
-            messageCount: revert?.messageCount || 0,
+            boundaryID: revert?.boundaryID,
+            messageIDs: revert?.messageIDs ?? [],
             files: revert?.files || [],
-            prompts: revert?.prompts,
             prompt: revert?.prompt,
           });
         }).catch((error) => {

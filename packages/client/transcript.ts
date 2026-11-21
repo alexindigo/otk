@@ -128,7 +128,11 @@ export interface TranscriptOwner {
   readonly interaction: TranscriptInteraction;
   /** Detached explicit archive demand, admitted by the canonical body owner.
    * Does not replace the live viewport's paging boundary or projection. */
-  snapshotPage(before?: string, signal?: AbortSignal): Promise<MessagePage>;
+  snapshotPage(
+    before?: string,
+    signal?: AbortSignal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
+  ): Promise<MessagePage>;
   source(
     messageID: string,
     text: (part: Part) => string | undefined,
@@ -1034,7 +1038,7 @@ export function createTranscript(
       setState(() => {});
     },
     interaction,
-    snapshotPage: (before, cancellation) => {
+    snapshotPage: (before, cancellation, scope) => {
       const signal = cancellation
         ? AbortSignal.any([snapshotLifetime.signal, cancellation])
         : snapshotLifetime.signal;
@@ -1043,6 +1047,7 @@ export function createTranscript(
           connection(target.sidecarId).rpc.call("history.messages", {
             sessionID: target.sessionID,
             before,
+            ...(scope ? { scope } : {}),
           }, { signal }),
         signal,
       );

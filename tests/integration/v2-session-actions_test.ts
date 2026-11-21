@@ -221,8 +221,11 @@ test("OC2A2 messages-only leaves files unchanged; code mode changes them; Restor
     await Deno.readTextFile(native.directory + "/note.txt"),
     "changed\n",
   );
-  assertEquals(staged.revert?.messageCount, 1);
-  assertEquals(staged.revert?.prompts?.[0].preview, "change note.txt");
+  assertEquals(staged.revert?.boundaryID, user.id);
+  assertEquals(
+    staged.revert?.messageIDs,
+    all.data.slice(all.data.indexOf(user)).map((m) => m.id),
+  );
   assertEquals(staged.revert?.files, []);
   const code = await value.capabilities.revertCode!.revert(
     target.id,
@@ -283,7 +286,7 @@ test("OC2A3 attachment failure preserves stage; the next successful prompt makes
     })
   );
   assertEquals(
-    (await value.core.getSession(target.id)).revert?.messageID,
+    (await value.core.getSession(target.id)).revert?.boundaryID,
     user.id,
   );
   fake.queue({ chunks: ["new ", "reply"], delay: 1000 });

@@ -70,6 +70,8 @@ export interface ClockedContent {
 }
 export interface MessagePage {
   sessionID: string;
+  /** Body revision witnesses for exact-ID archive reads, within clock.epoch. */
+  revisions?: Record<string, number>;
   version: TranscriptVersion;
   clock: ContentClock;
   from: ContentClock;
@@ -95,6 +97,14 @@ export interface MessagePageInput {
   before?: MessageCursor;
   /** Explicit user retry, never implied by paging or baseline acquisition. */
   retryRecovery?: boolean;
+}
+export interface MessageSnapshotScope {
+  messageIDs: string[];
+  /** Witness-only validation: never acquire bodies, prompts or sources. */
+  validate?: boolean;
+}
+export interface MessageSnapshotInput extends MessagePageInput {
+  scope?: MessageSnapshotScope;
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {

@@ -648,8 +648,8 @@ export async function messagesScenario(profile: Profile) {
           ) {
             f.app.connections.content(sessionID, {
               op: "session.revert",
-              messageID: "user",
-              messageCount: 1,
+              boundaryID: "user",
+              messageIDs: ["user"],
               files: [{ path: "example.ts", additions: 1, deletions: 1 }],
             });
             return null;

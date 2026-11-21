@@ -113,6 +113,7 @@ export function createShellState(
     session,
     current,
     branchHistory,
+    revertReady: (target) => revert.ready(target),
     factory: solidState,
     submitted: (target, action) =>
       forkNotes.submission(
@@ -130,6 +131,11 @@ export function createShellState(
     session,
     actions,
     drafts,
+    branchHistory,
+    storage,
+    server: (target) =>
+      new URL(resources.server(target.sidecarId)?.baseUrl || o.api.href, o.api)
+        .href,
     status: {
       working: actions.working,
       subscribe: (listener) =>

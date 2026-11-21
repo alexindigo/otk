@@ -1,0 +1,50 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-revert-group {
+  min-inline-size: 0;
+}
+.otk-revert-label,
+.otk-revert-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.otk-revert-label {
+  flex: 1;
+}
+.otk-revert-label > :not(.otk-revert-preview) {
+  flex: none;
+}
+.otk-revert-preview {
+  min-inline-size: 0;
+  flex: 1;
+}
+.otk-revert-failure {
+  min-inline-size: 0;
+  flex: 1;
+}
+.otk-revert-records {
+  min-inline-size: 0;
+}
+.otk-revert-confirmation {
+  margin-block: var(--space-3) var(--message-gap, var(--space-6));
+  padding: var(--space-3);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-card);
+}
+.otk-revert-confirmation p {
+  margin-block: 0 var(--space-2);
+}
+.otk-revert-confirmation .otk-control-row {
+  margin-block-start: var(--space-3);
+}
+.otk-revert-heading-content {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  flex: 1;
+  text-align: start;
+}
+.otk-revert-label {
+  inline-size: 100%;
+}

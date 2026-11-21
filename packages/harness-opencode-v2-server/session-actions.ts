@@ -66,32 +66,59 @@ export async function selectAction(
   }
 }
 
-/** Bounded pages; only scalar identities and at most 50 previews survive a page. */
+const revertRecords = new WeakMap<
+  V2Client,
+  Map<string, {
+    boundaryID: string;
+    record: Promise<NonNullable<ContentSession["revert"]>>;
+  }>
+>();
+
+/** A native stage owns its identity set across replacement page baselines. */
 export async function revertSession(
   client: V2Client,
   raw: NativeSession,
   signal?: AbortSignal,
 ): Promise<ContentSession> {
   const mapped = mapSession(raw);
-  if (!raw.revert || !mapped.revert) return mapped;
+  let records = revertRecords.get(client);
+  if (!records) revertRecords.set(client, records = new Map());
+  if (!raw.revert || !mapped.revert) {
+    records.delete(raw.id);
+    return mapped;
+  }
+  const boundaryID = raw.revert.messageID;
+  const previous = records.get(raw.id);
+  if (previous?.boundaryID === boundaryID) {
+    mapped.revert = { ...await previous.record, files: mapped.revert.files };
+    return mapped;
+  }
+  const record = resolveRevert(client, mapped, boundaryID, signal);
+  records.set(raw.id, { boundaryID, record });
+  try {
+    mapped.revert = await record;
+    return mapped;
+  } catch (error) {
+    if (records.get(raw.id)?.record === record) records.delete(raw.id);
+    throw error;
+  }
+}
+async function resolveRevert(
+  client: V2Client,
+  mapped: ContentSession,
+  boundaryID: string,
+  signal?: AbortSignal,
+): Promise<NonNullable<ContentSession["revert"]>> {
   const messages = new Messages(() => client);
-  let cursor: string | undefined, count = 0, foundBoundary = false;
-  const prompts: NonNullable<ContentSession["revert"]>["prompts"] = [];
+  let cursor: string | undefined, foundBoundary = false;
+  const messageIDs: string[] = [];
   let boundary: Extract<NativeMessage, { type: "user" }> | undefined;
   do {
     const page = await messages.page(mapped.id, SCAN_ROWS, cursor, signal);
     let found = false;
     for (const message of [...page.items].reverse()) {
-      if (message.type === "user") {
-        count++;
-        prompts.unshift({
-          messageID: message.id,
-          time: millis(message.time.created),
-          preview: message.text.replace(/\s+/g, " ").trim().slice(0, 200),
-        });
-        if (prompts.length > 50) prompts.pop();
-      }
-      if (message.id === raw.revert.messageID) {
+      messageIDs.unshift(message.id);
+      if (message.id === boundaryID) {
         foundBoundary = true;
         found = true;
         if (message.type === "user") boundary = message;
@@ -108,10 +135,10 @@ export async function revertSession(
       new Error("Revert boundary changed during preview acquisition"),
     );
   }
-  mapped.revert.messageCount = count;
-  mapped.revert.prompts = prompts;
+  const revert = { boundaryID, messageIDs, files: mapped.revert!.files };
+  let prompt: import("@otk/protocol").HistoryEntry | undefined;
   if (boundary) {
-    mapped.revert.prompt = {
+    prompt = {
       input: boundary.text,
       mode: "normal",
       time: millis(boundary.time.created),
@@ -130,7 +157,7 @@ export async function revertSession(
       ],
     };
   }
-  return mapped;
+  return { ...revert, ...(prompt ? { prompt } : {}) };
 }
 
 export function sessionActions(ports: {
@@ -177,6 +204,7 @@ export function sessionActions(ports: {
       );
     }
     ports.observed(settled);
+    revertRecords.get(client)?.delete(ids.decode(id));
     return mapSession(settled);
   };
   const stage = (files: boolean) => ({

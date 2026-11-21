@@ -29,12 +29,14 @@ test(
     const restores = Number(
       await page.locator("[data-restores]").getAttribute("data-restores"),
     );
-    const strip = page.locator(".otk-rolled-back-strip"),
+    const strip = page.locator(".otk-revert-group"),
       original = await strip.elementHandle();
-    const disclosure = page.locator(".otk-rollback-disclosure");
+    const disclosure = page.locator(
+      ".otk-revert-group .otk-record-group-toggle",
+    );
     await page.evaluate("styleTest.settleNotice()");
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator(".otk-rollback-footer button")).toBeVisible();
+    await expect(page.locator(".otk-revert-restore")).toBeVisible();
     if (
       await disclosure.getAttribute("aria-expanded") !== "true"
     ) await disclosure.click();
@@ -53,13 +55,17 @@ test(
       expect(await strip.evaluate((el, old) => el === old, original)).toBe(
         true,
       );
-      await expect(page.locator(".otk-composer-notice")).toHaveCount(1);
+      await expect(page.locator(".otk-composer-notice")).toHaveCount(
+        operation === "feedback('pending')" || operation === "feedback('error')"
+          ? 1
+          : 0,
+      );
       if (operation !== "refreshNotice()") {
-        await expect(page.locator(".otk-rollback-footer button"))
+        await expect(page.locator(".otk-revert-restore"))
           .toBeAttached();
       }
     }
-    await page.locator(".otk-rollback-footer button").click();
+    await page.locator(".otk-revert-restore").click();
     await expect(page.locator("[data-restores]")).toHaveAttribute(
       "data-restores",
       String(restores + 1),
@@ -499,19 +505,42 @@ test(
       "false",
     );
     await page.locator(".otk-work-fold").click();
-    const disclosure = page.locator(".otk-rollback-disclosure");
+    const disclosure = page.locator(
+      ".otk-revert-group .otk-record-group-toggle",
+    );
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(page.locator(".otk-rollback-file")).toHaveCount(1);
-    const colors = await page.evaluate(() =>
-      [".otk-path", ".otk-diff-add", ".otk-diff-del"].map((s) =>
-        getComputedStyle(document.querySelector(".otk-rollback-file " + s)!)
-          .color
-      )
-    );
-    expect(colors[1]).not.toBe(colors[0]);
-    expect(colors[2]).not.toBe(colors[0]);
+    const file = page.locator(".otk-revert-records .otk-control-row").filter({
+      has: page.locator(".otk-path"),
+    });
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await page.evaluate((theme) => {
+        (window as unknown as { styleTest: { theme(id: string): void } })
+          .styleTest.theme(theme);
+      }, theme);
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      await expect(file).toHaveCount(1);
+      await expect(file.locator(".otk-path")).toHaveText("src/owner.ts");
+      await expect(file.locator(".otk-diff-add")).toHaveText("+3");
+      await expect(file.locator(".otk-diff-del")).toHaveText("\u22121");
+      const colors = await file.evaluate((element) =>
+        [".otk-path", ".otk-diff-add", ".otk-diff-del"].map((selector) =>
+          getComputedStyle(element.querySelector(selector)!).color
+        )
+      );
+      expect(colors[1]).not.toBe(colors[0]);
+      expect(colors[2]).not.toBe(colors[0]);
+      await page.screenshot({
+        path: test.info().outputPath(`revert-files-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
     expect(
       await page.locator(".otk-work-fold").evaluate((el) =>
         getComputedStyle(el).display
@@ -533,7 +562,7 @@ test(
     await expect(page.locator(".otk-work-body")).toBeVisible();
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator(".otk-rollback-file")).toHaveCount(0);
+    await expect(file).toHaveCount(0);
   },
 );
 test(

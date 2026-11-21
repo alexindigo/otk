@@ -57,8 +57,8 @@ for (const outcome of ["rejected", "unknown"] as const) {
       error: value,
     };
     const result = revertPresentation(state, feedback);
-    assertEquals(result.feedback, feedback);
-    assertEquals(result.state.pending, undefined);
-    assertEquals(result.state.error, undefined);
+    assertEquals(result.feedback, undefined);
+    assertEquals(result.state, state);
+    assertEquals(result.state.error, value);
   });
 }

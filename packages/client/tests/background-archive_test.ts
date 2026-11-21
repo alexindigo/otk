@@ -4,7 +4,11 @@ import {
   createBranchHistory,
   createDrafts,
   createSessionActions,
+  createSessionRevert,
+  createState,
+  emptyContent,
   emptyDraft,
+  type SessionState,
 } from "@otk/client";
 import type { MessagePage } from "@otk/protocol";
 import { shellFixture, shellInfo, shellTask } from "./shell-fixture.ts";
@@ -27,7 +31,9 @@ function fixture() {
   const session = () => ({
     ...shellInfo("selected"),
     ...(staged
-      ? { revert: { messageID: "boundary", messageCount: 1, files: [] } }
+      ? {
+        revert: { boundaryID: "boundary", messageIDs: ["boundary"], files: [] },
+      }
       : {}),
   });
   const options = {
@@ -63,6 +69,7 @@ function fixture() {
           source: { kind: "fixture", ref: "exact-source" },
         }],
         clock: { epoch: "archive", seq: 1 },
+        revisions: { boundary: 0 },
         from: { epoch: "archive", seq: 1 },
         version: { generation: 1, revision: 1 },
         older: null,
@@ -99,13 +106,53 @@ function fixture() {
   const history = createBranchHistory(options);
   history.select(target);
   const actions = createSessionActions({ ...f, branchHistory: history });
+  const live = createState<SessionState>({
+    selection: target,
+    content: {
+      ...emptyContent(),
+      messages: [{
+        id: "boundary",
+        sessionID: "selected",
+        role: "user",
+        time: { created: 1 },
+        parts: [],
+      }],
+    },
+    siblings: [],
+    loading: false,
+    paging: false,
+    exhausted: true,
+    continuity: "ready",
+    clock: { epoch: "initial", seq: 0 },
+  });
+  const revertOwner = createSessionRevert({
+    session: live,
+    actions,
+    drafts,
+    branchHistory: history,
+    status: { working: () => false, subscribe: () => () => {} },
+  });
+  const publish = () =>
+    live.update((s) => {
+      s.clock = { epoch: staged ? "staged" : "restored", seq: 0 };
+      s.content.revert = session().revert ?? null;
+      s.content.messages = staged ? [] : [{
+        id: "boundary",
+        sessionID: "selected",
+        role: "user",
+        time: { created: 1 },
+        parts: [],
+      }];
+    });
   f.reply((_server, method) => {
     if (method === "session.revert") {
       staged = true;
+      publish();
       return Promise.resolve(session());
     }
     if (method === "session.restore") {
       staged = false;
+      publish();
       return Promise.resolve(session());
     }
     if (method === "session.get") return Promise.resolve(session());
@@ -124,6 +171,10 @@ function fixture() {
     values,
     options,
     signals,
+    revert: async () => {
+      await revertOwner.revertTo("boundary");
+      await revertOwner.confirm();
+    },
     stage: () => {
       staged = true;
     },
@@ -136,7 +187,7 @@ function fixture() {
 Deno.test("background archive: held save cannot delay reversible Revert, but committing Send joins it", async () => {
   const f = fixture();
   let reverted = false, sent = false;
-  const reverting = f.actions.revert(target, "boundary").then(() => {
+  const reverting = f.revert().then(() => {
     reverted = true;
   });
   let sending: Promise<unknown> | undefined;
@@ -170,10 +221,23 @@ Deno.test("background archive: held save cannot delay reversible Revert, but com
   }
 });
 
+function waitForPermanence(
+  history: import("@otk/client").BranchHistory,
+): Promise<void> {
+  if (history.state.permanence) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = history.subscribe(() => {
+      if (history.state.permanence) {
+        stop();
+        resolve();
+      }
+    });
+  });
+}
 Deno.test("background archive: quota failure is FP1-visible before a committing Send can discard history", async () => {
   const f = fixture();
   let reverted = false, sent = false;
-  const reverting = f.actions.revert(target, "boundary").then(() => {
+  const reverting = f.revert().then(() => {
     reverted = true;
   });
   try {
@@ -188,19 +252,11 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
       sent = true;
       return Promise.resolve();
     });
-    const rejected = assertRejects(() =>
-      sending.catch((cause) => {
-        assert(
-          f.resources.ownsFailure?.(cause),
-          "The target sink must own preservation feedback before a command can render its rejection",
-        );
-        throw cause;
-      })
-    );
+    const canceled = assertRejects(() => sending, DOMException);
     await turns();
     assertEquals(sent, false);
     f.held.resolve();
-    await rejected;
+    await waitForPermanence(f.history);
     const feedback = f.history.state.error;
     assert(feedback);
     const failure = feedback.failure;
@@ -210,11 +266,17 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     assertEquals(failure.target, { label: "" });
     assert(failure.reason.includes("localStorage is full"));
     assert(failure.recovery?.includes("Delete a saved branch"));
+    assertEquals(
+      f.options.feedback(target).current()?.diagnosticID,
+      failure.value.diagnosticID,
+    );
     assertEquals(sent, false, "No silent native commit after archive failure");
     assertEquals(
       f.drafts.current("local/selected").input,
       "Original unsent draft",
     );
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     await reverting;
@@ -226,7 +288,7 @@ Deno.test("background archive: Restore cancels stale capture without waiting and
   const f = fixture();
   try {
     const transaction = f.drafts.reverts.capture("local/selected");
-    await f.actions.revert(target, "boundary");
+    await f.revert();
     transaction.staged("boundary");
     await f.entered.promise;
     f.drafts.writer("local/selected")({
@@ -303,7 +365,7 @@ Deno.test("background archive: reloaded staged sessions reacquire preservation b
 Deno.test("background archive: background failure follows its target across selection before committing", async () => {
   const f = fixture();
   try {
-    await f.actions.revert(target, "boundary");
+    await f.revert();
     await f.entered.promise;
     f.history.select({ ...target, sessionID: "other" });
     f.quota();
@@ -313,14 +375,16 @@ Deno.test("background archive: background failure follows its target across sele
     f.history.select(target);
     assert(f.history.state.error);
     let sent = false;
-    await assertRejects(() =>
-      f.actions.submission(target)(() => {
-        sent = true;
-        return Promise.resolve();
-      })
-    );
+    const sending = f.actions.submission(target)(() => {
+      sent = true;
+      return Promise.resolve();
+    });
+    const canceled = assertRejects(() => sending, DOMException);
+    await waitForPermanence(f.history);
     assertEquals(sent, false);
     assert(f.history.state.error);
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     f.resources.stop();

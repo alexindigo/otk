@@ -119,11 +119,6 @@ for (const theme of themes) {
         primary = page.locator("[data-primary-action]");
       await input.fill("Retained prompt draft");
       const controls = [input, primary];
-      if (surface !== "standalone") {
-        controls.push(
-          page.getByRole("button", { name: "Restore", exact: true }),
-        );
-      }
       const idle = await boxes(controls);
       if (surface !== "standalone") {
         await page.evaluate('styleTest.feedback("pending")');
@@ -140,6 +135,17 @@ for (const theme of themes) {
       await expect(page.getByRole("alert")).toContainText("END OF REASON");
       unchanged(idle, await boxes(controls));
       await expect(input).toHaveValue("Retained prompt draft");
+      if (surface !== "standalone") {
+        await expect(
+          page.getByRole("button", {
+            name: "Restore conversation",
+            exact: true,
+          }),
+        ).toBeVisible();
+        const group = await page.locator(".otk-revert-group").boundingBox();
+        const composer = await input.boundingBox();
+        expect(group!.y + group!.height).toBeLessThanOrEqual(composer!.y);
+      }
       if (surface === "composer") {
         await info.attach(`stable-composer-${theme}`, {
           body: await page.screenshot({ fullPage: true }),

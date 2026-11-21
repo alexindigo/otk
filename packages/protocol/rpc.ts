@@ -258,7 +258,7 @@ export interface RpcMethods
     result: HistoryEntry | null;
   };
   "history.messages": {
-    params: import("./transcript.ts").MessagePageInput;
+    params: import("./transcript.ts").MessageSnapshotInput;
     result: import("./transcript.ts").MessagePage;
   };
   "history.attachments": {
