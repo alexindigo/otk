@@ -14,6 +14,61 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
+Deno.test("explicit session navigation reads the target task without changing memberships during refresh", async () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  const tasks = [
+    shellTask("parent-task", ["tstv1-selected"]),
+    shellTask("child-task", ["tstv1-child"]),
+  ];
+  const rows = [
+    shellEntry("tstv1-selected"),
+    shellEntry("tstv1-child", "/p", "tstv1-selected"),
+  ];
+  try {
+    f.entries("local", rows);
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "crumbs",
+      revision: 0,
+      summaryRevision: 0,
+      inbox: { projects: [], tasks, seen: {}, finishes: {}, pathTemplates: [] },
+    });
+    const before = structuredClone(
+      f.resources.inbox("local").state.inbox.tasks,
+    );
+    for (let n = 0; n < 4; n++) {
+      for (
+        const [sessionID, taskID] of [["tstv1-child", "child-task"], [
+          "tstv1-selected",
+          "parent-task",
+        ]]
+      ) {
+        assert(f.navigation.navigate({ sidecarId: "local", sessionID }));
+        // The same reconciliation used by the Shell is the sole tab selection owner.
+        f.resources.syncTabs(
+          project,
+          f.resources.tabSnapshot(project),
+          f.session.state.selection,
+        );
+        const tabs = f.resources.tabs(project);
+        assertEquals(tabs.state.selected, { kind: "task", id: taskID });
+        assertEquals(tabs.state.sessionID, sessionID);
+        f.entries("local", rows.map((row) => ({ ...row, timeUpdated: n + 2 })));
+        assertEquals(f.resources.inbox("local").state.inbox.tasks, before);
+      }
+    }
+    await settled();
+    assertEquals(
+      f.calls.filter((call) =>
+        String(call[1]).startsWith("tasks.") && call[1] !== "tasks.list"
+      ),
+      [],
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("explicit attention clicks retain their target and supersede pending project defaults", async () => {
   const f = fixture(), held = Promise.withResolvers<string | undefined>();
   const intents: unknown[] = [];
