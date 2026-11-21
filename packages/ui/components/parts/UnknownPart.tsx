@@ -48,7 +48,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     props.part.kind === "external" ? props.part.activity : undefined;
   const [expanded, setExpanded] = retainedDisclosure(
     "activity",
-    () => activity()?.category ?? "record",
+    () => activity()?.fold ? "record" : activity()?.category ?? "record",
     () => props.prefs,
   );
   const preview = createMemo(() =>

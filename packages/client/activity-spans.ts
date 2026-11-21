@@ -73,7 +73,8 @@ function summary(
   >();
   for (const id of ids) {
     const reply = replies[id], value = activity(reply);
-    const fact = foldable(reply) && value?.completion?.placement !== "footer" &&
+    const fact = foldable(reply) && !value?.fold &&
+      value?.completion?.placement !== "footer" &&
       value?.summary;
     if (!fact) continue;
     const count = counts.get(fact.kind) ?? { ...fact, count: 0 };

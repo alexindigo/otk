@@ -21,6 +21,8 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
       "outgoing",
       "compaction",
       "record",
+      "stepMarkers",
+      "snapshots",
       "source",
     ] as const
   ) assertEquals(owner.defaultFor(category), false, category);
@@ -47,7 +49,7 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
     preferences.settings("transcript").filter((row) =>
       row.key.startsWith("expand")
     ).length,
-    8,
+    10,
   );
   for (
     const row of preferences.settings("transcript").filter((row) =>
@@ -91,6 +93,8 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
     ["record", "expandRecords"],
     ["source", "expandSource"],
     ["compaction", "expandCompaction"],
+    ["stepMarkers", "expandStepMarkers"],
+    ["snapshots", "expandSnapshots"],
   ] as const;
   assertEquals(rows.map((row) => row.key), categories.map((row) => row[1]));
   for (const [category, key] of categories) {
@@ -98,6 +102,7 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
     assertEquals(row.settings!.control.kind, "toggle");
     assertEquals(
       row.label === "Always keep session compaction expanded" ||
+        row.label === "Step markers" || row.label === "Snapshots" ||
         /^Expand .+ by default$/.test(row.label),
       true,
     );

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message } from "@otk/protocol";
+import { mapPart } from "@otk/harness-opencode-v1";
 import { fixture } from "./config.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { WsClient } from "./ws-client.ts";
@@ -144,6 +145,51 @@ export async function messageWindowScenario(profile: Profile) {
         case "productRpc":
           return await client.rpc(frame.params.method, frame.params.params);
         case "scenario":
+          if (disclosure && frame.params.action === "thaw") {
+            for (
+              const [n, type] of ["step-start", "step-finish", "snapshot"]
+                .entries()
+            ) {
+              messages.push({
+                id: `context-${n}`,
+                sessionID,
+                role: "context",
+                time: { created: n + 3 },
+                parts: [
+                  mapPart({
+                    id: `context-part-${n}`,
+                    type,
+                    messageID: `context-${n}`,
+                    sessionID,
+                    snapshot: "sha",
+                  }),
+                ],
+              });
+            }
+            return null;
+          }
+          if (disclosure && frame.params.action === "hold") {
+            const native = (type: string, n: number) =>
+              mapPart({
+                id: `bookkeeping-${n}`,
+                type,
+                messageID: "reply",
+                sessionID,
+                snapshot: "native-snapshot-sha",
+                reason: "stop",
+              });
+            const tool = messages[0].parts[0];
+            messages[0].parts = [
+              native("step-start", 1),
+              tool,
+              native("step-finish", 2),
+              native("snapshot", 3),
+              native("step-start", 4),
+              { ...tool, id: "write-2" },
+              native("step-finish", 5),
+            ];
+            return null;
+          }
           if (frame.params.action !== "release") {
             throw new Error(
               "Window action outside scenario",

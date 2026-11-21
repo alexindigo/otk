@@ -13,6 +13,7 @@ export default function WorkLog(
     identity?: string;
     prefs?: Preferences;
     required?: boolean;
+    meta?(): Element;
     body(): Element;
   },
 ): Element {
@@ -33,16 +34,19 @@ export default function WorkLog(
         open={open()}
         onOpen={(value) => setOpen(value)}
         header={(_connected, toggleID) => (
-          <button
-            id={toggleID}
-            type="button"
-            class="otk-work-fold otk-tree-control"
-            aria-expanded={open() ? "true" : "false"}
-            onClick={() => void toggle()}
-          >
-            <TreeIcon />
-            <span class="otk-work-label">{label()}</span>
-          </button>
+          <div class="otk-control-row">
+            <button
+              id={toggleID}
+              type="button"
+              class="otk-work-fold otk-tree-control"
+              aria-expanded={open() ? "true" : "false"}
+              onClick={() => void toggle()}
+            >
+              <TreeIcon />
+              <span class="otk-work-label">{label()}</span>
+            </button>
+            {props.meta?.()}
+          </div>
         )}
         body={() => <div class="otk-work-body">{props.body()}</div>}
       />

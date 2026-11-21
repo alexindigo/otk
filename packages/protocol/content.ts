@@ -314,6 +314,8 @@ export type DisclosureCategory =
   | "outgoing"
   | "compaction"
   | "record"
+  | "stepMarkers"
+  | "snapshots"
   | "source";
 /** A loaded item's native source: an opaque plugin-owned reference that a
  * Source fold reads on demand, plus exact text only for declared content (Copy).
@@ -337,6 +339,9 @@ export interface NativeSourceView {
 }
 export interface Activity {
   kindLabel: string;
+  /** Low-signal bookkeeping folds into its enclosing frame's category count.
+   * Canonical records and their source references are always retained. */
+  fold?: boolean;
   /** Producer-owned neutral count wording; kind is opaque to consumers. */
   summary?: { kind: string; noun: string; plural: string };
   /** Producer-owned normal completion; the reply footer owns its presentation.

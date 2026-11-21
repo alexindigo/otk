@@ -8,6 +8,7 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
+import RecordKinds from "./RecordKinds.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -417,25 +418,35 @@ export default function Message(
                       </>
                     }
                   >
-                    <WorkLog
-                      workingMs={group().workingMs}
-                      identity={group().id}
+                    <RecordKinds
+                      items={group().parts}
+                      activity={(part) =>
+                        parts.presentation(part, props.prefs).activity}
                       prefs={props.prefs}
-                      required={group().required}
-                      body={() => (
-                        <PartsView
-                          tree
-                          parts={group().parts}
+                      identity={group().id}
+                      render={(visible, meta) => (
+                        <WorkLog
+                          workingMs={group().workingMs}
+                          identity={group().id}
                           prefs={props.prefs}
-                          directory={props.directory}
-                          permissions={props.permissions}
-                          onOpenChild={props.onOpenChild}
-                          user={props.message.role === "user"}
-                          streaming={streaming()}
-                          pending={props.pending}
-                          sourceID={sourceID}
-                          recordTime={recordTime}
-                          failureTime={failureTime}
+                          required={group().required}
+                          meta={meta}
+                          body={() => (
+                            <PartsView
+                              tree
+                              parts={visible()}
+                              prefs={props.prefs}
+                              directory={props.directory}
+                              permissions={props.permissions}
+                              onOpenChild={props.onOpenChild}
+                              user={props.message.role === "user"}
+                              streaming={streaming()}
+                              pending={props.pending}
+                              sourceID={sourceID}
+                              recordTime={recordTime}
+                              failureTime={failureTime}
+                            />
+                          )}
                         />
                       )}
                     />

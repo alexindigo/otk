@@ -1114,6 +1114,14 @@ and reflows below the label under pressure. Counts and annotations have no
 parentheses. The hierarchy projection supplies artwork eligibility, never
 section-local depth.
 
+Producer-declared low-signal bookkeeping folds into its work-log or background
+interval header's plain muted category count. `RecordKinds` borrows the client's
+`foldRecords` projection and the transcript's retained category choices. Folding
+changes only rendered membership: native identities, chronology, details and
+Source remain intact. The count reveals every record; Settings supplies each
+category's default independently of explicit choices and record-body disclosure.
+Failure, pending and active facts remain visible.
+
 ## Example
 
 [`example.tsx`](./example.tsx) renders a generic tool with only the selected
