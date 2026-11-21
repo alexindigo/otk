@@ -1367,6 +1367,11 @@ The same project owner supplies stable `projectMetadata` and keyed
 `path`, `family` and `crumbs` share one keyed family/adjacency derivation.
 `path()` holds the open session and known ancestor links; `family()` carries
 explicit task members and mandatory descendants with each session's own state.
+
+Crumb clicks forward only the explicit session identity to guarded navigation.
+The accepted route reconciles its actual owning tab; the previously selected
+task never assigns membership or overrides a crumb's target.
+
 `crumbs()` renders the path followed by off-path working, blocked and
 finished-unseen members. Settlement and acknowledgement retire only the off-path
 member, never open identity. `working()` borrows that family's working helpers
