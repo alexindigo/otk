@@ -63,6 +63,47 @@ const containsStringType = (node: t.Node): boolean => {
 const elementName = (node: t.JSXOpeningElement) =>
   node.name.type === "JSXIdentifier" ? node.name.name : "";
 
+Deno.test("UI convention: one composer destination row uses muted nonwrapping metadata and structural alignment", async () => {
+  const source = await Deno.readTextFile(
+    new URL(
+      "../../packages/ui/components/ComposerTakeovers.tsx",
+      import.meta.url,
+    ),
+  );
+  const syntax = new Source(source, "ComposerTakeovers.tsx");
+  const target = syntax.all.find((node) =>
+    node.type === "JSXOpeningElement" &&
+    elementName(node) === "ChromeMeta" && node.attributes.some((attr) =>
+      attr.type === "JSXAttribute" &&
+      property(attr.name) === "class" && attr.value?.type === "StringLiteral" &&
+      attr.value.value.includes("otk-composer-target")
+    )
+  );
+  assert(target?.type === "JSXOpeningElement");
+  assert(
+    target.attributes.some((attr) =>
+      attr.type === "JSXAttribute" && property(attr.name) === "title"
+    ),
+  );
+  const css = rules(
+    await Deno.readTextFile(
+      new URL(
+        "../../packages/ui/components/ComposerTakeovers.css",
+        import.meta.url,
+      ),
+    ),
+  );
+  const row = css.find((rule) => rule.selector === ".otk-composer-activity")!
+    .declarations;
+  assertEquals(row.get("display"), "flex");
+  assertEquals(row.get("align-items"), "center");
+  assertEquals(row.get("justify-content"), "space-between");
+  const label =
+    css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
+  assertEquals(label.get("min-inline-size"), "0");
+  assertEquals(label.get("flex"), "1");
+});
+
 /** Syntax-aware checks are exported so their reject/accept cases stay executable.
  * Owner exceptions name real responsibilities, never individual violations. */
 export function conventionErrors(

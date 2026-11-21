@@ -14,6 +14,167 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
+Deno.test("accepted project memory retries failed persistence on reconnect without changing the selection", async () => {
+  const f = fixture("");
+  let writes = 0;
+  f.reply((_id, method) => {
+    if (method === "layout.location" && ++writes === 1) {
+      return Promise.reject(new Error("lost location write"));
+    }
+    return Promise.resolve(null);
+  });
+  try {
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    await settled();
+    assertEquals(writes, 1);
+    f.welcome();
+    await settled();
+    assertEquals(writes, 2);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    f.navigation.projectHome();
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    assertEquals(writes, 2);
+  } finally {
+    f.stop();
+  }
+});
+
+for (
+  const change of [
+    "attention",
+    "new session",
+    "new helper",
+    "archive",
+    "reconnect",
+    "resync",
+    "tab reorder",
+  ] as const
+) {
+  Deno.test(`sticky accepted selection survives ${change} and project return before hydration`, async () => {
+    const f = fixture("");
+    const project = { sidecarId: "local", directory: "/p" };
+    const selected = shellEntry("tstv1-other");
+    try {
+      f.entries("local", [selected, shellEntry("tstv1-selected")]);
+      f.navigation.navigate({ sidecarId: "local", sessionID: selected.id });
+      // No observeView: acceptance must persist before transcript hydration.
+      assert(f.calls.some((c) =>
+        c[1] === "layout.location" &&
+        (c[2] as { sessionID?: string }).sessionID === selected.id
+      ));
+      if (change === "archive") selected.archived = true;
+      const rows = [selected, shellEntry("tstv1-selected")];
+      if (change === "new session") {
+        rows.push({
+          ...shellEntry("tstv1-new"),
+          status: "busy",
+          timeUpdated: 99,
+        });
+      }
+      if (change === "new helper") {
+        rows.push({
+          ...shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+          status: "busy",
+          timeUpdated: 99,
+        });
+      }
+      if (change === "tab reorder") rows.reverse();
+      f.entries("local", rows);
+      const urgent = change === "attention"
+        ? "tstv1-selected"
+        : change === "new session"
+        ? "tstv1-new"
+        : change === "new helper"
+        ? "tstv1-helper"
+        : undefined;
+      if (urgent) {
+        f.resources.receive("local", {
+          t: "inbox.snapshot",
+          generation: "sticky",
+          revision: 0,
+          summaryRevision: 0,
+          inbox: {
+            projects: [],
+            tasks: [],
+            seen: {},
+            finishes: {},
+            pathTemplates: [],
+            supervision: {
+              [urgent]: {
+                state: change === "attention" ? "needsYou" : "working",
+                terminal: 0,
+              },
+            },
+          },
+        });
+      }
+      if (change === "reconnect") f.welcome();
+      if (change === "resync") {
+        f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+      }
+      f.resources.syncTabs(
+        project,
+        f.resources.tabSnapshot(project),
+        f.session.state.selection,
+      );
+      assertEquals(f.session.state.selection?.sessionID, selected.id);
+      assertEquals(f.resources.tabs(project).state.sessionID, selected.id);
+      f.navigation.projectHome();
+      f.navigation.openProject(project);
+      await settled();
+      assertEquals(f.session.state.selection?.sessionID, selected.id);
+      assertEquals(f.navigation.state.selectionNotice, undefined);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("missing remembered sessions use a visible default and persist the accepted replacement", async () => {
+  const f = fixture("");
+  try {
+    f.resources.receive("local", {
+      t: "prefs",
+      prefs: {
+        ...DEFAULT_PREFS,
+        shellLayout: {
+          ...DEFAULT_PREFS.shellLayout,
+          projectLocations: [{
+            sidecarId: "local",
+            directory: "/p",
+            sessionID: "tstv1-missing",
+          }],
+        },
+      },
+    });
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
+    assertEquals(
+      f.navigation.state.selectionNotice,
+      'The remembered session is no longer available. Selected "tstv1-selected".',
+    );
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    assertEquals(f.navigation.state.selectionNotice, undefined);
+    f.navigation.observeView({
+      selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    f.navigation.projectHome();
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("explicit session navigation reads the target task without changing memberships during refresh", async () => {
   const f = fixture(), project = { sidecarId: "local", directory: "/p" };
   const tasks = [
@@ -89,9 +250,9 @@ Deno.test("explicit attention clicks retain their target and supersede pending p
   }
 });
 
-Deno.test("project defaults use attention before remembered child roots on click, cold start and reload", async () => {
+Deno.test("project return and cold restore preserve remembered sessions despite attention", async () => {
   for (const cold of [false, true]) {
-    const f = fixture(cold ? "#project/local/%2Fp" : undefined);
+    const f = fixture(cold ? "#project/local/%2Fp" : "");
     try {
       f.entries("local", [
         shellEntry("tstv1-selected"),
@@ -132,7 +293,7 @@ Deno.test("project defaults use attention before remembered child roots on click
       });
       f.navigation.openProject({ sidecarId: "local", directory: "/p" });
       await settled();
-      assertEquals(f.session.state.selection?.sessionID, "tstv1-urgent-root");
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-child");
       f.resources.receive("local", {
         t: "inbox.patch",
         generation: "attention",
@@ -146,7 +307,7 @@ Deno.test("project defaults use attention before remembered child roots on click
       });
       f.external("#project/local/%2Fp");
       await settled();
-      assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-child");
     } finally {
       f.stop();
     }
@@ -634,8 +795,12 @@ Deno.test("a late catalog establishes the selected project while its transcript 
     );
     assertEquals(
       f.calls,
-      [],
-      "Metadata readiness cannot mark unseen content seen or request bodies",
+      [["local", "layout.location", {
+        sidecarId: "remote",
+        directory: "/late",
+        sessionID: "tstv1-loading",
+      }]],
+      "Metadata readiness persists the accepted destination, never marks content seen or requests bodies",
     );
     assertEquals(f.location.hash, "#/remote/tstv1-loading");
   } finally {
@@ -849,8 +1014,8 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   );
   f.stop();
 });
-Deno.test("project memory resolves helpers to human roots through guarded navigation and rejects stale project identities", async () => {
-  const f = fixture();
+Deno.test("project memory restores exact helpers through guarded navigation and rejects stale project identities", async () => {
+  const f = fixture("");
   try {
     f.entries("local", [
       shellEntry("tstv1-selected"),
@@ -886,7 +1051,7 @@ Deno.test("project memory resolves helpers to human roots through guarded naviga
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
-    assertEquals(f.location.hash, "#/local/tstv1-selected");
+    assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
   } finally {
     f.stop();
   }
@@ -1029,11 +1194,6 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   f.navigation.observeView(view);
   await settled();
   assertEquals(f.calls, [
-    ["local", "layout.location", {
-      sidecarId: "local",
-      directory: "/p",
-      sessionID: "tstv1-selected",
-    }],
     ["local", "projects.visit", { directory: "/p" }],
     [
       "local",

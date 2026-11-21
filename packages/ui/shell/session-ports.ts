@@ -66,6 +66,15 @@ export function sessionPorts(o: {
     approvals: resources.approvals(target.sidecarId),
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
+    composerTarget: () => {
+      const title =
+        resources.entry(target.sidecarId, target.sessionID)?.title ??
+          (session.state.info?.id === target.sessionID
+            ? session.state.info.title
+            : target.sessionID);
+      const task = o.tabs?.()?.taskFor(target.sessionID);
+      return task && task.name !== title ? `${task.name} / ${title}` : title;
+    },
     failureTarget: () => ({
       ...target,
       label: resources.entry(target.sidecarId, target.sessionID)?.title,

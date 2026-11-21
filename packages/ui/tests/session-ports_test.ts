@@ -100,10 +100,37 @@ Deno.test("session ports capture target once while capability and resource gette
     session,
     guard: { mark: (owner, value) => dirty.push([owner, value]) },
     prefs: () => DEFAULT_PREFS,
+    tabs: () => {
+      const project = { sidecarId: "local", directory: "/original" };
+      const tabs = resources.tabs(project);
+      tabs.update(resources.tabSnapshot(project));
+      return tabs;
+    },
   });
   target.sessionID = "mutated";
   session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   assertEquals(ports.sessionID(), "original");
+  assertEquals(ports.composerTarget!(), "Title");
+  resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "target",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      projects: [],
+      tasks: [{
+        id: "task",
+        name: "Selected task",
+        directory: "/original",
+        sessions: ["original"],
+        order: 0,
+      }],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+    },
+  });
+  assertEquals(ports.composerTarget!(), "Selected task / Title");
   assertEquals(await ports.directory(), "/original");
   await ports.rpc("session.abort", { sessionID: ports.sessionID() });
   await ports.act(() => Promise.resolve());
