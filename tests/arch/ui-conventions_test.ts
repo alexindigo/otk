@@ -66,6 +66,32 @@ const containsStringType = (node: t.Node): boolean => {
 const elementName = (node: t.JSXOpeningElement) =>
   node.name.type === "JSXIdentifier" ? node.name.name : "";
 
+Deno.test("UI convention: unowned compact controls retain native geometry", async () => {
+  const geometry = (css: string) =>
+    rules(css).flatMap((rule) =>
+      /^input\[type=["']?(?:checkbox|radio|range|color|file|button|submit|reset|image)\b/i
+          .test(rule.selector)
+        ? [...rule.declarations.keys()].filter((key) =>
+          /^(?:inline-size|block-size|width|height|flex|margin|padding)(?:-|$)/
+            .test(key)
+        )
+        : []
+    );
+  assertEquals(geometry("input[type=radio] { accent-color: red; }"), []);
+  assertEquals(geometry("input[type=radio] { margin: 4px 3px 3px 4px; }"), [
+    "margin",
+  ]);
+  assertEquals(geometry(".otk-control input[type=radio] { margin: 0; }"), []);
+  assertEquals(
+    geometry(
+      await Deno.readTextFile(
+        new URL("../../packages/ui/theme.css", import.meta.url),
+      ),
+    ),
+    [],
+  );
+});
+
 Deno.test("UI convention: one composer destination row uses muted nonwrapping metadata and structural alignment", async () => {
   const source = await Deno.readTextFile(
     new URL(

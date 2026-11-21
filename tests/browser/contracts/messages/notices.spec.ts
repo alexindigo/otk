@@ -55,6 +55,7 @@ test.describe("V1 records", () => {
       while (await closed.count()) await closed.first().click();
     };
     await openRecords();
+    await revealAcquired(page, '[data-message="context"]');
     const standalone = page.locator('[data-message="context"]');
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(standalone.locator(".otk-user-bubble")).toHaveCount(0);
@@ -73,28 +74,47 @@ test.describe("V1 records", () => {
     const failed = page.locator('[data-message="task-notice"]');
     await expect(failed.locator(".otk-native-record")).toHaveClass(/is-error/);
     await failed.getByRole("button", { name: /Task failed/ }).click();
-    await expect(failed.locator(".otk-tool-body")).toContainText(
+    await expect(failed.locator(".otk-failure-reason")).toHaveText(
       "The usage limit has been reached",
     );
-    await expect(page.locator('[data-message="reply"] [role="alert"]'))
-      .toHaveText("The usage limit has been reached");
+    const reply = page.locator('[data-message="reply"]');
+    await expect(reply.getByRole("alert")).toHaveCount(2);
+    for (
+      const name of [
+        "Delegate failed: Subagent failed: The usage limit has been reached.",
+        "Running session failed: The usage limit has been reached.",
+      ]
+    ) {
+      await expect(
+        reply.getByRole("alert", { name, exact: true })
+          .locator(".otk-failure-main-reason .otk-failure-reason"),
+      ).toContainText("The usage limit has been reached");
+    }
+    await revealAcquired(page, '[data-message="summary"]');
     await expect(page.locator('[data-message="summary"]')).toHaveAttribute(
       "data-role",
       "context",
     );
+    await revealAcquired(page, '[data-message="permission:retained"]');
     await expect(page.locator('[data-message="permission:retained"]'))
       .toContainText("Permission rejected");
+    await revealAcquired(page, '[data-message="question:retained"]');
     await expect(page.locator('[data-message="question:retained"]'))
       .toContainText("Question cancelled");
     const permission = page.locator('[data-message="permission:retained"]');
     const question = page.locator('[data-message="question:retained"]');
-    await expect(permission.locator(".otk-tool-brief")).toHaveText(
+    await expect(
+      permission.locator(".otk-failure-main-reason .otk-failure-reason"),
+    ).toHaveText(
       "bash: git status --short",
     );
-    await expect(question.locator(".otk-tool-brief")).toHaveText(
+    await expect(
+      question.locator(".otk-failure-main-reason .otk-failure-reason"),
+    ).toHaveText(
       "Verification: Run the focused checks?",
     );
     const retry = page.locator('[data-message="retry:retained"]');
+    await revealAcquired(page, '[data-message="retry:retained"]');
     await expect(retry).toContainText("Free usage exceeded");
     await retry.getByRole("button", { name: /Retry 1/ }).click();
     await expect(retry.getByRole("link", { name: "subscribe" }))
@@ -107,6 +127,7 @@ test.describe("V1 records", () => {
     ).toHaveCount(0);
     await page.reload();
     await openRecords();
+    await revealAcquired(page, '[data-message="context"]');
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(prompt.locator(".otk-user-bubble")).toContainText(
       "Please investigate",
@@ -244,12 +265,20 @@ test.describe("V2 records", () => {
           has: page.locator(".otk-entity-pill", { hasText: "Junior" }),
         })
         .filter({ has: page.locator(".otk-tool-verb", { hasText: "failed" }) });
-      await expect(failed.locator(".otk-entity-pill")).toHaveText("Junior");
+      await expect(
+        failed.getByRole("button", {
+          name: "Open Junior session",
+          exact: true,
+        }),
+      ).toHaveText("Junior");
       await expect(failed.locator(".otk-tool-verb")).toHaveText("failed");
       await expect(failed).toHaveClass(/is-error/);
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(
-        failed.getByRole("button", { name: "Open task", exact: true }),
+        failed.getByRole("button", {
+          name: "Open Open task session",
+          exact: true,
+        }),
       )
         .toBeVisible();
       await failed.locator(".otk-tool-toggle").click();
@@ -301,10 +330,12 @@ test.describe("V2 records", () => {
       await source.locator(".otk-tool-toggle").click();
       await expect(source.locator(".otk-native-preview")).toBeVisible();
       await expect(source).toContainText("bytes");
-      await expect(page.locator(".otk-message .otk-error[role=alert]"))
-        .toContainText(
-          "The usage limit has been reached",
-        );
+      await expect(
+        page.locator(".otk-message").getByRole("alert", {
+          name: "Running session failed: The usage limit has been reached.",
+          exact: true,
+        }).locator(".otk-failure-main-reason .otk-failure-reason"),
+      ).toHaveText("The usage limit has been reached");
       await expect(page.locator('[data-native-record="opencode-v2/shell"]'))
         .toContainText("Exited with code 7");
       await revealAcquired(

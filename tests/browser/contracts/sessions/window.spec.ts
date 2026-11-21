@@ -269,13 +269,17 @@ test.describe("measured Sessions", () => {
       expect((await input.getAttribute("aria-describedby"))!.split(/\s+/))
         .toContain(failureID);
       await expect(input).toHaveAttribute("aria-invalid", "true");
-      await expect(failure).toContainText(
-        "Renaming session failed for Window session 050",
+      await expect(failure.locator(".otk-failure-heading strong")).toHaveText(
+        "Renaming session failed",
       );
+      await expect(page.locator(".otk-session-row.is-editing"))
+        .toHaveAttribute("data-session", "tstv1-w-50");
+      await expect(page.locator(".otk-session-row.is-editing"))
+        .toHaveAttribute("title", "Window session 050");
       await expect(
         failure.getByRole("link", { name: "Window session 050", exact: true }),
       )
-        .toHaveAttribute("href", "#/local/tstv1-w-50");
+        .toHaveCount(0);
       await expect(failure).toContainText("OTK has no further details");
       await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
       await expect(input).toHaveValue("Retained editor");
