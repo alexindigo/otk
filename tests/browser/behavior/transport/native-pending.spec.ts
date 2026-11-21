@@ -85,6 +85,7 @@ test.describe("native page", () => {
         received: frames.received.filter((frame) =>
           [
             "transcript.invalidated",
+            "content",
             "load.chunk",
             "request.result",
             "request.rejected",

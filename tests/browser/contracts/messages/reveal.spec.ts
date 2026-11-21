@@ -3,6 +3,8 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
+  compactionBoundary,
+  expectCompactionSummary,
   openWorkLogs,
   recordToggle,
   revealAcquired,
@@ -104,3 +106,66 @@ test(
       .rejects.toThrow("Acquired target is unavailable");
   },
 );
+
+test("messages.work-reveal-survives-virtual-segment-replacement", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><article data-message="reply"><div style="height:600px"></div><section data-virtual-key="work-running"><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">First work log</button><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Next work log</button></section><div style="height:400px"></div></article></div>`,
+  );
+  await page.locator(".otk-messages").evaluate((pane) => {
+    pane.addEventListener("scroll", () => {
+      pane.querySelector("[data-virtual-key]")!.setAttribute(
+        "data-virtual-key",
+        "work-completed",
+      );
+    }, { once: true });
+  });
+  await openWorkLogs(page);
+  await expect(page.locator('.otk-work-fold[aria-expanded="true"]'))
+    .toHaveCount(2);
+  await expect(page.locator("[data-virtual-key]")).toHaveAttribute(
+    "data-virtual-key",
+    "work-completed",
+  );
+});
+
+test("messages.compaction-summary-reveal-opens-published-ancestry", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page, isolatedState: state }) => {
+  const { selector } = compactionBoundary(state);
+  const name = /"([^"]+)"/.exec(selector)![1];
+  await page.setContent(
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><article data-message="older"><section data-native-record="${name}"><header class="otk-tool-state"><button class="otk-tool-toggle" aria-expanded="true">Earlier compaction</button></header><div>Earlier summary.</div></section></article><section data-record-members='["summary"]'><button class="otk-record-group-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');this.nextElementSibling.hidden=false">Activity</button><article hidden data-message="summary"><section data-native-record="${name}"><header class="otk-tool-state"><button class="otk-tool-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');this.parentElement.nextElementSibling.hidden=false">Session compacted</button></header><div hidden>Retained summary content.</div></section></article></section></div>`,
+  );
+  await page.evaluate((name) => {
+    Object.assign(globalThis, {
+      transcriptPublication: new Map([["older", {
+        id: "older",
+        parts: [{
+          id: "older-part",
+          kind: "external",
+          name,
+          source: { payload: "Earlier summary." },
+        }],
+      }], ["summary", {
+        id: "summary",
+        parts: [{
+          id: "summary-part",
+          kind: "external",
+          name,
+          source: { payload: "Retained summary content." },
+        }],
+      }]]),
+    });
+  }, name);
+  await expectCompactionSummary(state, page, "Retained summary content.");
+  await expect(page.locator(`[data-message="summary"] ${selector}`))
+    .toContainText(
+      "Retained summary content.",
+    );
+  await expect(page.locator(".otk-record-group-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+});

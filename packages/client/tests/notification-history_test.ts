@@ -98,6 +98,98 @@ Deno.test("historical failure backfill and acknowledgement replay stay silent; a
   }
 });
 
+for (const outcome of ["succeeded", "failed"] as const) {
+  Deno.test(`historical observation cannot consume a later live ${outcome} edge at the same terminal`, () => {
+    const f = shellFixture(), notes: Note[] = [];
+    const trigger = new NotificationTriggers(
+      (note) => notes.push(note),
+      () => {},
+    );
+    f.resources.observeEntries(
+      "local",
+      (change) => trigger.entriesChanged("local", change),
+    );
+    const entry = { ...shellEntry("root"), status: "idle" as const };
+    f.resources.receive("local", {
+      t: "index.snapshot",
+      rev: 0,
+      entries: [entry],
+    });
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "late-event",
+      revision: 0,
+      inbox: {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+      },
+    });
+    const failure = outcome === "failed"
+      ? {
+        code: "native.execution",
+        retry: "none" as const,
+        diagnosticID: "live-cause",
+        facts: { reason: "Native execution refused" },
+      }
+      : undefined;
+    const value = (terminalOrigin: "historical" | "live"): Supervision => ({
+      state: "finishedUnseen",
+      terminal: 10,
+      outcome,
+      unseen: true,
+      terminalOrigin,
+      ...(failure ? { terminalFailure: failure } : {}),
+    });
+    try {
+      f.resources.receive("local", {
+        t: "inbox.patch",
+        generation: "late-event",
+        from: 0,
+        revision: 2,
+        ops: [{ op: "finish", sessionID: "root", time: 10 }, {
+          op: "supervision",
+          sessionID: "root",
+          value: value("historical"),
+        }],
+      });
+      assertEquals(notes, []);
+      f.resources.receive("local", {
+        t: "inbox.patch",
+        generation: "late-event",
+        from: 2,
+        revision: 3,
+        ops: [{ op: "supervision", sessionID: "root", value: value("live") }],
+      });
+      assertEquals(notes.map((note) => note.kind), [
+        outcome === "failed" ? "error" : "done",
+      ]);
+      f.resources.receive("local", {
+        t: "index.patch",
+        from: 0,
+        rev: 1,
+        ops: [{ op: "upsert", entry: { ...entry, activity: value("live") } }],
+      });
+      f.resources.receive("local", {
+        t: "inbox.patch",
+        generation: "late-event",
+        from: 3,
+        revision: 4,
+        ops: [{
+          op: "supervision",
+          sessionID: "root",
+          value: value("historical"),
+        }],
+      });
+      assertEquals(notes.length, 1);
+    } finally {
+      trigger.stop();
+      f.resources.stop();
+    }
+  });
+}
 Deno.test("live native terminal advances independently of a lagging or replaced inbox view", () => {
   const f = shellFixture(), notes: Note[] = [];
   const trigger = new NotificationTriggers(

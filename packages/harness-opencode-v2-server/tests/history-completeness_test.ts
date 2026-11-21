@@ -197,6 +197,174 @@ Deno.test("native history repairs a missed compaction, prompt and reply without 
   }
 });
 
+Deno.test("initial page owns repair demand while its native boundary is still held", async () => {
+  const x = fixture(),
+    entered = Promise.withResolvers<void>(),
+    gate = Promise.withResolvers<void>();
+  const page = x.transcript.reader.page.bind(x.transcript.reader);
+  x.transcript.reader.page = async (...args) => {
+    if (args[1] === 10) {
+      entered.resolve();
+      await gate.promise;
+    }
+    return await page(...args);
+  };
+  try {
+    const reading = x.transcript.page(sessionID);
+    await entered.promise;
+    const clock = x.transcript.replay.clock(sessionID);
+    x.rows.push(prompt("during-page", 2));
+    await x.transcript.event({
+      type: "session.message.content.updated",
+      data: { sessionID: "ses_history", messageID: "during-page" },
+    });
+    assertEquals(
+      x.transcript.replay.clock(sessionID),
+      clock,
+      "Repair must join the held boundary, not invalidate it with stream.reconcile",
+    );
+    gate.resolve();
+    x.projection.replace((await reading).items);
+    await x.transcript.check(sessionID);
+    assertEquals(x.projection.state.messageIDs, ["before", "during-page"]);
+    assertEquals(x.reads.filter((read) => read.limit === 10).length, 1);
+  } finally {
+    gate.resolve();
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("fine recovery alone owns point checkpoints even when history observes the same head", async () => {
+  const x = fixture();
+  x.rows.splice(0, 1, { ...reply("recovering", 1), time: { created: 1 } });
+  try {
+    await x.transcript.page(sessionID);
+    x.failure.next = new Error("Checkpoint unavailable");
+    x.transcript.recovery.touch(sessionID, "recovering", "text");
+    while (!x.diagnostics.length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertEquals(x.gets, ["recovering"]);
+    // Production borrows a scalar SQL head, not the API's already-read body.
+    x.transcript.options.digest = {
+      read: () => Promise.resolve({ id: "recovering", seq: 1, updated: 1 }),
+      release() {},
+    } as unknown as NonNullable<typeof x.transcript.options.digest>;
+    await x.transcript.check(sessionID);
+    assertEquals(
+      x.gets,
+      ["recovering"],
+      "History cannot silently retry the failed checkpoint",
+    );
+    assertEquals(
+      x.transcript.recovery.snapshot(sessionID)[0].state,
+      "unavailable",
+    );
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("completed fine recovery cannot hide a later changed native-head witness", async () => {
+  const x = fixture();
+  x.rows.splice(0, 1, reply("recovered", 1));
+  let updated = 1;
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.transcript.options.digest = {
+      read: () => Promise.resolve({ id: "recovered", seq: 1, updated }),
+      release() {},
+    } as unknown as NonNullable<typeof x.transcript.options.digest>;
+    x.transcript.recovery.touch(sessionID, "recovered", "text");
+    x.transcript.recovery.terminal(sessionID, "recovered");
+    while (x.transcript.recovery.snapshot(sessionID).length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await x.transcript.check(sessionID);
+    const reads = x.gets.length;
+    assertEquals(
+      reads,
+      1,
+      "The recovered checkpoint already covers this native witness",
+    );
+    const changed = reply("recovered", 1);
+    assert(changed.type === "assistant");
+    changed.content = [{
+      type: "text",
+      text: "Changed after the recovered checkpoint",
+    }];
+    x.rows[0] = changed;
+    updated = 2;
+    await x.transcript.check(sessionID);
+    assertEquals(x.gets.length, reads + 1);
+    assert(
+      JSON.stringify(x.projection.messages()).includes(
+        "Changed after the recovered checkpoint",
+      ),
+    );
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("history checkpoints cannot erase an event-owned running compaction summary", async () => {
+  const x = fixture();
+  x.rows.push({
+    id: "compacting",
+    type: "compaction",
+    status: "running",
+    reason: "manual",
+    summary: "",
+    time: { created: 2 },
+  });
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    await x.transcript.event({
+      id: "evt_compact_start",
+      type: "session.compaction.started",
+      created: 2,
+      data: {
+        sessionID: "ses_history",
+        inputID: "compacting",
+        reason: "manual",
+      },
+    });
+    await x.transcript.event({
+      id: "evt_compact_delta",
+      type: "session.compaction.delta",
+      created: 3,
+      data: { sessionID: "ses_history", text: "Live queued summary" },
+    });
+    assert(
+      JSON.stringify(x.projection.messages()).includes("Live queued summary"),
+    );
+    await x.transcript.check(sessionID);
+    assert(
+      JSON.stringify(x.projection.messages()).includes("Live queued summary"),
+      "A persisted unfinished checkpoint cannot consume newer event-owned summary source",
+    );
+    await x.transcript.event({
+      id: "evt_compact_end",
+      type: "session.compaction.ended",
+      created: 4,
+      data: {
+        sessionID: "ses_history",
+        inputID: "compacting",
+        text: "Final owned summary",
+      },
+    });
+    const page = await x.transcript.page(sessionID);
+    const part = page.items.find((message) =>
+      message.id === "compacting"
+    )!.parts[0];
+    assert(part.kind === "external");
+    assertEquals(part.activity?.state?.key, "completed");
+    assert(JSON.stringify(part).includes("Final owned summary"));
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("history checkpoints use native identities when a failure has a different presentation identity", async () => {
   const x = fixture();
   try {
