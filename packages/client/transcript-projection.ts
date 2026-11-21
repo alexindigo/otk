@@ -431,10 +431,12 @@ export function createTranscriptProjection(): TranscriptProjection {
       recordsDirty = false;
     }
   };
-  const put = (message: Message, preservePartIndex = false, local = false) => {
+  // Only source admission can commit input. Decorations and derived clocks
+  // rebuild the same message too, but are not evidence that native accepted it.
+  const put = (message: Message, preservePartIndex = false, native = false) => {
     const send = sends.get(message.id);
     if (send && message.role === "user") {
-      if (!local) {
+      if (native) {
         sends.set(message.id, {
           ...send,
           phase: "committed",
@@ -445,7 +447,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       message = {
         ...message,
         sourceOrder: send.message.sourceOrder,
-        parts: !local && !message.parts.length && localParts.has(message.id)
+        parts: native && !message.parts.length && localParts.has(message.id)
           ? send.message.parts
           : message.parts,
       };
@@ -588,7 +590,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       };
       sends.set(value.message.id, value);
       localParts.add(value.message.id);
-      put(value.message, false, true);
+      put(value.message);
       queues();
     },
     boundary: (turnID: string) => boundaries.get(turnID),
@@ -635,11 +637,11 @@ export function createTranscriptProjection(): TranscriptProjection {
       replacing = true;
       try {
         for (const message of messages) {
-          put(retainStreamMessage(previous[message.id], message));
+          put(retainStreamMessage(previous[message.id], message), false, true);
         }
         for (const send of sends.values()) {
           if (send.phase !== "committed" && !read(send.message.id)) {
-            put(send.message, false, true);
+            put(send.message);
           } else if (send.phase === "committed" && !read(send.message.id)) {
             sends.delete(send.message.id);
             localParts.delete(send.message.id);
@@ -657,7 +659,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     merge(messages: readonly Message[]) {
       for (const message of messages) {
         if (!read(message.id) || sends.has(message.id)) {
-          put(message);
+          put(message, false, true);
         }
       }
       queues();
@@ -753,6 +755,8 @@ export function createTranscriptProjection(): TranscriptProjection {
           next,
           op.op === "part.blocks" || op.op === "task.progress" ||
             (op.op === "part.upsert" && slot !== undefined && slot >= 0),
+          op.op === "message.upsert" || op.op === "part.upsert" ||
+            op.op === "part.blocks",
         );
         queues();
       }

@@ -350,7 +350,8 @@ export class NotificationTriggers {
         notificationFailure(previous)?.value.diagnosticID;
       const cause = notificationFailure(note)?.value.diagnosticID;
       const distinct = !historical &&
-        (beforeCause && cause && beforeCause !== cause ||
+        (beforeCause && cause && beforeCause !== cause &&
+            (!!old.observations?.length || !!old.terminalFailure) ||
           priorFinish?.terminal !== undefined && completedAt !== undefined &&
             completedAt > priorFinish.terminal);
       if (

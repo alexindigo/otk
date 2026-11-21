@@ -60,9 +60,10 @@ function summary(
 ): string {
   if (failures) {
     const count = ids.filter((id) => {
-      const reply = replies[id], part = reply.message.parts[0];
-      return activity(reply)?.tone === "error" ||
-        part.kind === "external" && !!part.failure;
+      return replies[id].message.parts.some((part) =>
+        part.kind === "external" &&
+        (!!part.failure || part.activity?.tone === "error")
+      );
     }).length;
     return count ? `${count} failed` : "";
   }

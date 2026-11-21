@@ -13,7 +13,11 @@ export interface ListInteraction {
 export function createSessionGroupDisclosure(
   interaction?: ListInteraction,
   factory: StateFactory = createState,
-) {
+): {
+  open(group: string): boolean;
+  set(group: string, value: boolean): void;
+  rows(rows: readonly SessionListRow[]): SessionListRow[];
+} {
   const store = factory({ collapsed: interaction?.collapsedGroups ?? [] });
   const open = (group: string) => !store.state.collapsed.includes(group);
   return {
