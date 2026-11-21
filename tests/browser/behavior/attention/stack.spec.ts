@@ -282,7 +282,7 @@ test(
       expect(native).toHaveLength(1);
       await expect(
         page.locator(
-          `[data-session="${session.id}"] .otk-status-light[data-state=blocked]`,
+          `.otk-project-sessions .otk-session-row[data-session="${session.id}"] .otk-session-leading .otk-status-light[data-state=blocked]`,
         ),
       ).toBeVisible();
       if (kind === "permission") {
