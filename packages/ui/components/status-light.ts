@@ -9,6 +9,11 @@ export const LIGHT_STATES = {
   none: { label: "No known activity", shape: "○" },
 } as const;
 export type LightState = keyof typeof LIGHT_STATES;
+export function lightDescription(state: LightState, dependencies = 0): string {
+  return state === "dependencies"
+    ? `${LIGHT_STATES.dependencies.label} (${dependencies})`
+    : LIGHT_STATES[state].label;
+}
 /** Lamps render the server supervision projection; status is never a fallback. */
 export function sessionLight(
   entry: IndexEntry,

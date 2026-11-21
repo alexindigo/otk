@@ -655,17 +655,23 @@ No panel reads another component's DOM or maintains a second transcript store.
 `registerTerminalDock` contributes the session Terminal box without a backend
 capability gate; unavailable terminal RPCs produce its muted fallback. Its plain
 model borrows `SessionTerminals` for list, selection and four-sink retention.
-Renderer instances follow terminal identity, not tab ordinal. Hidden retained
-surfaces receive bytes without drawing; leaving the session releases its sinks.
-The shell's connection lifetime owns the shared lazy terminal socket
-independently of dock mounts. `registerTerminalPrompt` contributes the adjacent
-composer icon and toggles the client's per-session box intent.
-`registerTerminalDialog` uses the existing editor-size dialog host. One Portal
-content lifetime moves the same mounted renderer between dock and dialog without
-another attachment. `ShellPorts.addToPrompt` appends a text chip through the
-existing session draft writer and focuses the prompt through its command port.
-Selection uses the surface's exact text, never the system clipboard. Only the
-terminal adapter knows both client sinks and the vendored Ghostty surface API.
+The list is shared by authoritative checkout, while box intent, attachments and
+selection stay per viewing session. New shells record the viewer as owner; Add
+to prompt writes to that viewer, not the shell's original owner. Renderer
+instances follow terminal identity, not tab ordinal. Hidden retained surfaces
+receive bytes without drawing; leaving the session releases its sinks. The
+shell's connection lifetime owns the shared lazy terminal socket independently
+of dock mounts. `registerTerminalPrompt` contributes the adjacent composer icon
+and toggles the client's per-session box intent. `registerTerminalDialog` uses
+the existing editor-size dialog host. One Portal content lifetime moves the same
+mounted renderer between dock and dialog without another attachment.
+`ShellPorts.addToPrompt` appends a text chip through the existing session draft
+writer and focuses the prompt through its command port. Selection uses the
+surface's exact text, never the system clipboard. Only the terminal adapter
+knows both client sinks and the vendored Ghostty surface API. Task and project
+lights receive projected dependency counts; their shared StatusLight description
+is `Running in terminal (N)`. Session-row and breadcrumb lights retain their
+own-session state. No view scans processes or polls.
 
 `ComposerTakeovers` renders registered `composerDocks` between takeovers and the
 composer without suspending it. The composer and dock surfaces share one width

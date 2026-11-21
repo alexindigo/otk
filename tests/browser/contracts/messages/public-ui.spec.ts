@@ -130,7 +130,7 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   ]);
   await expect(lights.nth(3)).toHaveAttribute(
     "aria-label",
-    "Running in terminal",
+    "Running in terminal (0)",
   );
   await expect(lights.nth(4)).toHaveAttribute(
     "aria-label",

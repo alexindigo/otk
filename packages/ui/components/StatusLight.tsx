@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./StatusLight.css" with { type: "text" };
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
-import { LIGHT_STATES, type LightState } from "./status-light.ts";
+import {
+  LIGHT_STATES,
+  lightDescription,
+  type LightState,
+} from "./status-light.ts";
 import {
   type AttentionLampScope,
   useAttentionPresentation,
@@ -14,6 +18,7 @@ export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
   label?: string;
+  dependencies?: number;
   event?: string | number;
   attention?: AttentionLampScope;
 }): import("solid-js").Element {
@@ -23,6 +28,8 @@ export default function StatusLight(props: {
       ? presentation.light(props.attention, props.state)
       : props.state;
   const [blink, setBlink] = createSignal(false);
+  const description = () =>
+    props.label ?? lightDescription(state(), props.dependencies);
   let timer: ReturnType<typeof setTimeout> | undefined;
   createEffect(() => [props.event, state()] as const, (next, previous) => {
     if (!previous || next.every((value, i) => value === previous[i])) return;
@@ -43,8 +50,8 @@ export default function StatusLight(props: {
       data-small={props.small || undefined}
       data-blink={blink() || undefined}
       role="img"
-      aria-label={props.label ?? LIGHT_STATES[state()].label}
-      title={props.label ?? LIGHT_STATES[state()].label}
+      aria-label={description()}
+      title={description()}
     >
       <span class="otk-lamp-glow" aria-hidden="true" />
       <span class="otk-lamp-body" aria-hidden="true" />

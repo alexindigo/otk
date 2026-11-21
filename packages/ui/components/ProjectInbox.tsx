@@ -207,6 +207,7 @@ export default function ProjectInbox(props: {
             <span class="otk-project-marker">
               <StatusLight
                 state={project().status}
+                dependencies={project().dependencies}
                 attention={{
                   server: project().sidecarId,
                   project: {

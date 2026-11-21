@@ -892,7 +892,7 @@ export async function lights(
           "Needs you",
           "Working",
           "Finished, not seen",
-          "Running in terminal",
+          "Running in terminal (0)",
           "No known activity",
         ]);
         for (const lamp of lamps) {
