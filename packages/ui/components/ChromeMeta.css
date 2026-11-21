@@ -28,3 +28,9 @@
   height: 1px;
   background: var(--otk-border);
 }
+.otk-section-row-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}

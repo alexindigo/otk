@@ -76,6 +76,7 @@ const scenes = {
   "error-surfaces": () => import("./error-surfaces.tsx"),
   "failure-layout": () => import("./failure-layout.tsx"),
   uiconv: () => import("./ui-conventions.tsx"),
+  "sidebar-rows": () => import("./sidebar-rows.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

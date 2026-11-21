@@ -21,7 +21,8 @@ type Rule =
   | "failure-signal"
   | "presentation"
   | "settings-name"
-  | "list-order";
+  | "list-order"
+  | "sidebar-row";
 const owners: Record<Rule, string> = {
   clock:
     "Local date/time formatting belongs to Clock (including precise records)",
@@ -50,6 +51,8 @@ const owners: Record<Rule, string> = {
     "One surface name: navigation says Settings / servers, matching Settings",
   "list-order":
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
+  "sidebar-row":
+    "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
 };
 const containsStringType = (node: t.Node): boolean => {
   if (node.type === "TSStringKeyword") return true;
@@ -119,6 +122,33 @@ export function conventionErrors(
   }
   if (path.endsWith(".css")) {
     for (const { selector, declarations: d } of rules(text)) {
+      if (
+        rule === "sidebar-row" &&
+        /otk-(?:sidebar-(?:row|slot|lamp|icon|label|selection)|project-(?:row|open|name-line|marker|attention))/
+          .test(selector)
+      ) {
+        if (
+          [...d].some(([key, value]) =>
+            key === "position" && ["absolute", "fixed"].includes(value) ||
+            /^(?:margin|inset|top|left|right|bottom)/.test(key) &&
+              /(^|[\s(])-\d/.test(value)
+          )
+        ) fail(selector);
+        if (
+          path !== "packages/ui/components/SidebarRow.css" &&
+          (d.has("grid-template-columns") ||
+            /otk-project-(?:row|open)\b/.test(selector) &&
+              [...d.keys()].some((key) =>
+                /^(?:padding(?:-.+)?|margin(?:-.+)?|gap|column-gap|display)$/
+                  .test(key)
+              ) ||
+            /sidebar-(?:row|slot|lamp|icon|label)/.test(selector) &&
+              [...d.keys()].some((key) =>
+                /^(?:width|inline-size|min-width|min-inline-size|padding|gap|column-gap|display)$/
+                  .test(key)
+              ))
+        ) fail(selector);
+      }
       if (
         rule === "ellipsis" &&
         [...d.values()].some((value) => value.includes("\u2026"))
@@ -197,6 +227,46 @@ export function conventionErrors(
       ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
         .slice(1)
       : specifier;
+  if (rule === "sidebar-row") {
+    const openings = source.all.filter((node): node is t.JSXOpeningElement =>
+      node.type === "JSXOpeningElement" && source.live(node)
+    );
+    if (path === "packages/ui/components/ProjectInbox.tsx") {
+      if (
+        !openings.some((node) =>
+          modulePath(source.imported(node.name)?.module ?? "") ===
+            "packages/ui/components/SidebarRow.tsx"
+        )
+      ) fail("project rows bypass SidebarRow");
+      for (
+        const node of openings.filter((node) =>
+          source.imported(node.name)?.name === "SectionHeader"
+        )
+      ) {
+        if (
+          !node.attributes.some((attr) =>
+            attr.type === "JSXAttribute" && property(attr.name) === "sidebar" &&
+            attr.value === null
+          )
+        ) fail("section header bypasses sidebar tracks");
+      }
+    }
+    if (path !== "packages/ui/components/SidebarRow.tsx") {
+      for (const node of openings) {
+        if (
+          node.attributes.some((attr) =>
+            attr.type === "JSXAttribute" &&
+            ["class", "className"].includes(property(attr.name) ?? "") &&
+            /\botk-sidebar-(?:row|slot|lamp|icon|label)\b/.test(
+              source.string(attr.value) ?? "",
+            )
+          )
+        ) {
+          fail("handwritten sidebar slot");
+        }
+      }
+    }
+  }
   const iconFunctions = new Set<t.Node>();
   for (const node of source.all) {
     const value =

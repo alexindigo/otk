@@ -21,13 +21,19 @@ imports and knows no native backend.
 
 ## Composition and API
 
-Every style fix adds its check to `tests/arch/ui-conventions_test.ts`.
-Conventions are executable owner contracts, not a one-time grep sweep: Clock
-owns instants, the client duration formatter owns elapsed text, icon slots take
-components, FailurePresenter owns targets and outcome tone, and shared controls
-own their geometry. Include reject and accept fixtures so a gate catches the
-problem class without banning legitimate numeric formatting or intrinsic layout.
-Style scenes build failures through the same production presenters as the app.
+Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. Project
+inbox rows and its section headers borrow `SidebarRow`: nonshrinking
+lamp/artwork/metadata columns and a shrinkable, ellipsized label. Missing
+artwork retains its slot. `Tree` alone owns disclosure and nesting; selection
+paints in the shared heading inset, outside the content tracks, without
+consuming a column. Per-kind offsets, absolute positioning and replacement row
+tracks are rejected. Conventions are executable owner contracts, not a one-time
+grep sweep: Clock owns instants, the client duration formatter owns elapsed
+text, icon slots take components, FailurePresenter owns targets and outcome
+tone, and shared controls own their geometry. Include reject and accept fixtures
+so a gate catches the problem class without banning legitimate numeric
+formatting or intrinsic layout. Style scenes build failures through the same
+production presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
