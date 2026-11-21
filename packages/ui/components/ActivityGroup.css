@@ -25,6 +25,3 @@
   display: inline-grid;
   align-items: center;
 }
-.otk-chrome-meta.otk-record-group-failures {
-  color: var(--danger);
-}

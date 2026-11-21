@@ -215,7 +215,7 @@ export default function Sidebar(
         class="otk-settings-entry"
         onClick={() => void settings()}
       >
-        Settings / sidecars
+        Settings / servers
       </button>
     </aside>
   );

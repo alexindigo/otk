@@ -499,6 +499,7 @@ export default function Message(
           <Show when={props.send?.phase === "failed"}>
             <FeedbackStatus
               class="otk-send-failure"
+              intrinsic
               feedback={props.send?.feedback}
             />
           </Show>

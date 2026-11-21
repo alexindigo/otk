@@ -4,7 +4,7 @@
   grid-template-columns: var(--failure-gutter, var(--tree-indent)) minmax(0,
     1fr);
   gap: var(--space-1);
-  column-gap: 0;
+  column-gap: var(--space-2);
   min-inline-size: 0;
   inline-size: 100%;
   color: var(--otk-fg);
@@ -15,6 +15,17 @@
 }
 .otk-failure-content.is-record {
   column-gap: var(--space-2);
+}
+.otk-failure-content.uses-subgrid {
+  container-type: normal;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  --disclosure-gutter: var(--control-size);
+}
+.otk-failure-content.is-intrinsic {
+  container-type: normal;
+  inline-size: fit-content;
+  max-inline-size: 100%;
 }
 .otk-failure-content > * {
   grid-column: 1 / -1;
@@ -87,8 +98,6 @@
   grid-column: 1 / -1;
 }
 .otk-failure-details {
-  grid-template-columns: var(--failure-gutter, var(--tree-indent)) auto;
-  column-gap: inherit;
   inline-size: fit-content;
   min-inline-size: 0;
 }
@@ -117,6 +126,13 @@
 .otk-failure-content.is-reference {
   border: 0;
   padding: 0;
+}
+.otk-failure-reference {
+  justify-self: start;
+  padding: 0;
+  text-align: start;
+  text-decoration: underline;
+  font-weight: inherit;
 }
 .otk-failure-disclosed-reason,
 .otk-failure-content.is-compact .otk-failure-main-reason {

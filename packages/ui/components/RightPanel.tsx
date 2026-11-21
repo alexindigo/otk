@@ -83,10 +83,7 @@ export default function RightPanel(props: {
               <SelectionContent class="otk-control-icon-selection">
                 <ControlIcon>
                   <span class="otk-panel-view-icon" aria-hidden="true">
-                    {(() => {
-                      const icon = view().icon;
-                      return typeof icon === "function" ? icon() : icon;
-                    })()}
+                    {view().icon()}
                   </span>
                 </ControlIcon>
               </SelectionContent>

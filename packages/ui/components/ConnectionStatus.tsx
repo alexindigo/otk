@@ -12,6 +12,7 @@ export default function ConnectionStatus(
     connection: ConnectionInput;
     compact?: boolean;
     onSettings?(): void;
+    subgrid?: boolean;
   },
 ) {
   return (
@@ -27,6 +28,7 @@ export default function ConnectionStatus(
         >
           <FeedbackStatus
             class="otk-connection-status"
+            subgrid={props.subgrid}
             compact={props.compact}
             feedback={{
               ...feedback(),

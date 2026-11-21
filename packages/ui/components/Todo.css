@@ -6,8 +6,15 @@
 }
 .otk-todos li {
   display: flex;
-  align-items: baseline;
+  align-items: start;
   gap: var(--space-2);
+}
+.otk-todo-state {
+  display: grid;
+  place-items: center;
+  min-block-size: var(--line-ui);
+  inline-size: var(--icon-compact);
+  flex: none;
 }
 .otk-todos li[data-todo-status=in_progress] {
   color: var(--otk-warning);

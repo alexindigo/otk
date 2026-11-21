@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { QuestionIcon } from "../ChromeIcons.tsx";
 import "./QuestionTool.css" with { type: "text" };
 import QuestionAnswers from "../QuestionAnswers.tsx";
 import type { QuestionCall } from "@otk/protocol";
@@ -9,7 +10,7 @@ export function registerQuestionTool(tools: ToolRegistry): void {
     "question",
     (props) => <QuestionTool call={props.call} />,
     (call) => ({
-      icon: "?",
+      icon: QuestionIcon,
       verb: "Ask",
       summary: countLabel(call.questions.length, "question"),
     }),

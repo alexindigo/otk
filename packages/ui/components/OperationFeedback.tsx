@@ -11,7 +11,7 @@ import FailureContent from "./FailureContent.tsx";
 export default function OperationFeedback(
   props: {
     feedback: Feedback;
-    icon?: Element;
+    icon?: () => Element;
     control?(control: { focus(): void }): void;
     onReveal?(messageID: string): void;
   },
@@ -22,7 +22,7 @@ export default function OperationFeedback(
       focusable
       control={props.control}
       icon={props.icon ??
-        (feedback().failure ? null : <ActivityIcon />)}
+        (feedback().failure ? undefined : ActivityIcon)}
       {...feedbackState({
         feedback: props.feedback,
         class: "otk-operation-feedback",

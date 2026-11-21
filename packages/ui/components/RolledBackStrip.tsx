@@ -66,7 +66,7 @@ export function RolledBackContent(
     >
       <Show when={props.state.error || feedback()}>
         <OperationFeedback
-          icon={<RevertIcon />}
+          icon={RevertIcon}
           feedback={errorFeedback(props.state.error || feedback())!}
         />
       </Show>
@@ -74,7 +74,7 @@ export function RolledBackContent(
         <ComposerNoticeRow
           class="otk-rollback-status"
           role="status"
-          icon={<RevertIcon />}
+          icon={RevertIcon}
         >
           {props.state.pending === "restore" || props.state.pending === "redo"
             ? "Restoring..."
@@ -86,7 +86,7 @@ export function RolledBackContent(
           <>
             <ComposerNoticeRow
               class="otk-rollback-disclosure"
-              icon={<RevertIcon />}
+              icon={RevertIcon}
               expanded={expanded()}
               onClick={() => setExpanded(!expanded())}
               trailing={

@@ -186,7 +186,7 @@ test(
       );
       await expect(page.getByRole("status")).toBeFocused();
       await expect(page.locator("textarea")).toHaveAttribute("readonly", "");
-      await expect(page.locator(".otk-form-choice-value")).toHaveValue("Alpha");
+      await expect(page.locator(".otk-select-value")).toHaveValue("Alpha");
       await page.evaluate(`styleTest.fieldFailure('${name}')`);
       await expect(field).toHaveAttribute("aria-invalid", "true");
       const description = await field.evaluate((el) => {

@@ -31,12 +31,14 @@ export default function Setup(
         <label>
           Sign-in method<FormSelect
             name="type"
+            label="Sign-in method"
             value={type()}
-            onChange={(event) => setType(event.currentTarget.value)}
-          >
-            <option value="password">Password</option>
-            <option value="none">None</option>
-          </FormSelect>
+            onValue={setType}
+            options={[{ value: "password", label: "Password" }, {
+              value: "none",
+              label: "None",
+            }]}
+          />
         </label>
         <Show when={type() === "password"}>
           <label>

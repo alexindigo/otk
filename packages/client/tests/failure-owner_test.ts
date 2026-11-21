@@ -42,11 +42,11 @@ Deno.test("failure owner groups all occurrences, not replay or rendering, by ses
     owner.present(failure("other", "tstv1-second")).failure?.count,
     1,
   );
-  assertEquals(value.failure?.target.href, "#/remote/tstv1-first");
+  assertEquals(value.failure?.target, { label: "" });
+  assertEquals(value.failure?.value.facts?.target?.label, "Fixture session");
   for (
     const fact of [
       "Renaming session",
-      "Fixture session",
       "not found",
       "404",
       "choose another",
@@ -111,7 +111,14 @@ Deno.test("tracker failures carry action and routing through both transports, wi
         sessionID: session.id,
       });
       const shown = failureValue(cause);
-      assert(shown && shown.failure?.target.href === "#/remote/tstv1-first");
+      assert(shown);
+      assertEquals(shown.failure?.target, { label: "" });
+      assertEquals(
+        createFailurePresenter().present(cause.failure, {
+          surface: "notification",
+        }).failure?.target.href,
+        "#/remote/tstv1-first",
+      );
       const attention = requestAttention(
         tracker.operations(),
         createRequestMetadata(),

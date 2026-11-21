@@ -74,20 +74,12 @@ function AddProject(props: DialogProps) {
         <label>
           Server<FormSelect
             name="server"
+            label="Server"
             value={server()}
-            onChange={(e) => setServer(e.currentTarget.value)}
-          >
-            <For
-              each={shell.servers().filter((s) => s.status === "connected")}
-              keyed={(s) => s.id}
-            >
-              {(s) => (
-                <option value={s().id}>
-                  {s().label}
-                </option>
-              )}
-            </For>
-          </FormSelect>
+            onValue={setServer}
+            options={shell.servers().filter((s) => s.status === "connected")
+              .map((s) => ({ value: s.id, label: s.label }))}
+          />
         </label>
         <label>
           Path<FormInput

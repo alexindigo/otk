@@ -1,22 +1,27 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { countLabel } from "./count.ts";
 const exact = new Intl.NumberFormat("en-US");
 /** Exact audit counts; compact labels remain the usage formatter's concern. */
 export const exactCount = (value: number): string => exact.format(value);
-export const duration = (ms: number): string =>
-  `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
-/** Human status durations share units; clocks and ETA rounding belong to callers. */
-export function humanDuration(ms: number): string {
-  const elapsed = Math.max(0, ms);
-  if (elapsed >= 86400_000) {
-    return countLabel(Math.floor(elapsed / 86400_000), "day");
+/** One plain-text metadata flow, shared by ChromeMeta and tool presentations. */
+export const metaList = (
+  items: readonly (string | undefined | false)[],
+): string =>
+  items.filter((item) => item !== undefined && item !== false && item !== "")
+    .join(" · ");
+/** One elapsed-time vocabulary for work, progress, idle and ETA; no timers. */
+export function duration(ms: number): string {
+  let seconds = Math.round(Math.max(0, ms) / 100) / 10;
+  const parts: string[] = [];
+  for (const [unit, size] of [["d", 86400], ["h", 3600], ["m", 60]] as const) {
+    const count = Math.floor(seconds / size);
+    if (count) parts.push(`${count}${unit}`);
+    seconds = Math.round((seconds % size) * 10) / 10;
   }
-  if (elapsed >= 3600_000) {
-    return countLabel(Math.floor(elapsed / 3600_000), "hour");
-  }
-  if (elapsed >= 60_000) return `${Math.floor(elapsed / 60_000)} min`;
-  return `${Math.floor(elapsed / 1000)} s`;
+  if (seconds || !parts.length) parts.push(`${seconds}s`);
+  return parts.join(" ");
 }
+/** Compatibility name; all consumers share duration's format. */
+export const humanDuration = duration;
 /** Missing/invalid session activity has no age; observation time is not ask age. */
 export function requestIdle(time: number | undefined, now: number): {
   label?: string;

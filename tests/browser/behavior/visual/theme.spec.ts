@@ -75,16 +75,16 @@ test(
       await p.goto(state.url);
     }
     await openTheme(page);
-    await expect(page.locator("select[name=systemLightTheme]")).toHaveValue(
-      "otk-light",
-    );
+    await expect(page.locator("input[type=hidden][name=systemLightTheme]"))
+      .toHaveValue(
+        "otk-light",
+      );
     await choose(page, "system");
     await page.getByRole("button", { name: "Save theme", exact: true }).click();
     await painted(other, "system", "#f4eee3");
     await openTheme(page);
-    await page.locator("select[name=systemLightTheme]").selectOption(
-      "otk-light-stone",
-    );
+    await page.locator("button[name=systemLightTheme]").click();
+    await page.getByRole("option", { name: "Stone", exact: true }).click();
     for (const p of [page, other]) await painted(p, "system", "#f5f3ef");
     expect((await state.product("prefs.get", {})).systemLightTheme).toBe(
       "otk-light-stone",

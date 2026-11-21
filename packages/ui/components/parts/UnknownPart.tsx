@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import Clock from "../Clock.tsx";
 import "../tools/ToolFrame.css" with { type: "text" };
 import "./UnknownPart.css" with { type: "text" };
 import { createMemo, For, Show } from "solid-js";
@@ -35,7 +36,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   const failure = () => {
     const value = unknownPartFailure(props.part, identity);
     return value
-      ? presentFailure(value, "record").failure
+      ? presentFailure(value, { surface: "record", view: identity }).failure
       : activity()?.tone === "error"
       ? errorFeedback(activity()?.detail || GENERIC_FAILURE_REASON, {
         actionLabel: activity()?.title,
@@ -189,33 +190,17 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                         >
                           <dl class="otk-native-parameters">
                             <Show
-                              when={props.recordTime === undefined
-                                ? undefined
-                                : new Date(props.recordTime)}
+                              when={props.recordTime !== undefined}
                             >
-                              {(recorded) => (
-                                <>
-                                  <dt>Recorded at</dt>
-                                  <dd>
-                                    <time
-                                      class="otk-native-value"
-                                      data-record-time=""
-                                      datetime={recorded().toISOString()}
-                                    >
-                                      {recorded().toLocaleString(undefined, {
-                                        year: "numeric",
-                                        month: "short",
-                                        day: "numeric",
-                                        hour: "numeric",
-                                        minute: "2-digit",
-                                        second: "2-digit",
-                                        fractionalSecondDigits: 3,
-                                        timeZoneName: "short",
-                                      })}
-                                    </time>
-                                  </dd>
-                                </>
-                              )}
+                              <dt>Recorded at</dt>
+                              <dd>
+                                <Clock
+                                  at={props.recordTime!}
+                                  precise
+                                  class="otk-native-value"
+                                  data-record-time=""
+                                />
+                              </dd>
                             </Show>
                             <For
                               each={activity()?.parameters}

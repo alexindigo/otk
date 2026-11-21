@@ -15,7 +15,7 @@ export function ForkFact(
   return (
     <ComposerNoticeRow
       class="otk-fork-note"
-      icon={<ForkIcon />}
+      icon={ForkIcon}
       trailing={
         <button
           type="button"

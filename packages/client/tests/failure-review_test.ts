@@ -187,10 +187,13 @@ Deno.test("request failures capture the canonical title before selection or meta
     const cause = await result;
     assert(cause instanceof RequestFailure);
     const owner = createFailurePresenter();
-    assertEquals(owner.present(cause.failure).failure?.target, {
-      label: "Original target",
-      href: "#/remote/tstv1-native_id",
-    });
+    assertEquals(
+      owner.present(cause.failure, { surface: "notification" }).failure?.target,
+      {
+        label: "Original target",
+        href: "#/remote/tstv1-native_id",
+      },
+    );
     assertEquals(
       owner.present({
         ...cause.failure,
@@ -198,7 +201,7 @@ Deno.test("request failures capture the canonical title before selection or meta
           action: "session.rename",
           target: { sidecarId: "remote", sessionID: "tstv1-native_id" },
         },
-      }).failure?.target,
+      }, { surface: "notification" }).failure?.target,
       { label: "native_id", href: "#/remote/tstv1-native_id" },
     );
   } finally {
@@ -246,7 +249,8 @@ Deno.test("inline and notification context cannot replace a captured target titl
     };
     const inline = failureValue(cause, context);
     assert(inline);
-    assertEquals(inline.failure?.target.label, "Captured target");
+    assertEquals(inline.failure?.target, { label: "" });
+    assertEquals(inline.failure?.value.facts?.target?.label, "Captured target");
     const note = failureNote(cause, context)!;
     assertEquals(notificationFailure(note)?.target, {
       label: "Captured target",

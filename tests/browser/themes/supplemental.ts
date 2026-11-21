@@ -54,7 +54,9 @@ export async function supplemental(
               r = pane.getBoundingClientRect(),
               f = form.getBoundingClientRect();
             const fields = Array.from(
-              form.querySelectorAll("input:not(.otk-form-choice-value),select"),
+              form.querySelectorAll(
+                "input:not([type=hidden],.otk-select-value),button[name]",
+              ),
             );
             return {
               center: Math.abs((f.left + f.right - r.left - r.right) / 2),
@@ -85,14 +87,16 @@ export async function supplemental(
       await restoreViewport(page, cdp);
       await page.setViewportSize({ width: 1280, height: 1000 });
     }
-    await page.locator("select[name=type]").selectOption("none");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "None", exact: true }).click();
     await expect(page.locator("[data-auth-pane] input[name=username]"))
       .toHaveCount(0);
     for (const theme of themes) {
       await paint(theme);
       await shot(`public-setup-none-${theme.id}`);
     }
-    await page.locator("select[name=type]").selectOption("password");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "Password", exact: true }).click();
     await expect(page.locator("input[name=username]")).toBeVisible();
     for (
       const [wide, width, mode] of [[false, 800, "unified"], [

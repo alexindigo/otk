@@ -38,7 +38,8 @@ test(
       kind: "open-setup",
     });
     await page.goto(open.url);
-    await page.locator("select[name=type]").selectOption("none");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "None", exact: true }).click();
     await page.locator(".otk-auth-view button[type=submit]").click();
     await expect(page.locator(".otk-auth-view")).toHaveCount(0);
     await expect(page.locator(".otk-corner-right")).toBeEnabled();

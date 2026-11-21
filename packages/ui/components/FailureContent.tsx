@@ -20,6 +20,10 @@ export default function FailureContent(props: {
   signal?: boolean;
   /** Compatibility with single-line feedback tracks. */
   inline?: boolean;
+  /** Borrow a containing owner's signal/content tracks without offset math. */
+  subgrid?: boolean;
+  /** Size to the facts instead of filling an already bounded feedback track. */
+  intrinsic?: boolean;
 }) {
   const compact = () => props.compact || props.inline;
   const [open, setOpen] = createSignal(false);
@@ -50,7 +54,8 @@ export default function FailureContent(props: {
   return (
     <FailureSignal
       as="div"
-      enabled={props.signal !== false && !props.failure.reference}
+      enabled={props.signal !== false && !props.failure.reference &&
+        props.failure.tone !== "neutral"}
       informational={props.failure.tone === "info"}
       class={[
         "otk-failure-content",
@@ -58,6 +63,8 @@ export default function FailureContent(props: {
         props.failure.reference ? "is-reference" : "",
         props.placement === "record" ? "is-record" : "",
         props.signal === false ? "is-unmarked" : "",
+        props.subgrid ? "uses-subgrid" : "",
+        props.intrinsic ? "is-intrinsic" : "",
       ].filter(Boolean).join(" ")}
     >
       <Show
@@ -147,18 +154,21 @@ export default function FailureContent(props: {
         }
       >
         {(reference) => (
-          <a
-            class="otk-control-label"
-            title={reference().label}
-            href={props.failure.target.href}
-            onClick={(event) => {
-              if (!props.onReveal) return;
-              event.preventDefault();
-              props.onReveal(reference().messageID);
-            }}
+          <Show
+            when={props.onReveal}
+            fallback={<span>{reference().label}</span>}
           >
-            {reference().label}
-          </a>
+            {(reveal) => (
+              <button
+                class="otk-failure-reference otk-control-label"
+                type="button"
+                title={reference().label}
+                onClick={() => reveal()(reference().messageID)}
+              >
+                {reference().label}
+              </button>
+            )}
+          </Show>
         )}
       </Show>
     </FailureSignal>

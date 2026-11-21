@@ -5,6 +5,9 @@ import { TreeNode } from "./Tree.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import "./ChromeMeta.css" with { type: "text" };
 
+/** A metadata sentence is one text flow, not spaced flex-item separators. */
+export { metaList } from "@otk/client";
+
 /** Quiet product-owned chrome metadata, shared with the project's visit clock. */
 export default function ChromeMeta(
   props: Omit<ComponentProps<"span">, "class"> & { class?: string },

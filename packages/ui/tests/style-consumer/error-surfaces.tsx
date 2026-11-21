@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { onCleanup, onSettled, Show } from "solid-js";
 import {
+  attachmentFailure,
   CommandHub,
   errorFeedback,
+  failureNote,
   presentFailure,
   type SidecarState,
 } from "@otk/client";
@@ -17,6 +19,7 @@ import FieldFeedback from "../../components/FieldFeedback.tsx";
 import Settings from "../../components/Settings.tsx";
 import ProjectChip from "../../components/ProjectChip.tsx";
 import ToolFrame from "../../components/tools/ToolFrame.tsx";
+import { ToolIcon } from "../../components/ChromeIcons.tsx";
 import Chips from "../../components/prompt/Chips.tsx";
 import Message from "../../components/Message.tsx";
 import { useUiRegistries } from "../../registries/context.tsx";
@@ -56,7 +59,10 @@ const send = errorFeedback(
   "The model provider refused the request because the account has no remaining credit",
   {
     actionLabel: "Sending prompt",
-    target: { label: "Error presentation review" },
+    target: {
+      sessionID: "opcv2-ses_review",
+      label: "Error presentation review",
+    },
     recovery: "Add credit to the provider account before sending again",
   },
 )!;
@@ -169,11 +175,8 @@ export default function ErrorSurfaces() {
       actions: [],
     });
     notifications.hub.publish({
+      ...failureNote(send)!,
       id: "error-review",
-      kind: "error",
-      title: "Sending prompt failed",
-      body: send.text,
-      detail: { kind: "failure", value: send.failure },
       actions: [],
     });
   });
@@ -259,14 +262,17 @@ export default function ErrorSurfaces() {
               presentation={{
                 verb: "Install dependencies",
                 target: "/home/tester/projects/error-review",
-                icon: "",
+                icon: ToolIcon,
               }}
               prefs={DEFAULT_PREFS}
               body={() => <p>Command output remains available.</p>}
             />
             <SessionError
               error="The model provider did not accept this request"
-              target={{ label: "Error presentation review" }}
+              target={{
+                sessionID: "opcv2-ses_review",
+                label: "Error presentation review",
+              }}
             />
           </section>
           <section data-review-region="composer">
@@ -296,10 +302,10 @@ export default function ErrorSurfaces() {
                   source: "path",
                   path: "/workspace/unreadable-attachment.txt",
                 },
-                error: errorFeedback("The attachment could not be read", {
-                  actionLabel: "Reading attachment",
-                  target: { label: "unreadable-attachment.txt" },
-                }),
+                error: attachmentFailure(
+                  "The attachment could not be read",
+                  "unreadable-attachment.txt",
+                ),
               }]}
               onOpen={() => {}}
               onRemove={() => {}}

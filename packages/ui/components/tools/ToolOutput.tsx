@@ -2,6 +2,7 @@
 import "./ToolOutput.css" with { type: "text" };
 import { For, Match, Show, Switch } from "solid-js";
 import type { ToolResult } from "@otk/protocol";
+import { metaList } from "@otk/client";
 import Code from "../Code.tsx";
 import Blocks from "../Blocks.tsx";
 import ToolPath from "./ToolPath.tsx";
@@ -42,13 +43,28 @@ export default function ToolOutput(
         ? `${result.offset}–${result.offset + result.paths.length - 1} of ${
           countLabel(result.total, "entry", "entries")
         }`
-        : `Offset ${result.offset} · ${
-          countLabel(result.total, "entry", "entries")
-        } total`
+        : metaList([
+          `Offset ${result.offset}`,
+          `${countLabel(result.total, "entry", "entries")} total`,
+        ])
       : "";
-    return [range, result.truncated ? "More available" : ""].filter(Boolean)
-      .join(" · ");
+    return metaList([range, result.truncated && "More available"]);
   };
+  const fileMeta = (result: Extract<ToolResult, { kind: "file" }>) =>
+    metaList([
+      `${
+        result.endLine >= result.startLine
+          ? `${result.startLine}-${result.endLine}`
+          : ""
+      }${
+        result.totalLines !== undefined
+          ? `${result.endLine >= result.startLine ? " of " : ""}${
+            countLabel(result.totalLines, "line")
+          }${result.endLine >= result.startLine ? "" : " total"}`
+          : ""
+      }`,
+      result.truncated && "More available",
+    ]);
   return (
     <Switch
       fallback={
@@ -86,15 +102,7 @@ export default function ToolOutput(
                 result().totalLines !== undefined || result().truncated}
             >
               <small class="otk-muted" data-tool-result-meta>
-                {result().endLine >= result().startLine
-                  ? `${result().startLine}–${result().endLine}`
-                  : ""}
-                {result().totalLines !== undefined
-                  ? `${result().endLine >= result().startLine ? " of " : ""}${
-                    countLabel(result().totalLines!, "line")
-                  }${result().endLine >= result().startLine ? "" : " total"}`
-                  : ""}
-                {result().truncated ? " · More available" : ""}
+                {fileMeta(result())}
               </small>
             </Show>
           </>
