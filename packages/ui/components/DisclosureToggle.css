@@ -2,10 +2,24 @@
 :root {
   --tree-indent: calc(19 * var(--otk-unit));
   --tree-box-size: calc(9 * var(--otk-unit));
+  --disclosure-gutter: var(--control-size);
+}
+/* One content track for standalone disclosures and their surrounding facts. */
+.otk-disclosure-layout {
+  display: grid;
+  grid-template-columns: var(--disclosure-gutter) minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+.otk-disclosure-layout > * {
+  grid-column: 2;
+}
+.otk-disclosure-layout > .otk-disclosure-layout {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 .otk-disclosure-toggle {
   display: grid;
-  grid-template-columns: var(--disclosure-gutter, var(--tree-indent)) auto;
+  grid-template-columns: var(--disclosure-gutter) auto;
   column-gap: var(--space-2);
   align-items: center;
   padding: 0;
@@ -19,7 +33,7 @@
   display: grid;
   place-items: center;
   justify-self: stretch;
-  min-block-size: var(--tree-height, var(--control-size));
+  min-block-size: var(--disclosure-gutter);
 }
 .otk-disclosure-icon svg {
   inline-size: var(--tree-box-size);

@@ -59,10 +59,10 @@ export default function FailureContent(props: {
       informational={props.failure.tone === "info"}
       class={[
         "otk-failure-content",
+        "otk-disclosure-layout",
         compact() ? "is-compact" : "",
         props.failure.reference ? "is-reference" : "",
         props.placement === "record" ? "is-record" : "",
-        props.signal === false ? "is-unmarked" : "",
         props.subgrid ? "uses-subgrid" : "",
         props.intrinsic ? "is-intrinsic" : "",
       ].filter(Boolean).join(" ")}
