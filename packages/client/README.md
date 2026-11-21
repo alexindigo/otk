@@ -1062,21 +1062,26 @@ rewriting stored data.
 
 `revert(target, messageID)` and `restore(target)` use the same captured-target
 `act` owner. `createSessionRevert({session, actions, drafts, status, factory?})`
-serializes selected-session revert/restore/undo/redo intents, exposes
-pending/error and projects the authoritative `content.revert` into the composer
-strip. Selection changes retire late results and errors; no RPC result
-optimistically mutates session content. `dispose` releases its subscription. No
-file-overlap confirmation is added.
+owns a boundary-keyed flow per session: confirming, staging, staged, saving,
+saved, failed and restoring. Revert and Undo first publish the actual message
+identities for confirmation. Only Confirm starts a native mutation; Cancel sends
+nothing. A changed preview requires confirmation again. The authoritative native
+publication still settles the action, never its RPC result alone. The same owner
+ingests reverts staged by another client. Dismissal is a separate browser-stored
+choice per server, session and boundary, with no native effect; clear or commit
+retires the record. `dispose` releases its subscriptions.
 
-Undo targets the last visible prompt, interrupts a working captured session,
-then remains pending until authoritative idle before reverting. `Drafts.reverts`
-owns one browser-lifetime transaction per server/session, capturing the complete
-pre-revert draft before asynchronous work, including attachment bytes, mention
-coordinates, choices, own-undefined Default and editor buffer. Repeated pending
-boundaries keep that first snapshot. Its history refill preserves prompt choices
-and replaces only empty or transaction-owned content, never edits made during
-the operation. Restore and Redo share exact pre-revert restoration when the
-draft is unchanged. Selection and operation-owner replacement do not retire
+After confirmation, Undo targets the last visible prompt, interrupts a working
+captured session, then remains pending until authoritative idle before
+reverting. `Drafts.reverts` owns one browser-lifetime transaction per
+server/session, capturing the complete pre-revert draft before asynchronous
+work, including attachment bytes, mention coordinates, choices, own-undefined
+Default and editor buffer. Repeated pending boundaries keep that first snapshot.
+After authoritative staging, every revert kind refills from the boundary prompt,
+preserving prompt choices and retaining the displaced draft for Restore. Edits
+made during the operation still win. Only then does the revert owner start the
+earlier-branch capture. Restore and Redo share exact pre-revert restoration when
+the draft is unchanged. Selection and operation-owner replacement do not retire
 completed provenance. Newer text, attachments, choices and editors remain
 untouched; `reverts.get(key)` retains the old/current pair for the
 branch-history owner's saved/current choice. Drafts remains in memory; the

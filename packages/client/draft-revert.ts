@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Draft, DraftChange } from "./drafts.ts";
 import { replaceDraftContent } from "./drafts.ts";
-import { hasDraftContent } from "./draft-content.ts";
 
 export interface RevertDraft {
   readonly before: Draft;
@@ -65,8 +64,7 @@ export function createDraftReverts(drafts: {
           write((draft) => {
             if (
               draft !== invocation ||
-              ((captured.edited || !captured.recalled) &&
-                (hasDraftContent(draft) || draft.editor))
+              captured.edited
             ) return draft;
             captured.recalled = true;
             return replaceDraftContent(draft, content);

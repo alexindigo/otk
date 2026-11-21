@@ -72,7 +72,8 @@ const turn = async () => {
 Deno.test("undo remains serialized until authoritative rollback publication and then targets the newly visible prompt", async () => {
   const f = fixture();
   try {
-    const first = f.owner.undo();
+    await f.owner.undo();
+    const first = f.owner.confirm();
     await turn();
     assertEquals(f.owner.state.pending, "undo");
     assertEquals(f.session.state.content.revert, null);
@@ -93,7 +94,8 @@ Deno.test("undo remains serialized until authoritative rollback publication and 
     });
     await first;
     assertEquals(f.drafts.current("local/a").input, "p2");
-    const second = f.owner.undo();
+    await f.owner.undo();
+    const second = f.owner.confirm();
     await turn();
     assertEquals(f.calls, ["p2", "p1"]);
     f.session.update((state) => {
@@ -149,7 +151,8 @@ Deno.test("undo completion follows authoritative page epoch/cutoff rather than n
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const operation = f.owner.undo();
+    await f.owner.undo();
+    const operation = f.owner.confirm();
     await turn();
     assertEquals(f.calls, ["boundary"]);
     f.session.update((state) => {

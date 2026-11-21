@@ -26,6 +26,11 @@ export default function Notices(props: { prefs: Preferences }) {
   const rollback: SessionRevert = {
     state: operation.state,
     matches: () => true,
+    ready: () => undefined,
+    confirm: () => Promise.resolve(),
+    cancel() {},
+    retry: () => Promise.resolve(),
+    dismiss() {},
     revertTo: () => Promise.resolve(),
     restore: () => Promise.resolve(),
     undo: () => Promise.resolve(),

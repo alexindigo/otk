@@ -356,11 +356,6 @@ export function createSessionActions(o: {
             },
             options,
           );
-          // Staging is reversible. Preservation gates the next committing send,
-          // while its owner retains any background failure through FP1.
-          if (result.revert) {
-            void o.branchHistory?.prepare(target, messageID).catch(() => {});
-          }
           return result;
         },
       );

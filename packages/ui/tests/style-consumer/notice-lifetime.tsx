@@ -72,6 +72,11 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
   const rollback: SessionRevert = {
     state: operation.state,
     matches: () => true,
+    ready: () => undefined,
+    confirm: () => Promise.resolve(),
+    cancel() {},
+    retry: () => Promise.resolve(),
+    dismiss() {},
     revertTo: () => Promise.resolve(),
     restore: () => Promise.resolve(),
     undo: () => Promise.resolve(),
@@ -113,7 +118,7 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
     })
   );
   const ports: SessionPorts = {
-    supports: () => false,
+    supports: (capability) => capability === "restore",
     rpc: () => Promise.reject(new Error("No RPC expected")),
     sessionID: () => "tstv1-notice",
     directory: () => Promise.resolve("/project"),

@@ -62,8 +62,9 @@ function fixture() {
     });
   const run = async (action: () => Promise<void>, staged: boolean) => {
     const work = action();
+    const confirmed = staged ? owner.confirm() : work;
     publish(staged);
-    await work;
+    await confirmed;
   };
   return {
     session,

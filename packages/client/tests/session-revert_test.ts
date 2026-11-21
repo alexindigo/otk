@@ -56,7 +56,8 @@ export function revertFixture() {
 Deno.test("revert owner serializes intents without optimistic content and retires old selection results", async () => {
   const f = revertFixture(), held = Promise.withResolvers<ContentSession>();
   f.result(held.promise);
-  const pending = f.owner.revertTo("prompt");
+  await f.owner.revertTo("prompt");
+  const pending = f.owner.confirm();
   assertEquals(f.owner.state.pending, "revert");
   assertEquals(f.state.content.revert, null);
   await f.owner.restore();

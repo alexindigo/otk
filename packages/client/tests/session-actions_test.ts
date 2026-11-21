@@ -9,7 +9,7 @@ import {
   shellTask,
 } from "./shell-fixture.ts";
 
-Deno.test("branch preservation follows reversible revert and precedes every shared submission and Compact", async () => {
+Deno.test("revert RPC never starts capture; preservation still precedes every shared submission and Compact", async () => {
   const f = shellFixture(), events: string[] = [];
   const actions = client.createSessionActions({
     ...f,
@@ -55,7 +55,8 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
   });
   const target = { sidecarId: "local", sessionID: "selected" };
   await actions.revert(target, "boundary");
-  assertEquals(events.slice(0, 2), ["session.revert", "save-branch"]);
+  assertEquals(events.includes("save-branch"), false);
+  assertEquals(events[0], "session.revert");
   events.length = 0;
   const compact = actions.compact(target, { provider: "p", model: "m" });
   await compactEntered.promise;
