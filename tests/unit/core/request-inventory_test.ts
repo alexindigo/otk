@@ -47,6 +47,8 @@ import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { registerDigests } from "../../../core/features/digests.ts";
 import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
+import { registerTerminals } from "../../../core/features/terminals.ts";
+import { TerminalHost } from "../../../core/terminals/host.ts";
 
 function navigation(inbox: InboxFeature): NavigationDefault {
   return new NavigationDefault({
@@ -310,6 +312,14 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       registerDigests,
     ]
   ) register(rpc, harness);
+  const terminalRoot = await fixture();
+  const terminals = await TerminalHost.start({
+    statePath: terminalRoot,
+    dataDir: terminalRoot,
+    environment: {},
+    signal: new AbortController().signal,
+  });
+  registerTerminals(rpc, terminals);
   const rows = [
     "tasks.create",
     "tasks.rename",
@@ -378,6 +388,9 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "sessions.seen",
     "sessions.finishes",
     "digests.scope",
+    "terminal.list",
+    "terminal.create",
+    "terminal.close",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -402,13 +415,14 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 30, // Retained archive pages have an independent cancellable read.
-      native: 19,
+      read: 31, // Retained archive pages and terminal inventory are volatile reads.
+      native: 21,
       local: 10,
       "prepared-local": 6,
       lease: 2,
     });
   } finally {
+    await terminals.stop();
     approvals.close();
     f.inbox.close();
     f.db.close();

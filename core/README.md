@@ -850,3 +850,22 @@ admission and retain their reconciliation intent. Only scalar helper identities
 cross invalidation ports; tools, labels, scan generations and helper summaries
 commit on the worker's one derived connection. Catalog/restart publications
 carry cached helper metadata.
+
+## Terminal transport
+
+Terminal-ID requests share one daemon-owned FIFO per terminal, with adjacent
+input coalescing. Pending ingress reserves bytes and lifetimes before retaining
+work fits one existing 1 MiB transport window. Every pending lifetime reserves
+its framing as well as payload bytes, bounding tiny-message bookkeeping without
+treating a single-byte input as a maximum-size paste. The daemon counts encoded
+wire bytes, including base64 and framing. Relay attachment opens have their own
+bounded leases so retiring channels cannot leave an unbounded acquisition
+backlog. Channel retirement cancels queued and active request I/O; accepted
+bytes from other channel lifetimes retain their order.
+
+Resize always uses the daemon's atomic Control operation, never a cached role.
+`resize-ack` confirms acceptance even when the size is unchanged; only the
+subscription's `resized` event changes the browser's canonical grid. An
+`interaction-error` reports a failed request without claiming subscription loss.
+Ingress overload or a receiver that cannot drain closes the socket with 1013;
+direct replies and per-channel control queues cannot bypass output backpressure.
