@@ -55,10 +55,18 @@ try {
       "paste-hidden",
       "paste-native-first",
       "paste-read-first",
+      "paste-mac",
       "rtl",
       "scrollbar",
       "scrollbar-accessibility",
       "hover",
+      "composition-hidden",
+      "composition-visible",
+      "composition-reopen",
+      "input-hidden",
+      "input-reopen",
+      "paste-hidden-reopen",
+      "hidden-reports",
     ]
   ) {
     await page.goto(url);
@@ -66,7 +74,92 @@ try {
       document.documentElement.dataset.ready === "true"
     );
     try {
-      if (test === "hidden") {
+      if (test.startsWith("composition-")) {
+        await page.evaluate(() =>
+          globalThis.terminalFixture.compositionStart("draft")
+        );
+        if (test !== "composition-visible") {
+          await page.evaluate(() => globalThis.terminalFixture.hide());
+        }
+        if (test === "composition-reopen") {
+          await page.evaluate(() => globalThis.terminalFixture.show());
+        }
+        await page.evaluate(() => {
+          globalThis.terminalFixture.compositionEnd("IME-commit");
+          globalThis.terminalFixture.textInput(
+            "IME-commit",
+            "insertFromComposition",
+          );
+        });
+        assert.deepEqual(
+          await page.evaluate(() => globalThis.terminalFixture.input),
+          test === "composition-visible" ? ["IME-commit"] : [],
+        );
+        if (test === "composition-reopen") {
+          await page.evaluate(() => {
+            globalThis.terminalFixture.compositionStart("fresh");
+            globalThis.terminalFixture.compositionEnd("fresh");
+            globalThis.terminalFixture.textInput(
+              "fresh",
+              "insertFromComposition",
+            );
+          });
+          assert.deepEqual(
+            await page.evaluate(() => globalThis.terminalFixture.input),
+            ["fresh"],
+          );
+        }
+      } else if (test.startsWith("input-")) {
+        await page.evaluate(() => {
+          globalThis.terminalFixture.hide();
+          globalThis.terminalFixture.textInput("background-input");
+        });
+        assert.deepEqual(
+          await page.evaluate(() => globalThis.terminalFixture.input),
+          [],
+        );
+        if (test === "input-reopen") {
+          await page.evaluate(() => {
+            globalThis.terminalFixture.show();
+            globalThis.terminalFixture.textInput("foreground-input");
+          });
+          assert.deepEqual(
+            await page.evaluate(() => globalThis.terminalFixture.input),
+            ["foreground-input"],
+          );
+        }
+      } else if (test === "hidden-reports") {
+        await page.evaluate(() => {
+          globalThis.terminalFixture.reporting();
+          globalThis.terminalFixture.hide();
+          const canvas = document.querySelector("#visible canvas");
+          canvas.dispatchEvent(
+            new PointerEvent("pointermove", {
+              clientX: 12,
+              clientY: 10,
+              bubbles: true,
+            }),
+          );
+          canvas.dispatchEvent(
+            new WheelEvent("wheel", {
+              deltaY: 120,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+          document.querySelector("#visible textarea").dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "a",
+              code: "KeyA",
+              bubbles: true,
+            }),
+          );
+        });
+        assert.deepEqual(
+          await page.evaluate(() => globalThis.terminalFixture.input),
+          [],
+        );
+      } else if (test === "hidden") {
         const [measured, hidden] = await page.evaluate(() =>
           globalThis.terminalFixture.hiddenCheckpoint()
         );
@@ -83,9 +176,20 @@ try {
           });
         }
       } else if (test.startsWith("paste-")) {
+        if (test === "paste-mac") {
+          await page.evaluate(() =>
+            Object.defineProperty(navigator, "platform", {
+              configurable: true,
+              value: "MacIntel",
+            })
+          );
+        }
         await page.evaluate(() => globalThis.terminalFixture.startPaste());
-        if (test === "paste-hidden") {
+        if (test === "paste-hidden" || test === "paste-hidden-reopen") {
           await page.evaluate(() => globalThis.terminalFixture.hide());
+          if (test === "paste-hidden-reopen") {
+            await page.evaluate(() => globalThis.terminalFixture.show());
+          }
           await page.evaluate(() =>
             globalThis.terminalFixture.completePaste("background-input")
           );
@@ -141,12 +245,16 @@ try {
                 accessible: !!target &&
                   target.getAttribute("aria-hidden") !== "true",
                 role: target && target.getAttribute("role"),
+                sameMount:
+                  target === bar.parentElement?.querySelector("canvas"),
               };
             })
           );
+          assert.equal(relations.length, 2);
           assert(
             relations.every((item) =>
-              item.id && item.accessible && item.role === "img"
+              item.id && item.accessible && item.role === "img" &&
+              item.sameMount
             ),
           );
           assert.equal(
@@ -173,6 +281,7 @@ try {
         }
       } else if (test === "hover") {
         await page.clock.install();
+        await page.clock.pauseAt(new Date());
         await page.evaluate(() => globalThis.terminalFixture.prepareLink());
         await page.clock.runFor(32);
         const box = await page.locator("#visible canvas").boundingBox();

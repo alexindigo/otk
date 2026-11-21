@@ -36,7 +36,7 @@ interface Channel {
   terminal: string;
   sink: TerminalSink;
   wire?: Wire;
-  revision: number;
+  connectionRevision: number;
   ready: boolean;
   blocked: boolean;
   lastLag?: number;
@@ -94,14 +94,14 @@ export class TerminalSocket {
     }
   }
   #connected(channel: Channel, connected: boolean): void {
-    const revision = channel.revision;
+    const revision = ++channel.connectionRevision;
     channel.sink.meta({ connected });
     this.#emit({
       kind: "connection",
       session: channel.session,
       terminal: channel.terminal,
       connected,
-    }, () => channel.revision === revision);
+    }, () => channel.connectionRevision === revision);
   }
   attach(
     session: string,
@@ -115,7 +115,7 @@ export class TerminalSocket {
       sink,
       ready: false,
       blocked: false,
-      revision: 0,
+      connectionRevision: 0,
     };
     this.#channels.add(channel);
     this.#wake();
@@ -183,7 +183,6 @@ export class TerminalSocket {
     ) return;
     const wire: Wire = { channel, socket, number: this.#next++ };
     channel.wire = wire;
-    channel.revision++;
     channel.ready = false;
     this.#wire.set(wire.number, wire);
     this.#send({
@@ -202,7 +201,6 @@ export class TerminalSocket {
   #unbind(channel: Channel): void {
     const wire = channel.wire;
     channel.wire = undefined;
-    channel.revision++;
     channel.ready = false;
     if (wire) {
       this.#wire.delete(wire.number);
@@ -249,12 +247,13 @@ export class TerminalSocket {
     // Revoke the complete old transport before callbacks can reacquire one.
     const retired = [...this.#channels].map((channel) => {
       channel.wire = undefined;
-      channel.revision++;
       channel.ready = false;
-      return { channel, revision: channel.revision };
+      return { channel, revision: channel.connectionRevision };
     });
     for (const { channel, revision } of retired) {
-      if (channel.revision === revision) this.#connected(channel, false);
+      if (channel.connectionRevision === revision) {
+        this.#connected(channel, false);
+      }
     }
   }
   #lost(): void {

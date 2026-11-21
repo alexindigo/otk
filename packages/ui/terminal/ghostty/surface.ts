@@ -625,6 +625,8 @@ export class GhosttyTerminalSurface {
   private readonly core: GhosttyTerminalCore;
   private readonly options: GhosttyTerminalSurfaceOptions;
   private visible: boolean;
+  // A new visible lifetime never inherits pending input from the previous one.
+  private inputAdmission: object | null;
   private hasSize = false;
   private metrics: GhosttyCellMetrics;
   private fontFamily: string;
@@ -755,6 +757,7 @@ export class GhosttyTerminalSurface {
     this.metrics = metrics;
     this.options = options;
     this.visible = options.visible ?? true;
+    this.inputAdmission = this.visible ? {} : null;
     this.theme = options.theme;
     this.fontFamily = fontFamily;
     this.requestedFontFamily = options.font?.family;
@@ -855,7 +858,7 @@ export class GhosttyTerminalSurface {
     this.forceFullRender = true;
     this.scrollbarDirty = true;
     if (!visible) {
-      this.retirePaste();
+      this.retireInput();
       this.linkActivationRequestId += 1;
       this.clearHoveredLink();
       this.linkRowStability = [];
@@ -863,6 +866,7 @@ export class GhosttyTerminalSurface {
       this.setSelectionAutoscroll(0);
       return;
     }
+    this.inputAdmission = {};
     this.fit();
   }
 
@@ -1105,19 +1109,21 @@ export class GhosttyTerminalSurface {
     readText: () => Promise<string>,
     isCurrent: () => boolean = () => true,
   ): Promise<void> {
-    if (this.disposed || !this.visible || !isCurrent()) return;
+    const admission = this.inputAdmission;
+    if (
+      admission === null || !isCurrent() || admission !== this.inputAdmission
+    ) return;
     const token = ++this.pasteShortcutToken;
     const text = await readText();
     if (
-      this.disposed || !this.visible || this.pasteShortcutToken !== token ||
-      !isCurrent()
+      this.pasteShortcutToken !== token || !isCurrent() ||
+      admission !== this.inputAdmission
     ) {
       return;
     }
     this.pasteShortcutToken += 1;
     if (text.length === 0) return;
-    const encoded = this.core.encodePaste(text);
-    if (encoded.length > 0) this.options.onData(encoded);
+    this.sendInput(() => this.core.encodePaste(text), admission);
   }
 
   // The terminal selection is the only browser-readable PRIMARY-like buffer.
@@ -1226,7 +1232,7 @@ export class GhosttyTerminalSurface {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.retirePaste();
+    this.retireInput();
     this.clearHoveredLink();
     this.stopObservingResize();
     document.fonts.removeEventListener("loadingdone", this.onFontsLoaded);
@@ -1261,16 +1267,41 @@ export class GhosttyTerminalSurface {
     }
   }
 
-  private retirePaste(): void {
+  private retireInput(): void {
+    this.inputAdmission = null;
     this.pasteShortcutToken++;
     this.pasteShortcutGesture = null;
+    this.composing = false;
+    this.clearCompositionInputSuppression();
+    this.input.value = "";
+    this.primedCopySelection = "";
+    this.encodedKeyCodes.clear();
+    this.mouseReportingPointerId = null;
+    this.mouseReportingButton = null;
+    this.lastMouseMotionData = null;
+    this.touchScroll = null;
+    this.wheelRemainder = 0;
+    this.input.blur();
+  }
+
+  /** The sole shell-input port, checked before encoding and after reentrant work. */
+  private sendInput(
+    encode: () => string | Uint8Array,
+    admission = this.inputAdmission,
+  ): void {
+    if (admission === null || admission !== this.inputAdmission) return;
+    const data = encode();
+    if (admission !== this.inputAdmission || data.length === 0) return;
+    this.options.onData(data);
   }
 
   private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (this.disposed || !this.visible) return;
+    const admission = this.inputAdmission;
+    if (admission === null) return;
     // A consumed repeat still owes the original encoded press a release.
     if (!event.repeat) this.encodedKeyCodes.delete(event.code);
     if (isTerminalAltGraphText(event) || !this.options.beforeKey(event)) return;
+    if (admission !== this.inputAdmission) return;
     // IME candidates belong to the textarea, even if the key also resembles
     // a local shortcut. Safari signals the initial composition with code 229.
     if (isTerminalCompositionKey(event, this.composing)) {
@@ -1364,7 +1395,7 @@ export class GhosttyTerminalSurface {
             this.pasteShortcutToken += 1;
             if (!text) return;
             if (this.pasteShortcutGesture === gesture) gesture.readText = text;
-            this.options.onData(this.core.encodePaste(text));
+            this.sendInput(() => this.core.encodePaste(text), admission);
           },
           () => {},
         );
@@ -1372,12 +1403,15 @@ export class GhosttyTerminalSurface {
       return;
     }
     this.clearPrimedCopy();
-    const data = this.core.encodeKey(event);
-    if (data.length === 0) return;
-    this.encodedKeyCodes.add(event.code);
-    event.preventDefault();
-    event.stopPropagation();
-    this.options.onData(data);
+    this.sendInput(() => {
+      const data = this.core.encodeKey(event);
+      if (data.length > 0) {
+        this.encodedKeyCodes.add(event.code);
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return data;
+    }, admission);
   };
 
   private readonly onKeyUp = (event: KeyboardEvent) => {
@@ -1395,11 +1429,14 @@ export class GhosttyTerminalSurface {
       return;
     }
     // Ghostty emits release codes only for Kitty report-event-types sessions.
-    const data = this.core.encodeKey(event, "release");
-    if (data.length === 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.options.onData(data);
+    this.sendInput(() => {
+      const data = this.core.encodeKey(event, "release");
+      if (data.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return data;
+    });
   };
 
   // A release elsewhere must not leave a press for a later app shortcut to inherit.
@@ -1483,25 +1520,30 @@ export class GhosttyTerminalSurface {
     // The native paste won the race with actual text; a pending clipboard read
     // must not double. An empty native paste leaves the read as the only path.
     this.pasteShortcutToken += 1;
-    this.options.onData(this.core.encodePaste(data));
+    this.sendInput(() => this.core.encodePaste(data));
   };
 
   private readonly onCompositionStart = () => {
+    if (this.inputAdmission === null) return;
     this.clearPrimedCopy();
     this.clearCompositionInputSuppression();
     this.composing = true;
   };
 
   private readonly onCompositionEnd = (event: CompositionEvent) => {
+    const admitted = this.composing;
     this.composing = false;
     const data = this.input.value || event.data;
-    if (data.length > 0) this.options.onData(data);
     this.input.value = "";
+    this.clearCompositionInputSuppression();
+    // Some engines report the matching input with an empty inputType. Even a
+    // retired completion must consume its own duplicate, not create fresh input.
     this.compositionInputToSuppress = data;
     this.compositionSuppressionTimer = globalThis.setTimeout(() => {
       this.compositionInputToSuppress = null;
       this.compositionSuppressionTimer = null;
     }, 100);
+    if (admitted) this.sendInput(() => data);
   };
 
   private readonly onInput = (event: Event) => {
@@ -1517,8 +1559,14 @@ export class GhosttyTerminalSurface {
       return;
     }
     this.clearCompositionInputSuppression();
-    if (data.length > 0) this.options.onData(data);
     this.input.value = "";
+    // A composition commit requires the compositionend owner; retired IME
+    // events cannot become a fresh textarea input after hide/show.
+    if (
+      inputEvent.inputType === "insertCompositionText" ||
+      inputEvent.inputType === "insertFromComposition"
+    ) return;
+    this.sendInput(() => data);
   };
 
   private clearCompositionInputSuppression(): void {
@@ -1989,8 +2037,8 @@ export class GhosttyTerminalSurface {
     }
     if (this.core.isAlternateScreen()) {
       // Alternate screens have no scrollback; send arrow keys like xterm.
-      this.options.onData(
-        terminalWheelArrowData(rows, this.core.isApplicationCursorKeys()),
+      this.sendInput(
+        () => terminalWheelArrowData(rows, this.core.isApplicationCursorKeys()),
       );
       return;
     }
@@ -2533,36 +2581,38 @@ export class GhosttyTerminalSurface {
     button: number | null,
     event: MouseEvent,
   ): void {
-    const bounds = this.canvas.getBoundingClientRect();
-    const data = this.core.encodeMouse({
-      action,
-      button,
-      mods: (event.shiftKey ? 1 : 0) |
-        (event.ctrlKey ? 1 << 1 : 0) |
-        (event.altKey ? 1 << 2 : 0) |
-        (event.metaKey ? 1 << 3 : 0),
-      x: Math.max(0, event.clientX - bounds.left),
-      y: Math.max(0, event.clientY - bounds.top),
-      screenWidth: bounds.width,
-      screenHeight: bounds.height,
-      cellWidth: this.metrics.width,
-      cellHeight: this.metrics.height,
-      paddingLeft: CONTENT_PADDING,
-      paddingRight: CONTENT_PADDING,
-      paddingTop: this.originY,
-      paddingBottom: Math.max(
-        0,
-        bounds.height - this.originY - this.rows * this.metrics.height,
-      ),
-      anyButtonPressed: event.buttons !== 0,
+    this.sendInput(() => {
+      const bounds = this.canvas.getBoundingClientRect();
+      const data = this.core.encodeMouse({
+        action,
+        button,
+        mods: (event.shiftKey ? 1 : 0) |
+          (event.ctrlKey ? 1 << 1 : 0) |
+          (event.altKey ? 1 << 2 : 0) |
+          (event.metaKey ? 1 << 3 : 0),
+        x: Math.max(0, event.clientX - bounds.left),
+        y: Math.max(0, event.clientY - bounds.top),
+        screenWidth: bounds.width,
+        screenHeight: bounds.height,
+        cellWidth: this.metrics.width,
+        cellHeight: this.metrics.height,
+        paddingLeft: CONTENT_PADDING,
+        paddingRight: CONTENT_PADDING,
+        paddingTop: this.originY,
+        paddingBottom: Math.max(
+          0,
+          bounds.height - this.originY - this.rows * this.metrics.height,
+        ),
+        anyButtonPressed: event.buttons !== 0,
+      });
+      const resolution = resolveTerminalMouseData(
+        action,
+        data,
+        this.lastMouseMotionData,
+      );
+      this.lastMouseMotionData = resolution.nextMotionData;
+      return resolution.send ? data : new Uint8Array();
     });
-    const resolution = resolveTerminalMouseData(
-      action,
-      data,
-      this.lastMouseMotionData,
-    );
-    this.lastMouseMotionData = resolution.nextMotionData;
-    if (resolution.send) this.options.onData(data);
   }
 
   private synchronizeMouseTrackingState(): boolean {

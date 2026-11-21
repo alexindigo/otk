@@ -45,6 +45,33 @@ Object.assign(globalThis, {
     links,
     input,
     hover,
+    show() {
+      mounts[0].style.display = "block";
+      surfaces[0].setVisible(true);
+      surfaces[0].focus();
+    },
+    compositionStart(text: string) {
+      surfaces[0].focus();
+      surfaces[0].input.dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true }),
+      );
+      surfaces[0].input.value = text;
+    },
+    compositionEnd(text: string) {
+      surfaces[0].input.value = text;
+      surfaces[0].input.dispatchEvent(
+        new CompositionEvent("compositionend", { data: text, bubbles: true }),
+      );
+    },
+    textInput(text: string, inputType = "insertText") {
+      surfaces[0].input.value = text;
+      surfaces[0].input.dispatchEvent(
+        new InputEvent("input", { data: text, inputType, bubbles: true }),
+      );
+    },
+    reporting() {
+      surfaces[0].write("\x1b[?1049h\x1b[?1003h\x1b[?1006h");
+    },
     startPaste() {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -58,7 +85,8 @@ Object.assign(globalThis, {
         new KeyboardEvent("keydown", {
           key: "v",
           code: "KeyV",
-          ctrlKey: true,
+          ctrlKey: !/Mac|iPhone|iPad/.test(navigator.platform),
+          metaKey: /Mac|iPhone|iPad/.test(navigator.platform),
           shiftKey: true,
           bubbles: true,
         }),
