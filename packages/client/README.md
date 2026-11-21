@@ -377,6 +377,30 @@ Treat state as read-only outside model methods. A UI binding can supply a
 `StateFactory` implementing draft updates and reconciliation. The application's
 thin Solid binding retains granular updates at the UI boundary.
 
+`terminalBoxFor(connection, sessionID, factory?)` owns that session's in-memory
+closed/docked/expanded presentation intent independently of mounted surfaces.
+Toggle, expand, collapse and close never own terminal channels or persist state.
+The connection owner calls `releaseTerminalBoxes` when removed or stopped.
+
+`TerminalSocket(connection)` is one lazy `/api/terminal` transport per sidecar.
+It shares numbered channels, decodes base64 checkpoints, frames input with the
+channel prefix and reconnects retained channels from fresh snapshots. Reuse the
+connection's injected socket factory for authenticated native consumers.
+Initial/reconnect snapshots call the sink's `reset`; ordered live resize events
+call `resize` without replaying a checkpoint, preserving renderer scrollback and
+the saved primary screen while an alternate-screen program runs.
+
+`SessionTerminals(socket, connection, sessionID, factory?)` owns `state.list`,
+`state.selected`, `state.disconnected` and loading/error feedback through that
+same state/subscribe contract (not framework signals). `refresh`, `create`,
+`close` and `show` own list and selection intents. `show(id, sink)` returns the
+input/resize attachment and retains four sinks in LRU order; hidden retained
+sinks keep receiving bytes. Reusing a different sink takes a fresh snapshot.
+`dispose` detaches only that session; `socket.stop` releases the shared owner.
+Terminated channels refresh without reattach; repeated lag within 10 seconds
+stays disconnected until explicit `show`. Natural exit keeps the terminal in the
+refreshed list; closing its tab terminates it through RPC.
+
 `ClientIndex` owns its keyed entry dictionary synchronously and publishes keyed
 clocks through the binding. `get(sidecarID,sessionID)` is the invocation-current
 read used by `ServerResources.entry`; accepted tombstones govern selection and
