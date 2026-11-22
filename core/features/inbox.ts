@@ -605,6 +605,7 @@ export class InboxFeature implements FrameSource {
       this.supervision,
       new ProjectIdentity(stores.checkouts),
       this.index.hierarchy,
+      this.states,
     );
     this.index.hierarchy.configure(
       this.summaries.identity,
@@ -843,12 +844,18 @@ export class InboxFeature implements FrameSource {
           ? [...this.#supervision].filter(([id]) => leased.has(id))
           : this.#supervision,
       ),
+      // Sessions follow the lease; aggregates are per-user scalars for all views.
       entities: Object.fromEntries(
         leased
-          ? [...leased].flatMap((id) => {
-            const value = this.states.get(entityKey("session", id));
-            return value ? [[entityKey("session", id), value]] : [];
-          })
+          ? [
+            ...[...this.states.values()].filter(([, value]) =>
+              value.kind !== "session"
+            ),
+            ...[...leased].flatMap((id) => {
+              const value = this.states.get(entityKey("session", id));
+              return value ? [[entityKey("session", id), value] as const] : [];
+            }),
+          ]
           : this.states.values(),
       ),
       pathTemplates: [...this.#templates],

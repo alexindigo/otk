@@ -24,6 +24,7 @@ import {
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
+import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { fixture } from "../../support/config.ts";
 
@@ -269,17 +270,116 @@ test("the inbox publishes session entities with the snapshot and as lease patche
       (await feature.baseline()).inbox.entities?.[key]?.state,
       "working",
     );
-    // A lease names only its sessions; other sessions' entities stay out.
-    assertEquals(
-      Object.keys(
-        feature.get({ epoch: 0, crumbs: [], rows: [] }, new Set()).entities ??
-          {},
-      ),
-      [],
+    // A lease names only its sessions; other sessions' entities stay out,
+    // while per-user aggregates reach every view.
+    const leased = Object.keys(
+      feature.get({ epoch: 0, crumbs: [], rows: [] }, new Set()).entities ??
+        {},
     );
+    assertEquals(leased.filter((key) => key.startsWith("session:")), []);
+    assertEquals(leased.includes(entityKey("global", "global")), true);
   } finally {
     stop();
     feature.close();
     db.close();
   }
+});
+
+function summaries(marks: (id: string) => { seen: number; finish: number }) {
+  const owner = new ProjectSummaries(marks, () => {});
+  owner.authority("current");
+  owner.seed(["/repo", "/repo/tree"].map((directory) => ({
+    directory,
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current" as const,
+    topology: {
+      repoID: "repo",
+      canonicalRoot: "/repo",
+      leafDirectory: directory,
+      ...(directory === "/repo" ? {} : { parentDirectory: "/repo" }),
+    },
+  })));
+  const state = (kind: "checkout" | "project" | "global", id: string) =>
+    owner.states.get(entityKey(kind, id));
+  return { owner, state };
+}
+const row = (
+  id: string,
+  directory: string,
+  activity: IndexMetadata["activity"],
+  parentID?: string,
+): IndexMetadata => ({
+  ...base,
+  id,
+  directory,
+  projectID: "repo",
+  ...(parentID ? { parentID } : {}),
+  activity,
+});
+
+test("live 2.61 shape: a working project with two unseen finishes is green with unseen 2", () => {
+  const { owner, state } = summaries(() => ({ seen: 10, finish: 0 }));
+  owner.entry(row("main", "/repo", { terminal: 20, work: keys("shell") }));
+  owner.entry(
+    row("helper", "/repo", { terminal: 30, work: keys("run") }, "main"),
+  );
+  assertEquals(state("checkout", "/repo")?.state, "working");
+  assertEquals(state("checkout", "/repo")?.counts.unseen, 2);
+  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.counts.unseen, 2);
+  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 2);
+  assertEquals(state("global", "global")?.counts, {
+    blocked: 0,
+    working: 2,
+    finished: 0,
+    unseen: 2,
+  });
+});
+
+test("X10 shape: a working helper wins the repository while the main session stays finished", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  owner.entry(row("main", "/repo", { terminal: 20 }));
+  owner.entry(
+    row("helper", "/repo/tree", { terminal: 5, work: keys("run") }, "main"),
+  );
+  assertEquals(
+    owner.states.get(entityKey("session", "main"))?.state,
+    "finished",
+  );
+  assertEquals(state("checkout", "/repo/tree")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.counts.finished, 1);
+  assertEquals(owner.values.get("/repo")?.status, "working");
+  // Moving out of a checkout moves its contribution, nothing is rescanned.
+  owner.remove("helper");
+  assertEquals(state("checkout", "/repo/tree")?.state, "none");
+  assertEquals(state("project", "/repo")?.state, "finished");
+  assertEquals(state("project", "/repo")?.previous, "working");
+});
+
+test("a fresh location form blocks its checkout and project with cause form", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  owner.entry(row("main", "/repo/tree", { work: keys("run") }));
+  owner.locationForms({ "/repo/tree": 1 });
+  assertEquals(state("checkout", "/repo/tree")?.state, "blocked");
+  assertEquals(state("checkout", "/repo/tree")?.cause, "form");
+  assertEquals(state("project", "/repo")?.state, "blocked");
+  assertEquals(state("project", "/repo")?.cause, "form");
+  assertEquals(owner.values.get("/repo")?.status, "blocked");
+  owner.locationForms({});
+  assertEquals(state("project", "/repo")?.state, "working");
+});
+
+test("an aggregate blocked only by permissions shares their grace cause", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  const asking = row("a", "/repo", { permissions: keys("per_1") });
+  owner.entry({ ...asking, attention: { ...base.attention, permissions: 1 } });
+  assertEquals(state("project", "/repo")?.cause, "permission");
+  assertEquals(state("global", "global")?.cause, "permission");
+  owner.entry(row("b", "/repo", { inputs: keys("que_1") }));
+  assertEquals(state("project", "/repo")?.state, "blocked");
+  assertEquals(state("project", "/repo")?.cause, undefined);
 });

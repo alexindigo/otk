@@ -61,7 +61,7 @@ Deno.test("priority ownership detects reordered lists and numeric rank maps with
 });
 
 const lampConsumers = new Set([
-  "core/index/project-summaries.ts",
+  "core/index/entity-states.ts",
   "packages/client/inbox.ts",
   "packages/client/project-projection.ts",
   "packages/client/request-attention.ts",

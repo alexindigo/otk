@@ -256,7 +256,6 @@ function violations(path: string, text: string): string[] {
 // WP3.1 records existing violations. Each migration removes its entries. WP3.11
 // removes this mechanism and requires an empty result, not an expanding allowlist.
 const PENDING: string[] = [
-  "core/index/project-summaries.ts: rollup-owner",
   "packages/client/approval-attention.ts: raw-attention",
   "packages/client/inbox.ts: attention-clock",
   "packages/client/inbox.ts: rollup-owner",
