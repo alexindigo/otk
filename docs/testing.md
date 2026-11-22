@@ -88,3 +88,46 @@ first-attempt artifacts.
 Fixture/provider revisions invalidate matching snapshots. UI-only changes reuse
 native datasets and rebuild exact-tree assets. New tests belong in the Node
 browser island or the explicit Deno tier; the migration ledger audits ownership.
+
+## PR checks
+
+`Full-house PR checks` runs on PRs to `master`, pushes to `master`, and manual
+dispatch. It uses GitHub-hosted Ubuntu 24.04 guests, not self-hosted machines or
+cloud credentials. Fork PRs use the same read-only token and need no secrets.
+The workflow never uses `pull_request_target` or persists checkout credentials.
+
+| # | Job per native version                                                                                  | Slices   | Timeout      |
+| - | ------------------------------------------------------------------------------------------------------- | -------- | ------------ |
+| 1 | Base: prepare, fmt, lint, check, unit, arch, no-product-hooks, reuse, collection, quarantine, migration | 1        | 60 min       |
+| 2 | Prepare and integration                                                                                 | 1        | 60 min       |
+| 3 | Prepare and integration-scale                                                                           | 1        | 60 min       |
+| 4 | Prepare, collection and browser                                                                         | 4 shards | 60 min each  |
+| 5 | Prepare and browser-scale, when admitted by the migration ledger                                        | 2 shards | 120 min each |
+| 6 | Prepare and themes (2.2.6 only)                                                                         | 1        | 60 min       |
+
+There are 19 test jobs across opencode 1.19.3 and 2.2.6, followed by
+`full-house`. Each runs `deno task test:full` with explicit tiers/shards. The
+branch's `scripts/ci/provision.sh VERSION` installs the pinned Node, Deno,
+native binary, provider cache and Chromium, verifies native/denort hashes, and
+activates the user systemd bus. Deno, npm, browser, native and provider caches
+are keyed by their versions or source hashes. Temporary fixtures stay in
+`$RUNNER_TEMP/otk-tmp`, outside the Git checkout. The 2.2.6 integration job also
+provisions 1.19.3 for the native migration test.
+
+`full-house` proves every expected job, tier and browser shard ran exactly as
+planned, and every receipt names the same source tree. A missing receipt or
+shard fails the check, as do test failures, flaky results and not-run tests.
+Every tier still runs after a failed tier. Full-matrix runs allow one retry; a
+passing retry does not turn a flaky result into a passing qualification.
+
+Read the `full-house` job summary for failing IDs and coverage errors. On PRs,
+it compares failures with the latest completed master push record and labels
+them "new in this PR" or "also failing on master". Both labels still fail the
+check. Until a master record exists, the summary says no baseline is available.
+The master record is `failing-ids-master`; each job's receipts, JUnit and logs
+are `receipts-JOB`. Failed jobs also retain traces, screenshots and video in
+`diagnostics-JOB`. Artifacts expire after 14 days.
+
+The workflow does not configure branch protection or required checks. Its first
+GitHub run happens only when the CI branch is published with user approval;
+local rehearsal is not a claim that GitHub Actions has run successfully.
