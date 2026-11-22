@@ -12816,7 +12816,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/timestamps.spec.ts",
-              "testID": "messages.native-final-clock-hover-ax-preference-restart"
+              "testID": "messages.native-final-clock-persistent-footer-ax-preference-restart"
             }
           ],
           "retainedCoverage": {
@@ -12858,7 +12858,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/timestamps.spec.ts",
-              "testID": "messages.native-final-clock-hover-ax-preference-restart"
+              "testID": "messages.native-final-clock-persistent-footer-ax-preference-restart"
             }
           ],
           "retainedCoverage": {
