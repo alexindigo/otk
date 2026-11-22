@@ -177,25 +177,25 @@ export default function RevertGroup(props: {
                 Retry
               </button>
             </Show>
-            <button
-              type="button"
-              class="otk-pill otk-revert-restore"
-              aria-label="Restore conversation"
-              disabled={pending() || !props.owner}
-              onClick={() => void props.owner?.restore()}
-            >
-              Restore
-            </button>
-            <button
-              type="button"
-              class="otk-icon-button"
-              aria-label="Dismiss revert"
-              title="Dismiss revert"
-              disabled={pending() || !props.owner}
-              onClick={() => props.owner?.dismiss()}
-            >
-              <CloseIcon />
-            </button>
+            <Show when={!pending() && props.owner}>
+              <button
+                type="button"
+                class="otk-pill otk-revert-restore"
+                aria-label="Restore conversation"
+                onClick={() => void props.owner?.restore()}
+              >
+                Restore
+              </button>
+              <button
+                type="button"
+                class="otk-icon-button"
+                aria-label="Dismiss revert"
+                title="Dismiss revert"
+                onClick={() => props.owner?.dismiss()}
+              >
+                <CloseIcon />
+              </button>
+            </Show>
           </Show>
         )}
         body={() => (
