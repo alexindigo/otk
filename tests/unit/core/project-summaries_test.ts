@@ -548,3 +548,42 @@ Deno.test("recorded root migration retains deleted routing metadata without a ph
   owner.remove("deleted");
   assertEquals(owner.values.get("/repo")?.unseenCount, 0);
 });
+Deno.test("a removed self-claimed checkout is summarized under its repository's archive, and an unknown one fabricates no project", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  const claim = (
+    directory: string,
+    repository: {
+      root: string | null;
+      present: boolean;
+      evidence: "git" | "name" | "none";
+    },
+  ) => ({
+    directory,
+    hasSessions: true,
+    sessionCount: 2,
+    lastActivity: 1,
+    authority: "current" as const,
+    identities: [{
+      source: "native",
+      repoID: directory,
+      canonicalRoot: directory,
+      recordedRoot: directory,
+      inventory: [{ directory, kind: "checkout" as const }],
+      repository: { checkout: directory, ...repository },
+    }],
+  });
+  owner.seed([
+    claim("/repo", { root: "/repo", present: true, evidence: "git" }),
+    claim("/repo.review", { root: "/repo", present: false, evidence: "name" }),
+    claim("/lost", { root: null, present: false, evidence: "none" }),
+  ]);
+  const review = owner.values.get("/repo.review")!;
+  assertEquals(review.topology?.parentDirectory, "/repo");
+  assertEquals([review.availability, review.archived], ["removed", true]);
+  assertEquals(owner.values.get("/repo")?.sessionCount, 4);
+  assertEquals(
+    owner.values.get("/lost")?.topology?.canonicalRoot,
+    "otk:unknown-repository",
+  );
+  assertEquals(owner.values.has("otk:unknown-repository"), false);
+});

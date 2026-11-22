@@ -54,3 +54,25 @@ Deno.test("archive header rolls up through the shared attention order without co
     unseenCount: 8,
   });
 });
+
+Deno.test("a checkout with an unknown repository is never placed as a live project", () => {
+  for (const status of ["working", "blocked", "none"] as const) {
+    assertEquals(
+      projectPlacement({
+        lifecycle: {
+          availability: "unknown",
+          archived: false,
+          topology: {
+            repoID: "lost",
+            canonicalRoot: "otk:unknown-repository",
+            leafDirectory: "/lost",
+          },
+        },
+        status,
+        inactive: false,
+        hasSessions: true,
+      }).section,
+      "archived",
+    );
+  }
+});

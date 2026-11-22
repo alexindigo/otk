@@ -10,6 +10,9 @@ export const checkoutsMigrations: FeatureMigrations = {
   }, {
     version: 2,
     sql: new URL("./migrations/checkouts/002.sql", import.meta.url),
+  }, {
+    version: 3,
+    sql: new URL("./migrations/checkouts/003.sql", import.meta.url),
   }],
 };
 /** Durable native affiliation, not rebuildable digest data or user policy. */
@@ -22,6 +25,11 @@ export interface CheckoutRecord {
   kind: "checkout" | "worktree" | "unknown";
   availability: "present" | "removed" | "unknown";
   proven: boolean;
+  /**
+   * The checkout's repository root, recorded from Git evidence and kept after
+   * the checkout is removed. Absent until known; may be UNKNOWN_REPOSITORY.
+   */
+  repository?: string;
 }
 export interface CheckoutAuthority {
   sources: readonly string[];
@@ -45,6 +53,7 @@ export class Checkouts {
       kind: row.kind as CheckoutRecord["kind"],
       availability: row.availability as CheckoutRecord["availability"],
       proven: !!row.proven,
+      ...(row.repository == null ? {} : { repository: String(row.repository) }),
     }));
   }
   authority(): CheckoutAuthority | undefined {
@@ -80,7 +89,7 @@ export class Checkouts {
   ): void {
     this.db.write(() => {
       const statement = this.db.connection.prepare(
-        "INSERT INTO checkout_history VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(source,repo,scope) DO UPDATE SET canonical=excluded.canonical,checkout=excluded.checkout,kind=excluded.kind,availability=excluded.availability,proven=excluded.proven",
+        "INSERT INTO checkout_history(source,repo,scope,canonical,checkout,kind,availability,proven,repository) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(source,repo,scope) DO UPDATE SET canonical=excluded.canonical,checkout=excluded.checkout,kind=excluded.kind,availability=excluded.availability,proven=excluded.proven,repository=excluded.repository",
       );
       for (const r of records) {
         statement.run(
@@ -92,6 +101,7 @@ export class Checkouts {
           r.kind,
           r.availability,
           Number(r.proven),
+          r.repository ?? null,
         );
       }
       if (authority) {
