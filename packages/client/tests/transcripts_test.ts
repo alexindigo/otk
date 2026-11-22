@@ -132,6 +132,99 @@ const policy = {
   concurrency: 4,
 };
 
+for (
+  const replacement of [
+    "same",
+    "epoch",
+    "generation",
+    "revision",
+    "complete",
+  ] as const
+) {
+  Deno.test(`newest page reconciles acquired history under ${replacement} authority`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      await f.reply();
+      await f.reply();
+      const transcript = f.owner.get(target("a"))!;
+      const visible = transcript.state.messagesByID["a-060"];
+      assert(visible);
+      const boundary = {
+        turnID: visible.id,
+        firstID: visible.id,
+        lastID: visible.id,
+        complete: true,
+      };
+      transcript.projection.boundaries([boundary]);
+      const recovery = {
+        messageID: visible.id,
+        partID: "source",
+        generation: 1,
+        state: "unavailable" as const,
+      };
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: 1 },
+        event: { op: "stream.recovery", ...recovery },
+      }, true);
+      assertEquals(transcript.state.recovering, [recovery]);
+      const publications: boolean[] = [];
+      const release = transcript.subscribe((state) =>
+        publications.push(!!state.messagesByID[visible.id])
+      );
+      const work = transcript.refetch();
+      const request = f.requests.shift()!;
+      const messages = replacement === "complete"
+        ? f.messages("a", 5)
+        : f.messages("a");
+      const page = fixturePage("a", messages);
+      page.from = page.clock = { epoch: "fixture", seq: 1 };
+      if (replacement === "same") {
+        page.items = page.items.filter((message) => message.id !== "a-075");
+      }
+      if (replacement === "epoch") {
+        page.from = page.clock = { epoch: "new", seq: 0 };
+      }
+      if (replacement === "revision") page.version.revision++;
+      if (replacement === "generation") page.version.generation++;
+      replyRequest(f.connection.rpc, request, page);
+      await work;
+      await turns();
+      release();
+      if (replacement === "same") {
+        assert(publications.length > 0);
+        assert(
+          publications.every(Boolean),
+          "no accepted publication may drop materialized history outside page coverage",
+        );
+        assertEquals(transcript.state.messagesByID[visible.id], visible);
+        assertEquals(transcript.projection.boundary(visible.id), boundary);
+        assertEquals(transcript.state.recovering, [recovery]);
+        assertEquals(
+          transcript.state.messagesByID["a-075"],
+          undefined,
+          "absence inside the replacement's covered suffix is authoritative",
+        );
+        f.owner.receive("server", {
+          t: "content",
+          sessionID: "a",
+          clock: { epoch: "fixture", seq: 2 },
+          event: { op: "message.remove", messageID: visible.id },
+        }, true);
+        assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else assertEquals(transcript.state.messagesByID[visible.id], undefined);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
 for (const boundary of ["baseline", "projection"]) {
   Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
     const f = fixture(policy);
