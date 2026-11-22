@@ -33,20 +33,36 @@ function own(state: ProjectStatus, unseen: boolean): EntityCounts {
 }
 
 /** Members of an aggregate by state; graced counts members blocked only by a
- * permission, so an aggregate shares its members' grace. */
+ * permission, and requests holds those permissions' identities, so an
+ * aggregate shares its members' per-request grace (addendum 1). */
 interface Tally {
   counts: EntityCounts;
   graced: number;
+  requests: Map<string, number>;
+}
+/** One session's share of its aggregates. */
+interface Contribution {
+  counts: EntityCounts;
+  graced: number;
+  requests: readonly string[];
 }
 function tally(): Tally {
-  return { counts: own("none", false), graced: 0 };
+  return { counts: own("none", false), graced: 0, requests: new Map() };
 }
-function add(target: Tally, value: Tally, sign: 1 | -1): void {
+function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
   target.counts.blocked += sign * value.counts.blocked;
   target.counts.working += sign * value.counts.working;
   target.counts.finished += sign * value.counts.finished;
   target.counts.unseen += sign * value.counts.unseen;
   target.graced += sign * value.graced;
+  const requests = value.requests instanceof Map
+    ? [...value.requests]
+    : value.requests.map((id) => [id, 1] as const);
+  for (const [id, count] of requests) {
+    const next = (target.requests.get(id) ?? 0) + sign * count;
+    if (next) target.requests.set(id, next);
+    else target.requests.delete(id);
+  }
 }
 
 /** Decision 62: the one per-user state of every entity, updated from signals.
@@ -58,8 +74,8 @@ export class EntityStates {
   #own = new Map<string, EntityCounts>();
   /** Last published parent, so a moved or removed session updates its old family. */
   #parents = new Map<string, string>();
-  /** Sessions whose only blocker is a permission. */
-  #graced = new Set<string>();
+  /** Sessions whose only blocker is a permission, with those requests. */
+  #graced = new Map<string, readonly string[]>();
   /** Placement facts from ProjectSummaries: session checkout, checkout forms
    * and the checkouts of each project. Aggregates update by delta (D57). */
   #checkoutOf = new Map<string, string>();
@@ -192,8 +208,13 @@ export class EntityStates {
       const before = this.#own.get(entry.id);
       this.#own.set(entry.id, counts);
       const value = this.#session(entry, verdict, state, counts, operation);
-      if (value.cause === "permission") this.#graced.add(entry.id);
-      else this.#graced.delete(entry.id);
+      if (value.cause === "permission") {
+        this.#graced.set(
+          entry.id,
+          (value.evidence?.requests?.permissions ?? []).map((r) => r.id)
+            .sort(),
+        );
+      } else this.#graced.delete(entry.id);
       if (this.#set(value)) upserts.push(value);
       if (moved || JSON.stringify(before) !== JSON.stringify(counts)) {
         this.#ancestors(entry.id, upserts);
@@ -213,16 +234,21 @@ export class EntityStates {
     this.#contribute(id, contribution, upserts);
     if (upserts.length || removals.length) this.publish(upserts, removals);
   }
-  #contribution(id: string): Tally {
+  #contribution(id: string): Contribution {
     const counts = this.#own.get(id);
     return {
       counts: counts ? { ...counts } : own("none", false),
       graced: this.#graced.has(id) ? 1 : 0,
+      requests: this.#graced.get(id) ?? [],
     };
   }
   /** Apply one session's changed contribution to its checkout, the projects
    * holding that checkout and the global entity; nothing else is visited. */
-  #contribute(id: string, before: Tally, upserts: EntityState[]): void {
+  #contribute(
+    id: string,
+    before: Contribution,
+    upserts: EntityState[],
+  ): void {
     const after = this.#contribution(id);
     if (JSON.stringify(before) === JSON.stringify(after)) return;
     const checkout = this.#checkoutOf.get(id);
@@ -296,6 +322,11 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts: { ...counts },
+      ...(cause === "permission"
+        ? {
+          requests: [...members.requests.keys()].sort().map((id) => ({ id })),
+        }
+        : {}),
     };
   }
   #retire(id: string, removals: string[]): void {

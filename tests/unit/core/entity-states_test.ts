@@ -385,9 +385,18 @@ test("an aggregate blocked only by permissions shares their grace cause", () => 
   owner.entry({ ...asking, attention: { ...base.attention, permissions: 1 } });
   assertEquals(state("project", "/repo")?.cause, "permission");
   assertEquals(state("global", "global")?.cause, "permission");
+  assertEquals(state("project", "/repo")?.requests, [{ id: "per_1" }]);
+  // An equal-count replacement is a new identity, so its grace starts anew.
+  owner.entry({
+    ...row("a", "/repo", { permissions: keys("per_2") }),
+    attention: { ...base.attention, permissions: 1 },
+  });
+  assertEquals(state("project", "/repo")?.requests, [{ id: "per_2" }]);
+  assertEquals(state("checkout", "/repo")?.requests, [{ id: "per_2" }]);
   owner.entry(row("b", "/repo", { inputs: keys("que_1") }));
   assertEquals(state("project", "/repo")?.state, "blocked");
   assertEquals(state("project", "/repo")?.cause, undefined);
+  assertEquals(state("project", "/repo")?.requests, undefined);
 });
 
 test("a received operation is work on its target session and its wait blocks it immediately", () => {

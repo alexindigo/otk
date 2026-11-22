@@ -60,6 +60,9 @@ export interface EntityState {
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
   evidence?: SessionEvidence;
+  /** Aggregates blocked only by permissions: those requests' identities, so
+   * the client derives the same per-request grace as for each member. */
+  requests?: readonly EntityRequestEvidence[];
 }
 /** IDs are opaque and connection-local. No path or session identity is rewritten. */
 export const entityKey = (kind: EntityKind, id: string): string =>
