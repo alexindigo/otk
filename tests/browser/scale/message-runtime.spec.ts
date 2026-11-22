@@ -17,7 +17,12 @@ interface RangeSample {
 interface Measurements {
   ranges: RangeSample[];
   misses: unknown[];
-  frames: { at: number; ms: number; historicalReads: number }[];
+  frames: {
+    at: number;
+    ms: number;
+    historicalReads: number;
+    sourceLength: number;
+  }[];
   historicalReads: number;
   longTasks: { at: number; ms: number }[];
 }
@@ -189,144 +194,200 @@ test.describe("stream", () => {
     { tag: ["@scale"] },
     async ({ isolatedState: state, page, context }, info) => {
       test.setTimeout(300_000);
-      await open(state, page);
-      const population = await state.observe<
-        {
-          a: { id: string; nativeID: string };
-          counts: unknown;
-          expectedCounts: unknown;
-        }
-      >();
-      expect(population.counts).toEqual(population.expectedCounts);
-      await page.locator("#heap-load-all").click();
-      await expect(page.locator("#heap-state")).toHaveAttribute(
-        "data-a-count",
-        "1525",
-        { timeout: 120_000 },
-      );
-      await expect(page.locator("#heap-state")).toHaveAttribute(
-        "data-loading",
-        "false",
-      );
-      const pane = page.locator(".heap-view .otk-messages"),
-        box = await pane.boundingBox();
-      expect(box).toBeTruthy();
-      await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-      await page.mouse.wheel(0, -300);
-      // Join the real scroll completion before retaining the identity/anchor sample.
-      await expect.poll(() =>
-        pane.evaluate((e) => e.scrollHeight - e.clientHeight - e.scrollTop)
-      ).toBeGreaterThan(100);
-      await page.evaluate(
-        "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-      );
-      await page.evaluate(
-        `(()=>{const pane=document.querySelector('.heap-view .otk-messages'),v=pane.getBoundingClientRect();globalThis.stableHistoryNodes=[...pane.querySelectorAll('.otk-text')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>v.top&&r.top<v.bottom}).map(e=>({node:new WeakRef(e),top:e.getBoundingClientRect().top}));})()`,
-      );
-      expect(await page.evaluate<number>("stableHistoryNodes.length"))
-        .toBeGreaterThan(0);
-      const task = await state.product("tasks.create", {
-        directory: state.directory,
-        name: "Scale live actions",
-        sessions: [population.a.id],
-      });
-      await state.product("tasks.rename", {
-        id: task.id,
-        name: "Scale live actions saved",
-      });
-      const chunks = Array.from(
-          { length: 1000 },
-          (_, n) => `live-${String(n).padStart(4, "0")}${n === 999 ? "" : " "}`,
-        ),
-        producer = await state.queue([...chunks, ""], "stepped");
-      await page.locator("#heap-arm-stream").click();
-      await state.native(
-        `/session/${population.a.nativeID}/prompt_async`,
-        "POST",
-        {
-          agent: "build",
-          model: { providerID: "fake", modelID: "scripted" },
-          parts: [{ type: "text", text: "Scale live transcript update" }],
-        },
-      );
-      for (let n = 0; n < 1000; n++) {
-        await state.release(producer.gate);
-        // Join the actual paint rather than adding the assertion poller's
-        // 100/250ms backoff to every consumer-stepped native update.
-        await page.waitForFunction(
-          `scaleMeasurements.frames.length===${n + 1}`,
-          undefined,
-          { timeout: 5000 },
-        );
-      }
-      await state.release(producer.gate);
-      await expect.poll(() =>
-        page.evaluate(
-          "scaleMeasurements.frames.length===1000&&!!scaleMeasurements.completedMessage&&document.querySelector('#heap-state').dataset.aBusy==='false'",
-        )
-      ).toBe(true);
-      await page.evaluate(
-        "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-      );
-      const stable = await page.evaluate<
-        { connected: boolean; drift: number }[]
-      >("stableHistoryNodes.map(value=>({connected:!!value.node.deref()?.isConnected,drift:Math.abs((value.node.deref()?.getBoundingClientRect().top??Infinity)-value.top)}))");
-      expect(stable.every((n) => n.connected && n.drift <= 1)).toBe(true);
-      await page.locator("#heap-stop-probe").click();
-      const result = await page.evaluate<Measurements>("scaleMeasurements");
-      expect(result.frames).toHaveLength(1000);
-      expect(result.historicalReads).toBe(0);
-      expect(result.frames.every((f) => f.historicalReads === 0)).toBe(true);
-      expect(
-        (await state.product("tasks.list", { directory: state.directory }))
-          .find((t) => t.id === task.id)
-          ?.name,
-      ).toBe("Scale live actions saved");
-      const native = await state.native<
+      let released = 0;
+      try {
+        await open(state, page);
+        const population = await state.observe<
           {
-            info: { id: string; role: string };
-            parts: { type: string; text?: string }[];
-          }[]
-        >(`/session/${population.a.nativeID}/message?limit=1&order=desc&type=assistant`),
-        reply = native.filter((m) => m.info.role === "assistant").at(-1);
-      expect(reply).toBeTruthy();
-      const expected = chunks.join("");
-      expect(
-        reply!.parts.filter((p) => p.type === "text").map((p) => p.text).join(
-          "",
-        ),
-      ).toBe(expected);
-      await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-      await page.mouse.wheel(0, 1e7);
-      const rendered = page.locator(`[data-message="${reply!.info.id}"]`);
-      await expect(rendered).toContainText("live-0999", { timeout: 60_000 });
-      const content = await rendered.locator(".otk-message-content")
-        .boundingBox();
-      expect(content).toBeTruthy();
-      await page.mouse.move(
-        content!.x + content!.width / 2,
-        Math.min(content!.y + content!.height - 10, 720),
-      );
-      await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-        origin: new URL(state.url).origin,
-      });
-      await rendered.locator('[data-message-command="reply.copy"]').click();
-      await expect.poll(() =>
-        page.evaluate(() => navigator.clipboard.readText())
-      ).toBe(expected);
-      await state.controller.call("scenario", {
-        lease: state.lease.lease,
-        action: "stop",
-      });
-      await info.attach("population-control-measurements", {
-        body: JSON.stringify({
-          population,
-          result,
-          stable,
-          server: await state.observe(),
-        }),
-        contentType: "application/json",
-      });
+            a: { id: string; nativeID: string };
+            counts: unknown;
+            expectedCounts: unknown;
+          }
+        >();
+        expect(population.counts).toEqual(population.expectedCounts);
+        await page.locator("#heap-load-all").click();
+        await expect(page.locator("#heap-state")).toHaveAttribute(
+          "data-a-count",
+          "1525",
+          { timeout: 120_000 },
+        );
+        await expect(page.locator("#heap-state")).toHaveAttribute(
+          "data-loading",
+          "false",
+        );
+        const pane = page.locator(".heap-view .otk-messages"),
+          box = await pane.boundingBox();
+        expect(box).toBeTruthy();
+        await page.mouse.move(
+          box!.x + box!.width / 2,
+          box!.y + box!.height / 2,
+        );
+        await pane.evaluate((el) => {
+          el.setAttribute("data-scale-scroll", "pending");
+          el.addEventListener(
+            "scrollend",
+            () => el.setAttribute("data-scale-scroll", "settled"),
+            { once: true },
+          );
+        });
+        await page.mouse.wheel(0, -300);
+        // Join the real scroll completion before retaining the identity/anchor sample.
+        await expect(pane).toHaveAttribute("data-scale-scroll", "settled");
+        await expect.poll(() =>
+          pane.evaluate((e) => e.scrollHeight - e.clientHeight - e.scrollTop)
+        ).toBeGreaterThan(100);
+        await page.evaluate(
+          "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+        );
+        await page.evaluate(
+          `(()=>{const pane=document.querySelector('.heap-view .otk-messages'),v=pane.getBoundingClientRect();globalThis.stableHistoryNodes=[...pane.querySelectorAll('.otk-text')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>v.top&&r.top<v.bottom}).map(e=>({node:new WeakRef(e),top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom,viewport:{top:v.top,bottom:v.bottom,clientTop:pane.clientTop},message:e.closest('[data-message]')?.getAttribute('data-message'),role:e.closest('[data-role]')?.getAttribute('data-role'),row:e.closest('[data-virtual-key]')?.getAttribute('data-virtual-key'),parent:e.parentElement.className}));})()`,
+        );
+        expect(await page.evaluate<number>("stableHistoryNodes.length"))
+          .toBeGreaterThan(0);
+        const historyPhase = async (phase: string) => {
+          const sample = await page.evaluate(
+            "stableHistoryNodes.map(({node,message,row,top,bottom})=>({message,row,top,bottom,connected:!!node.deref()?.isConnected,now:node.deref()?.getBoundingClientRect().top}))",
+          );
+          await info.attach(`history-${phase}`, {
+            body: JSON.stringify(sample),
+            contentType: "application/json",
+          });
+        };
+        await historyPhase("sampled");
+        const task = await state.product("tasks.create", {
+          directory: state.directory,
+          name: "Scale live actions",
+          sessions: [population.a.id],
+        });
+        await state.product("tasks.rename", {
+          id: task.id,
+          name: "Scale live actions saved",
+        });
+        await historyPhase("tasks");
+        const chunks = Array.from(
+            { length: 1000 },
+            (_, n) =>
+              `live-${String(n).padStart(4, "0")}${n === 999 ? "" : " "}`,
+          ),
+          producer = await state.queue([...chunks, ""], "stepped");
+        await page.locator("#heap-arm-stream").click();
+        await historyPhase("armed");
+        await state.native(
+          `/session/${population.a.nativeID}/prompt_async`,
+          "POST",
+          {
+            agent: "build",
+            model: { providerID: "fake", modelID: "scripted" },
+            parts: [{ type: "text", text: "Scale live transcript update" }],
+          },
+        );
+        await historyPhase("prompted");
+        for (let n = 0; n < 1000; n++) {
+          await state.release(producer.gate);
+          released++;
+          // Join the actual paint rather than adding the assertion poller's
+          // 100/250ms backoff to every consumer-stepped native update.
+          await page.waitForFunction(
+            `scaleMeasurements.frames.length===${n + 1}`,
+            undefined,
+            { timeout: 5000 },
+          );
+          if (n % 50 === 0) {
+            expect(
+              await page.evaluate(
+                "stableHistoryNodes.every(({node})=>node.deref()?.isConnected)",
+              ),
+            )
+              .toBe(true);
+          }
+        }
+        await state.release(producer.gate);
+        await expect.poll(() =>
+          page.evaluate(
+            "scaleMeasurements.frames.length===1000&&!!scaleMeasurements.completedMessage&&document.querySelector('#heap-state').dataset.aBusy==='false'",
+          )
+        ).toBe(true);
+        await page.evaluate(
+          "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+        );
+        const stable = await page.evaluate<
+          { connected: boolean; drift: number }[]
+        >("stableHistoryNodes.map(value=>({connected:!!value.node.deref()?.isConnected,drift:Math.abs((value.node.deref()?.getBoundingClientRect().top??Infinity)-value.top)}))");
+        expect(stable.every((n) => n.connected && n.drift <= 1)).toBe(true);
+        await page.locator("#heap-stop-probe").click();
+        const result = await page.evaluate<Measurements>("scaleMeasurements");
+        expect(result.frames).toHaveLength(1000);
+        let sourceLength = 0;
+        expect(result.frames.map((frame) => frame.sourceLength)).toEqual(
+          chunks.map((chunk) => sourceLength += chunk.length),
+        );
+        expect(result.historicalReads).toBe(0);
+        expect(result.frames.every((f) => f.historicalReads === 0)).toBe(true);
+        expect(
+          (await state.product("tasks.list", { directory: state.directory }))
+            .find((t) => t.id === task.id)
+            ?.name,
+        ).toBe("Scale live actions saved");
+        const native = await state.native<
+            {
+              info: { id: string; role: string };
+              parts: { type: string; text?: string }[];
+            }[]
+          >(`/session/${population.a.nativeID}/message?limit=1&order=desc&type=assistant`),
+          reply = native.filter((m) => m.info.role === "assistant").at(-1);
+        expect(reply).toBeTruthy();
+        const expected = chunks.join("");
+        expect(
+          reply!.parts.filter((p) => p.type === "text").map((p) => p.text).join(
+            "",
+          ),
+        ).toBe(expected);
+        await page.mouse.move(
+          box!.x + box!.width / 2,
+          box!.y + box!.height / 2,
+        );
+        await page.mouse.wheel(0, 1e7);
+        const rendered = page.locator(`[data-message="${reply!.info.id}"]`);
+        await expect(rendered).toContainText("live-0999", { timeout: 60_000 });
+        const content = await rendered.locator(".otk-message-content")
+          .boundingBox();
+        expect(content).toBeTruthy();
+        await page.mouse.move(
+          content!.x + content!.width / 2,
+          Math.min(content!.y + content!.height - 10, 720),
+        );
+        await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+          origin: new URL(state.url).origin,
+        });
+        await rendered.locator('[data-message-command="reply.copy"]').click();
+        await expect.poll(() =>
+          page.evaluate(() => navigator.clipboard.readText())
+        ).toBe(expected);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "stop",
+        });
+        await info.attach("population-control-measurements", {
+          body: JSON.stringify({
+            population,
+            result,
+            stable,
+            server: await state.observe(),
+          }),
+          contentType: "application/json",
+        });
+      } finally {
+        await info.attach("stream-probe", {
+          body: JSON.stringify({
+            released,
+            probe: await page.evaluate("globalThis.scaleMeasurements ?? null"),
+            history: await page.evaluate(
+              "globalThis.stableHistoryNodes?.map(({node,...sample})=>({...sample,connected:!!node.deref()?.isConnected,now:node.deref()?.getBoundingClientRect().top})) ?? null",
+            ),
+          }),
+          contentType: "application/json",
+        });
+      }
     },
   );
 });

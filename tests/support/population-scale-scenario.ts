@@ -276,10 +276,13 @@ export async function populationScaleScenario(profile: Profile) {
               ).map((row) => row.id),
             expectedCosts: () =>
               Object.fromEntries(
-                [0, 2, 3, 250].map(
-                  (i) => [
-                    native.manifest.sessions[i].id,
-                    usageCost(native.manifest.sessions[i].expected.cost!),
+                native.manifest.sessions.filter((session) =>
+                  session.directory === native.directory &&
+                  session.expected.cost !== null
+                ).map(
+                  (session) => [
+                    session.id,
+                    usageCost(session.expected.cost!),
                   ],
                 ),
               ),

@@ -35,6 +35,10 @@ export function requestReads(
         same(other, ref)
       )
     );
+    const closed = frames.findIndex((other, n) =>
+      n > index && other.socket === event.socket &&
+      other.frame.t === "socket.closed"
+    );
     const phase = phases.find((phase) =>
       index >= phase.start && index < phase.end
     )?.name ?? "outside";
@@ -45,7 +49,8 @@ export function requestReads(
       key: request.ref!.key,
       sessionID: request.params!.sessionID!,
       index,
-      status: released >= 0 && (result < 0 || released < result)
+      status: (released >= 0 && (result < 0 || released < result)) ||
+          (closed >= 0 && (result < 0 || closed < result))
         ? "cancelled"
         : result < 0
         ? "pending"
@@ -54,6 +59,7 @@ export function requestReads(
         : "failed",
       result,
       released,
+      closed,
     }];
   });
 }

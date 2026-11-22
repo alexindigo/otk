@@ -64,10 +64,9 @@ test("messages.highlight-2000-lines-passive-latency", {
     delay: 0,
   });
   await prompt(page, "Highlight the large block then twenty chunks");
-  // The newest reply is the last virtual row holding an assistant: a V2
-  // execution record can follow it as the transcript's final row.
-  const measured =
-    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item:has([data-role=assistant])) [data-role=assistant] .otk-text';
+  const measuredReply =
+    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item:has([data-role=assistant])) [data-role=assistant]';
+  const measured = measuredReply + " .otk-text";
   await page.evaluate(
     `highlightMeasure(${
       JSON.stringify(measured + " .otk-code code")
@@ -153,14 +152,12 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  // Following keeps the newest reply's last line in view after any trailing
-  // record lands below it.
+  // WP16 puts successful native completion in the reply footer, not a trailing
+  // status row. Keep the completion witness without disclosing it during paint.
   if (state.controller.info!.version.startsWith("2.")) {
     await expect(
-      page.locator(
-        '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item)',
-      ),
-    ).toContainText("Execution succeeded");
+      page.locator(measuredReply + " .otk-record-completion button"),
+    ).toHaveAttribute("aria-expanded", "false");
   }
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {
@@ -263,6 +260,12 @@ test("messages.highlight-2000-lines-passive-latency", {
   ).toBe(true);
   assertHighlightBudget(evidence.blocks.slice(1), 20);
   assertHighlightBudget(evidence.revisions, 200);
+  if (state.controller.info!.version.startsWith("2.")) {
+    await page.locator(measuredReply + " .otk-record-completion button")
+      .click();
+    await expect(page.getByText("Execution succeeded", { exact: true }).last())
+      .toBeVisible();
+  }
   console.info(
     "Highlight measurements",
     JSON.stringify({

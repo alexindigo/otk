@@ -35,7 +35,15 @@ export function createScaleProbe(o: {
       visible: number;
     }[],
     misses: [] as { at: number; before: number; visible: number }[],
-    frames: [] as { at: number; ms: number; historicalReads: number }[],
+    frames: [] as {
+      at: number;
+      ms: number;
+      historicalReads: number;
+      messageID: string;
+      partID: string;
+      sourceLength: number;
+      version: number;
+    }[],
     longTasks: [] as { at: number; ms: number }[],
     historicalReads: 0,
     streamStart: 0,
@@ -51,7 +59,18 @@ export function createScaleProbe(o: {
   let observer: LongTaskObserver | undefined;
   const installed = new WeakSet<TranscriptOwner>();
   const pinned = new Map<string, number>();
-  let pending: { at: number; ms: number; before: number } | undefined;
+  const sources = new Map<string, number>();
+  let pending: {
+    at: number;
+    ms: number;
+    before: number;
+    source: {
+      messageID: string;
+      partID: string;
+      sourceLength: number;
+      version: number;
+    };
+  } | undefined;
   const finish = () => {
     if (!pending) return;
     const value = pending;
@@ -61,6 +80,7 @@ export function createScaleProbe(o: {
       at: value.at,
       ms: value.ms,
       historicalReads: data.historicalReads - value.before,
+      ...value.source,
     });
   };
   const sample = () => {
@@ -143,19 +163,43 @@ export function createScaleProbe(o: {
         frame.event.message.role === "assistant" &&
         frame.event.message.time.completed !== undefined
       ) data.completedMessage = frame.event.message.id;
-      const measured = streaming && frame.t === "content" &&
-        frame.sessionID === o.target.sessionID &&
-        frame.event.op === "part.blocks";
-      if (!measured) {
+      const event = streaming && frame.t === "content" &&
+          frame.sessionID === o.target.sessionID
+        ? frame.event
+        : undefined;
+      const part = event?.op === "part.blocks"
+        ? { id: event.partID, stream: event.stream }
+        : event?.op === "part.upsert" && event.part.kind === "text"
+        ? event.part
+        : undefined;
+      const length = part?.stream?.sourceLength;
+      const key = event && part && "messageID" in event
+        ? `${event.messageID}/${part.id}`
+        : undefined;
+      // Replacement checkpoints and deltas carry the same source authority.
+      // Empty seeds, equal replays and older checkpoints are not new updates.
+      if (!key || length === undefined || length <= (sources.get(key) ?? 0)) {
         run();
         return;
       }
+      sources.set(key, length);
+      const source = {
+        messageID: (event as { messageID: string }).messageID,
+        partID: part!.id,
+        sourceLength: length,
+        version: part!.stream!.version,
+      };
       const before = data.historicalReads, at = performance.now();
       reducing = true;
       try {
         run();
       } finally {
-        const value = pending = { at, ms: performance.now() - at, before };
+        const value = pending = {
+          at,
+          ms: performance.now() - at,
+          before,
+          source,
+        };
         const settle = () => {
           if (pending === value) finish();
         };
@@ -211,6 +255,7 @@ export function createScaleProbe(o: {
         }
       }
       data.frames = [];
+      sources.clear();
       data.historicalReads = 0;
       data.longTasks = [];
       data.streamStart = performance.now();
