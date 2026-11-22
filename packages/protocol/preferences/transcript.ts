@@ -116,8 +116,8 @@ export function registerTranscriptPreferences(
       ["expandRecords", "Expand other native records by default", 8],
       ["expandSource", "Expand native source by default", 9],
       ["expandCompaction", "Always keep session compaction expanded", 10],
-      ["expandStepMarkers", "Step markers", 11],
-      ["expandSnapshots", "Snapshots", 12],
+      ["expandStepMarkers", "Expand step markers by default", 11],
+      ["expandSnapshots", "Expand snapshots by default", 12],
     ] as const
   ) {
     registry.register({

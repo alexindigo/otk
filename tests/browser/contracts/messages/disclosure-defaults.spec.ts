@@ -65,6 +65,10 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
   }
   await expect(settings.locator("input[name=expandCompaction]"))
     .toHaveAccessibleName("Always keep session compaction expanded");
+  await expect(settings.locator("input[name=expandStepMarkers]"))
+    .toHaveAccessibleName("Expand step markers by default");
+  await expect(settings.locator("input[name=expandSnapshots]"))
+    .toHaveAccessibleName("Expand snapshots by default");
   await page.reload();
   await page.locator(".otk-settings-entry").click();
   for (
