@@ -11,6 +11,7 @@ import { countLabel } from "./count.ts";
 import { usageCost, usageTokens } from "./usage.ts";
 import { reportedTokens } from "./session-summary.ts";
 import { duration } from "./format.ts";
+import type { EntityFact } from "./entity-facts.ts";
 
 export const UNKNOWN_TIME = "Time unknown";
 export type TimeValue =
@@ -35,12 +36,16 @@ export const timingExplanation = (
 
 export function workingTime(
   timing: TurnTiming | number | undefined,
+  form: "fact" | "column" = "fact",
 ): string | undefined {
-  return typeof timing === "number"
-    ? `Worked for ${duration(timing)}`
+  const value = typeof timing === "number"
+    ? timing
     : timing?.state === "known" || timing?.state === "active"
-    ? `Worked for ${duration(timing.workingMs)}`
-    : timing?.state === "unknown"
+    ? timing.workingMs
+    : undefined;
+  return value !== undefined
+    ? `${form === "fact" ? "Worked for " : ""}${duration(value)}`
+    : typeof timing !== "number" && timing?.state === "unknown"
     ? UNKNOWN_TIME
     : undefined;
 }
@@ -48,6 +53,7 @@ export function workingTimeValue(
   timing: TurnTiming | number | undefined,
   pending = timing === undefined ||
     typeof timing !== "number" && timing.state === "active",
+  form: "fact" | "column" = "fact",
 ): TimeValue {
   if (pending) {
     const value = typeof timing === "number"
@@ -58,7 +64,7 @@ export function workingTimeValue(
     return {
       state: "counting",
       ...(value !== undefined && duration(value) !== "0s"
-        ? { text: workingTime(value) }
+        ? { text: workingTime(value, form) }
         : {}),
     };
   }
@@ -67,7 +73,16 @@ export function workingTimeValue(
     ? unknownTime(
       typeof timing === "number" ? undefined : timingExplanation(timing),
     )
-    : { state: "known", text: workingTime(timing)! };
+    : { state: "known", text: workingTime(timing, form)! };
+}
+/** Entity scopes use the same wording and finality presenter as message facts. */
+export function entityTimeValue(
+  fact: EntityFact,
+  explanation?: string,
+): TimeValue {
+  return fact.final && !fact.known
+    ? unknownTime(explanation)
+    : workingTimeValue(fact.known ? fact.value : undefined, !fact.final);
 }
 /** Footer facts have one presentation owner; views do not classify evidence. */
 export function messageTimeValue(time: MessagePresentation["time"]): TimeValue {

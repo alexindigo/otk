@@ -157,9 +157,9 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     expect(Math.abs(costs[i] - sums[i] * rate / 1e6)).toBeLessThanOrEqual(1e-9);
   }
   const turnTime = `${
-    ((detail.summary.timing?.state === "known"
+    Number(((detail.summary.timing?.state === "known"
       ? detail.summary.timing.workingMs
-      : NaN) / 1000).toFixed(1)
+      : NaN) / 1000).toFixed(1))
   }s`;
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,

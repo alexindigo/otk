@@ -59,10 +59,10 @@ group ordering uses the canonical first message's sort change, not the aggregate
 display clock; causal dependents are reinserted on prompt removal too.
 
 Timing presentation uses a discriminated TimeValue: known, counting or unknown.
-`messageTimeValue` and `workingTimeValue` own finality and explanation
-selection; views only render the result. Unknown has one label and a reason,
-while missing or nonfinal evidence keeps the counting cue separate from a
-measured duration.
+`messageTimeValue`, `workingTimeValue` and `entityTimeValue` own finality and
+explanation selection; views only render the result. Unknown has one label and a
+reason, while missing or nonfinal evidence keeps the counting cue separate from
+a measured duration.
 
 ProgressEstimate derives EWMA completion rate and variance-aware ETA from worker
 active-work facts, resetting at scope/generation replacement. createProgress

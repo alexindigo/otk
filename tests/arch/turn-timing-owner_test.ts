@@ -1,11 +1,41 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertMatch } from "@std/assert";
+import { assert, assertEquals, assertMatch } from "@std/assert";
+import { Source } from "./analysis.ts";
+for (const name of ["Message", "UsageDetail", "EntityPill"]) {
+  Deno.test(`turn timing ${name} passes presenter values through unchanged`, async () => {
+    const source = new Source(
+      await Deno.readTextFile(`packages/ui/components/${name}.tsx`),
+    );
+    const values = source.all.filter((node) =>
+      node.type === "JSXOpeningElement" &&
+      source.imported(node.name)?.module.endsWith("/TimeValue.tsx")
+    );
+    assert(values.length > 0, name);
+    for (const node of values) {
+      if (node.type !== "JSXOpeningElement") continue;
+      const value = source.value(source.attr(node, "value"));
+      assertEquals(
+        value?.type,
+        "CallExpression",
+        `${name} rewrites the timing presenter's value`,
+      );
+      if (value?.type === "CallExpression") {
+        assert(
+          ["messageTimeValue", "workingTimeValue", "entityTimeValue"].includes(
+            source.imported(value.callee)?.name ?? "",
+          ),
+          name,
+        );
+      }
+    }
+  });
+}
 Deno.test("turn-duration consumers render the accumulator result without endpoint arithmetic", async () => {
   for (
     const [name, presenter] of [
       ["Message", /messageTimeValue\(/],
-      ["WorkLog", /workingTimeValue\(/],
       ["UsageDetail", /workingTimeValue\(/],
+      ["EntityPill", /entityTimeValue\(/],
     ] as const
   ) {
     const source = await Deno.readTextFile(

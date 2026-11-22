@@ -13,18 +13,6 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 export default function UsageDetail(
   props: { usage?: Usage; error?: string | FailureValue; showCost: boolean },
 ): import("solid-js").Element {
-  const duration = (time: Usage["timing"]) => {
-    const value = workingTimeValue(time);
-    return (
-      <TimeValue
-        value={value.state === "known"
-          ? { ...value, text: value.text.replace("Worked for ", "") }
-          : value.state === "counting"
-          ? { ...value, text: value.text?.replace("Worked for ", "") }
-          : value}
-      />
-    );
-  };
   const count = (value: number | null) =>
     value === null ? "Not reported" : exactCount(value);
   return (
@@ -141,7 +129,13 @@ export default function UsageDetail(
                         </td>
                       </Show>
                       <td title={timingExplanation(call().timing)}>
-                        {duration(call().timing)}
+                        <TimeValue
+                          value={workingTimeValue(
+                            call().timing,
+                            undefined,
+                            "column",
+                          )}
+                        />
                       </td>
                     </tr>
                   )}
@@ -174,7 +168,13 @@ export default function UsageDetail(
                     </td>
                   </Show>
                   <td title={timingExplanation(usage().timing)}>
-                    {duration(usage().timing)}
+                    <TimeValue
+                      value={workingTimeValue(
+                        usage().timing,
+                        undefined,
+                        "column",
+                      )}
+                    />
                   </td>
                 </tr>
               </tfoot>
