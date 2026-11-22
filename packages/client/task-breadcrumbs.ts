@@ -76,17 +76,21 @@ export function taskBreadcrumbs(
   const saved = tasks.some((candidate) => candidate.id === task.id)
     ? tasks
     : [{ ...task, name: "", order: 0 }, ...tasks];
+  const hierarchy = projection ??
+    (entries.every((entry) => entry.hierarchy?.followParent === followParent)
+      ? new Map(entries.map((entry) => [entry.id, entry.hierarchy!]))
+      : undefined);
   const mandatory = new Set(
-    entries.filter((entry) => aggregateStatus(entry, inbox) !== "none").map((
+    entries.filter((entry) =>
+      aggregateStatus(entry, inbox) !== "none" ||
+      hierarchy?.get(entry.id)?.mandatory
+    ).map((
       entry,
     ) => entry.id),
   );
   const groups = projectTabGroups(entries, saved, {
     followParent,
-    hierarchy: projection ??
-      (entries.every((entry) => entry.hierarchy?.followParent === followParent)
-        ? new Map(entries.map((entry) => [entry.id, entry.hierarchy!]))
-        : undefined),
+    hierarchy,
     mandatory,
   });
   const group = groups.groups.find((group) =>

@@ -94,7 +94,8 @@ export function projectTabGroups(
   }
   const localParent = (id: string) => {
     const parent = byID.get(id)?.parentID;
-    return parent && local(parent) &&
+    return parent && (byID.has(parent) || owners.has(parent)) &&
+        local(parent) &&
         hierarchy.get(parent)?.projectDirectory ===
           hierarchy.get(id)?.projectDirectory
       ? parent

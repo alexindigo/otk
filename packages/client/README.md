@@ -1228,21 +1228,25 @@ remains the view-invalidation port and the input port for consumers that update
 synchronously.
 
 Tab state also exposes its selected `sessionID` and an input `revision` for
-reactive bindings. `sessionFor(taskID)` resolves the remembered member/helper or
-first member; `select(selection, sessionID?)` keeps that session inside its
-task. `createTaskActions(rpc, directory)` captures server/project ownership for
-task editors before asynchronous interaction. `contextMeter(messages, catalog?)`
-uses the latest reported assistant token footprint (including reasoning and
-caches). Charged costs belong exclusively to the usage owner. When the catalog
-reports a finite positive context limit for that exact assistant provider/model,
-it also supplies the limit and a clamped fill fraction; unknown windows stay
-unknown. The session's shared catalog loads independently of the transcript and
-rejects stale results; refresh errors retain last good metadata. The meter binds
-the owner's whole-session reported cost directly, independently of its
+reactive bindings. `sessionFor(taskID)` resolves a still-owned remembered
+member, then the first projected root, then the first projected member when no
+root is local. A foreign ancestor link is never a default member.
+`select(selection, sessionID?)` keeps that session inside its task.
+`createTaskActions(rpc, directory)` captures server/project ownership for task
+editors before asynchronous interaction. `contextMeter(messages, catalog?)` uses
+the latest reported assistant token footprint (including reasoning and caches).
+Charged costs belong exclusively to the usage owner. When the catalog reports a
+finite positive context limit for that exact assistant provider/model, it also
+supplies the limit and a clamped fill fraction; unknown windows stay unknown.
+The session's shared catalog loads independently of the transcript and rejects
+stale results; refresh errors retain last good metadata. The meter binds the
+owner's whole-session reported cost directly, independently of its
 latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
 shared partition and preserves explicit membership order. Visible crumbs contain
 explicit task members (or a phantom's own session), mandatory group members and
-the open group member. Quiet helpers retire when no longer open.
+the open group member. Quiet helpers retire when no longer open, including quiet
+intermediate members on the open session's ancestry. Mandatory membership
+borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
 `TaskCrumb.kind` separates `member` from `ancestor`: parents outside the group
 and cross-checkout parents are orientation links, never duplicate membership.
 Traversal is iterative and cycle-safe. Helper URLs retain native ancestry

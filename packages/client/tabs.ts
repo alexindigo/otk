@@ -301,11 +301,14 @@ export function createTabs(
   const contains = (task: TaskRecord, id: string) =>
     taskFor(id)?.id === task.id;
   function sessionFor(taskID: string): string | undefined {
-    prepare();
+    const groups = grouping();
     const task = taskByID.get(taskID);
     const saved = remembered.get(taskID);
     if (task && saved && contains(task, saved)) return saved;
-    return task?.sessions[0];
+    const group = groups.groups.find((group) =>
+      group.kind === "task" && group.id === taskID
+    );
+    return group?.roots[0] ?? group?.members[0];
   }
   function persist(
     sessionID: string,

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 import { projectSessionHierarchy } from "@otk/protocol";
-import { createTabs as canonicalTabs, projectTabGroups } from "@otk/client";
+import {
+  createTabs as canonicalTabs,
+  projectTabGroups,
+  taskBreadcrumbs,
+} from "@otk/client";
 import { createTabs, projected } from "./supervision-fixture.ts";
 
 const entry = (
@@ -286,6 +290,16 @@ for (
       update();
       tabs.preview("A");
       assertEquals(tabs.state.selected, { kind: "session", id: "A" });
+      const phantom = tabs.tabs().find((tab) => tab.id === "A")!;
+      assertEquals(
+        phantom.status,
+        state === "needsYou"
+          ? "blocked"
+          : state === "finishedUnseen"
+          ? "finished"
+          : state,
+      );
+      if (state === "dependencies") assertEquals(phantom.dependencies, 1);
       assertEquals(tabs.belongsToTab("A", "C"), true);
       assertEquals(tabs.crumbs().map((crumb) => [crumb.id, crumb.kind]), [[
         "R",
@@ -303,3 +317,116 @@ for (
     }
   });
 }
+
+Deno.test("review: foreign task defaults use projected roots or members before any preview", () => {
+  const rows = [
+    entry("P", undefined, "/other"),
+    entry("L1", "P"),
+    entry("L2", "P"),
+  ];
+  for (const sessions of [["P"], ["P", "L2"]]) {
+    const saved = [task("foreign", sessions, "/other")];
+    for (const wire of [false, true]) {
+      const nodes = projectSessionHierarchy(rows, saved, {
+        followParent: true,
+      });
+      const context = rows.map((row) => ({
+        ...row,
+        ...(wire ? { hierarchy: nodes.get(row.id) } : {}),
+      }));
+      const tabs = model();
+      const update = (remaining = context.slice(1)) =>
+        tabs.update({
+          directory: "/p",
+          entries: remaining,
+          context: [context[0], ...remaining],
+          followParent: true,
+          inbox: inbox(saved),
+        });
+      try {
+        update();
+        const first = sessions.includes("L2") ? "L2" : "L1";
+        assertEquals(tabs.sessionFor("foreign"), first);
+        tabs.select({ kind: "task", id: "foreign" });
+        assertEquals(tabs.state.sessionID, first);
+        assertEquals(tabs.belongsToTab("foreign", "P"), false);
+        assertThrows(
+          () => tabs.select({ kind: "task", id: "foreign" }, "P"),
+          Error,
+          "Unknown task session",
+        );
+        tabs.preview("L1");
+        assertEquals(tabs.sessionFor("foreign"), "L1");
+        update([context[2]]);
+        assertEquals(tabs.sessionFor("foreign"), "L2");
+        tabs.select({ kind: "task", id: "foreign" });
+        assertEquals(tabs.state.sessionID, "L2");
+      } finally {
+        tabs.stop();
+      }
+    }
+  }
+});
+
+Deno.test("review: sparse hierarchy cannot create absent phantoms but keeps reserved task inheritance", () => {
+  const rows = [entry("C", "P")];
+  const hierarchy = new Map();
+  const orphan = projectTabGroups(rows, [], { hierarchy });
+  assertEquals(orphan.owners.get("C")?.id, "C");
+  assertEquals(orphan.owners.has("P"), false);
+  assertEquals(orphan.groups.map((group) => group.members), [["C"]]);
+  const reserved = projectTabGroups(rows, [task("T", ["P"])], { hierarchy });
+  assertEquals(reserved.owners.get("C")?.id, "T");
+  assertEquals(reserved.groups.map((group) => group.members), [["P", "C"]]);
+});
+
+Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mandatory evidence", () => {
+  const rows = [entry("R"), entry("C", "R")], saved = [task("T", ["R"])];
+  const nodes = projectSessionHierarchy(rows, saved, {
+    mandatory: (id) => id === "C",
+  });
+  const context = rows.map((row) => ({ ...row, hierarchy: nodes.get(row.id) }));
+  const meta = inbox(saved);
+  const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+  try {
+    tabs.update({ directory: "/p", entries: context, inbox: meta });
+    tabs.select({ kind: "task", id: "T" });
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
+    for (
+      const [entries, projection] of [[context, undefined], [
+        rows,
+        nodes,
+      ]] as const
+    ) {
+      assertEquals(
+        taskBreadcrumbs(
+          saved[0],
+          entries,
+          saved,
+          undefined,
+          meta,
+          false,
+          projection,
+        ),
+        tabs.crumbs(),
+      );
+    }
+  } finally {
+    tabs.stop();
+  }
+});
+
+Deno.test("answer 1: quiet intermediate members retire even on the open member's ancestry", () => {
+  const rows = [entry("R"), entry("Q", "R"), entry("C", "Q"), entry("S", "R")];
+  const tabs = model();
+  try {
+    tabs.update({ directory: "/p", entries: rows, inbox: inbox() });
+    tabs.preview("C");
+    assertEquals(tabs.belongsToTab("R", "Q"), true);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
+    tabs.select({ kind: "session", id: "R" });
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
+  } finally {
+    tabs.stop();
+  }
+});
