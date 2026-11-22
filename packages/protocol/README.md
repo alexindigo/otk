@@ -144,6 +144,16 @@ Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
 a complete baseline rather than inventing missing state.
 
+Protocol 21 adds the per-user `InboxSnapshot.entities` map, keyed by
+`entityKey(kind, id)`, and `entity.upsert` / `entity.remove` inbox operations.
+`EntityState` separates a session's own state from task, checkout, project,
+archive and global rollups. Counts retain unseen independently of the winning
+state. Session evidence carries work, effective inputs, scoped descendants and
+optional body-free request identities. Only the client request-lifetime owner
+supplies `arrivedAt`, in its local clock domain, for per-request presentation
+grace; server evidence does not invent that clock. Legacy projections remain
+during migration.
+
 The inbox's per-user `supervision` map and keyed `supervision` operations
 publish `needsYou | working | finishedUnseen | none`, with the proven terminal
 token. Adapters contribute neutral `SupervisionEvidence` identities and

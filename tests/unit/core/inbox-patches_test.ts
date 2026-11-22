@@ -17,6 +17,47 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
+import { entityKey, type EntityState } from "@otk/protocol";
+
+Deno.test("existing inbox baseline carries body-free entity states alongside legacy projections", () => {
+  const rpc = new Rpc(() => {}), consumer = createInbox(rpc);
+  const entity: EntityState = {
+    kind: "session",
+    id: "tstv1-state",
+    state: "working",
+    previous: "none",
+    counts: { blocked: 0, working: 1, finished: 0, unseen: 1 },
+    terminal: 10,
+    terminalOrigin: "historical",
+    evidence: {
+      work: true,
+      permissions: 0,
+      questions: 0,
+      descendants: { blocked: 0, working: 0, finished: 0, unseen: 0 },
+    },
+  };
+  const key = entityKey(entity.kind, entity.id);
+  try {
+    consumer.receive({
+      t: "inbox.snapshot",
+      generation: "entities",
+      revision: 0,
+      inbox: {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: { [entity.id]: 10 },
+        pathTemplates: [],
+        entities: { [key]: entity },
+      },
+    });
+    assertEquals(consumer.state.inbox.entities?.[key], entity);
+    assertEquals(consumer.state.inbox.finishes, { [entity.id]: 10 });
+  } finally {
+    consumer.stop();
+    rpc.close();
+  }
+});
 
 Deno.test("family metadata leases include cross-checkout failures and inputs, but not delivered successes or unrelated sessions", async () => {
   const path = await Deno.makeTempDir();
