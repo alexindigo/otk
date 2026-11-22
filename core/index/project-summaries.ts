@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type IndexMetadata,
-  type ProjectStatus,
   type ProjectSummary,
   type ProjectTopology,
-  ROLLUP_PRIORITY,
   UNKNOWN_REPOSITORY,
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
+import { EntityStates } from "./entity-states.ts";
 import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
 import type { SessionHierarchy } from "./session-hierarchy.ts";
 
@@ -17,16 +16,12 @@ export class ProjectSummaries {
   #sessions = new Map<string, { entry: IndexMetadata; leaf: string }>();
   #repoSessions = new Map<string, Set<string>>();
   #projects = new Map<string, Map<string, IndexMetadata>>();
-  #facts = new Map<
-    string,
-    { status: ProjectStatus; unseen: number; time: number }
-  >();
+  /** Inventory facts only; attention is read from the entity-state owner. */
+  #facts = new Map<string, { time: number }>();
   #totals = new Map<
     string,
     {
       count: number;
-      unseen: number;
-      statuses: Map<ProjectStatus, number>;
       times: Map<number, number>;
       last: number;
     }
@@ -99,6 +94,7 @@ export class ProjectSummaries {
       this.#projects.get(row.leaf)?.delete(id);
       dirty.add(row.leaf);
       row.leaf = leaf;
+      this.states.member(id, leaf);
       const entries = this.#projects.get(leaf) ?? new Map();
       entries.set(id, row.entry);
       this.#projects.set(leaf, entries);
@@ -160,6 +156,8 @@ export class ProjectSummaries {
     }
     for (const directory of dirty) this.#publish(directory);
   }
+  /** Status and unseen counts belong to this owner; summaries place members. */
+  readonly states: EntityStates;
   constructor(
     readonly marks: (id: string) => { seen: number; finish: number },
     readonly publish: (summary: ProjectSummary) => void,
@@ -167,7 +165,15 @@ export class ProjectSummaries {
     readonly supervision = new SessionSupervision(),
     readonly identity = new ProjectIdentity(),
     readonly hierarchy?: SessionHierarchy,
-  ) {}
+    states?: EntityStates,
+  ) {
+    // Standalone summaries own a private, unpublished entity-state owner.
+    this.states = states ?? new EntityStates(supervision, {
+      getMetadata: (id) => this.#sessions.get(id)?.entry,
+      ancestors: () => [],
+      descendants: (id) => new Set([id]),
+    }, () => {});
+  }
   ensure(directory: string): void {
     this.#known.add(directory);
     directory = this.leaf(directory);
@@ -196,6 +202,7 @@ export class ProjectSummaries {
       this.#totals.delete(directory);
       this.#direct.delete(directory);
       this.values.delete(directory);
+      this.states.drop(directory);
       this.retire(directory);
     }
   }
@@ -222,6 +229,7 @@ export class ProjectSummaries {
     }
     const directory = this.leaf(entry.directory, entry.projectID);
     this.#sessions.set(entry.id, { entry, leaf: directory });
+    this.states.member(entry.id, directory);
     const repo = this.#repoSessions.get(entry.projectID) ?? new Set();
     repo.add(entry.id);
     this.#repoSessions.set(entry.projectID, repo);
@@ -240,6 +248,8 @@ export class ProjectSummaries {
     if (!before) return;
     this.#contribute(before.entry, -1, before.leaf);
     this.#sessions.delete(id);
+    this.states.member(id);
+    this.states.remove(id);
     this.#repoSessions.get(before.entry.projectID)?.delete(id);
     const directory = before.leaf;
     this.#projects.get(directory)?.delete(id);
@@ -266,33 +276,22 @@ export class ProjectSummaries {
     for (const directory of this.#projects.keys()) this.#update(directory);
   }
   #contribute(entry: IndexMetadata, sign: 1 | -1, directory: string): void {
+    if (sign > 0) {
+      // The owner interprets the session once; this summary reads its state.
+      const marks = this.marks(entry.id);
+      this.states.session(entry, marks.seen, marks.finish);
+    }
     if (entry.deleted) return;
     let totals = this.#totals.get(directory);
     if (!totals) {
-      totals = {
-        count: 0,
-        unseen: 0,
-        statuses: new Map(),
-        times: new Map(),
-        last: 0,
-      };
+      totals = { count: 0, times: new Map(), last: 0 };
       this.#totals.set(directory, totals);
     }
-    const marks = this.marks(entry.id);
-    const value = this.supervision.session(entry, marks.seen, marks.finish);
-    const unseen = Number(value.unseen === true);
-    const fact = sign === -1 ? this.#facts.get(entry.id)! : {
-      status: this.supervision.status(value),
-      unseen,
-      time: entry.timeUpdated,
-    };
+    const fact = sign === -1
+      ? this.#facts.get(entry.id)!
+      : { time: entry.timeUpdated };
     if (!fact) return;
     totals.count += sign;
-    totals.unseen += sign * fact.unseen;
-    totals.statuses.set(
-      fact.status,
-      (totals.statuses.get(fact.status) ?? 0) + sign,
-    );
     const count = (totals.times.get(fact.time) ?? 0) + sign;
     if (count) totals.times.set(fact.time, count);
     else totals.times.delete(fact.time);
@@ -331,11 +330,12 @@ export class ProjectSummaries {
     }
     const entries = this.#projects.get(directory)!;
     const totals = this.#totals.get(directory);
-    const count = totals?.count ?? 0,
-      unseen = totals?.unseen ?? 0,
-      last = totals?.last ?? 0;
     const previous = this.values.get(directory);
     const locationForms = this.#locationForms[directory] ?? 0;
+    const checkout = this.states.checkout(directory, locationForms);
+    const count = totals?.count ?? 0,
+      unseen = checkout.counts.unseen,
+      last = totals?.last ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
       : locationForms
@@ -343,10 +343,7 @@ export class ProjectSummaries {
       : entries.size
       ? "current"
       : this.#authority;
-    const status = locationForms
-      ? "blocked"
-      : ROLLUP_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
-        "none";
+    const status = checkout.state;
     const knownCount = this.#catalog;
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
     const seed = seeds.length
@@ -426,6 +423,10 @@ export class ProjectSummaries {
       [...leaves].map((leaf) => this.#direct.get(leaf)).filter((
         s,
       ): s is ProjectSummary => !!s);
+    const project = this.states.project(
+      directory,
+      summaries?.length ? summaries.map((s) => s.directory) : [directory],
+    );
     const summary: ProjectSummary = summaries?.length
       ? {
         ...direct,
@@ -447,14 +448,12 @@ export class ProjectSummaries {
           ? summaries.reduce((n, s) => n + s.sessionCount!, 0)
           : null,
         unseenCount: summaries.every((s) => s.unseenCount !== null)
-          ? summaries.reduce((n, s) => n + s.unseenCount!, 0)
+          ? project.counts.unseen
           : null,
         lastActivity: summaries.every((s) => s.lastActivity !== null)
           ? Math.max(...summaries.map((s) => s.lastActivity!))
           : null,
-        status: ROLLUP_PRIORITY.find((status) =>
-          summaries.some((s) => s.status === status)
-        ) ?? "none",
+        status: project.state,
         authority: summaries.some((s) => s.authority === "unknown")
           ? "unknown"
           : summaries.some((s) => s.authority === "stale")
@@ -470,7 +469,10 @@ export class ProjectSummaries {
       !this.#retained.has(directory) &&
       !this.#projects.get(directory)?.size
     ) {
-      if (this.values.delete(directory)) this.retire(directory);
+      if (this.values.delete(directory)) {
+        this.states.drop(directory);
+        this.retire(directory);
+      }
       return;
     }
     if (
