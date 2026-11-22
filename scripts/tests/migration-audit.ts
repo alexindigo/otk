@@ -3,6 +3,7 @@ import { collectLegacy } from "./legacy-collection.ts";
 import { hash as sha256 } from "./source.ts";
 import { parse } from "@babel/parser";
 import { oldBrowserConsumers } from "../../tests/arch/browser-retirement.ts";
+import { qualificationAreas as areas } from "./qualification-areas.ts";
 
 interface Owner {
   runner: "legacy" | "playwright";
@@ -43,18 +44,6 @@ export async function legacyFiles(): Promise<string[]> {
     row.groups.some((group) => group.activeOwner.runner === "legacy")
   ).map((row) => row.file).sort();
 }
-const areas = new Set([
-  "harness",
-  "transport",
-  "messages",
-  "composer",
-  "sessions",
-  "revert",
-  "attention",
-  "menus",
-  "visual",
-  "scale",
-]);
 function rejectDependencies(source: string, file: string): void {
   const visit = (value: unknown): void => {
     if (!value || typeof value !== "object") return;
