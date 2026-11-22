@@ -1057,6 +1057,14 @@ language and streaming state. Replacing a message/header with equal code values
 preserves that snapshot and token nodes; unrelated metadata publication or theme
 paint cannot admit a duplicate capture or cache-disposal message.
 
+Source layout never depends on enhancement capability, including synchronous
+worker-construction refusal. Explicit plain-text modes acquire no worker or
+grammar. The shared highlighting client owns diagnostic reporting with the
+actual Error, stack and cause; Code never turns that optional enhancement into a
+failed user action or transcript alert. Worker error replies preserve structured
+Errors. Empty Markdown code source has no decorative card; explicit fence reveal
+and numbered file views retain their requested empty-source presentation.
+
 The dependency-free highlighting policy owns the 32-row source-group contract.
 Source coordinates, raw layout, worker preparation/progress, cached replay and
 the renderer's complete-group path consume that same constant; changing a group

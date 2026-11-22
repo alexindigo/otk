@@ -119,6 +119,7 @@ export const profiles = {
   "transport-restart": "v1",
   "contract-core": "neutral",
   "contract-messages-highlight": "neutral",
+  "contract-messages-codeblocks": "neutral",
   "contract-messages-facts": "neutral",
   "contract-messages-metadata": "v1",
   "contract-messages-usage3": "neutral",

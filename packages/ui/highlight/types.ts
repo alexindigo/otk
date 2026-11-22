@@ -64,7 +64,8 @@ export type HighlightResult =
     id: number;
     block: number;
     generation?: number;
-    error: string;
+    /** Structured clone preserves the original Error, stack and cause. */
+    error: Error;
   };
 export interface HighlightCompletion {
   plain?: boolean;

@@ -4,6 +4,7 @@ import {
   assertEquals,
   assertNotStrictEquals,
   assertStrictEquals,
+  assertThrows,
 } from "@std/assert";
 import { CodeProjection, sourceRange } from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
@@ -90,6 +91,30 @@ function accept(
     /* bounded steps */
   }
 }
+Deno.test("syntax decorations cannot replace authoritative source, including priority projections", () => {
+  const text = "const kept = 7;";
+  const model = new CodeProjection(text, "ts");
+  build(model);
+  const group = model.groups[0];
+  accept(model, text, 0, [{ content: "const " }]);
+  assertThrows(
+    () => accept(model, text, 1, [{ content: "        " }]),
+    Error,
+    "Highlight tokens do not match source",
+  );
+  assertEquals(model.project(group), undefined);
+  accept(model, text, 0, [{ content: text }]);
+  assertThrows(
+    () => model.projectSource(group, 0, [{ content: " ".repeat(text.length) }]),
+    Error,
+    "Highlight tokens do not match source",
+  );
+  assertEquals(
+    model.project(group)?.flat().map((token) => token.content).join(""),
+    text,
+  );
+  assertEquals(build(model), text);
+});
 Deno.test("a demanded source interval retains exact rows and identity when dense traversal adopts it", () => {
   for (const ending of ["\n", "\r\n", "\r"]) {
     const rows = Array.from({ length: 2000 }, (_, i) => `row ${i} é 😀`);

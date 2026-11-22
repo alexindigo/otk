@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { normalizeError } from "@otk/protocol";
 import {
   applyColorReplacements,
   createCssVariablesTheme,
@@ -35,6 +35,10 @@ const highlighter = createHighlighterCore({
     sharedNativeScanners,
   ),
 });
+// A rendering scope can warm the engine before any source requests arrive.
+// Retain the original rejected promise for those requests to report through the
+// client owner, without an unhandled rejection racing their message delivery.
+void highlighter.catch(() => {});
 interface Stream {
   lang: string;
   text: string;
@@ -157,7 +161,7 @@ function enqueue(job: Job) {
         id: request.id,
         block: request.block,
         generation: request.generation,
-        error: errorMessage(error),
+        error: normalizeError(error),
       });
     })
   );
@@ -495,7 +499,7 @@ function receive(request: HighlightRequest) {
           type: "error",
           id: request.id,
           block: request.block,
-          error: errorMessage(error),
+          error: normalizeError(error),
         });
       }
     });
@@ -528,7 +532,7 @@ function receive(request: HighlightRequest) {
       id: request.id,
       block: request.block,
       generation: request.generation,
-      error: errorMessage(error),
+      error: normalizeError(error),
     });
   });
 }
@@ -539,22 +543,5 @@ globalThis.onmessage = (
     receive(request);
   }
 };
-// Worker identity carries grammar only. Genuine bounded source preparation uses
-// the ordinary block-owned message path, so dispose can release every source.
-const declaration: unknown = Reflect.get(globalThis, "name");
-if (
-  typeof declaration === "string" && declaration.startsWith("otk-highlight:")
-) {
-  try {
-    const context = JSON.parse(declaration.slice("otk-highlight:".length));
-    if (typeof context.lang !== "string") {
-      throw new Error("Invalid highlight declaration");
-    }
-    const loading = prepare(context.lang);
-    void loading.catch((error) =>
-      console.error("Highlight preparation:", error)
-    );
-  } catch (error) {
-    console.error("Highlight declaration:", error);
-  }
-}
+// All grammar preparation uses block-owned messages. Worker names are identity
+// only; they cannot start a second, uncorrelated preparation/diagnostic path.

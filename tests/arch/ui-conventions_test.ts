@@ -16,6 +16,48 @@ import {
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
 
+Deno.test("UI convention: syntax enhancement cannot publish user-action failures in source", async () => {
+  const failures = (text: string) =>
+    new Source(text).all.flatMap((node) =>
+      node.type === "ImportDeclaration"
+        ? node.specifiers.map((part) =>
+          part.type === "ImportSpecifier"
+            ? part.imported.type === "Identifier"
+              ? part.imported.name
+              : part.imported.value
+            : node.source.value.endsWith("/FeedbackStatus.tsx")
+            ? "FeedbackStatus"
+            : part.local.name
+        )
+        : []
+    ).filter((name) =>
+      ["FeedbackStatus", "failureValue", "errorFeedback"].includes(name)
+    );
+  assertEquals(
+    failures(await Deno.readTextFile("packages/ui/components/Code.tsx")),
+    [],
+  );
+  assertEquals(
+    failures('import {failureValue as diagnose} from "@otk/client";'),
+    ["failureValue"],
+  );
+  assertEquals(
+    failures('import {normalizeError as diagnose} from "@otk/protocol";'),
+    [],
+  );
+  assertEquals(failures('import FeedbackStatus from "./FeedbackStatus.tsx";'), [
+    "FeedbackStatus",
+  ]);
+  assertEquals(failures('import Status from "./FeedbackStatus.tsx";'), [
+    "FeedbackStatus",
+  ]);
+  assert(
+    (await Deno.readTextFile("packages/ui/highlight/client.ts")).includes(
+      "Syntax highlighting diagnostic:",
+    ),
+  );
+});
+
 Deno.test("UI convention: folded record counts are neutral metadata, not per-kind hidden rows", async () => {
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
