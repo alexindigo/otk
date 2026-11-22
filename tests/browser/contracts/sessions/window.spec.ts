@@ -99,6 +99,62 @@ test.describe("direct route", () => {
 });
 test.describe("measured Sessions", () => {
   test.use({ profile: "contract-sessions-window" });
+  test("sessions.retained-editor-reconciliation-blur-is-not-submission", {
+    tag: ["@sessions", "@contracts", "@isolated"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "succeed",
+    });
+    const frames = await wire(page);
+    await openSession(state, page, "tstv1-otk");
+    await sessionContext(page, "[data-session=tstv1-otk]", "session.rename");
+    const editor = page.getByRole("textbox", {
+      name: "Rename session",
+      exact: true,
+    });
+    await expect(editor).toBeFocused();
+    await editor.fill("Retained reconciliation draft");
+    const before = frames.sent.length;
+    // Native removal/reinsertion is the focus boundary used by keyed DOM moves.
+    // Keep the same node and position, as the window's retention owner does.
+    await editor.evaluate((input) => {
+      const row = input.closest("[data-virtual-key]")!;
+      const parent = row.parentNode!, next = row.nextSibling;
+      row.remove();
+      parent.insertBefore(row, next);
+    });
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("Retained reconciliation draft");
+    expect(
+      frames.sent.slice(before).filter(({ frame }) =>
+        frame.method === "session.rename"
+      ),
+    ).toEqual([]);
+    expect(
+      (await state.product("session.get", { sessionID: "tstv1-otk" })).title,
+    )
+      .not.toBe("Retained reconciliation draft");
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect(editor).toBeFocused();
+      await info.attach(`retained-editor-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
+    await page.getByRole("searchbox", { name: "Search sessions by title" })
+      .click();
+    await expect(editor).toHaveCount(0);
+    expect(
+      (await state.product("session.get", { sessionID: "tstv1-otk" })).title,
+    )
+      .toBe("Retained reconciliation draft");
+  });
   test(
     "sessions.virtual-list-bounded-dom-no-row-body-reads-unmounts-on-collapse",
     { tag: ["@sessions", "@contracts", "@isolated"] },
