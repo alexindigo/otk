@@ -35,7 +35,8 @@ export async function supplemental(
   };
   await test.step("8/public-setup-diff-and-task-feedback", async () => {
     await scene("layout-controls");
-    await expect(page.locator("select[name=type]")).toBeVisible();
+    // D54: Select owns the picker; its form value is hidden, not a native menu.
+    await expect(page.locator("button[name=type]")).toBeVisible();
     for (const theme of themes) {
       await paint(theme);
       for (const zoom of [1, 2]) {
@@ -191,8 +192,12 @@ export async function supplemental(
           const probe = document.createElement("span");
           probe.style.color = "var(--otk-danger)";
           document.body.append(probe);
-          const equal =
-            getComputedStyle(el).color === getComputedStyle(probe).color;
+          const danger = getComputedStyle(probe).color;
+          probe.style.color = "var(--otk-fg)";
+          const neutral = getComputedStyle(probe).color;
+          const signal = el.querySelector(".otk-failure-signal")!;
+          const equal = getComputedStyle(el).color === neutral &&
+            getComputedStyle(signal).boxShadow.includes(danger);
           probe.remove();
           return equal;
         }),
@@ -322,7 +327,7 @@ export async function supplemental(
         await page.evaluate(() =>
           [
             ".otk-inbox-brand svg",
-            ".otk-tool-icon svg",
+            "[data-diffs] .otk-tool-state .otk-tree-icon-art > svg",
             ".otk-takeover-collapse svg",
           ].map((s) => {
             const e = document.querySelector(s)!, r = e.getBoundingClientRect();

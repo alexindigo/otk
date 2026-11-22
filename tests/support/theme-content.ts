@@ -18,20 +18,37 @@ export async function themeContent(directory: string) {
     id: string,
     parts: Part[],
     extra: Partial<AssistantMessage> = {},
-  ): AssistantMessage => ({
-    id,
-    sessionID,
-    role: "assistant",
-    replyTo: "prompt",
-    agent: "build",
-    model: { provider: "fake2", model: "scripted" },
-    time: { created: 2000, completed: 6000 },
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    cost: 0,
-    interrupted: false,
-    parts,
-    ...extra,
-  });
+  ): AssistantMessage => {
+    const time = extra.time ?? { created: 2000, completed: 6000 };
+    return {
+      id,
+      sessionID,
+      role: "assistant",
+      replyTo: "prompt",
+      agent: "build",
+      model: { provider: "fake2", model: "scripted" },
+      time,
+      ...(time.completed !== undefined
+        ? {
+          outcomeTime: {
+            state: "known",
+            at: time.completed,
+            source: "completed",
+          } as const,
+        }
+        : {}),
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      parts,
+      ...extra,
+    };
+  };
   const user: Message = {
     id: "prompt",
     sessionID,

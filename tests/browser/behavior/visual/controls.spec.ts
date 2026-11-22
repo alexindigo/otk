@@ -155,12 +155,16 @@ test(
       "Unchecked task",
       "Checked task",
     ]);
-    await page.locator("input[name=timestamps]").click();
-    await expect(page.locator("input[name=timestamps]")).toBeChecked();
+    // D21: clocks/actions are persistent, not a Display preference.
+    await expect(page.locator("input[name=timestamps]")).toHaveCount(0);
+    await page.locator("input[name=thinking]").click();
+    await expect(page.locator("input[name=thinking]")).toBeChecked();
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(
       "Retain this draft",
     );
     await page.keyboard.press("Escape");
+    await expect(page.locator("[data-role=assistant] .otk-message-footer time"))
+      .toBeVisible();
     await page.keyboard.press("Control+k");
     await page.locator("input[name=command-search]").fill("Settings");
     await page.locator('[data-command="settings.open"]').click();
