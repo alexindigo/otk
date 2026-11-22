@@ -16,6 +16,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
+  /** Preserve the full measured row's intrinsic width in a wrapping action strip. */
+  intrinsic?: boolean;
   /** Readable content floor; required items reflow instead of clipping it. */
   minimumItemSize?(item: T): string;
   measure(item: T): Element;
@@ -112,6 +114,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
     <div
       class={["otk-overflow-row", {
         "has-overflow": snapshot().overflow.length > 0,
+        "is-intrinsic": props.intrinsic === true,
       }]}
       ref={(e) => root = e}
       onPointerDown={() => setGesture(fitted())}

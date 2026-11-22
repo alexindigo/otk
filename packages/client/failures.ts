@@ -14,6 +14,7 @@ interface FailureContent {
   reason: string;
   /** Specific next step supplied by the action/cause owner, absent otherwise. */
   recovery?: string;
+  details?: string;
   count: number;
   occurrences: readonly string[];
   /** No feature-authored reason: Details carry the diagnostic ID instead. */
@@ -158,6 +159,7 @@ export class FailurePresenter {
       target,
       reason: reason + status,
       recovery,
+      details: facts.details,
       count: 1,
       occurrences: [failure.diagnosticID],
       ...(known ? {} : { generic: true }),

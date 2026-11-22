@@ -248,7 +248,15 @@ Deno.test("unavailable persistence mounts without a saved list but visibly refus
   assertEquals(f.calls(), 0);
   const error = owner.state.error;
   assert(error);
-  assert(error.failure?.reason.includes("localStorage is unavailable"));
+  assertEquals(
+    error.failure?.reason,
+    "The earlier conversation couldn't be saved: storage is unavailable.",
+  );
+  assert(error.failure?.details?.includes("localStorage is unavailable"));
+  assertEquals(
+    error.failure?.recovery,
+    "Check storage access, then Retry, or Keep without a saved copy.",
+  );
   assertEquals(f.drafts.current("server/a").input, "Never discarded");
 });
 Deno.test("branch history is keyed by exact server and session and never evicts old branches", async () => {
@@ -271,7 +279,7 @@ Deno.test("a failed advertised prompt-history reader is not a no-history degrada
   await assertRejects(
     () => f.prepare(target, "2"),
     Error,
-    "The earlier branch could not be saved",
+    "The earlier conversation couldn't be saved",
   );
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.preservationWarning(), undefined);
@@ -296,15 +304,22 @@ Deno.test("branch history quota uses FP1 action target reason recovery and leave
   assertEquals([...f.values], original);
   const failure = f.owner.state.error;
   assert(failure);
-  assertEquals(failure.failure?.action, "Saving an earlier branch");
+  assertEquals(failure.failure?.action, "Saving the earlier conversation");
   assertEquals(
     failure.failure?.value.facts?.target?.sessionID,
     target.sessionID,
   );
   assertEquals(failure.failure?.target, { label: "" });
-  assert(failure.failure?.reason.includes("not saved"));
-  assert(failure.failure?.reason.includes("bytes"));
-  assert(failure.failure?.recovery?.includes("Delete a saved branch"));
+  assert(
+    failure.failure?.reason.includes("couldn't be saved: storage is full"),
+  );
+  assert(failure.failure?.details?.includes("bytes"));
+  assert(failure.failure?.details?.includes("localStorage is full"));
+  assert(failure.failure?.details?.includes("about 5 MB per origin"));
+  assertEquals(
+    failure.failure?.recovery,
+    "Free space, then Retry, or Keep without a saved copy.",
+  );
   assertEquals(f.drafts.current("server/a").input, "Not saved");
 });
 Deno.test("saved prompt reuse keeps exact text and attachment bytes and offers both drafts", async () => {

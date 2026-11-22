@@ -28,3 +28,9 @@
   display: inline-grid;
   align-items: center;
 }
+.otk-record-group-heading.wraps-actions {
+  flex-wrap: wrap;
+}
+.otk-record-group-heading.wraps-actions > .otk-record-group-toggle {
+  flex: 1 1 auto;
+}

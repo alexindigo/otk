@@ -56,6 +56,8 @@ export interface FailureFacts {
   status?: number;
   /** Specific next step from the action/cause owner; omit when none is known. */
   recovery?: string;
+  /** Producer-selected diagnostic facts, shown only inside Details. */
+  details?: string;
   outcome?: "unknown" | "unavailable" | "rejected";
   /** The input surface that caused this failure, independent of its transport. */
   origin?: RequestOrigin | "session";

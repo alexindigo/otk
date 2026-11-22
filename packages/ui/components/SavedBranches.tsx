@@ -18,6 +18,7 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import FittedActions from "./FittedActions.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
 export function RevertSendChoice(
   props: { owner: BranchHistory },
@@ -32,33 +33,29 @@ export function RevertSendChoice(
         <div class="otk-permanence-choice">
           <OperationFeedback feedback={errorFeedback(pending().error)!} />
           <ComposerNoticeRow>
-            <div class="otk-control-row">
-              <button
-                type="button"
-                class="otk-pill"
-                disabled={pending().saving ||
-                  !!props.owner.preservationWarning()}
-                title={props.owner.preservationWarning()}
-                onClick={() => perform(() => props.owner.saveCopy())}
-              >
-                {pending().saving ? "Saving copy..." : "Save copy"}
-              </button>
-              <button
-                type="button"
-                class="otk-pill"
-                disabled={pending().saving}
-                onClick={() => perform(() => props.owner.sendAnyway())}
-              >
-                Send anyway
-              </button>
-              <button
-                type="button"
-                class="otk-pill"
-                onClick={() => props.owner.cancelSend()}
-              >
-                Cancel
-              </button>
-            </div>
+            <FittedActions
+              items={[
+                {
+                  key: "save",
+                  label: pending().saving ? "Saving copy..." : "Save copy",
+                  disabled: pending().saving ||
+                    !!props.owner.preservationWarning(),
+                  title: props.owner.preservationWarning(),
+                  run: () => perform(() => props.owner.saveCopy()),
+                },
+                {
+                  key: "send",
+                  label: "Send anyway",
+                  disabled: pending().saving,
+                  run: () => perform(() => props.owner.sendAnyway()),
+                },
+                {
+                  key: "cancel",
+                  label: "Cancel",
+                  run: () => props.owner.cancelSend(),
+                },
+              ]}
+            />
           </ComposerNoticeRow>
         </div>
       )}
@@ -93,33 +90,12 @@ export function SavedBranchNotice(
           !state().permanence}
       >
         <ComposerNoticeRow>
-          <div class="otk-control-row">
-            <button
-              type="button"
-              class="otk-pill"
-              disabled={state().pending}
-              onClick={() =>
-                void props.owner.retryCopy().catch((cause) =>
-                  props.owner.fail(cause)
-                )}
-            >
-              {state().pending ? "Saving copy..." : "Retry"}
-            </button>
-            <button
-              type="button"
-              class="otk-pill"
-              disabled={state().pending}
-              title="Keep the live conversation and current draft without saving a browser copy"
-              onClick={() => props.owner.keepWithoutCopy()}
-            >
-              Keep without a saved copy
-            </button>
-          </div>
+          <BranchCopyRecovery owner={props.owner} />
         </ComposerNoticeRow>
       </Show>
       <Show when={props.statusVisible !== false && state().pending}>
         <ComposerNoticeRow icon={RevertIcon} role="status">
-          Saving earlier branch...
+          Saving the earlier conversation...
         </ComposerNoticeRow>
       </Show>
       <Show
@@ -165,6 +141,32 @@ export function SavedBranchNotice(
         )}
       </Show>
     </>
+  );
+}
+export function BranchCopyRecovery(props: { owner: BranchHistory }) {
+  return (
+    <FittedActions
+      items={[
+        {
+          key: "retry",
+          label: props.owner.state.pending ? "Saving copy..." : "Retry",
+          disabled: props.owner.state.pending,
+          run: () => {
+            void props.owner.retryCopy().catch((cause) =>
+              props.owner.fail(cause)
+            );
+          },
+        },
+        {
+          key: "keep",
+          label: "Keep without a saved copy",
+          disabled: props.owner.state.pending,
+          title:
+            "Keep the live conversation and current draft without saving the earlier conversation",
+          run: () => props.owner.keepWithoutCopy(),
+        },
+      ]}
+    />
   );
 }
 export default function SavedBranches(
