@@ -250,7 +250,7 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   );
 });
 
-Deno.test("ungrouped mandatory helpers keep their own tab and viewing them selects their root tab", () => {
+Deno.test("ungrouped mandatory helpers keep and select their own tab (fix 4.2 case 2)", () => {
   const root = entry("root"),
     child = entry("child", 2, "root"),
     other = entry("other");
@@ -265,19 +265,19 @@ Deno.test("ungrouped mandatory helpers keep their own tab and viewing them selec
     "blocked",
   ]]);
   tabs.preview(child.id);
-  assertEquals(tabs.state.selected, { kind: "session", id: "root" });
+  assertEquals(tabs.state.selected, { kind: "session", id: "child" });
   assertEquals(tabs.state.sessionID, "child");
-  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
-    ["child", "blocked"],
-    ["root", "none"],
-  ]);
+  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
+    "child",
+    "blocked",
+  ]]);
   child.attention.questions = 0;
   meta.finishes.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
     "child",
     "finished",
-  ], ["root", "none"]]);
+  ]]);
   tabs.preview("other");
   assertEquals(tabs.tabs().map((t) => t.id), ["child", "other"]);
   meta.seen.child = 10;
@@ -359,7 +359,7 @@ Deno.test("rename and pin share captured-name promotion without selecting a late
   failed.stop();
 });
 
-Deno.test("direct child phantom selection views the child under its root's selected tab across metadata updates", () => {
+Deno.test("direct child phantom selection stays on its own group across metadata updates (fix 4.2 case 2)", () => {
   const root = entry("root"), child = entry("child", 2, root.id);
   child.attention.questions = 1;
   const tabs = model(),
@@ -367,11 +367,12 @@ Deno.test("direct child phantom selection views the child under its root's selec
   try {
     tabs.update(input);
     tabs.select({ kind: "session", id: child.id });
-    // Decision 3: the open session's root has the selected top-line tab.
+    // Fix 4.2 case 2: D3's ancestor selection applies only to quiet children
+    // without an independent mandatory phantom.
     for (let pass = 0; pass < 2; pass++) {
-      assertEquals(tabs.state.selected, { kind: "session", id: root.id });
+      assertEquals(tabs.state.selected, { kind: "session", id: child.id });
       assertEquals(tabs.state.sessionID, child.id);
-      assert(tabs.tabs().some((row) => row.id === root.id));
+      assert(tabs.tabs().some((row) => row.id === child.id));
       child.title = "Updated title";
       tabs.update(input);
     }

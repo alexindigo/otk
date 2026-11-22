@@ -243,13 +243,14 @@ Deno.test("lamp grace borrows tab ownership, excluding children assigned to anot
     ...input,
     inbox: { ...input.inbox, tasks: input.inbox.tasks.slice(1) },
   });
-  // SH1 gives an ungrouped child its own phantom and its own supervision lamp.
-  assertEquals(tabs.belongsToTab("parent", "own-child"), false);
-  assertEquals(tabs.belongsToTab("own-child", "own-child"), true);
+  // Fix 4.2 case 3: without positive supervision these children are quiet,
+  // so their membership belongs to the nearest ancestor's phantom group.
+  assertEquals(tabs.belongsToTab("parent", "own-child"), true);
+  assertEquals(tabs.belongsToTab("own-child", "own-child"), false);
   assertEquals(tabs.belongsToTab("parent", "split"), false);
   assertEquals(tabs.belongsToTab("parent", "outside"), false);
   assertEquals(tabs.belongsToTab("orphan", "orphan"), true);
-  assertEquals(tabs.belongsToTab("orphan", "orphan-helper"), false);
+  assertEquals(tabs.belongsToTab("orphan", "orphan-helper"), true);
   owner.stop();
   tabs.stop();
 });

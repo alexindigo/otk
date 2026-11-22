@@ -120,6 +120,20 @@ export async function sessionsScenario(profile: Profile) {
     };
   }
   const base = f.entries[0];
+  if (profile === "contract-sessions-tab-groups") {
+    f.update(base.id, {
+      title:
+        "Main task: one trail belongs to one group, never to every other task in the project",
+    });
+    for (
+      const [id, title] of [["a", "Explore group A"], ["b", "Review group B"], [
+        "quiet",
+        "Quiet child",
+      ]]
+    ) {
+      f.add({ ...base, id: `tstv1-group-${id}`, parentID: base.id, title });
+    }
+  }
   if (profile === "contract-sessions-tabs") {
     const ledger = new UsageLedger(
       base.id,

@@ -71,23 +71,24 @@ operation and editable next input separate, including a working Cancel action.
 measurement content, live content and one overflow-menu callback. Its ordered
 item frames and controls stay mounted in source order; omitted rows are hidden
 and inert. More renders independent controls rather than adopting row nodes.
-Fitting cannot move or replace a focused required frame. Required frames use
-their current measured width; other values use their inert measurement frames.
-More occupies a separate trailing grid track, so editor blur cannot move its
-pointer target between press and release as the live chip width changes.
-ResizeObserver and font completion belong to this component. The client owns
-`fitOverflow` and ancestry preference. Breadcrumbs retain single-line
-required-frame shrinking. Task tabs instead use the horizontal `ScrollRegion`:
-one chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
-labels and a thin hover scrollbar. Vertical wheel deltas scroll horizontally
-unless Ctrl/Meta is held. Selection and lane resize reveal the active tab.
-`EdgeTriangle` owns a centred control-height slot and renders only available
-navigation. Paging aligns the last fully visible tab to the leading edge,
-mirrored going back. The client model alone orders tabs; no More or measurement
-frames are used for tabs. TitleEditor can receive an external `feedbackID`, with
-the same shared TitleFeedback rendered in the owner's in-flow track, so a
-compact editing field and its feedback do not compete for one control-height
-lane.
+Fitting cannot move or replace a focused required frame. Required frames reserve
+their natural measurement width or a larger live editor width, never a
+compressed width left by optional neighbours. They shrink only when the required
+content itself cannot fit. Other values use their inert measurement frames. More
+occupies a separate trailing grid track, so editor blur cannot move its pointer
+target between press and release as the live chip width changes. ResizeObserver
+and font completion belong to this component. The client owns `fitOverflow` and
+ancestry preference. Breadcrumbs retain single-line required-frame shrinking.
+Task tabs instead use the horizontal `ScrollRegion`: one chrome-header-height
+row, equal flex widths with a 90px minimum, ellipsized labels and a thin hover
+scrollbar. Vertical wheel deltas scroll horizontally unless Ctrl/Meta is held.
+Selection and lane resize reveal the active tab. `EdgeTriangle` owns a centred
+control-height slot and renders only available navigation. Paging aligns the
+last fully visible tab to the leading edge, mirrored going back. The client
+model alone orders tabs; no More or measurement frames are used for tabs.
+TitleEditor can receive an external `feedbackID`, with the same shared
+TitleFeedback rendered in the owner's in-flow track, so a compact editing field
+and its feedback do not compete for one control-height lane.
 
 PaneState also accepts injected content for empty panes, centring one
 left-aligned content group in the region left below chrome. Diff's automatic

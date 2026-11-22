@@ -42,7 +42,11 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await expect(page.locator(`[data-tab="${task.id}"]`)).toBeVisible();
   await page.locator('[data-session="tstv1-child"]').click();
   await expect(page).toHaveURL(/tstv1-otk\/tstv1-child$/);
-  await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveCount(0);
+  // Fix 4.2 answer 1: an open quiet child is a visible member of its group.
+  await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await sessionContext(page, '[data-session="tstv1-child"]', "session.close");
   await expect(page).toHaveURL(/tstv1-otk$/);
   await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveCount(0);

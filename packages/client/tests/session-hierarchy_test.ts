@@ -181,6 +181,7 @@ for (const prefix of ["opcv1", "opcv2"]) {
         assertEquals(tabs.state.selected?.id, child.id);
         assertEquals(tabs.crumbs()[0], {
           id: root.id,
+          kind: "ancestor",
           helper: false,
           depth: 0,
           external: true,
