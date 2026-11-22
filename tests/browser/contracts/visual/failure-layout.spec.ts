@@ -307,7 +307,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           "1:16 AM",
           "1:23 AM",
         ]);
-        await expect(page.getByText("No time recorded", { exact: true }))
+        await expect(page.getByText("Time unknown", { exact: true }))
           .toBeVisible();
       }
       if (surface === "send") {

@@ -117,8 +117,8 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  // WP2: saved reply facts live on its scoped identity, not an absent footer.
-  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+  // Saved replies borrow the same sole footer clock as live replies.
+  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,
@@ -148,7 +148,7 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
-  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,

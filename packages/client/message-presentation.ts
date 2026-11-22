@@ -10,11 +10,88 @@ import type {
 import { countLabel } from "./count.ts";
 import { usageCost, usageTokens } from "./usage.ts";
 import { reportedTokens } from "./session-summary.ts";
+import { duration } from "./format.ts";
+
+export const UNKNOWN_TIME = "Time unknown";
+export type TimeValue =
+  | { state: "known"; text: string }
+  | { state: "counting"; text?: string }
+  | { state: "unknown"; explanation: string };
+export function unknownTime(explanation?: string): TimeValue {
+  return {
+    state: "unknown",
+    explanation: explanation ?? "The recorded timing evidence is incomplete.",
+  };
+}
+export const timingExplanation = (
+  timing: TurnTiming | undefined,
+): string | undefined =>
+  timing?.state === "unknown"
+    ? timing.explanation ??
+      (timing.reason === "migration"
+        ? "The timing was lost when opencode migrated this session."
+        : "The recorded timing evidence is incomplete.")
+    : undefined;
+
+export function workingTime(
+  timing: TurnTiming | number | undefined,
+): string | undefined {
+  return typeof timing === "number"
+    ? `Worked for ${duration(timing)}`
+    : timing?.state === "known" || timing?.state === "active"
+    ? `Worked for ${duration(timing.workingMs)}`
+    : timing?.state === "unknown"
+    ? UNKNOWN_TIME
+    : undefined;
+}
+export function workingTimeValue(
+  timing: TurnTiming | number | undefined,
+  pending = timing === undefined ||
+    typeof timing !== "number" && timing.state === "active",
+): TimeValue {
+  if (pending) {
+    const value = typeof timing === "number"
+      ? timing
+      : timing?.state === "known" || timing?.state === "active"
+      ? timing.workingMs
+      : undefined;
+    return {
+      state: "counting",
+      ...(value !== undefined && duration(value) !== "0s"
+        ? { text: workingTime(value) }
+        : {}),
+    };
+  }
+  return timing === undefined ||
+      typeof timing !== "number" && timing.state === "unknown"
+    ? unknownTime(
+      typeof timing === "number" ? undefined : timingExplanation(timing),
+    )
+    : { state: "known", text: workingTime(timing)! };
+}
+/** Footer facts have one presentation owner; views do not classify evidence. */
+export function messageTimeValue(time: MessagePresentation["time"]): TimeValue {
+  if (time?.timing?.state === "unknown") {
+    return unknownTime(
+      time.timing.reason === "migration"
+        ? timingExplanation(time.timing)
+        : time.outcome?.state === "unknown"
+        ? time.outcome.reason
+        : timingExplanation(time.timing),
+    );
+  }
+  return workingTimeValue(time?.timing, time?.counting || !time?.timing);
+}
 
 export interface MessagePresentation {
   streaming: boolean;
   progress: boolean;
-  time?: { timing?: TurnTiming; fallback?: string; outcome?: OutcomeTime };
+  time?: {
+    timing?: TurnTiming;
+    fallback?: "counting...";
+    counting?: boolean;
+    outcome?: OutcomeTime;
+  };
   usage?: { summary?: Derived<UsageSummary> };
   facts: string[];
 }
@@ -35,7 +112,12 @@ export function messagePresentation(
       progress: streaming || activeRecord,
       time: {
         timing: value?.timing,
-        fallback: streaming ? "streaming" : "Time unknown",
+        fallback: !value?.timing ? "counting..." : undefined,
+        ...(value?.timing && value.timing.state !== "unknown" &&
+            (value.timing.state === "active" ||
+              summary?.state === "known" && !summary.final)
+          ? { counting: true }
+          : {}),
         ...(!streaming && message.role !== "user" && message.outcomeTime
           ? { outcome: message.outcomeTime }
           : {}),

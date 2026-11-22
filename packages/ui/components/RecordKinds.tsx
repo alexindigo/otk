@@ -4,6 +4,7 @@ import { foldRecords } from "@otk/client";
 import type { Activity, Preferences } from "@otk/protocol";
 import { retainedRecordKinds } from "../features/transcript-context.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import DisclosureToggle from "./DisclosureToggle.tsx";
 
 /** Both interval and work frames borrow this category disclosure owner. */
 export default function RecordKinds<T>(props: {
@@ -26,20 +27,19 @@ export default function RecordKinds<T>(props: {
   const meta = () => (
     <For each={folded().folds} keyed={(fold) => fold.category}>
       {(fold) => (
-        <button
-          type="button"
+        <DisclosureToggle
+          variant="meta"
+          label={fold().label}
           data-record-kind={fold().category}
-          aria-expanded={choices.expanded(fold().category, props.prefs)
-            ? "true"
-            : "false"}
-          onClick={() =>
+          open={choices.expanded(fold().category, props.prefs)}
+          onOpen={(open) =>
             choices.set(
               fold().category,
-              !choices.expanded(fold().category, props.prefs),
+              open,
             )}
         >
-          <ChromeMeta>{fold().label}</ChromeMeta>
-        </button>
+          <ChromeMeta truncate>{fold().label}</ChromeMeta>
+        </DisclosureToggle>
       )}
     </For>
   );

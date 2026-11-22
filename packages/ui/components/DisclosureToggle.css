@@ -60,3 +60,13 @@
   color: var(--otk-fg-3);
   background: transparent;
 }
+.otk-disclosure-toggle.otk-meta-toggle {
+  --disclosure-gutter: var(--tree-box-size);
+  padding: 0;
+  flex: 0 1 auto;
+  min-inline-size: var(--tree-box-size);
+  overflow: hidden;
+  grid-template-columns: var(--disclosure-gutter) minmax(0, 1fr);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+  color: var(--otk-fg-3);
+}

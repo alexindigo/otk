@@ -3,7 +3,11 @@ import { isAssistantTerminal } from "@otk/protocol";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
-import { errorFeedback, replyErrorFeedback } from "@otk/client";
+import {
+  errorFeedback,
+  messageTimeValue,
+  replyErrorFeedback,
+} from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
@@ -12,7 +16,7 @@ import RecordKinds from "./RecordKinds.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
-import Clock from "./Clock.tsx";
+import TimeValue from "./TimeValue.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
@@ -23,8 +27,6 @@ import {
   createMessageLayout,
   messageLayoutRole,
   type ReplyStart as ReplyStartData,
-  timingExplanation,
-  workingTime,
 } from "./work-log.ts";
 import MessageFooter from "./MessageFooter.tsx";
 import { contextTarget } from "./context-target.ts";
@@ -128,8 +130,6 @@ function ReplyStart(props: {
   onOpen(id: string): void;
 }) {
   const session = useOptionalSessionPorts();
-  const date = () =>
-    new Date(props.source.time.lastOutput ?? props.source.time.created);
   return (
     <header
       class={["otk-reply-start", {
@@ -150,7 +150,6 @@ function ReplyStart(props: {
           onOpen={props.onOpen}
         />
       </div>
-      <Clock at={date().getTime()} />
     </header>
   );
 }
@@ -316,10 +315,6 @@ export default function Message(
     const time = presentation().time?.outcome;
     return time?.state === "known" ? time : undefined;
   });
-  const outcomeUnknown = () => {
-    const time = presentation().time?.outcome;
-    return time?.state === "unknown" ? time.reason : undefined;
-  };
   const error = () =>
     replyErrorFeedback(
       props.message,
@@ -426,6 +421,9 @@ export default function Message(
                       render={(visible, meta) => (
                         <WorkLog
                           workingMs={group().workingMs}
+                          counting={presentation().time?.fallback ===
+                              "counting..." ||
+                            presentation().time?.counting}
                           identity={group().id}
                           prefs={props.prefs}
                           required={group().required}
@@ -521,30 +519,14 @@ export default function Message(
                       ? { kind: "reply", target: target() }
                       : undefined}
                     duration={
-                      <Show when={presentation().time}>
-                        {(time) => (
-                          <>
-                            <Show when={outcomeUnknown()}>
-                              {(reason) => (
-                                <span class="otk-turn-time" title={reason()}>
-                                  No time recorded
-                                </span>
-                              )}
-                            </Show>
-                            <Show
-                              when={!time().outcome ||
-                                time().timing?.state === "known" ||
-                                time().timing?.state === "active"}
-                            >
-                              <span
-                                class="otk-turn-time"
-                                title={timingExplanation(time().timing)}
-                              >
-                                {workingTime(time().timing) ?? time().fallback}
-                              </span>
-                            </Show>
-                          </>
-                        )}
+                      <Show
+                        when={presentation().time?.timing ||
+                          presentation().time?.fallback}
+                      >
+                        <TimeValue
+                          class="otk-turn-time"
+                          value={messageTimeValue(presentation().time)}
+                        />
                       </Show>
                     }
                   >

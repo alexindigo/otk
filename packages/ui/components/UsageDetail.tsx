@@ -3,7 +3,8 @@ import "./TurnUsage.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
-import { timingExplanation, workingTime } from "./work-log.ts";
+import { timingExplanation, workingTimeValue } from "./work-log.ts";
+import TimeValue from "./TimeValue.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { errorFeedback, type FailureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
@@ -12,8 +13,18 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 export default function UsageDetail(
   props: { usage?: Usage; error?: string | FailureValue; showCost: boolean },
 ): import("solid-js").Element {
-  const duration = (time: Usage["timing"]) =>
-    workingTime(time)?.replace("Worked for ", "") ?? "Time unknown";
+  const duration = (time: Usage["timing"]) => {
+    const value = workingTimeValue(time);
+    return (
+      <TimeValue
+        value={value.state === "known"
+          ? { ...value, text: value.text.replace("Worked for ", "") }
+          : value.state === "counting"
+          ? { ...value, text: value.text?.replace("Worked for ", "") }
+          : value}
+      />
+    );
+  };
   const count = (value: number | null) =>
     value === null ? "Not reported" : exactCount(value);
   return (

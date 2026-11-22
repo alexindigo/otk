@@ -46,14 +46,12 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
     delay: 1000,
   });
   await prompt(page, "Show timestamp behavior");
-  // WP2: reply identity owns its live clock and full localized timestamp.
-  const time = page.locator(".otk-reply-start > .otk-chrome-meta > time");
-  await expect(time).toBeAttached();
+  // The agent band never owns a second clock, including while streaming.
+  const time = page.locator("[data-role=assistant] .otk-message-footer time");
+  await expect.soft(page.locator(".otk-reply-start time")).toHaveCount(0);
   await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
     "first output",
   );
-  const first = await time.getAttribute("datetime");
-  await expect(time).not.toHaveAttribute("datetime", first!);
   await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
     "data-status",
     "idle",
@@ -81,43 +79,45 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
         ? [p.state?.time?.end || 0]
         : []
     ).filter((n) => n > 0),
-    expected = ends.length
-      ? Math.max(...ends)
-      : reply.info.time.completed || reply.info.time.created;
+    expected = reply.info.time.completed ?? Math.max(...ends);
   await expect.poll(() =>
     time.getAttribute("datetime").then((s) => Date.parse(s!))
   ).toBe(expected);
   const before = await time.locator("..").boundingBox();
   await time.hover();
   const geometry = await page.evaluate(() => {
-    const header = document.querySelector(".otk-reply-start")!,
-      time = header.querySelector<HTMLTimeElement>(
-        ":scope > .otk-chrome-meta > time",
+    const footer = document.querySelector(
+        "[data-role=assistant] .otk-message-footer",
       )!,
-      agent = header.querySelector(".otk-entity-pill")!,
-      h = header.getBoundingClientRect(),
-      a = agent.getBoundingClientRect(),
+      time = footer.querySelector<HTMLTimeElement>(
+        "time",
+      )!,
+      action = footer.querySelector("[data-message-command]")!,
+      f = footer.getBoundingClientRect(),
+      a = action.getBoundingClientRect(),
       t = time.closest(".otk-chrome-meta")!.getBoundingClientRect();
     return {
       timeLeft: t.left,
       timeRight: t.right,
-      headerRight: h.right,
-      agentRight: a.right,
-      agentCenter: a.y + a.height / 2,
+      footerLeft: f.left,
+      actionLeft: a.left,
+      actionCenter: a.y + a.height / 2,
       timeCenter: t.y + t.height / 2,
       title: time.title,
       expected: new Date(time.dateTime).toLocaleString(undefined, {
         timeZoneName: "short",
       }),
       color: getComputedStyle(time).color,
-      headerColor: getComputedStyle(time.closest(".otk-chrome-meta")!).color,
+      footerColor: getComputedStyle(time.closest(".otk-chrome-meta")!).color,
     };
   });
   expect(geometry.title).toBe(geometry.expected);
-  expect(geometry.agentRight).toBeLessThan(geometry.timeLeft);
-  expect(Math.abs(geometry.agentCenter - geometry.timeCenter)).toBeLessThan(.5);
-  expect(Math.abs(geometry.headerRight - geometry.timeRight)).toBeLessThan(.5);
-  expect(geometry.color).toBe(geometry.headerColor);
+  expect(geometry.timeRight).toBeLessThan(geometry.actionLeft);
+  expect(Math.abs(geometry.actionCenter - geometry.timeCenter)).toBeLessThan(
+    .5,
+  );
+  expect(Math.abs(geometry.footerLeft - geometry.timeLeft)).toBeLessThan(.5);
+  expect(geometry.color).toBe(geometry.footerColor);
   expect(Math.abs(geometry.timeLeft - before!.x)).toBeLessThan(.5);
   expect(Math.abs(geometry.timeRight - before!.x - before!.width)).toBeLessThan(
     .5,

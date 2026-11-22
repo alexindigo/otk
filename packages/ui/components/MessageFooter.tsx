@@ -2,6 +2,7 @@
 import "./MessageFooter.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import Clock from "./Clock.tsx";
+import { MetaRow } from "./ChromeMeta.tsx";
 import MessageActions from "./MessageActions.tsx";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 
@@ -16,13 +17,13 @@ export default function MessageFooter(props: {
 }) {
   return (
     <footer ref={props.ref} class={["otk-message-footer", props.class]}>
-      <span class="otk-message-details">
+      <MetaRow class="otk-message-details">
         <Show when={props.at !== undefined}>
           <Clock at={props.at!} />
         </Show>
         {props.duration}
         {props.children}
-      </span>
+      </MetaRow>
       <Show when={props.actions}>
         {(actions) => <MessageActions {...actions()} />}
       </Show>

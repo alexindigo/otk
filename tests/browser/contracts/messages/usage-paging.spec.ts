@@ -177,7 +177,11 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   expect(await foot.evaluate((row) => row.children[7].textContent)).toBe(
     "$1.02",
   );
-  await expect(page.locator(".otk-turn-time")).toHaveText("Worked for 1m 42s");
+  // This retained summary is explicitly nonfinal while its source is held.
+  await expect(page.locator(".otk-turn-time")).toHaveText(
+    "Worked for 1m 42s counting...",
+  );
+  await expect(page.locator(".otk-turn-time em")).toHaveText("counting...");
   await page.locator(".otk-usage-scroll").hover();
   await page.mouse.wheel(0, 5000);
   await expect.poll(() =>

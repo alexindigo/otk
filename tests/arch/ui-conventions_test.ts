@@ -8,6 +8,8 @@ import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
+import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
+import { registerTranscriptPreferences } from "../../packages/protocol/preferences/transcript.ts";
 import {
   codeSeparatorErrors,
   styleBoundaryErrors,
@@ -17,7 +19,8 @@ Deno.test("UI convention: folded record counts are neutral metadata, not per-kin
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
   );
-  assert(source.includes("<ChromeMeta>{fold().label}</ChromeMeta>"));
+  assert(source.includes("<ChromeMeta truncate>{fold().label}</ChromeMeta>"));
+  assert(source.includes("<DisclosureToggle"));
   assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
   const values = foldRecords([1, 2], () => ({
     kindLabel: "fixture",
@@ -30,6 +33,18 @@ Deno.test("UI convention: folded record counts are neutral metadata, not per-kin
   }), () => false);
   assertEquals(values.visible, []);
   assertEquals(values.folds[0].label, "2 facts");
+});
+
+Deno.test("UI convention: transcript disclosure defaults name their action", () => {
+  const registry = new PreferenceRegistry();
+  registerTranscriptPreferences(registry);
+  assertEquals(
+    registry.settings("transcript").filter((entry) =>
+      entry.key !== "expandCompaction" &&
+      !/^Expand .+ by default$/.test(entry.label)
+    ).map((entry) => entry.key),
+    [],
+  );
 });
 
 Deno.test("UI convention: component styles never target another component's internals, including every disclosure caller", async () => {
@@ -482,6 +497,14 @@ export function conventionErrors(
     for (const node of source.all) {
       if (node.type !== "JSXOpeningElement" || !source.live(node)) continue;
       const imported = source.imported(node.name);
+      if (
+        [
+          "packages/ui/components/Message.tsx",
+          "packages/ui/components/Timeline.tsx",
+        ]
+          .includes(path) &&
+        modulePath(imported?.module ?? "").endsWith("/Clock.tsx")
+      ) fail("message clock outside MessageFooter");
       if (
         source.attr(node, "data-message-command") &&
         path !== "packages/ui/components/MessageActions.tsx"
@@ -992,6 +1015,23 @@ Deno.test("UI convention: list ordering rejects activity/state keys and accepts 
 });
 
 Deno.test("UI convention: message footer rejects concealed metadata and independent action owners", () => {
+  for (const path of ["Message.tsx", "Timeline.tsx"]) {
+    assert(
+      conventionErrors(
+        "message-footer",
+        `packages/ui/components/${path}`,
+        'import Instant from "./Clock.tsx"; const view=<Instant at={1} />;',
+      ).length > 0,
+    );
+  }
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/MessageFooter.tsx",
+      'import Instant from "./Clock.tsx"; const view=<Instant at={1} />;',
+    ),
+    [],
+  );
   for (
     const text of [
       ".otk-message-actions {opacity: 0}",

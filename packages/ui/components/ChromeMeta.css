@@ -7,6 +7,10 @@
   font-weight: 400;
   line-height: var(--line-meta);
 }
+.otk-chrome-meta.is-truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .otk-section-tree {
   --tree-height: var(--row-project);
 }
@@ -33,4 +37,16 @@
   align-items: center;
   gap: var(--space-1);
   min-inline-size: 0;
+}
+.otk-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+  color: var(--otk-fg-3);
+  font-variant-numeric: tabular-nums;
 }

@@ -6,7 +6,9 @@ import {
   type RunningWork,
   runningWorkElapsed,
   runningWorkLabel,
+  unknownTime,
 } from "@otk/client";
+import TimeValue from "./TimeValue.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import StatusLight from "./StatusLight.tsx";
@@ -140,7 +142,13 @@ export default function LiveWork(props: {
                   aria-label="Running for"
                 >
                   {item().startedAt === undefined
-                    ? "Time unknown"
+                    ? (
+                      <TimeValue
+                        value={unknownTime(
+                          "The native start time was not recorded.",
+                        )}
+                      />
+                    )
                     : `Running for ${
                       runningWorkElapsed(now() - item().startedAt!)
                     }`}

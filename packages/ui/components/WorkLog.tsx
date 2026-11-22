@@ -3,13 +3,16 @@ import "./WorkLog.css" with { type: "text" };
 import type { Element } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { workingTime } from "./work-log.ts";
+import { workingTime, workingTimeValue } from "./work-log.ts";
+import TimeValue from "./TimeValue.tsx";
+import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
 import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
   props: {
     workingMs?: number;
+    counting?: boolean;
     identity?: string;
     prefs?: Preferences;
     required?: boolean;
@@ -25,7 +28,10 @@ export default function WorkLog(
     () => !!props.required,
   );
   const toggle = ownedAction("work.toggle", () => setOpen(!open()));
-  const label = () => workingTime(props.workingMs) ?? "Work log";
+  const label = () =>
+    props.counting && !props.workingMs
+      ? "Work log"
+      : workingTime(props.workingMs) ?? "Work log";
   return (
     <section class="otk-work-log">
       <TreeNode
@@ -34,7 +40,7 @@ export default function WorkLog(
         open={open()}
         onOpen={(value) => setOpen(value)}
         header={(_connected, toggleID) => (
-          <div class="otk-control-row">
+          <MetaRow>
             <button
               id={toggleID}
               type="button"
@@ -43,10 +49,18 @@ export default function WorkLog(
               onClick={() => void toggle()}
             >
               <TreeIcon />
-              <span class="otk-work-label">{label()}</span>
+              <ChromeMeta class="otk-work-label">
+                {props.counting
+                  ? (
+                    <TimeValue
+                      value={workingTimeValue(props.workingMs, true)}
+                    />
+                  )
+                  : label()}
+              </ChromeMeta>
             </button>
             {props.meta?.()}
-          </div>
+          </MetaRow>
         )}
         body={() => <div class="otk-work-body">{props.body()}</div>}
       />

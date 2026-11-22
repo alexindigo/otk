@@ -9,16 +9,32 @@ import "./ChromeMeta.css" with { type: "text" };
 /** A metadata sentence is one text flow, not spaced flex-item separators. */
 export { metaList } from "@otk/client";
 
+/** A single clipping metadata track; controls keep their own intrinsic slots. */
+export function MetaRow(
+  props: { children?: Element; class?: string },
+): Element {
+  return <span class={["otk-meta-row", props.class]}>{props.children}</span>;
+}
+
 /** Quiet product-owned chrome metadata, shared with the project's visit clock. */
 export default function ChromeMeta(
-  props: Omit<ComponentProps<"span">, "class"> & { class?: string },
+  props: Omit<ComponentProps<"span">, "class"> & {
+    class?: string;
+    truncate?: boolean;
+  },
 ): Element {
-  const native = nativeAttributes(() => props, ["class", "children"]);
+  const native = nativeAttributes(() => props, [
+    "class",
+    "children",
+    "truncate",
+  ]);
   return (
     <span
       ref={[props.ref, native.ref]}
       {...native.attributes}
-      class={["otk-chrome-meta", props.class]}
+      class={["otk-chrome-meta", props.class, {
+        "is-truncated": props.truncate,
+      }]}
     >
       {props.children}
     </span>

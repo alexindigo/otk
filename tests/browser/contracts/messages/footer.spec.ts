@@ -14,6 +14,27 @@ test.describe("shared message footer", () => {
       await openSession(state, page, "tstv1-other-finished");
       const footers = page.locator(".otk-message .otk-message-footer");
       await expect(footers).toHaveCount(2);
+      for (const message of await page.locator(".otk-message").all()) {
+        await expect.soft(message.locator("time:visible")).toHaveCount(1);
+      }
+      const actionGaps = await footers.evaluateAll((elements) =>
+        elements.map((footer) => {
+          const meta = footer.querySelector(".otk-message-details")!;
+          const last = meta.lastElementChild!.getBoundingClientRect();
+          const action = footer.querySelector("[data-message-command]")!
+            .getBoundingClientRect();
+          const style = getComputedStyle(footer);
+          return {
+            gap: action.left - last.right,
+            expected: parseFloat(style.columnGap),
+            padding: parseFloat(style.paddingInlineEnd),
+          };
+        })
+      );
+      for (const geometry of actionGaps) {
+        expect.soft(geometry.padding).toBe(0);
+        expect.soft(Math.abs(geometry.gap - geometry.expected)).toBeLessThan(1);
+      }
       const check = async () => {
         for (const footer of await footers.all()) {
           await expect(footer.locator("time")).toBeVisible();

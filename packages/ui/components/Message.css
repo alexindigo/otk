@@ -27,7 +27,6 @@
   justify-self: stretch;
 }
 .otk-user-meta {
-  padding-inline: var(--space-2);
   max-width: 100%;
 }
 .otk-response-recovery {
@@ -40,7 +39,7 @@
 }
 .otk-reply-start {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-2);

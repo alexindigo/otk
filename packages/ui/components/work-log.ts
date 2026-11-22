@@ -157,18 +157,7 @@ export const segmentWorkingTime = (
     }),
   ]);
 };
-export const workingTime = (timing: TurnTiming | number | undefined) =>
-  typeof timing === "number"
-    ? `Worked for ${duration(timing)}`
-    : timing?.state === "known" || timing?.state === "active"
-    ? `Worked for ${duration(timing.workingMs)}`
-    : timing?.state === "unknown"
-    ? "Time unknown"
-    : undefined;
-export const timingExplanation = (timing: TurnTiming | undefined) =>
-  timing?.state === "unknown"
-    ? timing.explanation ?? "The recorded timing evidence is incomplete."
-    : undefined;
+export { timingExplanation, workingTime, workingTimeValue } from "@otk/client";
 /** One progress owner for the active turn, borrowing canonical queue membership. */
 export function activeProgressRecord(
   { messageIDs, messagesByID, queuedIDs }: Pick<

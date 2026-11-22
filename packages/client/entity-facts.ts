@@ -7,6 +7,7 @@ import type {
 } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import type { InboxStatus } from "./inbox.ts";
+import { timingExplanation } from "./message-presentation.ts";
 
 export interface EntityIdentity {
   sessionID?: string;
@@ -77,9 +78,7 @@ export function entityFacts(
             identity.outcomeTime !== undefined,
             !identity.outcomeTime && active,
           ),
-          explanation: timing?.state === "unknown"
-            ? timing.explanation
-            : undefined,
+          explanation: timingExplanation(timing),
         },
       }
       : {}),

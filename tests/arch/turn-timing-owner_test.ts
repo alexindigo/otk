@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertMatch } from "@std/assert";
 Deno.test("turn-duration consumers render the accumulator result without endpoint arithmetic", async () => {
-  for (const name of ["Message", "WorkLog", "UsageDetail"]) {
+  for (
+    const [name, presenter] of [
+      ["Message", /messageTimeValue\(/],
+      ["WorkLog", /workingTimeValue\(/],
+      ["UsageDetail", /workingTimeValue\(/],
+    ] as const
+  ) {
     const source = await Deno.readTextFile(
       `packages/ui/components/${name}.tsx`,
     );
-    assertMatch(source, /workingTime\(/);
+    assertMatch(source, presenter);
+    assertMatch(source, /<TimeValue\b/);
     assert(!/\belapsed\(/.test(source), `${name} reconstructs a wall span`);
   }
   const projection = await Deno.readTextFile(

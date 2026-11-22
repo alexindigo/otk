@@ -10,14 +10,7 @@
   font-variant-numeric: tabular-nums;
 }
 .otk-message-details {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  flex-wrap: nowrap;
-  gap: var(--space-2) var(--space-4);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
+  flex: 0 1 auto;
 }
 .otk-message-details > * {
   flex: none;

@@ -2,8 +2,11 @@
 import { createTranscriptProjection, type SidecarState } from "@otk/client";
 import {
   DEFAULT_PREFS,
+  type Derived,
+  knownDerived,
   type Message as MessageData,
   type PublicFailure,
+  type UsageSummary,
 } from "@otk/protocol";
 import ProjectInbox from "../../components/ProjectInbox.tsx";
 import Settings from "../../components/Settings.tsx";
@@ -157,9 +160,10 @@ export default function FailureLayout() {
   const registry = useUiRegistries();
   registerUnknownPart(registry.parts);
   registerTextPart(registry.parts);
-  const message = (value: MessageData) => (
+  const message = (value: MessageData, summary?: Derived<UsageSummary>) => (
     <Message
       message={value}
+      summary={summary}
       prefs={DEFAULT_PREFS}
       permissions={[]}
       queued={false}
@@ -357,8 +361,8 @@ export default function FailureLayout() {
         <ActivityGroup
           group={group}
           prefs={DEFAULT_PREFS}
-          body={() => records.map(message)}
-          breakouts={() => records.slice(0, 2).map(message)}
+          body={() => records.map((value) => message(value))}
+          breakouts={() => records.slice(0, 2).map((value) => message(value))}
         />
       </section>
     );
@@ -394,16 +398,38 @@ export default function FailureLayout() {
           failure,
         }],
       })}
-      {message({
-        ...base,
-        id: "unknown",
-        time: { created: at - 60_000 },
-        outcomeTime: {
-          state: "unknown",
-          reason: "No native completion, error or part timestamp was recorded.",
+      {message(
+        {
+          ...base,
+          id: "unknown",
+          time: { created: at - 60_000 },
+          outcomeTime: {
+            state: "unknown",
+            reason:
+              "No native completion, error or part timestamp was recorded.",
+          },
+          parts: [],
         },
-        parts: [],
-      })}
+        knownDerived(
+          {
+            calls: 1,
+            tokens: base.tokens,
+            cost: base.cost,
+            contextPeak: 1200,
+            timing: {
+              state: "unknown",
+              start: at - 60_000,
+              terminal: true,
+              reason: "migration",
+              explanation:
+                "The real end time was lost when opencode migrated this session.",
+            },
+          },
+          "style-fixture",
+          1,
+          true,
+        ),
+      )}
     </section>
   );
 }

@@ -38,7 +38,8 @@ export default function DisclosureToggle(props: {
   open?: boolean;
   label: string;
   class?: string;
-  variant?: "tree";
+  variant?: "tree" | "meta";
+  "data-record-kind"?: string;
   children?: Element;
   onOpen(open: boolean): void;
 }): Element {
@@ -47,7 +48,9 @@ export default function DisclosureToggle(props: {
       type="button"
       class={["otk-disclosure-toggle", props.class, {
         "otk-tree-toggle": props.variant === "tree",
+        "otk-meta-toggle": props.variant === "meta",
       }]}
+      data-record-kind={props["data-record-kind"]}
       aria-label={props.label}
       aria-expanded={props.open ? "true" : "false"}
       onClick={() => props.onOpen(!props.open)}
