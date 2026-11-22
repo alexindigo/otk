@@ -228,6 +228,7 @@ export async function startApplication(
       );
     }
     registerRevert(rpc, backend);
+    // startCore owns its own failure cleanup; only a started core is wired.
     return startCore({
       cfg,
       backend,
@@ -241,6 +242,17 @@ export async function startApplication(
       diagnostic: options.diagnostic,
       signal: options.signal,
       requested: options.requested,
+    }).then((core) => {
+      const principal = () => cfg.auth.username.toLowerCase() || "local";
+      inbox.operationAttention(
+        (id) => core.requests.operation(principal(), id),
+        () => core.requests.operationSessions(principal()),
+        (changed) =>
+          core.requests.listenOperations((owner, id) => {
+            if (owner === principal()) changed(id);
+          }),
+      );
+      return core;
     });
   } catch (error) {
     const failures: unknown[] = [error];
