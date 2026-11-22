@@ -28,6 +28,7 @@ export function createSessionLists(
     revision: number;
     generation?: string;
     visible?: readonly string[];
+    order?: () => readonly string[];
     dirty?: boolean;
     covered?: boolean;
     retained: Map<string, SessionStructure>;
@@ -223,7 +224,7 @@ export function createSessionLists(
   const advance = (list: List) => {
     if (!list.active || list.loading || !list.older || list.pending) return;
     const visible = new Set(list.visible ?? []);
-    if (list.items.slice(-5).some((item) => visible.has(item.id))) {
+    if (list.order?.().slice(-5).some((id) => visible.has(id))) {
       read(list, true);
     }
   };
@@ -290,8 +291,13 @@ export function createSessionLists(
       projections.set(list, { source: list.structures, context, value });
       return value;
     },
-    viewport(list: List, keys: readonly string[]) {
+    viewport(
+      list: List,
+      keys: readonly string[],
+      order: () => readonly string[] = () => list.items.map((item) => item.id),
+    ) {
       list.visible = keys;
+      list.order = order;
       advance(list);
     },
     activate(input: SessionListInput | readonly SessionListInput[]) {

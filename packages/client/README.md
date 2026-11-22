@@ -100,12 +100,18 @@ viewed server/project.
 
 Sessions mounts its measured hierarchy after its demanded list page and the
 project's inbox baseline agree. Its page/query resource requests source-wide
-search and older pages near the acquired end, retains last-good rows while
+search and older pages near the projected end, retains last-good rows while
 loading, and acquires necessary ancestor context by key. Same-project
 visible-row lease changes keep readiness and keyed row DOM, including focus and
 retained scroll anchors. Query replacement and reconnect fence retired request
 identities, epochs and revisions. Child navigation follows the same bounded list
 cursor.
+
+List advancement borrows the current hierarchy/task/stable-order projection from
+ServerResources, including after request settlement. Native activity-page order
+never defines the visible paging frontier. Standalone lists can use their source
+order; projected consumers supply the current visible-order accessor at the same
+viewport boundary.
 
 Changing tasksFollowParent sends the new view before refreshing hierarchy list
 owners. Active lists replace their reads; inactive cached lists become dirty
