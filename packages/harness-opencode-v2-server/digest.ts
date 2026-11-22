@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectPresentation } from "./project-presentation.ts";
+import { CheckoutRepositories } from "@otk/harness";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Derived,
@@ -633,8 +634,11 @@ export class OpencodeV2DigestSink implements DigestSink {
     }
     const topology = new V2ProjectTopology(inventory);
     const roots = new Set(topology.roots());
+    const repositories = await CheckoutRepositories.discover([...roots]);
     const projects: ProjectSeed[] = [];
     const append = async (rows: ProjectSeed[]) => {
+      this.#check(signal, connection);
+      rows = await repositories.seeds(rows, signal);
       this.#check(signal, connection);
       rows = rows.map((row) => {
         const owners = new Set(

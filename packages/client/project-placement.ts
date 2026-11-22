@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ProjectStatus, ProjectSummary } from "@otk/protocol";
+import {
+  type ProjectStatus,
+  type ProjectSummary,
+  UNKNOWN_REPOSITORY,
+} from "@otk/protocol";
 
 export interface ProjectPlacement {
   section: "live" | "archived" | "inactive" | "discovered";
@@ -8,14 +12,17 @@ export interface ProjectPlacement {
 
 /** Lifecycle and attention choose placement and wording at the same boundary. */
 export function projectPlacement(input: {
-  lifecycle?: Pick<ProjectSummary, "archived" | "availability">;
+  lifecycle?: Pick<ProjectSummary, "archived" | "availability" | "topology">;
   status: ProjectStatus;
   inactive: boolean;
   hasSessions: boolean;
 }): ProjectPlacement {
   const live = input.status === "working" || input.status === "blocked";
   const archived = input.lifecycle?.archived === true;
-  const section = archived && !live
+  // Without a repository there is no live parent: it is never a project row.
+  const unknown =
+    input.lifecycle?.topology?.canonicalRoot === UNKNOWN_REPOSITORY;
+  const section = unknown || archived && !live
     ? "archived"
     : input.inactive && input.status === "none"
     ? "inactive"

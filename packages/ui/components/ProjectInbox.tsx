@@ -11,6 +11,7 @@ import {
   projectGroup,
   projectTree,
 } from "@otk/client";
+import { UNKNOWN_REPOSITORY } from "@otk/protocol";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
@@ -333,8 +334,11 @@ export default function ProjectInbox(props: {
       void intent.set(value);
     };
     const projects = () => archivedRows(section.repo);
+    const unknown = () => repository(section.repo) === UNKNOWN_REPOSITORY;
     const label = () =>
-      `Archived checkouts in ${projectName(repository(section.repo))}`;
+      unknown()
+        ? "Checkouts with unknown repository"
+        : `Archived checkouts in ${projectName(repository(section.repo))}`;
     const attention = () => archiveAttention(projects());
     const description = () =>
       `${label()}, ${attention().count}, ${
@@ -365,7 +369,7 @@ export default function ProjectInbox(props: {
             class="otk-project-tree otk-archive-tree"
             headerClass="otk-archived-toggle"
             metaClass="otk-archived-count"
-            label="Archived"
+            label={unknown() ? "Unknown repository" : "Archived"}
             description={description()}
             count={attention().count}
             compact={collapsed()}

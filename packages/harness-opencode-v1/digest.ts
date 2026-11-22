@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { CheckoutRepositories } from "@otk/harness";
 import { runningDirectories } from "./db-hints.ts";
 import {
   emptyProjectSeed,
@@ -889,6 +890,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       >("/project", { signal });
       if (!projectFileMatches(native.db, reported)) return { projects };
       this.#projectVerified = true;
+      const repositories = await CheckoutRepositories.discover(
+        reported.flatMap((
+          project,
+        ) => [project.worktree, ...project.sandboxes ?? []]),
+      );
       let after = "";
       for (;;) {
         signal.throwIfAborted();
@@ -896,13 +902,16 @@ export class OpencodeV1DigestSink implements DigestSink {
           connection !== this.#connection ||
           native.fileIdentity() !== native.identity
         ) throw new Error("Project authority changed");
-        const page = projectSeeds(
-          native.db,
-          after,
-          this.policy.batch,
-          directory,
-          reported,
-          "opencode-v1:" + native.file,
+        const page = await repositories.seeds(
+          projectSeeds(
+            native.db,
+            after,
+            this.policy.batch,
+            directory,
+            reported,
+            "opencode-v1:" + native.file,
+          ),
+          signal,
         );
         if (!page.length) break;
         projects.push(...page);
@@ -922,22 +931,22 @@ export class OpencodeV1DigestSink implements DigestSink {
           for (const root of [project.worktree, ...project.sandboxes ?? []]) {
             if (known.has(root)) continue;
             known.add(root);
-            const empty = emptyProjectSeed(
+            const [empty] = await repositories.seeds([emptyProjectSeed(
               root,
               reported,
               "opencode-v1:" + native.file,
-            );
+            )], signal);
             projects.push(empty);
             await publish?.([empty]);
           }
         }
       }
       if (directory !== undefined && !projects.length) {
-        const empty = emptyProjectSeed(
+        const [empty] = await repositories.seeds([emptyProjectSeed(
           directory,
           reported,
           "opencode-v1:" + native.file,
-        );
+        )], signal);
         projects.push(empty);
         await publish?.([empty]);
       }

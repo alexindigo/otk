@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
-import type { ProjectTopology } from "@otk/protocol";
+import { type ProjectTopology, UNKNOWN_REPOSITORY } from "@otk/protocol";
 import type { CheckoutAuthority, CheckoutRecord } from "@otk/store";
 
 const key = (r: Pick<CheckoutRecord, "source" | "repoID" | "scope">) =>
@@ -96,14 +96,16 @@ export class ProjectIdentity {
     ) return unchanged();
     const leafDirectory = recordedRoot ?? this.leaf(directory, repoID);
     const known = rows.find((r) => r.leafDirectory === leafDirectory);
+    const { repository: _, ...base } = rows[0];
     const record: IdentityRecord = {
-      ...rows[0],
+      ...base,
       scope: directory,
       leafDirectory,
       proven: recordedRoot !== undefined || known?.proven === true,
       kind: known?.kind ?? "unknown",
       availability: known?.availability ?? "unknown",
       inventory: known?.inventory ?? "unknown",
+      ...(known?.repository ? { repository: known.repository } : {}),
     };
     const records = new Map(this.#records);
     records.set(key(record), record);
@@ -137,9 +139,24 @@ export class ProjectIdentity {
     const selected = sources.size ? sources : new Set(this.#sources);
     const put = (r: IdentityRecord) => {
       const k = key(r);
-      if (JSON.stringify(records.get(k)) === JSON.stringify(r)) return;
+      const before = records.get(k);
+      // Git evidence alone revises a recorded checkout's kind and presence.
+      if (before?.repository !== undefined) {
+        r = {
+          ...r,
+          repository: before.repository,
+          kind: before.kind,
+          availability: before.availability,
+          inventory: before.inventory,
+        };
+      }
+      if (JSON.stringify(before) === JSON.stringify(r)) return;
       records.set(k, r);
     };
+    const evidence = new Map<
+      string,
+      NonNullable<ProjectIdentityFact["repository"]>
+    >();
     for (const seed of seeds) {
       const facts = seed.identities ??
         (seed.topology &&
@@ -215,6 +232,9 @@ export class ProjectIdentity {
             fact.inventory,
           ),
         });
+        if (fact.repository?.checkout === leafDirectory) {
+          evidence.set(leafDirectory, fact.repository);
+        }
       }
       // Legacy null means loss of inventory, not loss of a durable native edge.
       if (seed.topology === null && !seed.identities) {
@@ -227,6 +247,24 @@ export class ProjectIdentity {
             });
           }
         }
+      }
+    }
+    for (const [checkout, fact] of evidence) {
+      const repository = recordedRepository(records, checkout, fact);
+      for (const [k, r] of records) {
+        if (r.leafDirectory !== checkout) continue;
+        const next: IdentityRecord = {
+          ...r,
+          repository,
+          kind: repository === UNKNOWN_REPOSITORY
+            ? r.kind
+            : repository === checkout
+            ? "checkout"
+            : "worktree",
+          availability: fact.present ? "present" : "removed",
+          inventory: "current",
+        };
+        if (JSON.stringify(r) !== JSON.stringify(next)) records.set(k, next);
       }
     }
     return this.#accept(
@@ -322,6 +360,26 @@ export class ProjectIdentity {
   }
   topology(directory: string): ProjectTopology | undefined {
     const rows = this.#leaves.get(directory) ?? [];
+    const repositories = new Set(
+      rows.flatMap((r) => r.repository === undefined ? [] : [r.repository]),
+    );
+    if (repositories.size === 1) {
+      // A recorded repository outranks native project claims about this path.
+      const root = [...repositories][0];
+      const owners = root === UNKNOWN_REPOSITORY
+        ? rows
+        : this.#leaves.get(root)?.length
+        ? this.#leaves.get(root)!
+        : rows;
+      return {
+        repoID: owners.map((r) => r.repoID).sort()[0],
+        canonicalRoot: root,
+        leafDirectory: directory,
+        ...(root === directory || root === UNKNOWN_REPOSITORY
+          ? {}
+          : { parentDirectory: root }),
+      };
+    }
     const owners = new Set(
       rows.map((r) => JSON.stringify([r.source, r.repoID, r.canonicalRoot])),
     );
@@ -362,8 +420,8 @@ export class ProjectIdentity {
     const rows = this.#leaves.get(directory);
     return !!rows?.length &&
       rows.every((r) =>
-        r.kind === "worktree" && r.inventory === "current" &&
-        r.availability === "removed"
+        (r.kind === "worktree" || r.repository === UNKNOWN_REPOSITORY) &&
+        r.inventory === "current" && r.availability === "removed"
       );
   }
   topologies(): ProjectTopology[] {
@@ -371,4 +429,42 @@ export class ProjectIdentity {
       this.topology(directory) ?? []
     );
   }
+}
+
+/**
+ * A present checkout's own Git names its repository. A removed checkout keeps
+ * its recorded repository; else retained Git registration, then OTK's stored
+ * affiliation records, then `<repo>.<name>` naming of an existing repository.
+ */
+function recordedRepository(
+  records: ReadonlyMap<string, CheckoutRecord>,
+  checkout: string,
+  fact: NonNullable<ProjectIdentityFact["repository"]>,
+): string {
+  if (fact.present && fact.root) return fact.root;
+  const rows = [...records.values()];
+  const sole = (values: (string | undefined)[]) => {
+    const set = new Set(values.filter((v): v is string => !!v));
+    return set.size === 1 ? [...set][0] : undefined;
+  };
+  const own = rows.filter((r) => r.leafDirectory === checkout);
+  const recorded = sole(
+    own.map((r) =>
+      r.repository === UNKNOWN_REPOSITORY ? undefined : r.repository
+    ),
+  );
+  if (recorded) return recorded;
+  if (fact.evidence === "worktree-metadata" && fact.root) return fact.root;
+  const claimed = sole(
+    own.map((r) => r.canonicalRoot === checkout ? undefined : r.canonicalRoot),
+  );
+  if (claimed) return claimed;
+  if (
+    rows.some((r) =>
+      r.leafDirectory !== checkout &&
+      (r.canonicalRoot === checkout || r.repository === checkout)
+    )
+  ) return checkout;
+  if (fact.evidence === "name" && fact.root) return fact.root;
+  return UNKNOWN_REPOSITORY;
 }

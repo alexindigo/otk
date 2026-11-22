@@ -87,6 +87,15 @@ export interface ProjectIdentityFact {
   source: string;
   repoID: string;
   canonicalRoot?: string;
+  /** Local Git evidence for one checkout, independent of the native project ID. */
+  repository?: {
+    checkout: string;
+    /** Null: the checkout is gone and this evidence names no repository. */
+    root: string | null;
+    present: boolean;
+    /** `git` reads the checkout itself; the others recover a removed one. */
+    evidence: "git" | "worktree-metadata" | "name" | "none";
+  };
   /** Null means unrecorded; an empty native subpath instead proves an exact root. */
   recordedRoot?: string | null;
   historicalRoots?: readonly string[];
