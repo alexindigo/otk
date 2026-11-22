@@ -10,7 +10,8 @@
       "latest-native-authority_test.ts",
       "v2-discovery_test.ts",
       "v2-index_test.ts",
-      "worktree-topology_test.ts"
+      "worktree-topology_test.ts",
+      "storage-full_test.ts"
     ],
     "composer": [
       "attachment-mime_test.ts",
@@ -25,7 +26,8 @@
       "browser-native_test.ts",
       "picker-scale_test.ts",
       "v2-boundaries-native_test.ts",
-      "v2-catalogs_test.ts"
+      "v2-catalogs_test.ts",
+      "send-delivery_test.ts"
     ],
     "messages": [
       "bounded_history_test.ts",
@@ -42,7 +44,8 @@
       "v1-records-native_test.ts",
       "v2-boundaries-native_test.ts",
       "v2-helper-scalars_test.ts",
-      "v2-transcripts_test.ts"
+      "v2-transcripts_test.ts",
+      "send-delivery_test.ts"
     ],
     "sessions": [
       "supervision-native_test.ts",
@@ -63,7 +66,8 @@
       "v2-session-actions_test.ts",
       "v2-session-create_test.ts",
       "v2-shell-activity_test.ts",
-      "worktree-topology_test.ts"
+      "worktree-topology_test.ts",
+      "helper-delivery_test.ts"
     ],
     "revert": [
       "session_actions_test.ts",
@@ -81,7 +85,8 @@
       "browser-native_test.ts",
       "v2-actions_test.ts",
       "v2-notices-native_test.ts",
-      "v2-shell-activity_test.ts"
+      "v2-shell-activity_test.ts",
+      "helper-delivery_test.ts"
     ],
     "menus": [
       "commands_test.ts",
@@ -118,7 +123,8 @@
       "failure-contract-native_test.ts",
       "latest-native-authority_test.ts",
       "request-failures-native_test.ts",
-      "v2-foundation_test.ts"
+      "v2-foundation_test.ts",
+      "storage-full_test.ts"
     ],
     "harness": [
       "fixture_providers_test.ts",
@@ -141,7 +147,8 @@
       "v2-session-actions_test.ts",
       "v2-session-create_test.ts",
       "v2-shell-activity_test.ts",
-      "v2-transcripts_test.ts"
+      "v2-transcripts_test.ts",
+      "helper-delivery_test.ts"
     ]
   },
   "areas": [
