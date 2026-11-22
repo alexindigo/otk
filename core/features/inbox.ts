@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  entityKey,
+  type EntityState,
   errorMessage,
   type InboxBaseline,
   type InboxOp,
@@ -27,6 +29,7 @@ import type {
 import type { IndexStore } from "../index/store.ts";
 import { ProjectSummaries } from "../index/project-summaries.ts";
 import { SessionSupervision } from "../index/supervision.ts";
+import { EntityStates } from "../index/entity-states.ts";
 import { ProjectIdentity } from "../index/project-identity.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
@@ -63,6 +66,7 @@ export interface InboxStores {
   checkouts?: Checkouts;
 }
 interface InboxMaps {
+  entities: Map<string, EntityState>;
   supervision: Map<string, Supervision>;
   summaries: Map<string, ProjectSummary>;
   projects: Map<string, ProjectRecord>;
@@ -204,12 +208,14 @@ export class InboxFeature implements FrameSource {
       seen?: number;
       finish?: number;
       supervision?: Supervision;
+      entity?: EntityState;
     };
     let delivered: Map<string, Facts> | undefined;
     const facts = (id: string): Facts => ({
       seen: this.#seen.get(this.user)?.get(id),
       finish: this.#finishes.get(id),
       supervision: this.#supervision.get(id),
+      entity: this.states.get(entityKey("session", id)),
     });
     // Facts follow lease admission. Each pass compares only the sessions it
     // names, so work stays proportional to changed rows, not to the lease.
@@ -240,6 +246,13 @@ export class InboxFeature implements FrameSource {
             sessionID: id,
             value: current.supervision ?? null,
           });
+        }
+        if (JSON.stringify(current.entity) !== JSON.stringify(before?.entity)) {
+          ops.push(
+            current.entity
+              ? { op: "entity.upsert", value: current.entity }
+              : { op: "entity.remove", key: entityKey("session", id) },
+          );
         }
         delivered.set(id, current);
       }
@@ -293,6 +306,7 @@ export class InboxFeature implements FrameSource {
         seen: inbox.seen[id],
         finish: inbox.finishes[id],
         supervision: inbox.supervision?.[id],
+        entity: inbox.entities?.[entityKey("session", id)],
       }]));
       return {
         generation: this.#generation,
@@ -492,14 +506,39 @@ export class InboxFeature implements FrameSource {
       this.#supervision.get(id) ?? { state: "none", terminal: 0 },
     );
   }
+  /** Session entities follow the view lease like the facts they replace. */
+  #entities(
+    upserts: readonly EntityState[],
+    removals: readonly string[],
+  ): void {
+    for (const value of upserts) {
+      const key = entityKey(value.kind, value.id);
+      this.#capture("entities", key);
+      this.#queue(
+        `entity:${key}`,
+        { op: "entity.upsert", value },
+        value.kind === "session" ? { sessionID: value.id } : {},
+      );
+    }
+    const session = entityKey("session", "");
+    for (const key of removals) {
+      this.#capture("entities", key);
+      this.#queue(
+        `entity:${key}`,
+        { op: "entity.remove", key },
+        key.startsWith(session) ? { sessionID: key.slice(session.length) } : {},
+      );
+    }
+  }
   #supervise(id: string): void {
     const entry = this.index.getMetadata(id);
     const value = entry &&
-      this.supervision.session(
+      this.states.session(
         entry,
         this.#seen.get(this.user)?.get(id) ?? 0,
         this.#finishes.get(id),
       );
+    if (!entry) this.states.remove(id);
     if (JSON.stringify(value) === JSON.stringify(this.#supervision.get(id))) {
       return;
     }
@@ -514,6 +553,7 @@ export class InboxFeature implements FrameSource {
   }
   #assemblies = new Set<InboxAssembly>();
   #user = "";
+  readonly states: EntityStates;
   readonly summaries: ProjectSummaries;
   constructor(
     readonly stores: InboxStores,
@@ -530,6 +570,11 @@ export class InboxFeature implements FrameSource {
     ) => Promise<void>,
     readonly discoveryProject?: (directory: string, active: boolean) => void,
   ) {
+    this.states = new EntityStates(
+      this.supervision,
+      index,
+      (upserts, removals) => this.#entities(upserts, removals),
+    );
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
     this.#templates = stores.templates.list();
@@ -755,6 +800,8 @@ export class InboxFeature implements FrameSource {
     this.#pending.clear();
     this.#summaryPending.clear();
     this.#summaryRevision = 0;
+    // A new generation re-baselines every client: no transition spans users.
+    this.states.reset();
     this.summaries?.refresh();
     for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
   }
@@ -796,6 +843,14 @@ export class InboxFeature implements FrameSource {
           ? [...this.#supervision].filter(([id]) => leased.has(id))
           : this.#supervision,
       ),
+      entities: Object.fromEntries(
+        leased
+          ? [...leased].flatMap((id) => {
+            const value = this.states.get(entityKey("session", id));
+            return value ? [[entityKey("session", id), value]] : [];
+          })
+          : this.states.values(),
+      ),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
       summaries: Object.fromEntries(this.summaries.values),
@@ -815,6 +870,7 @@ export class InboxFeature implements FrameSource {
       const assembly: InboxAssembly = { dirty: new Map(), overflow: false };
       this.#assemblies.add(assembly);
       const maps: InboxMaps = {
+        entities: new Map(),
         supervision: new Map(),
         summaries: new Map(),
         projects: new Map(),
@@ -846,6 +902,7 @@ export class InboxFeature implements FrameSource {
         await copy(source.seen, maps.seen);
         await copy(source.finishes, maps.finishes);
         await copy(source.supervision, maps.supervision);
+        await copy(source.entities, maps.entities);
         await copy(source.summaries, maps.summaries);
         this.#flush();
         if (assembly.overflow || generation !== this.#generation) continue;
@@ -853,7 +910,12 @@ export class InboxFeature implements FrameSource {
         for (const { kind, id } of assembly.dirty.values()) {
           const target = maps[kind] as Map<
             string,
-            ProjectRecord | TaskRecord | ProjectSummary | Supervision | number
+            | ProjectRecord
+            | TaskRecord
+            | ProjectSummary
+            | Supervision
+            | EntityState
+            | number
           >;
           const value = current[kind].get(id);
           if (value === undefined) target.delete(id);
@@ -869,6 +931,7 @@ export class InboxFeature implements FrameSource {
           seen: Object.fromEntries(maps.seen),
           finishes: Object.fromEntries(maps.finishes),
           supervision: Object.fromEntries(maps.supervision),
+          entities: Object.fromEntries(maps.entities),
           pathTemplates: [...this.#templates],
           discovered: [...this.#discovered],
           summaries: Object.fromEntries(maps.summaries),
@@ -889,6 +952,7 @@ export class InboxFeature implements FrameSource {
   }
   #maps(): InboxMaps {
     return {
+      entities: this.states.values(),
       supervision: this.#supervision,
       summaries: this.summaries.values,
       projects: this.#projects,
