@@ -1160,6 +1160,10 @@ preparation, including continued copy existence unless discard was explicitly
 chosen. Restore cancels a waiting Send. Failed saving keeps both the draft and
 choice.
 
+The capture owner keeps its exact ID record and retained drafts independently of
+the worker lifetime. Restore recapture requires that record and cannot fall back
+to paging a whole session.
+
 Pre-publication Send admission borrows an acquired, connected transcript
 baseline instead of adding an unconditional native read before the local pending
 entry. Native state and exact permit identities are still revalidated at
