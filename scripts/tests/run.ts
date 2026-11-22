@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { nativeLane } from "./lanes.ts";
 import { join } from "@std/path";
-import { pathsFromNul, select } from "./selection.ts";
+import { browserGrep, pathsFromNul, select } from "./selection.ts";
 import { sourceTree } from "./source.ts";
 
 const value = (name: string) => {
@@ -59,7 +59,7 @@ tiers.push(["browser", [
   "test:e2e",
   `--project=oc-${version}`,
   "--grep",
-  `@(${[...selection.areas, "smoke"].join("|")})(?:\\s|$)`,
+  browserGrep(selection),
   "--retries=0",
   ...Deno.args.filter((a) => a.startsWith("--shard=")),
 ]]);

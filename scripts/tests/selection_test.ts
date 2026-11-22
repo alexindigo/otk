@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertThrows } from "@std/assert";
-import { pathsFromNul, select, validateCollection } from "./selection.ts";
+import {
+  browserGrep,
+  pathsFromNul,
+  select,
+  validateCollection,
+} from "./selection.ts";
 import map from "../../tests/browser/areas.json" with { type: "json" };
 Deno.test("SEL1: every standard integration file has an area owner", async () => {
   const mapped = new Set(Object.values(map.integration).flat());
@@ -104,4 +109,92 @@ Deno.test("SEL1: exact map contracts and explicit union", () => {
   assertThrows(() => validateCollection([]));
   assertThrows(() => validateCollection([["@smoke"]]));
   assertThrows(() => validateCollection([["@composer"]], ["menus"]));
+});
+
+// D63 bounded per-commit selection contracts.
+Deno.test("D63 unmapped paths select contracts, not every behavior area or themes", () => {
+  const result = select(["unmapped/file.ts"], [], "parent");
+  assertEquals(result.fallback, "contracts");
+  assertEquals(result.areas, []);
+  assertEquals(result.integration, ["*"]);
+  assert(!result.themes);
+  assert(result.broad);
+  const grep = new RegExp(browserGrep(result));
+  assert(grep.test("@contracts"));
+  assert(grep.test("@smoke"));
+  assert(!grep.test("@messages"));
+});
+
+Deno.test("D63 missing base preserves all-area fallback and themes", () => {
+  const result = select([], [], "missing");
+  assertEquals(result.fallback, "all");
+  assertEquals(result.areas, [...map.areas].sort());
+  assertEquals(result.integration, ["*"]);
+  assert(result.themes);
+});
+
+Deno.test("D63 empty and documentation changes retain smoke without extra areas", () => {
+  for (const paths of [[], ["docs/testing.md"]]) {
+    const result = select(paths, [], "parent");
+    assertEquals(result.fallback, null);
+    assertEquals(result.areas, []);
+    assertEquals(result.integration, []);
+    assertEquals(browserGrep(result), "@(smoke)(?:\\s|$)");
+    assert(!result.themes);
+  }
+});
+
+Deno.test("D63 themes need a style path and a row allowing themes", () => {
+  for (
+    const path of [
+      "packages/ui/theme.css",
+      "packages/ui/theme/tokens.ts",
+      "packages/ui/fonts/mono.woff2",
+    ]
+  ) {
+    assert(select([path], [], "parent").themes, path);
+  }
+  assert(!select(["packages/ui/components/Message.tsx"], [], "parent").themes);
+  assert(!select(["scripts/tests/run.ts"], [], "parent").themes);
+});
+
+Deno.test("D63 changed integration tests select themselves and their existing owners", () => {
+  const result = select(["tests/integration/history_test.ts"], [], "parent");
+  assertEquals(result.fallback, null);
+  assertEquals(result.areas, ["composer", "revert"]);
+  assert(result.integration.includes("tests/integration/history_test.ts"));
+  const added = select(
+    ["tests/integration/new-contract_test.ts"],
+    [],
+    "parent",
+  );
+  assertEquals(added.areas, []);
+  assertEquals(added.integration, ["tests/integration/new-contract_test.ts"]);
+  assertEquals(added.fallback, null);
+});
+
+Deno.test("D63 unions every matching row, explicit areas and semantic test areas", () => {
+  const result = select(
+    ["packages/ui/components/Message.css"],
+    ["attention"],
+    "parent",
+  );
+  for (
+    const area of [
+      "messages",
+      "sessions",
+      "revert",
+      "visual",
+      "menus",
+      "composer",
+      "attention",
+    ]
+  ) {
+    assert(result.areas.includes(area), area);
+  }
+  assertEquals(
+    select(["tests/browser/contracts/revert/new.spec.ts"], [], "parent").areas,
+    ["revert"],
+  );
+  assertThrows(() => select([], ["not-an-area"], "parent"));
 });
