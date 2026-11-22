@@ -14,6 +14,78 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
+for (
+  const path of [
+    "sticky restore",
+    "crumb navigation",
+    "attention jump",
+    "URL restore",
+  ]
+) {
+  Deno.test(`2.67 shell ${path} preserves the helper destination without a helper task`, async () => {
+    const f = fixture(
+      path === "URL restore" ? "#/local/tstv1-selected/tstv1-helper" : "",
+    );
+    const project = { sidecarId: "local", directory: "/p" };
+    try {
+      f.entries("local", [
+        shellEntry("tstv1-selected"),
+        shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+      ]);
+      f.resources.receive("local", {
+        t: "inbox.snapshot",
+        generation: "identity",
+        revision: 0,
+        summaryRevision: 0,
+        inbox: {
+          projects: [],
+          tasks: [],
+          seen: {},
+          finishes: {},
+          pathTemplates: [],
+          supervision: { "tstv1-helper": { state: "working", terminal: 0 } },
+        },
+      });
+      if (path === "attention jump") {
+        f.resources.projectSession = () => Promise.resolve("tstv1-helper");
+        f.navigation.openAttention(project);
+      } else if (path !== "URL restore") {
+        f.navigation.navigate({
+          sidecarId: "local",
+          sessionID: "tstv1-selected",
+        });
+        f.navigation.navigate({
+          sidecarId: "local",
+          sessionID: "tstv1-helper",
+        });
+        if (path === "sticky restore") {
+          f.navigation.projectHome();
+          f.navigation.openProject(project);
+        }
+      }
+      await settled();
+      f.resources.syncTabs(
+        project,
+        f.resources.tabSnapshot(project),
+        f.session.state.selection,
+      );
+      const tabs = f.resources.tabs(project);
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-helper");
+      assertEquals(tabs.state.selected, {
+        kind: "session",
+        id: "tstv1-selected",
+      });
+      assertEquals(tabs.tabs().map((tab) => tab.id), ["tstv1-selected"]);
+      assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+        "tstv1-selected",
+        "tstv1-helper",
+      ]);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
 Deno.test("accepted project memory retries failed persistence on reconnect without changing the selection", async () => {
   const f = fixture("");
   let writes = 0;
@@ -199,7 +271,7 @@ Deno.test("explicit session navigation reads the target task without changing me
     );
     for (let n = 0; n < 4; n++) {
       for (
-        const [sessionID, taskID] of [["tstv1-child", "child-task"], [
+        const [sessionID, taskID] of [["tstv1-child", "parent-task"], [
           "tstv1-selected",
           "parent-task",
         ]]
@@ -214,6 +286,12 @@ Deno.test("explicit session navigation reads the target task without changing me
         const tabs = f.resources.tabs(project);
         assertEquals(tabs.state.selected, { kind: "task", id: taskID });
         assertEquals(tabs.state.sessionID, sessionID);
+        assert(
+          f.actions.location(f.session.state.selection!, sessionID).includes(
+            "parent-task",
+          ),
+        );
+        assertEquals(f.actions.inTask(f.session.state.selection!), true);
         f.entries("local", rows.map((row) => ({ ...row, timeUpdated: n + 2 })));
         assertEquals(f.resources.inbox("local").state.inbox.tasks, before);
       }
@@ -1488,7 +1566,7 @@ for (const status of ["working", "blocked", "finished"] as const) {
       assertEquals(tabs.state.sessionID, "tstv1-selected");
       assert(
         f.messages.at(-1)?.includes(
-          "phantom tab while it has known activity or an unseen finish",
+          "task will stay visible while it has known activity or an unseen finish",
         ),
       );
       f.consent(true);

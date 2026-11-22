@@ -218,14 +218,16 @@ for (const prefix of ["opcv1", "opcv2"]) {
         const tabs = f.resources.tabs(project);
         assert(
           tabs.tabs().some((tab) =>
-            tab.kind === "phantom" && tab.sessions.includes(child.id)
+            tab.kind === "phantom" && tab.id === root.id &&
+            tabs.belongsToTab(tab.id, child.id)
           ),
           "Child is visible in Sessions but no mandatory tab exists in its own worktree project",
         );
         tabs.preview(child.id);
-        assertEquals(tabs.state.selected?.id, child.id);
+        assertEquals(tabs.state.selected?.id, root.id);
         assertEquals(tabs.crumbs()[0], {
           id: root.id,
+          kind: "ancestor",
           helper: false,
           depth: 0,
           external: true,

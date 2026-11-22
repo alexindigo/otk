@@ -110,7 +110,6 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
-      "early",
       "nested",
       "late",
       "finished",
@@ -122,7 +121,6 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
-      "early",
       "nested",
       "late",
       "finished",
@@ -135,7 +133,6 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
-      "early",
       "nested",
       "finished",
     ]);

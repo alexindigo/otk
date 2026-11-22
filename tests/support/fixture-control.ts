@@ -70,6 +70,7 @@ export const profiles = {
   "contract-sessions-removed": "neutral",
   "contract-sessions-merge": "neutral",
   "contract-sessions-tabs": "neutral",
+  "contract-sessions-tab-groups": "neutral",
   "composer-pickers": "v1",
   "composer-applied": "v1",
   "composer-selection": "v1",

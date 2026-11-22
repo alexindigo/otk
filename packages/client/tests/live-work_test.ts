@@ -119,7 +119,14 @@ Deno.test("helper elapsed starts at the owned execution, never helper session ag
     },
   } as unknown as IndexEntry;
   const input = {
-    tabs: { working: () => [{ id: "helper", helper: true, depth: 1 }] },
+    tabs: {
+      working: () => [{
+        id: "helper",
+        kind: "member" as const,
+        helper: true,
+        depth: 1,
+      }],
+    },
     inbox: {} as InboxSnapshot,
     sessionID: "root",
     connected: true,

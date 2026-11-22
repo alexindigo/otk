@@ -42,7 +42,11 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await expect(page.locator(`[data-tab="${task.id}"]`)).toBeVisible();
   await page.locator('[data-session="tstv1-child"]').click();
   await expect(page).toHaveURL(/tstv1-otk\/tstv1-child$/);
-  await expect(page.locator('[data-crumb="tstv1-child"]')).toBeVisible();
+  // Fix 4.2 answer 1: an open quiet child is a visible member of its group.
+  await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await sessionContext(page, '[data-session="tstv1-child"]', "session.close");
   await expect(page).toHaveURL(/tstv1-otk$/);
   await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveCount(0);
@@ -76,7 +80,7 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await sessionContext(page, ".otk-user-bubble", "session.close");
   // There is no idle state; the phantom lasts while evidence or an unseen finish does.
   expect(message).toContain(
-    "phantom tab while it has known activity or an unseen finish",
+    "task will stay visible while it has known activity or an unseen finish",
   );
   await expect(page).toHaveURL(/#project\//);
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));

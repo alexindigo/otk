@@ -76,14 +76,12 @@ for (
     const childRow = page.locator(`[data-session="${child.id}"]`);
     await expect(parentRow).toContainText("P 1");
     await expect(childRow).toContainText("P 1");
+    // 2.67: asking helpers remain inside their human task, with their own lamp.
+    const childTab = page.locator(`[data-tab="${child.id}"]`);
+    const parentTab = page.locator(`[data-tab="${parent.id}"]`);
+    await expect(childTab).toHaveCount(0);
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    // Pending family attention remains individually visible off the open path.
-    await expect(crumb).toBeVisible();
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
-      "data-state",
-      "blocked",
-    );
-    await expect(childRow.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
     );
@@ -92,13 +90,8 @@ for (
       await page.goto(`${state.url}/#/local/${child.id}`);
     } else if (view !== "parent" && view !== "publication") {
       await childRow.click();
-      if (view === "crumb") await crumb.click();
-    }
-    if (view !== "parent" && view !== "publication") {
-      await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
-        "data-state",
-        "blocked",
-      );
+      await expect(crumb).toHaveAttribute("data-crumb-kind", "member");
+      await crumb.click();
     }
     if (view === "reload") await page.reload();
     if (view === "reconnect") {
@@ -106,6 +99,17 @@ for (
       frames.close();
       await expect.poll(() => frames.connections().opened).toBeGreaterThan(
         before,
+      );
+    }
+    if (view !== "parent" && view !== "publication") {
+      await expect(parentTab).toHaveAttribute("aria-selected", "true");
+      await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+        "data-state",
+        "blocked",
+      );
+      await expect(page.locator(`[data-crumb="${parent.id}"]`)).toHaveAttribute(
+        "data-crumb-kind",
+        "member",
       );
     }
     const requests = await state.product("permission.list", {

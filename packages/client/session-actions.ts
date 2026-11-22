@@ -16,7 +16,7 @@ import {
   createSessionSubmission,
   type SessionSubmission,
 } from "./session-submission.ts";
-import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
+import { familySelection, sessionFamily } from "./session-tree.ts";
 import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
@@ -140,6 +140,15 @@ export function createSessionActions(o: {
   };
   const info = (): ContentSession | undefined =>
     liveSessionInfo(session.state.info, selectedEntry());
+  const taskFor = (target: Selection, id = target.sessionID) => {
+    const value = resources.entry(target.sidecarId, id) ??
+      resources.entry(target.sidecarId, target.rootID ?? target.sessionID);
+    if (!value) return undefined;
+    const project = { sidecarId: target.sidecarId, directory: value.directory };
+    const tabs = resources.tabs(project);
+    tabs.update(resources.tabSnapshot(project));
+    return tabs.taskFor(id);
+  };
   const directory = async (target: Selection): Promise<string> => {
     const known = resources.entry(target.sidecarId, target.sessionID);
     if (known) return known.directory;
@@ -526,25 +535,15 @@ export function createSessionActions(o: {
     },
     location(target, id) {
       const value = resources.entry(target.sidecarId, id);
-      const task = familyTask(
-        resources.inbox(target.sidecarId).state.inbox.tasks,
-        [id, target.rootID ?? target.sessionID],
-      );
+      const task = taskFor(target, id) ??
+        (value
+          ? undefined
+          : taskFor(target, target.rootID ?? target.sessionID));
       return [value && projectName(value.directory), task?.name ?? value?.title]
         .filter(Boolean).join(", ");
     },
     inTask(target) {
-      const value = resources.entry(target.sidecarId, target.sessionID);
-      if (!value) return false;
-      if (value.hierarchy) return !!value.hierarchy.taskID;
-      return !!familyTask(
-        resources.inbox(target.sidecarId).state.inbox.tasks,
-        sessionFamily(
-          target.sessionID,
-          (id) => resources.entry(target.sidecarId, id),
-        ),
-        value.directory,
-      );
+      return !!taskFor(target);
     },
     family: (selection) =>
       familySelection(

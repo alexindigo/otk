@@ -79,7 +79,7 @@ Deno.test("session tree preserves task order, parent-child paths and nearest exp
       task("root task", ["root"]),
       task("helper task", ["helper"], 1),
     ], "/project").map((g) => g.rows.map((r) => r.session.id)),
-    [["root"], ["helper", "nested"], ["other", "orphan"]],
+    [["root", "helper", "nested"], ["other", "orphan"]],
   );
 });
 Deno.test("session title search retains matching ancestry, excludes unrelated descendants and never hides cyclic or missing-parent rows", () => {

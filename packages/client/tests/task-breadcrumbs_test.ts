@@ -45,8 +45,9 @@ Deno.test("breadcrumbs keep member order, include active nested helpers and cann
     "b",
   ]);
   entries[0].parentID = "nested";
+  // A cycle remains in Sessions but cannot establish a human task identity.
   assertEquals(
     new Set(taskBreadcrumbs(task, entries).map((c) => c.id)).size,
-    4,
+    0,
   );
 });

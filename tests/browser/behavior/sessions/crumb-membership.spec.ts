@@ -29,7 +29,9 @@ test(
       rightView: "sessions",
     });
     await page.goto(`${state.url}/#/local/${root}/${child}`);
-    await expect(page.locator(`[data-tab="${childTask.id}"]`)).toHaveAttribute(
+    // 2.67: a legacy helper record cannot split its human task.
+    await expect(page.locator(`[data-tab="${childTask.id}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-tab="${parentTask.id}"]`)).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -56,20 +58,20 @@ test(
     ).toBeVisible();
     await expect(
       page.locator(
-        `[role=group][aria-label="Child task"] [data-session="${child}"]`,
+        `[role=group][aria-label="Parent task"] [data-session="${child}"]`,
       ),
     ).toBeVisible();
 
     // Keep a genuine list replacement pending while repeated route intents arrive.
     frames.hold((_frame, request) => request?.method === "sessions.list");
     await state.product("tasks.rename", {
-      id: childTask.id,
-      name: "Child task refreshed",
+      id: parentTask.id,
+      name: "Parent task refreshed",
     });
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     for (let n = 0; n < 3; n++) {
       await page.locator(`[data-crumb="${child}"]`).click();
-      await expect(page.locator(`[data-tab="${childTask.id}"]`))
+      await expect(page.locator(`[data-tab="${parentTask.id}"]`))
         .toHaveAttribute("aria-selected", "true");
       await page.locator(`[data-crumb="${root}"]`).click();
       await expect(page.locator(`[data-tab="${parentTask.id}"]`))
@@ -77,7 +79,7 @@ test(
       expect(await membership()).toEqual(before);
       await expect(
         page.locator(
-          `[role=group][aria-label="Child task refreshed"] [data-session="${child}"]`,
+          `[role=group][aria-label="Parent task refreshed"] [data-session="${child}"]`,
         ),
       ).toBeVisible();
     }
@@ -91,6 +93,8 @@ test(
     expect(await membership()).toEqual(before);
 
     // Intentional edits still use the membership owner, never a navigation default.
+    await page.locator(`[data-session="${child}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`${child}$`));
     page.once("dialog", (dialog) => dialog.accept());
     await sessionContext(
       page,
@@ -105,7 +109,7 @@ test(
     );
     await sessionContext(page, `[data-session="${child}"]`);
     await page.locator(contextMenu).getByRole("menuitem", {
-      name: "Add to task: Parent task",
+      name: "Add to task: Parent task refreshed",
       exact: true,
     }).click();
     await expect.poll(membership).toEqual(

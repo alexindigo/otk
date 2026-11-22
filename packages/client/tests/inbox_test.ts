@@ -461,7 +461,7 @@ Deno.test("helper URLs select their owning task and removed membership preserves
   });
   tabs.update(input);
   tabs.preview("helper");
-  assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
+  assertEquals(tabs.state.selected, { kind: "task", id: "task" });
 });
 
 Deno.test("selected helpers reconcile task ownership and remembered identity when task or ancestry metadata arrives late", () => {
@@ -505,8 +505,8 @@ Deno.test("selected helpers reconcile task ownership and remembered identity whe
       order: 1,
     });
     tabs.update(input);
-    assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
-    assertEquals(tabs.sessionFor("helper-task"), "nested");
+    assertEquals(tabs.state.selected, { kind: "task", id: "root-task" });
+    assertEquals(tabs.sessionFor("helper-task"), undefined);
     inbox.tasks = [task];
     helper.parentID = undefined;
     tabs.update(input);

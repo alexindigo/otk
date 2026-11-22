@@ -171,7 +171,7 @@ Deno.test("fresh absence retires lamp grace without restarting a presented reque
   owner.stop();
 });
 
-Deno.test("lamp grace borrows tab ownership, excluding children assigned to another task", () => {
+Deno.test("lamp grace borrows tab ownership, excluding another human task", () => {
   const time = clock();
   const owner = createAttentionGrace({ clock: time });
   const tabs = createTabs(() => {
@@ -198,7 +198,7 @@ Deno.test("lamp grace borrows tab ownership, excluding children assigned to anot
     directory: "/p",
     entries: [
       entry("parent"),
-      entry("split", "parent"),
+      entry("split"),
       entry("own-child", "parent"),
       entry("orphan", "missing-parent"),
       entry("orphan-helper", "orphan"),
@@ -228,7 +228,7 @@ Deno.test("lamp grace borrows tab ownership, excluding children assigned to anot
     },
   };
   tabs.update(input);
-  assertEquals(tabs.tabs().some((tab) => tab.id === "orphan"), true);
+  assertEquals(tabs.tabs().some((tab) => tab.id === "orphan"), false);
   const contains = (id: string) => tabs.belongsToTab("task", id);
   assertEquals(contains("parent"), true);
   assertEquals(contains("own-child"), true);
@@ -244,12 +244,13 @@ Deno.test("lamp grace borrows tab ownership, excluding children assigned to anot
     ...input,
     inbox: { ...input.inbox, tasks: input.inbox.tasks.slice(1) },
   });
-  // SH1 gives an ungrouped child its own phantom and its own supervision lamp.
-  assertEquals(tabs.belongsToTab("parent", "own-child"), false);
-  assertEquals(tabs.belongsToTab("own-child", "own-child"), true);
+  // Fix 4.2 case 3: without positive supervision these children are quiet,
+  // so their membership belongs to the nearest ancestor's phantom group.
+  assertEquals(tabs.belongsToTab("parent", "own-child"), true);
+  assertEquals(tabs.belongsToTab("own-child", "own-child"), false);
   assertEquals(tabs.belongsToTab("parent", "split"), false);
   assertEquals(tabs.belongsToTab("parent", "outside"), false);
-  assertEquals(tabs.belongsToTab("orphan", "orphan"), true);
+  assertEquals(tabs.belongsToTab("orphan", "orphan"), false);
   assertEquals(tabs.belongsToTab("orphan", "orphan-helper"), false);
   owner.stop();
   tabs.stop();

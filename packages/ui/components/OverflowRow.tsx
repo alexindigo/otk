@@ -41,7 +41,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
     );
     for (const key of props.required) {
       const current = liveFrames.get(key)?.getBoundingClientRect().width;
-      if (current) widths.set(key, current);
+      // A required item may already have shrunk to make room for its optional
+      // neighbours. Feeding that compressed width back into fitting lets those
+      // neighbours permanently squeeze it to zero. Reserve its natural width
+      // (or a larger live editor) before deciding which optional items fit.
+      if (current) widths.set(key, Math.max(widths.get(key) ?? 0, current));
     }
     const css = getComputedStyle(root);
     const next = {

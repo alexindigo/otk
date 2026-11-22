@@ -112,10 +112,11 @@ operation and editable next input separate, including a working Cancel action.
 measurement content, live content and one overflow-menu callback. Its ordered
 item frames and controls stay mounted in source order; omitted rows are hidden
 and inert. More renders independent controls rather than adopting row nodes.
-Fitting cannot move or replace a focused required frame. Required frames use
-their current measured width; other values use their inert measurement frames.
-More occupies a separate trailing grid track, so editor blur cannot move its
-pointer target between press and release as the live chip width changes. Its
+Fitting cannot move or replace a focused required frame. Required frames reserve
+their natural measurement width or a larger live editor width, never a
+compressed width left by optional neighbours. Other values use inert measurement
+frames. More occupies a separate trailing grid track, so editor blur cannot move
+its pointer target between press and release as the live chip width changes. Its
 control-height track aligns to the first item row, not the centre of a changing
 wrapped item collection, so ending an editor cannot shift it vertically either.
 ResizeObserver and font completion belong to this component. The client owns

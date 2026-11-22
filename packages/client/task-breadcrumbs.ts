@@ -5,21 +5,73 @@ import type {
   SessionHierarchyNode,
   TaskRecord,
 } from "@otk/protocol";
-import { projectSessionHierarchy } from "@otk/protocol";
+import { sessionAncestors } from "@otk/protocol";
 import { inboxStatus, type OperationAttention } from "./inbox.ts";
+import {
+  projectTabGroups,
+  resolveTabHierarchy,
+  type TabGroup,
+} from "./tab-groups.ts";
 export interface TaskCrumb {
   id: string;
+  kind: "member" | "ancestor" | "family";
   helper: boolean;
   depth: number;
+  /** Compatibility flag for navigable orientation links, including local parents. */
   external?: boolean;
 }
-/** Ordered explicit members plus mandatory descendants. The caller may inject
- * its already-resolved hierarchy, including PH1's checkout scope mapping. */
+
+/** Visibility borrows the complete partition; it cannot admit another group's
+ * members. Quiet inherited members retire unless they are the viewed session. */
+export function groupBreadcrumbs(
+  group: TabGroup,
+  entries: ReadonlyMap<string, IndexMetadata & OperationAttention>,
+  mandatory: ReadonlySet<string>,
+  selected?: string,
+): TaskCrumb[] {
+  const roots = new Set(group.roots), members = new Set(group.members);
+  const result: TaskCrumb[] = [];
+  for (const id of group.members) {
+    if (!roots.has(id) && !mandatory.has(id) && id !== selected) continue;
+    const ancestors = sessionAncestors(id, (key) => entries.get(key));
+    const at = ancestors.findIndex((ancestor) => roots.has(ancestor));
+    result.push({
+      id,
+      kind: "member",
+      helper: !roots.has(id),
+      depth: roots.has(id) ? 0 : at < 0 ? 1 : at + 1,
+    });
+  }
+  for (const id of group.ancestorLinks) {
+    if (members.has(id)) continue;
+    const at = result.findIndex((crumb) =>
+      sessionAncestors(crumb.id, (key) => entries.get(key)).includes(id)
+    );
+    if (at < 0) continue;
+    result.splice(at, 0, {
+      id,
+      kind: "ancestor",
+      helper: false,
+      depth: 0,
+      external: true,
+    });
+  }
+  for (const id of group.familyLinks) {
+    if (!mandatory.has(id) && id !== selected) continue;
+    if (result.some((crumb) => crumb.id === id)) continue;
+    result.push({ id, kind: "family", helper: true, depth: 1, external: true });
+  }
+  return result;
+}
+
+/** Standalone explicit-member projection uses the same group owner as tabs.
+ * A task-like record not yet persisted still declares explicit membership; no
+ * synthetic phantom/global-family exception exists. */
 export function taskBreadcrumbs(
   task: Pick<TaskRecord, "id" | "directory" | "sessions">,
   entries: readonly (IndexMetadata & OperationAttention)[],
   tasks: readonly TaskRecord[] = [],
-  indexed?: ReadonlyMap<
+  _indexed?: ReadonlyMap<
     string,
     readonly (IndexMetadata & OperationAttention)[]
   >,
@@ -30,67 +82,33 @@ export function taskBreadcrumbs(
   followParent = false,
   projection?: ReadonlyMap<string, SessionHierarchyNode>,
 ): TaskCrumb[] {
-  const actual = tasks.some((candidate) => candidate.id === task.id);
-  const projected = !!projection ||
-    entries.every((entry) => entry.hierarchy?.followParent === followParent);
-  const nodes = projected ? undefined : projectSessionHierarchy(
-    entries,
-    actual ? tasks : [
-      { ...task, name: "", order: 0 },
-      ...tasks,
-    ],
-    { followParent },
-  );
-  const node = (entry: IndexMetadata) =>
-    projection?.get(entry.id) ?? entry.hierarchy;
-  const root = entries.find((entry) => task.sessions.includes(entry.id));
-  const family = root && node(root)?.familyID;
-  const belongs = (entry: IndexMetadata) => {
-    if (projected && !actual) {
-      return !node(entry)?.taskID && node(entry)?.familyID === family;
-    }
-    return (projected ? node(entry) : nodes?.get(entry.id))?.taskID ===
-      task.id;
-  };
-  const collected = new Map<string, (IndexMetadata & OperationAttention)[]>();
-  const children = indexed ?? collected;
-  if (!indexed) {
-    for (const entry of entries) {
-      if (!entry.parentID) continue;
-      const siblings = collected.get(entry.parentID) ?? [];
-      siblings.push(entry);
-      collected.set(entry.parentID, siblings);
-    }
-  }
-  const visited = new Set(task.sessions), result: TaskCrumb[] = [];
-  function helpers(parent: string) {
-    const stack = (children.get(parent) ?? []).toReversed().map((entry) => ({
+  const saved = tasks.some((candidate) => candidate.id === task.id)
+    ? tasks
+    : [{ ...task, name: "", order: 0 }, ...tasks];
+  const hierarchy = resolveTabHierarchy(entries, saved, {
+    followParent,
+    hierarchy: projection,
+  });
+  const mandatory = new Set(
+    entries.filter((entry) =>
+      inboxStatus(entry, inbox) !== "none" ||
+      hierarchy?.get(entry.id)?.mandatory
+    ).map((
       entry,
-      depth: 1,
-    }));
-    while (stack.length) {
-      const { entry: child, depth } = stack.pop()!;
-      const external = (node(child)?.projectDirectory ?? child.directory) !==
-        (root && node(root)?.projectDirectory || task.directory);
-      if (visited.has(child.id)) continue;
-      visited.add(child.id);
-      const status = inboxStatus(child, inbox);
-      if (status !== "none" && (belongs(child) || external)) {
-        result.push({
-          id: child.id,
-          helper: true,
-          depth,
-          ...(external ? { external: true } : {}),
-        });
-      }
-      for (const entry of (children.get(child.id) ?? []).toReversed()) {
-        stack.push({ entry, depth: depth + 1 });
-      }
-    }
-  }
-  for (const id of task.sessions) {
-    result.push({ id, helper: false, depth: 0 });
-    helpers(id);
-  }
-  return result;
+    ) => entry.id),
+  );
+  const groups = projectTabGroups(entries, saved, {
+    followParent,
+    hierarchy,
+    mandatory,
+  });
+  const group = groups.groups.find((group) =>
+    group.kind === "task" && group.id === task.id
+  );
+  if (!group) return [];
+  return groupBreadcrumbs(
+    group,
+    new Map(entries.map((entry) => [entry.id, entry])),
+    mandatory,
+  );
 }
