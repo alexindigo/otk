@@ -616,3 +616,114 @@ test("strictly local registration rejects native identity preparation before inv
     db.close();
   }
 });
+
+test("received session mutations publish operation attention until they settle; unregistered methods never do", async () => {
+  const db = new OtkDb(await fixture(), [requestsMigrations], {
+    busyms: 5000,
+  });
+  const receipts = new Requests(db),
+    registry = new RpcRegistry({} as Harness, db);
+  const held = Promise.withResolvers<void>(),
+    entered = Promise.withResolvers<void>();
+  registry.register("session.abort", {
+    params: (p) => ({ sessionID: String(p.sessionID) }),
+    execution: {
+      kind: "native",
+      scope: () => ({ sessionID: "opcv1-operation-target" }),
+      receipt: () => undefined,
+      recover: () => Promise.resolve({ state: "reload" }),
+    },
+    handler: async (ctx) => {
+      await ctx.execution!.beforeEffect();
+      entered.resolve();
+      await held.promise;
+      return null;
+    },
+  });
+  registry.register("requests.example", {
+    params: (p) => ({ title: String(p.title) }),
+    execution: {
+      kind: "local",
+      scope: () => ({ sessionID: "opcv1-operation-other" }),
+      receipt: (id) => ({ kind: "example-id", value: { id } }),
+      recover: () => Promise.resolve({ state: "reload" }),
+    },
+    handler: () => Promise.resolve("done"),
+  });
+  const coordinator = new RequestCoordinator({
+    registry,
+    receipts,
+    policy: {
+      windowms: 10000,
+      retentionms: 10000,
+      maxpending: 8,
+      inputbytes: 10000,
+      resultbytes: 10000,
+      resumebatch: 8,
+      sweepbatch: 8,
+      livenessms: 1000,
+      stoppingms: 1000,
+    },
+  });
+  await coordinator.start();
+  const changes: string[] = [];
+  const stop = coordinator.listenOperations((principal, id) =>
+    changes.push(`${principal}:${id}`)
+  );
+  const window = coordinator.window();
+  const recipient = {
+    send() {},
+    lease: { id: "socket", signal: new AbortController().signal, defer() {} },
+  };
+  const client = crypto.randomUUID();
+  const ref = () => ({
+    id: crypto.randomUUID(),
+    clientID: client,
+    key: crypto.randomUUID(),
+    window: window.id,
+  });
+  try {
+    await coordinator.accept("local", {
+      t: "request",
+      ref: ref(),
+      method: "session.abort",
+      params: { sessionID: "opcv1-operation-target" },
+    }, recipient);
+    await entered.promise;
+    assertEquals(
+      coordinator.operation("local", "opcv1-operation-target"),
+      "working",
+    );
+    assertEquals(
+      coordinator.operation("other", "opcv1-operation-target"),
+      undefined,
+    );
+    assertEquals(coordinator.operationSessions("local"), [
+      "opcv1-operation-target",
+    ]);
+    await coordinator.accept("local", {
+      t: "request",
+      ref: ref(),
+      method: "requests.example",
+      params: { title: "x" },
+    }, recipient);
+    held.resolve();
+    await coordinator.idle();
+    assertEquals(
+      coordinator.operation("local", "opcv1-operation-target"),
+      undefined,
+    );
+    assertEquals(
+      coordinator.operation("local", "opcv1-operation-other"),
+      undefined,
+    );
+    assertEquals(changes, [
+      "local:opcv1-operation-target",
+      "local:opcv1-operation-target",
+    ]);
+  } finally {
+    stop();
+    await coordinator.stop();
+    db.close();
+  }
+});

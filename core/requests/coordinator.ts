@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   canonicalRequest,
+  createRequestMetadata,
   OperationFailure,
   requestFingerprint,
   requestRef,
@@ -74,6 +75,8 @@ const keyOf = (principal: string, ref: RequestRef): ReceiptKey => ({
 });
 const terminal = (record: RequestRecord) =>
   ["succeeded", "failed", "released"].includes(record.state);
+/** S22: what a received OTK operation means for its target session's state. */
+export type OperationAttention = "working" | "blocked";
 const bytes = (value: unknown) =>
   new TextEncoder().encode(JSON.stringify(value) ?? "null").byteLength;
 
@@ -100,7 +103,66 @@ export class RequestCoordinator {
   #resultBytes = 0;
   #maintenance?: MapIterator<Entry>;
   #storagePending = new Set<Entry>();
+  /** Received user operations by [principal, session], then by receipt. */
+  #operations = new Map<string, Map<string, OperationAttention>>();
+  #operationListeners = new Set<
+    (principal: string, sessionID: string) => void
+  >();
+  #metadata = createRequestMetadata();
   constructor(readonly options: CoordinatorOptions) {}
+  /** Operations this server received for a session: input or authentication
+   * waits block it, queued, running and reconciling work count as work. */
+  operation(
+    principal: string,
+    sessionID: string,
+  ): OperationAttention | undefined {
+    const values = this.#operations.get(JSON.stringify([principal, sessionID]));
+    if (!values?.size) return undefined;
+    return [...values.values()].some((value) => value === "blocked")
+      ? "blocked"
+      : "working";
+  }
+  /** Sessions with a received operation, for an observer's initial pass. */
+  operationSessions(principal: string): string[] {
+    return [...this.#operations.keys()].flatMap((key) => {
+      const [owner, session] = JSON.parse(key) as [string, string];
+      return owner === principal ? [session] : [];
+    });
+  }
+  listenOperations(
+    listener: (principal: string, sessionID: string) => void,
+  ): () => void {
+    this.#operationListeners.add(listener);
+    return () => this.#operationListeners.delete(listener);
+  }
+  /** One record observer for every receipt change; bookkeeping, reads,
+   * settled and failed operations never colour a session. */
+  #observe(entry: Entry): void {
+    const record = entry.record, session = record.scope_session;
+    if (!session) return;
+    const metadata = this.#metadata.get(record.method);
+    const value: OperationAttention | undefined =
+      metadata?.kind === "mutation" &&
+        metadata.presentation !== "bookkeeping" &&
+        !terminal(record) && record.error_code === null &&
+        this.#entries.get(identity(record)) === entry
+        ? record.state === "waiting" &&
+            record.progress_code === "input-required"
+          ? "blocked"
+          : "working"
+        : undefined;
+    const key = JSON.stringify([record.principal, session]);
+    const before = this.operation(record.principal, session);
+    const values = this.#operations.get(key) ?? new Map();
+    if (value) values.set(identity(record), value);
+    else values.delete(identity(record));
+    if (values.size) this.#operations.set(key, values);
+    else this.#operations.delete(key);
+    if (before === this.operation(record.principal, session)) return;
+    for (const listener of this.#operationListeners) {
+      listener(record.principal, session);
+    }
+  }
   #now(): number {
     return (this.options.clock ?? Date.now)();
   }
@@ -182,6 +244,7 @@ export class RequestCoordinator {
       };
       this.#entries.set(id, entry);
     }
+    this.#observe(entry);
     return entry;
   }
   #transition(entry: Entry, patch: Partial<RequestRecord>): void {
@@ -190,11 +253,13 @@ export class RequestCoordinator {
       entry.record.seq,
       { ...patch, updated_at: this.#now() },
     );
+    this.#observe(entry);
   }
   #refresh(entry: Entry): boolean {
     const current = this.options.receipts.get(entry.record);
     if (!current || current.seq === entry.record.seq) return false;
     entry.record = current;
+    this.#observe(entry);
     for (const [recipient, ref] of entry.recipients) {
       this.#snapshot(entry, recipient, ref, true);
     }
@@ -654,6 +719,7 @@ export class RequestCoordinator {
           return value;
         });
         entry.record = next!;
+        this.#observe(entry);
         return result;
       },
     };
@@ -907,7 +973,10 @@ export class RequestCoordinator {
     if (
       terminal(entry.record) && !entry.result && !entry.recipients.size &&
       !entry.work
-    ) this.#entries.delete(identity(entry.record));
+    ) {
+      this.#entries.delete(identity(entry.record));
+      this.#observe(entry);
+    }
   }
   #lifetime(entry: Entry): RequestLifetime | undefined {
     const recipient = entry.recipients.keys().next().value;
@@ -982,7 +1051,10 @@ export class RequestCoordinator {
       if (entry.work) continue;
       this.#storagePending.delete(entry);
       const current = this.options.receipts.get(entry.record);
-      if (current) entry.record = current;
+      if (current) {
+        entry.record = current;
+        this.#observe(entry);
+      }
       if (!terminal(entry.record) && !this.#stopped) {
         this.#schedule(entry, entry.record.dispatched_at !== null);
       }
@@ -1030,6 +1102,7 @@ export class RequestCoordinator {
     }
     await this.idle();
     this.#entries.clear();
+    this.#operations.clear();
     this.#storagePending.clear();
     this.#resultBytes = 0;
   }

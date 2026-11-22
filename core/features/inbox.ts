@@ -776,6 +776,26 @@ export class InboxFeature implements FrameSource {
     changed();
     this.#stops.push(listen(changed));
   }
+  #operation?: {
+    value: (id: string) => "working" | "blocked" | undefined;
+    sessions: () => readonly string[];
+  };
+  /** S22: received OTK operations, borrowed by target session (P30 shows the
+   * ones the server has not received). */
+  operationAttention(
+    value: (id: string) => "working" | "blocked" | undefined,
+    sessions: () => readonly string[],
+    listen: (changed: (id: string) => void) => () => void,
+  ): void {
+    this.#operation = { value, sessions };
+    const changed = (id: string) => {
+      this.states.operation(id, value(id));
+      this.#supervise(id);
+      this.summaries.mark(id);
+    };
+    this.#stops.push(listen(changed));
+    for (const id of sessions()) changed(id);
+  }
   locationAttention(
     values: () => Readonly<Record<string, number>>,
     listen: (changed: () => void) => () => void,
@@ -803,6 +823,9 @@ export class InboxFeature implements FrameSource {
     this.#summaryRevision = 0;
     // A new generation re-baselines every client: no transition spans users.
     this.states.reset();
+    for (const id of this.#operation?.sessions() ?? []) {
+      this.states.operation(id, this.#operation!.value(id));
+    }
     this.summaries?.refresh();
     for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
   }

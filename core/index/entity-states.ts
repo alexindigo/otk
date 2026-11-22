@@ -68,6 +68,8 @@ export class EntityStates {
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
   #global = tally();
+  /** S22: received OTK operations by target session. */
+  #operations = new Map<string, "working" | "blocked">();
   constructor(
     readonly supervision: SessionSupervision,
     readonly family: EntityFamily,
@@ -95,6 +97,12 @@ export class EntityStates {
     this.#leaves.clear();
     this.#projectsOf.clear();
     this.#global = tally();
+    this.#operations.clear();
+  }
+  /** Record a session's received-operation input; the caller re-derives it. */
+  operation(id: string, value?: "working" | "blocked"): void {
+    if (value) this.#operations.set(id, value);
+    else this.#operations.delete(id);
   }
   /** S18: the checkout a session belongs to, as placed by ProjectSummaries. */
   member(id: string, checkout?: string): void {
@@ -178,11 +186,12 @@ export class EntityStates {
       this.#retire(entry.id, removals);
       this.#ancestors(entry.id, upserts);
     } else {
-      const state = this.supervision.status(verdict);
+      const operation = this.#operations.get(entry.id);
+      const state = rollupStatus(this.supervision.status(verdict), operation);
       const counts = own(state, verdict.unseen === true);
       const before = this.#own.get(entry.id);
       this.#own.set(entry.id, counts);
-      const value = this.#session(entry, verdict, state, counts);
+      const value = this.#session(entry, verdict, state, counts, operation);
       if (value.cause === "permission") this.#graced.add(entry.id);
       else this.#graced.delete(entry.id);
       if (this.#set(value)) upserts.push(value);
@@ -338,6 +347,7 @@ export class EntityStates {
     verdict: Supervision,
     state: ProjectStatus,
     counts: EntityCounts,
+    operation?: "working" | "blocked",
   ): EntityState {
     const inputs = this.supervision.inputs(entry);
     const activity = entry.activity;
@@ -347,10 +357,12 @@ export class EntityStates {
       // permission is the sole reason.
       : inputs.questions > 0
       ? "question"
+      : operation === "blocked"
+      ? "operation"
+      : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
+      ? "failedHelper"
       : inputs.permissions > 0
       ? "permission"
-      : failedHelperNeedsAck(entry, verdict.outcome)
-      ? "failedHelper"
       : undefined;
     const items = inputs.work
       ? (activity?.work?.items ?? []).filter((item) =>
@@ -358,7 +370,8 @@ export class EntityStates {
       )
       : [];
     const evidence: SessionEvidence = {
-      work: inputs.work,
+      // A received operation in progress is work on its target session.
+      work: inputs.work || operation === "working",
       permissions: inputs.permissions,
       questions: inputs.questions,
       descendants: this.#descendants(entry.id),

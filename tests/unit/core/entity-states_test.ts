@@ -174,6 +174,12 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
   // The parent's own lamp is its own state (D35); the child is evidence.
   assertEquals(o.get("parent")?.state, "none");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 1);
+  // An unseen failure is immediate, so a pending permission cannot grace it.
+  o.put({
+    ...helper,
+    activity: { ...helper.activity, permissions: keys("per_1") },
+  });
+  assertEquals(o.get("helper")?.cause, "failedHelper");
   o.put(helper, 70);
   assertEquals(o.get("helper")?.state, "none");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 0);
@@ -382,4 +388,79 @@ test("an aggregate blocked only by permissions shares their grace cause", () => 
   owner.entry(row("b", "/repo", { inputs: keys("que_1") }));
   assertEquals(state("project", "/repo")?.state, "blocked");
   assertEquals(state("project", "/repo")?.cause, undefined);
+});
+
+test("a received operation is work on its target session and its wait blocks it immediately", () => {
+  const o = owner();
+  const entry = {
+    ...base,
+    activity: { terminal: 5, outcome: "succeeded" as const },
+  };
+  o.put(entry, 5);
+  assertEquals(o.get("s")?.state, "none");
+  o.states.operation("s", "working");
+  o.put(entry, 5);
+  assertEquals(o.get("s")?.state, "working");
+  assertEquals(o.get("s")?.evidence?.work, true);
+  assertEquals(o.get("s")?.counts.working, 1);
+  // An operation waiting for input is immediate, never graced as a permission.
+  o.states.operation("s", "blocked");
+  o.put({
+    ...entry,
+    activity: { ...entry.activity, permissions: keys("per_1") },
+  }, 5);
+  assertEquals(o.get("s")?.state, "blocked");
+  assertEquals(o.get("s")?.cause, "operation");
+  o.states.operation("s");
+  o.put(entry, 5);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.previous, "blocked");
+});
+
+test("the inbox borrows received operations by target session", async () => {
+  const db = new OtkDb(await fixture(), [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db, () => 100),
+    tasks: new Tasks(db),
+    seen: new Seen(db, () => 100),
+    finishes: new Finishes(db, () => 100),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "alice",
+    () => Promise.resolve([]),
+  );
+  const operations = new Map<string, "working" | "blocked">([["s", "working"]]);
+  let notify = (_id: string) => {};
+  try {
+    index.reset([base]);
+    feature.operationAttention(
+      (id) => operations.get(id),
+      () => [...operations.keys()],
+      (changed) => {
+        notify = changed;
+        return () => {};
+      },
+    );
+    const key = entityKey("session", "s");
+    assertEquals(feature.get().entities?.[key]?.state, "working");
+    operations.set("s", "blocked");
+    notify("s");
+    assertEquals(feature.get().entities?.[key]?.cause, "operation");
+    operations.delete("s");
+    notify("s");
+    assertEquals(feature.get().entities?.[key]?.state, "none");
+  } finally {
+    feature.close();
+    db.close();
+  }
 });
