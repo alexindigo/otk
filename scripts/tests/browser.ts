@@ -2,6 +2,7 @@
 import { join } from "@std/path";
 import { readBuild, sourceTree } from "./prepare.ts";
 import { nativeLane } from "./lanes.ts";
+import { releasedPort } from "../../tests/support/listener-ownership.ts";
 
 const tree = await sourceTree();
 const scale = Deno.args.includes("--scale");
@@ -147,23 +148,17 @@ try {
             await new Promise<void>((resolve) => setTimeout(resolve, 25));
           }
         }
+        const ports = [];
         for (const port of owned?.ports ?? []) {
-          let connection: Deno.TcpConn;
-          try {
-            connection = await Deno.connect({ hostname: "127.0.0.1", port });
-          } catch (error) {
-            if (error instanceof Deno.errors.ConnectionRefused) continue;
-            throw error;
-          }
-          connection.close();
-          throw new Error(`Owned port survived cleanup: ${port}`);
+          ports.push(await releasedPort(port, unit));
         }
         cleanupProof.push({
           unit,
           ...owned,
           cgroupEmpty: true,
           processesGone: true,
-          portsClosed: true,
+          ports,
+          portsReleased: true,
         });
       } catch (error) {
         errors.push(error);

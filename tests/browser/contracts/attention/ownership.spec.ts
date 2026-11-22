@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { stopUnit, unitInventory } from "../../fixtures/protocol.ts";
+import { releasedPort } from "../../../support/listener-ownership.ts";
 
 const exec = promisify(execFile);
 test(
@@ -96,11 +97,7 @@ test(
             .rejects.toMatchObject({ code: "ENOENT" });
         }
         for (const port of owned.ports) {
-          await expect(
-            fetch(`http://127.0.0.1:${port}`, {
-              signal: AbortSignal.timeout(1000),
-            }),
-          ).rejects.toThrow();
+          await releasedPort(port, record.unit);
         }
       }
       if (scenario === "notification-body") {

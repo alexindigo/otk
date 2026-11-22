@@ -31,7 +31,10 @@ test("transport.rpc-feedback-ownership", {
   await expect(page.locator(".otk-toast-message")).toHaveCount(1);
   await page.getByRole("button", { name: "Display options", exact: true })
     .click();
-  await page.locator('.otk-display-menu input[name="timestamps"]').click();
+  // D21 removed the clock toggle; rejected preference writes still belong here.
+  await expect(page.locator('.otk-display-menu input[name="timestamps"]'))
+    .toHaveCount(0);
+  await page.locator('.otk-display-menu input[name="thinking"]').click();
   await expect(page.locator(".otk-display-menu [role=alert]")).toBeVisible();
   await expect(page.locator(".otk-toast-message")).toHaveCount(1);
   frames.fault({

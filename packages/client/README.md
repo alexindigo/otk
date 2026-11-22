@@ -1467,9 +1467,11 @@ and child adjacency once, then walks iteratively. Deep chains cannot overflow
 the JavaScript stack; cycles and missing parents remain reachable. Task members
 retain explicit order. `createSessionTree().rows(...)` caches flattened keyed
 headings/session descriptors using stable structural/search inputs, without a
-serialized population signature. The project projection supplies those inputs
-through `ServerResources.sessionRows`. Live row facts continue to come from
-`ClientIndex.get`, never cached hierarchy entries.
+serialized population signature. Tasks key it through an owned signature of only
+the tasks that can own or scope its rows: callers may edit task records in
+place, and other projects' membership changes cost no derivation. The project
+projection supplies those inputs through `ServerResources.sessionRows`. Live row
+facts continue to come from `ClientIndex.get`, never cached hierarchy entries.
 
 The same project owner supplies stable `projectMetadata` and keyed
 `metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
