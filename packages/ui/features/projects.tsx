@@ -129,7 +129,7 @@ function AddProject(props: DialogProps) {
   );
 }
 
-/** Server-scoped templates and host-owned ageing controls live with inbox UI. */
+/** Server-scoped templates and host-owned project controls live with inbox UI. */
 export function ProjectSettings(): import("solid-js").Element {
   const shell = useShellPorts();
   const { commands } = useCommandPorts();
@@ -142,38 +142,6 @@ export function ProjectSettings(): import("solid-js").Element {
         ready={shell.toggles.state.ready}
         onSet={(key, value) => commands.run("prefs.set", { key, value })}
       />
-      <h3>Ageing thresholds (hours)</h3>
-      <Form
-        title="Ageing thresholds (hours)"
-        submitLabel="Save ageing"
-        onSubmit={async (data) => {
-          const value = [1, 2, 3].map((n) =>
-            Number(data.get(`age${n}`)) * 3_600_000
-          );
-          await shell.connection("local").rpc.call("prefs.set", {
-            key: "projectAgeing",
-            value,
-          });
-        }}
-      >
-        <div class="otk-ageing-fields">
-          <For each={[0, 1, 2]}>
-            {(n) => (
-              <label>
-                Level {n + 1}
-                <FormInput
-                  name={`age${n + 1}`}
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  required
-                  value={shell.toggles.state.prefs.projectAgeing[n] / 3_600_000}
-                />
-              </label>
-            )}
-          </For>
-        </div>
-      </Form>
       <For each={shell.servers()} keyed={(s) => s.id}>
         {(s) => (
           <>

@@ -391,9 +391,7 @@ export default function Shell(
       actions.eligibility(target).member,
     run: (_ctx, target: SessionContextTarget) => actions.removeFromTask(target),
   }));
-  const projects = createMemo(() =>
-    resources.projects(now(), toggles.state.prefs.projectAgeing)
-  );
+  const projects = createMemo(() => resources.projects(now()));
   const originalTitle = document.title;
   createEffect(
     () => [info()?.title, project()] as const,
@@ -560,6 +558,7 @@ export default function Shell(
               holdOrder={resources.holdProjectOrder}
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
+              entities={resources.entities}
               servers={sidecars.state.list}
               selected={project()}
               prefs={toggles.state.prefs}

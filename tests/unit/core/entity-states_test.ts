@@ -490,3 +490,16 @@ test("a received operation without a session colours its checkout and project", 
   assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(owner.values.get("/repo/tree")?.status, "none");
 });
+
+test("a deleted member stops counting toward its project's unseen finishes", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  const child = row("child", "/repo", { terminal: 10 }, "parent");
+  owner.entry(row("parent", "/repo", {}));
+  owner.entry(child);
+  assertEquals(state("project", "/repo")?.counts.unseen, 1);
+  assertEquals(state("project", "/repo")?.state, "finished");
+  owner.entry({ ...child, deleted: { at: 11, how: "provider" } });
+  assertEquals(state("project", "/repo")?.counts.unseen, 0);
+  assertEquals(state("project", "/repo")?.state, "none");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 0);
+});

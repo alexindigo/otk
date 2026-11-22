@@ -257,13 +257,11 @@ function violations(path: string, text: string): string[] {
 // removes this mechanism and requires an empty result, not an expanding allowlist.
 const PENDING: string[] = [
   "packages/client/approval-attention.ts: raw-attention",
-  "packages/client/inbox.ts: attention-clock",
   "packages/client/inbox.ts: rollup-owner",
   "packages/client/inbox.ts: state-producer",
   "packages/client/live-work.ts: raw-attention",
   "packages/client/notification-triggers.ts: raw-attention",
   "packages/client/project-projection.ts: raw-attention",
-  "packages/client/project-projection.ts: rollup-owner",
   "packages/client/reduce.ts: raw-attention",
   "packages/client/request-attention.ts: rollup-owner",
   "packages/client/request-attention.ts: state-producer",
@@ -275,7 +273,6 @@ const PENDING: string[] = [
   "packages/ui/components/LiveWork.tsx: state-producer",
   "packages/ui/components/ProjectInbox.tsx: lamp-input",
   "packages/ui/components/ProjectInbox.tsx: raw-attention",
-  "packages/ui/components/ProjectInbox.tsx: visit-age-paint",
   "packages/ui/components/ProjectSessions.tsx: lamp-input",
   "packages/ui/components/ProjectSessions.tsx: raw-attention",
   "packages/ui/components/ProjectTabs.tsx: lamp-input",
@@ -287,7 +284,6 @@ const PENDING: string[] = [
   "packages/ui/features/timeline.tsx: raw-attention",
   "packages/ui/shell/Shell.tsx: raw-attention",
   "packages/ui/shell/notifications.ts: raw-attention",
-  "packages/ui/theme.css: visit-age-paint",
 ];
 
 Deno.test("entity state ownership ratchets every existing independent computation", async () => {
