@@ -3,53 +3,109 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 
-test.use({ profile: "contract-messages-disclosures" });
-test("messages.header-meta-shared-spacing-and-disclosure", {
-  tag: ["@messages", "@contracts"],
-}, async ({ isolatedState: state, page }) => {
-  await state.controller.call("scenario", {
-    lease: state.lease.lease,
-    action: "hold",
+function headerGeometry(root: Element) {
+  const label = root.querySelector(
+    ".otk-work-label, .otk-record-group-toggle",
+  )!;
+  const counts = Array.from(root.querySelectorAll("[data-record-kind]"));
+  const controls = counts.map((element) => {
+    const r = element.getBoundingClientRect();
+    let left = 0, right = innerWidth;
+    for (
+      let parent = element.parentElement;
+      parent;
+      parent = parent.parentElement
+    ) {
+      if (/hidden|clip|auto|scroll/.test(getComputedStyle(parent).overflowX)) {
+        const p = parent.getBoundingClientRect();
+        left = Math.max(left, p.left);
+        right = Math.min(right, p.right);
+      }
+    }
+    const absent = !element.checkVisibility({ visibilityProperty: true }) ||
+      !r.width || !r.height;
+    return {
+      absent,
+      whole: r.left >= left - 0.5 && r.right <= right + 0.5,
+      textFits: element.scrollWidth <= element.clientWidth + 1,
+    };
   });
-  await openSession(state, page, "tstv1-otk");
-  const header = page.locator(".otk-work-log").first();
-  const counts = header.locator("[data-record-kind]");
-  await expect(counts).toHaveCount(2);
-  await expect.soft(page.locator(".otk-turn-time").first()).toHaveText(
-    "counting...",
-  );
-  await expect.soft(page.locator(".otk-turn-time em").first()).toHaveText(
-    "counting...",
-  );
-  await expect.soft(header.locator(".otk-work-label")).not.toContainText(
-    "Worked for 0s",
-  );
-  for (const width of [1440, 760]) {
-    await page.setViewportSize({ width, height: 1000 });
-    const geometry = await header.evaluate((root) => {
-      const label = root.querySelector(".otk-work-label")!;
-      const counts = Array.from(root.querySelectorAll("[data-record-kind]"));
-      const elements = [label, ...counts];
-      const rects = elements.map((e) => e.getBoundingClientRect());
-      return {
-        centres: rects.map((r) => r.y + r.height / 2),
-        gaps: rects.slice(1).map((r, i) => r.x - rects[i].right),
-        weights: elements.map((e) => getComputedStyle(e).fontWeight),
-        pads: counts.map((e) => getComputedStyle(e).paddingInline),
-      };
+  const elements = [
+    label,
+    ...counts.filter((_, index) => !controls[index].absent),
+  ];
+  const rects = elements.map((element) => element.getBoundingClientRect());
+  return {
+    controls,
+    centres: rects.map((r) => r.y + r.height / 2),
+    gaps: rects.slice(1).map((r, i) => r.left - rects[i].right),
+    weights: elements.map((element) => getComputedStyle(element).fontWeight),
+    pads: counts.map((element) => getComputedStyle(element).paddingInline),
+  };
+}
+
+test.use({ profile: "contract-messages-disclosures" });
+for (const surface of ["work", "interval"] as const) {
+  test(`messages.${surface}-header-shared-meta-and-whole-controls`, {
+    tag: ["@messages", "@contracts"],
+  }, async ({ isolatedState: state, page }) => {
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: surface === "work" ? "hold" : "thaw",
     });
-    expect.soft(Math.max(...geometry.centres) - Math.min(...geometry.centres))
-      .toBeLessThan(1);
-    expect.soft(Math.abs(geometry.gaps[0] - geometry.gaps[1])).toBeLessThan(1);
-    expect.soft(geometry.weights).toEqual(["400", "400", "400"]);
-    expect.soft(geometry.pads).toEqual(["0px", "0px"]);
-  }
-  for (const count of await counts.all()) {
-    await expect.soft(count.locator(".otk-disclosure-icon")).toBeVisible();
-    await expect(count).toHaveAttribute("aria-expanded", "false");
-    const closed = await count.locator("path").count();
-    await count.click();
-    await expect(count).toHaveAttribute("aria-expanded", "true");
-    expect.soft(await count.locator("path").count()).toBeLessThan(closed);
-  }
-});
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await openSession(state, page, "tstv1-otk");
+    const header = page.locator(
+      surface === "work" ? ".otk-work-log" : "[data-background-interval]",
+    ).first();
+    const counts = header.locator("[data-record-kind]");
+    await expect(counts).toHaveCount(2);
+    await expect.soft(header.locator(".otk-meta-row [data-record-kind]"))
+      .toHaveCount(2);
+    if (surface === "work") {
+      await expect.soft(header.locator(".otk-work-label")).toHaveText(
+        "Work log",
+      );
+      await expect.soft(header.locator(".otk-work-label em")).toHaveCount(0);
+      await expect.soft(page.locator(".otk-turn-time").first()).toHaveText(
+        "counting...",
+      );
+      await expect.soft(page.locator(".otk-turn-time em").first()).toHaveText(
+        "counting...",
+      );
+    }
+    for (const width of [1440, 760]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect.poll(async () => {
+        const geometry = await header.evaluate(headerGeometry);
+        return geometry.controls.every((control) =>
+          control.absent || control.whole && control.textFits
+        );
+      }).toBe(true);
+      const geometry = await header.evaluate(headerGeometry);
+      expect.soft(Math.max(...geometry.centres) - Math.min(...geometry.centres))
+        .toBeLessThan(1);
+      for (const gap of geometry.gaps) {
+        expect.soft(Math.abs(gap - 16)).toBeLessThan(1);
+      }
+      expect.soft(geometry.weights.every((weight) => weight === "400")).toBe(
+        true,
+      );
+      expect.soft(geometry.pads).toEqual(["0px", "0px"]);
+      if (width === 1440) {
+        expect.soft(geometry.controls.every((control) => !control.absent)).toBe(
+          true,
+        );
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    for (const count of await counts.all()) {
+      await expect.soft(count.locator(".otk-disclosure-icon")).toBeVisible();
+      await expect(count).toHaveAttribute("aria-expanded", "false");
+      const closed = await count.locator("path").count();
+      await count.click();
+      await expect(count).toHaveAttribute("aria-expanded", "true");
+      expect.soft(await count.locator("path").count()).toBeLessThan(closed);
+    }
+  });
+}

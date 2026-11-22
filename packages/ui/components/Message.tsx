@@ -420,10 +420,6 @@ export default function Message(
                       identity={group().id}
                       render={(visible, meta) => (
                         <WorkLog
-                          workingMs={group().workingMs}
-                          counting={presentation().time?.fallback ===
-                              "counting..." ||
-                            presentation().time?.counting}
                           identity={group().id}
                           prefs={props.prefs}
                           required={group().required}

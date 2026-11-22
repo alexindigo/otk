@@ -7,6 +7,7 @@ import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
+import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
 import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
 import { registerTranscriptPreferences } from "../../packages/protocol/preferences/transcript.ts";
@@ -19,7 +20,7 @@ Deno.test("UI convention: folded record counts are neutral metadata, not per-kin
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
   );
-  assert(source.includes("<ChromeMeta truncate>{fold().label}</ChromeMeta>"));
+  assert(source.includes("<ChromeMeta>{fold.label}</ChromeMeta>"));
   assert(source.includes("<DisclosureToggle"));
   assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
   const values = foldRecords([1, 2], () => ({
@@ -494,17 +495,10 @@ export function conventionErrors(
         .slice(1)
       : specifier;
   if (rule === "message-footer") {
+    errors.push(...messageHeaderClockErrors(new Map([[path, text]])));
     for (const node of source.all) {
       if (node.type !== "JSXOpeningElement" || !source.live(node)) continue;
       const imported = source.imported(node.name);
-      if (
-        [
-          "packages/ui/components/Message.tsx",
-          "packages/ui/components/Timeline.tsx",
-        ]
-          .includes(path) &&
-        modulePath(imported?.module ?? "").endsWith("/Clock.tsx")
-      ) fail("message clock outside MessageFooter");
       if (
         source.attr(node, "data-message-command") &&
         path !== "packages/ui/components/MessageActions.tsx"
@@ -1015,12 +1009,20 @@ Deno.test("UI convention: list ordering rejects activity/state keys and accepts 
 });
 
 Deno.test("UI convention: message footer rejects concealed metadata and independent action owners", () => {
-  for (const path of ["Message.tsx", "Timeline.tsx"]) {
+  assert(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/ExtractedHeader.tsx",
+      'import Instant from "./Clock.tsx"; export const Header=()=> <header data-message-header><Instant at={1}/></header>;',
+    ).length > 0,
+    "an extracted message header escapes the clock owner",
+  );
+  for (const path of ["Message.tsx", "Timeline.tsx", "MovedHeader.tsx"]) {
     assert(
       conventionErrors(
         "message-footer",
         `packages/ui/components/${path}`,
-        'import Instant from "./Clock.tsx"; const view=<Instant at={1} />;',
+        'import Instant from "./Clock.tsx"; const view=<header data-message-header><Instant at={1} /></header>;',
       ).length > 0,
     );
   }
@@ -1069,6 +1071,35 @@ Deno.test("UI convention: message footer rejects concealed metadata and independ
       "message-footer",
       "packages/ui/components/MessageFooter.tsx",
       'import Actions from "./MessageActions.tsx"; const view=<Actions />;',
+    ),
+    [],
+  );
+});
+
+Deno.test("UI convention: header clock ownership follows component roles and extracted renderers", async () => {
+  assertEquals(messageHeaderClockErrors(await productionSources()), []);
+  const wrapper = new Map([
+    [
+      "views/Frame.tsx",
+      'import Band from "./Renamed.tsx"; const view=<header data-message-header><Band /></header>;',
+    ],
+    [
+      "views/Renamed.tsx",
+      'import Instant from "../Clock.tsx"; export default function Band(){return <span><Instant at={1}/></span>}',
+    ],
+  ]);
+  assert(messageHeaderClockErrors(wrapper).length > 0);
+  wrapper.set(
+    "views/Renamed.tsx",
+    'import Preview from "../Popover.tsx"; import Instant from "../Clock.tsx"; export default function Band(){return <Preview><Instant at={1}/></Preview>}',
+  );
+  assertEquals(messageHeaderClockErrors(wrapper), []);
+  assertEquals(
+    messageHeaderClockErrors(
+      new Map([[
+        "records/History.tsx",
+        'import Instant from "../Clock.tsx"; const view=<header class="record-heading"><Instant at={1}/></header>;',
+      ]]),
     ),
     [],
   );

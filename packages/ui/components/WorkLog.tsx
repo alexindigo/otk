@@ -3,20 +3,16 @@ import "./WorkLog.css" with { type: "text" };
 import type { Element } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { workingTime, workingTimeValue } from "./work-log.ts";
-import TimeValue from "./TimeValue.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
 import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 
 export default function WorkLog(
   props: {
-    workingMs?: number;
-    counting?: boolean;
     identity?: string;
     prefs?: Preferences;
     required?: boolean;
-    meta?(): Element;
+    meta?(primary: () => Element): Element;
     body(): Element;
   },
 ): Element {
@@ -28,40 +24,30 @@ export default function WorkLog(
     () => !!props.required,
   );
   const toggle = ownedAction("work.toggle", () => setOpen(!open()));
-  const label = () =>
-    props.counting && !props.workingMs
-      ? "Work log"
-      : workingTime(props.workingMs) ?? "Work log";
+  const primary = (toggleID: string) => (
+    <button
+      id={toggleID}
+      type="button"
+      title="Work log"
+      class="otk-work-fold otk-tree-control"
+      aria-expanded={open() ? "true" : "false"}
+      onClick={() => void toggle()}
+    >
+      <TreeIcon />
+      <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
+    </button>
+  );
   return (
     <section class="otk-work-log">
       <TreeNode
         toggleHeader
-        label={label()}
+        label="Work log"
         open={open()}
         onOpen={(value) => setOpen(value)}
-        header={(_connected, toggleID) => (
-          <MetaRow>
-            <button
-              id={toggleID}
-              type="button"
-              class="otk-work-fold otk-tree-control"
-              aria-expanded={open() ? "true" : "false"}
-              onClick={() => void toggle()}
-            >
-              <TreeIcon />
-              <ChromeMeta class="otk-work-label">
-                {props.counting
-                  ? (
-                    <TimeValue
-                      value={workingTimeValue(props.workingMs, true)}
-                    />
-                  )
-                  : label()}
-              </ChromeMeta>
-            </button>
-            {props.meta?.()}
-          </MetaRow>
-        )}
+        header={(_connected, toggleID) =>
+          props.meta
+            ? props.meta(() => primary(toggleID))
+            : <MetaRow>{primary(toggleID)}</MetaRow>}
         body={() => <div class="otk-work-body">{props.body()}</div>}
       />
     </section>

@@ -266,7 +266,7 @@ export default function SessionView(props: {
                   group={group()}
                   onOpenChild={props.onOpenChild}
                   prefs={props.prefs}
-                  trailing={meta}
+                  meta={meta}
                   breakouts={() => (
                     <RecordList
                       items={group().breakouts ?? []}

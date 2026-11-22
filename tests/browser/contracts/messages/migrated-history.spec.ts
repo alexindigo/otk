@@ -50,7 +50,7 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
     "interrupted",
   );
 });
-test("messages.work-log-segments-have-own-times-and-footer-keeps-turn-total", {
+test("messages.work-log-segments-keep-their-name-and-footer-owns-turn-time", {
   tag: ["@messages", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
   await page.setViewportSize({ width: 1280, height: 1600 });
@@ -60,22 +60,22 @@ test("messages.work-log-segments-have-own-times-and-footer-keeps-turn-total", {
   await expect(headers).toHaveCount(2);
   await expect(headers.nth(0)).toHaveAttribute("aria-expanded", "false");
   await expect(headers.nth(1)).toHaveAttribute("aria-expanded", "false");
-  await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
-  await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+  await expect(headers.nth(0)).toHaveText("Work log");
+  await expect(headers.nth(1)).toHaveText("Work log");
   await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
   for (const detail of [false, true]) {
     await state.product("prefs.set", { key: "toolDetails", value: detail });
     await expect(headers).toHaveCount(2);
-    await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
-    await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+    await expect(headers.nth(0)).toHaveText("Work log");
+    await expect(headers.nth(1)).toHaveText("Work log");
     await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
     await page.reload();
-    await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
-    await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+    await expect(headers.nth(0)).toHaveText("Work log");
+    await expect(headers.nth(1)).toHaveText("Work log");
     await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
   }
   await page.reload();
-  await expect(headers.nth(0)).toHaveText("Worked for 0.7s");
-  await expect(headers.nth(1)).toHaveText("Worked for 0.9s");
+  await expect(headers.nth(0)).toHaveText("Work log");
+  await expect(headers.nth(1)).toHaveText("Work log");
   await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
 });
