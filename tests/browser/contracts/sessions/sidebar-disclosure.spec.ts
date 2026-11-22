@@ -7,7 +7,7 @@ import { activity } from "../../pages/sessions.ts";
 test.describe("sidebar disclosure intent", () => {
   test.use({ profile: "contract-sessions-worktrees" });
   test("projects.disclosure-mouse-immediate-held-save-keyboard-and-reload", {
-    tag: ["@projects", "@contracts"],
+    tag: ["@sessions", "@contracts"],
   }, async ({ isolatedState: state, page }, info) => {
     const { root, entries } = await state.observe<
       { root: string; entries: { directory: string }[] }
@@ -75,7 +75,7 @@ test.describe("sidebar disclosure intent", () => {
   });
 
   test("projects.disclosure-refusal-is-local-and-retries-captured-intent", {
-    tag: ["@projects", "@contracts"],
+    tag: ["@sessions", "@contracts"],
   }, async ({ isolatedState: state, page }, info) => {
     const { entries } = await state.observe<
       { entries: { directory: string }[] }
@@ -169,7 +169,7 @@ test.describe("sidebar disclosure intent", () => {
 test.describe("sidebar row-level presentation", () => {
   test.use({ profile: "contract-sessions-removed" });
   test("projects.sidebar-meta-and-project-only-artwork-three-themes", {
-    tag: ["@projects", "@contracts"],
+    tag: ["@sessions", "@contracts"],
   }, async ({ isolatedState: state, page }, info) => {
     const { root, entries } = await state.observe<
       { root: string; entries: { directory: string }[] }
@@ -253,7 +253,7 @@ test.describe("sidebar branch topology cases", () => {
   test(
     "projects.sidebar-empty-required-archive-only-missing-root-mixed-large",
     {
-      tag: ["@projects", "@contracts"],
+      tag: ["@sessions", "@contracts"],
     },
     async ({ isolatedState: state, page }) => {
       const { root } = await state.observe<{ root: string }>();
@@ -313,7 +313,7 @@ test.describe("sidebar branch topology cases", () => {
 test.describe("discovered disclosure", () => {
   test.use({ profile: "contract-sessions-catalog" });
   test("projects.discovered-immediate-intent-and-shared-count-meta", {
-    tag: ["@projects", "@contracts"],
+    tag: ["@sessions", "@contracts"],
   }, async ({ isolatedState: state, page }) => {
     const frames = await wire(page);
     await page.goto(state.url);
