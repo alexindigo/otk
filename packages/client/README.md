@@ -539,6 +539,9 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Same-authority newest-page reconciliation retains acquired messages preceding
+its covered suffix. Covered absences, explicit removals, a complete source page
+and changed epoch or transcript version still retire their authoritative scope.
 Replacement pages and recovery parts preserve last-good unfinished text when
 native source coverage is shorter or empty. The existing stream stamp carries
 optional UTF-16 `sourceLength`, so Markdown presentation changes do not
