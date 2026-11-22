@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { RequestMetadata } from "./request-metadata.ts";
+import type { EntityState } from "./entity-state.ts";
 import type { PublicFailure } from "./requests.ts";
 export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "inbox.get": { kind: "read", pending: "Loading projects" },
@@ -137,6 +138,8 @@ export interface InboxSnapshot {
   discoveryFailure?: PublicFailure;
   /** Additive server-owned scalar projection; no session data is needed by rows. */
   summaries?: Record<string, ProjectSummary>;
+  /** Per-user single state model, keyed by entityKey(kind, id). */
+  entities?: Record<string, EntityState>;
 }
 export interface InboxVersion {
   generation: string;
@@ -148,6 +151,8 @@ export interface InboxBaseline extends InboxVersion {
   summaryRevision?: number;
 }
 export type InboxOp =
+  | { op: "entity.upsert"; value: EntityState }
+  | { op: "entity.remove"; key: string }
   | { op: "project.upsert"; project: ProjectRecord }
   | { op: "project.remove"; directory: string }
   | { op: "task.upsert"; task: TaskRecord }

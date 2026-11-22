@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectTree } from "./project-tree.ts";
-import { DEFAULT_PROJECT_AGEING, rollupStatus } from "@otk/protocol";
+import { DEFAULT_PROJECT_AGEING, entityKey, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
@@ -390,6 +390,8 @@ export interface InboxState {
 }
 export interface InboxChanges {
   baseline: boolean;
+  /** Changed single-state keys; no client re-aggregation. */
+  entities?: readonly string[];
   /** Known facts for sessions newly in the view, not new events. */
   admitted?: boolean;
   projects: readonly string[];
@@ -476,6 +478,9 @@ export function createInbox(
       ...(value.inbox.supervision
         ? { supervision: { ...value.inbox.supervision } }
         : {}),
+      ...(value.inbox.entities
+        ? { entities: { ...value.inbox.entities } }
+        : {}),
     };
     current.ready = true;
     clock.update((draft) => {
@@ -536,6 +541,13 @@ export function createInbox(
   };
   const apply = (draft: InboxSnapshot, op: InboxOp) => {
     switch (op.op) {
+      case "entity.upsert":
+        (draft.entities ??= {})[entityKey(op.value.kind, op.value.id)] =
+          op.value;
+        break;
+      case "entity.remove":
+        if (draft.entities) delete draft.entities[op.key];
+        break;
       case "project.upsert": {
         const at = draft.projects.findIndex((p) =>
           p.directory === op.project.directory
@@ -683,10 +695,18 @@ export function createInbox(
         clock.update((draft) => {
           draft.revision++;
         });
-        const projects = new Set<string>(), sessions = new Set<string>();
+        const projects = new Set<string>(),
+          sessions = new Set<string>(),
+          entities = new Set<string>();
         let tasks = false, discovery = false;
         for (const op of frame.ops) {
           switch (op.op) {
+            case "entity.upsert":
+              entities.add(entityKey(op.value.kind, op.value.id));
+              break;
+            case "entity.remove":
+              entities.add(op.key);
+              break;
             case "project.upsert":
               projects.add(op.project.directory);
               break;
@@ -717,6 +737,7 @@ export function createInbox(
         }
         publish({
           baseline: false,
+          ...(entities.size ? { entities: [...entities] } : {}),
           ...(frame.admitted ? { admitted: true } : {}),
           projects: [...projects],
           sessions: [...sessions],
