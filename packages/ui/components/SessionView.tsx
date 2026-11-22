@@ -321,9 +321,13 @@ export default function SessionView(props: {
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
+  const copyRecovery = () =>
+    !!props.branchHistory?.state.recovery &&
+    (!rollbackState().record || !!rollbackState().dismissed);
   const noticed = () =>
     !!props.forkNote || !!feedback() ||
     !!props.branchHistory?.state.permanence ||
+    copyRecovery() ||
     !!props.branchHistory?.state.choice ||
     !!props.branchHistory?.state.error && !rollbackState().record ||
     !!props.branchHistory?.state.branches.some((branch) =>
@@ -342,7 +346,10 @@ export default function SessionView(props: {
             <RevertSendChoice owner={owner()} />
             <SavedBranchNotice
               owner={owner()}
-              failureVisible={branchFailureVisible() && !rollbackState().record}
+              failureVisible={branchFailureVisible() &&
+                !owner().state.permanence &&
+                (!rollbackState().record || !!rollbackState().dismissed)}
+              recoveryVisible={copyRecovery()}
               statusVisible={false}
             />
           </>
@@ -1086,7 +1093,8 @@ export default function SessionView(props: {
               focusNotice={() => noticeControl?.focus()}
               notice={noticed() ? notice : undefined}
               noticeFlow={!!props.branchHistory?.state.permanence ||
-                !!props.branchHistory?.state.choice}
+                !!props.branchHistory?.state.choice ||
+                copyRecovery()}
               readOnly={props.child}
             >
               {(active) => (

@@ -1141,11 +1141,13 @@ changed captured records. This precedes prompt/command, Compact and
 version-specific native commit paths. Exact selected prompts come from the
 plugin's `history.prompt` reader, independently of the 50-entry recall window;
 attachment references are resolved before deletion. Plugin-owned bounded Source
-previews are materialized too; saved Source folds never query the live native
-transcript. Common submission and Compact admission retain the current draft
-before dispatch. The archive is not native history and never restores files.
-Operations initiated elsewhere cannot recover content this browser never
-captured.
+data is retained too; saved Source folds never query the live native transcript.
+The archive codec stores repeated content once across messages, Source, prompts
+and drafts. JSON Source previews are derived lazily from saved structure;
+schema-1 browser archives remain readable without rewriting them. Common
+submission and Compact admission retain the current draft before dispatch. The
+archive is not native history and never restores files. Operations initiated
+elsewhere cannot recover content this browser never captured.
 
 Prompt-history absence is a separate capability result, not an exception-based
 fallback. Revert still proceeds without archive reads or writes, while
@@ -1157,6 +1159,15 @@ consent. The invocation-scoped BranchSendPermit is revalidated after attachment
 preparation, including continued copy existence unless discard was explicitly
 chosen. Restore cancels a waiting Send. Failed saving keeps both the draft and
 choice.
+
+The capture owner keeps its exact ID record and retained drafts independently of
+the worker lifetime. Restore recapture requires that record and cannot fall back
+to paging a whole session. Capture failures describe their actual operation;
+only the Send gate reports an unsent replacement. After Restore, an unsaved copy
+offers Retry or an explicit choice to keep the live conversation without a saved
+copy. Background failures use those same controls if the reverted group is
+dismissed or no longer present. Neither choice clears the current draft or
+bypasses the separate Send consent gate.
 
 Pre-publication Send admission borrows an acquired, connected transcript
 baseline instead of adding an unconditional native read before the local pending

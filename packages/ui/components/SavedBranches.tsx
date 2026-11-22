@@ -70,6 +70,7 @@ export function SavedBranchNotice(
   props: {
     owner: BranchHistory;
     failureVisible?: boolean;
+    recoveryVisible?: boolean;
     statusVisible?: boolean;
     navigationVisible?: boolean;
   },
@@ -86,6 +87,35 @@ export function SavedBranchNotice(
     <>
       <Show when={props.failureVisible !== false && state().error}>
         <OperationFeedback feedback={errorFeedback(state().error)!} />
+      </Show>
+      <Show
+        when={props.recoveryVisible !== false && state().recovery &&
+          !state().permanence}
+      >
+        <ComposerNoticeRow>
+          <div class="otk-control-row">
+            <button
+              type="button"
+              class="otk-pill"
+              disabled={state().pending}
+              onClick={() =>
+                void props.owner.retryCopy().catch((cause) =>
+                  props.owner.fail(cause)
+                )}
+            >
+              {state().pending ? "Saving copy..." : "Retry"}
+            </button>
+            <button
+              type="button"
+              class="otk-pill"
+              disabled={state().pending}
+              title="Keep the live conversation and current draft without saving a browser copy"
+              onClick={() => props.owner.keepWithoutCopy()}
+            >
+              Keep without a saved copy
+            </button>
+          </div>
+        </ComposerNoticeRow>
       </Show>
       <Show when={props.statusVisible !== false && state().pending}>
         <ComposerNoticeRow icon={RevertIcon} role="status">
