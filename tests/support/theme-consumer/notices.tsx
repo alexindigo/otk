@@ -4,6 +4,8 @@ import {
   CommandHub,
   createDrafts,
   errorFeedback,
+  type Feedback,
+  type FeedbackOwner,
   type SessionRevert,
   type SessionRevertState,
 } from "@otk/client";
@@ -33,6 +35,19 @@ export default function Notices(props: { prefs: Preferences }) {
     },
   };
   const operation = solidState<SessionRevertState>({ phase: "saved", record });
+  let current: Feedback | undefined;
+  const listeners = new Set<() => void>();
+  const feedback: FeedbackOwner = {
+    current: () => current,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    fail() {},
+    clear() {},
+  };
   const commands = new CommandHub();
   const rollback: SessionRevert = {
     state: operation.state,
@@ -65,12 +80,15 @@ export default function Notices(props: { prefs: Preferences }) {
     submit: (action) => action(),
     history: () => Promise.resolve([]),
     attachments: (parts) => Promise.resolve(parts),
+    feedback,
   };
   const select = (value: string) => {
     setMode(value);
     operation.update((state) => {
       state.pending = value === "pending" ? "revert" : undefined;
-      state.record = value === "fork" ? undefined : record;
+      state.record = ["strip", "pending", "error"].includes(value)
+        ? record
+        : undefined;
       state.phase = value === "pending"
         ? "staging"
         : value === "error"
@@ -86,11 +104,35 @@ export default function Notices(props: { prefs: Preferences }) {
         })
         : undefined;
     });
+    current = value === "notice-error"
+      ? errorFeedback("The requested rollback is no longer available", {
+        actionLabel: "Rolling back conversation",
+        target: {
+          sessionID: "tstv1-theme-notice",
+          label: "Public composer notice",
+        },
+      })
+      : value === "notice-pending"
+      ? { kind: "pending", text: "Saving response" }
+      : value === "notice"
+      ? { kind: "info", text: "Captured browser-local feedback" }
+      : undefined;
+    for (const listener of listeners) listener();
   };
   return (
     <CommandProvider commands={commands}>
       <nav aria-label="Public notice state">
-        <For each={["strip", "pending", "error", "fork"]}>
+        <For
+          each={[
+            "strip",
+            "pending",
+            "error",
+            "notice",
+            "notice-pending",
+            "notice-error",
+            "fork",
+          ]}
+        >
           {(value) => (
             <button
               type="button"
@@ -134,14 +176,6 @@ export default function Notices(props: { prefs: Preferences }) {
             onOlder={() => Promise.resolve()}
             onRetry={() => Promise.resolve()}
             rollback={rollback}
-            strip={mode() === "strip"
-              ? {
-                boundaryID: "prompt",
-                messageIDs: ["prompt"],
-                preview: "Captured prompt",
-                files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
-              }
-              : undefined}
             forkNote={mode() === "fork"
               ? { from: "Original conversation" }
               : undefined}

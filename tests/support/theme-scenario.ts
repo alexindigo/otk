@@ -770,7 +770,11 @@ export async function themeScenario() {
         }
         case "productRpc": {
           const { method, params } = frame.params;
-          if (method === "prefs.set") await nc.rpc(method, params);
+          // The sweep's common shell settings apply to both its component
+          // scene and stock-native application, just like its theme preference.
+          if (method === "prefs.set" || method === "layout.patch") {
+            await nc.rpc(method, params);
+          }
           const before = c.frames.length;
           const result = await c.rpc(method, params);
           if (method === "prefs.set") {

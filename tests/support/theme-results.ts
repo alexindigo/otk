@@ -235,6 +235,15 @@ export function themeResults(directory: string, sessionID: string) {
   const facts = [{
     ...reply("facts", [
       {
+        id: "facts-text",
+        kind: "text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{ i: "text", text: "Published agent and tool facts." }],
+        }],
+      },
+      {
         id: "task",
         kind: "tool",
         call: {

@@ -111,7 +111,10 @@ export async function composerAccessories(
   for (const width of [600, 800, 1280, 1920]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const mode of ["normal", "focus", "hover"]) {
-      const control = page.locator(".otk-control-trigger").first();
+      // Exercise this composer's public trigger, not an earlier hidden panel's
+      // Select that happens to share the generic control class.
+      const control = page.locator(".otk-agent-picker > button");
+      await expect(control).toBeVisible();
       if (mode === "focus") await control.focus();
       if (mode === "hover") await control.hover();
       await frames(page);
@@ -347,6 +350,18 @@ export async function collections456(input: Inputs) {
     );
     for (const theme of themes) {
       await test.step(theme.id, async () => {
+        // Every theme starts in the same full-label lane. Responsive pressure
+        // later in this iteration must not leak into the next theme's baseline.
+        await state.product("layout.patch", {
+          leftCollapsed: false,
+          rightCollapsed: false,
+          rightView: "sessions",
+          leftWidth: 248,
+          rightWidth: 320,
+        });
+        await expect.poll(async () =>
+          (await page.locator(".otk-project-inbox").boundingBox())!.width
+        ).toBe(248);
         await paint(theme);
         await expect(page.locator(".otk-variant-picker > button"))
           .toHaveAttribute("aria-label", "Variant: High, agent default");
@@ -670,11 +685,44 @@ export async function collections456(input: Inputs) {
           await shot(`composer-picker-${kind}-${theme.id}-1280`);
           await page.keyboard.press("Escape");
         }
+        // Own the lane at the point of measurement, after earlier scenes have
+        // finished their layout writes, and observe the browser's acceptance.
+        await state.product("layout.patch", {
+          leftWidth: 300,
+          rightWidth: 320,
+        });
+        await expect.poll(async () =>
+          (await page.locator(".otk-project-inbox").boundingBox())!.width
+        ).toBe(300);
         for (
           const [width, truncated] of [[1180, false], [1060, true]] as const
         ) {
           await page.setViewportSize({ width, height: 657 });
           await frames(page);
+          await test.info().attach(
+            `composer-responsive-geometry-${theme.id}-${width}`,
+            {
+              body: JSON.stringify(
+                await page.locator(".otk-composer-model-name").evaluate((
+                  el,
+                ) => ({
+                  name: el.textContent,
+                  client: el.clientWidth,
+                  source: el.scrollWidth,
+                  model: el.closest("button")!.getBoundingClientRect().width,
+                  lane: document.querySelector(".otk-composer")!
+                    .getBoundingClientRect().width,
+                  panels: [".otk-project-inbox", ".otk-right-panel"].map((
+                    selector,
+                  ) =>
+                    document.querySelector(selector)!.getBoundingClientRect()
+                      .width
+                  ),
+                })),
+              ),
+              contentType: "application/json",
+            },
+          );
           expect(
             await page.locator(".otk-composer-provider").evaluate((el) =>
               el.scrollWidth > el.clientWidth
@@ -1037,9 +1085,22 @@ export async function collections456(input: Inputs) {
         expect(Math.max(...icon.gaps) - Math.min(...icon.gaps))
           .toBeLessThanOrEqual(1);
         // The joined notice owns pending status; the footer keeps only the
-        // persistent primary, disabled with its reason (triage decision 5).
-        await expect(dock.locator(".otk-surface-actions button:visible"))
+        // persistent mutation primary, disabled with its reason. Presentation-
+        // only local dismissal remains available, as in the transport contract.
+        await expect(
+          dock.locator(
+            ".otk-surface-actions button:visible:not([data-request-dismiss])",
+          ),
+        )
           .toHaveCount(1);
+        await expect(
+          dock.locator(".otk-surface-actions [data-request-dismiss]"),
+        )
+          .toHaveCount(1);
+        await expect(
+          dock.getByRole("button", { name: "Dismiss locally", exact: true }),
+        )
+          .toBeEnabled();
         await expectPrimaryBlocked(
           dock.locator(".otk-surface-actions [data-primary-action]"),
           kind === "question" ? "Sending answer" : "Sending response",
@@ -1069,37 +1130,130 @@ export async function collections456(input: Inputs) {
     for (const theme of themes) {
       await paint(theme);
       let baseline: { row: number; notice: number; icon: number[] } | undefined;
-      for (const mode of ["strip", "pending", "error", "fork"]) {
+      for (
+        const mode of [
+          "strip",
+          "pending",
+          "error",
+          "notice",
+          "notice-pending",
+          "notice-error",
+          "fork",
+        ]
+      ) {
         await page.locator(`[data-theme-notice=${mode}]`).click();
         await frames(page);
+        if (["strip", "pending", "error"].includes(mode)) {
+          // Reverted work belongs to the transcript, not the retired composer
+          // overlay. Keep its state/geometry proof separate from joined feedback.
+          const group = page.locator(".otk-messages .otk-revert-group");
+          await expect(group).toHaveCount(1);
+          await expect(group).toBeVisible();
+          await expect(group).toHaveAttribute(
+            "data-phase",
+            mode === "pending"
+              ? "staging"
+              : mode === "error"
+              ? "failed"
+              : "saved",
+          );
+          await expect(group).toContainText("Captured prompt");
+          await expect(page.locator(".otk-composer-notice")).toHaveCount(0);
+          const restore = group.getByRole("button", {
+            name: "Restore conversation",
+            exact: true,
+          });
+          const dismiss = group.getByRole("button", {
+            name: "Dismiss revert",
+            exact: true,
+          });
+          if (mode === "pending") {
+            await expect(restore).toHaveCount(0);
+            await expect(dismiss).toHaveCount(0);
+          } else {
+            await expect(restore).toBeEnabled();
+            await expect(dismiss).toBeEnabled();
+          }
+          if (mode === "error") {
+            await expect(group).toHaveAttribute("role", "alert");
+            await expect(group).toContainText(
+              "The requested rollback is no longer available",
+            );
+          }
+          expect(
+            await group.evaluate((el) => {
+              const r = el.getBoundingClientRect(),
+                pane = el.closest(".otk-messages")!.getBoundingClientRect();
+              return r.left >= pane.left && r.right <= pane.right &&
+                r.top >= pane.top && r.bottom <= pane.bottom;
+            }),
+          ).toBe(true);
+          await expectRuleThree(page);
+          await shot(`joined-${mode}-${theme.id}-1280`);
+          continue;
+        }
         await expect(page.locator(".otk-composer-notice")).toHaveCount(1);
         await expect(page.locator(".otk-composer-notice-row")).toHaveCount(1);
         const g = await page.locator(".otk-composer-notice").evaluate((el) => {
           const row = el.querySelector(".otk-composer-notice-row")!,
             text = row.querySelector(".otk-composer-notice-content")!,
-            icon = row.querySelector(".otk-composer-notice-icon")!,
+            icon = row.querySelector(".otk-composer-notice-icon"),
             r = row.getBoundingClientRect(),
             t = text.getBoundingClientRect(),
-            i = icon.getBoundingClientRect(),
+            i = icon?.getBoundingClientRect(),
             n = el.getBoundingClientRect(),
-            input = document.querySelector(".otk-composer-input")!
+            frame = document.querySelector(".otk-composer-frame")!
+              .getBoundingClientRect(),
+            dock = document.querySelector(".otk-composer-dock")!
               .getBoundingClientRect();
           return {
             row: r.height,
             notice: n.height,
-            icon: [i.width, i.height],
+            icon: i ? [i.width, i.height] : [],
             text: Math.abs(t.top + t.height / 2 - r.top - r.height / 2),
-            iconOffset: i.top + i.height / 2 - r.top - r.height / 2,
-            joined: n.left === input.left && n.right === input.right &&
-              Math.abs(n.bottom - input.top) <= 1,
+            iconOffset: i ? i.top + i.height / 2 - r.top - r.height / 2 : null,
+            // Runtime notices anchor above the dock's reserved helper row.
+            // Its outer frame, not the bordered inner input, owns their width.
+            joined: n.left === frame.left && n.right === frame.right &&
+              Math.abs(n.bottom - dock.top) <= 1,
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
-        if (mode === "error") {
-          // Complete failure facts grow in flow; control-sized icons do not.
+        if (mode === "notice-error") {
+          // FailureContent owns the structured failure's gutter signal, not a
+          // duplicate activity icon. Complete facts still grow within the row.
           expect(g.row).toBeGreaterThanOrEqual(baseline.row);
           expect(g.notice).toBeGreaterThanOrEqual(baseline.notice);
-          expect(g.icon).toEqual(baseline.icon);
+          expect(g.icon).toEqual([]);
+          const signal = page.locator(
+            ".otk-failure-content.otk-failure-signal.is-gutter",
+          );
+          await expect(signal).toHaveCount(1);
+          expect(
+            await signal.evaluate((el) => {
+              const css = getComputedStyle(el),
+                box = el.getBoundingClientRect();
+              const heading = el.querySelector(".otk-failure-heading")!
+                .getBoundingClientRect();
+              const reason = el.querySelector(".otk-failure-main-reason")!
+                .getBoundingClientRect();
+              const label = el.querySelector(".otk-failure-detail-toggle")!
+                .getBoundingClientRect();
+              return {
+                painted: /^(?!rgba\(0, 0, 0, 0\)).* 2px 0px 0px 0px inset$/
+                  .test(css.boxShadow),
+                width: box.width > 0,
+                height: box.height > 0,
+                aligned: Math.max(heading.left, reason.left, label.left) -
+                    Math.min(heading.left, reason.left, label.left) <= .5,
+              };
+            }),
+          ).toEqual({
+            painted: true,
+            width: true,
+            height: true,
+            aligned: true,
+          });
           expect(
             await page.locator(".otk-failure-content").evaluate((el) => {
               const row = el.closest(".otk-composer-notice-row")!
@@ -1122,16 +1276,16 @@ export async function collections456(input: Inputs) {
             baseline,
           );
           expect(g.icon).toEqual([g.row, g.row]);
+          expect(g.iconOffset).toBe(0);
         }
         expect(g.text).toBeLessThanOrEqual(.5);
-        expect(g.iconOffset).toBe(0);
         expect(g.joined).toBe(true);
         await expectRuleThree(page);
-        if (mode === "pending") {
+        if (mode === "notice-pending") {
           await expect(page.locator(".otk-composer-notice [role=status]"))
             .toHaveCount(1);
         }
-        if (mode === "error") {
+        if (mode === "notice-error") {
           await expect(page.locator(".otk-composer-notice [role=alert]"))
             .toHaveCount(1);
         }
@@ -1247,11 +1401,16 @@ export async function collections456(input: Inputs) {
             await expect(page.locator("[data-tool=external] small")).toHaveText(
               "Output truncated.",
             );
-            await page.locator(".otk-message-agent").hover();
-            await expect(page.locator(".otk-message-agent")).toHaveCSS(
-              "color",
-              await token(page, "--accent"),
-            );
+            await page.locator(".otk-reply-agent .otk-entity-pill").hover();
+            await expect(page.locator(".otk-reply-agent .otk-entity-pill"))
+              .toHaveCSS(
+                "color",
+                await token(page, "--otk-fg"),
+              );
+            await expect(page.locator(":popover-open .otk-entity-facts"))
+              .toContainText("This reply");
+            await page.mouse.move(1, 1);
+            await page.keyboard.press("Escape");
             await expect(page.locator(".otk-agent-picker > button")).toHaveCSS(
               "color",
               await token(page, "--accent"),
@@ -1328,12 +1487,16 @@ export async function collections456(input: Inputs) {
             }
             await reveal(
               page,
-              "[data-tool=read][data-tool-status=error] .otk-tool-error-toggle",
+              "[data-tool=read][data-tool-status=error] .otk-failure-details",
             );
             await page.locator(
-              "[data-tool=read][data-tool-status=error] .otk-tool-error-toggle",
+              "[data-tool=read][data-tool-status=error] .otk-failure-details",
             ).click();
-            await expect(page.locator(".otk-tool-error")).toBeAttached();
+            await expect(
+              page.locator(
+                "[data-tool=read][data-tool-status=error] .otk-failure-detail-body",
+              ),
+            ).toBeVisible();
             await reveal(page, "[data-tool=websearch]");
             await expect(page.locator("[data-tool=websearch]")).not
               .toContainText("count unavailable");
@@ -1387,7 +1550,7 @@ export async function collections456(input: Inputs) {
                 .toHaveText("2\n3");
               await expect(
                 page.locator("[data-tool=read] [data-tool-result-meta]"),
-              ).toHaveText("2\u20133 of 4 lines \u00b7 More available");
+              ).toHaveText("2-3 of 4 lines \u00b7 More available");
               await expect(page.locator("[data-tool=read] .otk-token").first())
                 .toBeAttached();
               await expect.poll(() =>
@@ -1612,48 +1775,36 @@ export async function collections456(input: Inputs) {
             await page.setViewportSize({ width: 1280, height: 900 });
             const fold = page.locator(".otk-work-fold").first();
             await expect(fold).toBeAttached();
-            await expect(fold.locator(".otk-divider-label")).toHaveCSS(
-              "font",
-              await fold.evaluate((el) => getComputedStyle(el).font),
-            );
-            const rule = await fold.locator(".otk-divider-rule").evaluate(
+            await expect(fold.locator(".otk-work-label.otk-chrome-meta"))
+              .toHaveCSS(
+                "font",
+                await fold.evaluate((el) => getComputedStyle(el).font),
+              );
+            const rule = await fold.locator(".otk-tree-icon-stem").evaluate(
               (el) => {
-                const s = getComputedStyle(el),
-                  canvas = document.createElement("canvas");
-                canvas.width = canvas.height = 1;
-                const ctx = canvas.getContext("2d")!,
-                  rgb = (color: string) => {
-                    ctx.clearRect(0, 0, 1, 1);
-                    ctx.fillStyle = getComputedStyle(document.documentElement)
-                      .backgroundColor;
-                    ctx.fillRect(0, 0, 1, 1);
-                    ctx.fillStyle = color;
-                    ctx.fillRect(0, 0, 1, 1);
-                    return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(
-                      0,
-                      3,
-                    );
-                  },
-                  bg = rgb("transparent"),
-                  distance = (a: number[]) =>
-                    a.reduce(
-                      (sum, value, i) => sum + Math.abs(value - bg[i]),
-                      0,
-                    );
+                const s = getComputedStyle(el);
                 return {
-                  width: s.borderTopWidth,
-                  style: s.borderTopStyle,
-                  ratio: distance(rgb(s.borderTopColor)) /
-                    distance(rgb(s.color)),
+                  width: s.width,
+                  image: s.backgroundImage,
+                  size: s.backgroundSize,
+                  color: getComputedStyle(el.parentElement!).color,
+                  labelColor: getComputedStyle(el.closest("button")!).color,
                 };
               },
             );
-            expect([rule.width, rule.style]).toEqual(["1px", "solid"]);
-            expect(rule.ratio).toBeGreaterThan(0);
-            expect(rule.ratio).toBeLessThan(.2);
+            expect([rule.width, rule.size]).toEqual(["1px", "1px 2px"]);
+            expect(rule.image).toContain("repeating-linear-gradient");
+            expect(rule.image).toContain(rule.color);
+            expect(rule.color).toBe(rule.labelColor);
+            const wasOpen = await fold.getAttribute("aria-expanded");
             await fold.click();
+            await expect(fold).toHaveAttribute(
+              "aria-expanded",
+              wasOpen === "true" ? "false" : "true",
+            );
             await shot(`work-fold-${theme.id}-1280`);
             await fold.click();
+            await expect(fold).toHaveAttribute("aria-expanded", wasOpen!);
             await shot(`work-expanded-${theme.id}-1280`);
             await expect(page.locator("[data-tool=task] .otk-tool-target"))
               .toHaveText("Unknown agent");
@@ -1727,11 +1878,18 @@ export async function collections456(input: Inputs) {
             await expect(page.locator(".otk-queued")).toHaveCount(
               name === "queued" ? 1 : 0,
             );
-            await page.locator(".otk-message-agent").first().click();
-            await expect(page.locator(".otk-message-agent").first()).toHaveCSS(
+            await page.locator(".otk-reply-agent .otk-entity-pill").first()
+              .hover();
+            await expect(
+              page.locator(".otk-reply-agent .otk-entity-pill").first(),
+            ).toHaveCSS(
               "color",
-              "rgb(107, 172, 255)",
+              await token(page, "--otk-fg"),
             );
+            await expect(page.locator(":popover-open .otk-entity-facts"))
+              .toContainText("This reply");
+            await page.mouse.move(1, 1);
+            await page.keyboard.press("Escape");
             await expect(page.locator("[data-role=user]").first()).toHaveCSS(
               "border-left-width",
               "0px",
@@ -1745,7 +1903,11 @@ export async function collections456(input: Inputs) {
               .toContainText("interrupted");
           }
           if (name === "recovery") {
-            await expect(page.locator(".otk-response-recovery")).toHaveText(
+            await expect(
+              page.locator(
+                "[data-message=reading] .otk-feedback-status[role=status]",
+              ),
+            ).toHaveText(
               "Refreshing response...",
             );
           }
@@ -1844,17 +2006,26 @@ export async function collections456(input: Inputs) {
                 })
               );
               baseline ??= rects;
-              expect(rects).toEqual(baseline);
+              expect(rects.slice(0, -1)).toEqual(baseline.slice(0, -1));
+              expect(rects.at(-1)!.slice(0, 3)).toEqual(
+                baseline.at(-1)!.slice(0, 3),
+              );
+              if (status === "error") {
+                // Structured facts grow in their reserved post-control track;
+                // the field and feedback origin must not move.
+                expect(rects.at(-1)![3]).toBeGreaterThanOrEqual(
+                  baseline.at(-1)![3],
+                );
+                await expect(
+                  page.locator("#task-feedback .otk-failure-content"),
+                )
+                  .toBeVisible();
+              } else expect(rects.at(-1)).toEqual(baseline.at(-1));
               const centres = await page.evaluate(() => {
                 const pane = document.querySelector(".request-feedback-pane")!,
                   p = pane.getBoundingClientRect(),
-                  items = Array.from(pane.querySelectorAll("p,button")).map(
-                    (el) => el.getBoundingClientRect(),
-                  ),
-                  left = Math.min(...items.map((r) => r.left)),
-                  right = Math.max(...items.map((r) => r.right)),
-                  top = Math.min(...items.map((r) => r.top)),
-                  bottom = Math.max(...items.map((r) => r.bottom)),
+                  content = pane.querySelector(".otk-pane-state-content")!,
+                  group = content.getBoundingClientRect(),
                   rows = Array.from(
                     document.querySelector(".otk-operation-feedback")!.children,
                   ).map((el) => {
@@ -1862,9 +2033,13 @@ export async function collections456(input: Inputs) {
                     return r.y + r.height / 2;
                   });
                 return [
-                  Math.abs((p.left + p.right - left - right) / 2),
-                  Math.abs((p.top + p.bottom - top - bottom) / 2),
+                  Math.abs((p.left + p.right - group.left - group.right) / 2),
+                  Math.abs((p.top + p.bottom - group.top - group.bottom) / 2),
                   Math.max(...rows) - Math.min(...rows),
+                  group.width > 0 && group.height > 0 &&
+                    getComputedStyle(content).textAlign === "left"
+                    ? 0
+                    : Infinity,
                 ];
               });
               for (const delta of centres) expect(delta).toBeLessThan(1);
@@ -1875,8 +2050,17 @@ export async function collections456(input: Inputs) {
                 );
                 await expect(page.locator(".otk-operation-feedback")).toHaveCSS(
                   "color",
-                  await token(page, "--otk-danger"),
+                  await token(page, "--otk-fg"),
                 );
+                const signal = page.locator(
+                  ".otk-operation-feedback .otk-failure-content.otk-failure-signal.is-gutter",
+                );
+                await expect(signal).toBeVisible();
+                const shadow = await signal.evaluate((el) =>
+                  getComputedStyle(el).boxShadow
+                );
+                expect(shadow).toContain(await token(page, "--otk-danger"));
+                expect(shadow).toMatch(/ 2px 0px 0px 0px inset$/);
               }
               await shot(`notice-${status}-${theme.id}-${width}`);
             }
@@ -1942,7 +2126,12 @@ export async function collections456(input: Inputs) {
         if (scene === "journal") {
           for (
             const toggle of await page.locator(".otk-permission-scope").all()
-          ) await toggle.click();
+          ) {
+            if (await toggle.getAttribute("aria-expanded") !== "true") {
+              await toggle.click();
+            }
+            await expect(toggle).toHaveAttribute("aria-expanded", "true");
+          }
           const values = await page.evaluate(() =>
             ["summary", "activity"].map((id) =>
               Array.from(

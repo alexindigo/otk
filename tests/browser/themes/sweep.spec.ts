@@ -231,10 +231,11 @@ test(
           await test.step("empty/" + theme.id, async () => {
             await paint(theme);
             const delta = await empty.evaluate((el) => {
+              // PaneState centres one left-aligned content group, not each
+              // line of text independently.
               const a = el.closest(".otk-messages")!.getBoundingClientRect(),
-                r = document.createRange();
-              r.selectNodeContents(el);
-              const b = r.getBoundingClientRect();
+                b = el.closest(".otk-pane-state-content")!
+                  .getBoundingClientRect();
               return [
                 Math.abs((a.left + a.right - b.left - b.right) / 2),
                 Math.abs((a.top + a.bottom - b.top - b.bottom) / 2),
@@ -243,6 +244,7 @@ test(
             for (const d of delta) {
               expect(d).toBeLessThanOrEqual(1);
             }
+            await expect(empty).toHaveCSS("text-align", "left");
             await shot(`native-empty-${theme.id}-1280`);
           });
         }
@@ -258,7 +260,7 @@ test(
           await test.step("deleted/" + theme.id, async () => {
             await paint(theme);
             const contrast = await page.locator(
-              `[data-session="${facts.native.sessionID}"] .otk-row-title`,
+              `[data-session="${facts.native.sessionID}"] .otk-session-title`,
             ).evaluate((title) => {
               const css = getComputedStyle(document.documentElement),
                 canvas = document.createElement("canvas");
@@ -373,7 +375,11 @@ test(
               const status = pane.getByRole(
                 id === "error" ? "alert" : "status",
               );
-              await expect(status).toHaveText(
+              // Errors use the shared structured presenter. Its reason remains
+              // exact, alongside the action, target and Details disclosure.
+              await expect(
+                id === "error" ? status.locator(".otk-failure-reason") : status,
+              ).toHaveText(
                 id === "loading"
                   ? "Loading messages"
                   : id === "error"
@@ -863,7 +869,7 @@ test(
               page,
               ".otk-session-row",
               ".otk-status-light",
-              ".otk-row-title",
+              ".otk-session-title",
             );
             for (const width of [280, 480]) {
               await state.product("layout.patch", { rightWidth: width });
@@ -885,7 +891,7 @@ test(
                 ".otk-list-row-trailing",
               );
               expect(
-                await page.locator(".otk-session-row .otk-row-title")
+                await page.locator(".otk-session-row .otk-session-title")
                   .evaluateAll((els) =>
                     els.every((el) =>
                       getComputedStyle(el).whiteSpace === "nowrap"
@@ -1024,8 +1030,14 @@ test(
               menu.evaluate((el) => getComputedStyle(el).opacity)
             ).toBe("1");
             await expect.poll(() =>
-              row.locator("time").evaluate((el) => getComputedStyle(el).opacity)
+              row.locator(".otk-project-visit").evaluate((el) =>
+                getComputedStyle(el).opacity
+              )
             ).toBe("0");
+            await expect(row.locator(".otk-project-visit")).toHaveCSS(
+              "visibility",
+              "hidden",
+            );
             expect(await geometry()).toEqual(before);
             await page.mouse.move(600, 500);
             await row.locator(".otk-project-open").focus();
@@ -1038,7 +1050,7 @@ test(
             const session = await page.locator('[data-session="tstv1-otk"]')
               .evaluate((el) => {
                 const r = el.getBoundingClientRect(),
-                  t = el.querySelector(".otk-row-title")!
+                  t = el.querySelector(".otk-session-title")!
                     .getBoundingClientRect();
                 return { left: r.left, text: t.left, height: r.height };
               });
@@ -1072,7 +1084,7 @@ test(
             await first.locator(".otk-timeline-reveal").hover();
             await expect(first.locator("time")).toHaveCSS(
               "visibility",
-              "hidden",
+              "visible",
             );
             expect(await actions()).toEqual(fixed);
             await expect(first.locator(".otk-timeline-reveal")).toHaveCSS(
@@ -1088,7 +1100,7 @@ test(
             await first.locator(".otk-timeline-reveal").focus();
             await expect(first.locator("time")).toHaveCSS(
               "visibility",
-              "hidden",
+              "visible",
             );
             expect(await actions()).toEqual(fixed);
             await centers(
@@ -1230,8 +1242,10 @@ test(
               "data-collapsed",
               "true",
             );
-            await expect(page.locator(".otk-server-status > span:last-child"))
-              .toHaveCSS("display", "none");
+            // ConnectionBadge omits its label in the compact rail; the
+            // remaining span is ControlIcon's visible lamp slot.
+            await expect(page.locator(".otk-server-status .otk-server-label"))
+              .toHaveCount(0);
             expect(
               (await page.locator(".otk-server-status [role=img]")
                 .boundingBox())!.width,
@@ -1369,9 +1383,10 @@ test(
             const g = await geometry();
             expect(g.height).toBe(g.expected);
             expect(g.full).toContain(corpus.tasks[250]);
-            expect(g.tabs.slice(0, 23).map((tab) => tab.id)).toContain(
-              corpus.tasks[241],
-            );
+            // Activity never reorders task identities. The scrolling strip
+            // retains every task in its saved/source order while revealing
+            // the selected task through its ordinary scroll owner.
+            expect(g.tabs.map((tab) => tab.id)).toEqual(corpus.tasks);
             await shot(`task-required-${theme.id}-800`);
           });
         }
