@@ -188,8 +188,11 @@ task membership.
 
 Presentation order uses `createStableOrder`: saved positions seed task/project
 order, otherwise immutable creation or source discovery order seeds the list.
-Existing identities never move on activity, state, title or refresh. New rows
-append; only changed saved positions reorder existing positioned slots. The tabs
+Existing identities never move on activity, state, title or refresh. Projects
+also carry their server's rank in the configured server list, so the order never
+depends on which server answers first. An arrival takes its saved-key place
+(server rank, then saved position) without moving known rows; rows without one
+append. Only changed saved positions reorder existing positioned slots. The tabs
 model owns the strip and Sessions task-group permutation. Sidebar rows borrow
 the same contract within their repository topology. Counted holds retain
 departing pointer/focus and portalled-origin targets until every borrower

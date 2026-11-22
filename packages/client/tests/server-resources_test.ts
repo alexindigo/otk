@@ -401,6 +401,58 @@ Deno.test("sidebar identities stay ordered through state/recency ticks, explicit
   }
 });
 
+Deno.test("project order is the durable server and saved order, whichever server answers first after a reload", () => {
+  const answer = (
+    f: ReturnType<typeof fixture>,
+    id: string,
+    directories: string[],
+  ) => {
+    f.receive(id, {
+      t: "index.snapshot",
+      rev: 0,
+      entries: directories.map((d) => entry(`${id}${d}`, d)),
+    });
+    f.receive(id, {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
+      inbox: {
+        ...metadata(),
+        tasks: [],
+        projects: directories.map((directory, order) => ({
+          directory,
+          order,
+          lastVisit: 1,
+          inactive: false,
+          added: true,
+        })),
+      },
+    });
+  };
+  const order = (f: ReturnType<typeof fixture>) =>
+    f.resources.projects(100).map((p) => `${p.sidecarId}:${p.directory}`);
+  const expected = [
+    "local:/b",
+    "local:/a",
+    "remote:/d",
+    "remote:/c",
+  ];
+  for (const first of ["local", "remote"]) {
+    const f = fixture();
+    const servers = { local: ["/b", "/a"], remote: ["/d", "/c"] };
+    const second = first === "local" ? "remote" : "local";
+    answer(f, first, servers[first as keyof typeof servers]);
+    // A render between the answers must not fix arrival order.
+    assertEquals(
+      order(f),
+      expected.filter((row) => row.startsWith(`${first}:`)),
+    );
+    answer(f, second, servers[second as keyof typeof servers]);
+    assertEquals(order(f), expected, `${first} answered first`);
+    f.resources.stop();
+  }
+});
+
 function metadata(): InboxSnapshot {
   return {
     projects: [{
