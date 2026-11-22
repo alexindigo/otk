@@ -30,8 +30,12 @@ never imports product code or runs a host workload.
 paths, not line-delimited text. Ark collects explicit base-to-working-tree paths
 with rename compression disabled (old and new names), deletions and untracked
 source. The guest evaluates `tests/browser/areas.json`; `--areas composer,menus`
-unions with automatic areas and smoke. Missing base or unknown paths select
-broad standard coverage across A/B/C plus themes. Docs alone select
+unions with automatic areas and smoke. A missing base selects every area, all
+integration and themes. A path that matches no row, or a shared-infrastructure
+(`broad`) row, adds a bounded fallback: every `@contracts` test and all standard
+integration files, beside any mapped areas. A changed integration test selects
+itself and the areas that list it. Themes run only for style paths (CSS, tokens,
+theme or font paths) in a row that allows them. Docs alone select
 static/unit/arch and smoke. Scale changes opt into scale; ordinary changes
 exclude it. Native, SQL, protocol and transport changes also request full
 milestone qualification. Every collected test needs an area; unknown areas and
@@ -58,6 +62,16 @@ sequentially on their version guest.
 acceptance:sharding` verifies the disjoint union
 against unsharded collection and executes both real smoke shards. Browser report
 rendering/merging belongs in A, never on Ark.
+
+## Per-commit check and PR checks
+
+Each commit gets the selected check: base tiers once, then prepare, the selected
+integration files and the selected browser tests on 2.2.6 and 1.19.3, compared
+with a failing-ID baseline so only new failures block. `test:commit` takes
+`--workers=N` for the browser tier, `--tiers a,b` to keep only the named tiers
+and `--keep-going` to run every tier and fail at the end. PRs to `master` run
+the full house: every `test:full` tier on both versions, through
+`.github/workflows/pr-checks.yml` once milestone CI lands.
 
 ## First attempts and quarantine
 
