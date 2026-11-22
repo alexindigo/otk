@@ -21,6 +21,8 @@ export interface RequestLifetime {
   form?: FormRequest;
   draft?: unknown;
   scopes?: Set<string>;
+  /** Client-local receipt clock of this identity; never a server timestamp. */
+  arrivedAt?: number;
 }
 const key = (kind: RequestKind, id: string) =>
   `${kind === "permission" ? "permission" : "input"}:${id}`;
@@ -33,6 +35,11 @@ export class RequestLifetimes {
   #batch = 0;
   #dirty = false;
   #deleted: (id: string) => boolean = () => false;
+  constructor(readonly now: () => number = () => performance.now()) {}
+  /** When a permission identity first arrived here (per-request grace). */
+  arrival(id: string): number | undefined {
+    return this.get("permission", id)?.arrivedAt;
+  }
   get revision(): number {
     return this.#revision;
   }
@@ -106,6 +113,7 @@ export class RequestLifetimes {
         kind: kind === "permission" ? "permission" : "input",
         state: "pending",
         dismissed: false,
+        arrivedAt: this.now(),
       };
     if (op.op === "permission.upsert") {
       row.permission = op.request;

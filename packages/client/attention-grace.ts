@@ -2,8 +2,11 @@
 import type { SupervisionEvidence } from "@otk/protocol";
 import type { InboxStatus } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { graceDeadline } from "./entity-state.ts";
 
-export const ATTENTION_GRACE_MS = 500;
+/** The grace rule lives in the entity-state owner; this scope-based store
+ * remains only until its surfaces read lamp() (deleted in WP3.11). */
+export { ATTENTION_GRACE_MS } from "./entity-state.ts";
 export interface AttentionGraceClock {
   now(): number;
   set(callback: () => void, ms: number): unknown;
@@ -88,7 +91,7 @@ export function createAttentionGrace(o: {
         server,
         session,
         id,
-        due: clock.now() + ATTENTION_GRACE_MS,
+        due: graceDeadline(clock.now()),
         ready: false,
         presented: false,
         absent: false,

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectTree } from "./project-tree.ts";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+} from "./entity-state.ts";
 import { DEFAULT_PROJECT_AGEING, entityKey, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
@@ -402,6 +406,8 @@ export interface InboxChanges {
 export interface InboxModel {
   stop(): void;
   state: InboxState;
+  /** Presentation view of the entity replica: receipt times and transitions. */
+  readonly entities: EntityStateStore;
   subscribe(listener: (state: InboxState) => void): () => void;
   observeChanges(listener: (changes: InboxChanges) => void): () => void;
   receive(frame: ServerFrame): void;
@@ -425,6 +431,8 @@ export function createInbox(
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
   currentEpoch?: () => number,
+  /** Client arrival of a request identity (the request-lifetime owner). */
+  arrival?: (id: string) => number | undefined,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -439,6 +447,11 @@ export function createInbox(
     },
   };
   const clock = factory({ revision: 0 });
+  const entityStates = createEntityStateStore({
+    read: () => current.inbox.entities,
+    factory,
+    arrival,
+  });
   const state: InboxState = {
     get ready() {
       void clock.state.revision;
@@ -486,6 +499,7 @@ export function createInbox(
     clock.update((draft) => {
       draft.revision++;
     });
+    entityStates.observe("all", "historical");
     publish({
       baseline: true,
       projects: [],
@@ -604,8 +618,10 @@ export function createInbox(
       recoveryController?.abort();
       recoveryController = undefined;
       recovering = undefined;
+      entityStates.stop();
     },
     state,
+    entities: entityStates,
     subscribe: (listener) => clock.subscribe(() => listener(state)),
     observeChanges(listener) {
       listeners.add(listener);
@@ -734,6 +750,13 @@ export function createInbox(
               );
             }
           }
+        }
+        if (entities.size) {
+          // Newly admitted facts are known state, never a live transition.
+          entityStates.observe(
+            [...entities],
+            frame.admitted ? "historical" : "live",
+          );
         }
         publish({
           baseline: false,
