@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { createBranchHistory, createDrafts } from "@otk/client";
 import type { ContentSession, Message, MessagePage } from "@otk/protocol";
 
@@ -163,4 +163,47 @@ Deno.test("capture owns a plain immutable record when the view supplies a framew
   const f = fixture();
   await f.owner.prepare(target, "p", new Proxy(session.revert!, {}));
   assertEquals(f.reads, ["p", "r"]);
+});
+
+Deno.test("background and Restore failures describe the actual operation without claiming a Send", async () => {
+  const f = fixture({ quota: true });
+  await assertRejects(() => f.owner.prepare(target, "p", session.revert!));
+  const error = f.owner.state.error;
+  assert(error);
+  assert(!error.failure?.reason.includes("replacement was not sent"));
+  assertEquals(
+    error.failure?.value.facts?.actionLabel,
+    "Saving an earlier branch",
+  );
+});
+
+Deno.test("failed background and Restore copies retain explicit retry and keep-without-copy recovery", async () => {
+  const f = fixture({ quota: true });
+  const transaction = f.drafts.reverts.capture("local/session");
+  transaction.staged("p");
+  await assertRejects(() => f.owner.prepare(target, "p", session.revert!));
+  assertEquals(Reflect.get(f.owner.state, "recovery"), {
+    boundaryID: "p",
+    restored: false,
+  });
+  f.restore();
+  await f.owner.settled(target, true);
+  await assertRejects(() => f.owner.beforeCommit(target));
+  assertEquals(Reflect.get(f.owner.state, "recovery"), {
+    boundaryID: "p",
+    restored: true,
+  });
+  assert(!f.owner.state.permanence, "No Send was attempted");
+  const retry = Reflect.get(f.owner, "retryCopy") as () => Promise<void>;
+  f.quota(false);
+  await retry();
+  assertEquals(f.owner.state.branches[0].pending, false);
+  assertEquals(Reflect.get(f.owner.state, "recovery"), undefined);
+  f.quota(true);
+  // A new capture can be explicitly left unsaved without clearing the composer.
+  await assertRejects(() => f.owner.prepare(target, "p", session.revert!));
+  const keep = Reflect.get(f.owner, "keepWithoutCopy") as () => void;
+  keep();
+  assertEquals(f.owner.state.error, undefined);
+  assertEquals(Reflect.get(f.owner.state, "recovery"), undefined);
 });

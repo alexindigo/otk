@@ -1162,7 +1162,12 @@ choice.
 
 The capture owner keeps its exact ID record and retained drafts independently of
 the worker lifetime. Restore recapture requires that record and cannot fall back
-to paging a whole session.
+to paging a whole session. Capture failures describe their actual operation;
+only the Send gate reports an unsent replacement. After Restore, an unsaved copy
+offers Retry or an explicit choice to keep the live conversation without a saved
+copy. Background failures use those same controls if the reverted group is
+dismissed or no longer present. Neither choice clears the current draft or
+bypasses the separate Send consent gate.
 
 Pre-publication Send admission borrows an acquired, connected transcript
 baseline instead of adding an unconditional native read before the local pending

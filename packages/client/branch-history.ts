@@ -51,6 +51,7 @@ export interface BranchHistoryState {
   error?: FailureValue;
   choice?: { branchID: string; label: string; draft: Draft };
   permanence?: { boundaryID: string; saving: boolean; error: FailureValue };
+  recovery?: { boundaryID: string; restored: boolean };
 }
 export interface BranchSendPermit {
   target: Selection;
@@ -76,6 +77,8 @@ export interface BranchHistory {
   ): Promise<void>;
   beforeSend(target: Selection): Promise<BranchSendPermit>;
   saveCopy(): Promise<void>;
+  retryCopy(): Promise<void>;
+  keepWithoutCopy(): void;
   sendAnyway(): Promise<void>;
   cancelSend(target?: Selection): void;
   settled(target: Selection, restored?: boolean): Promise<void>;
@@ -243,6 +246,21 @@ export function createBranchHistory(options: {
     string,
     { record: RevertInfo; drafts: CaptureDrafts }
   >();
+  const recoveries = new Map<
+    string,
+    NonNullable<BranchHistoryState["recovery"]>
+  >();
+  const publishRecovery = (t: Selection) => {
+    if (same(selected, t)) {
+      store.update((s) => {
+        s.recovery = recoveries.get(draftKey(t));
+      });
+    }
+  };
+  const clearRecovery = (t: Selection) => {
+    recoveries.delete(draftKey(t));
+    publishRecovery(t);
+  };
   const failures = new Map<string, RequestFailure>();
   const sends = new Map<
     string,
@@ -300,6 +318,7 @@ export function createBranchHistory(options: {
     if (sends.get(draftKey(t)) !== pending) return;
     sends.delete(draftKey(t));
     clearFailure(t);
+    clearRecovery(t);
     publishSend(t);
     pending.wait.resolve(permit);
   };
@@ -384,6 +403,7 @@ export function createBranchHistory(options: {
     input: SavedBranch,
     after = false,
     fresh = false,
+    operation?: "restore" | "commit",
   ) => {
     const key = prefix(t) + input.id, branch = structuredClone(input);
     // Include the serialized measurement field itself in the final exact count.
@@ -414,12 +434,20 @@ export function createBranchHistory(options: {
       }
       const quota = !!cause && typeof cause === "object" && "name" in cause &&
         cause.name === "QuotaExceededError";
+      const outcome = operation === "restore"
+        ? " The conversation was restored; its copy is still unsaved."
+        : operation === "commit"
+        ? " The native action was not sent."
+        : "";
       throw fail(
         t,
         quota
-          ? `Browser localStorage is full. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved (about 5 MB per origin). The replacement was not sent.`
-          : `Browser localStorage is unavailable. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved. The replacement was not sent.`,
+          ? `Browser localStorage is full. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved (about 5 MB per origin).${outcome}`
+          : `Browser localStorage is unavailable. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved.${outcome}`,
         "Delete a saved branch you no longer need, or free browser storage, then retry. If this branch alone is too large, keep the live conversation; it cannot fit here. Older branches were not removed.",
+        operation === "restore"
+          ? "Saving a copy after Restore"
+          : "Saving an earlier branch",
       );
     }
     clearFailure(t);
@@ -456,8 +484,13 @@ export function createBranchHistory(options: {
       if (!options.storage) {
         throw fail(
           t,
-          "The earlier branch and draft were not saved: browser localStorage is unavailable. The replacement was not sent.",
-          "Restore browser storage access, then retry Send or restore the conversation.",
+          drafts.restored
+            ? "The conversation was restored, but its earlier branch and draft were not saved: browser localStorage is unavailable."
+            : "The earlier branch and draft were not saved: browser localStorage is unavailable.",
+          "Restore browser storage access, then Retry, or keep the conversation without a saved copy.",
+          drafts.restored
+            ? "Saving a copy after Restore"
+            : "Saving an earlier branch",
         );
       }
       // Session acquisition can yield to reuse or native settlement. Never use
@@ -701,7 +734,8 @@ export function createBranchHistory(options: {
       }
       signal.throwIfAborted();
       await refreshCapture?.();
-      save(t, branch, false, true);
+      save(t, branch, false, true, drafts.restored ? "restore" : undefined);
+      clearRecovery(t);
       if (
         drafts.restored?.edited && same(selected, t) &&
         !sameDraft(options.drafts.current(draftKey(t)), branch.drafts[0].value)
@@ -773,9 +807,19 @@ export function createBranchHistory(options: {
       if (controller.signal.aborted) return;
       const error = cause instanceof RequestFailure ? cause : fail(
         t,
-        "The earlier branch could not be saved. The replacement was not sent.",
-        "Restore access to the original history and browser storage, then retry Send or restore the conversation.",
+        drafts.restored
+          ? "The conversation was restored, but its earlier branch copy could not be saved."
+          : "The earlier branch could not be saved.",
+        "Restore access to the original history and browser storage, then Retry, or keep the conversation without a saved copy.",
+        drafts.restored
+          ? "Saving a copy after Restore"
+          : "Saving an earlier branch",
       );
+      recoveries.set(key, {
+        boundaryID: boundary,
+        restored: !!drafts.restored,
+      });
+      publishRecovery(t);
       failures.set(key, error);
       options.feedback?.(t).fail(error);
       if (same(selected, t)) {
@@ -828,6 +872,7 @@ export function createBranchHistory(options: {
         s.opened = undefined;
         s.choice = undefined;
         s.permanence = target ? sends.get(draftKey(target))?.choice : undefined;
+        s.recovery = target ? recoveries.get(draftKey(target)) : undefined;
         s.error = target && failures.has(draftKey(target))
           ? failureValue(failures.get(draftKey(target))!)
           : undefined;
@@ -892,7 +937,7 @@ export function createBranchHistory(options: {
       value.chips = value.chips.map((c, i) => ({ ...c, part: parts[i] }));
       const current = load(t).find((b) => b.id === branch!.id);
       if (current) retain(current, label, value);
-      if (!current || !save(t, current)) {
+      if (!current || !save(t, current, false, false, "commit")) {
         throw fail(
           t,
           "The earlier branch was deleted while preparing the replacement. The replacement was not sent.",
@@ -949,7 +994,7 @@ export function createBranchHistory(options: {
                 reason: reason ??
                   "There is no saved copy of the reverted messages in this browser.",
                 recovery:
-                  "Save a copy first, or choose Send anyway to discard those messages.",
+                  "The replacement was not sent. Save a copy first, or choose Send anyway to discard those messages.",
               },
             }),
           ),
@@ -982,6 +1027,25 @@ export function createBranchHistory(options: {
         publishSend(pending.target);
       }
     },
+    async retryCopy() {
+      const t = selected && { ...selected };
+      const retained = t && records.get(draftKey(t));
+      if (!t || !retained) return;
+      await prepare(
+        t,
+        retained.record.boundaryID,
+        retained.record,
+        retained.drafts,
+      );
+    },
+    keepWithoutCopy() {
+      if (!selected) return;
+      clearFailure(selected);
+      clearRecovery(selected);
+      store.update((s) => {
+        s.error = undefined;
+      });
+    },
     async sendAnyway() {
       if (selected) await allowSend({ ...selected }, true);
     },
@@ -998,6 +1062,7 @@ export function createBranchHistory(options: {
         previous?.controller.abort();
         captures.delete(draftKey(t));
         clearFailure(t);
+        clearRecovery(t);
         if (same(selected, t)) {
           store.update((s) => {
             s.pending = false;
