@@ -10,7 +10,7 @@ import "./Palette.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
-import { createSignal, For, onSettled, Show } from "solid-js";
+import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 export default function Palette(
   props: { onClose(): void },
@@ -27,7 +27,9 @@ export default function Palette(
       release();
     };
   });
-  const rows = () => {
+  // Every row borrows the same discovery snapshot, including while a command
+  // is pending and live context changes invalidate availability.
+  const rows = createMemo(() => {
     revision();
     return commands.list().filter((row) => row.enabled).filter((row) =>
       `${row.cmd.title} ${row.cmd.category} ${row.cmd.name} ${
@@ -35,7 +37,7 @@ export default function Palette(
       }`
         .toLowerCase().includes(query().toLowerCase())
     );
-  };
+  });
   const invoke = async (id: string) => {
     const facts = commandFailureFacts({
       id,
