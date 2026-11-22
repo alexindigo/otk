@@ -132,8 +132,12 @@ Deno.test("legacy saved branches decode message identity without rewriting store
   const f = fixture();
   await f.owner.prepare(target, "2");
   const key = [...f.values.keys()][0];
-  const stored = JSON.parse(f.values.get(key)!);
-  stored.session.revert = { messageID: "2", messageCount: 1, files: [] };
+  const stored = { ...f.owner.state.branches[0], schema: 1 };
+  Reflect.set(stored.session, "revert", {
+    messageID: "2",
+    messageCount: 1,
+    files: [],
+  });
   const raw = JSON.stringify(stored);
   f.values.set(key, raw);
   const reader = createBranchHistory(f.options);
@@ -320,7 +324,14 @@ Deno.test("saved labels have one sentence-case source including existing browser
   const f = fixture();
   await f.owner.prepare(target, "2");
   const key = [...f.values.keys()][0];
-  const stored = JSON.parse(f.values.get(key)!);
+  const stored = {
+    ...f.owner.state.branches[0],
+    schema: 1,
+    drafts: f.owner.state.branches[0].drafts.map((d) => ({
+      ...d,
+      defaultVariant: false,
+    })),
+  };
   stored.drafts.push({
     label: "saved prompt",
     value: emptyDraft(),

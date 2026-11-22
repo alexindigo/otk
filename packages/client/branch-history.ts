@@ -27,6 +27,11 @@ import { createState, type StateFactory } from "./state.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { TranscriptsOwner } from "./transcripts.ts";
 import { branchDraftLabel, branchDraftLabels } from "./branch-draft-labels.ts";
+import {
+  type BranchArchive,
+  packBranch,
+  unpackBranch,
+} from "./branch-archive-codec.ts";
 
 export interface SavedBranch {
   id: string;
@@ -129,14 +134,26 @@ function cloneDraft(value: Draft): Draft {
     : stored.value;
 }
 function encode(branch: SavedBranch): string {
+  // Keep the measurement outside the intern table: its digit count has a stable
+  // fixed point even when it happens to equal another number in the content.
+  const { bytes, ...content } = branch;
   return JSON.stringify({
-    ...branch,
-    schema: 1,
-    drafts: branch.drafts.map((d) => storedDraft(d.label, d.value)),
+    ...packBranch({
+      ...content,
+      schema: 1,
+      drafts: branch.drafts.map((d) => storedDraft(d.label, d.value)),
+    }),
+    bytes,
   });
 }
 function decode(raw: string): SavedBranch {
-  const value = JSON.parse(raw) as StoredBranch;
+  const parsed = JSON.parse(raw);
+  const value = (parsed.schema === 2
+    ? {
+      ...unpackBranch(parsed as BranchArchive) as StoredBranch,
+      ...(typeof parsed.bytes === "number" ? { bytes: parsed.bytes } : {}),
+    }
+    : parsed) as StoredBranch;
   if (
     value.schema !== 1 || typeof value.id !== "string" ||
     !Array.isArray(value.messages) ||

@@ -1141,11 +1141,13 @@ changed captured records. This precedes prompt/command, Compact and
 version-specific native commit paths. Exact selected prompts come from the
 plugin's `history.prompt` reader, independently of the 50-entry recall window;
 attachment references are resolved before deletion. Plugin-owned bounded Source
-previews are materialized too; saved Source folds never query the live native
-transcript. Common submission and Compact admission retain the current draft
-before dispatch. The archive is not native history and never restores files.
-Operations initiated elsewhere cannot recover content this browser never
-captured.
+data is retained too; saved Source folds never query the live native transcript.
+The archive codec stores repeated content once across messages, Source, prompts
+and drafts. JSON Source previews are derived lazily from saved structure;
+schema-1 browser archives remain readable without rewriting them. Common
+submission and Compact admission retain the current draft before dispatch. The
+archive is not native history and never restores files. Operations initiated
+elsewhere cannot recover content this browser never captured.
 
 Prompt-history absence is a separate capability result, not an exception-based
 fallback. Revert still proceeds without archive reads or writes, while

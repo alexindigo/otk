@@ -28,29 +28,46 @@ test("revert.saved-branch-switch-releases-excluded-reply-borrows", {
   await expect(
     page.getByRole("button", { name: "Open copy", exact: true }),
   ).toBeVisible();
-  await page.evaluate(() => {
+  // Build an independent legacy archive through public product reads, not by
+  // reaching into the current browser codec's private representation.
+  const session = await state.product("session.get", { sessionID: source.id });
+  const archive = await state.product("history.messages", {
+    sessionID: source.id,
+    scope: { messageIDs: session.revert!.messageIDs },
+  });
+  const boundary = archive.items.find((m) => m.role === "user")!;
+  const entry = await state.product("history.prompt", {
+    sessionID: source.id,
+    messageID: boundary.id,
+  });
+  expect(entry).not.toBeNull();
+  await page.evaluate((second) => {
     const key = Object.keys(localStorage).find((k) =>
       k.startsWith("otk.branch-history.v1/")
     )!;
-    const branch = JSON.parse(localStorage.getItem(key)!);
-    const second = structuredClone(branch);
-    second.id += "-other";
-    second.created += 1;
-    second.messages = second.messages.map((
-      m: { id: string; replyTo?: string },
-    ) => ({
-      ...m,
-      id: m.id + "-other",
-      ...(m.replyTo ? { replyTo: m.replyTo + "-other" } : {}),
-    }));
-    second.prompts = second.prompts.map((p: { messageID: string }) => ({
-      ...p,
-      messageID: p.messageID + "-other",
-    }));
     localStorage.setItem(
       key.slice(0, key.lastIndexOf("/") + 1) + second.id,
       JSON.stringify(second),
     );
+  }, {
+    schema: 1,
+    id: "other-archive",
+    created: Date.now() + 1,
+    session: archive.session,
+    boundary: boundary.id,
+    messages: archive.items.map((m) => ({
+      ...m,
+      id: m.id + "-other",
+      ...(m.role === "assistant" && m.replyTo
+        ? { replyTo: m.replyTo + "-other" }
+        : {}),
+    })),
+    prompts: [{ messageID: boundary.id + "-other", entry }],
+    turns: archive.turns,
+    drafts: [],
+    pending: false,
+    replaced: false,
+    bytes: 0,
   });
   await page.reload();
   const errors: string[] = [];
