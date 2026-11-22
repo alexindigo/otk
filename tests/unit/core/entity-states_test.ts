@@ -174,6 +174,12 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
   // The parent's own lamp is its own state (D35); the child is evidence.
   assertEquals(o.get("parent")?.state, "none");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 1);
+  // An unseen failure is immediate, so a pending permission cannot grace it.
+  o.put({
+    ...helper,
+    activity: { ...helper.activity, permissions: keys("per_1") },
+  });
+  assertEquals(o.get("helper")?.cause, "failedHelper");
   o.put(helper, 70);
   assertEquals(o.get("helper")?.state, "none");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 0);

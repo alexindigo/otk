@@ -347,10 +347,10 @@ export class EntityStates {
       // permission is the sole reason.
       : inputs.questions > 0
       ? "question"
+      : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
+      ? "failedHelper"
       : inputs.permissions > 0
       ? "permission"
-      : failedHelperNeedsAck(entry, verdict.outcome)
-      ? "failedHelper"
       : undefined;
     const items = inputs.work
       ? (activity?.work?.items ?? []).filter((item) =>
