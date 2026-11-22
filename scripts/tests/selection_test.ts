@@ -100,8 +100,8 @@ Deno.test("SEL1: exact map contracts and explicit union", () => {
     assert(!result.scale);
   }
   assert(select(["packages/ui/theme.css"], [], "HEAD").themes);
-  assert(select(["packages/store/schema.sql"], [], "HEAD").broad);
-  assert(select(["core/transport.ts"], [], "HEAD").milestone);
+  assert(!select(["packages/store/schema.sql"], [], "HEAD").broad);
+  assert(select(["core/service.ts"], [], "HEAD").milestone);
   assert(select(["deno.lock"], [], "HEAD").broad);
   assert(select(["tests/support/session-scale.ts"], [], "HEAD").scale);
   assertEquals(select(["docs/testing.md"], [], "HEAD").areas, []);
@@ -197,4 +197,59 @@ Deno.test("D63 unions every matching row, explicit areas and semantic test areas
     ["revert"],
   );
   assertThrows(() => select([], ["not-an-area"], "parent"));
+});
+
+Deno.test("D63 every per-commit area row maps a real path without fallback", async () => {
+  for (
+    const [path, expected] of [
+      ["core/features/revert.ts", ["revert", "messages"]],
+      ["core/features/prompt.ts", ["composer", "menus"]],
+      ["core/features/approvals.ts", ["attention", "sessions"]],
+      ["core/features/sessions.ts", ["sessions", "transport"]],
+      ["core/features/prefs.ts", ["visual", "menus", "sessions"]],
+      ["core/features/digests.ts", ["load", "messages", "harness"]],
+      ["core/index/supervision.ts", ["load", "attention", "sessions"]],
+      ["core/http/app.ts", ["transport", "load"]],
+      ["main.ts", ["transport", "load"]],
+      ["packages/store/db.ts", ["sessions", "messages", "load"]],
+      ["packages/harness-opencode-v2-server/adapter.ts", [
+        "harness",
+        "messages",
+        "sessions",
+        "transport",
+      ]],
+      ["packages/protocol/messages.ts", ["messages"]],
+      ["packages/protocol/inbox.ts", ["attention", "sessions"]],
+      ["packages/protocol/requests.ts", ["transport", "composer"]],
+      ["packages/protocol/catalogs/agents.ts", ["menus", "composer", "visual"]],
+      ["defaults/otk.toml", ["visual", "menus", "composer"]],
+    ] as [string, string[]][]
+  ) {
+    await Deno.stat(path);
+    const result = select([path], [], "HEAD");
+    assertEquals(result.fallback, null, path);
+    for (const area of expected) assert(result.areas.includes(area), path);
+  }
+  for (
+    const path of [
+      "docs/testing.md",
+      "core/README.md",
+      "LICENSE",
+      "tests/unit/catalog-demand_test.ts",
+      "tests/arch/analysis_test.ts",
+    ]
+  ) {
+    await Deno.stat(path);
+    const result = select([path], [], "HEAD");
+    assertEquals(result.fallback, null, path);
+    assertEquals(result.areas, [], path);
+    assertEquals(result.integration, [], path);
+  }
+  assert(select(["core/features/revert.ts"], [], "HEAD").areas.length === 2);
+  assert(select(["core/service.ts"], [], "HEAD").milestone);
+  assert(!select(["defaults/otk.toml"], [], "HEAD").milestone);
+  assertEquals(
+    select(["packages/protocol/LICENSE"], [], "HEAD").fallback,
+    "contracts",
+  );
 });
