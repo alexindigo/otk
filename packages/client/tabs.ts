@@ -5,10 +5,7 @@ import type {
   IndexMetadata,
   TaskRecord,
 } from "@otk/protocol";
-import {
-  projectSessionHierarchy,
-  type SessionHierarchyNode,
-} from "@otk/protocol";
+import type { SessionHierarchyNode } from "@otk/protocol";
 import {
   aggregateStatus,
   dependencyCount,
@@ -19,7 +16,11 @@ import {
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
-import { projectTabGroups, type TabGroups } from "./tab-groups.ts";
+import {
+  projectTabGroups,
+  resolveTabHierarchy,
+  type TabGroups,
+} from "./tab-groups.ts";
 import { attentionStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
@@ -141,26 +142,10 @@ export function createTabs(
     if (derived === input) return;
     derived = input;
     const context = input.context ?? input.entries;
-    const projected =
-      context.every((entry) =>
-          entry.hierarchy?.followParent === (input.followParent ?? false)
-        )
-        ? undefined
-        : projectSessionHierarchy(context, input.inbox.tasks, {
-          project: (directory) =>
-            belongs(directory) ? input.directory : directory,
-          followParent: input.followParent,
-        });
-    nodes = new Map(
-      context.map((
-        entry,
-      ) => [
-        entry.id,
-        entry.hierarchy?.followParent === (input.followParent ?? false)
-          ? entry.hierarchy
-          : projected!.get(entry.id)!,
-      ]),
-    );
+    nodes = resolveTabHierarchy(context, input.inbox.tasks, {
+      project: (directory) => belongs(directory) ? input.directory : directory,
+      followParent: input.followParent,
+    });
     entries = input.entries.filter((e) =>
       belongs(e.directory) ||
       nodes.get(e.id)?.projectDirectory === input.directory

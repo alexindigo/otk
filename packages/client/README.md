@@ -1247,11 +1247,15 @@ explicit task members (or a phantom's own session), mandatory group members and
 the open group member. Quiet helpers retire when no longer open, including quiet
 intermediate members on the open session's ancestry. Mandatory membership
 borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
-`TaskCrumb.kind` separates `member` from `ancestor`: parents outside the group
-and cross-checkout parents are orientation links, never duplicate membership.
-Traversal is iterative and cycle-safe. Helper URLs retain native ancestry
-independently of selected group; removing task membership preserves a mandatory
-helper's own phantom.
+Tabs and standalone crumbs share per-entry hierarchy resolution: compatible
+published nodes survive mixed catalogs, while missing or mismatched nodes use
+the neutral projection. An explicit absent task member can pass ownership to a
+present child within its resolved checkout scope; unknown parents cannot create
+phantoms or cross checkout boundaries. `TaskCrumb.kind` separates `member` from
+`ancestor`: parents outside the group and cross-checkout parents are orientation
+links, never duplicate membership. Traversal is iterative and cycle-safe. Helper
+URLs retain native ancestry independently of selected group; removing task
+membership preserves a mandatory helper's own phantom.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;

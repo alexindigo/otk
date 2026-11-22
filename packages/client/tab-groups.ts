@@ -22,6 +22,37 @@ export interface TabGroups {
   groups: readonly TabGroup[];
 }
 
+/** Independently published nodes keep their own compatible evidence. Both tabs
+ * and standalone crumbs borrow this resolved view, including partial catalogs. */
+export function resolveTabHierarchy(
+  entries: readonly SessionStructure[],
+  tasks: readonly TaskRecord[],
+  options: {
+    followParent?: boolean;
+    project?(directory: string, repoID?: string): string;
+    hierarchy?: ReadonlyMap<string, SessionHierarchyNode>;
+  } = {},
+): ReadonlyMap<string, SessionHierarchyNode> {
+  const followParent = options.followParent ?? false;
+  const node = (entry: SessionStructure) =>
+    options.hierarchy?.get(entry.id) ?? entry.hierarchy;
+  const projected =
+    entries.every((entry) => node(entry)?.followParent === followParent)
+      ? undefined
+      : projectSessionHierarchy(entries, tasks, {
+        followParent,
+        project: options.project,
+      });
+  return new Map(
+    entries.map((entry) => [
+      entry.id,
+      node(entry)?.followParent === followParent
+        ? node(entry)!
+        : projected!.get(entry.id)!,
+    ]),
+  );
+}
+
 /** One presentation partition for every consumer. Native ancestry establishes
  * inheritance, never membership across another task or an independent phantom.
  * Retained phantoms keep their identity until selection leaves, even when quiet. */
@@ -64,10 +95,15 @@ export function projectTabGroups(
     })
     : hierarchy;
   const byID = new Map(sessions.map((entry) => [entry.id, entry]));
+  const scopedDirectory = (directory: string | undefined) =>
+    scopes.has(directory) ? options.directory ?? directory : directory;
+  const projectFor = (id: string) =>
+    hierarchy.get(id)?.projectDirectory ??
+      scopedDirectory(byID.get(id)?.directory);
   const local = (id: string) =>
     options.directory === undefined ||
     scopes.has(byID.get(id)?.directory) ||
-    hierarchy.get(id)?.projectDirectory === options.directory;
+    projectFor(id) === options.directory;
   const taskByID = new Map(tasks.map((task) => [task.id, task]));
   const groups = new Map<string, TabGroup>();
   const group = (kind: TabGroup["kind"], id: string): TabGroup => {
@@ -94,10 +130,19 @@ export function projectTabGroups(
   }
   const localParent = (id: string) => {
     const parent = byID.get(id)?.parentID;
-    return parent && (byID.has(parent) || owners.has(parent)) &&
-        local(parent) &&
-        hierarchy.get(parent)?.projectDirectory ===
-          hierarchy.get(id)?.projectDirectory
+    if (!parent) return undefined;
+    if (!byID.has(parent)) {
+      const reserved = owners.get(parent);
+      const directory = reserved?.kind === "task"
+        ? taskByID.get(reserved.id)?.directory
+        : undefined;
+      return reserved &&
+          (options.followParent ||
+            scopedDirectory(directory) === projectFor(id))
+        ? parent
+        : undefined;
+    }
+    return local(parent) && projectFor(parent) === projectFor(id)
       ? parent
       : undefined;
   };

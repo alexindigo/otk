@@ -7,7 +7,11 @@ import type {
 } from "@otk/protocol";
 import { sessionAncestors } from "@otk/protocol";
 import { aggregateStatus, type OperationAttention } from "./inbox.ts";
-import { projectTabGroups, type TabGroup } from "./tab-groups.ts";
+import {
+  projectTabGroups,
+  resolveTabHierarchy,
+  type TabGroup,
+} from "./tab-groups.ts";
 export interface TaskCrumb {
   id: string;
   kind: "member" | "ancestor";
@@ -76,10 +80,10 @@ export function taskBreadcrumbs(
   const saved = tasks.some((candidate) => candidate.id === task.id)
     ? tasks
     : [{ ...task, name: "", order: 0 }, ...tasks];
-  const hierarchy = projection ??
-    (entries.every((entry) => entry.hierarchy?.followParent === followParent)
-      ? new Map(entries.map((entry) => [entry.id, entry.hierarchy!]))
-      : undefined);
+  const hierarchy = resolveTabHierarchy(entries, saved, {
+    followParent,
+    hierarchy: projection,
+  });
   const mandatory = new Set(
     entries.filter((entry) =>
       aggregateStatus(entry, inbox) !== "none" ||

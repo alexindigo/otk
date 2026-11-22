@@ -380,6 +380,41 @@ Deno.test("review: sparse hierarchy cannot create absent phantoms but keeps rese
   assertEquals(reserved.groups.map((group) => group.members), [["P", "C"]]);
 });
 
+Deno.test("review: reserved parent inheritance survives populated hierarchy and checkout scoping", () => {
+  const rows = [entry("C", "P")];
+  for (const directory of [undefined, "/p"]) {
+    const saved = [task("T", ["P"])];
+    const nodes = projectSessionHierarchy(rows, saved);
+    for (const hierarchy of [undefined, new Map(), nodes]) {
+      const result = projectTabGroups(rows, saved, { directory, hierarchy });
+      assertEquals(result.owners.get("C")?.id, "T");
+      assertEquals(result.groups.map((group) => group.members), [["P", "C"]]);
+    }
+    const foreign = [task("foreign", ["P"], "/other")];
+    for (
+      const hierarchy of [
+        undefined,
+        new Map(),
+        projectSessionHierarchy(rows, foreign),
+      ]
+    ) {
+      const result = projectTabGroups(rows, foreign, { directory, hierarchy });
+      assertEquals(result.owners.get("C")?.id, "C");
+      assertEquals(result.owners.get("C")?.kind, "session");
+    }
+  }
+  const catalog = [entry("P", undefined, "/other"), ...rows];
+  assertEquals(
+    projectTabGroups(catalog, [], { hierarchy: new Map() }).owners.get("C")?.id,
+    "C",
+  );
+  const nested = projectTabGroups(rows, [task("nested", ["P"], "/p/src")], {
+    directory: "/p",
+    directories: ["/p", "/p/src"],
+  });
+  assertEquals(nested.owners.get("C")?.id, "nested");
+});
+
 Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mandatory evidence", () => {
   const rows = [entry("R"), entry("C", "R")], saved = [task("T", ["R"])];
   const nodes = projectSessionHierarchy(rows, saved, {
@@ -396,6 +431,12 @@ Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mand
       const [entries, projection] of [[context, undefined], [
         rows,
         nodes,
+      ], [
+        [rows[0], context[1]],
+        undefined,
+      ], [
+        rows,
+        new Map([["C", nodes.get("C")!]]),
       ]] as const
     ) {
       assertEquals(
@@ -411,6 +452,16 @@ Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mand
         tabs.crumbs(),
       );
     }
+    const mismatched = [context[0], {
+      ...context[1],
+      hierarchy: { ...context[1].hierarchy!, followParent: true },
+    }];
+    tabs.update({ directory: "/p", entries: mismatched, inbox: meta });
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
+    assertEquals(
+      taskBreadcrumbs(saved[0], mismatched, saved, undefined, meta),
+      tabs.crumbs(),
+    );
   } finally {
     tabs.stop();
   }
