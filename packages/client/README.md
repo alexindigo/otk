@@ -1180,26 +1180,32 @@ affected repo membership.
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
 single-preview tabs. Every ungrouped mandatory session, including a child, has
-its own phantom and lamp. Helper navigation selects the checkout-local display
-root or owning task; foreign parents are breadcrumb links. Native family
-identity, local anchors and task ownership come from SessionHierarchy;
-standalone consumers use the same neutral projector. `tasksFollowParent`
-defaults off and crosses server connections through the view, not by rewriting
-stored membership or native paths. `select`, `preview`, `pin` (also the
-double-click action), `rename(sessionID, title, callback)` and
-`send(sessionID, callback)` own tab transitions. Required activity tabs never
-disappear when a preview is replaced; an idle/seen selected phantom remains
-until selection leaves. Inputs remain owned by their index/metadata models, and
-tabs never delete sessions. Concurrent pins share promotion; late completion
-cannot steal a newer selection. `belongsToTab(tabID, sessionID)` borrows the
-exact supervision membership for lamp presentation: a task's owned sessions, or
-a phantom's own session. Consumers do not reconstruct it from raw ancestry.
+its own phantom and lamp. `projectTabGroups` assigns each session exactly one
+presentation group: its saved task, its independent mandatory/retained phantom,
+or its nearest ancestor's group within the checkout. Group member sets are
+disjoint, including quiet descendants. Selection, remembered members, lamps,
+breadcrumbs and metadata demand borrow this same partition; ancestry alone never
+adds another group's sessions. Helper navigation selects its own phantom when it
+has one, otherwise its ancestor's group. Native family identity, local anchors
+and task ownership come from SessionHierarchy; standalone consumers use the same
+neutral projector. `tasksFollowParent` defaults off and crosses server
+connections through the view, not by rewriting stored membership or native
+paths. `select`, `preview`, `pin` (also the double-click action),
+`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
+transitions. Required activity tabs never disappear when a preview is replaced;
+an idle/seen selected phantom remains until selection leaves. Inputs remain
+owned by their index/metadata models, and tabs never delete sessions. Concurrent
+pins share promotion; late completion cannot steal a newer selection.
+`belongsToTab(tabID, sessionID)` borrows complete group membership for lamp
+presentation, including quiet descendants. Mandatory ungrouped descendants have
+independent groups, so a parent's lamp still reflects its own activity (D35).
+Consumers do not reconstruct membership from raw ancestry.
 
 Directly selecting a validated phantom preserves that exact tab and viewed
-session across metadata updates. Helper preview/navigation still uses its local
-display root or owning task. Breadcrumbs borrow complete ancestry context and
-insert foreign links relative to their displayed ancestors and descendants,
-preserving explicit local member order even when intermediate links are quiet.
+session across metadata updates. Preview and reconciliation share that same
+group selection. Breadcrumbs borrow complete ancestry context and insert foreign
+links relative to their displayed ancestors and descendants, preserving explicit
+local member order even when intermediate links are quiet.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
@@ -1233,12 +1239,15 @@ it also supplies the limit and a clamped fill fraction; unknown windows stay
 unknown. The session's shared catalog loads independently of the transcript and
 rejects stale results; refresh errors retain last good metadata. The meter binds
 the owner's whole-session reported cost directly, independently of its
-latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` preserves
-explicit membership order and adds working, blocked and unseen-finished
-descendants of every member. A finished helper retires only once acknowledged.
-Traversal is iterative, cycle-safe and stops at another task's explicit
-membership. Helper URLs retain their owning task; removing membership preserves
-the viewed helper under its top-level parent's phantom task.
+latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
+shared partition and preserves explicit membership order. Visible crumbs contain
+explicit task members (or a phantom's own session), mandatory group members and
+the open group member. Quiet helpers retire when no longer open.
+`TaskCrumb.kind` separates `member` from `ancestor`: parents outside the group
+and cross-checkout parents are orientation links, never duplicate membership.
+Traversal is iterative and cycle-safe. Helper URLs retain native ancestry
+independently of selected group; removing task membership preserves a mandatory
+helper's own phantom.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;

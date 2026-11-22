@@ -7,10 +7,10 @@ import type {
 } from "@otk/protocol";
 import {
   projectSessionHierarchy,
-  sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
 import {
+  aggregateStatus,
   dependencyCount,
   INBOX_STATUS_PRIORITY,
   type InboxStatus,
@@ -18,7 +18,8 @@ import {
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
-import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import { projectTabGroups, type TabGroups } from "./tab-groups.ts";
 import { attentionStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
@@ -127,10 +128,9 @@ export function createTabs(
   };
   type Entry = IndexMetadata & OperationAttention;
   let byID = new Map<string, Entry>(), taskByID = new Map<string, TaskRecord>();
-  let explicit = new Map<string, TaskRecord>();
   let nodes: ReadonlyMap<string, SessionHierarchyNode> = new Map();
-  let ownership = new Map<string, TaskRecord | undefined>();
-  let families = new Map<string, Entry[]>();
+  let partition: TabGroups | undefined, partitionKey = "";
+  let mandatory = new Set<string>();
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
@@ -174,38 +174,57 @@ export function createTabs(
     );
     byID = new Map(context.map((e) => [e.id, e]));
     taskByID = new Map(tasks.map((t) => [t.id, t]));
-    explicit = new Map();
-    ownership = new Map();
-    families = new Map();
-    for (const task of tasks) {
-      for (const id of task.sessions) {
-        if (!explicit.has(id)) explicit.set(id, task);
-      }
-    }
-    for (const entry of entries) {
-      const node = nodes.get(entry.id)!;
-      const owner = taskByID.get(node.taskID ?? "");
-      ownership.set(entry.id, owner);
-      const key = owner?.id ?? node.familyID;
-      const list = families.get(key) ?? [];
-      list.push(entry);
-      families.set(key, list);
-    }
+    partition = undefined;
+    mandatory = new Set(
+      context.filter((entry) =>
+        aggregateStatus(entry, input.inbox) !== "none" ||
+        nodes.get(entry.id)?.mandatory
+      ).map((entry) => entry.id),
+    );
     cachedTabs = undefined;
+  };
+  const grouping = () => {
+    prepare();
+    const retained = [
+      store.state.selected?.kind === "session"
+        ? store.state.selected.id
+        : undefined,
+      store.state.preview,
+    ]
+      .filter((id): id is string => id !== undefined);
+    const key = JSON.stringify(retained);
+    if (!partition || key !== partitionKey) {
+      partitionKey = key;
+      partition = projectTabGroups([...byID.values()], tasks, {
+        hierarchy: nodes,
+        mandatory,
+        retained: new Set(retained),
+        directory: input.directory,
+        directories: input.directories,
+        followParent: input.followParent,
+      });
+      cachedTabs = undefined;
+    }
+    return partition;
   };
   function tabs(): InboxTab[] {
     // Inputs are not owned by the state factory; expose their invalidation too.
     void store.state.revision;
     // These are live resource getters, not cheap fields. Borrow one coherent
     // snapshot before walking the population or ancestry.
-    prepare();
+    const groups = grouping();
     const selection =
       `${store.state.selected?.kind}/${store.state.selected?.id}/${store.state.preview}`;
     if (cachedTabs && selection === cachedSelection) return cachedTabs;
     cachedSelection = selection;
     const { inbox, taskActivity } = input;
-    // Nearest explicit membership owns the whole inherited family. Helpers can
-    // contribute work/attention, but cannot create a competing phantom tab.
+    const families = new Map(
+      groups.groups.map((group) => [
+        group.id,
+        group.members.flatMap((id) => byID.has(id) ? [byID.get(id)!] : []),
+      ]),
+    );
+    // Saved tasks and mandatory phantoms borrow the same disjoint partition.
     const activity = (id: string) =>
       byID.get(id)?.timeUpdated ?? (families.get(id) ?? []).reduce(
         (time, entry) => Math.max(time, entry.timeUpdated),
@@ -215,7 +234,11 @@ export function createTabs(
       kind: "task",
       id: task.id,
       title: task.name,
-      sessions: [...task.sessions],
+      sessions: [
+        ...groups.groups.find((group) =>
+          group.kind === "task" && group.id === task.id
+        )!.roots,
+      ],
       preview: false,
       dependencies: (families.get(task.id) ?? []).reduce(
         (n, entry) => n + dependencyCount(entry, inbox),
@@ -236,7 +259,8 @@ export function createTabs(
       if (root) candidates.set(root.id, root);
     }
     for (const entry of candidates.values()) {
-      if (ownership.get(entry.id) || explicit.has(entry.id)) continue;
+      const owner = groups.owners.get(entry.id);
+      if (owner?.kind !== "session" || owner.id !== entry.id) continue;
       // An ungrouped mandatory child has its own tab and its own lamp. A
       // parent's aggregate lamp is not a substitute for that visibility.
       const status = rollup([entry], inbox);
@@ -268,13 +292,11 @@ export function createTabs(
     return byID.get(id);
   };
   const rootFor = (id: string) => {
-    prepare();
-    const node = nodes.get(id);
-    return node?.anchorID ?? id;
+    return grouping().owners.get(id)?.id ?? id;
   };
   const taskFor = (id: string) => {
-    prepare();
-    return ownership.get(id) ?? explicit.get(id);
+    const owner = grouping().owners.get(id);
+    return owner?.kind === "task" ? taskByID.get(owner.id) : undefined;
   };
   const contains = (task: TaskRecord, id: string) =>
     taskFor(id)?.id === task.id;
@@ -345,10 +367,7 @@ export function createTabs(
     taskFor,
     belongsToTab(tabID, sessionID) {
       void store.state.revision;
-      prepare();
-      return taskByID.has(tabID)
-        ? ownership.get(sessionID)?.id === tabID
-        : sessionID === tabID && byID.has(tabID) && !ownership.get(tabID);
+      return grouping().owners.get(sessionID)?.id === tabID;
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
@@ -356,50 +375,10 @@ export function createTabs(
       if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
       crumbTabs = rows;
       crumbID = key;
-      const tab = rows.find((t) => t.id === id);
-      const task = taskByID.get(id ?? "") ??
-        (tab &&
-          { id: tab.id, directory: input.directory, sessions: tab.sessions });
-      const local = task
-        ? taskBreadcrumbs(
-          task,
-          [...byID.values()],
-          tasks,
-          undefined,
-          input.inbox,
-          input.followParent,
-          nodes,
-        )
+      const group = grouping().groups.find((group) => group.id === id);
+      return cachedCrumbs = group
+        ? groupBreadcrumbs(group, byID, mandatory, store.state.sessionID)
         : [];
-      const current = store.state.sessionID;
-      const external = current
-        ? sessionAncestors(current, (id) => byID.get(id))
-          .toReversed().filter((id) => {
-            const entry = byID.get(id);
-            return entry &&
-              nodes.get(id)?.projectDirectory !== input.directory &&
-              !belongs(entry.directory);
-          })
-        : [];
-      const foreign = new Set(external);
-      const result = local.map((crumb) =>
-        foreign.has(crumb.id) ? { ...crumb, external: true } : crumb
-      );
-      for (const id of external) {
-        if (result.some((crumb) => crumb.id === id)) continue;
-        let at = result.findIndex((crumb) =>
-          sessionAncestors(crumb.id, (id) => byID.get(id)).includes(id)
-        );
-        if (at < 0) {
-          const ancestor = sessionAncestors(id, (id) => byID.get(id))
-            .find((id) => result.some((crumb) => crumb.id === id));
-          at = ancestor === undefined
-            ? result.length
-            : result.findIndex((crumb) => crumb.id === ancestor) + 1;
-        }
-        result.splice(at, 0, { id, helper: false, depth: 0, external: true });
-      }
-      return cachedCrumbs = result;
     },
     sessionFor,
     update(next: TabInput): void {
@@ -439,8 +418,8 @@ export function createTabs(
           const task = taskFor(id);
           draft.selected = {
             kind: task ? "task" : "session",
-            // Decision 3: the open session's root holds the selected tab in
-            // the top line; a child is the viewed session beneath it.
+            // Fix 4.2 narrows D3: an independent phantom selects itself;
+            // quiet children still select their nearest ancestor's group.
             id: task?.id ?? rootFor(id),
           };
           if (task) {
@@ -506,7 +485,7 @@ export function createTabs(
         selectedID &&
         (task
           ? !contains(task, selectedID)
-          : selectedID !== selection.id && rootFor(selectedID) !== selection.id)
+          : rootFor(selectedID) !== selection.id)
       ) {
         throw new Error("Unknown task session");
       }

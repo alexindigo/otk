@@ -8,7 +8,12 @@ import {
 Deno.test("breadcrumb projections keep coherent identities across reorder, shrink and empty snapshots", () => {
   const crumbs = Array.from(
     { length: 10 },
-    (_, i) => ({ id: `s${i}`, helper: false, depth: 0 }),
+    (_, i) => ({
+      id: `s${i}`,
+      kind: "member" as const,
+      helper: false,
+      depth: 0,
+    }),
   );
   const original = breadcrumbRows(crumbs);
   assertEquals(original.map((row) => row.key), crumbs.map((crumb) => crumb.id));

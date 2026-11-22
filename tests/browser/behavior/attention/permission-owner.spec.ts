@@ -76,21 +76,40 @@ for (
     const childRow = page.locator(`[data-session="${child.id}"]`);
     await expect(parentRow).toContainText("P 1");
     await expect(childRow).toContainText("P 1");
-    const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+    // Fix 4.2 case 2: the ungrouped asking helper owns a mandatory phantom,
+    // not a member of its parent's trail. Permission-family ownership is unchanged.
+    const childTab = page.locator(`[data-tab="${child.id}"]`);
+    await expect(childTab.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
     );
+    const crumb = page.locator(`[data-crumb="${child.id}"]`);
+    await expect(crumb).toHaveCount(0);
     if (view === "direct") {
       await page.clock.setFixedTime(Date.now() + 12 * 86400_000 + 60_000);
       await page.goto(`${state.url}/#/local/${child.id}`);
-    } else if (view !== "parent" && view !== "publication") await crumb.click();
+    } else if (view !== "parent" && view !== "publication") {
+      await childTab.click();
+      await expect(crumb).toHaveAttribute("data-crumb-kind", "member");
+      await crumb.click();
+    }
     if (view === "reload") await page.reload();
     if (view === "reconnect") {
       const before = frames.connections().opened;
       frames.close();
       await expect.poll(() => frames.connections().opened).toBeGreaterThan(
         before,
+      );
+    }
+    if (view !== "parent" && view !== "publication") {
+      await expect(childTab).toHaveAttribute("aria-selected", "true");
+      await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+        "data-state",
+        "blocked",
+      );
+      await expect(page.locator(`[data-crumb="${parent.id}"]`)).toHaveAttribute(
+        "data-crumb-kind",
+        "ancestor",
       );
     }
     const requests = await state.product("permission.list", {

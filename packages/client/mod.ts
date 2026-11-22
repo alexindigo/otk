@@ -104,6 +104,11 @@ export * from "./notification-policy.ts";
 export * from "./notification-triggers.ts";
 export * from "./inbox.ts";
 export * from "./tabs.ts";
+export {
+  projectTabGroups,
+  type TabGroup,
+  type TabGroups,
+} from "./tab-groups.ts";
 export * from "./session-submission.ts";
 export * from "./session-actions.ts";
 export * from "./session-revert.ts";

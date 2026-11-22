@@ -183,6 +183,11 @@
 .otk-crumb-feedback {
   padding-inline: var(--lane-gutter);
 }
+.otk-session-crumb[data-crumb-kind="ancestor"] .otk-crumb-title,
+.otk-folded-crumbs [data-crumb-kind="ancestor"] .otk-crumb-title {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
 .otk-session-selection {
   gap: 0;
   padding-inline-end: var(--chrome-inset);

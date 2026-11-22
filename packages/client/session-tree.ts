@@ -8,6 +8,7 @@ import {
   type SessionStructure,
   type TaskRecord,
 } from "@otk/protocol";
+import { projectTabGroups } from "./tab-groups.ts";
 export type { SessionListRow } from "@otk/protocol";
 
 export function sessionFamily(id: string, lookup: SessionLookup): string[] {
@@ -79,8 +80,15 @@ export function sessionTree<T extends SessionStructure>(
     .sort((a, b) => a.order - b.order);
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
   const taskByID = new Map(ordered.map((t) => [t.id, t]));
+  const partition = projectTabGroups(entries, ordered, {
+    directory,
+    directories,
+    hierarchy: nodes ??
+      new Map(entries.map((entry) => [entry.id, entry.hierarchy!])),
+  });
   const groupFor = (entry: T): string => {
-    const id = (entry.hierarchy ?? nodes?.get(entry.id))?.taskID;
+    const owner = partition.owners.get(entry.id);
+    const id = owner?.kind === "task" ? owner.id : undefined;
     // Hierarchy and inbox metadata publish independently. Until the named task
     // arrives (or after it is removed), retain its sessions in the ungrouped
     // presentation instead of assigning them to a bucket nobody can render.
