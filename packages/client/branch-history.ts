@@ -339,7 +339,8 @@ export function createBranchHistory(options: {
     t: Selection,
     reason: string,
     recovery: string,
-    actionLabel = "Saving an earlier branch",
+    actionLabel = "Saving the earlier conversation",
+    details?: string,
   ) => {
     const error = new RequestFailure({
       code: "branch-history.storage",
@@ -354,6 +355,7 @@ export function createBranchHistory(options: {
         },
         reason,
         recovery,
+        details,
       },
     });
     failures.set(draftKey(t), error);
@@ -381,11 +383,36 @@ export function createBranchHistory(options: {
     } catch {
       throw fail(
         t,
-        "Saved branches could not be read from this browser. No stored data was changed.",
-        "Restore access to browser localStorage, then reopen this session.",
-        "Opening saved earlier branches",
+        "Saved earlier conversations could not be read. No stored data was changed.",
+        "Check storage access, then reopen this session.",
+        "Opening saved earlier conversations",
+        "Browser localStorage is unavailable. No stored data was changed.",
       );
     }
+  };
+  const sendFailure = (target: Selection, cause: unknown) => {
+    const facts = cause instanceof RequestFailure
+      ? cause.failure.facts
+      : undefined;
+    const reason = facts?.reason ??
+      "The earlier conversation has not been saved.";
+    return failureValue(
+      new RequestFailure({
+        code: "revert.permanence",
+        diagnosticID: randomID(),
+        retry: "new-intent",
+        facts: {
+          actionLabel: "Sending makes the revert permanent",
+          target,
+          reason: reason +
+            (reason.includes("The replacement was not sent.")
+              ? ""
+              : " The replacement was not sent."),
+          recovery: "Save copy, Send anyway, or Cancel.",
+          details: facts?.details,
+        },
+      }),
+    );
   };
   const refresh = (t: Selection) => {
     if (!same(selected, t)) return;
@@ -427,27 +454,32 @@ export function createBranchHistory(options: {
       if (after) {
         throw fail(
           t,
-          "The branch copy remains saved, but its latest status was not saved. The native action already ran.",
-          "Free browser storage or restore storage access, then reopen this session.",
-          "Updating saved branch status",
+          "The earlier conversation is saved, but its latest status could not be saved. The native action already ran.",
+          "Check storage access and free space, then reopen this session.",
+          "Updating the earlier conversation",
         );
       }
       const quota = !!cause && typeof cause === "object" && "name" in cause &&
         cause.name === "QuotaExceededError";
       const outcome = operation === "restore"
-        ? " The conversation was restored; its copy is still unsaved."
-        : operation === "commit"
-        ? " The native action was not sent."
+        ? " The conversation was restored."
         : "";
       throw fail(
         t,
         quota
-          ? `Browser localStorage is full. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved (about 5 MB per origin).${outcome}`
-          : `Browser localStorage is unavailable. The earlier branch and draft (${branch.bytes.toLocaleString()} bytes) were not saved.${outcome}`,
-        "Delete a saved branch you no longer need, or free browser storage, then retry. If this branch alone is too large, keep the live conversation; it cannot fit here. Older branches were not removed.",
-        operation === "restore"
-          ? "Saving a copy after Restore"
-          : "Saving an earlier branch",
+          ? `The earlier conversation couldn't be saved: storage is full.${outcome}`
+          : `The earlier conversation couldn't be saved: storage is unavailable.${outcome}`,
+        quota
+          ? "Free space, then Retry, or Keep without a saved copy."
+          : "Check storage access, then Retry, or Keep without a saved copy.",
+        "Saving the earlier conversation",
+        `Browser localStorage ${
+          quota ? "is full" : "is unavailable"
+        }. The earlier conversation and draft require ${branch.bytes.toLocaleString()} bytes (UTF-16, including the key).${
+          quota
+            ? " The quota is about 5 MB per origin. If this earlier conversation alone exceeds it, it cannot fit here."
+            : ""
+        } Older saved conversations were not removed.`,
       );
     }
     clearFailure(t);
@@ -485,12 +517,11 @@ export function createBranchHistory(options: {
         throw fail(
           t,
           drafts.restored
-            ? "The conversation was restored, but its earlier branch and draft were not saved: browser localStorage is unavailable."
-            : "The earlier branch and draft were not saved: browser localStorage is unavailable.",
-          "Restore browser storage access, then Retry, or keep the conversation without a saved copy.",
-          drafts.restored
-            ? "Saving a copy after Restore"
-            : "Saving an earlier branch",
+            ? "The earlier conversation couldn't be saved: storage is unavailable. The conversation was restored."
+            : "The earlier conversation couldn't be saved: storage is unavailable.",
+          "Check storage access, then Retry, or Keep without a saved copy.",
+          "Saving the earlier conversation",
+          "Browser localStorage is unavailable. The earlier conversation and draft were not saved. Older saved conversations were not removed.",
         );
       }
       // Session acquisition can yield to reuse or native settlement. Never use
@@ -774,7 +805,7 @@ export function createBranchHistory(options: {
       return Promise.reject(
         fail(
           t,
-          "The earlier branch has no valid revert identity record. No archive was acquired.",
+          "The earlier conversation has no valid revert identity record. No saved copy was acquired.",
           "Reopen the staged revert before retrying the copy.",
         ),
       );
@@ -808,12 +839,10 @@ export function createBranchHistory(options: {
       const error = cause instanceof RequestFailure ? cause : fail(
         t,
         drafts.restored
-          ? "The conversation was restored, but its earlier branch copy could not be saved."
-          : "The earlier branch could not be saved.",
-        "Restore access to the original history and browser storage, then Retry, or keep the conversation without a saved copy.",
-        drafts.restored
-          ? "Saving a copy after Restore"
-          : "Saving an earlier branch",
+          ? "The earlier conversation couldn't be saved. The conversation was restored."
+          : "The earlier conversation couldn't be saved.",
+        "Check history and storage access, then Retry, or Keep without a saved copy.",
+        "Saving the earlier conversation",
       );
       recoveries.set(key, {
         boundaryID: boundary,
@@ -925,8 +954,8 @@ export function createBranchHistory(options: {
       if (!branch) {
         throw fail(
           t,
-          "This reverted branch was not saved in this browser. The native action was not sent.",
-          "Use Restore conversation first, then revert again in this browser to save it.",
+          "The earlier conversation has not been saved. The replacement was not sent.",
+          "Use Restore conversation first, then revert again to save it.",
         );
       }
       const value = cloneDraft(draft ?? options.drafts.current(draftKey(t)));
@@ -940,7 +969,7 @@ export function createBranchHistory(options: {
       if (!current || !save(t, current, false, false, "commit")) {
         throw fail(
           t,
-          "The earlier branch was deleted while preparing the replacement. The replacement was not sent.",
+          "The saved earlier conversation was deleted while preparing the replacement. The replacement was not sent.",
           "Retry Send to save the retained conversation again, or restore the conversation.",
         );
       }
@@ -975,29 +1004,10 @@ export function createBranchHistory(options: {
           throw new DOMException("A Send choice is already open", "AbortError");
         }
         const wait = Promise.withResolvers<BranchSendPermit>();
-        const reason = cause instanceof RequestFailure
-          ? cause.failure.facts?.reason
-          : cause instanceof Error
-          ? cause.message
-          : undefined;
         const choice = {
           boundaryID: record.boundaryID,
           saving: false,
-          error: failureValue(
-            new RequestFailure({
-              code: "revert.permanence",
-              diagnosticID: randomID(),
-              retry: "new-intent",
-              facts: {
-                actionLabel: "Sending makes the revert permanent",
-                target,
-                reason: reason ??
-                  "There is no saved copy of the reverted messages in this browser.",
-                recovery:
-                  "The replacement was not sent. Save a copy first, or choose Send anyway to discard those messages.",
-              },
-            }),
-          ),
+          error: sendFailure(target, cause),
         };
         sends.set(draftKey(t), { target, record, draft, choice, wait });
         publishSend(t);
@@ -1021,7 +1031,10 @@ export function createBranchHistory(options: {
         );
         await allowSend(pending.target, false);
       } catch (cause) {
-        pending.choice = { ...pending.choice, error: failureValue(cause) };
+        pending.choice = {
+          ...pending.choice,
+          error: sendFailure(pending.target, cause),
+        };
       } finally {
         pending.choice = { ...pending.choice, saving: false };
         publishSend(pending.target);
@@ -1128,9 +1141,9 @@ export function createBranchHistory(options: {
       } catch {
         fail(
           t,
-          "The branch copy remains saved, but its latest status could not be confirmed. The native action already ran.",
-          "Reopen this session after restoring the connection and browser storage access.",
-          "Updating saved branch status",
+          "The earlier conversation is saved, but its latest status could not be confirmed. The native action already ran.",
+          "Check the connection and storage access, then reopen this session.",
+          "Updating the earlier conversation",
         );
       }
     },
@@ -1145,7 +1158,7 @@ export function createBranchHistory(options: {
     fail(cause) {
       store.update((s) => {
         s.error = failureValue(cause, {
-          actionLabel: "Using a saved earlier branch",
+          actionLabel: "Using a saved earlier conversation",
           target: selected &&
             { sidecarId: selected.sidecarId, sessionID: selected.sessionID },
         });
@@ -1179,9 +1192,10 @@ export function createBranchHistory(options: {
       } catch {
         throw fail(
           selected,
-          "The saved branch was not deleted: browser localStorage is unavailable.",
-          "Restore browser storage access, then retry Delete.",
-          "Deleting a saved branch",
+          "The saved earlier conversation was not deleted: storage is unavailable.",
+          "Check storage access, then retry Delete.",
+          "Deleting the saved earlier conversation",
+          "Browser localStorage is unavailable. No stored data was changed.",
         );
       }
       store.update((s) => {

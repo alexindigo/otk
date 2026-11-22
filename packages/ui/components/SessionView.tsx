@@ -291,6 +291,7 @@ export default function SessionView(props: {
         group={recordGroups().groups[key]}
         state={rollbackState()}
         owner={props.rollback}
+        history={props.branchHistory}
         prefs={props.prefs}
         target={props.info && props.sidecarId
           ? {

@@ -173,8 +173,45 @@ Deno.test("background and Restore failures describe the actual operation without
   assert(!error.failure?.reason.includes("replacement was not sent"));
   assertEquals(
     error.failure?.value.facts?.actionLabel,
-    "Saving an earlier branch",
+    "Saving the earlier conversation",
   );
+  assertEquals(
+    error.failure?.reason,
+    "The earlier conversation couldn't be saved: storage is full.",
+  );
+  assertEquals(
+    error.failure?.recovery,
+    "Free space, then Retry, or Keep without a saved copy.",
+  );
+  const details = error.failure?.details ?? "";
+  assert(details.includes("Browser localStorage is full"));
+  assert(/require [\d,]+ bytes/.test(details));
+  assert(details.includes("UTF-16, including the key"));
+  assert(details.includes("about 5 MB per origin"));
+  assert(details.includes("Older saved conversations were not removed"));
+});
+
+Deno.test("Send failure keeps its outcome in the reason and diagnostics in Details across Save copy retries", async () => {
+  const f = fixture({ quota: true });
+  const waiting = f.owner.beforeSend(target).catch(() => undefined);
+  while (!f.owner.state.permanence) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  for (const retry of [false, true]) {
+    if (retry) await f.owner.saveCopy();
+    const error = f.owner.state.permanence!.error;
+    assert(error);
+    const failure = error.failure!;
+    assertEquals(
+      failure.reason,
+      "The earlier conversation couldn't be saved: storage is full. The replacement was not sent.",
+    );
+    assertEquals(failure.recovery, "Save copy, Send anyway, or Cancel.");
+    assert(failure.details?.includes("localStorage is full"));
+    assert(failure.details?.includes("about 5 MB per origin"));
+  }
+  f.owner.cancelSend();
+  await waiting;
 });
 
 Deno.test("failed background and Restore copies retain explicit retry and keep-without-copy recovery", async () => {
@@ -189,6 +226,12 @@ Deno.test("failed background and Restore copies retain explicit retry and keep-w
   f.restore();
   await f.owner.settled(target, true);
   await assertRejects(() => f.owner.beforeCommit(target));
+  const restoredFailure = f.owner.state.error;
+  assert(restoredFailure);
+  assertEquals(
+    restoredFailure.failure?.reason,
+    "The earlier conversation couldn't be saved: storage is full. The conversation was restored.",
+  );
   assertEquals(Reflect.get(f.owner.state, "recovery"), {
     boundaryID: "p",
     restored: true,

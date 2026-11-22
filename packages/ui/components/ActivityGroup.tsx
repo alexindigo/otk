@@ -22,12 +22,13 @@ export default function ActivityGroup(props: {
   onOpenChild?(id: string): void;
   body(): Element;
   breakouts?(): Element;
-  label?(): Element;
-  trailing?(): Element;
+  label?(open: () => boolean): Element;
+  trailing?(open: () => boolean): Element;
   meta?(primary: () => Element): Element;
   icon?(): Element;
   collapsible?: boolean;
   failed?: boolean;
+  wrapActions?: boolean;
 }): Element {
   const session = useOptionalSessionPorts();
   const [open, setOpen] = retainedDisclosure(
@@ -46,7 +47,9 @@ export default function ActivityGroup(props: {
       as="div"
       placement="gutter"
       enabled={props.failed === true}
-      class="otk-record-group-heading"
+      class={props.wrapActions
+        ? "otk-record-group-heading wraps-actions"
+        : "otk-record-group-heading"}
     >
       {heading(toggleID)}
     </FailureSignal>
@@ -67,7 +70,9 @@ export default function ActivityGroup(props: {
         when={props.collapsible !== false}
         fallback={
           <span class="otk-record-group-toggle otk-control-label">
-            <ContentSlot content={props.label ?? (() => props.group.title)} />
+            <ContentSlot
+              content={() => props.label?.(open) ?? props.group.title}
+            />
           </span>
         }
       >
@@ -128,7 +133,7 @@ export default function ActivityGroup(props: {
               </>
             }
           >
-            {(label) => label()}
+            {(label) => label(open)}
           </Show>
         </button>
       </Show>
@@ -139,7 +144,7 @@ export default function ActivityGroup(props: {
           onOpen={props.onOpenChild}
         />
       </Show>
-      {props.trailing?.()}
+      {props.trailing?.(open)}
     </>
   );
   return (

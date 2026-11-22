@@ -263,6 +263,7 @@ type Rule =
   | "meta-list"
   | "failure-signal"
   | "presentation"
+  | "failure-wording"
   | "settings-name"
   | "list-order"
   | "sidebar-row"
@@ -291,6 +292,8 @@ const owners: Record<Rule, string> = {
     "One failure signal: use FailureSignal, not a red chip outline",
   presentation:
     "FailurePresentation is produced by the client presenter, never reconstructed by a view or fixture",
+  "failure-wording":
+    "Failure reasons and next steps are plain; storage APIs, byte counts and quotas belong in Details",
   "settings-name":
     "One surface name: navigation says Settings / servers, matching Settings",
   "list-order":
@@ -719,6 +722,32 @@ export function conventionErrors(
     fail("navigation label");
   }
   for (const node of source.all) {
+    if (rule === "failure-wording") {
+      const inputs = node.type === "ObjectProperty" &&
+          ["reason", "recovery", "actionLabel"].includes(
+            property(node.key) ?? "",
+          )
+        ? [node.value]
+        : node.type === "CallExpression" && source.name(node.callee) === "fail"
+        ? node.arguments.slice(1, 4)
+        : [];
+      for (const input of inputs) {
+        if (
+          source.all.some((child) =>
+            child.start! >= input.start! && child.end! <= input.end! &&
+            /localStorage|\bbytes\b|\b\d+\s*MB\b/i.test(
+              child.type === "StringLiteral"
+                ? child.value
+                : child.type === "TemplateElement"
+                ? child.value.raw
+                : "",
+            )
+          )
+        ) {
+          fail(`technical failure wording on line ${node.loc?.start.line}`);
+        }
+      }
+    }
     if (rule === "list-order") {
       const orderingOwner =
         /packages\/client\/(?:stable-order|tabs|inbox|project-projection|server-resources|session-tree|index)\.ts$/
@@ -1016,6 +1045,29 @@ function staticText(source: Source, node: t.Node): string | undefined {
   }
   return source.string(value);
 }
+
+Deno.test("UI convention: failure wording rejects diagnostics outside Details", () => {
+  for (
+    const text of [
+      'const facts = {reason: "localStorage is full"};',
+      "const facts = {recovery: `Free 5 MB (${bytes} bytes)`};",
+      'fail(target, "Could not save 123 bytes", "Retry", "Saving");',
+    ]
+  ) {
+    assert(
+      conventionErrors("failure-wording", "Fixture.ts", text).length > 0,
+      text,
+    );
+  }
+  assertEquals(
+    conventionErrors(
+      "failure-wording",
+      "Fixture.ts",
+      'const facts = {reason: "Storage is full", recovery: "Retry", details: "localStorage: 123 bytes, 5 MB quota"};',
+    ),
+    [],
+  );
+});
 
 Deno.test("UI convention: list ordering rejects activity/state keys and accepts saved moves and creation", () => {
   for (

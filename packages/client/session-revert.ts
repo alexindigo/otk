@@ -6,7 +6,11 @@ import {
   randomID,
   type RevertInfo,
 } from "@otk/protocol";
-import { type FailureValue, failureValue } from "./failure-features.ts";
+import {
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+} from "./failure-features.ts";
 import { type Feedback, RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
@@ -93,7 +97,10 @@ export function createSessionRevert(options: {
   branchHistory?:
     & Pick<BranchHistory, "prepare" | "state">
     & Partial<
-      Pick<BranchHistory, "subscribe" | "settled" | "preservationWarning">
+      Pick<
+        BranchHistory,
+        "subscribe" | "settled" | "preservationWarning" | "retryCopy"
+      >
     >;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
   server?(target: Selection): string;
@@ -216,10 +223,10 @@ export function createSessionRevert(options: {
               retry: "new-intent",
               diagnosticID: randomID(),
               facts: {
-                actionLabel: "Saving the reverted messages",
+                actionLabel: "Saving the earlier conversation",
                 target,
-                reason: "No complete copy is saved in this browser.",
-                recovery: "Retry saving the copy, or Restore the conversation.",
+                reason: "The earlier conversation has not been saved.",
+                recovery: "Retry, or Keep without a saved copy.",
               },
             }),
           );
@@ -288,6 +295,31 @@ export function createSessionRevert(options: {
       });
     }
     const copy = savedCopy(record);
+    const candidate = options.branchHistory?.state;
+    const history = !candidate?.target ||
+        candidate.target.sidecarId === target.sidecarId &&
+          candidate.target.sessionID === target.sessionID
+      ? candidate
+      : undefined;
+    if (history?.recovery?.boundaryID === record.boundaryID && !copy) {
+      update((state) => {
+        state.phase = history.pending ? "saving" : "failed";
+        state.error = history.error;
+        state.failure = errorFeedback(history.error)?.failure?.value;
+      });
+      return;
+    }
+    if (
+      !copy && flow().failure?.code.startsWith("branch-history.") &&
+      !history?.error
+    ) {
+      update((state) => {
+        state.phase = "staged";
+        state.copyRemoved = true;
+        state.error = undefined;
+        state.failure = undefined;
+      });
+    }
     if (copy && flow().phase !== "restoring") {
       update((state) => {
         state.phase = "saved";
@@ -554,8 +586,9 @@ export function createSessionRevert(options: {
       observe();
     },
     retry() {
-      const target = options.session.state.selection, record = flow().record;
-      return target && record ? save({ ...target }, record) : Promise.resolve();
+      return options.branchHistory?.retryCopy?.().catch(() => {
+        // The branch-history owner publishes the failure for both surfaces.
+      }) ?? Promise.resolve();
     },
     dismiss() {
       const target = options.session.state.selection, record = flow().record;

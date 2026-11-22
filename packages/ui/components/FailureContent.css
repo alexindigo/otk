@@ -123,4 +123,10 @@
   .otk-failure-disclosed-reason {
     display: block;
   }
+  .otk-failure-content.is-expanded .otk-failure-main-reason {
+    display: block;
+  }
+  .otk-failure-content.is-expanded .otk-failure-disclosed-reason {
+    display: none;
+  }
 }
