@@ -4,6 +4,7 @@ import { sourceTree } from "./source.ts";
 import { stripVTControlCharacters } from "node:util";
 import { migrationLedger } from "./migration-audit.ts";
 import { nativeLane } from "./lanes.ts";
+import { streamStage } from "./stage.ts";
 
 const flags = new Set<string>();
 for (let i = 0; i < Deno.args.length; i++) {
@@ -158,7 +159,7 @@ for (const [id, args] of lane) {
     write: true,
     createNew: true,
   });
-  let exit = 1, error: string | undefined;
+  let exit = 1, error: string | undefined, tail = "";
   const unit = `otk-full-${version}-${id}-${crypto.randomUUID()}.service`;
   // Persist ownership before acquisition, so an interrupted supervisor can find
   // the exact current tier even before its final result is available.
@@ -196,25 +197,9 @@ for (const [id, args] of lane) {
       stderr: "piped",
       signal: AbortSignal.timeout(24 * 60 * 60_000),
     }).spawn();
-    const pump = async (
-      stream: ReadableStream<Uint8Array>,
-      terminal: Pick<Deno.FsFile, "write">,
-    ) => {
-      for await (const bytes of stream) {
-        for (let at = 0; at < bytes.length;) {
-          at += await output.write(bytes.subarray(at));
-        }
-        for (let at = 0; at < bytes.length;) {
-          at += await terminal.write(bytes.subarray(at));
-        }
-      }
-    };
-    const [status] = await Promise.all([
-      child.status,
-      pump(child.stdout, Deno.stdout),
-      pump(child.stderr, Deno.stderr),
-    ]);
-    exit = status.code;
+    const streamed = await streamStage(child, output);
+    exit = streamed.status.code;
+    tail = streamed.tail;
   } catch (cause) {
     error = String(cause);
   } finally {
@@ -226,9 +211,8 @@ for (const [id, args] of lane) {
     }
     output.close();
   }
-  const text = stripVTControlCharacters(
-    await Deno.readTextFile(join(root, `${id}.log`)),
-  );
+  // Count lines are the tier's last output; the whole log stays on disk.
+  const text = stripVTControlCharacters(tail);
   const deno = [
     ...text.matchAll(
       /(?:ok|FAILED) \| (\d+) passed \| (\d+) failed(?: \| (\d+) ignored)?/g,

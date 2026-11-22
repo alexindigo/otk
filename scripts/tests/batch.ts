@@ -3,6 +3,7 @@ import { nativeLane } from "./lanes.ts";
 import { join } from "@std/path";
 import { migrationLedger } from "./migration-audit.ts";
 import { sourceTree } from "./source.ts";
+import { runStage } from "./stage.ts";
 import { stripVTControlCharacters } from "node:util";
 
 const area = Deno.args[Deno.args.indexOf("--area") + 1];
@@ -48,22 +49,12 @@ const run = async (
   expected: { file: string; testID: string }[],
 ) => {
   const start = performance.now();
-  const output = await new Deno.Command(Deno.execPath(), {
-    args,
-    stdout: "piped",
-    stderr: "piped",
-    signal: AbortSignal.timeout(24 * 60 * 60_000),
-  }).output();
   const log = join(root, `${name}.log`);
-  await Deno.writeFile(
-    log,
-    new Uint8Array([...output.stdout, ...output.stderr]),
-  );
-  console.log(new TextDecoder().decode(output.stdout));
-  console.error(new TextDecoder().decode(output.stderr));
-  const text = stripVTControlCharacters(
-    new TextDecoder().decode(output.stdout),
-  );
+  const output = await runStage(Deno.execPath(), args, log, {
+    signal: AbortSignal.timeout(24 * 60 * 60_000),
+  });
+  // The receipt and count lines are the stage's last output.
+  const text = stripVTControlCharacters(output.tail);
   let proof: unknown;
   if (output.success && name.startsWith("new")) {
     const receiptPath = text.match(/Browser run receipt: (.+)/)?.[1];
