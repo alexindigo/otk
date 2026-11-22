@@ -1434,7 +1434,9 @@ rename owner; only the matching identity/origin renders `TitleEditor` in its
 title slot. The native input selects its text, commits on Enter or blur, cancels
 on Escape and retains typed text with local feedback on failure. An editing
 control uses a non-button frame so the input is never nested inside a button.
-The session-action owner also contributes Delete, whose first activation arms a
+Blur submission joins settled rendering and retained-focus restoration first;
+moving the same keyed editor cannot submit or discard its draft. The
+session-action owner also contributes Delete, whose first activation arms a
 shared CommandMenu item in attention paint. Its title names working-session
 interruption and the helper count. A second activation executes; row-to-row
 pointer/focus movement, Tab and dismissal disarm it. Generic Menu owns row
