@@ -454,7 +454,12 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     assertEquals(a.state.loading, true);
     await f.reply();
     await shared;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    assertEquals(
+      a.state.messageIDs.length,
+      20,
+      "same-source recovery retains the acquired reserve",
+    );
     assertEquals(a.state.continuity, "ready");
     assertEquals(f.requests, []);
   } finally {
@@ -518,7 +523,9 @@ Deno.test("tail readiness waits through the disconnected interval before reconne
     assertEquals(ready, false, "welcome still requires the new baseline");
     await f.reply();
     await pending;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    assertEquals(a.state.messageIDs.length, 20);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
@@ -554,7 +561,9 @@ Deno.test("tail readiness also waits for native link recovery and its current ba
     );
     await f.reply();
     await pending;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    assertEquals(a.state.messageIDs.length, 20);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
