@@ -245,11 +245,11 @@ export async function startApplication(
     }).then((core) => {
       const principal = () => cfg.auth.username.toLowerCase() || "local";
       inbox.operationAttention(
-        (id) => core.requests.operation(principal(), id),
-        () => core.requests.operationSessions(principal()),
+        (target) => core.requests.operation(principal(), target),
+        () => core.requests.operationTargets(principal()),
         (changed) =>
-          core.requests.listenOperations((owner, id) => {
-            if (owner === principal()) changed(id);
+          core.requests.listenOperations((owner, target) => {
+            if (owner === principal()) changed(target);
           }),
       );
       return core;

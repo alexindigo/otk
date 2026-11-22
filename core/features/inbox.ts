@@ -65,6 +65,11 @@ export interface InboxStores {
   templates: ProjectTemplates;
   checkouts?: Checkouts;
 }
+/** A received operation's target: its session, or its project directory. */
+interface OperationTarget {
+  kind: "session" | "directory";
+  id: string;
+}
 interface InboxMaps {
   entities: Map<string, EntityState>;
   supervision: Map<string, Supervision>;
@@ -777,24 +782,33 @@ export class InboxFeature implements FrameSource {
     this.#stops.push(listen(changed));
   }
   #operation?: {
-    value: (id: string) => "working" | "blocked" | undefined;
-    sessions: () => readonly string[];
+    value: (target: OperationTarget) => "working" | "blocked" | undefined;
+    targets: () => readonly OperationTarget[];
   };
-  /** S22: received OTK operations, borrowed by target session (P30 shows the
-   * ones the server has not received). */
+  #operationInput(target: OperationTarget): void {
+    const value = this.#operation?.value(target);
+    if (target.kind === "session") this.states.operation(target.id, value);
+    else {
+      this.states.checkoutOperation(this.summaries.leaf(target.id), value);
+    }
+  }
+  /** S22: received OTK operations, borrowed by target session or, without a
+   * session, by project directory (P30 shows the ones not yet received). */
   operationAttention(
-    value: (id: string) => "working" | "blocked" | undefined,
-    sessions: () => readonly string[],
-    listen: (changed: (id: string) => void) => () => void,
+    value: (target: OperationTarget) => "working" | "blocked" | undefined,
+    targets: () => readonly OperationTarget[],
+    listen: (changed: (target: OperationTarget) => void) => () => void,
   ): void {
-    this.#operation = { value, sessions };
-    const changed = (id: string) => {
-      this.states.operation(id, value(id));
-      this.#supervise(id);
-      this.summaries.mark(id);
+    this.#operation = { value, targets };
+    const changed = (target: OperationTarget) => {
+      this.#operationInput(target);
+      if (target.kind === "session") {
+        this.#supervise(target.id);
+        this.summaries.mark(target.id);
+      } else this.summaries.touch(target.id);
     };
     this.#stops.push(listen(changed));
-    for (const id of sessions()) changed(id);
+    for (const target of targets()) changed(target);
   }
   locationAttention(
     values: () => Readonly<Record<string, number>>,
@@ -823,8 +837,8 @@ export class InboxFeature implements FrameSource {
     this.#summaryRevision = 0;
     // A new generation re-baselines every client: no transition spans users.
     this.states.reset();
-    for (const id of this.#operation?.sessions() ?? []) {
-      this.states.operation(id, this.#operation!.value(id));
+    for (const target of this.#operation?.targets() ?? []) {
+      this.#operationInput(target);
     }
     this.summaries?.refresh();
     for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
