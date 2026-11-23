@@ -539,6 +539,8 @@ export class EntityStates {
       ? "operation"
       : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
       ? "failedHelper"
+      : verdict.outcome === "failed" && verdict.unseen
+      ? "failure"
       : inputs.permissions > 0
       ? "permission"
       : undefined;

@@ -15,6 +15,7 @@ export type BlockedCause =
   | "question"
   | "form"
   | "operation"
+  | "failure"
   | "failedHelper";
 export interface EntityCounts {
   blocked: number;
