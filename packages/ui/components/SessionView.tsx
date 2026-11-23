@@ -445,7 +445,6 @@ export default function SessionView(props: {
       next.boundary === previous?.boundary && previous.phase !== "confirming"
     ) return;
     onSettled(() => {
-      following?.pause();
       void window?.reveal(revertRecordKey(next.boundary!), { align: "nearest" })
         .catch((cause) => {
           if (!isCancellation(cause)) {
@@ -483,7 +482,6 @@ export default function SessionView(props: {
       (!!projection().messagesByID[target.messageID] || !!props.transcript),
     run: async (_ctx, target: { messageID: string }) => {
       setRevealError(undefined);
-      following?.pause();
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
       const message = projection().messagesByID[target.messageID];
       if (!message) {
@@ -517,6 +515,7 @@ export default function SessionView(props: {
       };
       await window?.reveal(recordGroups().owners[key] ?? key, {
         align: "center",
+        intent: "user",
         focus: ancestors.length ? undefined : focus,
       });
       for (let n = 0; n < ancestors.length; n++) {
@@ -532,6 +531,7 @@ export default function SessionView(props: {
           ancestors[n + 1] ?? recordGroups().leaves[key] ?? key,
           {
             align: "center",
+            intent: "user",
             focus: n === ancestors.length - 1 ? focus : undefined,
           },
         );
@@ -932,13 +932,15 @@ export default function SessionView(props: {
                                                         <CompletionToggle
                                                           group={group()}
                                                           prefs={props.prefs}
-                                                          onReveal={() => {
-                                                            following?.pause();
+                                                          onReveal={(user) => {
                                                             void window?.reveal(
                                                               group().key,
                                                               {
                                                                 align:
                                                                   "nearest",
+                                                                intent: user
+                                                                  ? "user"
+                                                                  : undefined,
                                                               },
                                                             );
                                                           }}

@@ -5,6 +5,7 @@ import { retainedWorkDisclosure } from "../features/transcript-context.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
 import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
+import { discloseInViewport } from "./viewport.ts";
 
 export default function WorkLog(
   props: {
@@ -22,6 +23,14 @@ export default function WorkLog(
     () => props.prefs ?? {},
     () => !!props.required,
   );
+  let frame: HTMLElement | undefined;
+  const change = (value: boolean, event: MouseEvent | KeyboardEvent) =>
+    discloseInViewport(
+      frame,
+      value,
+      setOpen,
+      event.isTrusted && value !== open(),
+    );
   const primary = (toggleID: string) => (
     <button
       id={toggleID}
@@ -29,19 +38,19 @@ export default function WorkLog(
       title="Work log"
       class="otk-work-fold otk-tree-control"
       aria-expanded={open() ? "true" : "false"}
-      onClick={() => setOpen(!open())}
+      onClick={(event) => change(!open(), event)}
     >
       <TreeIcon />
       <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
     </button>
   );
   return (
-    <section class="otk-work-log">
+    <section ref={(element) => frame = element} class="otk-work-log">
       <TreeNode
         toggleHeader
         label="Work log"
         open={open()}
-        onOpen={(value) => setOpen(value)}
+        onOpen={change}
         header={(_connected, toggleID) =>
           props.meta
             ? props.meta(() => primary(toggleID))

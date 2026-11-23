@@ -264,7 +264,10 @@ export default function Message(
     get usage() {
       return props.openUsage
         ? async () => {
-          await footerControl?.reveal("footer", { align: "nearest" });
+          await footerControl?.reveal("footer", {
+            align: "nearest",
+            intent: "user",
+          });
           usageControl?.open();
         }
         : undefined;

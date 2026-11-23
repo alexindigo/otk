@@ -121,7 +121,7 @@ export function TreeNode(props: {
   hasChildren?: boolean;
   showEmptyToggle?: boolean;
   bodyVisible?: boolean;
-  onOpen?(open: boolean): void;
+  onOpen?(open: boolean, event: MouseEvent | KeyboardEvent): void;
   /** The junction labels the header's sole button, rather than adding another. */
   toggleHeader?: boolean;
   outgoing?: boolean;
@@ -162,7 +162,7 @@ export function TreeNode(props: {
           ) return;
           event.preventDefault();
           event.stopPropagation();
-          props.onOpen?.(event.key === "ArrowRight");
+          props.onOpen?.(event.key === "ArrowRight", event);
         }}
       >
         <Show when={props.selected !== undefined}>
@@ -189,7 +189,7 @@ export function TreeNode(props: {
                     label={props.label ??
                       (props.open ? "Collapse branch" : "Expand branch")}
                     open={props.open}
-                    onOpen={(open) => props.onOpen?.(open)}
+                    onOpen={(open, event) => props.onOpen?.(open, event)}
                   />
                 }
               >

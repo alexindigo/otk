@@ -23,6 +23,80 @@ Deno.test("scrollbar input retires follow and commits proportional navigation th
   });
 });
 
+Deno.test("automatic measured positioning does not take follow intent", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    try {
+      const positioned = owner.navigate(() => ({
+        start: 200,
+        end: 220,
+        measured: true,
+      }), { align: "start" });
+      flush();
+      await positioned;
+      assertEquals(pane.scrollTop, 200);
+      assertEquals(owner.following(), true);
+      owner.transaction(() => height(1072));
+      assertEquals(pane.scrollTop, 972);
+    } finally {
+      lease.release();
+    }
+  });
+});
+
+Deno.test("a measured reveal at the tail keeps its own anchor through growth and non-scroll input", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    let start = 915;
+    const unregister = owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({ key: "reader", offset: pane.scrollTop }),
+      resolve: (anchor) =>
+        (anchor.key === "reveal" ? start : 0) + anchor.offset,
+    });
+    try {
+      const revealed = owner.navigate(() => ({
+        start,
+        end: start + 20,
+        measured: true,
+        anchor: { id: "rows", key: "reveal", start },
+      }), { intent: "user" });
+      flush();
+      await revealed;
+      assertEquals(owner.following(), false);
+      assertEquals(pane.scrollTop, 900);
+      // An automatic reveal cannot replace that reading position.
+      const automatic = owner.navigate(() => ({
+        start: 200,
+        end: 220,
+        measured: true,
+      }));
+      flush();
+      await automatic;
+      assertEquals(pane.scrollTop, 900);
+      // An unrelated press is not a request to scroll or to re-anchor.
+      pane.dispatchEvent(new Event("pointerdown"));
+      owner.transaction(() => height(1072));
+      assertEquals(pane.scrollTop, 900);
+      owner.transaction(() => {
+        start += 72;
+        height(1144);
+      });
+      assertEquals(start - pane.scrollTop, 15);
+      const latest = owner.latest(async () => {});
+      await Promise.resolve();
+      flush();
+      await latest;
+      assertEquals(pane.scrollTop, 1044);
+      assertEquals(owner.following(), true);
+    } finally {
+      unregister();
+      lease.release();
+    }
+  });
+});
+
 Deno.test("current return-source acquisition retains ordinary measured restoration", async () => {
   await viewportFixture(async ({ pane, flush }) => {
     const lease = acquireViewport(pane), owner = lease.owner;
@@ -33,7 +107,7 @@ Deno.test("current return-source acquisition retains ordinary measured restorati
         owner.keepAnchor();
         await owner.navigate(
           () => ({ start: 200, end: 250, measured: true }),
-          "start",
+          { align: "start" },
         );
       });
       await Promise.resolve();
@@ -133,7 +207,7 @@ for (const supersede of ["input", "retire", "navigation"]) {
             start: 300,
             end: 400,
             measured: true,
-          }));
+          }), { intent: "user" });
         } else {
           const event = new Event("wheel");
           Object.defineProperty(event, "deltaY", { value: -48 });
@@ -433,7 +507,7 @@ Deno.test("reveal completes when its relative geometry is measured while precedi
       result = lease.owner.navigate(() => {
         start += 20;
         return { start, end: start + 20, measured: true };
-      }, "center");
+      }, { align: "center", intent: "user" });
       void result.catch(() => {});
       for (let i = 0; i < 5; i++) flush();
     } finally {
@@ -598,6 +672,9 @@ function viewportFixture(
     scrollHeight = 1000;
     clientHeight = 100;
     #top = 0;
+    getBoundingClientRect() {
+      return { left: 0 };
+    }
     get scrollTop() {
       // Native clamping changes the stored offset; it cannot resurrect when a
       // later layout grows the scroll range again.
@@ -745,7 +822,7 @@ Deno.test("a pending reveal survives native clamping of the previous position", 
     try {
       result = lease.owner.navigate(
         () => ({ start: 200, end: 220, measured: true }),
-        "start",
+        { align: "start", intent: "user" },
       );
       void result.catch(() => {});
       // Layout can shrink and grow the native range before its scroll event is
