@@ -9,21 +9,25 @@ export interface TranscriptAnchor extends WindowAnchor {
   messageID?: string;
 }
 
+interface Disclosure {
+  value(): boolean | undefined;
+  expanded(
+    category: DisclosureCategory,
+    prefs?: Partial<Preferences>,
+    required?: boolean,
+  ): boolean;
+  set(value: boolean): void;
+}
+
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
   ): boolean;
-  disclosure(key: string, generation: string): {
-    value(): boolean | undefined;
-    expanded(
-      category: DisclosureCategory,
-      prefs?: Partial<Preferences>,
-      required?: boolean,
-    ): boolean;
-    set(value: boolean): void;
-  };
+  disclosure(key: string, generation: string): Disclosure;
+  workDisclosure(scope: string, records: readonly string[]): Disclosure;
+  subscribeWork(scope: string, listener: () => void): () => void;
   retire(key: string): void;
   subscribe(listener: () => void, key: string): () => void;
   reveal(ancestors: readonly string[]): void;
@@ -36,6 +40,10 @@ export interface TranscriptInteraction {
 }
 export function createTranscriptInteraction(): TranscriptInteraction {
   const choices = new Map<string, { generation: string; open?: boolean }>();
+  type WorkIntent = { order: number; open: boolean };
+  const workGroups = new Map<string, Map<string, WorkIntent>>();
+  const workKey = (scope: string) => JSON.stringify(["work", scope]);
+  let workOrder = 0, lifetime = 0;
   const generations = new Map<string, number>();
   const windows = new Map<string, Map<string, number>>();
   const listeners = new Map<string, Set<() => void>>();
@@ -108,6 +116,50 @@ export function createTranscriptInteraction(): TranscriptInteraction {
         },
       };
     },
+    subscribeWork(scope, listener) {
+      return this.subscribe(listener, workKey(scope));
+    },
+    workDisclosure(scope, records) {
+      const key = workKey(scope);
+      const epoch = lifetime;
+      const members = records.map((id) => ({ id, key: this.generation(id) }));
+      const current = () =>
+        epoch === lifetime &&
+        members.every(({ id, key }) => this.generation(id) === key);
+      const value = () => {
+        if (!current()) return;
+        const assigned = workGroups.get(key);
+        if (!assigned) return;
+        let latest: WorkIntent | undefined;
+        for (const member of members) {
+          const intent = assigned.get(member.key);
+          if (intent && (!latest || intent.order > latest.order)) {
+            latest = intent;
+          }
+        }
+        // A newly admitted member borrows the existing group's choice, not
+        // its position in the layout. Unrelated work has no matching member.
+        if (latest) {
+          for (const member of members) {
+            if (!assigned.has(member.key)) assigned.set(member.key, latest);
+          }
+        }
+        return latest?.open;
+      };
+      return {
+        value,
+        expanded: (category, prefs, required = false) =>
+          value() ?? (required || defaultFor(category, prefs)),
+        set(open) {
+          if (!members.length || !current()) return;
+          let assigned = workGroups.get(key);
+          if (!assigned) workGroups.set(key, assigned = new Map());
+          const intent = { order: ++workOrder, open };
+          for (const member of members) assigned.set(member.key, intent);
+          publish(key);
+        },
+      };
+    },
     retire: (key) => {
       choices.delete(key);
     },
@@ -138,6 +190,8 @@ export function createTranscriptInteraction(): TranscriptInteraction {
     },
     clear() {
       choices.clear();
+      workGroups.clear();
+      lifetime++;
       generations.clear();
       windows.clear();
       anchor = undefined;
