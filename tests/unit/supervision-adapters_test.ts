@@ -166,10 +166,10 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
     assertEquals(
       await waitFor(
         () => Promise.resolve(lamp()),
-        (value) => value === "finishedUnseen",
+        (value) => value === "needsYou",
       ),
-      "finishedUnseen",
-      "a matching terminal cannot remain working during native cleanup",
+      "needsYou",
+      "2.72: an unseen failed terminal needs acknowledgement, never live work",
     );
     assertEquals(index.getMetadata(id)?.activity?.outcome, "failed");
     assertEquals(
