@@ -172,8 +172,72 @@ function rawAttention(source: Source): boolean {
   });
 }
 
+/** Only immutable caller inputs typed by the canonical owner can forward lamps.
+ * Casts, local lookalike types, reassigned bindings and computed states do not
+ * establish provenance. Trail construction itself is policed by trail-owner. */
+function trailInputType(
+  source: Source,
+  node: t.Node | undefined,
+): t.TSType | undefined {
+  if (!node) return;
+  if (node.type === "Identifier") {
+    const access = source.access(node);
+    if (!access || access.binding.value || access.binding.written) return;
+    const scope = access.binding.scope;
+    if (
+      scope.type !== "FunctionDeclaration" &&
+      scope.type !== "FunctionExpression" &&
+      scope.type !== "ArrowFunctionExpression" &&
+      scope.type !== "ObjectMethod" && scope.type !== "ClassMethod"
+    ) return;
+    const param = scope.params.find((param) =>
+      param.type === "Identifier" &&
+      source.binding(param.name, param) === access.binding
+    );
+    return param?.type === "Identifier" &&
+        param.typeAnnotation?.type === "TSTypeAnnotation"
+      ? param.typeAnnotation.typeAnnotation
+      : undefined;
+  }
+  if (node.type === "CallExpression" && node.arguments.length === 0) {
+    const type = trailInputType(source, node.callee);
+    return type?.type === "TSFunctionType"
+      ? type.typeAnnotation?.typeAnnotation
+      : undefined;
+  }
+  if (node.type === "MemberExpression" && !node.computed) {
+    const type = trailInputType(source, node.object);
+    const name = property(node.property);
+    const member = type?.type === "TSTypeLiteral"
+      ? type.members.find((member) =>
+        member.type === "TSPropertySignature" && property(member.key) === name
+      )
+      : undefined;
+    return member?.type === "TSPropertySignature"
+      ? member.typeAnnotation?.typeAnnotation
+      : undefined;
+  }
+}
+function canonicalTrailType(
+  source: Source,
+  type: t.TSType | undefined,
+): boolean {
+  if (type?.type === "TSIntersectionType") {
+    return type.types.some((type) => canonicalTrailType(source, type));
+  }
+  if (type?.type !== "TSTypeReference") return false;
+  const imported = source.imported(type.typeName);
+  return imported?.module === "@otk/client" &&
+    ["TrailCrumb", "TrailModel"].includes(imported.name);
+}
 function lampInput(source: Source, value: t.Node | undefined): boolean {
   const resolved = source.value(value);
+  if (
+    resolved?.type === "MemberExpression" && !resolved.computed &&
+    property(resolved.property) === "status"
+  ) {
+    return canonicalTrailType(source, trailInputType(source, resolved.object));
+  }
   if (!resolved || resolved.type !== "CallExpression") return false;
   const origin = source.imported(resolved.callee);
   return origin?.name === "lamp" &&
@@ -412,6 +476,31 @@ Deno.test("entity state lamps require the selector, directly or through its bind
       'import * as model from "@otk/client"; <StatusLight state={model.lamp(store,key,options)} />;',
     ]
   ) assertEquals(violations("packages/ui/example.tsx", text), []);
+});
+
+Deno.test("entity state lamps accept canonical trail input provenance, never lookalikes or casts", () => {
+  for (
+    const text of [
+      'import type {TrailCrumb as Crumb} from "@otk/client"; function view(row: Crumb) { return <StatusLight state={row.status} />; }',
+      'import type {TrailCrumb} from "@otk/client"; const view = (row: () => TrailCrumb) => <StatusLight state={row().status} />;',
+      'import type {TrailCrumb} from "@otk/client"; const view = (row: TrailCrumb & {key: string}) => <StatusLight state={row.status} />;',
+      'import type {TrailModel} from "@otk/client"; function view(props: {model: TrailModel}) { return <StatusLight state={props.model.status} />; }',
+      'import type {TrailCrumb} from "@otk/client"; function view(row: TrailCrumb) { const state = row.status; return <StatusLight state={state} />; }',
+    ]
+  ) assertEquals(violations("packages/ui/arbitrary.tsx", text), []);
+  for (
+    const text of [
+      "type TrailCrumb = {status: string}; function view(row: TrailCrumb) { return <StatusLight state={row.status} />; }",
+      'import type {TrailCrumb} from "elsewhere"; function view(row: TrailCrumb) { return <StatusLight state={row.status} />; }',
+      'import type {TrailCrumb} from "@otk/client"; const row = raw as TrailCrumb; <StatusLight state={row.status} />;',
+      'import type {TrailCrumb} from "@otk/client"; function view(row: TrailCrumb) { row.status = "working"; return <StatusLight state={row.status} />; }',
+      'import type {TrailCrumb} from "@otk/client"; function view(row: TrailCrumb) { return <StatusLight state={row.status === "none" ? "working" : row.status} />; }',
+    ]
+  ) {
+    assert(
+      violations("packages/ui/arbitrary.tsx", text).includes("lamp-input"),
+    );
+  }
 });
 
 Deno.test("entity state timing rejects attention clocks and visit-age paint", () => {
