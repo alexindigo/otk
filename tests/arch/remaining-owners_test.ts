@@ -25,7 +25,7 @@ Deno.test("remaining UI owners keep native select arrows, form width and overflo
     Deno.readTextFile(new URL(`../../packages/ui/${path}`, import.meta.url));
   const form = await read("components/Form.css"),
     rows = await read("components/list-presentation.ts"),
-    tabs = await read("components/ProjectTabs.tsx"),
+    tabs = await read("components/TaskTrail.tsx"),
     editor = await read("components/prompt/Editor.css");
   assert(
     !/max-width\s*:/.test(form),
@@ -36,7 +36,10 @@ Deno.test("remaining UI owners keep native select arrows, form width and overflo
     "No count folding",
   );
   assert(
-    tabs.includes("<OverflowRow") && tabs.includes("required={required()}"),
+    tabs.includes("<OverflowRow") && tabs.includes("required={") &&
+      tabs.includes("required={rows().map((row) => row.id)}") &&
+      tabs.includes("editing(row.id)") && tabs.includes("compactMeasure=") &&
+      tabs.includes("uncompacted="),
   );
   assert(
     !/\b(?:width|height)\s*:[^;]*\b\d+(?:vh|vw)\b/.test(editor),

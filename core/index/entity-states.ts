@@ -11,6 +11,7 @@ import {
   type Supervision,
 } from "@otk/protocol";
 import {
+  deliveredTerminal,
   failedHelperNeedsAck,
   type SessionSupervision,
 } from "./supervision.ts";
@@ -400,7 +401,29 @@ export class EntityStates {
         activity?.work?.keys.includes(item.id)
       )
       : [];
+    const before = this.#states.get(entityKey("session", entry.id));
+    const starts = items.flatMap((item) =>
+      item.kind === "execution" && item.startedAt !== undefined
+        ? [item.startedAt]
+        : []
+    );
+    const previousRun = before?.evidence?.run;
+    const startedAt = starts.length
+      ? Math.min(...starts)
+      : inputs.work && previousRun?.endedAt !== undefined
+      ? undefined
+      : previousRun?.startedAt;
     const evidence: SessionEvidence = {
+      awaitingDelivery: !!entry.parentID &&
+        verdict.terminal > deliveredTerminal(entry),
+      ...(startedAt === undefined ? {} : {
+        run: {
+          startedAt,
+          ...(!inputs.work && verdict.terminal >= startedAt
+            ? { endedAt: verdict.terminal }
+            : {}),
+        },
+      }),
       // A received operation in progress is work on its target session.
       work: inputs.work || operation === "working",
       permissions: inputs.permissions,
@@ -433,7 +456,6 @@ export class EntityStates {
         : {}),
       ...(verdict.terminalFailure ? { failure: verdict.terminalFailure } : {}),
     };
-    const before = this.#states.get(entityKey("session", entry.id));
     return {
       kind: "session",
       id: entry.id,

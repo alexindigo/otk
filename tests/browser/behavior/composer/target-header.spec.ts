@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
+import { subagent } from "../../pages/crumbs.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { activity } from "../../pages/sessions.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -18,7 +19,7 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   await activity(state, "tstv1-urgent-child", "hold");
   await openSession(state, page, "tstv1-otk");
   const target = page.locator(".otk-composer-target");
-  const work = page.locator(".otk-composer-activity .otk-live-work-trigger");
+  const work = page.locator(".otk-composer-activity .otk-subagents-trigger");
   await expect(target).toContainText(taskName);
   await expect(work).toContainText("1 subagent");
   await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(
@@ -30,7 +31,7 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   const geometry = async () => {
     const box = await target.evaluate((label) => {
       const row = label.parentElement!;
-      const work = row.querySelector(".otk-live-work-trigger")!;
+      const work = row.querySelector(".otk-subagents-trigger")!;
       const l = label.getBoundingClientRect(), w = work.getBoundingClientRect();
       // Style7 finding 3: task and destination have separate label ownership.
       // notes/2026-11-21-style7fix.md; decision 3 keeps the actual open session named.
@@ -89,6 +90,19 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   await page.setViewportSize({ width: 800, height: 800 });
   expect((await geometry()).truncated).toBe(true);
   await activity(state, "tstv1-urgent-child", "release");
+  // Ending execution is not delivery. The finished helper remains until its
+  // parent receives its result, at which point the header loses the control.
+  await work.click();
+  await expect(
+    subagent(page, "tstv1-urgent-child").locator(".otk-status-light"),
+  )
+    .toHaveAttribute("data-state", "finished");
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "release",
+    sessionID: "tstv1-urgent-child",
+    target: "trail-delivery",
+  });
   await expect(work).toHaveCount(0);
   await expect(target).toContainText(taskName);
   await page.reload();

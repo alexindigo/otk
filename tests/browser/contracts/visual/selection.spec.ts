@@ -25,7 +25,7 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
   });
   await state.product("layout.patch", { rightCollapsed: false });
   await page.goto(state.url + "/#/local/tstv1-otk");
-  await expect(page.locator(".otk-folded-crumbs")).toBeVisible();
+  await expect(page.locator(".otk-subagents")).toBeVisible();
   await expect(page.locator(".otk-session-row[aria-current=page]"))
     .toBeVisible();
   const cdp = await context.newCDPSession(page),
@@ -74,10 +74,10 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
       await observe(".otk-project-sessions [data-otk-selection]", 10);
       await observe(".otk-project-tabs [data-otk-selection]", 3);
       await observe(".otk-panel-icons [data-otk-selection]", 1);
-      await page.locator(".otk-folded-crumbs > button").click();
+      await page.locator(".otk-subagents > button").click();
       await expect(page.locator(":popover-open")).toBeVisible();
       await observe(
-        ".otk-folded-crumbs .otk-menu-items [data-otk-selection]",
+        ".otk-subagents .otk-menu-items [data-otk-selection]",
         1,
       );
       await page.keyboard.press("Escape");

@@ -9,6 +9,7 @@ import {
   stripThemes,
 } from "../../pages/task-strip.ts";
 import { activity } from "../../pages/sessions.ts";
+import { subagent, subagents } from "../../pages/crumbs.ts";
 
 test.use({ profile: "contract-sessions-tabs" });
 for (const count of [2, 10]) {
@@ -63,8 +64,9 @@ for (const count of [2, 10]) {
         await stripShot(page, info, `u4-2-tabs-${theme.name}`);
       }
       await activity(state, "tstv1-helper", "hold");
-      // WP3: working helpers are mandatory, not only selected ancestry.
-      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(1);
+      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
+      await subagents(page).click();
+      await expect(subagent(page, "tstv1-helper")).toBeVisible();
       await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-helper`);
       await expect(
         page.locator(

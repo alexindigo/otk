@@ -3,6 +3,12 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
+import {
+  openBlockedSubagents,
+  restorePermissionDock,
+  subagent,
+  subagents,
+} from "../../pages/crumbs.ts";
 import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.use({ profile: "isolated", timezoneId: "America/Los_Angeles" });
@@ -26,11 +32,8 @@ for (
     if (view === "publication") {
       frames.hold((f) => f.t === "index.patch" || f.t === "index.snapshot");
     }
-    const child = await seed(
-      state,
-      "Execute optimized-preview-build plan",
-      parent.id,
-    );
+    const childTitle = "Execute optimized-preview-build plan";
+    const child = await seed(state, childTitle, parent.id);
     await tool(state, "bash", {
       command: "printf permission-owner-output",
       description: "Helper permission owner probe",
@@ -81,7 +84,11 @@ for (
     const parentTab = page.locator(`[data-tab="${parent.id}"]`);
     await expect(childTab).toHaveCount(0);
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+    await expect(crumb).toHaveCount(0);
+    const inventory = subagents(page);
+    await openBlockedSubagents(page);
+    const helper = subagent(page, child.id);
+    await expect(helper.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
     );
@@ -89,9 +96,12 @@ for (
       await page.clock.setFixedTime(Date.now() + 12 * 86400_000 + 60_000);
       await page.goto(`${state.url}/#/local/${child.id}`);
     } else if (view !== "parent" && view !== "publication") {
-      await childRow.click();
+      const target = helper.locator(".otk-subagent-name");
+      await expect(target).toHaveText(childTitle);
+      await target.click();
       await expect(crumb).toHaveAttribute("data-crumb-kind", "member");
-      await crumb.click();
+    } else {
+      await inventory.click();
     }
     if (view === "reload") await page.reload();
     if (view === "reconnect") {
@@ -129,7 +139,7 @@ for (
       }),
       contentType: "application/json",
     });
-    await expect(page.locator(".otk-permission-dock")).toBeVisible();
+    await restorePermissionDock(page);
     await expect(page.locator(".otk-permission-command")).toHaveText(
       "printf permission-owner-output",
     );
@@ -231,7 +241,9 @@ for (
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     if (pendingTool === "bash") {
-      await expect(page.locator(".otk-composer-dock")).toHaveCount(0);
+      // The read-only header may still own Subagents after the request closes.
+      await expect(page.locator(".otk-composer:visible")).toHaveCount(0);
+      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
     }
     await expect(parentRow).not.toContainText("P 1");
     await expect(childRow).not.toContainText("P 1");

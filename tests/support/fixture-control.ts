@@ -222,7 +222,10 @@ export interface Commands {
       | "backgrounds"
       | "summarize"
       | "tabs-pin"
-      | "delivery-helpers";
+      | "delivery-helpers"
+      | "trail-decisions"
+      | "trail-delivery"
+      | "trail-overflow";
   };
   stop: Record<string, never>;
 }
@@ -435,6 +438,9 @@ export function request(value: unknown): ControlRequest {
           "summarize",
           "tabs-pin",
           "delivery-helpers",
+          "trail-decisions",
+          "trail-delivery",
+          "trail-overflow",
         ]
           .includes(
             String(p.target),

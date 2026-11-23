@@ -2,8 +2,8 @@
 import type { ContextAction, TaskCrumb } from "@otk/client";
 
 /** Neighbor decisions belong to this snapshot, never a keyed child's old index. */
-export function breadcrumbRows(
-  crumbs: readonly TaskCrumb[],
+export function breadcrumbRows<T extends TaskCrumb>(
+  crumbs: readonly T[],
 ) {
   return crumbs.map((crumb, index) => ({
     ...crumb,

@@ -336,7 +336,6 @@ const PENDING: string[] = [
   "packages/client/transcript.ts: raw-attention",
   "packages/ui/components/EntityPill.tsx: lamp-input",
   "packages/ui/components/LiveWork.tsx: lamp-input",
-  "packages/ui/components/LiveWork.tsx: state-producer",
   "packages/ui/components/ProjectInbox.tsx: lamp-input",
   "packages/ui/components/ProjectInbox.tsx: raw-attention",
   "packages/ui/components/ProjectInbox.tsx: visit-age-paint",

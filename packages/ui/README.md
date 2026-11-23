@@ -122,18 +122,19 @@ wrapped item collection, so ending an editor cannot shift it vertically either.
 ResizeObserver and font completion belong to this component. The client owns
 `fitOverflow` and ancestry preference. A consumer-supplied item minimum belongs
 to the frame; required frames reflow as whole controls rather than clipping
-their readable labels. Breadcrumb metadata yields to its own line under
-pressure. Task tabs instead use the horizontal `ScrollRegion`: one
-chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
-labels and a thin hover scrollbar. Vertical wheel deltas scroll horizontally
-unless Ctrl/Meta is held. Selection and lane resize reveal the active tab.
-`EdgeTriangle` owns a centred control-height slot and renders only available
-navigation. Paging aligns the last fully visible tab to the leading edge,
-mirrored going back. The client model alone orders tabs; no More or measurement
-frames are used for tabs. TitleEditor can receive an external `feedbackID`, with
-the same shared TitleFeedback rendered in the owner's in-flow track, so a
-compact editing field and its feedback do not compete for one control-height
-lane.
+their readable labels. Breadcrumb consumers select `singleLine`: optional crumbs
+fold into +N, while the open session and editor retain their slots. Breadcrumb
+metadata yields to its own line under pressure. Task tabs instead use the
+horizontal `ScrollRegion`: one chrome-header-height row, equal flex widths with
+a 90px minimum, ellipsized labels and a thin hover scrollbar. Vertical wheel
+deltas scroll horizontally unless Ctrl/Meta is held. Selection and lane resize
+reveal the active tab. `EdgeTriangle` owns a centred control-height slot and
+renders only available navigation. Paging aligns the last fully visible tab to
+the leading edge, mirrored going back. The client model alone orders tabs; no
+More or measurement frames are used for tabs. TitleEditor can receive an
+external `feedbackID`, with the same shared TitleFeedback rendered in the
+owner's in-flow track, so a compact editing field and its feedback do not
+compete for one control-height lane.
 
 PaneState also accepts injected content for empty panes, centring one
 left-aligned content group in the region left below chrome. Diff's automatic
@@ -702,46 +703,46 @@ track; runtime feedback uses the dock's independent notice slot above that
 track, so arrival cannot resize the transcript. Explicit user-owned Send/draft
 choices opt into normal flow through `noticeFlow`, while overflowing takeovers
 keep their bounded presentation. Revert records belong to the transcript, not a
-composer overlay. Required breadcrumb controls separately reflow the header
-under pressure, preserving readable titles rather than clipping them. RecordList
-owns record spacing and supplies topology to the shared Tree; views borrow
-canonical span identities and retained disclosure state rather than regrouping
-mounted neighbours. Background intervals share one outer conversation gap and
-compact internal record rhythm, including actionable breakouts. Their folded
-line is plain muted meta text with producer-owned counts and client-owned
-failure wording, no Activity prefix or time range. Footer-borrowed successful
-completions never add a title count. Successful completion-only intervals borrow
-a footer junction instead of adding a status row; direct reveal opens the same
-retained interval. Read-only helper transcripts mount those same attention
-owners; only prompt submission is unavailable. With no active takeover, helpers
-mount no empty composer. That same owner provides composer availability to
-takeover headers, so draft-kept copy appears only when the open session offers a
-composer. Permission docks and notifications share RequestAge presentation and
-the client's requestIdle formatter/resumption threshold, using the asking
-session's activity clock rather than request age. Permission and question
-surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
-a common blocked-light header. Consumer-supplied session location names the
-project/task; question tabs/options use shared underline/pointer primitives.
-Static keyboard hints are in titles, Keys and the palette, not the surface.
-Question step/collapse changes focus a visible option or review action; leaving
-an own-answer field focuses Answer. Arrival does not focus an answer action.
-Takeover layout sections are programmatic-only landmarks, not Tab stops. The
-prompt restores its own input when a takeover releases focus to the document,
-while preserving focus the reader moved elsewhere. Shared focus paint admits
-semantic controls and explicitly marked visible content (message/date reveals),
-never layout wrappers or programmatic-only targets, including browser-focusable
-scroll containers. Actual keyboard controls retain visible focus. The composer's
-rounded border owns focus-within rather than a second textarea rectangle;
-own-answer input focuses its visible row. ComposerTakeovers delegates field
-paint through `--prompt-input-outline`; without that enclosing box, a standalone
-Prompt retains its own field focus outline. Permission takeovers and
-notification toasts share one PermissionSummary: exact tool, command/working
-directory, edit file paths/counts or generic target and requested patterns.
-Notification enrichment carries the neutral request alongside its originating
-action through the hub's opaque detail port. A permission-owned adapter supplies
-injected toast content; the generic hub and toast host know no permission
-schema. Permission and question owners preserve dirty state through reconnects.
-The legacy `Docks` API remains independently reusable for existing consumers.
+composer overlay. Breadcrumbs stay in one measured row and fold optional
+controls under pressure. RecordList owns record spacing and supplies topology to
+the shared Tree; views borrow canonical span identities and retained disclosure
+state rather than regrouping mounted neighbours. Background intervals share one
+outer conversation gap and compact internal record rhythm, including actionable
+breakouts. Their folded line is plain muted meta text with producer-owned counts
+and client-owned failure wording, no Activity prefix or time range.
+Footer-borrowed successful completions never add a title count. Successful
+completion-only intervals borrow a footer junction instead of adding a status
+row; direct reveal opens the same retained interval. Read-only helper
+transcripts mount those same attention owners; only prompt submission is
+unavailable. With no active takeover, helpers mount no empty composer. That same
+owner provides composer availability to takeover headers, so draft-kept copy
+appears only when the open session offers a composer. Permission docks and
+notifications share RequestAge presentation and the client's requestIdle
+formatter/resumption threshold, using the asking session's activity clock rather
+than request age. Permission and question surfaces replace the composer with a
+raised, bordered, 20px-radius Takeover and a common blocked-light header.
+Consumer-supplied session location names the project/task; question tabs/options
+use shared underline/pointer primitives. Static keyboard hints are in titles,
+Keys and the palette, not the surface. Question step/collapse changes focus a
+visible option or review action; leaving an own-answer field focuses Answer.
+Arrival does not focus an answer action. Takeover layout sections are
+programmatic-only landmarks, not Tab stops. The prompt restores its own input
+when a takeover releases focus to the document, while preserving focus the
+reader moved elsewhere. Shared focus paint admits semantic controls and
+explicitly marked visible content (message/date reveals), never layout wrappers
+or programmatic-only targets, including browser-focusable scroll containers.
+Actual keyboard controls retain visible focus. The composer's rounded border
+owns focus-within rather than a second textarea rectangle; own-answer input
+focuses its visible row. ComposerTakeovers delegates field paint through
+`--prompt-input-outline`; without that enclosing box, a standalone Prompt
+retains its own field focus outline. Permission takeovers and notification
+toasts share one PermissionSummary: exact tool, command/working directory, edit
+file paths/counts or generic target and requested patterns. Notification
+enrichment carries the neutral request alongside its originating action through
+the hub's opaque detail port. A permission-owned adapter supplies injected toast
+content; the generic hub and toast host know no permission schema. Permission
+and question owners preserve dirty state through reconnects. The legacy `Docks`
+API remains independently reusable for existing consumers.
 
 Context part renderers receive their original canonical message clock through
 `recordTime`. The fallback shows it, including milliseconds and the local zone,
@@ -1009,24 +1010,29 @@ server's `shellLayout` preference. Controls pass independent
 validation/save/broadcast. No control constructs a whole-layout replacement from
 props. `ProjectTabs` consumes the public client tabs model,
 server/project-scoped task actions and injected guarded navigation. It renders
-task/phantom/preview tabs, ordered foldable breadcrumbs with helper nesting and
-reported usage, using 8px status lights. Shell-owned 28px corner toggles stay at
-a shared 12px offset across full/rail and right-open/closed layouts; each top
-bar reserves the corner zone. The 52px centre bar contains quiet task pills and
-injected Display options; the breadcrumb owns the selected session title and
-path tooltip. Reported usage fills the context bar against the reporting model's
-catalog context window; unknown windows show tokens without an invented
-denominator or bar. The inbox has 32px rows, hover-revealed menus, Search and a
-compact settings/keys/server footer; Sessions has 30px rows and CSS child
-guides. Chrome uses the shared selection pointer/underline, and shortcuts remain
-in tooltips, Keys and the palette. `registerTaskDialogs` contributes its name
-editor to the dialog host. Tabs have no per-tab menu; their owner-scoped
-commands and package-internal task handlers retain pin, naming, moving, adding
-and closing actions independently of presentation. Project rows own selection
-around their flowing open button and trailing cell. That cell reserves visit
-time and menu trigger in the same grid cell, revealing the trigger on hover or
-focus without shifting content or positioning it over the row. `session.preview`
-and `session.pin` are guarded command ports for the Sessions panel; preview
+task/phantom/preview tabs, the data-only `TaskTrail` and reported usage, using
+8px status lights. Shell-owned 28px corner toggles stay at a shared 12px offset
+across full/rail and right-open/closed layouts; each top bar reserves the corner
+zone. The 52px centre bar contains quiet task pills and injected Display
+options. `TaskTrail` renders the canonical model's ancestry only, with clickable
+titles and chevron boundaries. Shared `OverflowRow` measures matching inert
+content for full and whole-first-word/fitting-tail compact states, preserving
+every ancestor. The composer's `Subagents` control renders that model's separate
+D66 helper set once: lamps and titles left, shared duration-owner values right,
+with navigation and existing Stop admission. `LiveWork` displays shell jobs
+only. Reported usage fills the context bar against the reporting model's catalog
+context window; unknown windows show tokens without an invented denominator or
+bar. The inbox has 32px rows, hover-revealed menus, Search and a compact
+settings/keys/server footer; Sessions has 30px rows and CSS child guides. Chrome
+uses the shared selection pointer/underline, and shortcuts remain in tooltips,
+Keys and the palette. `registerTaskDialogs` contributes its name editor to the
+dialog host. Tabs have no per-tab menu; their owner-scoped commands and
+package-internal task handlers retain pin, naming, moving, adding and closing
+actions independently of presentation. Project rows own selection around their
+flowing open button and trailing cell. That cell reserves visit time and menu
+trigger in the same grid cell, revealing the trigger on hover or focus without
+shifting content or positioning it over the row. `session.preview` and
+`session.pin` are guarded command ports for the Sessions panel; preview
 replacement cannot remove required activity tabs. `ProjectSessions` consumes the
 framework-free client hierarchy and injected open/pin/create actions. The
 shell's existing navigation guard protects draft/attention input, including

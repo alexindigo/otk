@@ -630,6 +630,9 @@ export function createServerResources(o: {
       inboxes.set(id, model);
       const current = model;
       current.observeChanges((changes) => {
+        if (changes.baseline || changes.entities?.length) {
+          current.entities.stale(!connected(id));
+        }
         for (const cache of tabInputs.values()) {
           if (cache.server !== id) continue;
           if (changes.sessions.some((key) => cache.dependencies.has(key))) {
@@ -757,6 +760,7 @@ export function createServerResources(o: {
       get taskActivity() {
         return base.taskActivity;
       },
+      entities: inbox(p.sidecarId).entities,
     };
     tabInputs.set(key, {
       key,
@@ -869,7 +873,10 @@ export function createServerResources(o: {
         }
       }
     }
-    if (frame.t === "welcome") projections.get(id)?.reset();
+    if (frame.t === "welcome") {
+      projections.get(id)?.reset();
+      inboxes.get(id)?.entities.stale(true);
+    }
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
     if (
@@ -906,6 +913,9 @@ export function createServerResources(o: {
   };
   const sidecars = o.sidecars(receive);
   const stopLinks = sidecars.subscribe(() => {
+    for (const [id, model] of inboxes) {
+      if (!connected(id)) model.entities.stale(true);
+    }
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {

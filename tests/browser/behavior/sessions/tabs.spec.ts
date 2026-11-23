@@ -22,10 +22,16 @@ test.describe("task tabs", () => {
           "aria-selected",
           "true",
         );
-        await expect(page.locator(`[data-crumb="${helper}"]`)).toBeVisible();
+        await expect(
+          page.getByRole("button", { name: "Subagents", exact: true }),
+        ).toHaveText("1 subagent");
       };
       await assertTask();
-      await page.locator(`[data-crumb="${helper}"]`).click();
+      await expect(page.locator(`[data-crumb="${helper}"]`)).toHaveCount(0);
+      await page.getByRole("button", { name: "Subagents", exact: true })
+        .click();
+      await page.locator(`[data-subagent="${helper}"] .otk-subagent-name`)
+        .click();
       await expect(page).toHaveURL(new RegExp(`${helper}$`));
       await assertTask();
       await page.reload();
@@ -71,8 +77,9 @@ test.describe("task tabs", () => {
         "aria-current",
         "page",
       );
-      await expect(page.locator("[data-crumb=tstv1-helper][data-helper=true]"))
-        .toBeVisible();
+      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Subagents", exact: true }))
+        .toHaveText("2 subagents");
       await expect(page.locator(".otk-context-meter")).toHaveAttribute(
         "data-tokens",
         "2670",
@@ -85,7 +92,7 @@ test.describe("task tabs", () => {
       await expect(page.locator(".otk-context-bar")).toHaveCount(0);
       await page.locator('[data-session="tstv1-helper"]').click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-helper$/);
-      await expect(page.locator("[data-crumb=tstv1-nested]")).toBeVisible();
+      await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveCount(0);
       await page.locator('[data-session="tstv1-nested"]').click();
       await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveAttribute(
         "data-depth",
@@ -148,18 +155,21 @@ test.describe("task tabs", () => {
         (await state.product("tasks.list", { directory: state.directory }))
           .sort((a, b) => a.order - b.order).map((t) => t.id),
       ).toEqual([exec.id, plan.id]);
+      await openSession(state, page, "tstv1-otk");
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // Unseen helpers remain in both the mandatory trail and Sessions until
-      // acknowledged; the task keeps its aggregate lamp.
+      // D66/D58: human seen does not replace a parent delivery receipt.
       const helpers = page.locator(
         "[data-session=tstv1-helper], [data-session=tstv1-nested]",
       );
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(2);
       await expect(page.locator(
-        "[data-crumb=tstv1-helper] .otk-status-light[data-state=finished], [data-crumb=tstv1-nested] .otk-status-light[data-state=finished]",
-      )).toHaveCount(2);
+        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+      )).toHaveCount(0);
+      await page.getByRole("button", { name: "Subagents", exact: true })
+        .click();
+      await expect(page.locator("[data-subagent]")).toHaveCount(2);
       const finishes = await state.product("sessions.finishes", {});
       for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
         await state.product("sessions.seen", {
@@ -170,8 +180,21 @@ test.describe("task tabs", () => {
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(0);
       await expect(page.locator(
-        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
-      )).toHaveCount(0);
+        "[data-subagent=tstv1-helper], [data-subagent=tstv1-nested]",
+      )).toHaveCount(2);
+      for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "release",
+          target: "trail-delivery",
+          sessionID,
+        });
+      }
+      await expect(
+        page.locator(
+          "[data-subagent=tstv1-helper], [data-subagent=tstv1-nested]",
+        ),
+      ).toHaveCount(0);
       await expect(
         page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
       )
@@ -211,19 +234,25 @@ test.describe("task tabs", () => {
       name: "Long chain",
       sessions: ids,
     });
+    for (const id of ids.slice(1)) await activity(state, id, "hold");
+    await page.setViewportSize({ width: 900, height: 1000 });
     await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-chain-8`);
-    await expect(page.locator(".otk-folded-crumbs")).toBeVisible();
-    expect(await page.locator("[data-crumb]:visible").count()).toBeLessThan(10);
-    await page.locator(".otk-folded-crumbs > button").click();
-    const choice = page.locator(".otk-folded-crumbs .otk-menu-items button")
-      .nth(1);
-    const id = await choice.getAttribute("data-overflow-target");
-    expect(ids).toContain(id);
-    await choice.click();
-    await expect(page.locator(`[data-crumb="${id}"]`)).toHaveAttribute(
-      "aria-current",
-      "page",
+    const chip = page.getByRole("button", {
+      name: "Subagents",
+      exact: true,
+    });
+    await expect(chip).toBeVisible();
+    await expect(page.locator("[data-crumb]:visible")).toHaveCount(10);
+    await expect(page.locator("[data-fit-mode]").first()).toHaveAttribute(
+      "data-fit-mode",
+      "compact",
     );
+    await chip.click();
+    const choice = page.locator(".otk-subagents [data-subagent]")
+      .nth(1);
+    const id = await choice.getAttribute("data-subagent");
+    expect(ids).toContain(id);
+    await choice.locator(".otk-subagent-name").click();
     await expect(page).toHaveURL(new RegExp(`${id}$`));
     await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(
       "aria-selected",
@@ -234,7 +263,8 @@ test.describe("task tabs", () => {
       "data-otk-reduced-colors",
       "",
     );
-    await expect(page.locator(`[data-crumb="${id}"] .otk-lamp-shape`))
+    await chip.click();
+    await expect(page.locator(`[data-subagent="${id}"] .otk-lamp-shape`))
       .toHaveCSS("display", "block");
   });
 });

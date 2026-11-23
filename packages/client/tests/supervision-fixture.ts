@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // Legacy scenario knobs describe the fake server's positive evidence. Production
 // consumers receive only this server projection, never these status-based knobs.
-import type { InboxSnapshot, IndexMetadata, Supervision } from "@otk/protocol";
+import {
+  entityKey,
+  type InboxSnapshot,
+  type IndexMetadata,
+  type Supervision,
+} from "@otk/protocol";
 import * as inbox from "../inbox.ts";
 import { createTabs as tabs, type TabInput } from "../tabs.ts";
 import { taskBreadcrumbs as crumbs } from "../task-breadcrumbs.ts";
@@ -9,11 +14,49 @@ export * from "../inbox.ts";
 export type * from "../tabs.ts";
 export type * from "../task-breadcrumbs.ts";
 
+/** Fake-server entity publication for legacy scenario knobs, not a client fallback. */
+export function entitySnapshot(
+  value: Pick<InboxSnapshot, "supervision">,
+  entries: readonly IndexMetadata[] = [],
+) {
+  return Object.fromEntries(
+    Object.entries(value.supervision ?? {}).map((
+      [id, s],
+    ) => [entityKey("session", id), {
+      kind: "session" as const,
+      id,
+      state: inbox.inboxStatus({ id } as IndexMetadata, {
+        seen: {},
+        finishes: {},
+        supervision: { [id]: s },
+      }),
+      previous: "none" as const,
+      evidence: {
+        awaitingDelivery: s.state === "finishedUnseen",
+        work: entries.length
+          ? !!entries.find((entry) => entry.id === id)?.activity?.work?.fresh &&
+            !!entries.find((entry) => entry.id === id)?.activity?.work?.keys
+              .length
+          : s.state === "working",
+        permissions: 0,
+        questions: 0,
+        descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+      },
+      counts: {
+        working: Number(s.state === "working"),
+        blocked: Number(s.state === "needsYou"),
+        finished: Number(s.state === "finishedUnseen"),
+        unseen: Number(s.unseen ?? false),
+      },
+    }]),
+  );
+}
+
 export function projected(
   entries: readonly IndexMetadata[],
   value: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ) {
-  return {
+  const result = {
     ...value,
     supervision: Object.fromEntries(
       entries.map((entry): [string, Supervision] => {
@@ -35,6 +78,7 @@ export function projected(
       }),
     ),
   };
+  return { ...result, entities: entitySnapshot(result) };
 }
 export const inboxStatus: typeof inbox.inboxStatus = (entry, value) =>
   inbox.inboxStatus(entry, projected([entry], value));

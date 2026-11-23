@@ -140,7 +140,12 @@ export {
 } from "@otk/protocol";
 export { contextMeter } from "./context-meter.ts";
 export { createTaskActions, type TaskActions } from "./task-actions.ts";
-export { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+export {
+  taskBreadcrumbs,
+  type TaskCrumb,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
 export {
   familySelection,
   familyTask,

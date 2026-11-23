@@ -107,11 +107,5 @@
 .otk-composer-dock[data-read-only="true"] {
   --composer-bottom-inset: 0px;
   flex: none;
-  block-size: 0;
   padding-block: 0;
-}
-.otk-composer-dock[data-read-only="true"] > .otk-composer-activity-slot {
-  position: absolute;
-  inset-inline: var(--lane-gutter);
-  inset-block-end: 0;
 }

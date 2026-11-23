@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { createTabs, runningWork } from "@otk/client";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
+import { entitySnapshot } from "./supervision-fixture.ts";
 
 const entry = (
   id: string,
@@ -63,8 +64,10 @@ for (const grouped of [true, false]) {
     };
     const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
     let connected = true;
-    const update = () =>
+    const update = () => {
+      inbox.entities = entitySnapshot(inbox);
       tabs.update({ directory: "/p", entries, inbox, connected });
+    };
     const helpers = () =>
       runningWork({
         tabs,
@@ -78,10 +81,6 @@ for (const grouped of [true, false]) {
     tabs.preview(root.id);
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
-      "late",
-      "early",
-      "nested",
-      "finished",
     ]);
     assertEquals(helpers(), ["early", "nested", "late"]);
     tabs.preview(nested.id);
@@ -89,8 +88,6 @@ for (const grouped of [true, false]) {
       "root",
       "early",
       "nested",
-      "late",
-      "finished",
     ]);
     for (const id of ["early", "nested", "late"]) {
       inbox.supervision![id] = { state: "finishedUnseen", terminal: 60 };
@@ -101,8 +98,6 @@ for (const grouped of [true, false]) {
       "root",
       "early",
       "nested",
-      "late",
-      "finished",
     ]);
     assertEquals(helpers(), []);
     inbox.supervision!.early = { state: "none", terminal: 60 };
@@ -110,9 +105,8 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
+      "early",
       "nested",
-      "late",
-      "finished",
     ]);
     // A native rerun counts under its ancestor, never under an open sibling.
     inbox.supervision!.late = { state: "working", terminal: 60 };
@@ -121,9 +115,8 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
+      "early",
       "nested",
-      "late",
-      "finished",
     ]);
     assertEquals(helpers(), []);
     tabs.preview(root.id);
@@ -133,8 +126,8 @@ for (const grouped of [true, false]) {
     update();
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
+      "early",
       "nested",
-      "finished",
     ]);
     assertEquals(helpers(), []);
     tabs.stop();
