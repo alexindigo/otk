@@ -893,24 +893,26 @@ parts through their own registry and page through the original session owner.
 
 The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
-presentation revisions. The first background record mints its frame even while
-queued. Settlement changes child presentation, never the root partition. Folded
-frames show a client-worded failure count and only their chronological
-breakouts. They never partition successful stretches into additional disclosure
-rows; all children remain in the one frame's details. Pending, active, blocked,
-unknown and failed records break out inside that frame in source order, then
-rejoin its compact children when settled. Native plugins supply opaque summary
-kinds and singular/plural nouns; headings never classify records. Records
-without producer-owned summary facts remain visible breakouts. Producer-declared
-footer completions retain their original source and reveal paths. A success-only
-interval is silent until explicitly disclosed through the preceding reply footer
-or revealed; mixed intervals retain those completion facts in their original
-chronology, but not their summary. Failure counts do not borrow producer nouns
-and include failures without summary facts. The existing transcript interaction
-owner retains all disclosure choices and opens reveal ancestors. Measurements
-use presentation revisions separately from logical row identity, so a topology
-or streamed-content revision cannot borrow an old extent, including when an
-unmounted row was previously empty.
+presentation revisions. An interval needs admitted part content before offering
+a disclosure; headers alone retain their source rows. A populated interval keeps
+all its records, including empty breakouts. Its first record mints the frame
+even while queued. Settlement changes child presentation, never the root
+partition. Folded frames show a client-worded failure count and only their
+chronological breakouts. They never partition successful stretches into
+additional disclosure rows; all children remain in the one frame's details.
+Pending, active, blocked, unknown and failed records break out inside that frame
+in source order, then rejoin its compact children when settled. Native plugins
+supply opaque summary kinds and singular/plural nouns; headings never classify
+records. Records without producer-owned summary facts remain visible breakouts.
+Producer-declared footer completions retain their original source and reveal
+paths. A success-only interval is silent until explicitly disclosed through the
+preceding reply footer or revealed; mixed intervals retain those completion
+facts in their original chronology, but not their summary. Failure counts do not
+borrow producer nouns and include failures without summary facts. The existing
+transcript interaction owner retains all disclosure choices and opens reveal
+ancestors. Measurements use presentation revisions separately from logical row
+identity, so a topology or streamed-content revision cannot borrow an old
+extent, including when an unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
