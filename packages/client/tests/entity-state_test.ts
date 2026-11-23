@@ -9,6 +9,8 @@ import {
   label,
   lamp,
   liveWork,
+  sessionEvidence,
+  sessionWorkStatus,
 } from "../entity-state.ts";
 import { createInbox } from "../inbox.ts";
 
@@ -66,6 +68,29 @@ const session = (
   ...extra,
 });
 const S = entityKey("session", "s"), P = entityKey("project", "/p");
+
+Deno.test("session row observations borrow work and retry evidence independently of lamp priority", () => {
+  const f = fixture();
+  try {
+    assertEquals(sessionWorkStatus(f.store, S), undefined);
+    f.put(session("blocked", { cause: "question" }));
+    assertEquals(sessionWorkStatus(f.store, S), "busy");
+    const evidence: NonNullable<ReturnType<typeof sessionEvidence>> = {
+      ...sessionEvidence(f.store, S)!,
+      work: false,
+      retry: { attempt: 2 },
+    };
+    f.put(session("working", { evidence }));
+    assertEquals(sessionWorkStatus(f.store, S), "retry");
+    delete evidence.retry;
+    f.put(session("none", { evidence }));
+    assertEquals(sessionWorkStatus(f.store, S), "idle");
+    f.store.stale(true);
+    assertEquals(sessionWorkStatus(f.store, S), undefined);
+  } finally {
+    f.store.stop();
+  }
+});
 
 function fixture() {
   const time = clock();

@@ -7,7 +7,12 @@ import {
   SidecarConnection,
 } from "../mod.ts";
 import type { ClientSidecars, SidecarState } from "../mod.ts";
-import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
+import {
+  entityKey,
+  type InboxSnapshot,
+  type IndexEntry,
+  taskEntityID,
+} from "@otk/protocol";
 
 Deno.test("request activity keeps original project and phantom visible without changing native facts", () => {
   const index = createIndex(),
@@ -84,10 +89,7 @@ Deno.test("request activity keeps original project and phantom visible without c
   assertEquals(resources.projects(2)[0].inactive, false);
   const project = { sidecarId: "local", directory: "/one" };
   const tabs = resources.tabs(project);
-  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [[
-    entry.id,
-    "working",
-  ]]);
+  assertEquals(tabs.tabs(), []); // No server receipt/state yet (D62).
   assertEquals(
     resources.entry("local", entry.id)?.status,
     "idle",
@@ -102,6 +104,27 @@ Deno.test("request activity keeps original project and phantom visible without c
     retentionUntil: 2,
     replayed: false,
   });
+  const taskID = taskEntityID(entry.id, false, "/one", "session");
+  resources.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 0,
+    revision: 1,
+    ops: [{
+      op: "entity.upsert",
+      value: {
+        kind: "task",
+        id: taskID,
+        state: "working",
+        previous: "none",
+        counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+      },
+    }],
+  });
+  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [[
+    entry.id,
+    "working",
+  ]]);
   connection.rpc.requests.disconnect();
   assertEquals(resources.projects(2)[0].status, "working");
   connection.rpc.receive({
@@ -118,6 +141,13 @@ Deno.test("request activity keeps original project and phantom visible without c
     },
   });
   assertEquals(resources.projects(2)[0].status, "none");
+  resources.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 1,
+    revision: 2,
+    ops: [{ op: "entity.remove", key: entityKey("task", taskID) }],
+  });
   tabs.update(resources.tabSnapshot(project));
   assertEquals(tabs.tabs(), []);
   assertEquals(connection.rpc.feedback(entry.id).current()?.kind, "error");

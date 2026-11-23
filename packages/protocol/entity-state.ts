@@ -48,6 +48,8 @@ export interface SessionEvidence {
   }[];
   retry?: { attempt: number; message?: string; next?: number };
   failure?: PublicFailure;
+  /** A current diagnostic observation, not proof that a native run failed. */
+  error?: true;
 }
 export interface EntityState {
   kind: EntityKind;

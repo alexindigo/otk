@@ -206,6 +206,29 @@ export function lamp(
 }
 
 /** One label dictionary, keyed by state; the cause refines nothing yet. */
+export function entityState(store: EntityStateStore, k: string): ProjectStatus {
+  return store.isStale ? "none" : store.get(k)?.state ?? "none";
+}
+
+/** Own-session evidence only. Descendant counts retain their explicit scope. */
+export function sessionEvidence(
+  store: EntityStateStore,
+  k: string,
+): SessionEvidence | undefined {
+  return store.isStale ? undefined : store.get(k)?.evidence;
+}
+
+/** Compatibility observation for session-row consumers. This is work evidence,
+ * not the supervision lamp: a blocked session can still have fresh work. */
+export function sessionWorkStatus(
+  store: EntityStateStore,
+  k: string,
+): "idle" | "busy" | "retry" | undefined {
+  const evidence = sessionEvidence(store, k);
+  if (!evidence) return undefined;
+  return evidence.retry ? "retry" : evidence.work ? "busy" : "idle";
+}
+
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
   blocked: "Needs you",
   working: "Working",

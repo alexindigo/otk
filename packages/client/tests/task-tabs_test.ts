@@ -148,7 +148,7 @@ Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing th
   tabs.crumbs();
   tabs.tabs();
   tabs.entry(entries[0].id);
-  assertEquals(reads, { entries: 0, inbox: 1, taskActivity: 1 });
+  assertEquals(reads, { entries: 0, inbox: 0, taskActivity: 0 });
 });
 
 Deno.test("task tabs keep saved order through activity changes and accept explicit moves", () => {
@@ -241,6 +241,18 @@ Deno.test("pending operation lamp paint cannot change saved task order", () => {
     finished: { state: "finishedUnseen", terminal: 50 },
     newer: { state: "working", terminal: 0 },
   };
+  // Received operations are part of the server's task state, never a browser
+  // overlay on completion bookkeeping (D62).
+  meta.entities = Object.fromEntries(["finished", "newer"].map((id) => [
+    `task:${JSON.stringify(["task", id, "/p", false])}`,
+    {
+      kind: "task" as const,
+      id: JSON.stringify(["task", id, "/p", false]),
+      state: "working" as const,
+      previous: "none" as const,
+      counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+    },
+  ]));
   const tabs = canonicalTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({ directory: "/p", entries: [finished, newer], inbox: meta });
   assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [

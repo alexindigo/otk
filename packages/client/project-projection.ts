@@ -34,6 +34,7 @@ export interface ProjectProjectionRow extends InboxProject {
 export function createProjectProjection(o: {
   entry(id: string): MergedMetadata | undefined;
   inbox?(): InboxSnapshot;
+  entities?(): import("./entity-state.ts").EntityStateStore;
   taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
   membership?(directory: string, present: boolean): void;
@@ -256,6 +257,9 @@ export function createProjectProjection(o: {
           get inbox() {
             return o.inbox?.() ?? inbox;
           },
+          get entities() {
+            return o.entities?.();
+          },
         };
       }
       return p.input;
@@ -467,7 +471,10 @@ export function createProjectProjection(o: {
       const text = record ? visitTime(record.lastVisit, time) : "";
       const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
       const key = `${text}/${age}`;
-      if (!p.row || p.time !== key) {
+      if (
+        !p.row || p.time !== key || p.row.status !== status ||
+        p.row.unread !== unread
+      ) {
         p.time = key;
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
