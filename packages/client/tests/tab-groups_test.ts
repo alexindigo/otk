@@ -117,6 +117,28 @@ Deno.test("tab groups row 2: legacy child tasks cannot split human membership", 
   }
 });
 
+Deno.test("2.67 helper-only saved groups render no task tab", () => {
+  const rows = [entry("R"), entry("H", "R")];
+  const tabs = model();
+  try {
+    tabs.update({
+      directory: "/p",
+      entries: rows,
+      inbox: inbox([task("helper-only", ["H"])]),
+    });
+    tabs.preview("H");
+    assertEquals(tabs.tabs().map((tab) => [tab.kind, tab.id]), [[
+      "phantom",
+      "R",
+    ]]);
+    assertEquals(tabs.tasks(), []);
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.state.sessionID, "H");
+  } finally {
+    tabs.stop();
+  }
+});
+
 Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout toggles preserve the partition", () => {
   const rows = [entry("R"), entry("A", "R"), entry("B", "R"), entry("C", "A")];
   for (const row of rows.slice(0, 3)) row.status = "busy";

@@ -108,3 +108,92 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   await page.reload();
   await expect(target).toContainText(taskName);
 });
+
+test("composer.header-and-input-share-content-edges-at-every-size", {
+  tag: ["@composer", "@contracts", "@isolated"],
+}, async ({ isolatedState: state, page }, info) => {
+  test.setTimeout(240000);
+  await state.product("tasks.create", {
+    directory: state.directory,
+    name: "melo#ark | main",
+    sessions: ["tstv1-otk"],
+  });
+  await activity(state, "tstv1-urgent-child", "hold");
+  await openSession(state, page, "tstv1-otk");
+  const facts: unknown[] = [];
+  for (const width of [1440, 760]) {
+    await page.setViewportSize({ width, height: 900 });
+    // At phone widths, use the existing rail layout instead of squeezing the
+    // input between two expanded sidebars (a separate shell-width constraint).
+    await state.product("layout.patch", {
+      leftCollapsed: width === 760,
+      rightCollapsed: width === 760,
+    });
+    await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
+      "data-collapsed",
+      String(width === 760),
+    );
+    for (const scale of ["100", "125"]) {
+      await state.product("prefs.set", { key: "textSize", value: scale });
+      await expect(page.locator("html")).toHaveCSS(
+        "--otk-scale",
+        String(Number(scale) / 100),
+      );
+      for (
+        const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
+          "otk-light-stone",
+          "stone",
+        ]]
+      ) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await expect(page.locator(".otk-subagents-trigger")).toContainText(
+          "1 subagent",
+        );
+        const measure = () =>
+          page.locator(".otk-composer-dock").evaluate((dock) => {
+            const box = (selector: string) =>
+              dock.querySelector(selector)!.getBoundingClientRect();
+            const left = box(".otk-composer-task").left;
+            const right = box(".otk-subagents-trigger").right;
+            const input = box(".otk-prompt-input");
+            const send = box(".otk-send-button");
+            return {
+              left,
+              right,
+              inputLeft: input.left,
+              sendRight: send.right,
+              leftDrift: Math.abs(left - input.left),
+              rightDrift: Math.abs(right - send.right),
+            };
+          });
+        const edges = await measure();
+        expect.soft(
+          edges.leftDrift,
+          `${width}/${scale}/${label} leading content edge`,
+        ).toBeLessThanOrEqual(1);
+        expect.soft(
+          edges.rightDrift,
+          `${width}/${scale}/${label} trailing content edge`,
+        ).toBeLessThanOrEqual(1);
+        facts.push({ width, scale, theme, ...edges });
+        await page.mouse.move(width - 2, 2);
+        await page.screenshot({
+          path: info.outputPath(
+            `composer-inset-${width}-${scale}-${label}.png`,
+          ),
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+    }
+  }
+  await info.attach("content-edges", {
+    body: JSON.stringify(facts, null, 2),
+    contentType: "application/json",
+  });
+  await activity(state, "tstv1-urgent-child", "release");
+});

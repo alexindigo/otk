@@ -458,7 +458,10 @@ export class SessionScale {
           ? this.directory
           : join(this.root, "background");
         const title = `Scale session ${String(i).padStart(4, "0")}`;
-        const parent = i >= 10 && i < 40
+        // Catalog qualification owns 251 human tasks, not helper-only groups.
+        const parent = options.files
+          ? null
+          : i >= 10 && i < 40
           ? `ses_scale${String(i - 1).padStart(6, "0")}`
           : i === 40
           ? "ses_missing_parent"

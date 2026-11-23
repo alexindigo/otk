@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-composer-dock {
+  --composer-content-inset: var(--space-4);
+  --composer-frame-stroke: 1px;
   --composer-bottom-inset: calc(20 * var(--otk-unit));
   position: relative;
   flex: 0 1 auto;
@@ -10,7 +12,7 @@
   max-height: 100%;
   box-sizing: border-box;
 }
-.otk-composer {
+.otk-composer-dock .otk-composer {
   position: relative;
   --prompt-input-outline: none;
   width: 100%;
@@ -18,7 +20,7 @@
   margin-inline: auto;
   min-height: 0;
   background: var(--otk-bg-elevated);
-  border: 1px solid var(--otk-border);
+  border: var(--composer-frame-stroke) solid var(--otk-border);
   border-radius: var(--radius-composer);
   box-shadow: var(--otk-composer-shadow);
 }
@@ -37,6 +39,9 @@
   max-inline-size: var(--lane-width);
   min-block-size: var(--control-size);
   margin-inline: auto;
+  box-sizing: border-box;
+  border-inline: var(--composer-frame-stroke) solid transparent;
+  padding-inline: var(--composer-content-inset);
   padding-block-end: var(--space-2);
   flex: none;
 }
@@ -83,7 +88,9 @@
 .otk-composer.is-suspended {
   visibility: hidden;
 }
-.otk-composer-feedback {
+.otk-composer-dock .otk-composer-feedback {
+  box-sizing: border-box;
+  border-inline: var(--composer-frame-stroke) solid transparent;
   position: relative;
   max-inline-size: var(--lane-width);
   margin-inline: auto;

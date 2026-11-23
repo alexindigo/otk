@@ -59,6 +59,8 @@ test(
       })
     );
     expect(population).toBeGreaterThanOrEqual(251);
+    await expect(page.locator('.otk-task-list [data-tab^="scale-task-"]'))
+      .toHaveCount(251);
     const paintMs = performance.now() - paintStart;
     const prompt = page.locator("textarea[name=prompt]"),
       autocomplete = page.locator(".otk-autocomplete");
@@ -221,6 +223,18 @@ test(
       generations = await audit();
     }
     expect(generations.length).toBeGreaterThanOrEqual(2);
+    // Welcome restores the transport before the scoped inbox has rehydrated
+    // all 251 task members. Join that baseline before checking live keyed edits;
+    // retained pre-reconnect labels are not a current-generation baseline.
+    await expect.poll(() => {
+      const socket = frames.filter((event) =>
+        event.direction === "received" && event.frame.t === "welcome"
+      ).at(-1)?.socket;
+      return frames.some((event) =>
+        event.socket === socket && event.direction === "received" &&
+        event.frame.t === "inbox.snapshot"
+      );
+    }, { timeout: 120_000 }).toBe(true);
     await state.product("tasks.rename", {
       id: "scale-task-0",
       name: "Current scale task",
