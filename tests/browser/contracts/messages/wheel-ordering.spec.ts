@@ -2,7 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { viewing } from "../../pages/composer.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { revealTool } from "../../pages/transcript.ts";
 import type { CDPSession, Page } from "@playwright/test";
 
 const source = Array.from(
@@ -133,7 +133,7 @@ for (const cpuRate of [1, 8]) {
       ).toBe(true);
       await openSession(state, page, session.id);
       if (numbered) {
-        await openWorkLogs(page);
+        await revealTool(page, "[data-tool=write][data-tool-status=completed]");
         await page.locator(".otk-display-menu > button").click();
         const collapse = page.locator("input[name=collapseFileChanges]");
         await expect(collapse).not.toBeChecked();
