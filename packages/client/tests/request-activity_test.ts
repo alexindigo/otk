@@ -9,7 +9,7 @@ import {
 import type { ClientSidecars, SidecarState } from "../mod.ts";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 
-Deno.test("request activity keeps original project and phantom visible without changing native facts", () => {
+Deno.test("request activity keeps the phantom visible, leaves projects to received state and never changes native facts", () => {
   const index = createIndex(),
     connection = new SidecarConnection("http://localhost", {
       status() {},
@@ -80,8 +80,11 @@ Deno.test("request activity keeps original project and phantom visible without c
     title: "New title",
   });
   void operation.result.catch(() => {});
-  assertEquals(resources.projects(2)[0].status, "working");
-  assertEquals(resources.projects(2)[0].inactive, false);
+  // Decision 62, plan 3.3: an operation the server has not received does not
+  // colour the project (its pending message shows it, P30); received ones
+  // arrive as entity states (tests/unit/core/entity-states_test.ts).
+  assertEquals(resources.projects(2)[0].status, "none");
+  assertEquals(resources.projects(2)[0].inactive, true);
   const project = { sidecarId: "local", directory: "/one" };
   const tabs = resources.tabs(project);
   assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [[
@@ -103,7 +106,7 @@ Deno.test("request activity keeps original project and phantom visible without c
     replayed: false,
   });
   connection.rpc.requests.disconnect();
-  assertEquals(resources.projects(2)[0].status, "working");
+  assertEquals(resources.projects(2)[0].status, "none");
   connection.rpc.receive({
     t: "request.result",
     ref,
@@ -124,7 +127,7 @@ Deno.test("request activity keeps original project and phantom visible without c
   resources.stop();
 });
 
-Deno.test("a project-owned creation has activity before a task or session ID exists, while reads stay quiet", () => {
+Deno.test("a project-owned creation before any task or session ID exists leaves the project to received state, and reads stay quiet", () => {
   const index = createIndex(),
     connection = new SidecarConnection("http://localhost", {
       status() {},
@@ -181,8 +184,10 @@ Deno.test("a project-owned creation has activity before a task or session ID exi
     name: "perf",
   });
   void create.result.catch(() => {});
-  assertEquals(resources.projects(2)[0].status, "working");
-  assertEquals(resources.projects(2)[0].inactive, false);
+  // Decision 62, plan 3.3: only received operations colour the project, through
+  // the server's checkout operation input (core entity-states tests).
+  assertEquals(resources.projects(2)[0].status, "none");
+  assertEquals(resources.projects(2)[0].inactive, true);
   connection.rpc.receive({
     t: "request.accepted",
     ref: create.state.ref,
@@ -192,10 +197,6 @@ Deno.test("a project-owned creation has activity before a task or session ID exi
     replayed: false,
   });
   create.release();
-  assertEquals(
-    resources.projects(2)[0].status,
-    "working",
-    "Presentation release cannot hide accepted work",
-  );
+  assertEquals(resources.projects(2)[0].status, "none");
   resources.stop();
 });

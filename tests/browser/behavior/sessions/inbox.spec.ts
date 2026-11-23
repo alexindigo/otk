@@ -25,13 +25,19 @@ test.describe("inbox ownership", () => {
     const project = (await state.product("inbox.get", {})).inbox.projects.find(
       (p) => p.directory === state.directory,
     )!;
-    for (const [hours, level] of [[0, 0], [2, 1], [8, 2], [24, 3]]) {
+    // S4 (decision 62): visit age never tints the name; only the neutral
+    // visit clock moves.
+    const plain = await row.locator(".otk-project-name").evaluate((e) =>
+      getComputedStyle(e).color
+    );
+    for (
+      const [hours, text] of [[0, "now"], [2, "2h"], [8, "8h"], [24, "1d"]]
+    ) {
       await page.evaluate(
-        `inboxNow=${project.lastVisit + hours * 3600000};inboxTick()`,
+        `inboxNow=${project.lastVisit + Number(hours) * 3600000};inboxTick()`,
       );
-      await expect(row.locator(".otk-project-name")).toHaveClass(
-        new RegExp(`otk-age-${level}`),
-      );
+      await expect(row.locator("time")).toHaveText(String(text));
+      await expect(row.locator(".otk-project-name")).toHaveCSS("color", plain);
     }
     await state.product("prefs.set", { key: "reducedColors", value: true });
     await expect(page.locator("html")).toHaveAttribute(
@@ -39,8 +45,8 @@ test.describe("inbox ownership", () => {
       "",
     );
     await expect(row.locator(".otk-project-name")).toHaveCSS(
-      "text-decoration-style",
-      "double",
+      "text-decoration-line",
+      "none",
     );
     await state.product("prefs.set", { key: "reducedColors", value: false });
     await page.evaluate(

@@ -264,6 +264,11 @@ export class ProjectSummaries {
       this.#update(row.leaf);
     }
   }
+  /** Re-read one directory's attention from the owner. */
+  touch(directory: string): void {
+    const leaf = this.leaf(directory);
+    if (this.#projects.has(leaf)) this.#update(leaf);
+  }
   permissions(lookup: (id: string) => number): void {
     this.supervision.permissions(lookup);
     this.refresh();

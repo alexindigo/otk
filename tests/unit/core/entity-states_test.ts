@@ -453,10 +453,10 @@ test("the inbox borrows received operations by target session", async () => {
   try {
     index.reset([base]);
     feature.operationAttention(
-      (id) => operations.get(id),
-      () => [...operations.keys()],
+      (target) => operations.get(target.id),
+      () => [...operations.keys()].map((id) => ({ kind: "session", id })),
       (changed) => {
-        notify = changed;
+        notify = (id) => changed({ kind: "session", id });
         return () => {};
       },
     );
@@ -472,4 +472,34 @@ test("the inbox borrows received operations by target session", async () => {
     feature.close();
     db.close();
   }
+});
+
+test("a received operation without a session colours its checkout and project", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  owner.entry(row("main", "/repo", { terminal: 5 }));
+  owner.states.checkoutOperation("/repo/tree", "working");
+  owner.touch("/repo/tree");
+  assertEquals(state("checkout", "/repo/tree")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(owner.values.get("/repo/tree")?.status, "working");
+  owner.states.checkoutOperation("/repo/tree", "blocked");
+  assertEquals(state("project", "/repo")?.state, "blocked");
+  assertEquals(state("project", "/repo")?.cause, "operation");
+  owner.states.checkoutOperation("/repo/tree");
+  owner.touch("/repo/tree");
+  assertEquals(state("project", "/repo")?.state, "finished");
+  assertEquals(owner.values.get("/repo/tree")?.status, "none");
+});
+
+test("a deleted member stops counting toward its project's unseen finishes", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  const child = row("child", "/repo", { terminal: 10 }, "parent");
+  owner.entry(row("parent", "/repo", {}));
+  owner.entry(child);
+  assertEquals(state("project", "/repo")?.counts.unseen, 1);
+  assertEquals(state("project", "/repo")?.state, "finished");
+  owner.entry({ ...child, deleted: { at: 11, how: "provider" } });
+  assertEquals(state("project", "/repo")?.counts.unseen, 0);
+  assertEquals(state("project", "/repo")?.state, "none");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 0);
 });

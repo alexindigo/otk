@@ -56,10 +56,12 @@
   flex-basis: 100%;
   padding-block-end: var(--space-1);
 }
+/* Names keep the plain foreground; visit age never tints them (S4). */
 .otk-project-name {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
+  color: var(--otk-fg);
   font-size: var(--text-ui);
   overflow: hidden;
   text-overflow: ellipsis;

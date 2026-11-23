@@ -2,7 +2,13 @@
 import { assertEquals } from "@std/assert";
 import { createInbox, inboxProjects } from "../inbox.ts";
 import { createProjectProjection } from "../project-projection.ts";
-import type { InboxSnapshot, ProjectSummary } from "@otk/protocol";
+import {
+  entityKey,
+  type EntityState,
+  type InboxSnapshot,
+  type ProjectSummary,
+} from "@otk/protocol";
+import { createEntityStateStore, presentedEntity } from "../entity-state.ts";
 import type { MergedMetadata } from "../index.ts";
 import { shellEntry } from "./shell-fixture.ts";
 
@@ -174,12 +180,25 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
         pathTemplates: [],
         ...(hasSummary ? { summaries: { "/p": summary } } : {}),
       };
+      // Decision 62: which members count is the server owner's rule
+      // (tests/unit/core/entity-states_test.ts); rows show its project state.
+      const entities: Record<string, EntityState> = {};
+      const store = createEntityStateStore({ read: () => entities });
       const rows = createProjectProjection({
         entry: (id) => id === parent.id ? parent : child,
+        entities: () => store,
       });
       rows.inbox(inbox);
       rows.update([parent.id, child.id]);
       const check = (expected: boolean) => {
+        const key = entityKey("project", "/p");
+        entities[key] = presentedEntity(
+          "project",
+          "/p",
+          expected ? "finished" : "none",
+          expected,
+        );
+        rows.entities([key]);
         assertEquals(rows.row("/p", 0)?.unread, expected);
         assertEquals(
           inboxProjects([parent, child], inbox, 0)[0].unread,
@@ -307,8 +326,16 @@ Deno.test("project lamps consume server supervision independently of metadata an
   const model = createInbox({
     call: () => Promise.reject(new Error("No reads expected")),
   });
-  const rows = createProjectProjection({ entry: () => entry });
-  model.observeChanges((changes) => rows.inbox(model.state.inbox, changes));
+  const rows = createProjectProjection({
+    entry: () => entry,
+    entities: () => model.entities,
+  });
+  model.observeChanges((changes) => {
+    rows.inbox(model.state.inbox, changes);
+    if (changes.baseline || changes.entities) {
+      rows.entities(changes.baseline ? "all" : changes.entities!);
+    }
+  });
   rows.update([entry.id]);
   const summary: ProjectSummary = {
     directory: entry.directory,
@@ -352,11 +379,14 @@ Deno.test("project lamps consume server supervision independently of metadata an
     t: "inbox.patch",
     generation: "g",
     from: 1,
-    revision: 2,
+    revision: 3,
     ops: [{
       op: "supervision",
       sessionID: entry.id,
       value: { state: "finishedUnseen", terminal: 3, unseen: true },
+    }, {
+      op: "entity.upsert",
+      value: presentedEntity("project", entry.directory, "finished", true),
     }],
   });
   assertEquals(rows.row(entry.directory, 0)?.unread, true);
@@ -364,12 +394,15 @@ Deno.test("project lamps consume server supervision independently of metadata an
   model.receive({
     t: "inbox.patch",
     generation: "g",
-    from: 2,
-    revision: 4,
+    from: 3,
+    revision: 6,
     ops: [{ op: "seen", sessionID: entry.id, time: 4 }, {
       op: "supervision",
       sessionID: entry.id,
       value: { state: "none", terminal: 3, unseen: false },
+    }, {
+      op: "entity.upsert",
+      value: presentedEntity("project", entry.directory, "none"),
     }],
   });
   assertEquals(

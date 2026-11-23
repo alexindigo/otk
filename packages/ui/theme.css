@@ -407,38 +407,10 @@ h5,
 h6 {
   font-weight: 600;
 }
-.otk-age-0 {
-  color: var(--otk-fg);
-}
-.otk-age-1 {
-  color: var(--otk-age-1);
-}
-.otk-age-2 {
-  color: var(--otk-age-2);
-}
-.otk-age-3 {
-  color: var(--otk-age-3);
-}
 /* Applied values retain the same geometry and remain fully interactive. */
 .is-applied,
 :root button.is-applied {
   color: var(--applied-fg);
-}
-:root[data-otk-reduced-colors] :is(.otk-age-0, .otk-age-1, .otk-age-2, .otk-age-3) {
-  color: var(--otk-fg);
-  text-underline-offset: 4px;
-}
-:root[data-otk-reduced-colors] .otk-age-0 {
-  text-decoration: none;
-}
-:root[data-otk-reduced-colors] .otk-age-1 {
-  text-decoration: underline dotted;
-}
-:root[data-otk-reduced-colors] .otk-age-2 {
-  text-decoration: underline wavy;
-}
-:root[data-otk-reduced-colors] .otk-age-3 {
-  text-decoration: underline double;
 }
 :root {
   --deleted-fg: color-mix(in srgb, var(--otk-fg) 70%, var(--otk-bg));

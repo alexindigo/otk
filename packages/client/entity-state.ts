@@ -63,6 +63,8 @@ export function createEntityStateStore(o: {
   clock?: EntityClock;
   factory?: StateFactory;
   arrival?: (id: string) => number | undefined;
+  /** The connection's reactive state; a lost link makes every state stale. */
+  connected?: () => boolean;
 }): EntityStateStore {
   const clock = o.clock ?? {
     now: () => performance.now(),
@@ -152,7 +154,7 @@ export function createEntityStateStore(o: {
     arrival,
     get isStale() {
       void store.state.revision;
-      return stale;
+      return stale || o.connected?.() === false;
     },
     get revision() {
       return store.state.revision;
@@ -167,6 +169,28 @@ export function createEntityStateStore(o: {
       stopped = true;
       clock.clear(timer);
       listeners.clear();
+    },
+  };
+}
+
+/** A state held by a standalone consumer without a connection (an embedded
+ * component or fixture), presented through the same selectors. */
+export function presentedEntity(
+  kind: EntityState["kind"],
+  id: string,
+  state: ProjectStatus,
+  unseen = false,
+): EntityState {
+  return {
+    kind,
+    id,
+    state,
+    previous: state,
+    counts: {
+      blocked: state === "blocked" ? 1 : 0,
+      working: state === "working" ? 1 : 0,
+      finished: state === "finished" ? 1 : 0,
+      unseen: unseen ? 1 : 0,
     },
   };
 }

@@ -86,6 +86,8 @@ export class EntityStates {
   #global = tally();
   /** S22: received OTK operations by target session. */
   #operations = new Map<string, "working" | "blocked">();
+  /** S22: received operations without a session, by checkout directory. */
+  #checkoutOperations = new Map<string, "working" | "blocked">();
   constructor(
     readonly supervision: SessionSupervision,
     readonly family: EntityFamily,
@@ -114,6 +116,17 @@ export class EntityStates {
     this.#projectsOf.clear();
     this.#global = tally();
     this.#operations.clear();
+    this.#checkoutOperations.clear();
+  }
+  /** A received operation owned by a project directory (e.g. a creation
+   * before its session exists) colours that checkout and its projects. */
+  checkoutOperation(directory: string, value?: "working" | "blocked"): void {
+    if (value) this.#checkoutOperations.set(directory, value);
+    else this.#checkoutOperations.delete(directory);
+    const upserts: EntityState[] = [];
+    this.#tally(directory);
+    this.#checkout(directory, upserts);
+    if (upserts.length) this.publish(upserts, []);
   }
   /** Record a session's received-operation input; the caller re-derives it. */
   operation(id: string, value?: "working" | "blocked"): void {
@@ -273,6 +286,7 @@ export class EntityStates {
       directory,
       this.#tally(directory),
       this.#forms.get(directory) ?? 0,
+      this.#checkoutOperations.get(directory),
     );
     if (this.#set(value)) upserts.push(value);
     for (const project of this.#projectsOf.get(directory) ?? []) {
@@ -282,12 +296,22 @@ export class EntityStates {
   #project(directory: string, upserts: EntityState[]): void {
     const sum = tally();
     let forms = 0;
+    const operations: ("working" | "blocked")[] = [];
     for (const leaf of this.#leaves.get(directory) ?? [directory]) {
       const value = this.#tallies.get(leaf);
       if (value) add(sum, value, 1);
       forms += this.#forms.get(leaf) ?? 0;
+      const operation = this.#checkoutOperations.get(leaf);
+      if (operation) operations.push(operation);
     }
-    const value = this.#aggregate("project", directory, sum, forms);
+    const operation = rollupStatus(...operations);
+    const value = this.#aggregate(
+      "project",
+      directory,
+      sum,
+      forms,
+      operation === "none" ? undefined : operation as "working" | "blocked",
+    );
     if (this.#set(value)) upserts.push(value);
   }
   /** Decision 57 over members: blocked > working > finished > none. */
@@ -296,18 +320,20 @@ export class EntityStates {
     id: string,
     members: Tally,
     forms: number,
+    operation?: "working" | "blocked",
   ): EntityState {
     const { counts } = members;
     const state = rollupStatus(
       counts.blocked || forms ? "blocked" : undefined,
+      operation,
       counts.working ? "working" : undefined,
       counts.finished ? "finished" : undefined,
     );
     const cause: BlockedCause | undefined = state !== "blocked"
       ? undefined
       : !counts.blocked
-      ? "form"
-      : !forms && members.graced === counts.blocked
+      ? forms ? "form" : "operation"
+      : !forms && operation !== "blocked" && members.graced === counts.blocked
       ? "permission"
       : undefined;
     const before = this.#states.get(entityKey(kind, id));

@@ -16,7 +16,20 @@ import {
   type SidecarState,
   type StateFactory,
 } from "@otk/client";
-import type { InboxSnapshot, IndexEntry, ServerFrame } from "@otk/protocol";
+import {
+  entityKey,
+  type InboxOp,
+  type InboxSnapshot,
+  type IndexEntry,
+  type ProjectStatus,
+  type ServerFrame,
+} from "@otk/protocol";
+import { presentedEntity } from "../entity-state.ts";
+/** Decision 62: rows read the project entity the server publishes. */
+const projectEntity = (directory: string, state: ProjectStatus): InboxOp => ({
+  op: "entity.upsert",
+  value: presentedEntity("project", directory, state, state === "finished"),
+});
 import { DEFAULT_PREFS } from "@otk/protocol";
 
 function entry(id = "session", directory = "/p"): IndexEntry {
@@ -420,6 +433,9 @@ function metadata(): InboxSnapshot {
     seen: { session: 1 },
     finishes: { session: 2 },
     supervision: { session: { state: "needsYou", terminal: 2 } },
+    entities: {
+      [entityKey("project", "/p")]: presentedEntity("project", "/p", "blocked"),
+    },
     pathTemplates: [],
   };
 }
@@ -922,6 +938,14 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
       seen: {},
       finishes: { a: 2 },
       supervision: { a: { state: "finishedUnseen", terminal: 2 } },
+      entities: {
+        [entityKey("project", a.directory)]: presentedEntity(
+          "project",
+          a.directory,
+          "finished",
+          true,
+        ),
+      },
       discovered: ["/empty"],
     },
   });
@@ -937,12 +961,12 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     t: "inbox.patch",
     generation: "fixture",
     from: 0,
-    revision: 2,
+    revision: 3,
     ops: [{ op: "seen", sessionID: "a", time: 3 }, {
       op: "supervision",
       sessionID: "a",
       value: { state: "none", terminal: 2 },
-    }],
+    }, projectEntity(a.directory, "none")],
   });
   assertEquals(
     f.resources.projectRow({ sidecarId: "local", directory: a.directory }, 100)
@@ -965,13 +989,13 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
   f.receive("local", {
     t: "inbox.patch",
     generation: "fixture",
-    from: 2,
-    revision: 3,
+    from: 3,
+    revision: 5,
     ops: [{
       op: "supervision",
       sessionID: "a",
       value: { state: "working", terminal: 2 },
-    }],
+    }, projectEntity("/moved", "working")],
   });
   const currentMoved = f.resources.projects(100);
   assertEquals(moved.some((r) => r.directory === a.directory), false);
@@ -1009,7 +1033,7 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     t: "inbox.snapshot",
     generation: "fixture",
     revision: 0,
-    inbox: { ...metadata(), finishes: {}, supervision: {} },
+    inbox: { ...metadata(), finishes: {}, supervision: {}, entities: {} },
   });
   const p = { sidecarId: "local", directory: "/p" };
   f.resources.projects(100);
@@ -1020,7 +1044,9 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     title: "New",
   }, { owner: "task" });
   void operation.result.catch(() => {});
-  assertEquals(f.resources.projectRow(p, 100)?.status, "working");
+  // Decision 62, plan 3.3: an operation the server has not received does not
+  // colour the project; received ones arrive as entity states.
+  assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   assertEquals(
     f.resources.metadataEntries().find((e) => e.id === "session")
       ?.operationStatus,
@@ -1068,12 +1094,12 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     t: "inbox.patch",
     generation: "fixture",
     from: 1,
-    revision: 2,
+    revision: 3,
     ops: [{
       op: "supervision",
       sessionID: "session",
       value: { state: "needsYou", terminal: 0 },
-    }],
+    }, projectEntity("/p", "blocked")],
   });
   assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
   f.receive("local", {
@@ -1083,13 +1109,13 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
   f.receive("local", {
     t: "inbox.patch",
     generation: "fixture",
-    from: 2,
-    revision: 3,
+    from: 3,
+    revision: 5,
     ops: [{
       op: "supervision",
       sessionID: "session",
       value: { state: "none", terminal: 0 },
-    }],
+    }, projectEntity("/p", "none")],
   });
   assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   f.store.update((state) => {
@@ -1233,12 +1259,12 @@ Deno.test("server resources project per-server attention and labelled projects f
     t: "inbox.patch",
     generation: "fixture",
     from: 0,
-    revision: 1,
+    revision: 2,
     ops: [{
       op: "supervision",
       sessionID: "session",
       value: { state: "working", terminal: 2 },
-    }],
+    }, projectEntity("/p", "working")],
   });
   assertEquals(
     f.resources.projectEntries({ sidecarId: "local", directory: "/other" }),

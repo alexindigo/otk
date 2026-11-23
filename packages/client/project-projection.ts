@@ -1,23 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  InboxSnapshot,
-  ProjectRecord,
-  ProjectSummary,
-  TaskRecord,
+import {
+  entityKey,
+  type InboxSnapshot,
+  type ProjectRecord,
+  type ProjectSummary,
+  type TaskRecord,
 } from "@otk/protocol";
+import { emphasis, type EntityStateStore } from "./entity-state.ts";
 import { createSessionTree } from "./session-tree.ts";
 import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
 import {
-  ageing,
   type InboxChanges,
   type InboxProject,
   type InboxStatus,
-  inboxStatus,
   projectDirectory,
-  ROLLUP_PRIORITY,
-  rollupStatus,
-  unread,
   visitTime,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
@@ -37,6 +34,8 @@ export function createProjectProjection(o: {
   taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
   membership?(directory: string, present: boolean): void;
+  /** The connection's entity states: the only source of row attention. */
+  entities?(): EntityStateStore;
 }) {
   const clock = (o.factory ?? createState)({
     revision: 0,
@@ -48,18 +47,13 @@ export function createProjectProjection(o: {
   const sessions = new Map<string, {
     entry: MergedMetadata;
     directory: string;
-    status: InboxStatus;
-    unread: boolean;
   }>();
   const repoSessions = new Map<string, Set<string>>();
   const projects = new Map<string, {
     members: Map<string, MergedMetadata>;
-    counts: Record<InboxStatus, number>;
-    unread: number;
     record?: ProjectRecord;
     summary?: ProjectSummary;
     discovered: boolean;
-    operation?: InboxStatus;
     ids?: string;
     row?: ProjectProjectionRow;
     time?: string;
@@ -96,19 +90,13 @@ export function createProjectProjection(o: {
       ]),
     ].sort();
   };
-  let operationStates: ReadonlyMap<string, InboxStatus> = new Map();
   const visible = new Set<string>();
   const ensure = (directory: string) => {
     let p = projects.get(directory);
     if (!p) {
       p = {
         members: new Map(),
-        counts: Object.fromEntries(
-          ROLLUP_PRIORITY.map((status) => [status, 0]),
-        ) as Record<InboxStatus, number>,
-        unread: 0,
         discovered: false,
-        operation: operationStates.get(directory),
         tasks: [],
         tree: createSessionTree(),
         activity: {},
@@ -151,12 +139,7 @@ export function createProjectProjection(o: {
     for (const id of ids) {
       const before = sessions.get(id), entry = o.entry(id);
       const directory = entry && resolve(entry.directory, entry.projectID);
-      const status = entry && inboxStatus(entry, inbox);
-      const unseen = !!entry && unread(entry, inbox);
-      if (
-        before?.entry === entry && before?.status === status &&
-        before?.unread === unseen && before?.directory === directory
-      ) continue;
+      if (before?.entry === entry && before?.directory === directory) continue;
       changed.add(id);
       if (before) {
         repoSessions.get(before.entry.projectID)?.delete(id);
@@ -167,8 +150,6 @@ export function createProjectProjection(o: {
           entry.parentID !== before.entry.parentID ||
           entry.title !== before.entry.title
         ) p.structure = undefined;
-        p.counts[before.status]--;
-        p.unread -= Number(before.unread);
         if (!entry || directory !== before.directory) {
           p.members.delete(id);
           p.ids = undefined;
@@ -188,14 +169,7 @@ export function createProjectProjection(o: {
         }
         if (!p.members.has(id)) p.ids = undefined;
         p.members.set(id, entry);
-        p.counts[status!]++;
-        p.unread += Number(unseen);
-        sessions.set(id, {
-          entry,
-          directory: directory!,
-          status: status!,
-          unread: unseen,
-        });
+        sessions.set(id, { entry, directory: directory! });
         dirty.add(directory!);
       } else sessions.delete(id);
       catalog = undefined;
@@ -405,49 +379,36 @@ export function createProjectProjection(o: {
         }}
       update(ids, dirty);
     },
-    operations(states: ReadonlyMap<string, InboxStatus>) {
-      const resolved = new Map<string, InboxStatus>();
-      for (const [directory, status] of states) {
-        const leaf = resolve(directory);
-        resolved.set(leaf, rollupStatus(resolved.get(leaf), status));
-      }
-      states = resolved;
+    /** Rows re-read the entity states the inbox accepted for them. */
+    entities(keys: readonly string[] | "all") {
       const dirty = new Set<string>();
-      for (
-        const directory of new Set([
-          ...operationStates.keys(),
-          ...states.keys(),
-        ])
-      ) {
-        const p = projects.get(directory), next = states.get(directory);
-        if (!p) continue;
-        if (p.operation !== next) {
-          p.operation = next;
+      const prefix = entityKey("project", "");
+      for (const directory of projects.keys()) {
+        if (keys === "all" || keys.includes(prefix + directory)) {
           dirty.add(directory);
         }
       }
-      operationStates = states;
       publish(dirty);
     },
     directories() {
       void clock.state.revision;
       return [...visible];
     },
-    row(directory: string, now: number, thresholds?: readonly number[]) {
+    row(directory: string, now: number) {
       void clock.state.keys[directory];
       const p = projects.get(directory);
       if (!p) return undefined;
       const summary = p.summary;
       const summaryReady = summary !== undefined;
-      const status = rollupStatus(
-        p.operation,
-        ...(summaryReady ? [summary.status ?? "none"] : [
-          ...ROLLUP_PRIORITY.filter((s) => p.counts[s] > 0),
-        ]),
-      );
-      // Evidence only: an unknown population adds no unseen finish.
-      const unread = (summary?.unseenCount ?? 0) > 0 || p.unread > 0 ||
-        summary?.status === "finished";
+      // Decision 62: the project entity is the row's state; absent or stale
+      // state is grey (D6). Standalone projections read the owner's summary.
+      const store = o.entities?.(), key = entityKey("project", directory);
+      const status: InboxStatus = store
+        ? store.isStale ? "none" : store.get(key)?.state ?? "none"
+        : summary?.status ?? "none";
+      const unread = store
+        ? emphasis(store, key)
+        : (summary?.unseenCount ?? 0) > 0;
       const record = p.record;
       const archived = summary?.archived === true;
       const inactive = !!record?.inactive && status === "none";
@@ -465,10 +426,8 @@ export function createProjectProjection(o: {
         ? record.inactiveAt ?? record.lastVisit
         : now;
       const text = record ? visitTime(record.lastVisit, time) : "";
-      const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
-      const key = `${text}/${age}`;
-      if (!p.row || p.time !== key) {
-        p.time = key;
+      if (!p.row || p.time !== text) {
+        p.time = text;
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
           ...(record ?? {
@@ -489,9 +448,10 @@ export function createProjectProjection(o: {
           archived,
           status,
           unread,
-          unseenCount: summary ? summary.unseenCount : p.unread,
+          unseenCount: store
+            ? store.get(key)?.counts.unseen ?? 0
+            : summary?.unseenCount ?? null,
           visitText: text,
-          ageing: age,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,
