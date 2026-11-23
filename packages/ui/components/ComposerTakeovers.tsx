@@ -8,6 +8,7 @@ import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
+import Subagents from "./Subagents.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
@@ -40,7 +41,10 @@ export default function ComposerTakeovers(
       };
   return (
     <ComposerProvider available={hasComposer}>
-      <Show when={hasComposer() || active() || work().length}>
+      <Show
+        when={hasComposer() || active() || work().length ||
+          session.trail?.()?.helpers.length}
+      >
         <div
           class="otk-composer-dock"
           data-read-only={props.readOnly ? "true" : "false"}
@@ -68,13 +72,20 @@ export default function ComposerTakeovers(
                 </ChromeMeta>
               </span>
               <span class="otk-composer-live-slot">
-                <LiveWork
-                  items={work()}
-                  owner={session.liveWork}
-                  onOpen={(id) =>
-                    void commands.run("session.child", id).catch(fail)}
-                  onError={fail}
-                />
+                <Show when={session.trail?.()}>
+                  {(trail) => (
+                    <Subagents
+                      model={trail()}
+                      owner={session.liveWork}
+                      onError={fail}
+                      title={(id) =>
+                        session.entry(id)?.title ?? "Session unavailable"}
+                      onOpen={(id) =>
+                        void commands.run("session.child", id).catch(fail)}
+                    />
+                  )}
+                </Show>
+                <LiveWork items={work()} />
               </span>
             </div>
           </div>

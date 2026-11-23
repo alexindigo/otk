@@ -29,6 +29,10 @@ export interface EntityRequestEvidence {
   arrivedAt?: number;
 }
 export interface SessionEvidence {
+  /** D66: a proven helper terminal not covered by its parent's result receipt. */
+  awaitingDelivery?: boolean;
+  /** Positive native execution clock, retained across its terminal transition. */
+  run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
   work: boolean;
   permissions: number;

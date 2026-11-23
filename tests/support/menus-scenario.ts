@@ -173,6 +173,7 @@ export async function menusScenario(profile: Profile) {
             for (let n = 1; n < 10; n++) {
               f.update(`tstv1-r2-session-${n}`, {
                 parentID: n > 1 ? `tstv1-r2-session-${n - 1}` : undefined,
+                status: "busy",
               });
             }
             f.update("tstv1-otk", { parentID: "tstv1-r2-session-9" });

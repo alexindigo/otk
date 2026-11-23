@@ -48,7 +48,11 @@ test("menus.captured-session-task-and-project-effects", {
   ) {
     await rightClick(page, selector);
     expect(await menuLabels(page)).toEqual(
-      name === "row" ? [...expected, ...panelActions] : expected,
+      name === "row"
+        ? [...expected, ...panelActions]
+        : name === "chip"
+        ? ["Open link in new tab", "Copy link address", ...expected]
+        : expected,
     );
     expect(
       await contextMenu(page).getByRole("menuitem").filter({
@@ -257,7 +261,7 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   ];
   await state.product("tasks.sessions", { id: task.id, sessions: ids });
   await page.locator(`[data-tab="${task.id}"]`).click();
-  await expect(page.locator(".otk-folded-crumbs > button")).toBeVisible();
+  await expect(page.locator(".otk-subagents > button")).toBeVisible();
   await page.locator('[data-crumb="tstv1-otk"]').click();
   await rightClick(page, '[data-crumb="tstv1-otk"]');
   expect(await menuLabels(page)).toContain("Copy session title");
@@ -290,8 +294,8 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
         false,
       ],
       [
-        ".otk-folded-crumbs > button",
-        ".otk-folded-crumbs :popover-open [role=menu]",
+        ".otk-subagents > button",
+        ".otk-subagents :popover-open [role=menu]",
         "ArrowUp",
         true,
       ],

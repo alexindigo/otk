@@ -36,6 +36,7 @@ const driver = {
   collapse: (_value: boolean) => {},
   conceal: (_value: boolean) => {},
   lists: (_members: string[], _selected?: string, _editing?: string) => {},
+  createdSessions: () => 0,
   menuItems: (_keys: string[]) => {},
   feedback: (_state: "clear" | "pending" | "error") => {},
   holdMenu: (_value: boolean) => {},

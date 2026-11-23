@@ -1138,8 +1138,8 @@ test(
                         ),
                         meter = row.querySelector("output")!
                           .getBoundingClientRect(),
-                        more = row.querySelector(".otk-folded-crumbs")
-                          ?.getBoundingClientRect(),
+                        lane = row.querySelector(".otk-overflow-items")!
+                          .getBoundingClientRect(),
                         action = document.querySelector(".otk-new-session")!
                           .getBoundingClientRect();
                       return {
@@ -1153,18 +1153,23 @@ test(
                         ),
                         menus:
                           row.querySelectorAll(".otk-folded-crumbs").length,
-                        bounds: chips.every((el) => {
-                          const b = el.getBoundingClientRect(),
-                            label = el.querySelector(".otk-crumb-title")!,
-                            range = document.createRange();
-                          range.selectNodeContents(label);
-                          return b.right <= meter.left + 1 &&
-                            b.right <= action.left + 1 &&
-                            b.right <= (more?.left ?? r.right) + 1 &&
-                            range.getBoundingClientRect().height <=
-                              parseFloat(getComputedStyle(label).lineHeight) +
-                                1;
-                        }),
+                        bounds: lane.right <= meter.left + 1 &&
+                          lane.right <= action.left + 1 && chips.every((el) => {
+                            const b = el.getBoundingClientRect(),
+                              label = el.querySelector(".otk-crumb-title")!,
+                              first = el.querySelector(".otk-trail-first")
+                                ?.getBoundingClientRect(),
+                              range = document.createRange();
+                            range.selectNodeContents(label);
+                            // D67 retains every ancestor in its clipped scroll
+                            // lane; each frame keeps its whole first word.
+                            return (!first ||
+                              first.left >= b.left - 1 &&
+                                first.right <= b.right + 1) &&
+                              range.getBoundingClientRect().height <=
+                                parseFloat(getComputedStyle(label).lineHeight) +
+                                  1;
+                          }),
                       };
                     },
                   );
@@ -1172,7 +1177,7 @@ test(
                   expect(g.selected && g.bounds).toBe(true);
                   expect(Math.max(...g.centres) - Math.min(...g.centres))
                     .toBeLessThanOrEqual(1);
-                  expect(g.menus).toBeLessThanOrEqual(1);
+                  expect(g.menus).toBe(0);
                   await shot(`breadcrumbs-${theme.id}-${physical}-zoom${zoom}`);
                 });
               }
@@ -1181,9 +1186,9 @@ test(
             await page.setViewportSize({ width: 1280, height: 900 });
             await page.setViewportSize({ width: 800, height: 800 });
             await settled(page);
-            await page.locator(".otk-folded-crumbs > button").click();
+            await page.locator(".otk-subagents > button").click();
             await expect(
-              page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
+              page.locator(".otk-subagents [data-subagent]").first(),
             ).toBeVisible();
             const shown = await page.locator("[data-crumb]").evaluateAll((
               els,
@@ -1193,11 +1198,18 @@ test(
               )
             );
             const omitted = await page.locator(
-              ".otk-folded-crumbs [data-overflow-target]",
+              ".otk-subagents [data-subagent]",
             ).evaluateAll((els) =>
-              els.map((el) => el.getAttribute("data-overflow-target")!)
+              els.map((el) => el.getAttribute("data-subagent")!)
             );
-            assertCrumbCoverage(ids, shown, omitted);
+            assertCrumbCoverage(
+              ids,
+              shown,
+              omitted,
+              // The active fixture family includes the selected helper and
+              // its existing child as well as the synthetic working ancestors.
+              [...ids.slice(1), "tstv1-child"],
+            );
             await shot(`more-${theme.id}-800`);
             await page.keyboard.press("Escape");
             await state.controller.call("scenario", {
@@ -1288,7 +1300,7 @@ test(
             const shown = await visible();
             expect(shown).toContain("session-9");
             expect(shown).toContain("session-7");
-            expect(shown.length).toBeLessThan(members.length);
+            expect(shown).toEqual(members);
             expect(
               await edit.evaluate((el) => {
                 const a = el.getBoundingClientRect(),
@@ -1296,12 +1308,29 @@ test(
                 return a.width > 0 && a.left >= b.left && a.right <= b.right;
               }),
             ).toBe(true);
-            const more = page.locator(".otk-folded-crumbs > button"),
-              before = await more.boundingBox();
             await shot(`editing-${theme.id}-600`);
+            // D67 moved Subagents out of the trail. Keep the editor-blur
+            // press proof on its same-row Session action, then test the menu.
+            const sessionAction = page.locator(".otk-new-session"),
+              actionBefore = await sessionAction.boundingBox(),
+              createdBefore = await page.evaluate(
+                "styleTest.createdSessions()",
+              );
+            await sessionAction.click();
+            await expect.poll(() =>
+              page.evaluate("styleTest.createdSessions()")
+            )
+              .toBe(Number(createdBefore) + 1);
+            const actionAfter = await sessionAction.boundingBox();
+            for (const key of ["x", "y", "width", "height"] as const) {
+              expect(Math.abs(actionAfter![key] - actionBefore![key]))
+                .toBeLessThanOrEqual(1);
+            }
+            const more = page.locator(".otk-subagents > button"),
+              before = await more.boundingBox();
             await more.click();
             await expect(
-              page.locator(".otk-folded-crumbs [role=menuitem]").first(),
+              page.locator(".otk-subagents [role=menuitem]").first(),
             ).toBeVisible();
             const after = await more.boundingBox();
             for (const key of ["x", "y", "width", "height"] as const) {
@@ -1309,16 +1338,14 @@ test(
                 1,
               );
             }
-            const omitted = await page.locator("[data-overflow-target]")
+            const omitted = await page.locator("[data-subagent]")
               .evaluateAll((els) =>
-                els.map((el) => el.getAttribute("data-overflow-target")!)
+                els.map((el) => el.getAttribute("data-subagent")!)
               );
-            const current = await visible();
-            expect(omitted).toEqual(
-              members.filter((id) => !current.includes(id)),
-            );
+            expect(await visible()).toEqual(members);
+            expect(omitted).toEqual(members.slice(1));
             expect(
-              await page.locator("[data-overflow-target]").evaluateAll((els) =>
+              await page.locator("[data-subagent]").evaluateAll((els) =>
                 els.every((el) => !el.closest("[data-overflow-key]"))
               ),
             ).toBe(true);

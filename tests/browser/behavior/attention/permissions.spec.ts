@@ -3,6 +3,12 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { file, prompt, reply, seed, tool } from "../../pages/attention.ts";
+import {
+  openBlockedSubagents,
+  restorePermissionDock,
+  subagent,
+  subagents,
+} from "../../pages/crumbs.ts";
 import { openWorkLogs } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
@@ -114,8 +120,14 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   );
   await expect(page.locator(".otk-permission-command")).toHaveText("echo otk");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
-  // WP3: blocked helpers remain mandatory alongside the parent path.
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(1);
+  const childCrumb = page.locator(`[data-crumb="${child.id}"]`);
+  const inventory = subagents(page);
+  await expect(childCrumb).toHaveCount(0);
+  await openBlockedSubagents(page);
+  await expect(subagent(page, child.id).locator(".otk-status-light"))
+    .toHaveAttribute("data-state", "blocked");
+  await inventory.click();
+  await restorePermissionDock(page);
   await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "blocked");
   await expect(
@@ -128,7 +140,8 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await reply(page, session.id, "Parent completed");
   // Decision 58: receiving the helper result acknowledges that exact run. Its
   // parent result remains visible, without acquiring the child's transcript.
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  await expect(inventory).toHaveCount(0);
+  await expect(childCrumb).toHaveCount(0);
   await expect(
     page.locator(
       `[data-session="${child.id}"] .otk-status-light[data-state="finished"]`,
@@ -180,19 +193,26 @@ test.describe("native helper lifecycle", () => {
     });
     const parentTab = page.locator(`[data-tab="${parent.id}"]`);
     const childTab = page.locator(`[data-tab="${child.id}"]`);
-    // 2.67: the human task rolls up activity; helpers retain their own crumbs.
+    // The human task rolls up activity; D66 retains the helper's own lamp.
     await expect(parentTab.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "blocked");
     await expect(childTab).toHaveCount(0);
     await parentTab.click();
-    await page.locator(`[data-crumb="${child.id}"]`).click();
+    const crumb = page.locator(`[data-crumb="${child.id}"]`);
+    const helper = subagent(page, child.id);
+    await expect(crumb).toHaveCount(0);
+    await openBlockedSubagents(page);
+    await expect(helper.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "blocked");
+    const target = helper.locator(".otk-subagent-name");
+    await expect(target).toHaveText("Live helper");
+    await target.click();
     await expect(parentTab).toHaveAttribute("aria-selected", "true");
     const ancestor = page.locator(
       `[data-crumb="${parent.id}"][data-crumb-kind="member"]`,
     );
     await expect(ancestor.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "none");
-    const crumb = page.locator(`[data-crumb="${child.id}"]`);
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
@@ -209,6 +229,7 @@ test.describe("native helper lifecycle", () => {
     );
     await expect(parentTab).toHaveCount(0);
     await expect(childTab).toHaveCount(0);
+    await restorePermissionDock(page);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",

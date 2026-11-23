@@ -6,22 +6,28 @@ import type {
   SessionListRow,
   TaskRecord,
 } from "@otk/protocol";
-import { sessionAncestors, type SessionHierarchyNode } from "@otk/protocol";
+import type { SessionHierarchyNode } from "@otk/protocol";
 import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createStableOrder } from "./stable-order.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
-import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import {
+  buildTrail,
+  type TaskCrumb,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+} from "./entity-state.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
   type TabGroups,
 } from "./tab-groups.ts";
 import { type OperationAttention, rollupStatus } from "./inbox.ts";
-import { runningDescendants } from "./live-work.ts";
-export interface FamilyCrumb extends TaskCrumb {
-  status: InboxStatus;
-}
+export type FamilyCrumb = TrailCrumb;
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -47,6 +53,7 @@ export interface TabInput {
   context?: readonly (IndexMetadata & OperationAttention)[];
   followParent?: boolean;
   taskActivity?: Readonly<Record<string, InboxStatus>>;
+  entities?: EntityStateStore;
   inbox: InboxSnapshot;
 }
 /** Promotion needs identity and naming metadata, not a replicated status row. */
@@ -68,6 +75,7 @@ export interface TabState {
   revision: number;
 }
 export interface ClientTabs {
+  trail(): TrailModel;
   state: TabState;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
@@ -77,12 +85,12 @@ export interface ClientTabs {
   orderRows(rows: readonly SessionListRow[]): SessionListRow[];
   /** Pointer, keyboard and portalled interactions share this ordering lifetime. */
   holdOrder(): () => void;
-  crumbs(): TaskCrumb[];
+  crumbs(): TrailCrumb[];
   /** Open-session identity and known ancestor links, independent of activity. */
-  path(): TaskCrumb[];
-  /** Explicit members and mandatory descendants, with their own session state. */
+  path(): TrailCrumb[];
+  /** Compatibility view of the trail's off-path working/blocked helpers. */
   family(): FamilyCrumb[];
-  /** Canonical running helpers shared by the breadcrumb trail and composer. */
+  /** Positive native descendant work from the trail owner's entity inputs. */
   working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
@@ -136,6 +144,9 @@ export function createTabs(
   };
   const belongs = (directory: string) =>
     (input.directories ?? [input.directory]).includes(directory);
+  const snapshotEntities = createEntityStateStore({
+    read: () => input.inbox.entities,
+  });
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
@@ -152,10 +163,13 @@ export function createTabs(
     cachedTabs = undefined;
     store.update((s) => s.revision++);
   });
-  let cachedCrumbs: TaskCrumb[] = [],
-    cachedPath: TaskCrumb[] = [],
-    cachedFamily: FamilyCrumb[] = [],
-    cachedWorking: TaskCrumb[] = [],
+  let cachedTrail: TrailModel = {
+      crumbs: [],
+      path: [],
+      helpers: [],
+      working: [],
+      status: "none",
+    },
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
@@ -387,70 +401,37 @@ export function createTabs(
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      const key = `${id}/${store.state.sessionID}/${input.connected !== false}`;
-      if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
+      const entities = input.entities ?? snapshotEntities;
+      const key =
+        `${id}/${store.state.sessionID}/${entities.revision}/${entities.isStale}`;
+      if (rows === crumbTabs && key === crumbID) return cachedTrail.crumbs;
       crumbTabs = rows;
       crumbID = key;
       const group = grouping().groups.find((group) => group.id === id);
-      const current = store.state.sessionID;
-      const path = current
-        ? [
-          ...sessionAncestors(current, (id) => byID.get(id)).toReversed(),
-          current,
-        ].filter((id) => byID.has(id))
-        : [];
-      const local = group
-        ? groupBreadcrumbs(group, byID, mandatory, store.state.sessionID)
-        : path.map((id, depth): TaskCrumb => ({
-          id,
-          kind: "member",
-          helper: !!byID.get(id)?.parentID,
-          depth,
-        }));
-      const familyState = (id: string): InboxStatus => {
-        const state = byID.has(id)
-          ? inboxStatus(byID.get(id)!, input.inbox)
-          : "none";
-        return input.connected === false && state === "working"
-          ? "none"
-          : state;
-      };
-      cachedFamily = local.filter((crumb) => crumb.kind !== "ancestor").map((
-        crumb,
-      ) => ({
-        ...crumb,
-        status: familyState(crumb.id),
-      })).filter((crumb) =>
-        !crumb.helper || crumb.status !== "none" || mandatory.has(crumb.id)
+      cachedTrail = buildTrail(
+        group,
+        byID,
+        entities,
+        store.state.sessionID,
+        (...states) => rollupStatus(...states),
       );
-      cachedWorking = runningDescendants(
-        current,
-        [...byID.values()],
-        input.connected !== false,
-      );
-      cachedPath = path.flatMap((id) =>
-        local.filter((crumb) => crumb.id === id)
-      );
-      return cachedCrumbs = [
-        ...cachedPath,
-        ...local.filter((crumb) =>
-          !path.includes(crumb.id) &&
-          (!current || mandatory.has(crumb.id) ||
-            familyState(crumb.id) !== "none")
-        ),
-      ];
+      return cachedTrail.crumbs;
+    },
+    trail() {
+      this.crumbs();
+      return cachedTrail;
     },
     path() {
       this.crumbs();
-      return cachedPath;
+      return cachedTrail.path;
     },
     family() {
       this.crumbs();
-      return cachedFamily;
+      return cachedTrail.helpers;
     },
     working() {
       this.crumbs();
-      return cachedWorking;
+      return cachedTrail.working;
     },
     sessionFor,
     update(next: TabInput): void {
@@ -459,6 +440,8 @@ export function createTabs(
       const changedProject = next.directory !== input.directory;
       if (changedProject) ordering.reset();
       input = next;
+      snapshotEntities.stale(input.connected === false);
+      if (!input.entities) snapshotEntities.observe("all", "historical");
       derived = undefined;
       prepare();
       if (changedProject) selectionRevision++;
@@ -667,6 +650,7 @@ export function createTabs(
     stop() {
       if (stopped) return;
       stopped = true;
+      snapshotEntities.stop();
       ordering.stop();
       selectionRevision++;
       for (const waiters of taskWaiters.values()) {

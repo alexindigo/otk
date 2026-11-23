@@ -15,6 +15,15 @@ export function failedHelperNeedsAck(
 ): boolean {
   return !!entry.parentID && outcome === "failed";
 }
+/** WP11's run-correlated parent receipt, independently of human acknowledgement. */
+export function deliveredTerminal(entry: IndexMetadata): number {
+  const receipt = entry.activity?.delivered;
+  return receipt && receipt.parentID === entry.parentID &&
+      receipt.receipt.length > 0 &&
+      Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0
+    ? receipt.terminal
+    : 0;
+}
 /** Fresh positive evidence as the interpreter counts it; absence is zero. */
 export interface SessionInputs {
   work: boolean;
@@ -55,15 +64,8 @@ export class SessionSupervision {
           : {}),
       }
       : {};
-    const delivery = evidence?.delivered;
     const helperFailed = failedHelperNeedsAck(entry, outcome);
-    const delivered =
-      !helperFailed && delivery && delivery.parentID === entry.parentID &&
-        delivery.receipt.length > 0 &&
-        Number.isSafeInteger(delivery.terminal) &&
-        delivery.terminal > 0
-        ? delivery.terminal
-        : 0;
+    const delivered = helperFailed ? 0 : deliveredTerminal(entry);
     const unseen = terminal > Math.max(acknowledged, delivered);
     if (entry.deleted) {
       return {

@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
+import { subagent, subagents } from "../../pages/crumbs.ts";
 import { activity, contextMenu, sessionContext } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-tabs" });
@@ -70,7 +71,13 @@ test(
     });
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     for (let n = 0; n < 3; n++) {
-      await page.locator(`[data-crumb="${child}"]`).click();
+      await expect(page.locator(`[data-crumb="${child}"]`)).toHaveCount(0);
+      await subagents(page).click();
+      await subagent(page, child).locator(".otk-subagent-name").click();
+      await expect(page.locator(`[data-crumb="${child}"]`)).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
       await expect(page.locator(`[data-tab="${parentTask.id}"]`))
         .toHaveAttribute("aria-selected", "true");
       await page.locator(`[data-crumb="${root}"]`).click();

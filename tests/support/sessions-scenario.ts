@@ -642,6 +642,134 @@ export async function sessionsScenario(profile: Profile) {
         case "scenario": {
           const { action, sessionID: id } = frame.params;
           if (
+            frame.params.target === "trail-delivery" && id &&
+            action === "release"
+          ) {
+            const entry = f.entries.find((entry) => entry.id === id)!;
+            f.update(id, {
+              activity: {
+                ...entry.activity,
+                delivered: {
+                  parentID: entry.parentID!,
+                  receipt: `result:${id}`,
+                  terminal: entry.activity!.terminal!,
+                },
+              },
+            });
+            return null;
+          }
+          if (
+            profile === "contract-sessions-tab-groups" &&
+            frame.params.target === "trail-decisions"
+          ) {
+            f.update(base.id, { title: "comm#ark | main" });
+            const running = (id: string) => ({
+              work: {
+                fresh: true,
+                keys: [id],
+                items: [{
+                  id,
+                  kind: "execution" as const,
+                  label: "Execution",
+                  title: id,
+                  startedAt: Date.now() - 14 * 60_000,
+                }],
+              },
+            });
+            f.update("tstv1-group-a", {
+              title: "Explore implementation architecture endA",
+              status: "busy",
+              activity: running("explore-run"),
+            });
+            f.update("tstv1-group-b", { status: "busy" });
+            f.add({
+              ...base,
+              id: "tstv1-trail-blocked",
+              parentID: base.id,
+              title: "Review integration boundaries endB",
+              attention: { ...base.attention, questions: 1 },
+            });
+            f.update("tstv1-trail-blocked", {
+              activity: {
+                ...running("blocked-run"),
+                inputs: { fresh: true, keys: ["trail-question"] },
+              },
+            });
+            for (let n = 0; n < 60; n++) {
+              const id = `tstv1-trail-cont-${n}`;
+              f.add({
+                ...base,
+                id,
+                parentID: base.id,
+                title: n === 1
+                  ? "Finished awaiting parent receipt"
+                  : `communico backup-restore (cont. ${n})`,
+              });
+              if (n === 1) f.update(id, { activity: running("finished-run") });
+              f.update(id, {
+                activity: {
+                  terminal: n === 1 ? Date.now() : 100,
+                  outcome: "succeeded",
+                  ...(n !== 1
+                    ? {
+                      delivered: {
+                        parentID: base.id,
+                        receipt: "parent-result",
+                        terminal: 100,
+                      },
+                    }
+                    : {}),
+                },
+              });
+            }
+            f.add({
+              ...base,
+              id: "tstv1-trail-nested",
+              parentID: "tstv1-group-a",
+              title: "Nested verification branch tail",
+              status: "busy",
+              activity: running("nested-run"),
+            });
+            f.update("tstv1-trail-nested", { activity: running("nested-run") });
+            // Inspect delivery without viewing/acknowledging the helper. RPC
+            // snapshots are lease-scoped just like the browser's replica.
+            c.lease({
+              directory: base.directory,
+              selected: base.id,
+              crumbs: ["tstv1-trail-cont-0"],
+              rows: [],
+            });
+            return null;
+          }
+          if (
+            profile === "contract-sessions-tab-groups" &&
+            frame.params.target === "trail-overflow"
+          ) {
+            for (let n = 0; n < 21; n++) {
+              f.add({
+                ...base,
+                id: `tstv1-trail-active-${n}`,
+                parentID: base.id,
+                title: `Working helper ${n}`,
+                status: "busy",
+                activity: {
+                  work: {
+                    fresh: true,
+                    keys: [`active-${n}`],
+                    items: [{
+                      id: `active-${n}`,
+                      kind: "execution",
+                      label: "Execution",
+                      title: `Working helper ${n}`,
+                      startedAt: Date.now() - 14 * 60_000,
+                    }],
+                  },
+                },
+              });
+            }
+            return null;
+          }
+          if (
             profile === "contract-sessions-hierarchy" &&
             frame.params.target === "delivery-helpers" && action === "hold"
           ) {

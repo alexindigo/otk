@@ -232,7 +232,7 @@ test(
       ids.push(
         (await state.native<{ id: string }>("/session", "POST", {
           title: `Native ancestry session ${i} with a deliberately long title`,
-          // WP3: overflow follows the selected ancestry, not idle siblings.
+          // D66: real undelivered helper runs drive the overflow inventory.
           ...(i ? { parentID: ids[i - 1] } : {}),
           // The meter assertion needs reported zero usage, not native defaults.
           ...(i === 4 && state.controller.info!.version.startsWith("2.")
@@ -256,6 +256,13 @@ test(
         })).id,
       );
     }
+    // D67: a genuine held native run drives the composer inventory, while
+    // ancestry remains available independently of execution/delivery state.
+    const held = await state.queue(["Native helper result"], "held");
+    await state.native(`/session/${ids[9]}/prompt_async`, "POST", {
+      model: { providerID: "fake", modelID: "scripted" },
+      parts: [{ type: "text", text: "Prepare helper result" }],
+    });
     await state.product("tasks.create", {
       directory: state.directory,
       name: "Native folding",
@@ -274,22 +281,16 @@ test(
       rightCollapsed: true,
     });
     await page.setViewportSize({ width: 800, height: 800 });
-    // Style7 finding 7 retains hidden/inert frames; More owns independent,
-    // reachable controls (style7fix note; decisions 3/54). Rename the same ID
-    // through that control, not its deliberately hidden original frame.
-    await page.getByRole("button", { name: "More task sessions", exact: true })
-      .click();
-    await page.locator(`[data-overflow-target="${ids[0]}"]`).click({
+    await page.locator(`[data-crumb="${ids[1]}"]`).click({
       button: "right",
     });
     await page.locator(
       '.otk-context-menu [data-context-command="session.rename"]',
     ).click();
     await expect(page.locator(".otk-title-editor input")).toBeFocused();
-    const more = page.locator(".otk-folded-crumbs > button");
-    // The independent overflow menu remains open after its context action.
-    // The first trigger gesture blurs the editor and closes that same menu.
-    await expect(more).toHaveAttribute("aria-expanded", "true");
+    const more = page.getByRole("button", { name: "Subagents", exact: true });
+    await expect(more).toHaveText("1 subagent");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
     // Join font/layout settlement on the actual gesture target, after the
     // neighboring digest consumer has painted its authoritative value.
     await expect.poll(() =>
@@ -311,7 +312,7 @@ test(
     await capture("editing");
     const before = (await more.boundingBox())!;
     await more.click();
-    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(more).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator(".otk-title-editor input")).toHaveCount(0);
     const afterBlur = (await more.boundingBox())!;
     for (const k of ["x", "y", "width", "height"] as const) {
@@ -320,10 +321,8 @@ test(
         JSON.stringify({ before, afterBlur, axis: k }),
       ).toBeLessThanOrEqual(1);
     }
-    await more.click();
-    await expect(more).toHaveAttribute("aria-expanded", "true");
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
+      page.locator(".otk-subagents [data-subagent]").first(),
     ).toBeVisible();
     const after = (await more.boundingBox())!;
     for (const k of ["x", "y", "width", "height"] as const) {
@@ -335,21 +334,21 @@ test(
     await capture("opened");
     await page.keyboard.press("ArrowDown");
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]:focus"),
+      page.locator(".otk-subagents .otk-subagent-name:focus"),
     ).toHaveCount(1);
     await expect(page.locator(`[data-crumb="${ids[4]}"]`)).toBeVisible();
     const omitted = await page.locator(
-      ".otk-folded-crumbs [data-overflow-target]",
-    ).evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-overflow-target")!)
-    );
+      ".otk-subagents [data-subagent]",
+    ).evaluateAll((els) => els.map((el) => el.getAttribute("data-subagent")!));
     expect(omitted.length).toBeGreaterThan(0);
     await page.locator(
-      `.otk-folded-crumbs [data-overflow-target="${omitted[0]}"]`,
+      `.otk-subagents [data-subagent="${omitted[0]}"] .otk-subagent-name`,
     ).click();
     await expect(page).toHaveURL(new RegExp("/" + omitted[0] + "$"));
     await page.goto(state.url + "/#/local/" + ids[4]);
     await expect(page.locator(`[data-crumb="${ids[4]}"][aria-current=page]`))
       .toBeVisible();
+    await state.product("session.abort", { sessionID: ids[9] });
+    await state.release(held.gate);
   },
 );

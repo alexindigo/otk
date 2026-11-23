@@ -57,7 +57,7 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
       `[data-crumb=${JSON.stringify(session)}]`,
     );
     await visibleOnScreen(current);
-    await expect(current.locator(".otk-crumb-title")).toHaveText(title);
+    await expect(current.locator(".otk-trail-title")).toHaveText(title);
     await expect(page.locator(".otk-open-session-title")).toHaveCount(0);
     await expect(current).toHaveAttribute("aria-current", "page");
     const geometry = await current.evaluate((node) => {
@@ -67,9 +67,9 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
       )!;
       const a = node.querySelector(".otk-status-light")!
           .getBoundingClientRect(),
-        n = node.querySelector(".otk-crumb-title")!.getBoundingClientRect(),
+        n = node.querySelector(".otk-trail-title")!.getBoundingClientRect(),
         s = strip.getBoundingClientRect();
-      const label = node.querySelector(".otk-crumb-title")!;
+      const label = node.querySelector(".otk-trail-title")!;
       return {
         fontStyle: getComputedStyle(active).fontStyle,
         currentStyle: getComputedStyle(label).fontStyle,

@@ -2,6 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
 import { cssLength } from "../../pages/css-length.ts";
+import { subagents } from "../../pages/crumbs.ts";
 import {
   captureParagraph,
   paragraphTop,
@@ -311,9 +312,14 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
+  await expect(subagents(page)).toHaveText("1 subagent");
+  const activity = page.locator(".otk-composer-activity-slot");
+  await expect(activity).toBeVisible();
   const rect = await pane.boundingBox();
   const session = await page.locator(".otk-session-view").boundingBox();
-  expect(Math.abs(rect!.y + rect!.height - session!.y - session!.height))
+  const header = await activity.boundingBox();
+  expect(Math.abs(rect!.y + rect!.height - header!.y)).toBeLessThanOrEqual(.5);
+  expect(Math.abs(header!.y + header!.height - session!.y - session!.height))
     .toBeLessThanOrEqual(.5);
   await page.mouse.move(rect!.x + 8, rect!.y + rect!.height / 2);
   for (let i = 0; i < 4; i++) {
@@ -327,12 +333,10 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   await expect(jump).toBeVisible();
   expect(await pane.boundingBox()).toEqual(rect);
   const inset = await cssLength(jump.locator(".."), "--jump-bottom-inset");
-  const geometry = await jump.evaluate((button) => ({
-    footer: button.parentElement!.getBoundingClientRect().bottom,
-    session:
-      button.closest(".otk-session-view")!.getBoundingClientRect().bottom,
-  }));
-  expect(Math.abs(geometry.footer - geometry.session + inset))
+  const footer = await jump.evaluate((button) =>
+    button.parentElement!.getBoundingClientRect().bottom
+  );
+  expect(Math.abs(footer - (rect!.y + rect!.height) + inset))
     .toBeLessThanOrEqual(.5);
   await page.screenshot({ path: info.outputPath("child-jump.png") });
   await jump.click();

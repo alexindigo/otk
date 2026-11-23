@@ -171,7 +171,9 @@ export class InboxFeature implements FrameSource {
         const entry = this.index.getMetadata(id);
         if (
           id !== view.selected && !entry?.deleted &&
-          (this.#supervision.get(id)?.state ?? "none") !== "none"
+          ((this.#supervision.get(id)?.state ?? "none") !== "none" ||
+            this.states.get(entityKey("session", id))?.evidence
+              ?.awaitingDelivery)
         ) ids.add(id);
       }
     }
@@ -184,7 +186,11 @@ export class InboxFeature implements FrameSource {
           .flatMap((scope) => this.index.catalog(scope))
     ) {
       if (entry.deleted) continue;
-      if ((this.#supervision.get(entry.id)?.state ?? "none") !== "none") {
+      if (
+        (this.#supervision.get(entry.id)?.state ?? "none") !== "none" ||
+        this.states.get(entityKey("session", entry.id))?.evidence
+          ?.awaitingDelivery
+      ) {
         ids.add(entry.id);
       }
     }
