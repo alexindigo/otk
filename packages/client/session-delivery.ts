@@ -33,6 +33,8 @@ export interface SessionDelivery {
     action: (dispatch: () => void) => Promise<PromptReceipt | null>,
     entry?: PendingSend,
   ): Promise<void>;
+  /** Reattach receipt observation only; never replay the submission preparation. */
+  resume(entry: PendingSend, result?: Promise<PromptReceipt | null>): void;
   /** The viewport reports real visible native sources through its existing port. */
   presented(ids: readonly string[]): void;
   reload(): Promise<void>;
@@ -162,12 +164,53 @@ export function createSessionDelivery(input: {
       return store.state;
     },
     subscribe: (listener) => store.subscribe(listener),
+    resume(entry, result) {
+      bind();
+      if (!result && entry.dispatched === false) {
+        transcript?.send?.({
+          ...entry,
+          phase: "failed",
+          feedback: presentFailure({
+            code: "send.not-submitted",
+            retry: "new-intent",
+            diagnosticID: entry.intent.key,
+            facts: {
+              actionLabel: "Sending prompt",
+              target: { ...input.target, label: input.title() },
+              reason: "The page reloaded before this message was sent.",
+              recovery:
+                "The message is retained here. Copy it to the composer to send it.",
+            },
+          }, { surface: "record", view: input.target }),
+        });
+        return;
+      }
+      const recovered = {
+        ...entry,
+        retry: () => {
+          void owner.reload();
+        },
+      };
+      const failure = entry.feedback?.failure?.value;
+      void owner.send((dispatch) => {
+        dispatch();
+        return result ??
+          (failure
+            ? Promise.reject(new RequestFailure(failure))
+            : Promise.resolve(null));
+      }, recovered).catch(() => {
+        // The existing delivery owner has published the correlated entry failure.
+      });
+    },
     async send(action, entry) {
       if (stopped) {
         throw new DOMException("Submission owner stopped", "AbortError");
       }
       bind();
       const id = entry?.intent.key ?? randomID();
+      const currentEntry = () =>
+        (entry && transcript?.projection.entry(entry.message.id)?.send) ??
+          entry!;
       if (entry) {
         if (transcript?.projection.committed(entry.message.id)) return;
         if (store.state.receipts.some((receipt) => receipt.id === id)) return;
@@ -184,7 +227,7 @@ export function createSessionDelivery(input: {
       if (entry) {
         const publish = (value: PendingSend) => transcript?.send?.(value);
         const observeAgain = () => {
-          publish({ ...entry, phase: "pending" });
+          publish({ ...currentEntry(), phase: "pending", feedback: undefined });
           timers.set(
             id,
             clock.set(() => failObservation(), SEND_OBSERVATION_MS),
@@ -212,20 +255,25 @@ export function createSessionDelivery(input: {
             },
           }, { surface: "record", view: input.target });
           publish({
-            ...entry,
+            ...currentEntry(),
             phase: "failed",
             feedback: feedback &&
               { ...feedback, action: { label: "Retry", run: observeAgain } },
             retry: observeAgain,
           });
         };
-        publish(entry);
+        publish({ ...entry, dispatched: entry.dispatched ?? false });
         timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
       }
       let result: PromptReceipt | null;
       let dispatched = false;
       try {
-        result = await action(() => dispatched = true);
+        result = await action(() => {
+          dispatched = true;
+          if (entry) {
+            transcript?.send?.({ ...currentEntry(), dispatched: true });
+          }
+        });
       } catch (cause) {
         clear(id);
         if (entry) {
@@ -269,7 +317,7 @@ export function createSessionDelivery(input: {
               } else entry.retry?.();
             };
             transcript?.send?.({
-              ...entry,
+              ...currentEntry(),
               phase: "failed",
               feedback: feedback &&
                 { ...feedback, action: { label: "Retry", run: retry } },

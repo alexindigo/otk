@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
 import { type Quarantine, validateQuarantine } from "./report.ts";
+import { qualificationTags } from "./qualification-areas.ts";
 import entries from "../../tests/browser/quarantine.json" with { type: "json" };
 const version = Deno.args[0];
 if (!version || version !== Deno.env.get("OTK_TEST_VERSION")) {
@@ -44,12 +45,9 @@ for (const kind of ["test", "scale", "themes"]) {
     await Deno.readTextFile(join(root, "outcomes.json")),
   );
   for (const row of report.rows) {
-    if (
-      !row.tags.some((tag: string) =>
-        /@(composer|messages|sessions|revert|attention|menus|visual|transport|harness|scale)$/
-          .test(tag)
-      )
-    ) throw new Error(`No area: ${row.stableID}`);
+    if (!qualificationTags(row.tags).length) {
+      throw new Error(`No area: ${row.stableID}`);
+    }
     collection.push({ id: row.stableID, project: row.project });
   }
 }

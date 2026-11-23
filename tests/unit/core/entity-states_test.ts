@@ -86,6 +86,72 @@ function owner() {
   return { entries, published, states, supervision, put, get };
 }
 
+test("D66: parent delivery and native run clocks survive human seen independently", () => {
+  const o = owner();
+  const entry = { ...base, parentID: "root" };
+  o.put({
+    ...entry,
+    activity: {
+      work: {
+        ...keys("run"),
+        items: [{
+          id: "run",
+          kind: "execution",
+          label: "Execution",
+          title: "Work",
+          startedAt: 10,
+        }],
+      },
+    },
+  });
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 10 });
+  const terminal = {
+    ...entry,
+    activity: { terminal: 50, outcome: "succeeded" as const },
+  };
+  o.put(terminal, 50);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 10, endedAt: 50 });
+  for (
+    const delivered of [
+      { parentID: "foreign", receipt: "result", terminal: 50 },
+      { parentID: "root", receipt: "", terminal: 50 },
+      { parentID: "root", receipt: "result", terminal: 49 },
+    ]
+  ) {
+    o.put({ ...terminal, activity: { ...terminal.activity, delivered } }, 50);
+    assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  }
+  o.put({
+    ...terminal,
+    activity: {
+      ...terminal.activity,
+      delivered: { parentID: "root", receipt: "result", terminal: 50 },
+    },
+  }, 50);
+  assertEquals(o.get("s")?.evidence?.awaitingDelivery, false);
+  o.put({ ...entry, activity: { work: keys("rerun"), terminal: 50 } }, 50);
+  assertEquals(o.get("s")?.evidence?.run, undefined);
+  o.put({
+    ...entry,
+    activity: {
+      work: {
+        ...keys("rerun"),
+        items: [{
+          id: "rerun",
+          kind: "execution",
+          label: "Execution",
+          title: "Rerun",
+          startedAt: 60,
+        }],
+      },
+      terminal: 50,
+    },
+  }, 50);
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 60 });
+});
+
 test("each supervision verdict maps to one session lamp state and cause", () => {
   const o = owner();
   o.put(base);

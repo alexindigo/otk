@@ -6,6 +6,7 @@ import type {
   ProjectStatus,
   SessionEvidence,
 } from "@otk/protocol";
+import { rollupStatus } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 /** WP5: a permission is painted only after it has been pending this long. */
@@ -232,6 +233,14 @@ export function lamp(
 /** One label dictionary, keyed by state; the cause refines nothing yet. */
 export function entityState(store: EntityStateStore, k: string): ProjectStatus {
   return store.isStale ? "none" : store.get(k)?.state ?? "none";
+}
+
+/** Presentation only: summarize the lamps in the D66 disclosure. This is not
+ * the task's state, which includes members outside the disclosure. */
+export function visibleLampStatus(
+  states: readonly ProjectStatus[],
+): ProjectStatus {
+  return rollupStatus(...states);
 }
 
 /** Own-session evidence only. Descendant counts retain their explicit scope. */

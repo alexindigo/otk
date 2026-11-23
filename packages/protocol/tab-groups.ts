@@ -3,7 +3,6 @@ import {
   projectSessionHierarchy,
   type SessionHierarchyNode,
 } from "./session-hierarchy.ts";
-import { sessionAncestors } from "./session-tree.ts";
 import type { SessionStructure } from "./session-list.ts";
 import type { TaskRecord } from "./inbox.ts";
 
@@ -14,10 +13,6 @@ export interface TabGroup {
   roots: string[];
   /** Complete ordered membership, independent of activity and visibility. */
   members: string[];
-  /** Orientation only: these identities are never group members. */
-  ancestorLinks: string[];
-  /** Same human family in another checkout, reachable without local membership. */
-  familyLinks: string[];
 }
 export interface TabGroups {
   owners: ReadonlyMap<string, TabGroup>;
@@ -127,8 +122,6 @@ export function projectTabGroups(
         id,
         roots: [],
         members: [],
-        ancestorLinks: [],
-        familyLinks: [],
       };
       groups.set(key, value);
     }
@@ -250,30 +243,6 @@ export function projectTabGroups(
       if (!ids.has(byID.get(id)?.parentID ?? "")) walk(id);
     }
     for (const id of members) walk(id);
-    const links = new Set<string>();
-    for (const id of value.members) {
-      if (!explicit.has(id) && ids.has(byID.get(id)?.parentID ?? "")) continue;
-      for (
-        const ancestor of sessionAncestors(id, (key) => byID.get(key))
-          .reverse()
-      ) {
-        if (!ids.has(ancestor) && byID.has(ancestor)) links.add(ancestor);
-      }
-    }
-    value.ancestorLinks = [...links];
-  }
-  const humanGroups = new Map<string, TabGroup>();
-  for (const value of groups.values()) {
-    for (const id of value.roots) {
-      const root = hierarchy.get(id)?.rootID;
-      if (root) humanGroups.set(root, value);
-    }
-  }
-  for (const entry of sessions) {
-    if (local(entry.id) || !entry.parentID) continue;
-    const root = hierarchy.get(entry.id)?.rootID;
-    const value = root && humanGroups.get(root);
-    if (value) value.familyLinks.push(entry.id);
   }
   return { owners, groups: [...groups.values()] };
 }

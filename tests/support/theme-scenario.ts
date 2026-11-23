@@ -569,11 +569,12 @@ export async function themeScenario() {
             ["hold", "release"].includes(frame.params.action) &&
             frame.params.sessionID === "tstv1-crumb-path"
           ) {
-            // WP3 trails are selected ancestry; idle task siblings are not crumbs.
+            // D66 overflow fixtures supply positive work for the background chain.
             const held = frame.params.action === "hold";
             for (let n = 1; n < 12; n++) {
               f.update(`tstv1-visual-${n}`, {
                 parentID: held && n > 1 ? `tstv1-visual-${n - 1}` : undefined,
+                status: held ? "busy" : "idle",
               });
             }
             f.update(base.id, {

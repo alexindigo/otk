@@ -4,6 +4,7 @@ import type { InboxBaseline, InboxSnapshot } from "@otk/protocol";
 import { entityKey, type EntityState } from "@otk/protocol";
 import { createInbox, type InboxChanges, type InboxRpc } from "../inbox.ts";
 import { createState, type StateFactory } from "../state.ts";
+import { createSessionTree } from "../session-tree.ts";
 
 const snapshot = (): InboxSnapshot => ({
   projects: [{
@@ -264,4 +265,38 @@ Deno.test("retired inbox recovery releases its read and cannot publish after ser
   });
   await new Promise((yes) => setTimeout(yes, 0));
   assertEquals(model.state.inbox.pathTemplates, []);
+});
+Deno.test("Sessions grouping follows accepted task upserts applied in place", () => {
+  const model = createInbox({
+    call: () => Promise.reject(new Error("unused")),
+  });
+  model.receive({
+    t: "inbox.snapshot",
+    generation: "a",
+    revision: 0,
+    inbox: snapshot(),
+  });
+  const tree = createSessionTree();
+  const entries = [{
+    id: "s",
+    directory: "/p",
+    title: "Session",
+    timeCreated: 1,
+  }];
+  const group = () =>
+    tree.rows(entries, model.state.inbox.tasks, "/p").find((row) =>
+      row.kind === "session"
+    )?.group;
+  assertEquals(group(), "");
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 0,
+    revision: 1,
+    ops: [
+      { op: "task.upsert", task: { ...snapshot().tasks[0], sessions: ["s"] } },
+    ],
+  });
+  // The accepted tasks array is the same object, edited by the reducer.
+  assertEquals(group(), "t");
 });

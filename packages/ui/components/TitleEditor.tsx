@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TitleEditor.css" with { type: "text" };
-import {
-  createSignal,
-  createUniqueId,
-  type Element,
-  onSettled,
-  Show,
-} from "solid-js";
+import { createUniqueId, type Element, onSettled, Show } from "solid-js";
 import type { SessionRename } from "@otk/client";
 import { errorFeedback } from "@otk/client";
 import { MAX_SESSION_TITLE } from "@otk/protocol";
@@ -30,7 +24,8 @@ export function TitleFeedback(
 export default function TitleEditor(
   props: { owner: SessionRename; feedbackID?: string },
 ) {
-  const [title, setTitle] = createSignal(props.owner.state.editing!.title);
+  const title = () =>
+    props.owner.state.input ?? props.owner.state.editing!.title;
   const errorID = props.feedbackID ?? createUniqueId();
   let input!: HTMLInputElement;
   onSettled(() => {
@@ -53,7 +48,7 @@ export default function TitleEditor(
         maxlength={MAX_SESSION_TITLE}
         value={title()}
         readonly={props.owner.state.pending}
-        onInput={(event) => setTitle(event.currentTarget.value)}
+        onInput={(event) => props.owner.edit(event.currentTarget.value)}
         onBlur={() => {
           const editing = props.owner.state.editing, value = title();
           // Keyed moves can natively blur a connected editor. Let rendering and

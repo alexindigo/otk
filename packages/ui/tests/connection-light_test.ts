@@ -39,7 +39,6 @@ Deno.test("connection health requires both links and gives failures precedence o
     const status of [
       "login required",
       "setup required",
-      "protocol mismatch",
     ] as const
   ) {
     assertEquals(connectionState({ ...healthy, status }), "error");
@@ -72,6 +71,7 @@ Deno.test("connection descriptions retain transport, agent link and error detail
   );
   assertEquals(connectionLabel(), "Disconnected");
   assertEquals(Object.values(CONNECTION_STATES).map((s) => s.shape), [
+    "retry",
     "check",
     "loading",
     "retry",

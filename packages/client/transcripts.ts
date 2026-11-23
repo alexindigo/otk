@@ -11,6 +11,7 @@ import { sessionKey } from "./index.ts";
 import type { IndexChanges } from "./index.ts";
 import { createTranscript, type TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { presentFailure } from "./failure-features.ts";
 
 export interface BodyTarget {
   sidecarId: string;
@@ -37,6 +38,14 @@ export interface TranscriptClock {
   clear(timer: unknown): void;
 }
 export interface TranscriptsOwner {
+  snapshot(): unknown;
+  restore(
+    value: unknown,
+    resume: (
+      target: BodyTarget,
+      send: import("./pending-send.ts").PendingSend,
+    ) => void,
+  ): void;
   setDemand(value: TranscriptDemand): void;
   interact(scope: ScopeRef): void;
   preload(
@@ -258,6 +267,44 @@ export function createTranscripts(o: {
     pump();
   };
   return {
+    snapshot: () =>
+      [...resources.values()].flatMap(({ target, owner }) => {
+        const sends = owner.projection.pendingSends().map((
+          { intent, message, phase, dispatched, feedback },
+        ) => ({
+          intent,
+          message,
+          phase,
+          dispatched,
+          failure: feedback?.failure?.value,
+        }));
+        return sends.length ? [{ target, sends }] : [];
+      }),
+    restore(value, resume) {
+      for (
+        const { target, sends } of value as {
+          target: BodyTarget;
+          sends: (import("./pending-send.ts").PendingSend & {
+            failure?: import("@otk/protocol").PublicFailure;
+          })[];
+        }[]
+      ) {
+        const owner = resource(target);
+        for (const send of sends) {
+          const restored = {
+            ...send,
+            feedback: send.failure
+              ? presentFailure(send.failure, {
+                surface: "record",
+                view: target,
+              })
+              : undefined,
+          };
+          owner.send?.(restored);
+          resume(target, restored);
+        }
+      }
+    },
     setDemand(value) {
       if (stopped) return;
       const previous = demand;

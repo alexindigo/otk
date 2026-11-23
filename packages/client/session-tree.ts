@@ -182,7 +182,9 @@ export function createSessionTree(): {
   ): SessionListRow[];
 } {
   let previousEntries: readonly SessionStructure[] | undefined;
-  let previousTasks: readonly TaskRecord[] | undefined;
+  // Owned task snapshot: callers' task records and arrays may change in place.
+  let previousTasks: string | undefined;
+  let entryIDs = new Set<string>(), taskRefs = new Set<string | undefined>();
   let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
   let previousScopes = "";
   let previousOrder = "";
@@ -209,23 +211,33 @@ export function createSessionTree(): {
               JSON.stringify(entry.hierarchy) ===
                 JSON.stringify(previous.hierarchy);
           }));
-      const sameTasks = tasks === previousTasks ||
-        (!!previousTasks && tasks.length === previousTasks.length &&
-          tasks.every((task, i) => {
-            const previous = previousTasks![i];
-            return task.id === previous.id && task.name === previous.name &&
-              task.directory === previous.directory &&
-              task.order === previous.order &&
-              task.sessions.length === previous.sessions.length &&
-              task.sessions.every((id, n) => id === previous.sessions[n]);
-          }));
+      if (!sameEntries) {
+        entryIDs = new Set(entries.map((entry) => entry.id));
+        taskRefs = new Set(entries.map((entry) => entry.hierarchy?.taskID));
+      }
+      // Only tasks that can own or scope these rows key the cache, so another
+      // project's membership changes cost no derivation work here.
+      const scoped = new Set(directories);
+      const taskKey = JSON.stringify(
+        tasks.filter((task) =>
+          scoped.has(task.directory) || taskRefs.has(task.id) ||
+          task.sessions.some((id) => entryIDs.has(id))
+        ).map((task) => [
+          task.id,
+          task.name,
+          task.directory,
+          task.order,
+          task.sessions,
+        ]),
+      );
       if (
-        sameEntries && sameTasks && directory === previousDirectory &&
+        sameEntries && taskKey === previousTasks &&
+        directory === previousDirectory &&
         needle === previousQuery && scopes === previousScopes &&
         order === previousOrder
       ) return result;
       previousEntries = entries;
-      previousTasks = tasks;
+      previousTasks = taskKey;
       previousDirectory = directory;
       previousQuery = needle;
       previousScopes = scopes;

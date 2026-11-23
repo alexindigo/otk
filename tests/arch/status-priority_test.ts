@@ -62,10 +62,10 @@ Deno.test("priority ownership detects reordered lists and numeric rank maps with
 
 const lampConsumers = new Set([
   "core/index/entity-states.ts",
+  "packages/client/entity-state.ts",
   "packages/client/inbox.ts",
   "packages/client/project-projection.ts",
   "packages/client/request-attention.ts",
-  "packages/client/tabs.ts",
 ]);
 const urgencyConsumers = new Set([
   "core/features/navigation-default.ts",

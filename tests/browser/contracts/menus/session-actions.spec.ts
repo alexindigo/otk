@@ -14,7 +14,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       "Keep session actions reversible",
     );
     const chip = page.getByRole("navigation", { name: "Task sessions" })
-      .getByRole("button", { name: "Session actions review", exact: true });
+      .getByRole("link", { name: "Session actions review", exact: true });
     await chip.click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Archive", exact: true }))
       .toBeVisible();

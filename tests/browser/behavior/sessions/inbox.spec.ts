@@ -248,7 +248,36 @@ test.describe("server merge", () => {
           es.map((e) => (e as HTMLElement).dataset.project)
         ),
       ).toEqual(order);
+      // After the reload this server answers last; its rows take their place.
+      const local = new URL(state.url).host;
+      let answer!: () => void;
+      const answered = new Promise<void>((resolve) => answer = resolve);
+      await page.routeWebSocket((url) => url.host === local, (socket) => {
+        const server = socket.connectToServer();
+        socket.onMessage((message) => server.send(message));
+        server.onMessage((message) => {
+          const { t } = JSON.parse(message.toString()) as { t: string };
+          if (/^(index|inbox)\./.test(t)) {
+            void answered.then(() => socket.send(message));
+          } else socket.send(message);
+        });
+        let closed = false;
+        socket.onClose(() => {
+          if (!closed) server.close();
+          closed = true;
+        });
+        server.onClose(() => {
+          if (!closed) socket.close();
+          closed = true;
+        });
+      });
       await page.reload();
+      await expect.poll(() =>
+        page.locator(".otk-project-row").evaluateAll((es) =>
+          es.map((e) => (e as HTMLElement).dataset.project)
+        )
+      ).toEqual(order.slice(4));
+      answer();
       await expect(page.locator(".otk-project-row")).toHaveCount(8);
       expect(
         await page.locator(".otk-project-row").evaluateAll((es) =>

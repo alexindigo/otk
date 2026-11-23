@@ -8,31 +8,31 @@ import type {
 } from "@otk/protocol";
 import {
   entityKey,
-  sessionAncestors,
+  entityRequiresVisibility,
   type SessionHierarchyNode,
   taskEntityID,
 } from "@otk/protocol";
-import type { InboxStatus } from "./inbox.ts";
+import type { InboxStatus, OperationAttention } from "./inbox.ts";
 import {
   createEntityStateStore,
-  entityState,
   type EntityStateStore,
   lamp,
 } from "./entity-state.ts";
 import { createStableOrder } from "./stable-order.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
-import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import {
+  buildTrail,
+  type TaskCrumb,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
   type TabGroups,
 } from "./tab-groups.ts";
-import type { OperationAttention } from "./inbox.ts";
-import { runningDescendants } from "./live-work.ts";
-export interface FamilyCrumb extends TaskCrumb {
-  status: InboxStatus;
-}
+export type FamilyCrumb = TrailCrumb;
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -81,6 +81,7 @@ export interface TabState {
   revision: number;
 }
 export interface ClientTabs {
+  trail(): TrailModel;
   state: TabState;
   entities(): EntityStateStore;
   tabEntityKey(tab: Pick<InboxTab, "id" | "kind">): string;
@@ -92,12 +93,12 @@ export interface ClientTabs {
   orderRows(rows: readonly SessionListRow[]): SessionListRow[];
   /** Pointer, keyboard and portalled interactions share this ordering lifetime. */
   holdOrder(): () => void;
-  crumbs(): TaskCrumb[];
+  crumbs(): TrailCrumb[];
   /** Open-session identity and known ancestor links, independent of activity. */
-  path(): TaskCrumb[];
-  /** Explicit members and mandatory descendants, with their own session state. */
+  path(): TrailCrumb[];
+  /** Compatibility view of the trail's off-path working/blocked helpers. */
   family(): FamilyCrumb[];
-  /** Canonical running helpers shared by the breadcrumb trail and composer. */
+  /** Positive native descendant work from the trail owner's entity inputs. */
   working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
@@ -157,8 +158,6 @@ export function createTabs(
     factory,
   });
   const entities = () => input.entities ?? standalone;
-  const sessionState = (id: string) =>
-    lamp(entities(), entityKey("session", id), { now: performance.now() });
   const groupKey = (id: string, kind: "task" | "session") =>
     entityKey(
       "task",
@@ -181,10 +180,13 @@ export function createTabs(
     cachedTabs = undefined;
     store.update((s) => s.revision++);
   });
-  let cachedCrumbs: TaskCrumb[] = [],
-    cachedPath: TaskCrumb[] = [],
-    cachedFamily: FamilyCrumb[] = [],
-    cachedWorking: TaskCrumb[] = [],
+  let cachedTrail: TrailModel = {
+      crumbs: [],
+      path: [],
+      helpers: [],
+      working: [],
+      status: "none",
+    },
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
@@ -214,10 +216,13 @@ export function createTabs(
     taskByID = new Map(tasks.map((t) => [t.id, t]));
     partition = undefined;
     mandatory = new Set(
-      context.filter((entry) => {
-        const status = entityState(entities(), entityKey("session", entry.id));
-        return status !== "none" || nodes.get(entry.id)?.mandatory;
-      }).map((entry) => entry.id),
+      context.filter((entry) =>
+        !entry.deleted &&
+        (nodes.get(entry.id)?.mandatory ||
+          !entities().isStale && entityRequiresVisibility(
+              entities().get(entityKey("session", entry.id)),
+            ))
+      ).map((entry) => entry.id),
     );
     cachedTabs = undefined;
   };
@@ -411,63 +416,33 @@ export function createTabs(
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      const key = `${id}/${store.state.sessionID}/${input.connected !== false}`;
-      if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
+      const replica = entities();
+      const key =
+        `${id}/${store.state.sessionID}/${replica.revision}/${replica.isStale}`;
+      if (rows === crumbTabs && key === crumbID) return cachedTrail.crumbs;
       crumbTabs = rows;
       crumbID = key;
-      const group = grouping().groups.find((group) => group.id === id);
-      const current = store.state.sessionID;
-      const path = current
-        ? [
-          ...sessionAncestors(current, (id) => byID.get(id)).toReversed(),
-          current,
-        ].filter((id) => byID.has(id))
-        : [];
-      const local = group
-        ? groupBreadcrumbs(group, byID, mandatory, store.state.sessionID)
-        : path.map((id, depth): TaskCrumb => ({
-          id,
-          kind: "member",
-          helper: !!byID.get(id)?.parentID,
-          depth,
-        }));
-      const familyState = sessionState;
-      cachedFamily = local.filter((crumb) => crumb.kind !== "ancestor").map((
-        crumb,
-      ) => ({
-        ...crumb,
-        status: familyState(crumb.id),
-      })).filter((crumb) =>
-        !crumb.helper || crumb.status !== "none" || mandatory.has(crumb.id)
+      const group = grouping().groups.find((group) =>
+        group.id === id && group.kind === store.state.selected?.kind
       );
-      cachedWorking = runningDescendants(
-        current,
-        [...byID.values()],
-        input.connected !== false,
-      );
-      cachedPath = path.flatMap((id) =>
-        local.filter((crumb) => crumb.id === id)
-      );
-      return cachedCrumbs = [
-        ...cachedPath,
-        ...local.filter((crumb) =>
-          !path.includes(crumb.id) &&
-          (!current || mandatory.has(crumb.id) ||
-            familyState(crumb.id) !== "none")
-        ),
-      ];
+      cachedTrail = buildTrail(group, byID, replica, store.state.sessionID);
+      return cachedTrail.crumbs;
+    },
+    trail() {
+      this.crumbs();
+      return cachedTrail;
     },
     path() {
       this.crumbs();
-      return cachedPath;
+      return cachedTrail.path;
     },
     family() {
       this.crumbs();
-      return cachedFamily;
+      return cachedTrail.helpers;
     },
     working() {
       this.crumbs();
-      return cachedWorking;
+      return cachedTrail.working;
     },
     sessionFor,
     update(next: TabInput): void {

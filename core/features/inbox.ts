@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   entityKey,
+  entityRequiresVisibility,
   type EntityState,
   errorMessage,
   type InboxBaseline,
@@ -247,8 +248,7 @@ export class InboxFeature implements FrameSource {
         const entry = this.index.getMetadata(id);
         if (
           id !== view.selected && !entry?.deleted &&
-          (this.states.get(entityKey("session", id))?.state ?? "none") !==
-            "none"
+          entityRequiresVisibility(this.states.get(entityKey("session", id)))
         ) ids.add(id);
       }
     }
@@ -262,8 +262,9 @@ export class InboxFeature implements FrameSource {
     ) {
       if (entry.deleted) continue;
       if (
-        (this.states.get(entityKey("session", entry.id))?.state ?? "none") !==
-          "none"
+        entityRequiresVisibility(
+          this.states.get(entityKey("session", entry.id)),
+        )
       ) {
         ids.add(entry.id);
       }

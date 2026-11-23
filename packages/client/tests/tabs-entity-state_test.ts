@@ -9,7 +9,7 @@ import {
   taskEntityID,
 } from "@otk/protocol";
 
-Deno.test("tabs and family lamps borrow separate task and own-session entities, never metadata or operation overlays", () => {
+Deno.test("tab and ancestry lamps borrow separate task and own-session entities, never metadata or operation overlays", () => {
   const row: IndexMetadata = {
     id: "root",
     directory: "/p",
@@ -73,7 +73,7 @@ Deno.test("tabs and family lamps borrow separate task and own-session entities, 
     });
     tabs.select({ kind: "task", id: "task" }, row.id);
     assertEquals(tabs.tabs()[0].status, "working");
-    assertEquals(tabs.family()[0].status, "none");
+    assertEquals(tabs.path()[0].status, "none");
     inbox.entities![entityKey("task", taskID)] = value(
       "task",
       taskID,
@@ -83,7 +83,7 @@ Deno.test("tabs and family lamps borrow separate task and own-session entities, 
     assertEquals(tabs.tabs()[0].status, "blocked");
     entities.stale(true);
     assertEquals(tabs.tabs()[0].status, "none");
-    assertEquals(tabs.family()[0].status, "none");
+    assertEquals(tabs.path()[0].status, "none");
   } finally {
     tabs.stop();
     entities.stop();

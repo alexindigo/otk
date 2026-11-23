@@ -30,6 +30,10 @@ export interface EntityRequestEvidence {
   arrivedAt?: number;
 }
 export interface SessionEvidence {
+  /** D66: a proven helper terminal not covered by its parent's result receipt. */
+  awaitingDelivery?: boolean;
+  /** Positive native execution clock, retained across its terminal transition. */
+  run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
   work: boolean;
   permissions: number;
@@ -70,6 +74,14 @@ export interface EntityState {
 /** IDs are opaque and connection-local. No path or session identity is rewritten. */
 export const entityKey = (kind: EntityKind, id: string): string =>
   `${kind}:${id}`;
+
+/** Keep attention and undelivered helper results reachable (D62/D66). */
+export function entityRequiresVisibility(
+  value: EntityState | undefined,
+): boolean {
+  return !!value && (value.state !== "none" ||
+    value.evidence?.awaitingDelivery === true);
+}
 
 /** Task membership is a view projection (D8), not a different state rule. */
 export const taskEntityID = (

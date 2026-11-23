@@ -919,12 +919,12 @@ export function createServerResources(o: {
   };
   const sidecars = o.sidecars(receive);
   const stopLinks = sidecars.subscribe(() => {
-    for (const id of projections.keys()) projection(id);
     // Reconnection alone cannot revive old evidence. Accepted entity changes
     // or a baseline make the replica fresh again in observeChanges above.
     for (const [id, model] of inboxes) {
       if (!connected(id)) model.entities.stale(true);
     }
+    for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
     operationAttention,
@@ -1121,6 +1121,10 @@ export function createServerResources(o: {
     },
     projects: (now) => {
       void projectOrderClock.state.revision;
+      // The configured server list is durable before any server answers.
+      const serverOrder = new Map(
+        sidecars.state.list.map((s, i) => [s.id, i]),
+      );
       const rows = sidecars.state.list.flatMap((s) => {
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
@@ -1140,6 +1144,7 @@ export function createServerResources(o: {
             row,
           })),
           (row) => ({
+            source: serverOrder.get(row.row.sidecarId),
             position: row.row.source === "tracked" ? row.row.order : undefined,
           }),
         ).map((item) => item.row),

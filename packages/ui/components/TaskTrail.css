@@ -1,0 +1,62 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-trail {
+  min-inline-size: 0;
+}
+.otk-trail-link,
+.otk-trail-measure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-trail-link {
+  inline-size: 100%;
+}
+.otk-trail-session {
+  --selection-padding: 0 var(--chrome-inset) 0 0;
+  min-inline-size: 0;
+  color: var(--otk-fg-3);
+  padding: 0;
+  height: var(--control-size);
+  flex: 1 1 auto;
+}
+.otk-trail-separator {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.otk-trail-separator > svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
+.otk-trail-compact-title {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+.otk-trail-title {
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+.otk-trail-first,
+.otk-trail-ellipsis {
+  flex: none;
+}
+.otk-trail-ellipsis {
+  white-space: pre;
+}
+.otk-trail-tail {
+  display: flex;
+  justify-content: flex-end;
+  min-inline-size: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+.otk-trail-tail > span {
+  flex: none;
+}
+.otk-trail-session[data-crumb-kind="ancestor"] .otk-trail-title {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}

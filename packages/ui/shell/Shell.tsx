@@ -71,6 +71,7 @@ export default function Shell(
   },
 ): import("solid-js").Element {
   const {
+    reload,
     resources,
     session,
     drafts,
@@ -469,6 +470,7 @@ export default function Shell(
         failureOwned={resources.ownsFailure}
       >
         <ShellProvider
+          reload={reload}
           ports={{
             theme: props.theme,
             toggles,
@@ -808,14 +810,18 @@ export default function Shell(
                                   session.state.selection!.sidecarId,
                                   "usage",
                                 ) &&
-                                  actions.eligibility(session.state.selection!)
+                                  actions.eligibility(
+                                    session.state.selection!,
+                                  )
                                     .live
                                 ? (turnID) => {
                                   const target = {
                                     ...session.state.selection!,
                                     turnID,
                                   };
-                                  const release = session.usage.retain(target);
+                                  const release = session.usage.retain(
+                                    target,
+                                  );
                                   void session.usage.load(target);
                                   return release;
                                 }

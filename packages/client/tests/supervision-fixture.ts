@@ -20,6 +20,46 @@ export * from "../inbox.ts";
 export type * from "../tabs.ts";
 export type * from "../task-breadcrumbs.ts";
 
+/** Fake-server entity publication for legacy scenario knobs, not a client fallback. */
+export function entitySnapshot(
+  value: Pick<InboxSnapshot, "supervision">,
+  entries?: readonly (IndexMetadata & inbox.OperationAttention)[],
+) {
+  const byID = new Map(entries?.map((entry) => [entry.id, entry]));
+  return Object.fromEntries(
+    Object.entries(value.supervision ?? {}).map(
+      ([id, verdict]): [string, EntityState] => {
+        const entry = byID.get(id);
+        const activity = entry?.activity?.work;
+        const state = entry?.deleted
+          ? "none"
+          : entry?.operationStatus ?? inbox.supervisionStatus(id, value);
+        return [entityKey("session", id), {
+          kind: "session",
+          id,
+          state,
+          previous: state,
+          evidence: {
+            awaitingDelivery: verdict.state === "finishedUnseen",
+            work: activity
+              ? activity.fresh && activity.keys.length > 0
+              : verdict.state === "working",
+            permissions: 0,
+            questions: 0,
+            descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+          },
+          counts: {
+            blocked: Number(state === "blocked"),
+            working: Number(state === "working"),
+            finished: Number(state === "finished"),
+            unseen: Number(verdict.unseen ?? false),
+          },
+        }];
+      },
+    ),
+  );
+}
+
 export function projected(
   entries: readonly (IndexMetadata & inbox.OperationAttention)[],
   value: Pick<InboxSnapshot, "seen" | "finishes" | "supervision" | "entities">,
@@ -46,36 +86,13 @@ export function projected(
       ];
     }),
   );
-  const entities: Record<string, EntityState> = Object.fromEntries(
-    entries.map((entry) => {
-      const verdict = supervision[entry.id];
-      const states = {
-        none: "none",
-        working: "working",
-        needsYou: "blocked",
-        finishedUnseen: "finished",
-      } as const;
-      const state = entry.deleted
-        ? "none"
-        : entry.operationStatus ?? states[verdict.state];
-      return [entityKey("session", entry.id), {
-        kind: "session",
-        id: entry.id,
-        state,
-        previous: state,
-        counts: {
-          blocked: Number(state === "blocked"),
-          working: Number(state === "working"),
-          finished: Number(state === "finished"),
-          unseen: Number(verdict.unseen ?? false),
-        },
-      }];
-    }),
-  );
   return {
     ...value,
     supervision,
-    entities: { ...entities, ...value.entities },
+    entities: {
+      ...entitySnapshot({ supervision }, entries),
+      ...value.entities,
+    },
   };
 }
 export const inboxStatus: typeof inbox.inboxStatus = (entry, value) =>

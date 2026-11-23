@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { createReload, type Reload, type ReloadOwner } from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
 export * from "./project-disclosure.ts";
@@ -140,7 +141,12 @@ export {
 } from "@otk/protocol";
 export { contextMeter } from "./context-meter.ts";
 export { createTaskActions, type TaskActions } from "./task-actions.ts";
-export { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+export {
+  taskBreadcrumbs,
+  type TaskCrumb,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
 export {
   familySelection,
   familyTask,

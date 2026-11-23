@@ -27,7 +27,7 @@ export default function ConnectionStatus(
     <Show when={connectionFeedback(props.connection)}>
       {(feedback) => (
         <Show
-          when={feedback().failure}
+          when={feedback().failure || feedback().action}
           fallback={
             <ChromeMeta class={classes()} role="status">
               {feedback().text}
@@ -36,7 +36,7 @@ export default function ConnectionStatus(
         >
           <FeedbackStatus
             class={classes()}
-            subgrid={props.subgrid}
+            subgrid={props.subgrid && !!feedback().failure}
             compact={props.compact}
             feedback={{
               ...feedback(),

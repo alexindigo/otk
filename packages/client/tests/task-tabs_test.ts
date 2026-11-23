@@ -302,7 +302,7 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   ]);
   assertEquals(
     taskBreadcrumbs(meta.tasks[0], input.entries, meta.tasks).map((c) => c.id),
-    ["root", "nested"],
+    ["root"],
   );
 });
 
@@ -344,7 +344,7 @@ Deno.test("ungrouped mandatory helpers keep their human task visible (2.67 super
   assertEquals(tabs.tabs(), []);
 });
 
-Deno.test("phantom crumbs show all active descendants of every member and retire even while selected", () => {
+Deno.test("D66 phantom crumbs isolate the native root within a multi-root task", () => {
   const a = entry("a"),
     b = entry("b"),
     child = entry("child", 2, "b"),
@@ -353,24 +353,29 @@ Deno.test("phantom crumbs show all active descendants of every member and retire
   const members = task("task", ["a", "b"]), entries = [a, b, child, nested];
   assertEquals(taskBreadcrumbs(members, entries).map((c) => [c.id, c.depth]), [
     ["a", 0],
-    ["b", 0],
-    ["nested", 2],
   ]);
   child.attention.questions = 1;
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
-    "nested",
   ]);
+  const tabs = model();
+  tabs.update({
+    directory: "/p",
+    entries,
+    inbox: { ...inbox(), tasks: [members] },
+  });
+  tabs.select({ kind: "task", id: members.id }, b.id);
+  assertEquals(tabs.crumbs().map((c) => [c.id, c.depth]), [
+    ["b", 0],
+  ]);
+  assertEquals(tabs.family().map((c) => c.id), ["child", "nested"]);
+  tabs.stop();
   child.attention.questions = 0;
   nested.status = "idle";
-  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a", "b"]);
+  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a"]);
   members.sessions.push("child");
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
   ]);
 });
 
@@ -458,6 +463,7 @@ for (const followParent of [true, false]) {
         tabs.crumbs().find((crumb) => crumb.id === b.id)?.external,
         true,
       );
+      assertEquals(tabs.path().map((crumb) => crumb.id), [a.id, b.id, c.id]);
       assertEquals(tabs.state.sessionID, c.id);
     } finally {
       tabs.stop();

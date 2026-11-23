@@ -1,0 +1,305 @@
+name: Full-house PR checks
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: ${{ matrix.id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {
+              id: base-1.19.3,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,fmt,lint,check,unit,arch,no-product-hooks,reuse,collection,quarantine,migration",
+            }
+          - {
+              id: integration-1.19.3,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,integration",
+            }
+          - {
+              id: integration-scale-1.19.3,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,integration-scale",
+            }
+          - {
+              id: browser-1.19.3-1of4,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "1/4",
+            }
+          - {
+              id: browser-1.19.3-2of4,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "2/4",
+            }
+          - {
+              id: browser-1.19.3-3of4,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "3/4",
+            }
+          - {
+              id: browser-1.19.3-4of4,
+              version: "1.19.3",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "4/4",
+            }
+          - {
+              id: browser-scale-1.19.3-1of2,
+              version: "1.19.3",
+              timeout: 120,
+              tiers: "prepare,browser-scale",
+              shard: "1/2",
+            }
+          - {
+              id: browser-scale-1.19.3-2of2,
+              version: "1.19.3",
+              timeout: 120,
+              tiers: "prepare,browser-scale",
+              shard: "2/2",
+            }
+          - {
+              id: base-2.2.6,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,fmt,lint,check,unit,arch,no-product-hooks,reuse,collection,quarantine,migration",
+            }
+          - {
+              id: integration-2.2.6,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,integration",
+            }
+          - {
+              id: integration-scale-2.2.6,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,integration-scale",
+            }
+          - {
+              id: browser-2.2.6-1of4,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "1/4",
+            }
+          - {
+              id: browser-2.2.6-2of4,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "2/4",
+            }
+          - {
+              id: browser-2.2.6-3of4,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "3/4",
+            }
+          - {
+              id: browser-2.2.6-4of4,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,collection,browser",
+              shard: "4/4",
+            }
+          - {
+              id: browser-scale-2.2.6-1of2,
+              version: "2.2.6",
+              timeout: 120,
+              tiers: "prepare,browser-scale",
+              shard: "1/2",
+            }
+          - {
+              id: browser-scale-2.2.6-2of2,
+              version: "2.2.6",
+              timeout: 120,
+              tiers: "prepare,browser-scale",
+              shard: "2/2",
+            }
+          - {
+              id: themes-2.2.6,
+              version: "2.2.6",
+              timeout: 60,
+              tiers: "prepare,themes",
+            }
+    env:
+      TMPDIR: ${{ github.workspace }}/.test-state/tmp
+      DENO_DIR: ${{ github.workspace }}/.test-state/deno
+      PLAYWRIGHT_BROWSERS_PATH: /opt/otk-test/ms-playwright
+      OTK_TEST_VERSION: ${{ matrix.version }}
+      OTK_TEST_LANE: ${{ matrix.version == '2.2.6' && 'A' || 'C' }}
+      OTK_TEST_OPENCODE: /opt/otk-test/opencode/${{ matrix.version }}/opencode
+      OTK_TEST_PROVIDER_CACHE: /opt/otk-test/provider-cache/opencode-${{ matrix.version }}
+      OTK_TEST_GUEST: gha-${{ matrix.id }}
+      OTK_TEST_MATRIX_FULL: "1"
+      CI_JOB_ID: ${{ matrix.id }}
+      CI_TIERS: ${{ matrix.tiers }}
+      CI_SHARD: ${{ matrix.shard || '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Create cache and temporary directories
+        run: |
+          mkdir -p "$TMPDIR" "$DENO_DIR" ".test-state/ci/$CI_JOB_ID"
+          sudo install -d -o "$(id -un)" -g "$(id -gn)" /opt/otk-test /opt/otk-test/opencode /opt/otk-test/provider-cache /opt/otk-test/ms-playwright
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.9.6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.22.2
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-2.9.6-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.npm
+          key: npm-24.22.2-${{ runner.os }}-${{ hashFiles('tests/browser/package-lock.json') }}
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/otk-test/ms-playwright
+          key: playwright-1.64.1-${{ runner.os }}
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/otk-test/opencode/${{ matrix.version }}
+          key: native-${{ matrix.version }}-${{ matrix.version == '1.19.3' && '179ca421d61eefeadfa0c50e084a6e79c1623734732f0f4593f81ccfd3ab7ee9' || '50503d24577fa4117a7c95ee85b2cd679606a87eacf20ca54ed5db5c9e1cf895' }}
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/otk-test/provider-cache/opencode-${{ matrix.version }}
+          key: provider-${{ matrix.version }}-${{ hashFiles('tests/support/prepare-provider-cache.ts') }}
+      - name: Provision toolchain
+        id: provision
+        run: bash scripts/ci/provision.sh "$OTK_TEST_VERSION"
+      - name: Run full-house slice
+        id: suite
+        run: |
+          deno task test:full --version "$OTK_TEST_VERSION" --dry-run > ".test-state/ci/$CI_JOB_ID/plan.json"
+          if [[ $CI_JOB_ID == base-* ]]; then
+            cp ".test-state/ci/$CI_JOB_ID/plan.json" ".test-state/ci/$CI_JOB_ID/full-plan-$OTK_TEST_VERSION.json"
+          fi
+          if [[ $CI_JOB_ID == browser-scale-* ]] && ! deno eval 'const p=JSON.parse(await Deno.readTextFile(Deno.args[0])); Deno.exit(p.tiers.some(t=>t.id==="browser-scale")?0:1)' ".test-state/ci/$CI_JOB_ID/plan.json"; then
+            echo 'browser-scale is not admitted by the migration ledger.' >> "$GITHUB_STEP_SUMMARY"
+            touch ".test-state/ci/$CI_JOB_ID/skipped"
+          else
+            args=(--version "$OTK_TEST_VERSION" --tiers "$CI_TIERS")
+            if [[ -n $CI_SHARD ]]; then args+=("--shard=$CI_SHARD"); fi
+            /usr/bin/time -v deno task test:full "${args[@]}"
+          fi
+      - name: Test coverage aggregator
+        if: always() && startsWith(matrix.id, 'base-') && steps.provision.outcome == 'success'
+        run: deno test -A scripts/tests/ci-complete_test.ts
+      - name: Record job outcome
+        if: always()
+        env:
+          CI_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p ".test-state/ci/$CI_JOB_ID"
+          deno eval 'import {sourceTree} from "./scripts/tests/source.ts"; const root=".test-state/ci/"+Deno.env.get("CI_JOB_ID"); let skipped=false; try {await Deno.stat(root+"/skipped"); skipped=true} catch(e) {if(!(e instanceof Deno.errors.NotFound)) throw e} await Deno.writeTextFile(root+"/ci-job.json",JSON.stringify({schema:1,id:Deno.env.get("CI_JOB_ID"),version:Deno.env.get("OTK_TEST_VERSION"),tree:await sourceTree(),exit:Deno.env.get("CI_JOB_STATUS")==="success"?0:1,skipped}));'
+      - name: Upload receipts and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: receipts-${{ matrix.id }}
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .test-state/runs/
+            .test-state/ci/
+            !**/*.png
+            !**/*.jpg
+            !**/*.jpeg
+            !**/*.webm
+            !**/*.mp4
+            !**/*.zip
+      - name: Upload failed-job diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: diagnostics-${{ matrix.id }}
+          retention-days: 14
+          include-hidden-files: true
+          path: .test-state/runs/
+
+  full-house:
+    name: full-house
+    runs-on: ubuntu-24.04
+    needs: checks
+    if: always()
+    timeout-minutes: 10
+    env:
+      TMPDIR: ${{ github.workspace }}/.test-state/tmp
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: mkdir -p "$TMPDIR" receipts master-record
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.9.6
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: receipts-*
+          path: receipts
+      - name: Read latest master failure record
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if run_id=$(gh run list --workflow pr-checks.yml --branch master --event push --status completed --limit 1 --json databaseId --jq '.[0].databaseId // empty') && [[ -n $run_id ]]; then
+            if ! gh run download "$run_id" --name failing-ids-master --dir master-record; then
+              echo 'Latest master failure record unavailable; no comparison baseline.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo 'No completed master failure record yet.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Prove full-house coverage
+        if: always()
+        run: |
+          args=(--receipts receipts)
+          if [[ -f master-record/failing-ids.json ]]; then args+=(--master master-record/failing-ids.json); fi
+          deno run -A scripts/tests/ci-complete.ts "${args[@]}"
+      - name: Record master failing IDs
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: failing-ids-master
+          path: failing-ids.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Require all matrix jobs to succeed
+        if: always()
+        env:
+          MATRIX_RESULT: ${{ needs.checks.result }}
+        run: test "$MATRIX_RESULT" = success
