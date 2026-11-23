@@ -1,5 +1,31 @@
 # @otk/client
 
+## Deploy and reload custody
+
+Version skew is `client outdated`, not a transport failure. It retires the
+socket/retry lifetime while retaining request and input owners. The application
+supplies Reload; the client never navigates implicitly. Legacy `error/protocol`
+frames and incompatible welcomes share this classification.
+
+`createReload` joins feature-owned snapshot/restore ports in one tab-local
+sessionStorage checkpoint. It preserves own-undefined values and Sets, writes
+and reads back the complete checkpoint before navigation, and refuses reload
+when storage or an unfinished file read cannot preserve input. Drafts include
+attachment bytes, editor buffers and revert provenance. Transcripts contribute
+uncommitted local sends; request trackers contribute their exact captured input,
+principal and original intent identity, excluding bootstrap credentials. This
+explicit reload handoff is separate from the ordinary payload-free request
+metadata store. Restoration precedes transport startup and resumes receipts,
+never creates a second native send. Feature state not yet mounted remains in the
+checkpoint until its original keyed owner remounts.
+
+Restored local sends reattach to `SessionDelivery` and the original request
+operation before transport startup. The same native-rejection and observation
+deadline paths remain authoritative. Input whose preparation had not dispatched
+stays visible as not sent; reload never repeats that preparation. Corrupt or
+unrestorable checkpoints leave startup usable but prevent overwriting the saved
+work or navigating through the owned Reload action.
+
 `createTranscriptProjection` owns local sends and native messages in the same
 entry collection. Normal Send captures its request identity and native message
 ID together before preparation, publishes the ordinary user message immediately,

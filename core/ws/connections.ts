@@ -375,8 +375,15 @@ export class Connections {
         refresh();
         if (!c.welcomed) {
           if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
-            this.#send(c, { t: "error", code: "protocol" });
-            ws.close(1002, "protocol mismatch");
+            // Keep this envelope stable: already-open older bundles understand it.
+            this.#send(c, {
+              t: "error",
+              code: "protocol",
+              reason: "client-outdated",
+              protocol: PROTOCOL_VERSION,
+              build: SIDECAR_VERSION,
+            });
+            ws.close(1000, "OTK was updated");
             return;
           }
           if (welcoming) return;

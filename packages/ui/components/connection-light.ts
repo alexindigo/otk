@@ -6,6 +6,7 @@ export type ConnectionInput = Pick<
   "label" | "status" | "harness" | "error" | "feedback"
 >;
 export const CONNECTION_STATES = {
+  updated: { label: "OTK was updated", shape: "retry" },
   connected: { label: "Connected", shape: "check" },
   connecting: { label: "Connecting", shape: "loading" },
   reconnecting: { label: "Reconnecting", shape: "retry" },
@@ -20,9 +21,12 @@ export function connectionState(
 ): ConnectionLightState {
   if (!connection) return "disconnected";
   if (
-    connection.error || connection.status === "login required" ||
-    connection.status === "setup required" ||
+    connection.status === "client outdated" ||
     connection.status === "protocol mismatch"
+  ) return "updated";
+  if (
+    connection.error || connection.status === "login required" ||
+    connection.status === "setup required"
   ) return "error";
   if (
     connection.status === "reconnecting" ||
@@ -44,6 +48,12 @@ export function connectionLabel(connection?: ConnectionInput): string {
 export function connectionFeedback(
   connection: ConnectionInput,
 ): Feedback | undefined {
+  if (
+    connection.status === "client outdated" ||
+    connection.status === "protocol mismatch"
+  ) {
+    return connection.feedback ?? { kind: "info", text: "OTK was updated" };
+  }
   if (connection.error) {
     return connection.feedback ?? errorFeedback(connection.error, {
       actionLabel: "Connecting",

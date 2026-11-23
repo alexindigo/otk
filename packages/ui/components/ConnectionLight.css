@@ -21,6 +21,9 @@
 .otk-connection-light[data-connection-state=error] {
   --connection-color: var(--connection-light-error);
 }
+.otk-connection-light[data-connection-state=updated] {
+  --connection-color: var(--connection-light-connecting);
+}
 .otk-connection-dot {
   width: 100%;
   height: 100%;

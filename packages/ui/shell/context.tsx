@@ -15,6 +15,7 @@ import type {
 import type { Toggles } from "../components/Toggles.ts";
 import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
+import { ReloadProvider } from "../state/reload.tsx";
 export type { ProjectSelection } from "@otk/client";
 /** Live shell resources passed to features, never a component's internal state. */
 export interface ShellPorts {
@@ -53,9 +54,17 @@ export interface ShellPorts {
 }
 const Context = createContext<ShellPorts>();
 export function ShellProvider(
-  props: { ports: ShellPorts; children: Element },
+  props: {
+    ports: ShellPorts;
+    children: Element;
+    reload?: import("@otk/client").Reload;
+  },
 ): Element {
-  return <Context value={props.ports}>{props.children}</Context>;
+  return (
+    <ReloadProvider owner={props.reload}>
+      <Context value={props.ports}>{props.children}</Context>
+    </ReloadProvider>
+  );
 }
 export function useShellPorts(): ShellPorts {
   return useContext(Context);

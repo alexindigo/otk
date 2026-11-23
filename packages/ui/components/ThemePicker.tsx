@@ -10,6 +10,7 @@ import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
 import { FormSelect } from "./Form.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import { retainForReload } from "../state/reload.tsx";
 /** Preview is locally owned; committed state and saves are supplied by the host. */
 export default function ThemePicker(props: {
   theme: ThemeEngine;
@@ -25,9 +26,16 @@ export default function ThemePicker(props: {
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal<FailureValue>("");
   let active = true, preview: ReturnType<ThemeEngine["preview"]> | undefined;
+  retainForReload("theme-picker", {
+    snapshot: selected,
+    restore(value) {
+      setSelected(String(value));
+    },
+  });
   let status: { focus(): void } | undefined, saveButton!: HTMLButtonElement;
   onSettled(() => {
     preview = props.theme.preview();
+    preview.select(selected());
     return () => {
       active = false;
       preview?.close();
