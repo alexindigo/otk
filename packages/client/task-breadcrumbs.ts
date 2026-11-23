@@ -30,16 +30,27 @@ export function groupBreadcrumbs(
   selected?: string,
 ): TaskCrumb[] {
   const roots = new Set(group.roots), members = new Set(group.members);
+  const path = new Set(
+    selected ? sessionAncestors(selected, (id) => entries.get(id)) : [],
+  );
+  const selectedDirectory = selected
+    ? entries.get(selected)?.directory
+    : undefined;
   const result: TaskCrumb[] = [];
   for (const id of group.members) {
-    if (!roots.has(id) && !mandatory.has(id) && id !== selected) continue;
+    const external = path.has(id) && selectedDirectory !== undefined &&
+      entries.get(id)?.directory !== selectedDirectory;
+    if (!roots.has(id) && !mandatory.has(id) && id !== selected && !external) {
+      continue;
+    }
     const ancestors = sessionAncestors(id, (key) => entries.get(key));
     const at = ancestors.findIndex((ancestor) => roots.has(ancestor));
     result.push({
       id,
-      kind: "member",
+      kind: external ? "ancestor" : "member",
       helper: !roots.has(id),
       depth: roots.has(id) ? 0 : at < 0 ? 1 : at + 1,
+      ...(external ? { external: true } : {}),
     });
   }
   for (const id of group.ancestorLinks) {

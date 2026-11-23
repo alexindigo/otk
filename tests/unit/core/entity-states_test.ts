@@ -20,6 +20,7 @@ import {
   type IndexEntry,
   type IndexMetadata,
   type ServerFrame,
+  taskEntityID,
 } from "@otk/protocol";
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
@@ -229,6 +230,50 @@ test("an unchanged session publishes nothing", () => {
   assertEquals(o.published, []);
 });
 
+test("task projections share the state owner and update only containing groups", () => {
+  const o = owner();
+  const local = taskEntityID("task"), following = taskEntityID("task", true);
+  o.put({ ...base, id: "parent", activity: { terminal: 10 } });
+  o.put({
+    ...base,
+    id: "helper",
+    parentID: "parent",
+    directory: "/other",
+    activity: { work: keys("run") },
+  });
+  o.states.membership(
+    new Map([[local, ["parent"]], [following, ["parent", "helper"]]]),
+  );
+  const get = (id: string) => o.states.get(entityKey("task", id));
+  assertEquals(get(local)?.state, "finished");
+  assertEquals(get(following)?.state, "working");
+  assertEquals(get(following)?.counts.unseen, 1);
+  o.published.length = 0;
+  o.put({
+    ...base,
+    id: "helper",
+    parentID: "parent",
+    directory: "/other",
+    activity: { permissions: keys("per_helper") },
+  });
+  assertEquals(get(following)?.state, "blocked");
+  assertEquals(get(following)?.cause, "permission");
+  assertEquals(get(following)?.requests, [{ id: "per_helper" }]);
+  assertEquals(
+    o.published.flatMap((p) => p.upserts).filter((v) => v.kind === "task").map((
+      v,
+    ) => v.id),
+    [following],
+  );
+  // Changing membership retires the old contribution without changing sessions.
+  o.states.membership(new Map([[local, ["parent", "helper"]]]));
+  assertEquals(get(following), undefined);
+  assertEquals(get(local)?.state, "blocked");
+  o.states.remove("helper");
+  assertEquals(get(local)?.state, "finished");
+  assertEquals(get(local)?.requests, undefined);
+});
+
 test("the inbox publishes session entities with the snapshot and as lease patches", async () => {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
@@ -285,6 +330,124 @@ test("the inbox publishes session entities with the snapshot and as lease patche
     assertEquals(leased.filter((key) => key.startsWith("session:")), []);
     assertEquals(leased.includes(entityKey("global", "global")), true);
   } finally {
+    stop();
+    feature.close();
+    db.close();
+  }
+});
+
+test("the inbox publishes both D8 task projections and refreshes state, moves and membership", async () => {
+  const db = new OtkDb(await fixture(), [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "alice",
+    () => Promise.resolve([]),
+  );
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+  };
+  const frames: ServerFrame[] = [];
+  const stop = feature.listen((frame) => frames.push(frame));
+  const views: ReturnType<InboxFeature["open"]>[] = [];
+  try {
+    const task = stores.tasks.create("/p", "Task", ["parent"]);
+    const parent = { ...base, id: "parent", activity: { terminal: 10 } };
+    const child = {
+      ...base,
+      id: "child",
+      directory: "/other",
+      parentID: "parent",
+      activity: { work: keys("run") },
+    };
+    index.reset([parent, child]);
+    await settle();
+    assertEquals(
+      Object.values(feature.get().entities ?? {}).filter((v) =>
+        v.kind === "task"
+      ),
+      [],
+    );
+    for (const followParent of [false, true]) {
+      views.push(
+        feature.open(
+          () => ({
+            epoch: 0,
+            directory: "/p",
+            crumbs: [],
+            rows: [],
+            tasksFollowParent: followParent,
+          }),
+          String(followParent),
+          () => new Set(["parent", "child"]),
+        ),
+      );
+    }
+    await settle();
+    const get = (follow = false) =>
+      feature.get().entities
+        ?.[entityKey("task", taskEntityID(task.id, follow, "/p"))];
+    assertEquals(get()?.state, "finished");
+    assertEquals(get(true)?.state, "working");
+    index.upsert({ ...child, activity: { permissions: keys("per_child") } });
+    await settle();
+    assertEquals(get(true)?.state, "blocked");
+    assertEquals(get()?.state, "finished");
+    assertEquals(
+      frames.some((frame) =>
+        frame.t === "inbox.patch" &&
+        frame.ops.some((op) =>
+          op.op === "entity.upsert" &&
+          op.value.id === taskEntityID(task.id, true, "/p") &&
+          op.value.state === "blocked"
+        )
+      ),
+      true,
+    );
+    index.upsert({ ...child, directory: "/p" });
+    await settle();
+    assertEquals(get()?.state, "working");
+    assertEquals(get()?.counts.unseen, 1);
+    stores.tasks.close(task.id);
+    await settle();
+    assertEquals(get(), undefined);
+    assertEquals(get(true), undefined);
+    // A phantom is an unpinned task/family, not its root session's own lamp.
+    assertEquals(
+      feature.get().entities
+        ?.[entityKey("task", taskEntityID("parent", true, "/p", "session"))]
+        ?.state,
+      "working",
+    );
+    assertEquals(
+      feature.get().entities?.[entityKey("session", "parent")]?.state,
+      "finished",
+    );
+    for (const view of views) view.close?.();
+    views.length = 0;
+    await settle();
+    assertEquals(
+      Object.values(feature.get().entities ?? {}).filter((v) =>
+        v.kind === "task"
+      ),
+      [],
+    );
+  } finally {
+    for (const view of views) view.close?.();
     stop();
     feature.close();
     db.close();

@@ -83,6 +83,11 @@ export class EntityStates {
   #forms = new Map<string, number>();
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
+  /** D8 task projections borrow the shared identity partition. State changes
+   * touch only the groups containing that session. */
+  #tasks = new Map<string, Set<string>>();
+  #tasksOf = new Map<string, Set<string>>();
+  #taskTallies = new Map<string, Tally>();
   #global = tally();
   /** S22: received OTK operations by target session. */
   #operations = new Map<string, "working" | "blocked">();
@@ -112,6 +117,9 @@ export class EntityStates {
     this.#forms.clear();
     this.#leaves.clear();
     this.#projectsOf.clear();
+    this.#tasks.clear();
+    this.#tasksOf.clear();
+    this.#taskTallies.clear();
     this.#global = tally();
     this.#operations.clear();
   }
@@ -119,6 +127,41 @@ export class EntityStates {
   operation(id: string, value?: "working" | "blocked"): void {
     if (value) this.#operations.set(id, value);
     else this.#operations.delete(id);
+  }
+  /** Structural membership changes only. No session-state publication scans
+   * the catalog or rebuilds the task partition. */
+  membership(groups: ReadonlyMap<string, readonly string[]>): void {
+    const upserts: EntityState[] = [], removals: string[] = [];
+    for (const [id, members] of this.#tasks) {
+      if (groups.has(id)) continue;
+      for (const member of members) this.#tasksOf.get(member)?.delete(id);
+      this.#tasks.delete(id);
+      this.#taskTallies.delete(id);
+      const key = entityKey("task", id);
+      if (this.#states.delete(key)) removals.push(key);
+    }
+    for (const [id, members] of groups) {
+      const previous = this.#tasks.get(id) ?? new Set<string>();
+      const next = new Set(members);
+      const sum = this.#taskTallies.get(id) ?? tally();
+      for (const member of previous) {
+        if (next.has(member)) continue;
+        add(sum, this.#contribution(member), -1);
+        this.#tasksOf.get(member)?.delete(id);
+      }
+      for (const member of next) {
+        if (previous.has(member)) continue;
+        add(sum, this.#contribution(member), 1);
+        const owners = this.#tasksOf.get(member) ?? new Set<string>();
+        owners.add(id);
+        this.#tasksOf.set(member, owners);
+      }
+      this.#tasks.set(id, next);
+      this.#taskTallies.set(id, sum);
+      const value = this.#aggregate("task", id, sum, 0);
+      if (this.#set(value)) upserts.push(value);
+    }
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** S18: the checkout a session belongs to, as placed by ProjectSummaries. */
   member(id: string, checkout?: string): void {
@@ -251,6 +294,13 @@ export class EntityStates {
   ): void {
     const after = this.#contribution(id);
     if (JSON.stringify(before) === JSON.stringify(after)) return;
+    for (const task of this.#tasksOf.get(id) ?? []) {
+      const sum = this.#taskTallies.get(task)!;
+      add(sum, before, -1);
+      add(sum, after, 1);
+      const value = this.#aggregate("task", task, sum, 0);
+      if (this.#set(value)) upserts.push(value);
+    }
     const checkout = this.#checkoutOf.get(id);
     if (checkout) {
       add(this.#tally(checkout), before, -1);
