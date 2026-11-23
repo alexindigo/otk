@@ -693,8 +693,14 @@ transactions. Native server/path fields and rendering remain in the dialog;
 unmount disposes its owner so late operations cannot navigate from retired UI.
 
 `takeovers.register({ id, capability, component })` supplies composer attention
-owners. `ComposerTakeovers` mounts capability-available components; they read
-session state from context and construct their own UI. Optional feature-owned
+owners. `ComposerTakeovers` owns `--composer-content-inset` for the destination/
+live-work row, Prompt, joined notices and takeover Surface slots. Rows borrow
+that value rather than choosing horizontal padding. The unpainted header and
+notice frame retain the same border track as the framed composer. Standalone
+Prompt/notices keep their default inset; unrelated Surfaces keep their density.
+RevertGroup borrows Tree/ActivityGroup's tracks without adding an inset.
+`ComposerTakeovers` mounts capability-available components; they read session
+state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome uses structural tracks: helper presence uses a reserved control-height
