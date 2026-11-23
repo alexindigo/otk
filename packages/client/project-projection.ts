@@ -230,6 +230,9 @@ export function createProjectProjection(o: {
           get inbox() {
             return o.inbox?.() ?? inbox;
           },
+          get entities() {
+            return o.entities?.();
+          },
         };
       }
       return p.input;
@@ -426,7 +429,10 @@ export function createProjectProjection(o: {
         ? record.inactiveAt ?? record.lastVisit
         : now;
       const text = record ? visitTime(record.lastVisit, time) : "";
-      if (!p.row || p.time !== text) {
+      if (
+        !p.row || p.time !== text || p.row.status !== status ||
+        p.row.unread !== unread
+      ) {
         p.time = text;
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {

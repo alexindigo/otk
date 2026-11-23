@@ -54,6 +54,7 @@ export function registerSessionsPanel(
                 rename={shell.rename}
                 showCost={shell.toggles.state.prefs.showCost}
                 inbox={(id) => shell.inbox(id).state.inbox}
+                entities={(id) => shell.inbox(id).entities}
                 connected={(id) =>
                   shell.servers().some((s) =>
                     s.id === id && s.status === "connected"

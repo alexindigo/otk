@@ -34,15 +34,17 @@ import type {
 import {
   type ClientTabs,
   digestLabel,
-  inboxStatus,
   type InboxTab,
+  lamp,
   type MergedEntry,
   type ProjectSelection,
   type SessionRename,
+  sessionWorkStatus,
   summaryMeter,
   type TaskActions,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import { entityKey } from "@otk/protocol";
 import EdgeTriangle from "./EdgeTriangle.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import UsageCost from "./UsageCost.tsx";
@@ -471,12 +473,14 @@ export default function ProjectTabs(props: {
                     title={tab().title}
                     aria-label={tab().title || "Session"}
                     data-tab={tab().id}
+                    data-status={sessionWorkStatus(
+                      props.model.entities(),
+                      entityKey("session", props.model.state.sessionID ?? ""),
+                    )}
                     data-open-session={!separateTitle() &&
                         props.model.state.selected?.id === tab().id
                       ? props.model.state.sessionID
                       : undefined}
-                    data-status={entry(props.model.state.sessionID ?? "")
-                      ?.status}
                     {...native.attributes}
                   >
                     <SelectionContent
@@ -484,15 +488,11 @@ export default function ProjectTabs(props: {
                       leading={
                         <StatusLight
                           small
-                          state={tab().status}
-                          attention={{
-                            server: props.project.sidecarId,
-                            family: {
-                              id: tab().id,
-                              contains: (id) =>
-                                props.model.belongsToTab(tab().id, id),
-                            },
-                          }}
+                          state={lamp(
+                            props.model.entities(),
+                            props.model.tabEntityKey(tab()),
+                            { now: performance.now() },
+                          )}
                         />
                       }
                     >
@@ -563,7 +563,16 @@ export default function ProjectTabs(props: {
                 </Show>
                 <SelectionContent
                   class="otk-session-selection otk-crumb-measure-content"
-                  leading={<StatusLight small state="none" />}
+                  leading={
+                    <StatusLight
+                      small
+                      state={lamp(
+                        props.model.entities(),
+                        entityKey("session", item.id),
+                        { now: performance.now() },
+                      )}
+                    />
+                  }
                 >
                   {title(item.id)}
                 </SelectionContent>
@@ -679,13 +688,11 @@ export default function ProjectTabs(props: {
                             leading={
                               <StatusLight
                                 small
-                                attention={{
-                                  server: props.project.sidecarId,
-                                  session: crumb().id,
-                                }}
-                                state={entry(crumb().id)
-                                  ? inboxStatus(entry(crumb().id)!, props.inbox)
-                                  : "none"}
+                                state={lamp(
+                                  props.model.entities(),
+                                  entityKey("session", crumb().id),
+                                  { now: performance.now() },
+                                )}
                               />
                             }
                           >

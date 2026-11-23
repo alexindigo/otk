@@ -5,8 +5,8 @@ import type {
   SessionHierarchyNode,
   TaskRecord,
 } from "@otk/protocol";
-import { sessionAncestors } from "@otk/protocol";
-import { inboxStatus, type OperationAttention } from "./inbox.ts";
+import { entityKey, sessionAncestors } from "@otk/protocol";
+import type { OperationAttention } from "./inbox.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
@@ -86,7 +86,7 @@ export function taskBreadcrumbs(
     string,
     readonly (IndexMetadata & OperationAttention)[]
   >,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision"> = {
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "entities"> = {
     seen: {},
     finishes: {},
   },
@@ -102,7 +102,8 @@ export function taskBreadcrumbs(
   });
   const mandatory = new Set(
     entries.filter((entry) =>
-      inboxStatus(entry, inbox) !== "none" ||
+      (inbox.entities?.[entityKey("session", entry.id)]?.state ?? "none") !==
+        "none" ||
       hierarchy?.get(entry.id)?.mandatory
     ).map((
       entry,

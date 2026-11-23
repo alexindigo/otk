@@ -579,6 +579,9 @@ export class EntityStates {
         ? { retry: { ...entry.retry } }
         : {}),
       ...(verdict.terminalFailure ? { failure: verdict.terminalFailure } : {}),
+      // The diagnostic owner already selects current session-level error text.
+      // Preserve its marker without interpreting that observation as a run outcome.
+      ...(entry.attention.error ? { error: true as const } : {}),
     };
     const before = this.#states.get(entityKey("session", entry.id));
     return {

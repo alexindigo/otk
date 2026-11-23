@@ -142,6 +142,49 @@ test("each supervision verdict maps to one session lamp state and cause", () => 
   assertEquals(o.get("s")?.counts.unseen, 0);
 });
 
+test("current diagnostics retain their row marker without inventing a failed run", () => {
+  const o = owner();
+  const observed: IndexMetadata = {
+    ...base,
+    attention: {
+      ...base.attention,
+      error: "Unavailable",
+      errorState: {
+        revision: 1,
+        observations: [{ id: "http", source: "http", message: "Unavailable" }],
+      },
+    },
+  };
+  o.put(observed);
+  assertEquals(o.get("s")?.evidence?.error, true);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.outcome, undefined);
+  assertEquals(o.get("s")?.evidence?.failure, undefined);
+  o.put({
+    ...observed,
+    attention: {
+      ...base.attention,
+      errorState: {
+        revision: 2,
+        observations: observed.attention.errorState!.observations.map((
+          item,
+        ) => ({
+          ...item,
+          cleared: true,
+        })),
+      },
+    },
+  });
+  assertEquals(o.get("s")?.evidence?.error, undefined);
+  o.put({
+    ...base,
+    attention: { ...base.attention, error: "Legacy current diagnostic" },
+  });
+  assertEquals(o.get("s")?.evidence?.error, true);
+  o.put(base);
+  assertEquals(o.get("s")?.evidence?.error, undefined);
+});
+
 test("auto-approved permissions do not block and carry no request identities", () => {
   const o = owner();
   o.supervision.permissions(() => 0);
@@ -364,6 +407,13 @@ test("the inbox publishes both D8 task projections and refreshes state, moves an
   const frames: ServerFrame[] = [];
   const stop = feature.listen((frame) => frames.push(frame));
   const views: ReturnType<InboxFeature["open"]>[] = [];
+  const demands: { rows: string[]; epoch: number }[] = [];
+  const snapshotEntries = index.snapshotEntries.bind(index);
+  let populationReads = 0;
+  index.snapshotEntries = () => {
+    populationReads++;
+    return snapshotEntries();
+  };
   try {
     const task = stores.tasks.create("/p", "Task", ["parent"]);
     const parent = { ...base, id: "parent", activity: { terminal: 10 } };
@@ -383,21 +433,35 @@ test("the inbox publishes both D8 task projections and refreshes state, moves an
       [],
     );
     for (const followParent of [false, true]) {
+      const scope = {
+        epoch: 0,
+        directory: "/p",
+        crumbs: [] as string[],
+        rows: [] as string[],
+        tasksFollowParent: followParent,
+      };
+      demands.push(scope);
       views.push(
         feature.open(
-          () => ({
-            epoch: 0,
-            directory: "/p",
-            crumbs: [],
-            rows: [],
-            tasksFollowParent: followParent,
-          }),
+          () => scope,
           String(followParent),
           () => new Set(["parent", "child"]),
         ),
       );
     }
     await settle();
+    const beforeRows = populationReads;
+    assertEquals(beforeRows > 0, true);
+    demands[0].rows.push("parent");
+    demands[0].epoch++;
+    views[0].viewChanged?.();
+    views[1].viewChanged?.();
+    await settle();
+    assertEquals(
+      populationReads,
+      beforeRows,
+      "row-only scope changes cannot rebuild task membership",
+    );
     const get = (follow = false) =>
       feature.get().entities
         ?.[entityKey("task", taskEntityID(task.id, follow, "/p"))];

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertThrows } from "@std/assert";
-import { createTabs } from "../tabs.ts";
+import { createTabs } from "./supervision-fixture.ts";
 import { createSessionTree, sessionTree } from "../session-tree.ts";
 import type {
   InboxSnapshot,

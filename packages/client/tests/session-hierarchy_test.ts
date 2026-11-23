@@ -2,15 +2,14 @@
 // Shared hierarchy consumers retain native family identity across checkouts.
 import { assert, assertEquals } from "@std/assert";
 import * as client from "@otk/client";
+import { createTabs } from "./supervision-fixture.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
 
 Deno.test("failed cross-checkout helpers stay in their human family's trail and family without inheriting its task", () => {
   const root = shellEntry("human", "/repo");
   const child = shellEntry("failed", "/tree", root.id);
-  const tabs = client.createTabs(() =>
-    Promise.reject(new Error("No promotion"))
-  );
+  const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({
     directory: root.directory,
     entries: [root],
@@ -53,9 +52,7 @@ Deno.test("failed cross-checkout helpers stay in their human family's trail and 
 Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested scopes", () => {
   const root = shellEntry("root", "/tree");
   const child = shellEntry("child", "/tree/src", root.id);
-  const tabs = client.createTabs(() =>
-    Promise.reject(new Error("No promotion"))
-  );
+  const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({
     directory: "/tree",
     directories: ["/tree", "/tree/src"],

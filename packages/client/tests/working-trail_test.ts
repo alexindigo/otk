@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createTabs, runningWork } from "@otk/client";
+import { runningWork } from "@otk/client";
+import { createTabs } from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 
 const entry = (
@@ -131,11 +132,13 @@ for (const grouped of [true, false]) {
     tabs.preview(nested.id);
     connected = false;
     update();
+    // D6/D62: all stale states are grey; the selected path remains as
+    // orientation, not a retained red blocker from a disconnected source.
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
       "root",
       "nested",
-      "finished",
     ]);
+    assertEquals(tabs.family().every((crumb) => crumb.status === "none"), true);
     assertEquals(helpers(), []);
     tabs.stop();
   });

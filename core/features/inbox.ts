@@ -96,28 +96,43 @@ interface InboxPublication {
 export class InboxFeature implements FrameSource {
   #taskScopes = new Map<string, () => ViewLease>();
   #membershipScheduled = false;
+  #membershipDirty = false;
+  #membershipSignature = "";
   /** Coalesce structural changes. Attention changes use the owner's reverse
    * membership and never traverse the catalog. */
-  #taskMembership(): void {
+  #taskMembership(topologyChanged = true): void {
+    this.#membershipDirty ||= topologyChanged;
     if (this.#membershipScheduled) return;
     this.#membershipScheduled = true;
     queueMicrotask(() => {
       this.#membershipScheduled = false;
       if (this.#closed) return;
-      const groups = new Map<string, readonly string[]>();
-      if (!this.#taskScopes.size) {
-        this.states.membership(groups);
-        return;
-      }
-      const entries = this.index.snapshotEntries();
-      const projections = new Set<string>();
+      const projections = new Map<
+        string,
+        { directory: string; followParent: boolean }
+      >();
       for (const read of this.#taskScopes.values()) {
         const view = read(), directory = this.#directory(view);
         if (!directory) continue;
         const followParent = view.tasksFollowParent ?? false;
-        const key = JSON.stringify([directory, followParent]);
-        if (projections.has(key)) continue;
-        projections.add(key);
+        projections.set(JSON.stringify([directory, followParent]), {
+          directory,
+          followParent,
+        });
+      }
+      const signature = JSON.stringify([...projections.keys()].sort());
+      if (!this.#membershipDirty && signature === this.#membershipSignature) {
+        return;
+      }
+      this.#membershipDirty = false;
+      this.#membershipSignature = signature;
+      const groups = new Map<string, readonly string[]>();
+      if (!projections.size) {
+        this.states.membership(groups);
+        return;
+      }
+      const entries = this.index.snapshotEntries();
+      for (const { directory, followParent } of projections.values()) {
         const scopes = this.summaries.values.get(directory)?.scopes ??
           [directory];
         const partition = projectTabGroups(
@@ -267,7 +282,7 @@ export class InboxFeature implements FrameSource {
     entries: () => ReadonlySet<string>,
   ): FrameSource {
     this.#taskScopes.set(id, view);
-    this.#taskMembership();
+    this.#taskMembership(false);
     const listeners = new Set<(frame: ServerFrame) => void>();
     let revision = 0;
     let deliveredTasks = new Map<string, TaskRecord>();
@@ -461,8 +476,8 @@ export class InboxFeature implements FrameSource {
       } else wholeLease = true;
       schedule();
     };
-    const topologyChanged = () => {
-      this.#taskMembership();
+    const topologyChanged = (membershipDirty = true) => {
+      this.#taskMembership(membershipDirty);
       if (!delivered) return;
       taskTopology = true;
       schedule();
@@ -530,7 +545,7 @@ export class InboxFeature implements FrameSource {
     return {
       entriesChanged,
       // A view change re-projects tasks; rows it admits arrive as frames.
-      viewChanged: topologyChanged,
+      viewChanged: () => topologyChanged(false),
       snapshot: async (signal) => {
         await hydrate(signal);
         const value = baseline();
@@ -553,7 +568,7 @@ export class InboxFeature implements FrameSource {
         listeners.clear();
         this.#views.delete(id);
         this.#taskScopes.delete(id);
-        this.#taskMembership();
+        this.#taskMembership(false);
       },
     };
   }

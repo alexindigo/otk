@@ -230,7 +230,7 @@ Deno.test("current inbox membership wins over independently arriving stale wire 
     A: { state: "working", terminal: 0 },
     C: { state: "working", terminal: 0 },
   };
-  const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+  const tabs = createTabs(() => Promise.reject(Error("No promotion")));
   const update = () =>
     tabs.update({ directory: "/p", entries: context, inbox: meta });
   try {
@@ -274,7 +274,7 @@ for (
         terminal: 1,
       },
     };
-    const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+    const tabs = createTabs(() => Promise.reject(Error("No promotion")));
     const update = () =>
       tabs.update({ directory: "/p", entries: rows, inbox: meta });
     try {

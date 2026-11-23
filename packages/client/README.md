@@ -1360,27 +1360,35 @@ virtual session-row continuation flags from the complete projected preorder,
 never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
-`update({directory, entries, inbox})` and exposes saved task and human-root
-phantom groups. `projectTabGroups` is the task-identity owner: helpers belong to
-their proven human root's group, never an independent activity/selection group.
-Legacy helper-only task records cannot split that group. Unresolved or cyclic
-ancestry cannot establish a task identity; Sessions retains those rows. Group
-member sets are disjoint, including quiet descendants. Selection, remembered
-views, lamps, breadcrumbs and metadata demand borrow this partition. Opening a
-helper keeps its exact view but selects the human group's tab. Pin and send
-promote that root, never the helper; helper rename is not task promotion. Native
-ancestry comes from SessionHierarchy. `tasksFollowParent` defaults off and
-crosses server connections through the view, not by rewriting stored membership
-or native paths. `select`, `preview`, `pin` (also the double-click action),
-`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
-transitions. Required activity tabs never disappear when a preview is replaced;
-an idle/seen selected phantom remains until selection leaves. Inputs remain
-owned by their index/metadata models, and tabs never delete sessions. Concurrent
-pins share promotion; late completion cannot steal a newer selection.
-`belongsToTab(tabID, sessionID)` borrows complete group membership for lamp
-presentation, including quiet descendants. The task lamp rolls up its members;
-each session crumb retains its own session state (D35). Consumers do not
-reconstruct membership from raw ancestry.
+`update({directory, entries, inbox, entities?})` and exposes saved task and
+human-root phantom groups. `projectTabGroups` is the task-identity owner:
+helpers belong to their proven human root's group, never an independent
+activity/selection group. Legacy helper-only task records cannot split that
+group. Unresolved or cyclic ancestry cannot establish a task identity; Sessions
+retains those rows. Group member sets are disjoint, including quiet descendants.
+Selection, remembered views, lamps, breadcrumbs and metadata demand borrow this
+partition. Opening a helper keeps its exact view but selects the human group's
+tab. Pin and send promote that root, never the helper; helper rename is not task
+promotion. Native ancestry comes from SessionHierarchy. `tasksFollowParent`
+defaults off and crosses server connections through the view, not by rewriting
+stored membership or native paths. `select`, `preview`, `pin` (also the
+double-click action), `rename(sessionID, title, callback)` and
+`send(sessionID, callback)` own tab transitions. Required activity tabs never
+disappear when a preview is replaced; an idle/seen selected phantom remains
+until selection leaves. Inputs remain owned by their index/metadata models, and
+tabs never delete sessions. Concurrent pins share promotion; late completion
+cannot steal a newer selection. `projectTabGroups` lives in protocol and is
+re-exported by client: server demand and browser placement share the same
+partition. The server publishes task states only for open view projections.
+Their opaque identities include group kind, group ID, directory and
+follow-parent mode; unpinned human groups are task aggregates too. Last view
+release retires those aggregates. `belongsToTab(tabID, sessionID)` borrows
+complete membership, including quiet descendants. `tabEntityKey(tab)` names that
+server aggregate, while each crumb reads its own session entity (D35).
+`entities()` exposes the borrowed replica to presentation. Standalone callers
+can supply `inbox.entities` instead. Metadata, supervision and client operation
+overlays never manufacture tab state. State revision and grace expiry invalidate
+cached paint without borrowing the catalog.
 
 Directly selecting a validated phantom preserves that exact tab and viewed
 session across metadata updates. Preview and reconciliation share that same
@@ -1435,8 +1443,9 @@ latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
 shared partition and preserves explicit membership order. Visible crumbs contain
 explicit task members (or a phantom's own session), mandatory group members and
 the open group member. Quiet helpers retire when no longer open, including quiet
-intermediate members on the open session's ancestry. Mandatory membership
-borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
+local intermediate members on the open session's ancestry; quiet foreign
+ancestors remain explicit orientation links. Mandatory membership borrows own
+entity states and the resolved hierarchy's mandatory flag, never lamp grace.
 Tabs and standalone crumbs share per-entry hierarchy resolution: compatible
 published nodes survive mixed catalogs, while missing or mismatched nodes use
 the neutral projection. An explicit absent task member can pass ownership to a
