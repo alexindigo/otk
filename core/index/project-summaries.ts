@@ -410,6 +410,7 @@ export class ProjectSummaries {
         : {}),
     };
     this.#direct.set(directory, summary);
+    this.states.placement(summary);
     if (!publish) return;
     this.#publish(directory);
     const parent = summary.topology?.parentDirectory;

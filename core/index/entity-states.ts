@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  archiveEntityID,
   type BlockedCause,
   type EntityCounts,
   entityKey,
   type EntityState,
   type IndexMetadata,
+  projectPlacement,
   type ProjectStatus,
+  type ProjectSummary,
   rollupStatus,
   type SessionEvidence,
   type Supervision,
@@ -83,6 +86,12 @@ export class EntityStates {
   #forms = new Map<string, number>();
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
+  #placement = new Map<
+    string,
+    Pick<ProjectSummary, "directory" | "archived" | "availability" | "topology">
+  >();
+  #archiveOf = new Map<string, string>();
+  #archiveLeaves = new Map<string, Set<string>>();
   /** D8 task projections borrow the shared identity partition. State changes
    * touch only the groups containing that session. */
   #tasks = new Map<string, Set<string>>();
@@ -117,6 +126,9 @@ export class EntityStates {
     this.#forms.clear();
     this.#leaves.clear();
     this.#projectsOf.clear();
+    this.#placement.clear();
+    this.#archiveOf.clear();
+    this.#archiveLeaves.clear();
     this.#tasks.clear();
     this.#tasksOf.clear();
     this.#taskTallies.clear();
@@ -207,7 +219,27 @@ export class EntityStates {
     return this.#states.get(entityKey("project", directory))!;
   }
   /** A directory is no longer summarized: its aggregates are gone. */
+  placement(
+    facts: Pick<
+      ProjectSummary,
+      "directory" | "archived" | "availability" | "topology"
+    >,
+  ): void {
+    this.#placement.set(facts.directory, {
+      directory: facts.directory,
+      archived: facts.archived,
+      availability: facts.availability,
+      topology: facts.topology,
+    });
+    const upserts: EntityState[] = [];
+    this.#placeArchive(facts.directory, upserts);
+    if (upserts.length) this.publish(upserts, []);
+  }
+
   drop(directory: string): void {
+    const upserts: EntityState[] = [];
+    this.#placement.delete(directory);
+    this.#placeArchive(directory, upserts);
     const removals: string[] = [];
     for (const kind of ["checkout", "project"] as const) {
       const key = entityKey(kind, directory);
@@ -218,7 +250,7 @@ export class EntityStates {
     }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
-    if (removals.length) this.publish([], removals);
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** Interpret one session, publish its state and its ancestors' descendant
    * evidence. Returns the supervision verdict it was derived from. */
@@ -325,6 +357,7 @@ export class EntityStates {
       this.#forms.get(directory) ?? 0,
     );
     if (this.#set(value)) upserts.push(value);
+    this.#placeArchive(directory, upserts);
     for (const project of this.#projectsOf.get(directory) ?? []) {
       this.#project(project, upserts);
     }
@@ -339,6 +372,44 @@ export class EntityStates {
     }
     const value = this.#aggregate("project", directory, sum, forms);
     if (this.#set(value)) upserts.push(value);
+  }
+  /** C3 placement is shared unchanged with the client. A checkout state change
+   * revisits only its old/new archive, never the session population. */
+  #placeArchive(directory: string, upserts: EntityState[]): void {
+    const facts = this.#placement.get(directory),
+      before = this.#archiveOf.get(directory);
+    const status = this.#states.get(entityKey("checkout", directory))?.state ??
+      "none";
+    const next = facts &&
+        projectPlacement({
+            lifecycle: facts,
+            status,
+            inactive: false,
+            hasSessions: false,
+          }).section === "archived"
+      ? archiveEntityID(facts)
+      : undefined;
+    if (before && before !== next) {
+      this.#archiveLeaves.get(before)?.delete(directory);
+      this.#archiveOf.delete(directory);
+    }
+    if (next) {
+      const leaves = this.#archiveLeaves.get(next) ?? new Set<string>();
+      leaves.add(directory);
+      this.#archiveLeaves.set(next, leaves);
+      this.#archiveOf.set(directory, next);
+    }
+    for (const id of new Set([before, next])) {
+      if (!id) continue;
+      const sum = tally();
+      let forms = 0;
+      for (const leaf of this.#archiveLeaves.get(id) ?? []) {
+        add(sum, this.#tally(leaf), 1);
+        forms += this.#forms.get(leaf) ?? 0;
+      }
+      const value = this.#aggregate("archive", id, sum, forms);
+      if (this.#set(value)) upserts.push(value);
+    }
   }
   /** Decision 57 over members: blocked > working > finished > none. */
   #aggregate(
