@@ -1,5 +1,13 @@
 # @otk/protocol
 
+`projectPlacement` is shared by server archive membership and client layout;
+client re-exports it. The pending C3 behavior is unchanged: working/blocked
+removed checkouts stay live, while unknown-repository checkouts have no
+fabricated live parent. `archiveEntityID` uses the native repository ID, or the
+shared unknown-repository sentinel for that disclosure. Archive state comes from
+EntityStates' checkout memberships and changes with their states, forms and
+repository identity; clients do not roll up archive rows.
+
 `ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
 time/counter characters followed by fourteen base62 random characters. Browser
 pending sends and both native prompt fallbacks share this owner and encoding,

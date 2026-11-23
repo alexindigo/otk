@@ -21,6 +21,7 @@ export * from "./paths.ts";
 export * from "./index.ts";
 export * from "./inbox.ts";
 export * from "./entity-state.ts";
+export * from "./project-placement.ts";
 export * from "./supervision.ts";
 export * from "./messages.ts";
 export * from "./models.ts";
