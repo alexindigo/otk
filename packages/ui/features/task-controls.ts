@@ -9,6 +9,7 @@ export function createTaskControls(ports: {
   actions(): TaskActions;
   model(): ClientTabs;
   tasks(): readonly TaskRecord[];
+  project?(): { sidecarId: string; directory: string };
   onEmpty(): boolean;
 }) {
   return {
@@ -20,6 +21,9 @@ export function createTaskControls(ports: {
       return ports.commands.run("dialog.open", {
         id: "task-name",
         input: {
+          key: ports.project
+            ? JSON.stringify([ports.project(), task?.id])
+            : undefined,
           name: task?.name,
           save: async (name: string) => {
             if (task) await actions.rename(task.id, name);

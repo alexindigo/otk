@@ -108,6 +108,13 @@ Deno.test("UI convention: framed composer rows borrow their owner's inline inset
   }
 });
 
+Deno.test("UI convention: informational connection actions keep the shared feedback row", async () => {
+  const source = await Deno.readTextFile(
+    "packages/ui/components/ConnectionStatus.tsx",
+  );
+  assert(source.includes("subgrid={props.subgrid && !!feedback().failure}"));
+});
+
 Deno.test("UI convention: syntax enhancement cannot publish user-action failures in source", async () => {
   const failures = (text: string) =>
     new Source(text).all.flatMap((node) =>

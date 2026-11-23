@@ -293,6 +293,9 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
     name: "Use draft: Before revert",
     exact: true,
   }).click();
+  await expect(input).toHaveValue("Current edited draft");
+  await page.getByRole("button", { name: "Use saved draft", exact: true })
+    .click();
   await expect(input).toHaveValue("Original draft before revert");
 });
 

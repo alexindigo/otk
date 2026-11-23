@@ -153,6 +153,7 @@ export default function ProjectTabs(props: {
     },
     actions: () => props.actions,
     model: () => props.model,
+    project: () => props.project,
     tasks,
     onEmpty: () => props.onEmpty(),
   });

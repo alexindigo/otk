@@ -36,6 +36,18 @@ export class RequestLifetimes {
   #dirty = false;
   #deleted: (id: string) => boolean = () => false;
   constructor(readonly now: () => number = () => performance.now()) {}
+  snapshot(): unknown {
+    return [...this.#records].filter(([, row]) =>
+      row.draft !== undefined || row.dismissed
+    );
+  }
+  restore(value: unknown): void {
+    for (const [key, row] of value as [string, RequestLifetime][]) {
+      // Saved input is custody, not fresh server authority or a new arrival.
+      this.#records.set(key, { ...row, arrivedAt: undefined });
+    }
+    this.#changed();
+  }
   /** When a permission identity first arrived here (per-request grace). */
   arrival(id: string): number | undefined {
     return this.get("permission", id)?.arrivedAt;

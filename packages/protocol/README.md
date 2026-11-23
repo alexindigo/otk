@@ -1,5 +1,24 @@
 # @otk/protocol
 
+## Compatibility and deployments
+
+`PROTOCOL_VERSION` changes only for incompatible wire changes. New optional
+fields and ignorable additive messages do not require a bump while existing
+consumers retain their contract. The optional entity map and ignored entity
+operations in 4b785f13 did not require its 20-to-21 bump; 21 remains unchanged.
+
+An incompatible hello receives
+`{t:"error",code:"protocol",reason:"client-outdated",
+protocol,build}` before a
+normal WebSocket close. `build` identifies the serving OTK release
+(`SIDECAR_VERSION`). The `error`/`protocol` discriminator remains stable for
+already-open older clients. They enter their existing protocol-mismatch path
+instead of network retry. New clients retain input custody and expose
+`OTK was updated` with an application-owned Reload action. Reload checkpoints
+feature-owned unsaved state in tab-local session storage before navigation;
+storage refusal leaves the page and work intact. Restored mutation identities
+resume their original receipt, never become a new send.
+
 `ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
 time/counter characters followed by fourteen base62 random characters. Browser
 pending sends and both native prompt fallbacks share this owner and encoding,

@@ -51,6 +51,61 @@ class Socket {
     });
   }
 }
+Deno.test("incompatible hello and welcome publish OTK was updated with an owner-supplied Reload", async () => {
+  for (
+    const frame of [
+      {
+        t: "error",
+        code: "protocol",
+        reason: "client-outdated",
+        protocol: 999,
+        build: "new-build",
+      },
+      { t: "error", code: "protocol" },
+      { t: "welcome", protocol: 999 },
+    ]
+  ) {
+    const socket = new Socket();
+    let latest: {
+      state: string;
+      error?: string;
+      feedback?: import("../failures.ts").Feedback;
+    } | undefined;
+    let reloads = 0;
+    const connection = new SidecarConnection("http://example.test", {
+      status(state, error, _auth, feedback) {
+        latest = { state, error, feedback };
+      },
+      frame() {},
+    }, {
+      fetcher: bootstrapFetch(),
+      socket: () => socket as unknown as WebSocket,
+      reload: () => {
+        reloads++;
+      },
+    });
+    try {
+      await connection.connect();
+      const pending = connection.requests.start("session.prompt", {
+        sessionID: "tstv1-pending",
+        mode: "normal",
+        parts: [{ kind: "text", text: "kept" }],
+      });
+      socket.open();
+      socket.onmessage!({ data: JSON.stringify(frame) });
+      assertEquals(pending.state.connection, "client-outdated");
+      assertEquals(latest?.state, "client outdated");
+      assertEquals(latest?.error, undefined);
+      assertEquals(latest?.feedback?.text, "OTK was updated");
+      assertEquals(latest?.feedback?.action?.label, "Reload");
+      latest?.feedback?.action?.run();
+      assertEquals(reloads, 1);
+      assertEquals(socket.closed, 1);
+    } finally {
+      connection.stop();
+    }
+  }
+});
 Deno.test("restart 503s at admission and request-events reconnect automatically and renew the request window", async () => {
   const policy = { ...fixtureRequestPolicy, retrybase: 1, retrymax: 2 };
   const sockets: Socket[] = [];
