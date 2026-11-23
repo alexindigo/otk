@@ -1552,6 +1552,18 @@ the same interaction on return.
 
 ## Commands
 
+`CommandHub.control(id, args, {target, shown, unshown, recovery, active?})`
+binds an action's availability and effect to the same registered owner. Each
+activation rechecks availability, joins repeat activation while pending and
+resolves to `shown`, `refused` or `failed`. Success requires the injected
+consumer observation, not just a fulfilled effect. Failure wording is captured
+from the invoking registration before awaiting it. A borrowed `active` lifetime
+fences retired presentations. `subscribe` forwards registry changes without
+retaining the view. Existing direct command ports remain during M6 migration.
+`CommandContext.viewing` distinguishes a presented session from a retained
+selection behind Settings; navigation availability and its observation borrow
+that same input without dropping the selected command scope.
+
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A
 feature registers
 `{ id, name?, aliases?, title, description?, category,

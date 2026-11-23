@@ -117,6 +117,29 @@ for (const scenario of ["lifetime", "source"] as const) {
   });
 }
 
+test("messages.public-ui-action-controls-never-end-silently", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.goto(state.url);
+  const action = (id: string) => page.locator(`[data-action="${id}"]`);
+  const button = (id: string) =>
+    action(id).getByRole("button", { name: id, exact: true });
+  // An owner-observed non-result is a refusal with its reason, in flow.
+  await button("Open unobserved").click();
+  await expect(action("Open unobserved")).toContainText(
+    "The fixture view did not open.",
+  );
+  // A thrown effect is a failure on the control, not a dropped promise.
+  await button("Open failing").click();
+  await expect(action("Open failing").locator(".otk-feedback-status"))
+    .toBeVisible();
+  await expect(button("Open failing")).toBeEnabled();
+  // Unavailable is disabled with its reason; a self-target is not offered.
+  await expect(button("Open closed")).toBeDisabled();
+  await expect(action("Open closed")).toContainText("Server offline");
+  await expect(action("Open self").getByRole("button")).toHaveCount(0);
+});
+
 test("messages.public-ui-external-tools-callbacks-isolation", {
   tag: ["@messages", "@contracts", "@composer"],
 }, async ({ isolatedState: state, page }) => {

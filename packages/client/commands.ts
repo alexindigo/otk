@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { FailureTarget } from "@otk/protocol";
+import {
+  commandFailureFacts,
+  errorFeedback,
+  failureValue,
+} from "./failure-features.ts";
+import type { Feedback } from "./failures.ts";
 import {
   type CommandArguments,
   freezeCommandArguments,
@@ -12,8 +19,12 @@ export interface CommandContext {
   origin?: import("@otk/protocol").RequestOrigin;
   sidecar?: string;
   session?: string;
+  /** False when selection is retained behind another view, such as Settings. */
+  viewing?: boolean;
   focus?: string;
   dialog?: string;
+  /** An explicit action offer must change its target, unlike ordinary re-selection. */
+  transition?: true;
   /** Prevent reentrant text commands from invoking their own input owner. */
   command?: string;
 }
@@ -38,7 +49,19 @@ export interface CommandMetadata {
 export type CommandAvailability = { available: true } | {
   available: false;
   reason: string;
+  /** A transition to the current place is not an offered action. */
+  hidden?: true;
 };
+export type ActionOutcome = { kind: "shown" } | {
+  kind: "refused" | "failed";
+  feedback: Feedback;
+};
+/** The only native action-control input: no separate handler or disabled flag. */
+export interface ActionControl {
+  availability(): CommandAvailability;
+  subscribe(listener: () => void): () => void;
+  run(): Promise<ActionOutcome>;
+}
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   /** Feature-owned context contribution; args are the target's captured data. */
   context?: {
@@ -197,6 +220,66 @@ export class CommandHub {
     context: CommandContext = this.context(),
   ): Promise<R> {
     return await this.#run<R>(id, args, context, false);
+  }
+  /** Bind a control to the command owner and its consumer-observed result.
+   * Legacy run() ports remain for M6 migration; controls cannot infer success
+   * merely from an effect returning without throwing. */
+  control(id: string, args: unknown, options: {
+    target: FailureTarget;
+    /** A borrowed presentation lifetime, not another command registration. */
+    active?(): boolean;
+    shown(): boolean | Promise<boolean>;
+    unshown: string;
+    recovery: string;
+  }): ActionControl {
+    let pending: Promise<ActionOutcome> | undefined;
+    const availability = (): CommandAvailability =>
+      options.active?.() === false
+        ? { available: false, reason: "This action is no longer available." }
+        : this.availability(id, { ...this.context(), transition: true }, args);
+    return {
+      availability,
+      subscribe: (listener) => this.subscribe(listener),
+      run: () => {
+        if (pending) return pending;
+        const facts = {
+          ...commandFailureFacts({ id, title: this.#commands.get(id)?.title }),
+          target: { ...options.target },
+          recovery: options.recovery,
+        };
+        const refuse = (reason: string): ActionOutcome => ({
+          kind: "refused",
+          feedback: errorFeedback(reason, facts)!,
+        });
+        // Reserve before any user code or availability callback can reenter.
+        pending = Promise.resolve().then(async (): Promise<ActionOutcome> => {
+          try {
+            const allowed = availability();
+            if (!allowed.available) return refuse(allowed.reason);
+            const result = await this.run<unknown>(id, args, {
+              ...this.context(),
+              transition: true,
+            });
+            if (result === false || !await options.shown()) {
+              return refuse(options.unshown);
+            }
+            return { kind: "shown" };
+          } catch (cause) {
+            return {
+              kind: "failed",
+              feedback: failureValue(cause, facts) ||
+                errorFeedback(
+                  "The action was cancelled before its result was shown.",
+                  facts,
+                )!,
+            };
+          }
+        }).finally(() => {
+          pending = undefined;
+        });
+        return pending;
+      },
+    };
   }
   async #run<R>(
     id: string,

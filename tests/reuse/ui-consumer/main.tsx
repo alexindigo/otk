@@ -10,6 +10,7 @@ import {
   type ExternalCall,
 } from "@otk/protocol";
 import {
+  ActionButton,
   browserThemeEnvironment,
   Code,
   CommandProvider,
@@ -106,6 +107,57 @@ function ExternalTool(props: ToolProps): Element {
         Open result
       </button>
     </div>
+  );
+}
+/** Every outcome an action control can end in, through the shared owner. */
+function ActionOutcomes(props: { commands: CommandHub }): Element {
+  const register = (
+    id: string,
+    availability: () =>
+      | { available: true }
+      | { available: false; reason: string; hidden?: true },
+    run: () => unknown,
+  ) =>
+    props.commands.register({
+      id,
+      title: id,
+      category: "Consumer",
+      availability,
+      run,
+    });
+  register("Open unobserved", () => ({ available: true }), () => {});
+  register("Open failing", () => ({ available: true }), () => {
+    throw new Error("fixture rejection");
+  });
+  register(
+    "Open closed",
+    () => ({ available: false, reason: "Server offline" }),
+    () => {},
+  );
+  register(
+    "Open self",
+    () => ({ available: false, reason: "Already open", hidden: true }),
+    () => {},
+  );
+  const control = (id: string) =>
+    props.commands.control(id, undefined, {
+      target: { label: id },
+      shown: () => false,
+      unshown: "The fixture view did not open.",
+      recovery: "Choose the fixture again",
+    });
+  return (
+    <section data-action-outcomes>
+      <For
+        each={["Open unobserved", "Open failing", "Open closed", "Open self"]}
+      >
+        {(id) => (
+          <div data-action={id}>
+            <ActionButton action={control(id)}>{id}</ActionButton>
+          </div>
+        )}
+      </For>
+    </section>
   );
 }
 function Consumer(): Element {
@@ -261,6 +313,7 @@ function Consumer(): Element {
         </section>
         <section id="registered" style={{ padding: "1rem" }}>
           <h1>Independent UI registration</h1>
+          <ActionOutcomes commands={commands} />
           <button
             type="button"
             data-light
