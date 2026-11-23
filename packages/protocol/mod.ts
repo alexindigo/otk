@@ -30,6 +30,7 @@ export * from "./preferences.ts";
 export * from "./rpc.ts";
 export * from "./session-tree.ts";
 export * from "./session-hierarchy.ts";
+export * from "./tab-groups.ts";
 export * from "./session-list.ts";
 export * from "./view.ts";
 export * from "./session-id.ts";
