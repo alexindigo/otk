@@ -138,7 +138,65 @@ test("messages.public-ui-action-controls-never-end-silently", {
   await expect(button("Open closed")).toBeDisabled();
   await expect(action("Open closed")).toContainText("Server offline");
   await expect(action("Open self").getByRole("button")).toHaveCount(0);
+  await expect(button("Open late")).toBeDisabled();
+  await page.getByRole("button", { name: "Install action owner", exact: true })
+    .click();
+  await expect(button("Open late")).toBeEnabled();
 });
+
+test(
+  "messages.notification-open-controls-observe-the-view-and-refuse-self-targets",
+  {
+    tag: ["@messages", "@contracts"],
+  },
+  async ({ isolatedState: state, page }) => {
+    const url = new URL(state.url);
+    url.searchParams.set("action-toasts", "");
+    await page.goto(url.href);
+    const toast = (id: string) => page.locator(`.otk-toast[data-note="${id}"]`);
+    await expect(
+      toast("current").getByRole("button", {
+        name: "Open session",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await toast("refused").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(toast("refused")).toContainText(
+      "The requested view did not open.",
+    );
+    await expect(page.locator("[data-toast-view]")).toHaveText("current");
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await expect(
+      toast("other").getByRole("button", { name: "Open session", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Hide session view", exact: true })
+      .click();
+    await expect(page.locator("[data-toast-settings]")).toBeVisible();
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(toast("other")).toContainText(
+      "The requested view did not open.",
+    );
+    await expect(page.locator("[data-toast-view]")).toHaveCount(0);
+    await page.getByRole("button", { name: "Allow session view", exact: true })
+      .click();
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await expect(page.locator("[data-toast-settings]")).toHaveCount(0);
+  },
+);
 
 test("messages.public-ui-external-tools-callbacks-isolation", {
   tag: ["@messages", "@contracts", "@composer"],

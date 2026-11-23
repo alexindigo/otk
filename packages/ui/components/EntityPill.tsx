@@ -1,29 +1,42 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./EntityPill.css" with { type: "text" };
 import Clock from "./Clock.tsx";
-import { Show } from "solid-js";
-import { type EntityFacts, entityTimeValue } from "@otk/client";
+import { createMemo, Show } from "solid-js";
+import {
+  type ActionControl,
+  type EntityFacts,
+  entityTimeValue,
+} from "@otk/client";
 import TimeValue from "./TimeValue.tsx";
 import Popover from "./surface/Popover.tsx";
 import StatusLight from "./StatusLight.tsx";
 import { LIGHT_STATES } from "./status-light.ts";
+import { useCommandPorts } from "../keyboard/context.tsx";
+import ActionButton from "./ActionButton.tsx";
+import { sessionOpenControl } from "./session-open.ts";
 
 /** Data-only shared preview. No session lookup or cross-scope fallback. */
 export default function EntityPill(props: {
   label: string;
   facts: EntityFacts;
-  onOpen?(id: string): void;
+  open?: ActionControl;
 }): import("solid-js").Element {
-  const open = () => {
-    if (props.facts.session.id) props.onOpen?.(props.facts.session.id);
-  };
+  const { commands } = useCommandPorts();
+  const open = createMemo(() =>
+    props.open ??
+      (props.facts.session.id
+        ? sessionOpenControl(
+          commands,
+          props.facts.session.id,
+          props.facts.session.title ?? props.label,
+        )
+        : undefined)
+  );
   const work = () => props.facts.reply ?? props.facts.tool;
   return (
     <Popover
       label={`${props.label} details`}
-      triggerLabel={props.facts.session.id && props.onOpen
-        ? `Open ${props.label} session`
-        : `${props.label} details`}
+      triggerLabel={`${props.label} details`}
       class="otk-entity"
       triggerClass="otk-entity-pill"
       trigger={<span class="otk-control-label">{props.label}</span>}
@@ -31,7 +44,6 @@ export default function EntityPill(props: {
       size="content"
       preview
       pinOnClick
-      onActivate={props.facts.session.id && props.onOpen ? open : undefined}
     >
       <dl class="otk-entity-facts">
         <dt>Agent</dt>
@@ -89,8 +101,10 @@ export default function EntityPill(props: {
           )}
         </Show>
       </dl>
-      <Show when={props.facts.session.id && props.onOpen}>
-        <button type="button" class="otk-pill" onClick={open}>Open</button>
+      <Show when={open()}>
+        {(action) => (
+          <ActionButton action={action()} class="otk-pill">Open</ActionButton>
+        )}
       </Show>
     </Popover>
   );

@@ -82,7 +82,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     <EntityPill
       label={ref.label}
       facts={scopedEntityFacts(session, ref)}
-      onOpen={props.onOpenChild}
     />
   );
   const heading = () => (
@@ -150,7 +149,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                     <EntityPill
                       label={entity().label}
                       facts={scopedEntityFacts(session, entity())}
-                      onOpen={props.onOpenChild}
                     />
                   )}
                 </Show>
@@ -232,7 +230,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                                             session,
                                             entity(),
                                           )}
-                                          onOpen={props.onOpenChild}
                                         />
                                       )}
                                     </Show>

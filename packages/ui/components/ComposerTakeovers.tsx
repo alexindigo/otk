@@ -6,7 +6,6 @@ import { useUiRegistries } from "../registries/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
 import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
-import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
@@ -23,7 +22,6 @@ export default function ComposerTakeovers(
   },
 ): Element {
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
-  const { commands } = useCommandPorts();
   const work = createMemo(() => session.runningWork?.() ?? []);
   const fail = (error: unknown) => session.feedback?.fail(error);
   const available = () => takeovers.available(session.supports);
@@ -71,8 +69,6 @@ export default function ComposerTakeovers(
                 <LiveWork
                   items={work()}
                   owner={session.liveWork}
-                  onOpen={(id) =>
-                    void commands.run("session.child", id).catch(fail)}
                   onError={fail}
                 />
               </span>

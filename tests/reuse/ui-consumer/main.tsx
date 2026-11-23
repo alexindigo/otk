@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createSignal, type Element, For } from "solid-js";
+import { createEffect, createSignal, type Element, For, Show } from "solid-js";
 import { render } from "@solidjs/web";
-import { CommandHub, SidecarConnection } from "@otk/client";
+import { CommandHub, NotificationHub, SidecarConnection } from "@otk/client";
 import {
   booleanPreference,
   type CapabilityName,
@@ -27,6 +27,7 @@ import {
   Prompt,
   registerGenericTool,
   registerOtkThemes,
+  registerToastChannel,
   registerToolPart,
   registerUnknownPart,
   ScrollRegion,
@@ -37,6 +38,7 @@ import {
   StatusLight,
   ThemeEngine,
   ThemeRegistry,
+  Toasts,
   ToolLine,
   ToolOutput,
   type ToolProps,
@@ -149,7 +151,13 @@ function ActionOutcomes(props: { commands: CommandHub }): Element {
   return (
     <section data-action-outcomes>
       <For
-        each={["Open unobserved", "Open failing", "Open closed", "Open self"]}
+        each={[
+          "Open unobserved",
+          "Open failing",
+          "Open closed",
+          "Open self",
+          "Open late",
+        ]}
       >
         {(id) => (
           <div data-action={id}>
@@ -157,7 +165,86 @@ function ActionOutcomes(props: { commands: CommandHub }): Element {
           </div>
         )}
       </For>
+      <button
+        type="button"
+        onClick={() =>
+          register("Open late", () => ({ available: true }), () => {})}
+      >
+        Install action owner
+      </button>
     </section>
+  );
+}
+function ActionToasts(): Element {
+  const [current, setCurrent] = createSignal("current");
+  const [viewing, setViewing] = createSignal(true);
+  let holdView = false;
+  const commands = new CommandHub(() => ({
+    sidecar: "local",
+    session: current(),
+    viewing: viewing(),
+  }));
+  for (const id of ["session.open", "session.preview"]) {
+    commands.register({
+      id,
+      title: "Open session",
+      category: "Test",
+      arguments: { type: "object" },
+      availability: (context, target?: { sessionID: string }) =>
+        id === "session.preview" && context.viewing !== false &&
+          target?.sessionID === current()
+          ? { available: false, reason: "Already open", hidden: true }
+          : { available: true },
+      run: (_context, target: { sessionID: string }) => {
+        if (target.sessionID === "refused") return false;
+        setCurrent(target.sessionID);
+        if (!holdView) setViewing(true);
+      },
+    });
+  }
+  const hub = new NotificationHub(
+    () => ({ channels: ["toast"] }),
+    (id, args) => commands.run(id, args),
+    () => {},
+  );
+  const toast = registerToastChannel(hub);
+  for (const id of ["current", "refused", "other"]) {
+    hub.publish({
+      id,
+      kind: "error",
+      title: `Target ${id}`,
+      dismissOnView: false,
+      actions: [{
+        label: "Open session",
+        command: "session.open",
+        args: { sidecarId: "local", sessionID: id },
+      }],
+    });
+  }
+  return (
+    <CommandProvider commands={commands}>
+      <Show when={viewing()} fallback={<p data-toast-settings>Settings</p>}>
+        <output data-toast-view>{current()}</output>
+      </Show>
+      <button
+        type="button"
+        onClick={() => {
+          holdView = true;
+          setViewing(false);
+        }}
+      >
+        Hide session view
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          holdView = false;
+        }}
+      >
+        Allow session view
+      </button>
+      <Toasts model={toast.model} onMore={() => {}} />
+    </CommandProvider>
   );
 }
 function Consumer(): Element {
@@ -565,7 +652,9 @@ function ScrollbarProbe(): Element {
   );
 }
 render(
-  new URL(location.href).searchParams.has("scrollbars")
+  new URL(location.href).searchParams.has("action-toasts")
+    ? ActionToasts
+    : new URL(location.href).searchParams.has("scrollbars")
     ? ScrollbarProbe
     : new URL(location.href).searchParams.has("source-ownership")
     ? SourceOwnership

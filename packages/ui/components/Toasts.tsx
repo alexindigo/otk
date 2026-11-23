@@ -10,16 +10,20 @@ import {
   Show,
 } from "solid-js";
 import { CloseIcon } from "./ChromeIcons.tsx";
-import { type Note, notificationFailure } from "@otk/client";
+import { type Note, notificationFailure, type Selection } from "@otk/client";
 import type { ToastsModel } from "../features/notify/toast.ts";
 import Toast from "./surface/Toast.tsx";
 import RequestAge from "./RequestAge.tsx";
 import FailureContent from "./FailureContent.tsx";
 import { feedbackState } from "./feedback-state.ts";
 import { nativeAttributes } from "./native-attributes.ts";
+import { useCommandPorts } from "../keyboard/context.tsx";
+import ActionButton from "./ActionButton.tsx";
+import { sessionTargetOpenControl } from "./session-open.ts";
 export default function Toasts(
   props: { model: ToastsModel; detail?(note: Note): Element; onMore(): void },
 ): import("solid-js").Element {
+  const { commands } = useCommandPorts();
   const [items, setItems] = createSignal(props.model.state.items);
   const [limit, setLimit] = createSignal(3);
   const [offset, setOffset] = createSignal(0);
@@ -157,14 +161,31 @@ export default function Toasts(
               <div class="otk-toast-actions">
                 <For each={item().note.actions}>
                   {(action) => (
-                    <button
-                      type="button"
-                      title={action.description}
-                      aria-description={action.description}
-                      onClick={() => void item().delivery.invoke(action)}
+                    <Show
+                      when={action.command === "session.open"}
+                      fallback={
+                        <button
+                          type="button"
+                          title={action.description}
+                          aria-description={action.description}
+                          onClick={() => void item().delivery.invoke(action)}
+                        >
+                          {action.label}
+                        </button>
+                      }
                     >
-                      {action.label}
-                    </button>
+                      <ActionButton
+                        action={sessionTargetOpenControl(
+                          commands,
+                          action.args as Selection,
+                          item().note.title,
+                          item().delivery.current,
+                        )}
+                        title={action.description}
+                      >
+                        {action.label}
+                      </ActionButton>
+                    </Show>
                   )}
                 </For>
                 <button

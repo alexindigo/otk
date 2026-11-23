@@ -128,4 +128,25 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await expect(page.locator(card)).toContainText("1 tool call");
   await expect(page.locator(card)).not.toContainText("1 tool calls");
   await expect(page.locator(card)).toContainText(/\ds/);
+  // Details and navigation are separate actions. The shared Open control must
+  // show the actual helper, not only settle its navigation callback.
+  const helperPill = page.locator(
+    '[data-tool=task]:has(.otk-tool-brief[title="Second inspection"]) .otk-entity-pill',
+  ).first();
+  await revealAcquired(
+    page,
+    '[data-tool=task]:has(.otk-tool-brief[title="Second inspection"])',
+  );
+  await helperPill.click();
+  const entityCard = page.locator(".otk-entity:has(.otk-entity-facts:visible)");
+  await expect(entityCard).toContainText("Session");
+  await entityCard.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${second.id}$`));
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Second child completed.",
+  );
+  await page.locator(".otk-subagent-bar button").first().click();
+  await expect(page.locator("textarea[name=prompt]")).toHaveValue(
+    "Unsent parent work",
+  );
 });

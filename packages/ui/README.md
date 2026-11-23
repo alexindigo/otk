@@ -21,6 +21,14 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`ActionButton` renders one client action control: live availability, pending
+state and in-flow refusal/failure feedback. It takes no independent handler or
+disabled input. Registry changes refresh mounted controls; teardown releases the
+subscription. Explicit entity, task, live-work and notification Open offers
+borrow the guarded session command and observe the selected server/session.
+Self-target offers are hidden as Already open; ordinary row re-selection remains
+available. The entity pill itself pins its details instead of navigating.
+
 Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. A
 component's stylesheet owns its internal classes; a consumer uses public props,
 class slots or its own grid track, never a selector reaching into a child. The

@@ -16,16 +16,19 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
+import { useCommandPorts } from "../keyboard/context.tsx";
+import ActionButton from "./ActionButton.tsx";
+import { sessionOpenControl } from "./session-open.ts";
 
 /** One quiet control; data and actions belong to the session composition. */
 export default function LiveWork(props: {
   items: readonly RunningWork[];
-  onOpen(id: string): void;
   owner?: LiveWorkOwner;
   onError(error: unknown): void;
 }): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
   const session = useOptionalSessionPorts();
+  const { commands } = useCommandPorts();
   const sidecar = session?.failureTarget?.().sidecarId;
   const [revision, setRevision] = createSignal(0);
   onSettled(() =>
@@ -39,10 +42,6 @@ export default function LiveWork(props: {
   let popover: PopoverControl | undefined;
   const stopClock = () => clearInterval(timer);
   onCleanup(stopClock);
-  const open = (id: string) => {
-    popover?.close();
-    props.onOpen(id);
-  };
   const stop = async (item: RunningWork) => {
     try {
       await props.owner?.stop(item.id);
@@ -88,9 +87,6 @@ export default function LiveWork(props: {
                 }]}
                 role="listitem"
                 data-running-work={item().id}
-                onClick={() => {
-                  if (item().kind === "helper") open(item().sessionID);
-                }}
               >
                 <StatusLight
                   small
@@ -110,7 +106,6 @@ export default function LiveWork(props: {
                     facts={scopedEntityFacts(session, {
                       sessionID: item().sessionID,
                     })}
-                    onOpen={item().kind === "helper" ? open : undefined}
                   />
                 </span>
                 <Show
@@ -124,18 +119,19 @@ export default function LiveWork(props: {
                     </span>
                   }
                 >
-                  <button
-                    type="button"
+                  <ActionButton
+                    action={sessionOpenControl(
+                      commands,
+                      item().sessionID,
+                      item().title,
+                    )}
                     class="otk-live-work-open otk-live-work-title otk-control-label"
-                    aria-label={`Open ${item().label}: ${item().title}`}
+                    label={`Open ${item().label}: ${item().title}`}
                     title={item().title}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      open(item().sessionID);
-                    }}
+                    onShown={() => popover?.close()}
                   >
                     {item().title}
-                  </button>
+                  </ActionButton>
                 </Show>
                 <ChromeMeta
                   class="otk-live-work-elapsed"
