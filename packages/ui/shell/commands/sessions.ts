@@ -5,7 +5,8 @@ export function registerSessionCommands(commands: CommandHub, actions: {
   available(input?: { sidecarId: string; directory: string }): boolean;
   create(input?: { sidecarId: string; directory: string }): Promise<void>;
   open(input: Selection): void;
-  child(id: string): void;
+  /** False when guarded navigation refused the transition. */
+  child(id: string): boolean;
   older(): Promise<void>;
   retry(): Promise<void>;
 }): () => void {

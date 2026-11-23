@@ -1037,6 +1037,21 @@ Deno.test("shell navigation confirms and clears dirty owners only on selection c
   assertEquals(f.guard.dirty("permissions"), false);
   f.stop();
 });
+Deno.test("child navigation reports a declined guard instead of settling silently", () => {
+  const f = fixture();
+  f.entries("local", [shellEntry("tstv1-selected"), shellEntry("tstv1-other")]);
+  assert(
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-selected" }),
+  );
+  f.guard.mark("permissions", true);
+  f.consent(false);
+  assertEquals(f.navigation.openChild("tstv1-other"), false);
+  assertEquals(f.location.hash, "#/local/tstv1-selected");
+  f.consent(true);
+  assertEquals(f.navigation.openChild("tstv1-other"), true);
+  assertEquals(f.location.hash, "#/local/tstv1-other");
+  f.stop();
+});
 Deno.test("shell navigation normalizes roots and same-session reselection visits without another push", async () => {
   const f = fixture();
   f.entries("local", [
