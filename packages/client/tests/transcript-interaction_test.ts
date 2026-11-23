@@ -33,3 +33,40 @@ Deno.test("disclosure notifications target only changed keys and reveal ancestry
   interaction.reveal(["a"]);
   assertEquals(seen, []);
 });
+
+Deno.test("work intent survives a remount with a newly admitted prefix", () => {
+  const owner = createTranscriptInteraction();
+  owner.workDisclosure("reply", ["edit"]).set(true);
+  const mounted = owner.workDisclosure("reply", ["reasoning", "edit"]);
+  assertEquals(mounted.expanded("work"), true);
+  assertEquals(
+    owner.workDisclosure("other-reply", ["edit"]).expanded("work"),
+    false,
+  );
+  assertEquals(
+    owner.workDisclosure("reply", ["unrelated"]).expanded("work"),
+    false,
+  );
+  mounted.set(false);
+  assertEquals(
+    owner.workDisclosure("reply", ["edit"]).expanded("work", {
+      expandWork: true,
+    }),
+    false,
+  );
+});
+
+Deno.test("work intent can precede the first viewer and is not inherited by a reused native part", () => {
+  const owner = createTranscriptInteraction();
+  const early = owner.workDisclosure("reply", ["edit"]);
+  early.set(true);
+  const first = owner.workDisclosure("reply", ["reasoning", "edit"]);
+  assertEquals(first.expanded("work"), true);
+  owner.retireIdentity("edit");
+  early.set(true);
+  assertEquals(owner.workDisclosure("reply", ["edit"]).expanded("work"), false);
+  assertEquals(
+    owner.workDisclosure("reply", ["reasoning"]).expanded("work"),
+    true,
+  );
+});

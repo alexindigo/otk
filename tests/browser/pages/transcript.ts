@@ -87,10 +87,12 @@ export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
         }[aria-expanded="false"]`;
     });
     if (!selector) break;
-    await revealAcquired(page, selector);
+    // This selector describes a currently closed projection, not a published
+    // record. If it leaves the range while measuring, rescan the live groups.
+    if (!await revealMounted(page, selector)) continue;
     // Once acquired, settlement belongs to this exact control. Re-querying a
     // closed-control selector would observe its successor instead of the click.
-    const control = await page.locator(selector).first().elementHandle();
+    const control = await page.$(selector);
     if (!control) continue;
     try {
       await control.evaluate((button) => (button as HTMLElement).click());
@@ -389,11 +391,19 @@ export async function runNativeTool(
 
 /** Join publication, disclose identity-owned ancestry, then measured scrolling. */
 export async function revealAcquired(page: Page, selector: string) {
+  await revealMeasured(page, selector, true);
+}
+
+async function revealMounted(page: Page, selector: string) {
+  return await revealMeasured(page, selector, false);
+}
+
+async function revealMeasured(page: Page, selector: string, required: boolean) {
   const identity =
     /\[data-(message|native-record|tool)(\^?=)(?:"([^"]+)"|'([^']+)'|([^\]]+))\]/
       .exec(selector);
   let messageID: string | undefined;
-  if (identity) {
+  if (required && identity) {
     await expect.poll(async () => {
       const publishedID = await page.evaluate(
         ({ kind, prefix, value, selector }) => {
@@ -561,6 +571,7 @@ export async function revealAcquired(page: Page, selector: string) {
   };
   let state = await probe();
   while (state.disclosed) state = await probe();
+  if (!required && state.delta === undefined) return false;
   if (state.delta === undefined) {
     // Estimated extents can grow while nested sources materialize.
     await scrollTranscript(page, false);
@@ -578,13 +589,16 @@ export async function revealAcquired(page: Page, selector: string) {
   if (Math.abs(state.delta) >= 1) await wheelTranscript(page, state.delta);
   await expect.poll(async () => {
     state = await probe();
-    return state.delta === undefined ? Infinity : Math.abs(state.delta);
+    return state.delta === undefined
+      ? required ? Infinity : 0
+      : Math.abs(state.delta);
   }).toBeLessThan(1).catch((cause) => {
     throw new Error(
       "Measured reveal did not settle: " + JSON.stringify(state),
       { cause },
     );
   });
+  return state.delta !== undefined;
 }
 
 const v2 = (state: TestState) =>

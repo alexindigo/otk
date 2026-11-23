@@ -138,6 +138,27 @@ export function retainedDisclosure(
     choice.set(open);
   }] as const;
 }
+
+/** Work membership may change without changing the reader's disclosure intent. */
+export function retainedWorkDisclosure(
+  scope: string,
+  records: () => readonly string[],
+  prefs: () => Partial<Preferences>,
+  required: () => boolean,
+) {
+  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
+  const [revision, setRevision] = createSignal(0);
+  onCleanup(interaction.subscribeWork(scope, () => setRevision((n) => n + 1)));
+  const choice = () => interaction.workDisclosure(scope, records());
+  return [
+    () => {
+      revision();
+      return choice().expanded("work", prefs(), required());
+    },
+    (open: boolean) => choice().set(open),
+  ] as const;
+}
+
 const key = (identity: ContentIdentity) =>
   JSON.stringify([
     identity.sidecarId,

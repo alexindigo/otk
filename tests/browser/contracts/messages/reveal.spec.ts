@@ -130,6 +130,29 @@ test("messages.work-reveal-survives-virtual-segment-replacement", {
   );
 });
 
+test("messages.work-reveal-reacquires-a-retired-disclosure", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><button class="otk-record-group-toggle" aria-expanded="false">Temporary Activity</button><article data-message="reply" hidden><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Work log</button></article></div>`,
+  );
+  await page.evaluate(() => {
+    const ready = document.fonts.ready;
+    Object.defineProperty(document.fonts, "ready", {
+      get() {
+        document.querySelector(".otk-record-group-toggle")?.remove();
+        document.querySelector("article")!.hidden = false;
+        return ready;
+      },
+    });
+  });
+  await openWorkLogs(page);
+  await expect(page.getByRole("button", { name: "Work log" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+});
+
 test("messages.compaction-summary-reveal-opens-published-ancestry", {
   tag: ["@messages", "@contracts"],
 }, async ({ page, isolatedState: state }) => {
