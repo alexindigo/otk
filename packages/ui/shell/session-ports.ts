@@ -4,16 +4,17 @@ import {
   type ClientTabs,
   createLiveWork,
   entityFacts,
-  inboxStatus,
+  lamp,
+  liveWork as entityLiveWork,
   loadHistory,
-  runningWork,
   type Selection,
   type ServerResources,
   type SessionActions,
-  supervisionStatus,
 } from "@otk/client";
 import {
   belongsToSession,
+  derivedValue,
+  entityKey,
   type PermissionRequest,
   type Preferences,
 } from "@otk/protocol";
@@ -32,19 +33,25 @@ export function sessionPorts(o: {
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
+  const entities = () => resources.inbox(target.sidecarId).entities;
   const liveWork = createLiveWork({
-    items: () => {
-      const tabs = o.tabs?.();
-      return tabs
-        ? runningWork({
-          tabs,
-          inbox: resources.inbox(target.sidecarId).state.inbox,
-          sessionID: target.sessionID,
-          entry: (id) => resources.entry(target.sidecarId, id),
-          connected: resources.linked(target.sidecarId),
-        })
-        : [];
-    },
+    items: () =>
+      (entityLiveWork(entities(), entityKey("session", target.sessionID)) ?? [])
+        .flatMap((item) =>
+          item.kind === "execution" ? [] : [{
+            ...item,
+            id: `${item.kind}/${item.id}`,
+            kind: item.kind,
+            sessionID: item.kind === "helper" ? item.id : target.sessionID,
+            ...(item.kind === "helper"
+              ? {
+                label: derivedValue(
+                  resources.entry(target.sidecarId, item.id)?.digest.last,
+                )?.agent ?? item.label,
+              }
+              : {}),
+          }]
+        ),
     stopHelper: () =>
       resources.linked(target.sidecarId) &&
         resources.declares(target.sidecarId, "prompt")
@@ -84,22 +91,25 @@ export function sessionPorts(o: {
     }),
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
+    entities,
+    workEntityKey: () => {
+      const tabs = o.tabs?.(), selected = tabs?.state.selected;
+      return tabs && selected
+        ? tabs.tabEntityKey({
+          id: selected.id,
+          kind: selected.kind === "task" ? "task" : "phantom",
+        })
+        : entityKey("session", target.sessionID);
+    },
     entityFacts: (identity) =>
       entityFacts(identity, {
+        entities: entities(),
         session: (id) => ({
           title: resources.entry(target.sidecarId, id)?.title,
-          status: supervisionStatus(
-            id,
-            resources.inbox(target.sidecarId).state.inbox,
-          ),
         }),
       }),
-    status: (id) => {
-      const entry = resources.entry(target.sidecarId, id);
-      return entry
-        ? inboxStatus(entry, resources.inbox(target.sidecarId).state.inbox)
-        : supervisionStatus(id, resources.inbox(target.sidecarId).state.inbox);
-    },
+    status: (id) =>
+      lamp(entities(), entityKey("session", id), { now: performance.now() }),
     location: (id) => actions.location(target, id),
     liveWork,
     delivery: actions.delivery(target),

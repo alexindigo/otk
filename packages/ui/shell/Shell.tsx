@@ -56,7 +56,8 @@ import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
 import type { SessionContextTarget } from "../features/session-context.ts";
 import DeletedSession from "../components/DeletedSession.tsx";
-import { deletedFacts } from "@otk/client";
+import { deletedFacts, sessionEvidence } from "@otk/client";
+import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
 import { AttentionProvider } from "../registries/attention.tsx";
 import { attentionPresentation } from "../state/attention-grace.ts";
@@ -781,16 +782,24 @@ export default function Shell(
                               branchHistory={branchHistory}
                               strip={revert.strip(session.state.content)}
                               busy={!!session.state.selection &&
-                                ["busy", "retry"].includes(
-                                  entry(
+                                !!sessionEvidence(
+                                  resources.inbox(
                                     session.state.selection.sidecarId,
+                                  ).entities,
+                                  entityKey(
+                                    "session",
                                     session.state.selection.sessionID,
-                                  )?.status ?? "",
-                                )}
+                                  ),
+                                )?.work}
                               retryState={session.state.selection
-                                ? entry(
-                                  session.state.selection.sidecarId,
-                                  session.state.selection.sessionID,
+                                ? sessionEvidence(
+                                  resources.inbox(
+                                    session.state.selection.sidecarId,
+                                  ).entities,
+                                  entityKey(
+                                    "session",
+                                    session.state.selection.sessionID,
+                                  ),
                                 )?.retry
                                 : undefined}
                               child={!!session.state.selection?.rootID ||

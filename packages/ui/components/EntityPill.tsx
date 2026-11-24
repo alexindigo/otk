@@ -4,16 +4,21 @@ import Clock from "./Clock.tsx";
 import { createMemo, Show } from "solid-js";
 import {
   type ActionControl,
+  createEntityStateStore,
   type EntityFacts,
   entityTimeValue,
+  label,
+  lamp,
 } from "@otk/client";
+import { entityKey } from "@otk/protocol";
 import TimeValue from "./TimeValue.tsx";
 import Popover from "./surface/Popover.tsx";
 import StatusLight from "./StatusLight.tsx";
-import { LIGHT_STATES } from "./status-light.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import ActionButton from "./ActionButton.tsx";
 import { sessionOpenControl } from "./session-open.ts";
+
+const absent = createEntityStateStore({ read: () => undefined });
 
 /** Data-only shared preview. No session lookup or cross-scope fallback. */
 export default function EntityPill(props: {
@@ -33,6 +38,12 @@ export default function EntityPill(props: {
         : undefined)
   );
   const work = () => props.facts.reply ?? props.facts.tool;
+  const state = () =>
+    lamp(
+      props.facts.session.entities ?? absent,
+      entityKey("session", props.facts.session.id ?? ""),
+      { now: performance.now() },
+    );
   return (
     <Popover
       label={`${props.label} details`}
@@ -89,13 +100,20 @@ export default function EntityPill(props: {
             </>
           )}
         </Show>
-        <Show when={props.facts.session.status}>
-          {(status) => (
+        <Show when={props.facts.session.id}>
+          {(_id) => (
             <>
               <dt>Session now</dt>
               <dd class="otk-entity-status">
-                <StatusLight state={status()} small />
-                {LIGHT_STATES[status()].label}
+                <StatusLight
+                  state={lamp(
+                    props.facts.session.entities ?? absent,
+                    entityKey("session", props.facts.session.id ?? ""),
+                    { now: performance.now() },
+                  )}
+                  small
+                />
+                {label(state())}
               </dd>
             </>
           )}

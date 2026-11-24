@@ -56,6 +56,10 @@ export interface EntityStateStore {
    * deadline. */
   readonly revision: number;
   subscribe(listener: (transition: EntityTransition) => void): () => void;
+  /** Evidence and stale changes, including changes with no lamp transition. */
+  observeChanges(
+    listener: (keys: readonly string[] | "all") => void,
+  ): () => void;
   stop(): void;
 }
 
@@ -76,6 +80,7 @@ export function createEntityStateStore(o: {
   /** Last observed state and its receipt time per key: transition memory. */
   const known = new Map<string, { state: ProjectStatus; since: number }>();
   const listeners = new Set<(transition: EntityTransition) => void>();
+  const observers = new Set<(keys: readonly string[] | "all") => void>();
   let stale = false, stopped = false, timer: unknown;
   const arrival = (id: string) => o.arrival?.(id);
   const read = (k: string) => o.read()?.[k];
@@ -138,6 +143,7 @@ export function createEntityStateStore(o: {
       }
       bump();
       schedule();
+      for (const observer of observers) observer(keys);
       for (const transition of transitions) {
         for (const listener of listeners) listener(transition);
       }
@@ -146,6 +152,7 @@ export function createEntityStateStore(o: {
       if (stale === value) return;
       stale = value;
       bump();
+      for (const observer of observers) observer("all");
     },
     get(k) {
       void store.state.revision;
@@ -166,10 +173,17 @@ export function createEntityStateStore(o: {
         listeners.delete(listener);
       };
     },
+    observeChanges(listener) {
+      observers.add(listener);
+      return () => {
+        observers.delete(listener);
+      };
+    },
     stop() {
       stopped = true;
       clock.clear(timer);
       listeners.clear();
+      observers.clear();
     },
   };
 }

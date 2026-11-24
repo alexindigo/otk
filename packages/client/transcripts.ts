@@ -98,6 +98,7 @@ export function createTranscripts(o: {
   factory?: StateFactory;
   clock?: TranscriptClock;
   changes?(server: string): IndexChanges | undefined;
+  entities?(server: string): import("./entity-state.ts").EntityStateStore;
 }): TranscriptsOwner {
   const clock = o.clock ?? systemClock;
   const resources = new Map<
@@ -199,6 +200,7 @@ export function createTranscripts(o: {
           (run, signal) => acquire(target, run, signal),
           o.factory ?? createState,
           () => policy(target.sidecarId),
+          o.entities?.(target.sidecarId),
         ),
       };
       resources.set(key(target), value);

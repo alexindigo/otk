@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import {
+  createEntityStateStore,
   createTabs,
   entityFacts,
   inboxStatus,
+  lamp,
   NotificationTriggers,
   unread,
 } from "@otk/client";
@@ -31,14 +33,6 @@ Deno.test("delivered helper shares unseen across rollup, name, family, navigatio
   };
   assertEquals(unread(helper, inbox), false);
   assertEquals(inboxStatus(helper, inbox), "none");
-  assertEquals(
-    entityFacts({ sessionID: "helper" }, {
-      session: (id) => ({
-        status: inboxStatus(id === "helper" ? helper : root, inbox),
-      }),
-    }).session.status,
-    "none",
-  );
   const summaries = new ProjectSummaries(
     () => ({ seen: 0, finish: 100 }),
     () => {},
@@ -52,6 +46,19 @@ Deno.test("delivered helper shares unseen across rollup, name, family, navigatio
     authority: "current",
   }]);
   summaries.entry(helper);
+  const entities = createEntityStateStore({
+    read: () => Object.fromEntries(summaries.states.values()),
+  });
+  assertEquals(
+    lamp(
+      entityFacts({ sessionID: "helper" }, { session: () => ({}), entities })
+        .session.entities!,
+      "session:helper",
+      { now: 0 },
+    ),
+    "none",
+  );
+  entities.stop();
   assertEquals(summaries.values.get("/p")?.unseenCount, 0);
   const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({ directory: "/p", entries: [root, helper], inbox });

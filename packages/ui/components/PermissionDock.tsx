@@ -297,6 +297,7 @@ function RequestDock(
         notice={props.notice}
         title={
           <TakeoverHeader
+            entityKey={`session:${props.request.sessionID}`}
             title={props.request.detail.kind === "bash"
               ? "Run this command?"
               : "Allow this action?"}

@@ -5,6 +5,7 @@ import type {
   DirectoryCatalogLease,
   EntityFacts,
   EntityIdentity,
+  EntityStateStore,
   FeedbackOwner,
   FrecencyCatalogLease,
   InboxRpc,
@@ -49,6 +50,8 @@ export interface SessionPorts {
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
   entityFacts?(identity: EntityIdentity): EntityFacts;
+  entities?(): EntityStateStore;
+  workEntityKey?(): string;
   status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
