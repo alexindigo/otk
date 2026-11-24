@@ -7,6 +7,7 @@ import {
   createServerResources,
   createSessionActions,
   emptyContent,
+  lamp,
   SidecarConnection,
   type SidecarsState,
 } from "@otk/client";
@@ -200,6 +201,7 @@ Deno.test("session ports capture target once while capability and resource gette
   assertEquals(ports.questions(), []);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
   const inbox = resources.inbox("local");
+  state.list[0].status = "connected";
   const facts = () =>
     ports.entityFacts!({
       sessionID: "unleased",
@@ -207,6 +209,7 @@ Deno.test("session ports capture target once while capability and resource gette
       timing: { state: "known", start: 100, end: 2100, workingMs: 2000 },
       outcomeTime: { state: "known", at: 2200, source: "completed" },
     });
+  const historicalCard = facts();
   for (
     const [generation, activity] of [["first", "working"], [
       "reconnected",
@@ -226,11 +229,27 @@ Deno.test("session ports capture target once while capability and resource gette
         pathTemplates: [],
         seen: {},
         finishes: {},
-        supervision: { unleased: { state: activity, terminal: 0 } },
+        entities: {
+          "session:unleased": {
+            kind: "session",
+            id: "unleased",
+            state: activity,
+            previous: "none",
+            counts: {
+              working: Number(activity === "working"),
+              blocked: 0,
+              finished: 0,
+              unseen: 0,
+            },
+          },
+        },
       },
     });
     assertEquals(ports.entry("unleased"), undefined);
-    assertEquals(facts().session.status, activity);
+    assertEquals(
+      lamp(historicalCard.session.entities!, "session:unleased", { now: 0 }),
+      activity,
+    );
     assertEquals(facts().reply?.working.value, 2000);
     assertEquals(facts().reply?.completed.value, 2200);
   }

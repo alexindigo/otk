@@ -141,7 +141,7 @@ export default function SessionView(props: {
   branchHistory?: import("@otk/client").BranchHistory;
   strip?: import("@otk/client").RevertStrip;
   busy: boolean;
-  retryState?: { attempt: number; message: string; next: number };
+  retryState?: { attempt: number; message?: string; next?: number };
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
@@ -794,13 +794,19 @@ export default function SessionView(props: {
                               <strong>
                                 Retrying · attempt {retry().attempt}
                               </strong>
-                              <p title={retry().message}>{retry().message}</p>
-                              <span>
-                                Next attempt in {Math.max(
-                                  0,
-                                  Math.ceil((retry().next - now()) / 1000),
-                                )}s
-                              </span>
+                              <Show when={retry().message}>
+                                {(message) => (
+                                  <p title={message()}>{message()}</p>
+                                )}
+                              </Show>
+                              <Show when={retry().next !== undefined}>
+                                <span>
+                                  Next attempt in {Math.max(
+                                    0,
+                                    Math.ceil((retry().next! - now()) / 1000),
+                                  )}s
+                                </span>
+                              </Show>
                             </div>
                           )}
                         </Show>

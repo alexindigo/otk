@@ -7,7 +7,12 @@ import {
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import type { AssistantMessage, HelperSummary } from "@otk/protocol";
 import { createTranscriptProjection } from "../transcript-projection.ts";
-import { createIndex, createTranscripts, SidecarConnection } from "@otk/client";
+import {
+  createEntityStateStore,
+  createIndex,
+  createTranscripts,
+  SidecarConnection,
+} from "@otk/client";
 import {
   fixtureMessagePolicy,
   fixturePage,
@@ -42,10 +47,28 @@ const linked = (): AssistantMessage => ({
   parts: [task("one"), task("two")],
 });
 
-Deno.test("metadata-only idle publishes final pending state to the transcript consumer", async () => {
+Deno.test("entity work retirement publishes final pending state without another body read", async () => {
   const index = createIndex(),
     initial = { ...shellEntry("tstv1-parent"), status: "busy" as const };
   index.receive("server", { t: "index.snapshot", rev: 0, entries: [initial] });
+  let work = true;
+  const entities = createEntityStateStore({
+    read: () => ({
+      [`session:${initial.id}`]: {
+        kind: "session",
+        id: initial.id,
+        state: work ? "working" : "none",
+        previous: "none",
+        counts: { working: Number(work), blocked: 0, finished: 0, unseen: 0 },
+        evidence: {
+          work,
+          permissions: 0,
+          questions: 0,
+          descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+        },
+      },
+    }),
+  });
   const requests: Extract<ClientFrame, { t: "request" }>[] = [];
   const connection = new SidecarConnection("http://example.test", {
     status() {},
@@ -60,6 +83,7 @@ Deno.test("metadata-only idle publishes final pending state to the transcript co
     connection: () => connection,
     entry: (server, id) => index.get(server, id),
     changes: (server) => index.changes(server),
+    entities: () => entities,
   });
   const target = { sidecarId: "server", sessionID: initial.id };
   try {
@@ -98,6 +122,13 @@ Deno.test("metadata-only idle publishes final pending state to the transcript co
     };
     index.receive("server", frame);
     owner.receive("server", frame, true);
+    assertEquals(
+      transcript.state.repliesByID.u.pending,
+      true,
+      "D62: metadata idle cannot override positive owner evidence",
+    );
+    work = false;
+    entities.observe([`session:${initial.id}`], "live");
     assertEquals(seen.at(-1), false);
     assertEquals(
       requests.filter((f) => f.method === "session.messages").length,
@@ -106,6 +137,7 @@ Deno.test("metadata-only idle publishes final pending state to the transcript co
     stop();
   } finally {
     owner.stop();
+    entities.stop();
     connection.stop();
   }
 });

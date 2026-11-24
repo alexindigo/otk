@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorFeedback, type Feedback, type SidecarState } from "@otk/client";
+import {
+  type ConnectionInput,
+  errorFeedback,
+  type Feedback,
+} from "@otk/client";
 
-export type ConnectionInput = Pick<
-  SidecarState,
-  "label" | "status" | "harness" | "error" | "feedback"
->;
+export {
+  type ConnectionInput,
+  type ConnectionLightState,
+  connectionState,
+} from "@otk/client";
 export const CONNECTION_STATES = {
   updated: { label: "OTK was updated", shape: "retry" },
   connected: { label: "Connected", shape: "check" },
@@ -13,30 +18,6 @@ export const CONNECTION_STATES = {
   disconnected: { label: "Disconnected", shape: "circle" },
   error: { label: "Connection error", shape: "cross" },
 } as const;
-export type ConnectionLightState = keyof typeof CONNECTION_STATES;
-
-/** Both links must be healthy. Session work/attention never enters this owner. */
-export function connectionState(
-  connection?: ConnectionInput,
-): ConnectionLightState {
-  if (!connection) return "disconnected";
-  if (
-    connection.status === "client outdated" ||
-    connection.status === "protocol mismatch"
-  ) return "updated";
-  if (
-    connection.error || connection.status === "login required" ||
-    connection.status === "setup required"
-  ) return "error";
-  if (
-    connection.status === "reconnecting" ||
-    connection.harness === "reconnecting"
-  ) return "reconnecting";
-  if (connection.status === "connected" && connection.harness === "connected") {
-    return "connected";
-  }
-  return "connecting";
-}
 export function connectionLabel(connection?: ConnectionInput): string {
   return connection
     ? `${connection.label}: ${connection.status}; agent service ${connection.harness}${

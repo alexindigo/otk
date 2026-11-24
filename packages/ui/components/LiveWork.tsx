@@ -2,11 +2,14 @@
 import "./LiveWork.css" with { type: "text" };
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import {
+  createEntityStateStore,
+  lamp,
   type RunningWork,
   runningWorkElapsed,
   runningWorkLabel,
   unknownTime,
 } from "@otk/client";
+import { entityKey } from "@otk/protocol";
 import TimeValue from "./TimeValue.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -15,10 +18,12 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import Popover from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
+const absent = createEntityStateStore({ read: () => undefined });
 
 /** Shell work only. D67's sub-session inventory has one separate Menu view. */
 export default function LiveWork(props: { items: readonly RunningWork[] }) {
   const session = useOptionalSessionPorts();
+  const entities = () => session?.entities?.() ?? absent;
   const shells = () => props.items.filter((item) => item.kind === "shell");
   const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -41,7 +46,15 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
         onClose={stop}
         trigger={
           <>
-            <StatusLight small state="working" />
+            <StatusLight
+              small
+              state={lamp(
+                entities(),
+                session?.workEntityKey?.() ??
+                  entityKey("session", session?.sessionID() ?? ""),
+                { now: performance.now() },
+              )}
+            />
             <ChromeMeta class="otk-control-label">
               {runningWorkLabel(shells())}
             </ChromeMeta>

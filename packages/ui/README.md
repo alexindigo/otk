@@ -1650,6 +1650,13 @@ lamp state. `LIGHT_STATES` owns the public state inventory and `LightState`
 derives from its keys; galleries enumerate that mapping instead of maintaining a
 second inventory.
 
+EntityPill borrows the live entity handle carried by the shared scoped-facts
+binding, including historical records and unleased sessions. TakeoverHeader
+receives the asking session/project key, not the selected parent's state.
+LiveWork reads owner evidence and paints its task trigger and own-session items
+through the same selector. The client owns `connectionState`; connection chrome
+only supplies labels and shapes for it.
+
 The shell's `AttentionProvider` binds the shared client grace owner to accepted
 permission evidence/content and system reduced motion plus Animations off.
 Composer permission takeovers and permission notifications wait 500 ms; scoped

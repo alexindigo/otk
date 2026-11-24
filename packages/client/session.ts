@@ -115,6 +115,7 @@ export function createSession(
   ) =>
     | { directory: DirectoryCatalogLease; frecency: FrecencyCatalogLease }
     | undefined,
+  entities?: (server: string) => import("./entity-state.ts").EntityStateStore,
 ): ClientSession {
   const store = factory<SessionState>({
     content: emptyContent(),
@@ -135,6 +136,7 @@ export function createSession(
     entry,
     factory,
     changes: metadataChanges,
+    entities,
   });
   let selected: Selection | undefined, resource: TranscriptOwner | undefined;
   let release: (() => void) | undefined,

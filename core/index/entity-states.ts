@@ -294,7 +294,6 @@ export class EntityStates {
       const operation = this.#operations.get(entry.id);
       const state = rollupStatus(this.supervision.status(verdict), operation);
       const counts = own(state, verdict.unseen === true);
-      const before = this.#own.get(entry.id);
       this.#own.set(entry.id, counts);
       const value = this.#session(entry, verdict, state, counts, operation);
       if (value.cause === "permission") {
@@ -305,9 +304,9 @@ export class EntityStates {
         );
       } else this.#graced.delete(entry.id);
       if (this.#set(value)) upserts.push(value);
-      if (moved || JSON.stringify(before) !== JSON.stringify(counts)) {
-        this.#ancestors(entry.id, upserts);
-      }
+      // Helper title, live-work and retry evidence may change without a count
+      // change. Refresh only this family's ancestors, not the catalog.
+      this.#ancestors(entry.id, upserts);
     }
     this.#contribute(entry.id, contribution, upserts);
     if (upserts.length || removals.length) this.publish(upserts, removals);
@@ -497,13 +496,26 @@ export class EntityStates {
     const current = this.#states.get(entityKey("session", id));
     if (!current?.evidence) return;
     const descendants = this.#descendants(id);
+    const liveWork = [
+      ...(current.evidence.liveWork ?? []).filter((item) =>
+        item.kind !== "helper"
+      ),
+      ...this.#helpers(id),
+    ];
     if (
       JSON.stringify(descendants) ===
-        JSON.stringify(current.evidence.descendants)
+        JSON.stringify(current.evidence.descendants) &&
+      JSON.stringify(liveWork) ===
+        JSON.stringify(current.evidence.liveWork ?? [])
     ) return;
+    const { liveWork: _previousWork, ...evidence } = current.evidence;
     const value = {
       ...current,
-      evidence: { ...current.evidence, descendants },
+      evidence: {
+        ...evidence,
+        descendants,
+        ...(liveWork.length ? { liveWork } : {}),
+      },
     };
     this.#states.set(entityKey("session", id), value);
     upserts.push(value);
@@ -520,6 +532,27 @@ export class EntityStates {
       sum.unseen += counts.unseen;
     }
     return sum;
+  }
+  #helpers(id: string): NonNullable<SessionEvidence["liveWork"]> {
+    return [...this.family.descendants(id)].flatMap((child) => {
+      if (child === id) return [];
+      const value = this.#states.get(entityKey("session", child));
+      if (!value?.evidence?.work) return [];
+      const metadata = this.family.getMetadata(child);
+      const startedAt = value.evidence.liveWork?.find((item) =>
+        item.kind === "execution"
+      )?.startedAt;
+      return [{
+        id: child,
+        kind: "helper" as const,
+        label: "Helper",
+        title: metadata?.title ?? child,
+        ...(startedAt === undefined ? {} : { startedAt }),
+        state: value.state,
+      }];
+    }).sort((a, b) =>
+      (a.startedAt ?? 0) - (b.startedAt ?? 0) || a.id.localeCompare(b.id)
+    );
   }
   #session(
     entry: IndexMetadata,
@@ -562,6 +595,7 @@ export class EntityStates {
       : inputs.work && previousRun?.endedAt !== undefined
       ? undefined
       : previousRun?.startedAt;
+    const helpers = this.#helpers(entry.id);
     const evidence: SessionEvidence = {
       awaitingDelivery: !!entry.parentID &&
         verdict.terminal > deliveredTerminal(entry),
@@ -586,21 +620,24 @@ export class EntityStates {
           ? (activity?.inputs?.keys ?? []).map((id) => ({ id }))
           : [],
       },
-      ...(items.length
+      ...(items.length || helpers.length
         ? {
-          liveWork: items.map((item) => ({
-            id: item.id,
-            kind: item.kind,
-            label: item.label,
-            title: item.title,
-            ...(item.startedAt === undefined
-              ? {}
-              : { startedAt: item.startedAt }),
-            state: "working" as const,
-          })),
+          liveWork: [
+            ...items.map((item) => ({
+              id: item.id,
+              kind: item.kind,
+              label: item.label,
+              title: item.title,
+              ...(item.startedAt === undefined
+                ? {}
+                : { startedAt: item.startedAt }),
+              state,
+            })),
+            ...helpers,
+          ],
         }
         : {}),
-      ...(entry.status === "retry" && entry.retry
+      ...(inputs.work && entry.status === "retry" && entry.retry
         ? { retry: { ...entry.retry } }
         : {}),
       ...(verdict.terminalFailure ? { failure: verdict.terminalFailure } : {}),

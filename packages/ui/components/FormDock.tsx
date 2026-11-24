@@ -80,6 +80,7 @@ export function registerGlobalForms(
                 >
                   {(request) => (
                     <FormDock
+                      entities={shell.inbox(server().id).entities}
                       connected={server().status === "connected" &&
                         server().harness === "connected"}
                       request={request()}
@@ -150,6 +151,7 @@ export function registerFormTakeover(
             };
             return (
               <FormDock
+                entities={session.entities?.()}
                 connected={session.connected?.() ?? true}
                 request={request()}
                 retention={session.requests}
@@ -183,6 +185,7 @@ export function registerFormTakeover(
 export default function FormDock(
   props: {
     request: FormRequest;
+    entities?: import("@otk/client").EntityStateStore;
     connected?: boolean;
     failureTarget?: import("@otk/protocol").FailureTarget;
     onReply(answer: FormAnswer): Promise<void>;
@@ -275,6 +278,10 @@ export default function FormDock(
         collapsed={collapsed()}
         title={
           <TakeoverHeader
+            entities={props.entities}
+            entityKey={props.request.owner.kind === "session"
+              ? `session:${props.request.owner.sessionID}`
+              : `project:${props.request.owner.directory}`}
             title={props.request.title}
             where={props.request.directory}
             collapsed={collapsed()}

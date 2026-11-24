@@ -31,6 +31,10 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   await expect(page.locator(".otk-entity-facts:visible").last()).not
     .toContainText("Completed");
   await page.keyboard.press("Escape");
+  // Use reader input: the viewport intentionally compensates raw scrollTop
+  // writes while following. Scrolling away acquires historical virtual rows.
+  await page.locator(".otk-messages").hover();
+  await page.mouse.wheel(0, -2000);
   const firstPill = replies.first().locator(".otk-entity-pill").first();
   await firstPill.focus();
   const card = page.locator(".otk-entity-facts").filter({

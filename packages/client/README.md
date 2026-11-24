@@ -51,19 +51,29 @@ follow; canonical append revisions expose new messages even near the tail.
 
 `entityFacts(identity, sources)` projects explicit session, turn and tool
 scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
-markers and never borrow session/helper clocks. Session-now status borrows live
-supervision, including when a metadata entry is not leased. `runningWork` reads
-helpers from the shared tabs working projection and shells only from fresh
-adapter inventory items whose identities remain in that inventory. Transcript
-paging is not an input. `createLiveWork` owns capability checks and joined stop
-admission across presentation lifetimes; elapsed labels describe running time,
-not working time.
+markers and never borrow session/helper clocks. Session-now presentation borrows
+the serving entity replica handle, including when a metadata entry is not
+leased. The same retained historical fact uses current state and permission
+grace instead of copying a status from its record. Every EntityPill producer
+uses that binding. `liveWork(session)` reads the owner's helper and shell
+inventory; helper labels may borrow acquired digest metadata, never its
+attention. Transcript paging is not an input. `createLiveWork` owns capability
+checks and joined stop admission across presentation lifetimes; elapsed labels
+describe running time, not working time.
 
 The helper inventory follows native ancestry and fresh positive work keys,
 independently of task/checkout boundaries and attention priority. Blocked
 helpers remain in the count with their own attention lamps. Cross-project
 routing keeps work facts for these demanded descendants while unrelated pending
-identities remain request-only.
+identities remain request-only. Helper title/work changes refresh only family
+ancestors even when the lamp counts do not change. The task entity supplies the
+work-chip lamp; each popover item uses its own session entity.
+
+`EntityStateStore.observeChanges` observes accepted evidence and staleness
+independently of `subscribe`'s notification transitions. Canonical transcripts
+borrow it for `evidence.work`, including when work starts/stops under a stable
+blocked lamp. Retry text borrows `evidence.retry`; missing retry time or message
+is not invented. Serving transport staleness clears these observations.
 
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
@@ -616,11 +626,11 @@ Helper updates preserve parent source/native completion clocks and unrelated
 reply identities; removal, cooling and replacement release the source-free link
 index. No helper RPC, child transcript cache or timer belongs to the view.
 
-`createTranscripts({connection, entry, factory?, clock?})` owns one canonical
-`createTranscript` per `sessionKey(server, session)`. `setDemand` replaces
-active scope/screen demand, `interact` refreshes that scope's clock, and
-`preload` gives an attention scope its temporary lease. Resources wait for an
-explicit/welcomed policy. One shared queue bounds page reads per server and
+`createTranscripts({connection, entry, entities?, factory?, clock?})` owns one
+canonical `createTranscript` per `sessionKey(server, session)`. `setDemand`
+replaces active scope/screen demand, `interact` refreshes that scope's clock,
+and `preload` gives an attention scope its temporary lease. Resources wait for
+an explicit/welcomed policy. One shared queue bounds page reads per server and
 prioritizes selection, attention and recently interacted scopes. Atomic body
 pushes can paint before scalar metadata, but the shared admission slot belongs
 to the full page request until coverage completes or it retires. Warm hydration

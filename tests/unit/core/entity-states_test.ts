@@ -264,6 +264,22 @@ test("auto-approved permissions do not block and carry no request identities", (
   assertEquals(o.get("s")?.evidence?.requests?.permissions, []);
 });
 
+test("retry evidence shares the interpreter's native freshness rather than retained metadata", () => {
+  const o = owner();
+  const row: IndexMetadata = {
+    ...base,
+    status: "retry",
+    retry: { attempt: 2, message: "Waiting", next: 100 },
+    activity: { work: keys("retry") },
+  };
+  o.put(row);
+  assertEquals(o.get("s")?.evidence?.retry?.attempt, 2);
+  o.supervision.freshness(false);
+  o.put(row);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.evidence?.retry, undefined);
+});
+
 test("a failed helper delivered to its parent stays blocked until seen (C1 unchanged)", () => {
   const o = owner();
   o.put({ ...base, id: "parent" });
@@ -337,6 +353,34 @@ test("an unchanged session publishes nothing", () => {
   o.published.length = 0;
   o.put(entry);
   assertEquals(o.published, []);
+});
+
+test("live work belongs to the entity owner, including blocked helpers, title changes and retirement", () => {
+  const o = owner();
+  o.put({ ...base, id: "root" });
+  const helper: IndexMetadata = {
+    ...base,
+    id: "child",
+    parentID: "root",
+    title: "Original helper",
+    activity: { work: keys("native"), permissions: keys("permission") },
+  };
+  o.put(helper);
+  assertEquals(o.get("root")?.state, "none");
+  assertEquals(
+    o.get("root")?.evidence?.liveWork?.map((
+      item,
+    ) => [item.id, item.kind, item.title, item.state]),
+    [["child", "helper", "Original helper", "blocked"]],
+  );
+  o.put({ ...helper, title: "Renamed helper" });
+  assertEquals(o.get("root")?.evidence?.liveWork?.[0].title, "Renamed helper");
+  o.put({ ...helper, activity: { work: keys("native") } });
+  assertEquals(o.get("root")?.evidence?.liveWork?.[0].state, "working");
+  o.put({ ...helper, activity: { terminal: 50 } });
+  assertEquals(o.get("root")?.evidence?.liveWork, undefined);
+  o.put({ ...helper, parentID: "other" });
+  assertEquals(o.get("root")?.evidence?.liveWork, undefined);
 });
 
 test("task projections share the state owner and update only containing groups", () => {
