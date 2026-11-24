@@ -1,5 +1,33 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { WindowAnchor } from "@otk/client";
+import { isCancellation } from "@otk/protocol";
+
+/** A user-opened disclosure asks its nearest window to measure its frame. */
+export interface ViewportRevealRequest {
+  settled?: Promise<void>;
+}
+
+/** State-only changes never claim the viewport, even if they open a fold. */
+export function discloseInViewport(
+  element: HTMLElement | undefined,
+  open: boolean,
+  setOpen: (open: boolean) => void,
+  user: boolean,
+) {
+  if (user && open && element) {
+    const request: ViewportRevealRequest = {};
+    element.dispatchEvent(
+      new CustomEvent("otk-viewport-reveal", {
+        bubbles: true,
+        detail: request,
+      }),
+    );
+    void request.settled?.catch((error) => {
+      if (!isCancellation(error)) throw error;
+    });
+  }
+  setOpen(open);
+}
 
 /** One DOM measurement boundary reports native source identities, never reply counts. */
 export function sourceViewport(
@@ -90,6 +118,11 @@ export interface ViewportSnapshot {
   readonly following: boolean;
   readonly history: ViewportHistory;
 }
+export interface ViewportNavigation {
+  align?: "center" | "nearest" | "start";
+  /** Only explicit reader actions may take and pin the viewport intent. */
+  intent?: "user";
+}
 export interface ViewportPosition {
   following(): boolean;
   /** Explicit scrollbar input shares navigation cancellation and position application. */
@@ -119,7 +152,7 @@ export interface ViewportPosition {
   subscribe(change: () => void): () => void;
   navigate(
     target: () => ViewportTarget | undefined,
-    align?: "center" | "nearest" | "start",
+    options?: ViewportNavigation,
   ): Promise<void>;
   observe(flow: HTMLElement): () => void;
   dispose(): void;
@@ -160,7 +193,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const geometries = new Map<string, ViewportGeometry>(),
     listeners = new Set<() => void>();
   const flows = new Map<HTMLElement, number>();
-  let mode: "follow" | "anchored" = "anchored",
+  let mode: "following" | "free-scrolled" | "user-pinned" = "free-scrolled",
     disposed = false,
     dragging = false,
     pressed = false;
@@ -205,7 +238,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   } | undefined;
   let navigation: {
     target: () => ViewportTarget | undefined;
-    align: "center" | "nearest" | "start";
+    align: NonNullable<ViewportNavigation["align"]>;
+    intent: ViewportNavigation["intent"];
     resolve(): void;
     reject(error: Error): void;
   } | undefined;
@@ -241,7 +275,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       const viewportHeight = viewport.clientHeight,
         contentHeight = viewport.scrollHeight,
         scrollTop = viewport.scrollTop,
-        following = mode === "follow";
+        following = mode === "following";
       if (following && distanceFromBottom <= 1) newMessages = false;
       if (
         publishedGeometry === revision &&
@@ -267,7 +301,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       // Window publication may materialize descendants and acquire leases. The
       // command settles at this same committed consumer boundary, not before it.
       if (
-        latest?.ready && mode === "follow" && !geometryPending && !leases &&
+        latest?.ready && mode === "following" && !geometryPending && !leases &&
         publishedGeometry === revision && distanceFromBottom <= 1
       ) {
         const completed = latest;
@@ -288,13 +322,16 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     previous?.();
   };
   const capture = () => {
-    if (mode === "follow") {
+    if (mode === "following") {
       readerCapturePending = false;
       anchors = [];
       releaseAnchor?.();
       releaseAnchor = undefined;
       return;
     }
+    // A disclosure press, keyboard activation, or geometry notification is not
+    // reader displacement and must not replace an explicitly revealed source.
+    if (mode === "user-pinned" || navigation) return;
     if (leases || changing) return;
     const candidates = [...geometries.values()].flatMap((geometry) => {
       const anchor = geometry.anchor();
@@ -314,11 +351,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     attach(source.geometry.id, source.anchor);
     readerCapturePending = false;
   };
-  const setMode = (next: "follow" | "anchored") => {
+  const setMode = (next: typeof mode) => {
     mode = next;
     // Every route into follow (including native movement at the tail) retires
     // anchored source retention, even while descendant geometry is pending.
-    if (next === "follow") capture();
+    if (next === "following") capture();
   };
   const cancelNavigation = (reason = "Viewport intent superseded") => {
     const previous = restoration;
@@ -350,7 +387,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (Math.abs(top - expected) <= 1) return false;
     if (gesture) gestureMoved = true;
     position = top;
-    if ((gesture || dragging) && mode === "anchored") {
+    if ((gesture || dragging) && mode === "free-scrolled") {
       const delta = top - expected;
       anchors = anchors.map(({ id, anchor }) => ({
         id,
@@ -371,12 +408,13 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     // the old range can arrive after a reveal was requested, before it applies.
     if (
       gesture || dragging || navigation ||
-      (geometryPending && (mode === "anchored" || geometries.size > 0))
+      (geometryPending && (mode !== "following" || geometries.size > 0))
     ) return false;
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = undefined;
     geometryPending = false;
     cancelNavigation();
+    if (mode === "user-pinned") setMode("free-scrolled");
     capture();
     return true;
   };
@@ -412,7 +450,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
           if (!leases && target.measured && appliedRevision === revision) {
             navigation = undefined;
             geometryPending = false;
-            if (target.anchor) {
+            if (request.intent === "user") {
+              setMode(target.anchor ? "user-pinned" : "free-scrolled");
+            }
+            if (mode !== "following" && target.anchor) {
               attach(target.anchor.id, {
                 key: target.anchor.key,
                 offset: position - target.anchor.start,
@@ -428,7 +469,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         }
         return;
       }
-      if (mode === "follow") applyPosition(viewport.scrollHeight);
+      if (mode === "following") applyPosition(viewport.scrollHeight);
       else {
         for (const saved of anchors) {
           const top = geometries.get(saved.id)?.resolve(saved.anchor);
@@ -459,21 +500,21 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     const changed = externalPosition();
     position = viewport.scrollTop;
     if (gesture || dragging) {
-      if (dragging) setMode(atTail() ? "follow" : "anchored");
-      else if (gesture === "toward" && (mode === "follow" || atTail())) {
-        setMode("follow");
+      if (dragging) setMode(atTail() ? "following" : "free-scrolled");
+      else if (gesture === "toward" && (mode === "following" || atTail())) {
+        setMode("following");
       }
       if (!geometryPending) capture();
       else schedule();
-      if (mode === "follow") schedule();
+      if (mode === "following") schedule();
     } else if (changed && !navigation && !geometryPending) capture();
     notify();
   };
   const away = () => {
     cancelNavigation();
     cancelLatest();
-    const captureNow = mode !== "anchored" || !geometryPending;
-    setMode("anchored");
+    const captureNow = mode !== "free-scrolled" || !geometryPending;
+    setMode("free-scrolled");
     if (captureNow) capture();
   };
   const beginGesture = (direction: "away" | "toward") => {
@@ -481,7 +522,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     gestureMoved = false;
     compensated = false;
     if (gesture === "away") away();
-    else if (atTail()) setMode("follow");
+    else if (mode === "user-pinned" || navigation) {
+      away();
+      if (atTail()) setMode("following");
+    } else if (atTail()) setMode("following");
     // An input intent at a native boundary cannot produce a scrollend event.
     // Settle that intent here rather than indefinitely blocking geometry work.
     if (
@@ -496,7 +540,6 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const wheel = (event: WheelEvent) =>
     beginGesture(event.deltaY < 0 ? "away" : "toward");
   const down = (event: PointerEvent) => {
-    cancelNavigation();
     capture();
     pressed = true;
     startX = event.clientX;
@@ -530,7 +573,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     pressed = false;
     if (dragging) {
       dragging = false;
-      setMode(atTail() ? "follow" : "anchored");
+      setMode(atTail() ? "following" : "free-scrolled");
       if (!geometryPending) capture();
       schedule();
     }
@@ -557,7 +600,6 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         "input,textarea,[contenteditable=true],button,a,select,summary,[role=button]",
       )
     ) {
-      cancelNavigation();
       capture();
       return;
     }
@@ -606,7 +648,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   document.addEventListener("touchend", up);
   document.addEventListener("touchcancel", up);
   return {
-    following: () => mode === "follow",
+    following: () => mode === "following",
     input(top) {
       away();
       gesture = undefined;
@@ -620,7 +662,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }));
       readerCapturePending = true;
       if (!geometryPending) capture();
-      setMode(atTail() ? "follow" : "anchored");
+      setMode(atTail() ? "following" : "free-scrolled");
       layout();
     },
     snapshot: () => snapshot,
@@ -637,7 +679,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         history.appendRevision === value.appendRevision
       ) return;
       if (
-        mode === "anchored" &&
+        mode !== "following" &&
         (value.appendRevision ?? 0) > (history.appendRevision ?? 0)
       ) newMessages = true;
       history = Object.freeze({ ...value });
@@ -669,7 +711,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         if (latest !== pending || pending.abort.signal.aborted) return;
         pending.ready = true;
         tail = true;
-        setMode("follow");
+        setMode("following");
         gesture = undefined;
         dragging = false;
         layout();
@@ -704,7 +746,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       cancelNavigation();
       cancelLatest();
       tail = true;
-      setMode("follow");
+      setMode("following");
       gesture = undefined;
       dragging = false;
       layout();
@@ -749,12 +791,13 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         throw new Error(`Duplicate viewport geometry: ${geometry.id}`);
       }
       geometries.set(geometry.id, geometry);
-      if (!anchors.length && mode === "anchored") capture();
+      if (!anchors.length && mode === "free-scrolled") capture();
       layout();
       return () => {
         if (geometries.get(geometry.id) === geometry) {
           geometries.delete(geometry.id);
           if (anchors.some((saved) => saved.id === geometry.id)) {
+            if (mode === "user-pinned") setMode("free-scrolled");
             anchors = [];
             const release = releaseAnchor;
             releaseAnchor = undefined;
@@ -770,6 +813,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       const anchor = change(saved.anchor);
       if (anchor) attach(id, anchor);
       else {
+        if (mode === "user-pinned") setMode("free-scrolled");
         anchors = [];
         releaseAnchor?.();
         releaseAnchor = undefined;
@@ -781,20 +825,28 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         listeners.delete(change);
       };
     },
-    navigate(target, align = "nearest") {
+    navigate(target, { align = "nearest", intent } = {}) {
       if (disposed) {
         return Promise.reject(
           new DOMException("Viewport retired", "AbortError"),
         );
       }
-      cancelNavigation();
-      cancelLatest();
-      setMode("anchored");
-      readerCapturePending = false;
-      gesture = undefined;
-      dragging = false;
+      if (intent === "user") {
+        cancelNavigation();
+        cancelLatest();
+        readerCapturePending = false;
+        gesture = undefined;
+        dragging = false;
+      } else {
+        // Layout positioning may not preempt newer reader intent or its pin.
+        if (
+          mode === "user-pinned" || navigation?.intent === "user" || latest ||
+          restoration || gesture || dragging
+        ) return Promise.resolve();
+        cancelNavigation();
+      }
       return new Promise<void>((resolve, reject) => {
-        navigation = { target, align, resolve, reject };
+        navigation = { target, align, intent, resolve, reject };
         layout();
       });
     },

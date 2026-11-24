@@ -928,8 +928,13 @@ ancestor windows. The lease ends only after actual DOM size has been recorded,
 so a large code/diff body cannot be recycled using its earlier estimate while
 tail follow is positioning the root. Mounted row bounds supply geometry; absent
 rows use `createWindow`'s retained measurements/role estimates. A reveal settles
-on measured viewport-relative bounds even while preceding content grows, then
-retains that requested identity as its anchor.
+on measured viewport-relative bounds even while preceding content grows. Only an
+explicit user reveal retains the requested identity as a user pin. Trusted
+disclosure input reveals the opened frame through its nearest window; default,
+synthetic and retained-state changes only update disclosure state. Automatic
+positioning cannot replace a user pin or take over from following. Reader scroll
+replaces a pin with an ordinary reader anchor; reaching the tail or jumping to
+latest resumes following through the same owner.
 
 The root's revisioned geometry transaction joins keyed reconciliation, nested
 materialization, recorded sizes and position compensation before paint. Pending

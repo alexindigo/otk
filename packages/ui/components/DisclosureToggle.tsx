@@ -41,7 +41,7 @@ export default function DisclosureToggle(props: {
   variant?: "tree" | "meta";
   "data-record-kind"?: string;
   children?: Element;
-  onOpen(open: boolean): void;
+  onOpen(open: boolean, event: MouseEvent | KeyboardEvent): void;
 }): Element {
   return (
     <button
@@ -53,12 +53,12 @@ export default function DisclosureToggle(props: {
       data-record-kind={props["data-record-kind"]}
       aria-label={props.label}
       aria-expanded={props.open ? "true" : "false"}
-      onClick={() => props.onOpen(!props.open)}
+      onClick={(event) => props.onOpen(!props.open, event)}
       onKeyDown={(event) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         event.preventDefault();
         event.stopPropagation();
-        props.onOpen(event.key === "ArrowRight");
+        props.onOpen(event.key === "ArrowRight", event);
       }}
     >
       <DisclosureIcon open={props.open} />

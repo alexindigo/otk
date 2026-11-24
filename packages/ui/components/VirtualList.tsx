@@ -3,7 +3,12 @@ import "./VirtualList.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import { createWindow, type WindowAnchor } from "@otk/client";
-import { acquireViewport, type ViewportPosition } from "./viewport.ts";
+import {
+  acquireViewport,
+  type ViewportNavigation,
+  type ViewportPosition,
+  type ViewportRevealRequest,
+} from "./viewport.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import {
   createContext,
@@ -24,7 +29,10 @@ export interface VirtualListControl {
   restore(anchor: WindowAnchor): Promise<void>;
   reveal(
     key: string,
-    options?: { align?: "center" | "nearest"; focus?: () => void },
+    options?: Omit<ViewportNavigation, "align"> & {
+      align?: "center" | "nearest";
+      focus?: () => void;
+    },
   ): Promise<void>;
   anchor(): WindowAnchor | undefined;
 }
@@ -513,7 +521,7 @@ export default function VirtualList(props: {
           const top = (model.restore(initialPosition.anchor) ??
             initialPosition.scrollTop) + origin();
           return { start: top, end: top, measured: true };
-        }, "start").catch((error) => {
+        }, { align: "start" }).catch((error) => {
           if (!isCancellation(error)) throw error;
         }).finally(() => {
           restoring = false;
@@ -583,7 +591,7 @@ export default function VirtualList(props: {
   };
   async function navigateKey(
     key: string,
-    align: "center" | "nearest" | "start",
+    options: ViewportNavigation,
     anchor?: WindowAnchor,
     focus?: () => void,
   ) {
@@ -610,17 +618,17 @@ export default function VirtualList(props: {
               .01,
           anchor: { id: path, key, start: base },
         };
-      }, align);
+      }, options);
       focus?.();
     } finally {
       setReveals((keys) => keys.filter((id) => id !== key));
     }
   }
   props.control?.({
-    restore: (anchor) => navigateKey(anchor.key, "start", anchor),
+    restore: (anchor) => navigateKey(anchor.key, { align: "start" }, anchor),
     anchor: logicalAnchor,
     reveal: (key, options) =>
-      navigateKey(key, options?.align ?? "nearest", undefined, options?.focus),
+      navigateKey(key, options ?? {}, undefined, options?.focus),
   });
   onSettled(() => {
     for (const [role, element] of samples) {
@@ -698,6 +706,30 @@ export default function VirtualList(props: {
       sync();
       remember();
     };
+    const revealElement = (event: Event) => {
+      const element = event.target, key = keyFor(element);
+      if (!key || !(element instanceof HTMLElement)) return;
+      const request = (event as CustomEvent<ViewportRevealRequest>).detail;
+      if (request.settled) return;
+      const release = pin(key);
+      request.settled = positionOwner!.navigate(() => {
+        const row = elements.get(key), base = rowStart(key);
+        if (!row?.contains(element) || !element.isConnected) {
+          throw new DOMException("Viewport target retired", "AbortError");
+        }
+        if (base === undefined) return;
+        const bounds = element.getBoundingClientRect();
+        const rowBounds = row.getBoundingClientRect();
+        const start = base + bounds.top - rowBounds.top;
+        return {
+          start,
+          end: start + Math.min(bounds.height, root.clientHeight),
+          measured: !measuring.has(key) &&
+            Math.abs(rowBounds.height - model.size(key)) < .01,
+          anchor: { id: path, key, start: base },
+        };
+      }, { intent: "user" }).finally(release);
+    };
     const retain = (event: Event) => {
       const key = keyFor(event.target);
       if (!key) return;
@@ -773,6 +805,7 @@ export default function VirtualList(props: {
     };
     root.addEventListener("scroll", moved, { passive: true });
     container.addEventListener("otk-context-retain", retain);
+    container.addEventListener("otk-viewport-reveal", revealElement);
     container.addEventListener("keydown", selectAll);
     document.addEventListener("selectionchange", selection);
     focusMoves = new MutationObserver(retainMovedFocus);
@@ -793,6 +826,7 @@ export default function VirtualList(props: {
       positionOwner = undefined;
       root.removeEventListener("scroll", moved);
       container.removeEventListener("otk-context-retain", retain);
+      container.removeEventListener("otk-viewport-reveal", revealElement);
       container.removeEventListener("keydown", selectAll);
       document.removeEventListener("selectionchange", selection);
     };
