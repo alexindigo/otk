@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { runNativeTool, showFileChanges } from "../../pages/transcript.ts";
 import { readFile, stat } from "node:fs/promises";
+
+async function openDiffStyleForKeyboard(page: Page) {
+  await page.locator("button[name=diffStyle]").click();
+  // The native popover can open before its toggle mounts and focuses the picker.
+  const picker = page.locator(".otk-picker-content").filter({
+    has: page.getByRole("listbox", { name: "Diff style", exact: true }),
+  });
+  await expect(picker).toBeFocused();
+}
 
 test.use({ profile: "messages-files" });
 test("messages.edit-write-patch-native-files-geometry", {
@@ -39,7 +49,7 @@ test("messages.edit-write-patch-native-files-geometry", {
   const diff = page.locator("[data-tool=edit] .otk-diff");
   await expect(diff).toHaveAttribute("aria-label", "Modified edit.ts");
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("button[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "split");
@@ -57,7 +67,7 @@ test("messages.edit-write-patch-native-files-geometry", {
     JSON.stringify(geometry),
   ).toBe(true);
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("button[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
@@ -65,7 +75,7 @@ test("messages.edit-write-patch-native-files-geometry", {
   await expect(diff).not.toHaveClass(/otk-diff-wrap/);
   await page.locator(".otk-display-menu > button").click();
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("button[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
