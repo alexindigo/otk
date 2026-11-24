@@ -11,7 +11,14 @@ import {
   projectGroup,
   projectTree,
 } from "@otk/client";
-import { UNKNOWN_REPOSITORY } from "@otk/protocol";
+import { entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+  label as stateLabel,
+  lamp,
+  presentedEntity,
+} from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
@@ -74,6 +81,8 @@ export default function ProjectInbox(props: {
     project: ProjectSelection,
     collapsed: boolean,
   ): Promise<void>;
+  /** The connection's entity states; standalone consumers present rows'. */
+  entities?(server: string): EntityStateStore;
 }): import("solid-js").Element {
   const disclosure = createProjectDisclosure(solidState);
   const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
@@ -426,6 +435,19 @@ export default function ProjectInbox(props: {
     const name = () =>
       project().displayName || projectName(project().directory);
     const duplicate = () => props.duplicateName(name());
+    const key = () => entityKey("project", project().directory);
+    const presented = createEntityStateStore({
+      read: () => ({
+        [key()]: presentedEntity(
+          "project",
+          project().directory,
+          project().status,
+          project().unread,
+        ),
+      }),
+    });
+    const entities = () => props.entities?.(project().sidecarId) ?? presented;
+    const lampLabel = () => stateLabel(project().status);
     return (
       <div
         ref={contextTarget(target)}
@@ -462,27 +484,17 @@ export default function ProjectInbox(props: {
                 class="otk-project-attention"
                 aria-label={project().status === "none"
                   ? `Open project ${name()}`
-                  : `Open session needing attention in ${name()}`}
+                  : `${lampLabel()}: open session in ${name()}`}
                 title={project().status === "none"
                   ? `Open project ${project().directory}`
-                  : `Open session needing attention in ${project().directory}`}
+                  : `${lampLabel()}: open session in ${project().directory}`}
                 onClick={() =>
                   void (project().status === "none"
                     ? open(project())
                     : openAttention(project()))}
               >
                 <StatusLight
-                  state={project().status}
-                  attention={{
-                    server: project().sidecarId,
-                    project: {
-                      directory: project().directory,
-                      repo: project().summary?.topology?.canonicalRoot ===
-                          project().directory
-                        ? project().summary?.topology?.repoID
-                        : undefined,
-                    },
-                  }}
+                  state={lamp(entities(), key(), { now: performance.now() })}
                 />
               </button>
             </TreeIcon>
@@ -500,7 +512,7 @@ export default function ProjectInbox(props: {
                 : ` - ${
                   project().status === "none"
                     ? "No known activity"
-                    : project().status
+                    : lampLabel()
                 }`
             }${project().annotation ? `, ${project().annotation}` : ""}`,
             onClick: () => void open(project()),
@@ -513,7 +525,7 @@ export default function ProjectInbox(props: {
           label={
             <span class="otk-project-name-line">
               <span
-                class={`otk-project-name otk-age-${project().ageing}`}
+                class="otk-project-name"
                 data-unread={project().unread ? "true" : "false"}
               >
                 {name()}

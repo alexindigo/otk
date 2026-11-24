@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createTabs, inboxProjects, Rpc } from "../mod.ts";
+import { inboxProjects, Rpc } from "../mod.ts";
+import { createTabs } from "./supervision-fixture.ts";
 import { requestAttention } from "../request-attention.ts";
 import {
   createRequestMetadata,

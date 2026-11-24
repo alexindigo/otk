@@ -78,7 +78,11 @@ export class SessionSupervision {
     }
     const inputs = this.inputs(entry);
     const needsInput = inputs.questions > 0 || inputs.permissions > 0;
-    const state = needsInput || helperFailed && unseen
+    // A failed top-level run needs acknowledgement, not a successful-finish
+    // lamp (2.72). Delivered-helper treatment remains the isolated C1 rule.
+    const failedRun = unseen &&
+      (helperFailed || !entry.parentID && outcome === "failed");
+    const state = needsInput || failedRun
       ? "needsYou"
       : inputs.work
       ? "working"

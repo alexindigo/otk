@@ -667,8 +667,9 @@ test("received session mutations publish operation attention until they settle; 
   });
   await coordinator.start();
   const changes: string[] = [];
-  const stop = coordinator.listenOperations((principal, id) =>
-    changes.push(`${principal}:${id}`)
+  const target = { kind: "session" as const, id: "opcv1-operation-target" };
+  const stop = coordinator.listenOperations((principal, changed) =>
+    changes.push(`${principal}:${changed.kind}:${changed.id}`)
   );
   const window = coordinator.window();
   const recipient = {
@@ -691,16 +692,14 @@ test("received session mutations publish operation attention until they settle; 
     }, recipient);
     await entered.promise;
     assertEquals(
-      coordinator.operation("local", "opcv1-operation-target"),
+      coordinator.operation("local", target),
       "working",
     );
     assertEquals(
-      coordinator.operation("other", "opcv1-operation-target"),
+      coordinator.operation("other", target),
       undefined,
     );
-    assertEquals(coordinator.operationSessions("local"), [
-      "opcv1-operation-target",
-    ]);
+    assertEquals(coordinator.operationTargets("local"), [target]);
     await coordinator.accept("local", {
       t: "request",
       ref: ref(),
@@ -710,16 +709,19 @@ test("received session mutations publish operation attention until they settle; 
     held.resolve();
     await coordinator.idle();
     assertEquals(
-      coordinator.operation("local", "opcv1-operation-target"),
+      coordinator.operation("local", target),
       undefined,
     );
     assertEquals(
-      coordinator.operation("local", "opcv1-operation-other"),
+      coordinator.operation("local", {
+        kind: "session",
+        id: "opcv1-operation-other",
+      }),
       undefined,
     );
     assertEquals(changes, [
-      "local:opcv1-operation-target",
-      "local:opcv1-operation-target",
+      "local:session:opcv1-operation-target",
+      "local:session:opcv1-operation-target",
     ]);
   } finally {
     stop();

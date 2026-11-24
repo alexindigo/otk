@@ -2,7 +2,8 @@
 import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
 import { LIGHT_STATES, sessionLight } from "../components/status-light.ts";
-Deno.test("session lights render the supervision projection and default to No known activity", () => {
+import { createEntityStateStore } from "@otk/client";
+Deno.test("session lights render entity states and default to No known activity", () => {
   const entry: IndexEntry = {
     id: "session",
     directory: "/project",
@@ -43,19 +44,29 @@ Deno.test("session lights render the supervision projection and default to No kn
   for (
     const [state, expected] of [
       ["working", "working"],
-      ["needsYou", "blocked"],
-      ["finishedUnseen", "finished"],
+      ["blocked", "blocked"],
+      ["finished", "finished"],
       ["none", "none"],
     ] as const
   ) {
-    assertEquals(
-      sessionLight(entry, {
-        seen: {},
-        finishes: {},
-        supervision: { [entry.id]: { state, terminal: 10 } },
+    const entities = createEntityStateStore({
+      read: () => ({
+        ["session:" + entry.id]: {
+          kind: "session",
+          id: entry.id,
+          state,
+          previous: state,
+          counts: { blocked: 0, working: 0, finished: 0, unseen: 0 },
+        },
       }),
-      expected,
-    );
+    });
+    try {
+      assertEquals(sessionLight(entry, entities), expected);
+      entities.stale(true);
+      assertEquals(sessionLight(entry, entities), "none");
+    } finally {
+      entities.stop();
+    }
   }
   assertEquals(LIGHT_STATES.none.label, "No known activity");
   assertEquals(Object.values(LIGHT_STATES).map((state) => state.shape), [

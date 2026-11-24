@@ -6,6 +6,7 @@ import type {
   ProjectStatus,
   SessionEvidence,
 } from "@otk/protocol";
+import { rollupStatus } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 /** WP5: a permission is painted only after it has been pending this long. */
@@ -63,6 +64,8 @@ export function createEntityStateStore(o: {
   clock?: EntityClock;
   factory?: StateFactory;
   arrival?: (id: string) => number | undefined;
+  /** The connection's reactive state; a lost link makes every state stale. */
+  connected?: () => boolean;
 }): EntityStateStore {
   const clock = o.clock ?? {
     now: () => performance.now(),
@@ -152,7 +155,7 @@ export function createEntityStateStore(o: {
     arrival,
     get isStale() {
       void store.state.revision;
-      return stale;
+      return stale || o.connected?.() === false;
     },
     get revision() {
       return store.state.revision;
@@ -167,6 +170,28 @@ export function createEntityStateStore(o: {
       stopped = true;
       clock.clear(timer);
       listeners.clear();
+    },
+  };
+}
+
+/** A state held by a standalone consumer without a connection (an embedded
+ * component or fixture), presented through the same selectors. */
+export function presentedEntity(
+  kind: EntityState["kind"],
+  id: string,
+  state: ProjectStatus,
+  unseen = false,
+): EntityState {
+  return {
+    kind,
+    id,
+    state,
+    previous: state,
+    counts: {
+      blocked: state === "blocked" ? 1 : 0,
+      working: state === "working" ? 1 : 0,
+      finished: state === "finished" ? 1 : 0,
+      unseen: unseen ? 1 : 0,
     },
   };
 }
@@ -206,6 +231,37 @@ export function lamp(
 }
 
 /** One label dictionary, keyed by state; the cause refines nothing yet. */
+export function entityState(store: EntityStateStore, k: string): ProjectStatus {
+  return store.isStale ? "none" : store.get(k)?.state ?? "none";
+}
+
+/** Presentation only: summarize the lamps in the D66 disclosure. This is not
+ * the task's state, which includes members outside the disclosure. */
+export function visibleLampStatus(
+  states: readonly ProjectStatus[],
+): ProjectStatus {
+  return rollupStatus(...states);
+}
+
+/** Own-session evidence only. Descendant counts retain their explicit scope. */
+export function sessionEvidence(
+  store: EntityStateStore,
+  k: string,
+): SessionEvidence | undefined {
+  return store.isStale ? undefined : store.get(k)?.evidence;
+}
+
+/** Compatibility observation for session-row consumers. This is work evidence,
+ * not the supervision lamp: a blocked session can still have fresh work. */
+export function sessionWorkStatus(
+  store: EntityStateStore,
+  k: string,
+): "idle" | "busy" | "retry" | undefined {
+  const evidence = sessionEvidence(store, k);
+  if (!evidence) return undefined;
+  return evidence.retry ? "retry" : evidence.work ? "busy" : "idle";
+}
+
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
   blocked: "Needs you",
   working: "Working",

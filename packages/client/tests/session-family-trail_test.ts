@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createTabs } from "@otk/client";
+import { createTabs } from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexMetadata } from "@otk/protocol";
 import { entitySnapshot } from "./supervision-fixture.ts";
 

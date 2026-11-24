@@ -77,7 +77,12 @@ for (
     });
     const parentRow = page.locator(`[data-session="${parent.id}"]`);
     const childRow = page.locator(`[data-session="${child.id}"]`);
-    await expect(parentRow).toContainText("P 1");
+    // D35/D62: the parent's count names child sessions, not own permissions.
+    await expect(parentRow).toContainText("Children 1");
+    await expect(parentRow.getByLabel("Child sessions needing you: 1"))
+      .toBeVisible();
+    await expect(parentRow.getByTitle("This session's pending permissions"))
+      .toHaveCount(0);
     await expect(childRow).toContainText("P 1");
     // 2.67: asking helpers remain inside their human task, with their own lamp.
     const childTab = page.locator(`[data-tab="${child.id}"]`);

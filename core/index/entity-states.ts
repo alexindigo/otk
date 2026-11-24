@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  archiveEntityID,
   type BlockedCause,
   type EntityCounts,
   entityKey,
   type EntityState,
   type IndexMetadata,
+  projectPlacement,
   type ProjectStatus,
+  type ProjectSummary,
   rollupStatus,
   type SessionEvidence,
   type Supervision,
@@ -84,9 +87,22 @@ export class EntityStates {
   #forms = new Map<string, number>();
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
+  #placement = new Map<
+    string,
+    Pick<ProjectSummary, "directory" | "archived" | "availability" | "topology">
+  >();
+  #archiveOf = new Map<string, string>();
+  #archiveLeaves = new Map<string, Set<string>>();
+  /** D8 task projections borrow the shared identity partition. State changes
+   * touch only the groups containing that session. */
+  #tasks = new Map<string, Set<string>>();
+  #tasksOf = new Map<string, Set<string>>();
+  #taskTallies = new Map<string, Tally>();
   #global = tally();
   /** S22: received OTK operations by target session. */
   #operations = new Map<string, "working" | "blocked">();
+  /** S22: received operations without a session, by checkout directory. */
+  #checkoutOperations = new Map<string, "working" | "blocked">();
   constructor(
     readonly supervision: SessionSupervision,
     readonly family: EntityFamily,
@@ -113,13 +129,65 @@ export class EntityStates {
     this.#forms.clear();
     this.#leaves.clear();
     this.#projectsOf.clear();
+    this.#placement.clear();
+    this.#archiveOf.clear();
+    this.#archiveLeaves.clear();
+    this.#tasks.clear();
+    this.#tasksOf.clear();
+    this.#taskTallies.clear();
     this.#global = tally();
     this.#operations.clear();
+    this.#checkoutOperations.clear();
+  }
+  /** A received operation owned by a project directory (e.g. a creation
+   * before its session exists) colours that checkout and its projects. */
+  checkoutOperation(directory: string, value?: "working" | "blocked"): void {
+    if (value) this.#checkoutOperations.set(directory, value);
+    else this.#checkoutOperations.delete(directory);
+    const upserts: EntityState[] = [];
+    this.#tally(directory);
+    this.#checkout(directory, upserts);
+    if (upserts.length) this.publish(upserts, []);
   }
   /** Record a session's received-operation input; the caller re-derives it. */
   operation(id: string, value?: "working" | "blocked"): void {
     if (value) this.#operations.set(id, value);
     else this.#operations.delete(id);
+  }
+  /** Structural membership changes only. No session-state publication scans
+   * the catalog or rebuilds the task partition. */
+  membership(groups: ReadonlyMap<string, readonly string[]>): void {
+    const upserts: EntityState[] = [], removals: string[] = [];
+    for (const [id, members] of this.#tasks) {
+      if (groups.has(id)) continue;
+      for (const member of members) this.#tasksOf.get(member)?.delete(id);
+      this.#tasks.delete(id);
+      this.#taskTallies.delete(id);
+      const key = entityKey("task", id);
+      if (this.#states.delete(key)) removals.push(key);
+    }
+    for (const [id, members] of groups) {
+      const previous = this.#tasks.get(id) ?? new Set<string>();
+      const next = new Set(members);
+      const sum = this.#taskTallies.get(id) ?? tally();
+      for (const member of previous) {
+        if (next.has(member)) continue;
+        add(sum, this.#contribution(member), -1);
+        this.#tasksOf.get(member)?.delete(id);
+      }
+      for (const member of next) {
+        if (previous.has(member)) continue;
+        add(sum, this.#contribution(member), 1);
+        const owners = this.#tasksOf.get(member) ?? new Set<string>();
+        owners.add(id);
+        this.#tasksOf.set(member, owners);
+      }
+      this.#tasks.set(id, next);
+      this.#taskTallies.set(id, sum);
+      const value = this.#aggregate("task", id, sum, 0);
+      if (this.#set(value)) upserts.push(value);
+    }
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** S18: the checkout a session belongs to, as placed by ProjectSummaries. */
   member(id: string, checkout?: string): void {
@@ -165,7 +233,27 @@ export class EntityStates {
     return this.#states.get(entityKey("project", directory))!;
   }
   /** A directory is no longer summarized: its aggregates are gone. */
+  placement(
+    facts: Pick<
+      ProjectSummary,
+      "directory" | "archived" | "availability" | "topology"
+    >,
+  ): void {
+    this.#placement.set(facts.directory, {
+      directory: facts.directory,
+      archived: facts.archived,
+      availability: facts.availability,
+      topology: facts.topology,
+    });
+    const upserts: EntityState[] = [];
+    this.#placeArchive(facts.directory, upserts);
+    if (upserts.length) this.publish(upserts, []);
+  }
+
   drop(directory: string): void {
+    const upserts: EntityState[] = [];
+    this.#placement.delete(directory);
+    this.#placeArchive(directory, upserts);
     const removals: string[] = [];
     for (const kind of ["checkout", "project"] as const) {
       const key = entityKey(kind, directory);
@@ -176,7 +264,7 @@ export class EntityStates {
     }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
-    if (removals.length) this.publish([], removals);
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** Interpret one session, publish its state and its ancestors' descendant
    * evidence. Returns the supervision verdict it was derived from. */
@@ -252,6 +340,13 @@ export class EntityStates {
   ): void {
     const after = this.#contribution(id);
     if (JSON.stringify(before) === JSON.stringify(after)) return;
+    for (const task of this.#tasksOf.get(id) ?? []) {
+      const sum = this.#taskTallies.get(task)!;
+      add(sum, before, -1);
+      add(sum, after, 1);
+      const value = this.#aggregate("task", task, sum, 0);
+      if (this.#set(value)) upserts.push(value);
+    }
     const checkout = this.#checkoutOf.get(id);
     if (checkout) {
       add(this.#tally(checkout), before, -1);
@@ -274,8 +369,10 @@ export class EntityStates {
       directory,
       this.#tally(directory),
       this.#forms.get(directory) ?? 0,
+      this.#checkoutOperations.get(directory),
     );
     if (this.#set(value)) upserts.push(value);
+    this.#placeArchive(directory, upserts);
     for (const project of this.#projectsOf.get(directory) ?? []) {
       this.#project(project, upserts);
     }
@@ -283,13 +380,61 @@ export class EntityStates {
   #project(directory: string, upserts: EntityState[]): void {
     const sum = tally();
     let forms = 0;
+    const operations: ("working" | "blocked")[] = [];
     for (const leaf of this.#leaves.get(directory) ?? [directory]) {
       const value = this.#tallies.get(leaf);
       if (value) add(sum, value, 1);
       forms += this.#forms.get(leaf) ?? 0;
+      const operation = this.#checkoutOperations.get(leaf);
+      if (operation) operations.push(operation);
     }
-    const value = this.#aggregate("project", directory, sum, forms);
+    const operation = rollupStatus(...operations);
+    const value = this.#aggregate(
+      "project",
+      directory,
+      sum,
+      forms,
+      operation === "none" ? undefined : operation as "working" | "blocked",
+    );
     if (this.#set(value)) upserts.push(value);
+  }
+  /** C3 placement is shared unchanged with the client. A checkout state change
+   * revisits only its old/new archive, never the session population. */
+  #placeArchive(directory: string, upserts: EntityState[]): void {
+    const facts = this.#placement.get(directory),
+      before = this.#archiveOf.get(directory);
+    const status = this.#states.get(entityKey("checkout", directory))?.state ??
+      "none";
+    const next = facts &&
+        projectPlacement({
+            lifecycle: facts,
+            status,
+            inactive: false,
+            hasSessions: false,
+          }).section === "archived"
+      ? archiveEntityID(facts)
+      : undefined;
+    if (before && before !== next) {
+      this.#archiveLeaves.get(before)?.delete(directory);
+      this.#archiveOf.delete(directory);
+    }
+    if (next) {
+      const leaves = this.#archiveLeaves.get(next) ?? new Set<string>();
+      leaves.add(directory);
+      this.#archiveLeaves.set(next, leaves);
+      this.#archiveOf.set(directory, next);
+    }
+    for (const id of new Set([before, next])) {
+      if (!id) continue;
+      const sum = tally();
+      let forms = 0;
+      for (const leaf of this.#archiveLeaves.get(id) ?? []) {
+        add(sum, this.#tally(leaf), 1);
+        forms += this.#forms.get(leaf) ?? 0;
+      }
+      const value = this.#aggregate("archive", id, sum, forms);
+      if (this.#set(value)) upserts.push(value);
+    }
   }
   /** Decision 57 over members: blocked > working > finished > none. */
   #aggregate(
@@ -297,18 +442,20 @@ export class EntityStates {
     id: string,
     members: Tally,
     forms: number,
+    operation?: "working" | "blocked",
   ): EntityState {
     const { counts } = members;
     const state = rollupStatus(
       counts.blocked || forms ? "blocked" : undefined,
+      operation,
       counts.working ? "working" : undefined,
       counts.finished ? "finished" : undefined,
     );
     const cause: BlockedCause | undefined = state !== "blocked"
       ? undefined
       : !counts.blocked
-      ? "form"
-      : !forms && members.graced === counts.blocked
+      ? forms ? "form" : "operation"
+      : !forms && operation !== "blocked" && members.graced === counts.blocked
       ? "permission"
       : undefined;
     const before = this.#states.get(entityKey(kind, id));
@@ -393,6 +540,8 @@ export class EntityStates {
       ? "operation"
       : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
       ? "failedHelper"
+      : verdict.outcome === "failed" && verdict.unseen
+      ? "failure"
       : inputs.permissions > 0
       ? "permission"
       : undefined;
@@ -455,6 +604,9 @@ export class EntityStates {
         ? { retry: { ...entry.retry } }
         : {}),
       ...(verdict.terminalFailure ? { failure: verdict.terminalFailure } : {}),
+      // The diagnostic owner already selects current session-level error text.
+      // Preserve its marker without interpreting that observation as a run outcome.
+      ...(entry.attention.error ? { error: true as const } : {}),
     };
     return {
       kind: "session",

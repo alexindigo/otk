@@ -11,6 +11,7 @@ import ListRow from "./ListRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -21,9 +22,11 @@ import VirtualList from "./VirtualList.tsx";
 import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import {
+  createEntityStateStore,
   createSessionGroupDisclosure,
   createSessionTree,
-  inboxStatus,
+  type EntityStateStore,
+  lamp,
   type ListInteraction,
   type MergedEntry,
   type MergedMetadata,
@@ -31,9 +34,12 @@ import {
   type Selection,
   type SessionListRow,
   type SessionRename,
+  sessionWorkStatus,
   usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import SessionStateMeta from "./SessionStateMeta.tsx";
+import { entityKey } from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
 import { PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import {
@@ -66,11 +72,34 @@ export default function ProjectSessions(props: {
   cost?(sessionID: string): number | undefined;
   connected(id: string): boolean;
   inbox(id: string): InboxSnapshot;
+  entities?(id: string): EntityStateStore;
   onOpen(entry: MergedEntry): void | Promise<unknown>;
   onPin?(entry: MergedEntry): void | Promise<unknown>;
   onCreate(project: ProjectSelection): void | Promise<unknown>;
 }): import("solid-js").Element {
   const [query, setQuery] = createSignal(props.interaction?.query ?? "");
+  const standalone = createEntityStateStore({
+    read: () =>
+      props.project ? props.inbox(props.project.sidecarId).entities : undefined,
+    factory: solidState,
+  });
+  onCleanup(() => standalone.stop());
+  const entities = () =>
+    props.entities?.(props.project!.sidecarId) ?? standalone;
+  createEffect(
+    () =>
+      [
+        props.project
+          ? props.inbox(props.project.sidecarId).entities
+          : undefined,
+        props.project ? props.connected(props.project.sidecarId) : false,
+      ] as const,
+    ([, connected]) => {
+      if (!props.project || props.entities) return;
+      standalone.stale(!connected);
+      standalone.observe("all", "historical");
+    },
+  );
   const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
   const [error, setError] = createSignal<FailureValue>("");
   let visibleKeys: readonly string[] = [];
@@ -161,8 +190,6 @@ export default function ProjectSessions(props: {
       ? {
         ...raw,
         sidecarId: props.project!.sidecarId,
-        attention: projected?.attention ?? raw.attention,
-        operationStatus: projected?.operationStatus,
       }
       : projected as MergedEntry;
   };
@@ -364,7 +391,10 @@ export default function ProjectSessions(props: {
                           props.selected.sessionID === row().session.id}
                         attributes={{
                           "data-session": row().session.id,
-                          "data-status": row().session.status,
+                          "data-status": sessionWorkStatus(
+                            entities(),
+                            entityKey("session", row().session.id),
+                          ),
                           title: row().session.title,
                           "aria-description": costDescription(
                             row().session.id,
@@ -398,13 +428,10 @@ export default function ProjectSessions(props: {
                             </Show>
                             <StatusLight
                               small
-                              attention={{
-                                server: props.project!.sidecarId,
-                                session: row().session.id,
-                              }}
-                              state={inboxStatus(
-                                row().session,
-                                props.inbox(props.project!.sidecarId),
+                              state={lamp(
+                                entities(),
+                                entityKey("session", row().session.id),
+                                { now: performance.now() },
                               )}
                               event={row().session.timeUpdated}
                             />
@@ -413,41 +440,10 @@ export default function ProjectSessions(props: {
                         labelClass="otk-session-title"
                         trailing={
                           <>
-                            <Show when={row().session.status === "retry"}>
-                              <span>
-                                retry {row().session.retry?.attempt}
-                              </span>
-                            </Show>
-                            <Show
-                              when={row().session.attention.permissions +
-                                row().session.attention.childPermissions}
-                            >
-                              <span title="Pending permissions">
-                                P {row().session.attention.permissions +
-                                  row().session.attention.childPermissions}
-                              </span>
-                            </Show>
-                            <Show
-                              when={row().session.attention.questions +
-                                row().session.attention.childQuestions}
-                            >
-                              <ChromeMeta
-                                title="Pending questions"
-                                aria-label="Pending questions"
-                              >
-                                <StatusLight small state="blocked" />{" "}
-                                {row().session.attention.questions +
-                                  row().session.attention.childQuestions}
-                              </ChromeMeta>
-                            </Show>
-                            <Show when={row().session.attention.error}>
-                              <ChromeMeta
-                                title="The agent reported a session failure"
-                                aria-label="Session error"
-                              >
-                                Error
-                              </ChromeMeta>
-                            </Show>
+                            <SessionStateMeta
+                              entities={entities()}
+                              entityKey={entityKey("session", row().session.id)}
+                            />
                             <Show when={costLabel(row().session.id)}>
                               <ChromeMeta
                                 class="otk-session-cost"

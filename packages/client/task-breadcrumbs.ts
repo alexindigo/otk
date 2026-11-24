@@ -9,8 +9,11 @@ import { entityKey, sessionAncestors } from "@otk/protocol";
 import type { InboxStatus, OperationAttention } from "./inbox.ts";
 import {
   createEntityStateStore,
+  entityState,
   type EntityStateStore,
   lamp,
+  sessionEvidence,
+  visibleLampStatus,
 } from "./entity-state.ts";
 import {
   projectTabGroups,
@@ -43,7 +46,6 @@ export function buildTrail(
   entries: ReadonlyMap<string, IndexMetadata & OperationAttention>,
   entities: EntityStateStore,
   selected?: string,
-  aggregate?: (...values: InboxStatus[]) => InboxStatus,
 ): TrailModel {
   const current = selected ?? group?.roots[0];
   const ids = current
@@ -55,32 +57,36 @@ export function buildTrail(
   const members = new Set(group?.members);
   const status = (id: string) =>
     lamp(entities, entityKey("session", id), { now: performance.now() });
-  const path = ids.map((id, depth): TrailCrumb => ({
-    id,
-    kind: members.has(id) ? "member" : "ancestor",
-    helper: !!entries.get(id)?.parentID,
-    depth,
-    status: status(id),
-    ...(!members.has(id) ? { external: true } : {}),
-  }));
-  const state = (id: string) =>
-    entities.isStale
-      ? "none"
-      : entities.get(entityKey("session", id))?.state ?? "none";
+  const directory = current ? entries.get(current)?.directory : undefined;
+  const path = ids.map((id, depth): TrailCrumb => {
+    const entry = entries.get(id)!;
+    const external = !members.has(id) || entry.directory !== directory;
+    return {
+      id,
+      kind: external ? "ancestor" : "member",
+      helper: !!entry.parentID,
+      depth,
+      status: status(id),
+      ...(external ? { external: true } : {}),
+    };
+  });
   const depth = (id: string) =>
     sessionAncestors(id, (key) => entries.get(key)).length;
   const main = ids[0] ?? group?.roots[0];
-  const helpers = (group?.members ?? []).filter((id) => {
-    const value = state(id);
-    return id !== main && !!entries.get(id)?.parentID &&
-      !entities.isStale &&
-      !!main && sessionAncestors(id, (key) =>
-        entries.get(key)).includes(main) &&
-      (value === "working" || value === "blocked" &&
-          entities.get(entityKey("session", id))?.cause !== "failedHelper" ||
-        entities.get(entityKey("session", id))?.evidence?.awaitingDelivery ===
-          true);
-  }).sort((a, b) =>
+  const helpers = (group?.members ?? []).filter(
+    (id) => {
+      const key = entityKey("session", id);
+      const value = entityState(entities, key);
+      return id !== main && !!entries.get(id)?.parentID &&
+        !entries.get(id)?.deleted &&
+        !entities.isStale &&
+        !!main &&
+        sessionAncestors(id, (key) => entries.get(key)).includes(main) &&
+        (value === "working" || value === "blocked" &&
+            entities.get(key)?.cause !== "failedHelper" ||
+          sessionEvidence(entities, key)?.awaitingDelivery === true);
+    },
+  ).sort((a, b) =>
     depth(a) - depth(b) ||
     entries.get(a)!.timeCreated - entries.get(b)!.timeCreated ||
     (group?.members.indexOf(a) ?? 0) - (group?.members.indexOf(b) ?? 0)
@@ -91,7 +97,7 @@ export function buildTrail(
       helper: true,
       depth: depth(id),
       status: status(id),
-      run: entities.get(entityKey("session", id))?.evidence?.run,
+      run: sessionEvidence(entities, entityKey("session", id))?.run,
     }));
   // Execution lifetimes support Stop admission, independently of D66 eligibility.
   // Native descendants across checkout boundaries share one cycle-safe walk.
@@ -113,7 +119,7 @@ export function buildTrail(
       const { id, depth } = pending.pop()!;
       if (visited.has(id)) continue;
       visited.add(id);
-      if (entities.get(entityKey("session", id))?.evidence?.work) {
+      if (sessionEvidence(entities, entityKey("session", id))?.work) {
         working.push({ id, kind: "helper", helper: true, depth });
       }
       for (const child of children.get(id) ?? []) {
@@ -129,8 +135,7 @@ export function buildTrail(
     path,
     helpers,
     working,
-    status: aggregate?.(...helpers.map((helper) => helper.status)) ??
-      "none",
+    status: visibleLampStatus(helpers.map((helper) => helper.status)),
     crumbs: path,
   };
 }
@@ -146,11 +151,10 @@ export function taskBreadcrumbs(
     string,
     readonly (IndexMetadata & OperationAttention)[]
   >,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision" | "entities"> =
-    {
-      seen: {},
-      finishes: {},
-    },
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "entities"> = {
+    seen: {},
+    finishes: {},
+  },
   followParent = false,
   projection?: ReadonlyMap<string, SessionHierarchyNode>,
 ): TrailCrumb[] {

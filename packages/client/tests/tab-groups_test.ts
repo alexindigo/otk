@@ -7,11 +7,7 @@ import {
   projectTabGroups,
   taskBreadcrumbs,
 } from "@otk/client";
-import {
-  createTabs,
-  entitySnapshot,
-  projected,
-} from "./supervision-fixture.ts";
+import { createTabs, projected } from "./supervision-fixture.ts";
 
 const entry = (
   id: string,
@@ -252,8 +248,7 @@ Deno.test("current inbox membership wins over independently arriving stale wire 
     A: { state: "working", terminal: 0 },
     C: { state: "working", terminal: 0 },
   };
-  meta.entities = entitySnapshot(meta);
-  const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+  const tabs = createTabs(() => Promise.reject(Error("No promotion")));
   const update = () =>
     tabs.update({ directory: "/p", entries: context, inbox: meta });
   try {
@@ -301,11 +296,9 @@ for (
         terminal: 1,
       },
     };
-    const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
-    const update = () => {
-      meta.entities = entitySnapshot(meta);
+    const tabs = createTabs(() => Promise.reject(Error("No promotion")));
+    const update = () =>
       tabs.update({ directory: "/p", entries: rows, inbox: meta });
-    };
     try {
       update();
       tabs.preview("A");

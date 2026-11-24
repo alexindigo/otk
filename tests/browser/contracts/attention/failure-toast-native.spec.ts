@@ -49,11 +49,44 @@ test("attention.native-failure-toast-identifies-the-background-session", {
   );
   await expect(page.locator('.otk-toast[data-kind="done"]')).toHaveCount(0);
   await expect(page.locator('.otk-toast[data-kind="error"]')).toHaveCount(1);
-  // A failed native execution can also produce a legitimate unseen finish.
-  // It must not invent pending user input; error-only badge isolation is covered
-  // by the request-burst and controlled-notification consumer proofs.
-  await expect(page.getByRole("img", { name: "Needs you", exact: true }))
-    .toHaveCount(0);
+  // V1 rejects this shell before admitting a run. Its diagnostic is not a
+  // terminal fact; keep proving error-only badge isolation on that path.
+  if (info.project.name === "oc-1.19.3") {
+    await expect(page.getByRole("img", { name: "Needs you", exact: true }))
+      .toHaveCount(0);
+  }
+  // 2.72: an unseen failed run needs acknowledgement, not a yellow successful
+  // finish. The session owner and every rollup publish that same fact.
+  const project = page.locator(
+    `.otk-project-row[data-project=${
+      JSON.stringify(state.directory)
+    }] .otk-status-light`,
+  );
+  const session = page.locator(
+    `.otk-project-sessions [data-session=${
+      JSON.stringify(failed.id)
+    }] .otk-status-light`,
+  );
+  const tab = page.locator(`[data-tab=${JSON.stringify(failed.id)}]`);
+  if (info.project.name === "oc-2.2.6") {
+    await expect(project).toHaveAttribute("data-state", "blocked");
+    await expect(session).toHaveAttribute("data-state", "blocked");
+    await expect(tab.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "blocked",
+    );
+    const published = (await state.product("inbox.get", {})).inbox;
+    expect(published.entities?.["global:global"]?.counts.blocked).toBe(1);
+    for (
+      const key of [
+        `checkout:${state.directory}`,
+        `project:${state.directory}`,
+        "global:global",
+      ]
+    ) {
+      expect(published.entities?.[key]?.state, key).toBe("blocked");
+    }
+  }
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
@@ -61,5 +94,13 @@ test("attention.native-failure-toast-identifies-the-background-session", {
       body: await page.screenshot({ fullPage: true }),
       contentType: "image/png",
     });
+  }
+  // A real visit acknowledges the terminal the browser actually received.
+  if (info.project.name === "oc-2.2.6") {
+    await openSession(state, page, failed.id);
+    await openSession(state, page, other.id);
+    await expect(project).toHaveAttribute("data-state", "none");
+    await expect(session).toHaveAttribute("data-state", "none");
+    await expect(tab).toHaveCount(0);
   }
 });

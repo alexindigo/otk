@@ -1629,10 +1629,16 @@ needs-you red, unseen-finished amber, working green and no-evidence grey.
 `theme.css` exposes shared `--status-light-*` aliases; the component owns only
 construction: radial top highlight, colour-mixed dark rim and glow. Each theme's
 gel colours meet 3:1 non-text contrast across base, hover and selected surfaces.
-`sessionLight` renders the server supervision projection, never legacy session
-status. There is no idle or unknown lamp state. `LIGHT_STATES` owns the public
-state inventory and `LightState` derives from its keys; galleries enumerate that
-mapping instead of maintaining a second inventory.
+`sessionLight`, tabs, crumbs and both session lists use the entity-state
+selectors, never legacy status, attention counts or operation overlays. Tabs
+read their task projection; rows and crumbs read own-session state.
+`SessionStateMeta` is shared by both lists: own permissions/questions,
+explicitly labelled child-session counts, retry and failure all borrow session
+evidence. Current diagnostic markers also borrow that evidence; a diagnostic
+does not establish a failed run or change its lamp. There is no idle or unknown
+lamp state. `LIGHT_STATES` owns the public state inventory and `LightState`
+derives from its keys; galleries enumerate that mapping instead of maintaining a
+second inventory.
 
 The shell's `AttentionProvider` binds the shared client grace owner to accepted
 permission evidence/content and system reduced motion plus Animations off.

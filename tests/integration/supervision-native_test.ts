@@ -135,14 +135,18 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
     const value = await waitFor(
       async () => (await client.rpc<InboxBaseline>("inbox.get", {})).inbox,
       (inbox) =>
-        inbox.supervision?.[parent.id]?.state === "finishedUnseen" &&
+        inbox.supervision?.[parent.id]?.state === "needsYou" &&
         inbox.supervision?.[child.id]?.state === "needsYou",
     );
     for (const id of [parent.id, child.id]) {
       assert(value.supervision![id].terminal > 0);
+      // 2.72: an unseen failed parent needs acknowledgement too. C1's failed
+      // helper contract is unchanged; neither terminal represents live work.
+      assertEquals(value.supervision![id].state, "needsYou");
+      assertEquals(value.entities?.[`session:${id}`]?.state, "blocked");
       assertEquals(
-        value.supervision![id].state,
-        id === child.id ? "needsYou" : "finishedUnseen",
+        value.entities?.[`session:${id}`]?.cause,
+        id === child.id ? "failedHelper" : "failure",
       );
       assertEquals(value.supervision![id].unseen, true);
       assertEquals(value.supervision![id].outcome, "failed");

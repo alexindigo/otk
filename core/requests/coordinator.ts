@@ -75,8 +75,12 @@ const keyOf = (principal: string, ref: RequestRef): ReceiptKey => ({
 });
 const terminal = (record: RequestRecord) =>
   ["succeeded", "failed", "released"].includes(record.state);
-/** S22: what a received OTK operation means for its target session's state. */
+/** S22: what a received OTK operation means for its target's state. */
 export type OperationAttention = "working" | "blocked";
+export interface OperationTarget {
+  kind: "session" | "directory";
+  id: string;
+}
 const bytes = (value: unknown) =>
   new TextEncoder().encode(JSON.stringify(value) ?? "null").byteLength;
 
@@ -103,43 +107,55 @@ export class RequestCoordinator {
   #resultBytes = 0;
   #maintenance?: MapIterator<Entry>;
   #storagePending = new Set<Entry>();
-  /** Received user operations by [principal, session], then by receipt. */
+  /** Received user operations by [principal, kind, target], then by receipt. */
   #operations = new Map<string, Map<string, OperationAttention>>();
   #operationListeners = new Set<
-    (principal: string, sessionID: string) => void
+    (principal: string, target: OperationTarget) => void
   >();
   #metadata = createRequestMetadata();
   constructor(readonly options: CoordinatorOptions) {}
-  /** Operations this server received for a session: input or authentication
-   * waits block it, queued, running and reconciling work count as work. */
+  /** Operations this server received for a target (a session, or a project
+   * directory for operations without one): input or authentication waits
+   * block it, queued, running and reconciling work count as work. */
   operation(
     principal: string,
-    sessionID: string,
+    target: OperationTarget,
   ): OperationAttention | undefined {
-    const values = this.#operations.get(JSON.stringify([principal, sessionID]));
+    const values = this.#operations.get(
+      JSON.stringify([principal, target.kind, target.id]),
+    );
     if (!values?.size) return undefined;
     return [...values.values()].some((value) => value === "blocked")
       ? "blocked"
       : "working";
   }
-  /** Sessions with a received operation, for an observer's initial pass. */
-  operationSessions(principal: string): string[] {
+  /** Targets with a received operation, for an observer's initial pass. */
+  operationTargets(principal: string): OperationTarget[] {
     return [...this.#operations.keys()].flatMap((key) => {
-      const [owner, session] = JSON.parse(key) as [string, string];
-      return owner === principal ? [session] : [];
+      const [owner, kind, id] = JSON.parse(key) as [
+        string,
+        OperationTarget["kind"],
+        string,
+      ];
+      return owner === principal ? [{ kind, id }] : [];
     });
   }
   listenOperations(
-    listener: (principal: string, sessionID: string) => void,
+    listener: (principal: string, target: OperationTarget) => void,
   ): () => void {
     this.#operationListeners.add(listener);
     return () => this.#operationListeners.delete(listener);
   }
   /** One record observer for every receipt change; bookkeeping, reads,
-   * settled and failed operations never colour a session. */
+   * settled and failed operations never colour a target. */
   #observe(entry: Entry): void {
-    const record = entry.record, session = record.scope_session;
-    if (!session) return;
+    const record = entry.record;
+    const target: OperationTarget | undefined = record.scope_session
+      ? { kind: "session", id: record.scope_session }
+      : record.scope_directory
+      ? { kind: "directory", id: record.scope_directory }
+      : undefined;
+    if (!target) return;
     const metadata = this.#metadata.get(record.method);
     const value: OperationAttention | undefined =
       metadata?.kind === "mutation" &&
@@ -151,16 +167,16 @@ export class RequestCoordinator {
           ? "blocked"
           : "working"
         : undefined;
-    const key = JSON.stringify([record.principal, session]);
-    const before = this.operation(record.principal, session);
+    const key = JSON.stringify([record.principal, target.kind, target.id]);
+    const before = this.operation(record.principal, target);
     const values = this.#operations.get(key) ?? new Map();
     if (value) values.set(identity(record), value);
     else values.delete(identity(record));
     if (values.size) this.#operations.set(key, values);
     else this.#operations.delete(key);
-    if (before === this.operation(record.principal, session)) return;
+    if (before === this.operation(record.principal, target)) return;
     for (const listener of this.#operationListeners) {
-      listener(record.principal, session);
+      listener(record.principal, target);
     }
   }
   #now(): number {
