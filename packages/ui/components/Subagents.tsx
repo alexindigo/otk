@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
 import {
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  onSettled,
+  Show,
+} from "solid-js";
+import {
+  type ActionControl,
   countLabel,
   type LiveWorkOwner,
   runningWorkElapsed,
@@ -8,6 +16,8 @@ import {
   type TrailModel,
   unknownTime,
 } from "@otk/client";
+import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import ActionButton from "./ActionButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -22,9 +32,8 @@ export default function Subagents(
   props: {
     model: TrailModel;
     title(id: string): string;
-    onOpen(id: string): void;
+    openAction(id: string): ActionControl;
     owner?: LiveWorkOwner;
-    onError(error: unknown): void;
   },
 ) {
   const [now, setNow] = createSignal(Date.now());
@@ -35,15 +44,37 @@ export default function Subagents(
   onSettled(() =>
     props.owner?.subscribe(() => setRevision((value) => value + 1))
   );
+  const workID = (id: string) => `helper/${id}`;
   const stopping = (id: string) => {
     revision();
-    return props.owner?.stopping(`helper/${id}`);
+    return props.owner?.stopping(workID(id));
   };
+  const ports = useCommandPorts();
+  const stopCommand = `subagents.stop@${createUniqueId()}`;
+  ownedCommand(ports, {
+    id: stopCommand,
+    title: "Stop subagent",
+    category: "Session",
+    scope: "control",
+    arguments: { type: "string" },
+    availability: (_context, id: string) =>
+      props.owner?.canStop(workID(id)) ? { available: true } : {
+        available: false,
+        reason: "Subagent cannot be stopped",
+        hidden: true,
+      },
+    run: (_context, id: string) => props.owner?.stop(workID(id)),
+  });
+  const stopAction = (id: string) =>
+    ports.commands.control(stopCommand, id, {
+      target: { label: props.title(id) },
+      // The stop request has settled; the lamp still follows native work evidence.
+      shown: () => true,
+      unshown: "The stop request did not complete.",
+      recovery:
+        "Check the subagent and try stopping it again if it is still running",
+    });
   let menu: PopoverControl | undefined;
-  const open = (id: string) => {
-    menu?.close();
-    props.onOpen(id);
-  };
   return (
     <Show when={props.model.helpers.length}>
       <Menu
@@ -68,70 +99,66 @@ export default function Subagents(
         }
       >
         <For each={props.model.helpers} keyed={(item) => item.id}>
-          {(item: () => TrailCrumb) => (
-            <div
-              class="otk-subagent-row"
-              data-subagent={item().id}
-              onClick={() => open(item().id)}
-            >
-              <button
-                type="button"
-                data-otk-selection="vertical"
-                {...selection({
-                  class: "otk-subagent-name",
-                  kind: "current",
-                  selected: item().id === props.model.path.at(-1)?.id,
-                })}
+          {(item: () => TrailCrumb) => {
+            const selected = () =>
+              selection({
+                class: "otk-subagent-name",
+                kind: "current",
+                selected: item().id === props.model.path.at(-1)?.id,
+              });
+            return (
+              <div
+                class="otk-subagent-row"
+                data-subagent={item().id}
               >
-                <SelectionContent>
-                  <StatusLight small state={item().status} />
-                  <span
-                    class="otk-control-label"
-                    title={props.title(item().id)}
+                <div class="otk-subagent-navigation">
+                  <ActionButton
+                    action={props.openAction(item().id)}
+                    selection={selected()}
+                    attributes={{ "data-otk-selection": "vertical" }}
+                    onShown={() => menu?.close()}
                   >
-                    {props.title(item().id)}
-                  </span>
-                </SelectionContent>
-              </button>
-              <Show when={props.owner?.canStop(`helper/${item().id}`)}>
-                <Show
-                  when={stopping(item().id)}
-                  fallback={
-                    <button
-                      type="button"
-                      class="otk-subagent-stop"
-                      aria-label={`Stop ${props.title(item().id)}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void props.owner?.stop(`helper/${item().id}`).catch(
-                          props.onError,
-                        );
-                      }}
-                    >
-                      Stop
-                    </button>
-                  }
+                    <SelectionContent>
+                      <StatusLight small state={item().status} />
+                      <span
+                        class="otk-control-label"
+                        title={props.title(item().id)}
+                      >
+                        {props.title(item().id)}
+                      </span>
+                    </SelectionContent>
+                  </ActionButton>
+                </div>
+                <div
+                  class="otk-subagent-stop"
+                  hidden={!props.owner?.canStop(workID(item().id)) &&
+                    !stopping(item().id)}
                 >
-                  <span class="otk-subagent-stop" role="status">
-                    Stopping...
-                  </span>
-                </Show>
-              </Show>
-              <ChromeMeta class="otk-subagent-time" aria-label="Running time">
-                {item().run
-                  ? runningWorkElapsed(
-                    (item().run!.endedAt ?? now()) - item().run!.startedAt,
-                  )
-                  : (
-                    <TimeValue
-                      value={unknownTime(
-                        "The native execution start time is not available.",
-                      )}
-                    />
-                  )}
-              </ChromeMeta>
-            </div>
-          )}
+                  <ActionButton
+                    action={stopAction(item().id)}
+                    label={`Stop ${props.title(item().id)}`}
+                    pendingLabel="Stopping..."
+                    busy={stopping(item().id)}
+                  >
+                    Stop
+                  </ActionButton>
+                </div>
+                <ChromeMeta class="otk-subagent-time" aria-label="Running time">
+                  {item().run
+                    ? runningWorkElapsed(
+                      (item().run!.endedAt ?? now()) - item().run!.startedAt,
+                    )
+                    : (
+                      <TimeValue
+                        value={unknownTime(
+                          "The native execution start time is not available.",
+                        )}
+                      />
+                    )}
+                </ChromeMeta>
+              </div>
+            );
+          }}
         </For>
       </Menu>
     </Show>

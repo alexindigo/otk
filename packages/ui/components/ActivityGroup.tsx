@@ -62,7 +62,6 @@ export default function ActivityGroup(props: {
           <EntityPill
             label={entity().label}
             facts={scopedEntityFacts(session, entity())}
-            onOpen={props.onOpenChild}
           />
         )}
       </Show>
@@ -141,7 +140,6 @@ export default function ActivityGroup(props: {
         <EntityPill
           label={props.group.child!.label}
           facts={scopedEntityFacts(session, props.group.child!)}
-          onOpen={props.onOpenChild}
         />
       </Show>
       {props.trailing?.(open)}

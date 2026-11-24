@@ -91,7 +91,8 @@ export default function ProjectTabs(props: {
   onCreateSession(task?: TaskRecord): Promise<void>;
   actions: TaskActions;
 }): import("solid-js").Element {
-  const { commands } = useCommandPorts();
+  const ports = useCommandPorts();
+  const { commands } = ports;
   const orderInput = orderInteraction(
     () => props.model.holdOrder(),
     () => props.model,
@@ -349,11 +350,28 @@ export default function ProjectTabs(props: {
     props.session?.id === id
       ? props.session.title
       : entry(id)?.title ?? "Session unavailable";
-  const openCrumb = ownedAction("task.session.open", (id: string) => {
-    // The accepted route owns selection. Path ancestors and working descendants
-    // can belong to another task; the currently active task is not their owner.
-    props.onOpen(id);
-  }, { arguments: { type: "string" } });
+  const crumbCommand = `task.session.open@${createUniqueId()}`;
+  ownedCommand(ports, {
+    id: crumbCommand,
+    title: "Open session",
+    category: "Session",
+    scope: "control",
+    arguments: { type: "string" },
+    // The accepted route owns selection, even for ancestors in another task.
+    run: (_context, id: string) => props.onOpen(id),
+  });
+  const openCrumb = (id: string) =>
+    commands.control(crumbCommand, id, {
+      target: {
+        sidecarId: props.project.sidecarId,
+        sessionID: id,
+        label: title(id),
+      },
+      // The injected navigation port reports synchronous route acceptance.
+      shown: () => true,
+      unshown: "The requested session did not open. Your input was kept.",
+      recovery: "Resolve unsaved input and open the session again",
+    });
   const meter = createMemo(() => summaryMeter(props.entry, props.catalog));
   const cost = () => sessionSummary(props.entry)?.cost ?? undefined;
   const contextRange = () =>
@@ -540,7 +558,7 @@ export default function ProjectTabs(props: {
             title={title}
             tooltip={(id) => metaList([title(id), props.project.directory])}
             target={sessionTarget}
-            open={(id) => run(openCrumb(id))}
+            openAction={openCrumb}
             rename={props.rename}
             feedbackID={crumbFeedbackID}
           />

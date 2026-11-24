@@ -147,7 +147,6 @@ function ReplyStart(props: {
             outcomeTime: props.source.outcomeTime,
             model: props.source.model,
           })}
-          onOpen={props.onOpen}
         />
       </div>
     </header>

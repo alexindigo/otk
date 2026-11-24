@@ -42,6 +42,15 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   await expect(card).toContainText("Completed");
   await expect(card).toContainText("Session now");
   await expect(card).toContainText("Working");
+  // The reply belongs to the session already on screen, not an Open target.
+  await expect(
+    page.locator(".otk-entity:has(.otk-entity-facts:visible)").getByRole(
+      "button",
+      { name: "Open", exact: true },
+    ),
+  ).toHaveCount(0);
+  await firstPill.click();
+  await expect(card).toBeVisible();
   const completed = await card.locator("time").getAttribute("datetime");
   await state.release(held.gate);
   await expect(card.locator("time")).toHaveAttribute("datetime", completed!);

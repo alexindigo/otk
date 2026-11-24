@@ -140,10 +140,25 @@ export function createRecordProjection(): {
     reconcile(ids, replies) {
       const next = empty();
       let interval: ActivityGroup | undefined, conversation: string | undefined;
+      let contextEnd = 0, contextHasContent = false;
       for (let index = 0; index < ids.length; index++) {
         const id = ids[index];
         const reply = replies[id];
-        if (reply.message.role !== "context") {
+        if (reply.message.role === "context" && index >= contextEnd) {
+          contextEnd = index;
+          contextHasContent = false;
+          while (
+            contextEnd < ids.length &&
+            replies[ids[contextEnd]].message.role === "context"
+          ) {
+            contextHasContent ||= !!replies[ids[contextEnd]].message.parts
+              .length;
+            contextEnd++;
+          }
+        }
+        // Headers alone cannot offer an activity disclosure. Once the interval
+        // has content, retain every source row, including empty breakouts.
+        if (reply.message.role !== "context" || !contextHasContent) {
           interval = undefined;
           conversation = id;
           next.keys.push(id);

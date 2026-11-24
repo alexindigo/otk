@@ -267,7 +267,7 @@ test.describe("V2 records", () => {
         .filter({ has: page.locator(".otk-tool-verb", { hasText: "failed" }) });
       await expect(
         failed.getByRole("button", {
-          name: "Open Junior session",
+          name: "Junior details",
           exact: true,
         }),
       ).toHaveText("Junior");
@@ -276,7 +276,7 @@ test.describe("V2 records", () => {
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(
         failed.getByRole("button", {
-          name: "Open Open task session",
+          name: "Open task details",
           exact: true,
         }),
       )

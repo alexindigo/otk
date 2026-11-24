@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import { dynamic } from "@solidjs/web";
 import {
+  type ActionControl,
   type ContextTarget,
   hashFor,
   type SessionRename,
@@ -16,6 +16,7 @@ import TitleEditor from "./TitleEditor.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { selection } from "./selection.ts";
 import { contextTarget } from "./context-target.ts";
+import ActionButton from "./ActionButton.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import { breadcrumbRows } from "./list-presentation.ts";
 import "./TaskTrail.css" with { type: "text" };
@@ -28,7 +29,7 @@ export default function TaskTrail(props: {
   title(id: string): string;
   tooltip(id: string): string;
   target(id: string): ContextTarget<SessionContextTarget>;
-  open(id: string): void;
+  openAction(id: string): ActionControl;
   rename?: SessionRename;
   feedbackID: string;
 }) {
@@ -105,60 +106,67 @@ export default function TaskTrail(props: {
         more={() => null}
       >
         {(row: () => TrailCrumb & { key: string; first: boolean }, compact) => {
-          const Control = dynamic(() => editing(row().id) ? "div" : "a");
+          const target = contextTarget(() => props.target(row().id));
+          const current = () =>
+            selection({
+              class: "otk-trail-session otk-session-crumb",
+              kind: "current",
+              selected: row().id === props.selected,
+            });
+          const attributes = () => ({
+            "data-otk-selection": "horizontal",
+            "data-crumb": row().id,
+            "data-depth": row().depth,
+            "data-helper": String(row().helper),
+            "data-crumb-kind": row().kind,
+          });
           const native = nativeAttributes(() => ({
-            onClick: (event: MouseEvent) => {
-              if (
-                editing(row().id) || event.button !== 0 || event.ctrlKey ||
-                event.metaKey || event.shiftKey || event.altKey
-              ) return;
-              event.preventDefault();
-              props.open(row().id);
-            },
+            ...attributes(),
+            ...current(),
           }));
+          const lamp = () => <StatusLight small state={row().status} />;
           return (
             <span class="otk-trail-link">
               {separator(row().first)}
-              <Control
-                href={hashFor({
-                  sidecarId: props.sidecarId,
-                  sessionID: row().id,
-                })}
-                ref={[contextTarget(() => props.target(row().id)), native.ref]}
-                {...native.attributes}
-                {...selection({
-                  class: "otk-trail-session otk-session-crumb",
-                  kind: "current",
-                  selected: row().id === props.selected,
-                })}
-                data-otk-selection="horizontal"
-                data-crumb={row().id}
-                data-depth={row().depth}
-                data-helper={String(row().helper)}
-                data-crumb-kind={row().kind}
-                title={props.tooltip(row().id)}
-                aria-label={props.title(row().id)}
-              >
-                <SelectionContent
-                  leading={<StatusLight small state={row().status} />}
-                >
-                  <Show
-                    when={editing(row().id)}
-                    fallback={
+              <Show
+                when={editing(row().id)}
+                fallback={
+                  <ActionButton
+                    action={props.openAction(row().id)}
+                    href={hashFor({
+                      sidecarId: props.sidecarId,
+                      sessionID: row().id,
+                    })}
+                    ref={target}
+                    selection={current()}
+                    attributes={attributes()}
+                    title={props.tooltip(row().id)}
+                    label={props.title(row().id)}
+                  >
+                    <SelectionContent leading={lamp()}>
                       <span class="otk-trail-title otk-crumb-title">
                         <Show when={compact()} fallback={props.title(row().id)}>
                           {compactTitle(props.title(row().id))}
                         </Show>
                       </span>
-                    }
-                  >
+                    </SelectionContent>
+                  </ActionButton>
+                }
+              >
+                <div
+                  {...native.attributes}
+                  ref={[target, native.ref]}
+                  title={props.tooltip(row().id)}
+                  aria-label={props.title(row().id)}
+                >
+                  <SelectionContent leading={lamp()}>
                     <TitleEditor
                       owner={props.rename!}
                       feedbackID={props.feedbackID}
                     />
-                  </Show>
-                </SelectionContent>
-              </Control>
+                  </SelectionContent>
+                </div>
+              </Show>
             </span>
           );
         }}

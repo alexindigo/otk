@@ -123,6 +123,7 @@ export default function Shell(
     () => ({
       sidecar: session.state.selection?.sidecarId,
       session: session.state.selection?.sessionID,
+      viewing: !settings(),
       dialog: dialog() || (draft().editor ? "editor" : ""),
       focus: keyboard.focus(),
     }),
@@ -796,7 +797,9 @@ export default function Shell(
                                 !!info()?.parentID}
                               siblings={session.state.siblings}
                               onOpenChild={(id) =>
-                                void commands.run("session.child", id)}
+                                void commands.run("session.child", id).catch(
+                                  fail,
+                                )}
                               permissions={session.state.content.permissions}
                               prefs={toggles.state.prefs}
                               info={info()}

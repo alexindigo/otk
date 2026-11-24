@@ -24,3 +24,9 @@
   justify-self: end;
   white-space: nowrap;
 }
+.otk-subagent-navigation {
+  min-inline-size: 0;
+}
+.otk-subagent-name {
+  inline-size: 100%;
+}

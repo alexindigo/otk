@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DelegateIcon } from "../ChromeIcons.tsx";
 import "./TaskTool.css" with { type: "text" };
-import { Show } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import { derivedValue } from "@otk/protocol";
-import { duration, metaList } from "@otk/client";
+import { type ActionControl, duration, metaList } from "@otk/client";
 import type { ToolRegistry } from "../../registries/renderers.ts";
-import { ownedAction } from "../../keyboard/context.tsx";
+import { useCommandPorts } from "../../keyboard/context.tsx";
+import ActionButton from "../ActionButton.tsx";
+import { sessionOpenControl } from "../session-open.ts";
 import ToolOutput from "./ToolOutput.tsx";
 import { countLabel } from "./count.ts";
 export function registerTaskTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "task",
-    (props) => <TaskTool call={props.call} onOpen={props.onOpenChild} />,
+    (props) => <TaskTool call={props.call} />,
     (call) => ({
       icon: DelegateIcon,
       verb: "Delegate",
@@ -26,11 +28,17 @@ export function registerTaskTool(tools: ToolRegistry): void {
   );
 }
 export default function TaskTool(
-  props: { call: TaskCall; onOpen(id: string): void },
+  props: { call: TaskCall; open?: ActionControl },
 ) {
-  const open = ownedAction("task.open", () => {
-    if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
-  });
+  const { commands } = useCommandPorts();
+  const open = createMemo(() =>
+    props.open ??
+      sessionOpenControl(
+        commands,
+        props.call.childSessionID ?? "",
+        props.call.description ?? "Task",
+      )
+  );
   const progress = () => {
     const result = props.call.progress?.progress;
     const value = derivedValue(result);
@@ -58,14 +66,13 @@ export default function TaskTool(
           </div>
         }
       >
-        <button
-          type="button"
+        <ActionButton
+          action={open()}
           class="otk-task-card"
-          onClick={() => void open()}
         >
           <strong>Open task</strong>
           <span>{progress()}</span>
-        </button>
+        </ActionButton>
       </Show>
       <ToolOutput
         text={props.call.output ?? ""}
