@@ -37,6 +37,15 @@ export function sessionOpenControl(
   }, label);
 }
 
+/** A selectable row, including the currently selected session. */
+export function sessionSelectionControl(
+  commands: CommandHub,
+  target: Selection,
+  label: string,
+): ActionControl {
+  return observedOpen(commands, "session.open", target, target, label);
+}
+
 /** Explicit cross-server Open offers, distinct from ordinary row re-selection. */
 export function sessionTargetOpenControl(
   commands: CommandHub,

@@ -13,7 +13,7 @@
 }
 .otk-live-work-list {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-1) var(--space-2);
   inline-size: max-content;
   max-inline-size: 100%;
@@ -30,13 +30,6 @@
   padding: var(--space-1);
   border-radius: var(--radius-control);
 }
-.otk-live-work-item.is-helper {
-  cursor: pointer;
-}
-.otk-live-work-item.is-helper:hover,
-.otk-live-work-item.is-helper:focus-within {
-  background: var(--otk-bg-elevated);
-}
 .otk-live-work-entity {
   display: inline-flex;
   min-inline-size: 0;
@@ -44,26 +37,6 @@
 .otk-live-work-title {
   min-inline-size: 0;
 }
-.otk-live-work-open {
-  padding: 0;
-  min-block-size: var(--row-compact);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  text-align: start;
-  font: inherit;
-}
 .otk-live-work-elapsed {
   text-align: end;
-}
-.otk-live-work-actions {
-  display: flex;
-  justify-content: end;
-  align-items: center;
-  gap: var(--space-1);
-  min-block-size: 0;
-}
-.otk-live-work-actions:empty {
-  display: none;
 }

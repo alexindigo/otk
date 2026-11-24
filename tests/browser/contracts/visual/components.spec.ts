@@ -340,7 +340,7 @@ test(
     const otherOriginal = await page.locator('[data-crumb="session-1"]')
       .elementHandle();
     await page.setViewportSize({ width: 600, height: 800 });
-    await expect(page.locator(".otk-folded-crumbs > button")).toBeVisible();
+    await expect(page.locator(".otk-subagents > button")).toBeVisible();
     const visible = () =>
       page.locator("[data-crumb]").evaluateAll((els) =>
         els.filter((el) => !el.closest("[hidden]")).map((el) =>
@@ -350,7 +350,7 @@ test(
     const shown = await visible();
     expect(shown).toContain("session-9");
     expect(shown).toContain("session-7");
-    expect(shown.length).toBeLessThan(ids.length);
+    expect(shown).toEqual(ids);
     expect(shown).toEqual(ids.filter((id) => shown.includes(id)));
     expect(
       await page.locator('[data-crumb="session-9"]').evaluate(
@@ -364,26 +364,39 @@ test(
         otherOriginal,
       ),
     ).toBe(true);
-    const before = await bounds(page, ".otk-folded-crumbs > button");
-    await page.locator(".otk-folded-crumbs > button").click();
-    await expect(page.locator(".otk-folded-crumbs [role=menuitem]").first())
+    // D67 moved the helper menu out of this row. The row's existing Session
+    // control still proves that ending an editor cannot move its press target.
+    const sessionBefore = await bounds(page, ".otk-new-session");
+    await page.locator(".otk-new-session").click();
+    await expect.poll(() => page.evaluate("styleTest.createdSessions()"))
+      .toBe(1);
+    expect(
+      (await bounds(page, ".otk-new-session")).every((value, index) =>
+        Math.abs(value - sessionBefore[index]) <= 1
+      ),
+    ).toBe(true);
+    const before = await bounds(page, ".otk-subagents > button");
+    await page.locator(".otk-subagents > button").click();
+    await expect(page.locator(".otk-subagents [role=menuitem]").first())
       .toBeVisible();
     expect(
-      (await bounds(page, ".otk-folded-crumbs > button")).every((v, i) =>
+      (await bounds(page, ".otk-subagents > button")).every((v, i) =>
         Math.abs(v - before[i]) <= 1
       ),
     ).toBe(true);
     const omitted = await page.locator(
-      ".otk-folded-crumbs [data-overflow-target]",
-    ).evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-overflow-target"))
-    );
-    // Opening More blurs the native title editor and refits the live chips.
-    // Compare both partitions from that same post-blur snapshot.
+      ".otk-subagents [data-subagent]",
+    ).evaluateAll((els) => els.map((el) => el.getAttribute("data-subagent")));
+    // D67 keeps every ancestor; the composer inventory is independent.
     const currentShown = await visible();
-    expect(omitted).toEqual(ids.filter((id) => !(currentShown.includes(id))));
+    expect(omitted).toEqual(ids.slice(1));
     expect(
-      await page.locator("[data-overflow-target]").evaluateAll((els) =>
+      ids.filter((id) => !currentShown.includes(id)).every((id) =>
+        omitted.includes(id)
+      ),
+    ).toBe(true);
+    expect(
+      await page.locator("[data-subagent]").evaluateAll((els) =>
         els.every((el) => !el.closest("[data-overflow-key]"))
       ),
     ).toBe(true);
@@ -409,6 +422,42 @@ test(
       .toHaveCount(1);
     await page.evaluate("styleTest.menuItems(['one','two','delete'])");
     await expect(page.locator(":popover-open [role=menuitem]")).toHaveCount(3);
+  },
+);
+test(
+  "visual.trail-first-words-retain-measured-width-inside-the-shared-scroll-lane",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await scene(page, state.url, "lists");
+    const root = "root" + "w".repeat(100);
+    await page.setViewportSize({ width: 600, height: 800 });
+    await page.evaluate(
+      `styleTest.lists(${JSON.stringify([root, "leaf"])},'leaf')`,
+    );
+    const trail = page.locator(".otk-task-crumbs");
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
+      "data-fit-mode",
+      "compact",
+    );
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    await expect.poll(() =>
+      trail.locator(".otk-trail-first:visible").evaluateAll((nodes) =>
+        nodes.every((node) => {
+          const word = node.getBoundingClientRect(),
+            frame = node.closest("[data-overflow-key]")!
+              .getBoundingClientRect();
+          return word.width > 0 && word.left >= frame.left &&
+            word.right <= frame.right;
+        })
+      )
+    ).toBe(true);
+    await expect.poll(() =>
+      trail.locator(".otk-overflow-items").evaluate((lane) =>
+        lane.scrollWidth > lane.clientWidth
+      )
+    ).toBe(true);
+    await expect(trail.getByRole("scrollbar", { name: "Horizontal scroll" }))
+      .toBeAttached();
   },
 );
 test(

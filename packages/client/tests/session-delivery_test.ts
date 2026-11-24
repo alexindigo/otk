@@ -91,6 +91,70 @@ function fixture(committed?: (message: UserMessage) => void) {
   };
 }
 
+for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
+  Deno.test(`reload reattaches ${outcome} input to the existing send lifecycle`, async () => {
+    const f = fixture();
+    const entry = {
+      intent: { clientID: "tab", key: "restored" },
+      message: pendingMessage("restored-message", "opcv2-root", [{
+        kind: "text",
+        text: "Keep these original bytes",
+      }]),
+      phase: "pending" as const,
+      dispatched: outcome !== "preparing",
+    };
+    f.projection.send(entry);
+    const result = Promise.withResolvers<PromptReceipt | null>();
+    void result.promise.catch(() => {});
+    const resume = (f.owner as typeof f.owner & {
+      resume?(
+        value: typeof entry,
+        result?: Promise<PromptReceipt | null>,
+      ): void;
+    }).resume;
+    resume?.(entry, outcome === "preparing" ? undefined : result.promise);
+    if (outcome === "rejected") {
+      result.reject(
+        new RequestFailure({
+          code: "native.rejected",
+          retry: "new-intent",
+          diagnosticID: "restored-rejection",
+          facts: { reason: "Native refused the original send" },
+        }),
+      );
+      for (let n = 0; n < 10; n++) await Promise.resolve();
+    } else if (outcome === "unobserved") f.expire();
+    const restored = f.projection.entry(entry.message.id)?.send;
+    assertEquals(restored?.phase, "failed");
+    assertEquals(restored?.message.parts, entry.message.parts);
+    assert(restored?.feedback?.failure);
+    if (outcome === "preparing") {
+      assert(
+        restored.feedback.failure.reason.includes(
+          "before this message was sent",
+        ),
+      );
+    } else if (outcome === "rejected") {
+      assertEquals(
+        restored.feedback.failure.reason,
+        "Native refused the original send",
+      );
+    } else {
+      assert(restored.feedback.failure.reason.includes("not been observed"));
+      restored.retry?.();
+      assertEquals(f.counts().reads, 1);
+    }
+    f.message(entry.message.id);
+    assertEquals(
+      f.projection.entry(entry.message.id)?.send?.phase,
+      "committed",
+    );
+    result.resolve({ messageID: entry.message.id, state: "accepted" });
+    await Promise.resolve();
+    f.owner.stop();
+  });
+}
+
 Deno.test("send bookkeeping observes only its canonical native identity once, including admission before acknowledgement", async () => {
   const seen: UserMessage[] = [], f = fixture((message) => seen.push(message));
   const acknowledgement = Promise.withResolvers<PromptReceipt>();

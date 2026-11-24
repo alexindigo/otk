@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./LiveWork.css" with { type: "text" };
-import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import {
-  type LiveWorkOwner,
   type RunningWork,
   runningWorkElapsed,
   runningWorkLabel,
@@ -13,63 +12,38 @@ import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
-import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import Popover from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
-import { useCommandPorts } from "../keyboard/context.tsx";
-import ActionButton from "./ActionButton.tsx";
-import { sessionOpenControl } from "./session-open.ts";
 
-/** One quiet control; data and actions belong to the session composition. */
-export default function LiveWork(props: {
-  items: readonly RunningWork[];
-  owner?: LiveWorkOwner;
-  onError(error: unknown): void;
-}): import("solid-js").Element {
-  const [now, setNow] = createSignal(Date.now());
+/** Shell work only. D67's sub-session inventory has one separate Menu view. */
+export default function LiveWork(props: { items: readonly RunningWork[] }) {
   const session = useOptionalSessionPorts();
-  const { commands } = useCommandPorts();
-  const sidecar = session?.failureTarget?.().sidecarId;
-  const [revision, setRevision] = createSignal(0);
-  onSettled(() =>
-    props.owner?.subscribe(() => setRevision((value) => value + 1))
-  );
-  const stopping = (id: string) => {
-    revision();
-    return props.owner?.stopping(id);
-  };
+  const shells = () => props.items.filter((item) => item.kind === "shell");
+  const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
-  let popover: PopoverControl | undefined;
-  const stopClock = () => clearInterval(timer);
-  onCleanup(stopClock);
-  const stop = async (item: RunningWork) => {
-    try {
-      await props.owner?.stop(item.id);
-    } catch (error) {
-      props.onError(error);
-    }
-  };
+  const stop = () => clearInterval(timer);
+  onCleanup(stop);
   return (
-    <Show when={props.items.length}>
+    <Show when={shells().length}>
       <Popover
         class="otk-live-work"
         triggerClass="otk-live-work-trigger"
-        label="Running work"
-        triggerLabel={`Running work: ${runningWorkLabel(props.items)}`}
-        title="Running work"
+        label="Running shells"
+        triggerLabel={`Running work: ${runningWorkLabel(shells())}`}
+        title="Running shells"
         size="content"
-        control={(control) => popover = control}
         onOpen={() => {
-          stopClock();
+          stop();
           setNow(Date.now());
           timer = setInterval(() => setNow(Date.now()), 1000);
         }}
-        onClose={stopClock}
+        onClose={stop}
         trigger={
           <>
             <StatusLight small state="working" />
             <ChromeMeta class="otk-control-label">
-              {runningWorkLabel(props.items)}
+              {runningWorkLabel(shells())}
             </ChromeMeta>
           </>
         }
@@ -77,62 +51,27 @@ export default function LiveWork(props: {
         <ScrollRegion
           class="otk-live-work-list"
           role="list"
-          aria-label="Running work"
+          aria-label="Running shells"
         >
-          <For each={props.items} keyed={(item) => item.id}>
+          <For each={shells()} keyed={(item) => item.id}>
             {(item) => (
               <div
-                class={["otk-live-work-item", {
-                  "is-helper": item().kind === "helper",
-                }]}
+                class="otk-live-work-item"
                 role="listitem"
                 data-running-work={item().id}
               >
-                <StatusLight
-                  small
-                  attention={sidecar
-                    ? { server: sidecar, session: item().sessionID }
-                    : undefined}
-                  state={session?.status?.(item().sessionID) === "blocked"
-                    ? "blocked"
-                    : "working"}
+                <EntityPill
+                  label={item().label}
+                  facts={scopedEntityFacts(session, {
+                    sessionID: item().sessionID,
+                  })}
                 />
                 <span
-                  class="otk-live-work-entity"
-                  onClick={(event) => event.stopPropagation()}
+                  class="otk-live-work-title otk-control-label"
+                  title={item().title}
                 >
-                  <EntityPill
-                    label={item().label}
-                    facts={scopedEntityFacts(session, {
-                      sessionID: item().sessionID,
-                    })}
-                  />
+                  {item().title}
                 </span>
-                <Show
-                  when={item().kind === "helper"}
-                  fallback={
-                    <span
-                      class="otk-live-work-title otk-control-label"
-                      title={item().title}
-                    >
-                      {item().title}
-                    </span>
-                  }
-                >
-                  <ActionButton
-                    action={sessionOpenControl(
-                      commands,
-                      item().sessionID,
-                      item().title,
-                    )}
-                    class="otk-live-work-open otk-live-work-title otk-control-label"
-                    label={`Open ${item().label}: ${item().title}`}
-                    title={item().title}
-                    onShown={() => popover?.close()}
-                  >
-                    {item().title}
-                  </ActionButton>
-                </Show>
                 <ChromeMeta
                   class="otk-live-work-elapsed"
                   aria-label="Running for"
@@ -149,28 +88,6 @@ export default function LiveWork(props: {
                       runningWorkElapsed(now() - item().startedAt!)
                     }`}
                 </ChromeMeta>
-                <div
-                  class="otk-live-work-actions"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <Show when={item().kind === "helper"}>
-                    <Show
-                      when={props.owner?.canStop(item().id) &&
-                        !stopping(item().id)}
-                    >
-                      <button
-                        type="button"
-                        class="otk-pill"
-                        onClick={() => void stop(item())}
-                      >
-                        Stop
-                      </button>
-                    </Show>
-                    <Show when={stopping(item().id)}>
-                      <span role="status">Stopping...</span>
-                    </Show>
-                  </Show>
-                </div>
               </div>
             )}
           </For>

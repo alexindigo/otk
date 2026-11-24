@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration } from "../../fixtures/wire.ts";
+import { subagents } from "../../pages/crumbs.ts";
 import type { Page } from "@playwright/test";
 import type { TestState } from "../../fixtures/test-state.ts";
 import type { Commands } from "../../../support/fixture-control.ts";
@@ -152,14 +153,25 @@ test(
     await throughDuration(300, async () => {});
     const before = await geometry(page, true),
       stop = await frameProbe(page, true);
+    const inventory = subagents(page);
+    const helpers = page.locator(".otk-subagents [data-subagent]");
     for (let n = 0; n < 3; n++) {
       await scenario(state, "succeed");
-      const helpers = page.locator(
-        '.otk-task-crumbs [data-helper="true"]:visible',
-      );
-      await expect(helpers).toHaveCount([1, 4, 0][n]);
-      for (const helper of await helpers.all()) {
-        await expect(helper).toBeInViewport();
+      const count = [1, 4, 0][n];
+      await expect(page.locator('.otk-task-crumbs [data-helper="true"]'))
+        .toHaveCount(0);
+      if (count) {
+        await expect(inventory).toHaveText(
+          `${count} subagent${count === 1 ? "" : "s"}`,
+        );
+        await inventory.click();
+        await expect(helpers).toHaveCount(count);
+        for (const helper of await helpers.all()) {
+          await expect(helper).toBeInViewport();
+        }
+        await inventory.click();
+      } else {
+        await expect(inventory).toHaveCount(0);
       }
       await throughDuration(
         180,
@@ -172,11 +184,10 @@ test(
     await scenario(state, "fail");
     await expect(page.locator(".otk-composer-notice")).toBeVisible();
     await scenario(state, "succeed");
-    await expect(page.locator(".otk-live-work-trigger")).toBeVisible();
+    await expect(inventory).toBeVisible();
     const noticeBounds = await page.locator(".otk-composer-notice")
       .boundingBox();
-    const chipBounds = await page.locator(".otk-live-work-trigger")
-      .boundingBox();
+    const chipBounds = await inventory.boundingBox();
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(

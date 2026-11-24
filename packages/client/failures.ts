@@ -282,10 +282,12 @@ export class FailurePresenter {
     };
     return { kind: "pending", text: text[progress.code] };
   }
-  connection(): Feedback {
+  connection(updated = false): Feedback {
     return {
       kind: "connection",
-      text: "Reconnecting. Your pending action is kept.",
+      text: updated
+        ? "OTK was updated. Your pending action is kept."
+        : "Reconnecting. Your pending action is kept.",
     };
   }
 }

@@ -118,7 +118,14 @@ type ServerMessage =
   | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "bootstrap.complete" }
   | ({ t: "transcript.invalidated" } & TranscriptInvalidation)
-  | { t: "error"; code: string; message?: string };
+  | {
+    t: "error";
+    code: string;
+    message?: string;
+    reason?: "client-outdated";
+    protocol?: number;
+    build?: string;
+  };
 
 // A missing advertisement uses the compatibility families; an explicit []
 // advertises none.

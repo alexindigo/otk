@@ -15,6 +15,7 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 import PreferenceControls from "../components/PreferenceControls.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import { registerProjectSettings } from "./project-settings.tsx";
+import { retainForReload } from "../state/reload.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   registerProjectSettings(dialogs);
@@ -33,6 +34,14 @@ function AddProject(props: DialogProps) {
     shell.servers().find((s) => s.status === "connected")?.id ?? "local",
   );
   const [path, setPath] = createSignal("");
+  retainForReload("add-project", {
+    snapshot: () => ({ server: server(), path: path() }),
+    restore(value) {
+      const saved = value as { server: string; path: string };
+      setServer(saved.server);
+      setPath(saved.path);
+    },
+  });
   const connection = () => {
     const selected = shell.servers().find((s) => s.id === server());
     return {

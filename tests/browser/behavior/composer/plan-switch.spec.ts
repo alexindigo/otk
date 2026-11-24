@@ -179,7 +179,7 @@ test(
       await footer("build", "high");
       await page.reload();
       await openSession(state, page, session.id);
-      await footer("plan", "low");
+      await footer("build", "high");
       return;
     }
     await openSession(state, page, session.id);
@@ -261,6 +261,6 @@ test(
     await footer("build", "high");
     await page.reload();
     await openSession(state, page, session.id);
-    await footer("plan", "low");
+    await footer("build", "high");
   },
 );

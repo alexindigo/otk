@@ -9,7 +9,7 @@
   overflow: clip;
   min-block-size: var(--row-compact);
 }
-.otk-overflow-row.has-overflow {
+.otk-overflow-row.has-overflow:not(.is-progressive) {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 .otk-overflow-items {
@@ -18,6 +18,8 @@
   align-items: center;
   gap: inherit;
   min-inline-size: 0;
+}
+.otk-overflow-row:not(.is-progressive) > .otk-overflow-items {
   overflow: clip;
 }
 .otk-overflow-more {
@@ -73,4 +75,30 @@
 }
 .otk-overflow-row.is-intrinsic > .otk-overflow-measure > span:last-child {
   position: absolute;
+}
+.otk-overflow-row.is-single-line .otk-overflow-items {
+  flex-wrap: nowrap;
+}
+.otk-overflow-lane {
+  gap: inherit;
+}
+.otk-overflow-compact-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  inline-size: max-content;
+  block-size: var(--row-compact);
+}
+.otk-overflow-compact-measure > span {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.otk-overflow-row.is-compact .otk-overflow-items > .otk-overflow-item {
+  inline-size: var(--overflow-item-width);
+}
+.otk-overflow-row.is-progressive.is-compact .otk-overflow-items > .otk-overflow-item {
+  flex: none;
+  max-inline-size: none;
 }

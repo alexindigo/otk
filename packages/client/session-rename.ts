@@ -8,11 +8,15 @@ export interface RenameTarget extends Selection {
   title: string;
 }
 export interface SessionRenameState {
+  input?: string;
   editing?: RenameTarget & { origin: RenameOrigin };
   pending: boolean;
   error?: FailureValue;
 }
 export interface SessionRename {
+  edit(title: string): void;
+  snapshot(): unknown;
+  restore(value: unknown): void;
   readonly state: SessionRenameState;
   start(target: RenameTarget, origin: RenameOrigin): void;
   cancel(): void;
@@ -47,11 +51,25 @@ export function createSessionRename(options: {
   };
   return {
     state: store.state,
+    edit: (title) =>
+      store.update((state) => {
+        state.input = title;
+      }),
+    snapshot: () => ({ editing, input: store.state.input }),
+    restore(value) {
+      const saved = value as Pick<SessionRenameState, "editing" | "input">;
+      editing = saved.editing;
+      store.update((state) => {
+        state.editing = editing;
+        state.input = saved.input;
+      });
+    },
     start(target, origin) {
       cancel();
       editing = { ...target, origin };
       store.update((state) => {
         state.editing = editing;
+        state.input = target.title;
       });
     },
     cancel,

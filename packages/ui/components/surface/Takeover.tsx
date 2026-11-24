@@ -28,6 +28,7 @@ export default function Takeover(props: {
         )}
       </Show>
       <Surface
+        density="composer"
         layout="fill"
         title={props.title}
         actions={props.collapsed || !props.actions

@@ -6,6 +6,7 @@ import {
   nativeIdle,
   openWorkLogs,
   prompt,
+  revealAcquired,
   scrollTranscript,
   selectSourceWord,
   showFileChanges,
@@ -14,6 +15,78 @@ import {
   wheelTranscript,
 } from "../../pages/transcript.ts";
 import type { Page } from "@playwright/test";
+
+const completedWrite = '[data-tool="write"][data-tool-status="completed"]';
+
+// A mounted fold is not source readiness. Borrow the delivered tool's identity
+// before opening its own work groups, including across virtual replacement.
+async function revealWrite(page: Page, sessionID: string) {
+  let messageID: string | undefined;
+  await expect.poll(async () => {
+    messageID = await page.evaluate((sessionID) => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication: Map<string, import("@otk/protocol").Message>;
+      }).transcriptPublication;
+      return [...messages.values()].find((message) =>
+        message.sessionID === sessionID &&
+        message.parts.some((part) =>
+          part.kind === "tool" && part.call.tool === "write" &&
+          part.call.status === "completed"
+        )
+      )?.id;
+    }, sessionID);
+    return messageID;
+  }).toBeTruthy();
+  const selector = `[data-message="${messageID}"]`;
+  await revealAcquired(page, selector);
+  await openWorkLogs(page, page.locator(selector));
+  await expect(page.locator(selector).locator(completedWrite)).toBeVisible();
+}
+
+test("messages.numbered-source-acquires-published-write-owner", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><article data-message="earlier"><button class="otk-work-fold" aria-expanded="true">Earlier work</button></article></div>`,
+  );
+  await page.evaluate(() => {
+    Object.assign(globalThis, { transcriptPublication: new Map() });
+  });
+  let settled = false;
+  const acquisition = revealWrite(page, "shape-session").then(() => {
+    settled = true;
+  });
+  try {
+    // The old readiness condition can finish while the requested source is held.
+    // Join it explicitly, not a sleep or a guessed number of quiet frames.
+    await openWorkLogs(page);
+    expect(settled, "An earlier open fold cannot certify the write").toBe(
+      false,
+    );
+  } finally {
+    await page.evaluate(() => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication: Map<string, unknown>;
+      }).transcriptPublication;
+      messages.set("written", {
+        id: "written",
+        sessionID: "shape-session",
+        parts: [{
+          kind: "tool",
+          call: { tool: "write", status: "completed" },
+        }],
+      });
+      document.querySelector(".otk-messages")!.insertAdjacentHTML(
+        "beforeend",
+        `<article data-message="written"><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true');this.nextElementSibling.hidden=false">Write work</button><section hidden data-tool="write" data-tool-status="completed"><code>Written source</code></section></article>`,
+      );
+    });
+    await acquisition;
+  }
+  await expect(page.locator('[data-message="written"] code')).toHaveText(
+    "Written source",
+  );
+});
 
 // Native source coordinates cover both preformatted text and styled rows. The
 // independent probe deliberately does not import product geometry machinery.
@@ -143,7 +216,7 @@ test("messages.code-projection-copy-numbered-geometry", {
   });
   await nativeIdle(state, write.id);
   await openSession(state, page, write.id);
-  await openWorkLogs(page);
+  await revealWrite(page, write.id);
   await expect(page.locator(".otk-code[data-numbered=true] code"))
     .toHaveJSProperty("textContent", source);
   await expect(page.locator(".otk-code-plain")).toBeAttached({
@@ -197,7 +270,7 @@ test("messages.leading-clip-true-colour-gutter", {
     "data-status",
     "idle",
   );
-  await openWorkLogs(page);
+  await revealWrite(page, session.id);
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1999$/ }))
     .toHaveCount(1);
   const delta = await page.evaluate<number>(
@@ -283,7 +356,7 @@ test("messages.numbered-empty-blank-terminal-geometry", {
       content,
     }, "Written.");
     await prompt(page, "Write shape " + index);
-    await openWorkLogs(page);
+    await revealWrite(page, session.id);
     await expect(page.locator(".otk-code[data-numbered=true] code"))
       .toHaveJSProperty("textContent", content);
     await expect.poll(() =>

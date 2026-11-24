@@ -128,6 +128,7 @@ function insert(
 }
 /** Sole canonical body and grouping owner. Compatibility arrays are explicit lazy reads. */
 export interface TranscriptProjection {
+  pendingSends(): readonly PendingSend[];
   readonly state: TranscriptProjectionState;
   send(value: PendingSend): void;
   /** Retire a local entry refused before native dispatch; committed source wins. */
@@ -609,6 +610,8 @@ export function createTranscriptProjection(): TranscriptProjection {
   };
   const owner = {
     state,
+    pendingSends: () =>
+      [...sends.values()].filter((send) => send.phase !== "committed"),
     entry(messageID: string) {
       return state.repliesByID[locations.get(messageID)?.key ?? messageID];
     },

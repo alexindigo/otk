@@ -330,15 +330,17 @@ single replaceable session preview. Pin, double-click or send in a phantom to
 make a task. Tasks share one row equally down to 90px, then scroll sideways.
 Wheel over the strip to scroll; edge triangles page with the last fully visible
 tab becoming the first (mirrored going back). Selection and resizing keep the
-active tab in view. Tasks follow attention priority, then newest activity. Task
-breadcrumbs switch sessions and their helpers in one measured row with their own
-More menu; the selected or editing chip stays in place. The meter shows reported
-token usage and whole-session reported cost. The collapsible right panel hosts
-feature-registered views; its collapsed rail keeps their icons available and
-clicking an icon opens that view. Sessions shows the selected project's
-task-grouped parent/child tree with status lights and title search. Switching
-projects restores the last session's proven human root and its task tab,
-including project-route reloads; explicit helper URLs remain helper views;
+active tab in view. Task order changes only through explicit moves. Task
+breadcrumbs show only the open session's complete ancestry, with every title
+clickable. Crowding compacts titles to a whole first word and a fitting tail.
+The composer header's Subagents control lists working, blocked and finished but
+undelivered helpers, with lamps, navigable titles and running times. The meter
+shows reported token usage and whole-session reported cost. The collapsible
+right panel hosts feature-registered views; its collapsed rail keeps their icons
+available and clicking an icon opens that view. Sessions shows the selected
+project's task-grouped parent/child tree with status lights and title search.
+Switching projects restores the last session's proven human root and its task
+tab, including project-route reloads; explicit helper URLs remain helper views;
 missing or closed sessions fall back to the default project session. Click to
 preview or double-click to make a task. Panel width (280–480px) and selected
 view persist with its collapsed state per user. Close session in the context

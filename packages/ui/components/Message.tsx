@@ -419,7 +419,8 @@ export default function Message(
                       identity={group().id}
                       render={(visible, meta) => (
                         <WorkLog
-                          identity={group().id}
+                          owner={props.ownerID ?? props.message.id}
+                          records={group().parts.map((part) => part.id)}
                           prefs={props.prefs}
                           required={group().required}
                           meta={meta}

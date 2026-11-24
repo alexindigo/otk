@@ -1,0 +1,32 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-subagents-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.otk-subagents-trigger {
+  padding: 0;
+  min-block-size: var(--control-size);
+  white-space: nowrap;
+}
+.otk-subagent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+.otk-subagent-stop {
+  grid-column: 2;
+}
+.otk-subagent-time {
+  grid-column: 3;
+  justify-self: end;
+  white-space: nowrap;
+}
+.otk-subagent-navigation {
+  min-inline-size: 0;
+}
+.otk-subagent-name {
+  inline-size: 100%;
+}

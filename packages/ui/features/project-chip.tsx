@@ -67,6 +67,11 @@ export default function ProjectLocation(props: {
               return commands.run("dialog.open", {
                 id: "project-settings",
                 input: {
+                  key: JSON.stringify([
+                    props.sidecarId,
+                    snapshot.directory,
+                    snapshot.projectID,
+                  ]),
                   name: project?.state.value?.[0]?.name ||
                     directory.split("/").at(-1) || directory,
                   editor,

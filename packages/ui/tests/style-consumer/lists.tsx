@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, onSettled } from "solid-js";
 import { createSessionRename, createTabs } from "@otk/client";
-import type { ContentSession, InboxSnapshot } from "@otk/protocol";
+import {
+  type ContentSession,
+  entityKey,
+  type InboxSnapshot,
+} from "@otk/protocol";
 import ProjectTabs from "../../components/ProjectTabs.tsx";
 import CommandMenu from "../../components/CommandMenu.tsx";
+import Subagents from "../../components/Subagents.tsx";
 import { useCommandPorts } from "../../keyboard/context.tsx";
 import { solidState } from "../../state/binding.ts";
 
@@ -19,18 +24,29 @@ export default function Scene() {
   });
   const [members, setMembers] = createSignal<string[]>([]),
     [session, setSession] = createSignal<ContentSession>();
-  const inbox = (): InboxSnapshot => ({
+  const inbox = (ids = members()): InboxSnapshot => ({
     projects: [],
     tasks: [{
       id: "task",
       directory,
       name: "Task",
-      sessions: members(),
+      sessions: ids,
       order: 0,
     }],
     seen: {},
     finishes: {},
     pathTemplates: [],
+    entities: Object.fromEntries(
+      ids.map((
+        id,
+      ) => [entityKey("session", id), {
+        kind: "session",
+        id,
+        state: "working",
+        previous: "none",
+        counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+      }]),
+    ),
   });
   const entry = (id: string, index: number, ids: string[]) => ({
     id,
@@ -52,13 +68,15 @@ export default function Scene() {
     },
   });
   const entries = () => members().map(entry);
+  let createdSessions = 0;
+  styleTest.createdSessions = () => createdSessions;
   styleTest.lists = (ids, selected = ids[0], editing) => {
     setMembers(ids);
     tabs.update({
       directory,
       entries: ids.map(entry),
       inbox: {
-        ...inbox(),
+        ...inbox(ids),
         tasks: [{
           id: "task",
           directory,
@@ -115,6 +133,12 @@ export default function Scene() {
         },
       })
     );
+    releases.push(commands.register({
+      id: "list.open-helper",
+      title: "Open subagent",
+      category: "Probe",
+      run: () => undefined,
+    }));
     return () => releases.forEach((release) => release());
   });
   return (
@@ -129,7 +153,10 @@ export default function Scene() {
         rename={rename}
         onOpen={() => true}
         onEmpty={() => true}
-        onCreateSession={() => Promise.resolve()}
+        onCreateSession={() => {
+          createdSessions++;
+          return Promise.resolve();
+        }}
         actions={{
           create: () => Promise.reject(new Error("unused")),
           rename: () => Promise.resolve(),
@@ -138,6 +165,20 @@ export default function Scene() {
           add: () => Promise.resolve(),
           remove: () => Promise.resolve(),
         }}
+      />
+      <Subagents
+        model={(() => {
+          void tabs.state.revision;
+          return tabs.trail();
+        })()}
+        title={(id) => id}
+        openAction={(id) =>
+          commands.control("list.open-helper", undefined, {
+            target: { label: id },
+            shown: () => true,
+            unshown: "The subagent did not open.",
+            recovery: "Choose the subagent again",
+          })}
       />
       <CommandMenu
         label="Reactive list menu"

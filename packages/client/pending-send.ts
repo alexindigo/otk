@@ -14,6 +14,8 @@ export interface PendingSend {
   intent: ClientIntent;
   message: UserMessage;
   phase: "pending" | "failed" | "committed";
+  /** Captured by SessionDelivery at its dispatch boundary, not inferred by a view. */
+  dispatched?: boolean;
   feedback?: Feedback;
   retry?(): void;
 }

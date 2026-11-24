@@ -10,6 +10,7 @@ import {
   createForkNotes,
   createInputGuard,
   createListScopes,
+  createReload,
   createServerResources,
   createSessionActions,
   createSessionRename,
@@ -35,6 +36,7 @@ import { createSession } from "./session.ts";
 import { createSidecars } from "./sidecars.ts";
 
 export interface ShellState {
+  reload: import("@otk/client").Reload;
   confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   resources: ServerResources;
@@ -68,7 +70,11 @@ export function createShellState(
     sidecars: (receive) =>
       createSidecars(receive, {
         storage,
-        connection: { api: o.api, policy: o.policy },
+        connection: {
+          api: o.api,
+          policy: o.policy,
+          reload: () => reload.run(),
+        },
         sessionTitle: (sidecarId, sessionID) =>
           index.get(sidecarId, sessionID)?.title,
       }),
@@ -94,6 +100,52 @@ export function createShellState(
         : undefined,
   );
   const drafts = createDrafts(solidState);
+  let tabStorage: Storage | null = null;
+  try {
+    tabStorage = globalThis.sessionStorage;
+  } catch { /* Reload will refuse visibly. */ }
+  const reload = createReload({
+    key: `otk.reload.v1:${o.api.href}`,
+    storage: tabStorage,
+    navigate: () => globalThis.location.reload(),
+    owners: {
+      drafts,
+      connections: {
+        snapshot: () =>
+          sidecars.state.list.map(({ id }) => ({
+            id,
+            attention: sidecars.connection(id).attention.snapshot(),
+            requests: sidecars.connection(id).requests.snapshot(),
+          })),
+        restore(value) {
+          for (
+            const saved of value as {
+              id: string;
+              attention: unknown;
+              requests: unknown;
+            }[]
+          ) {
+            if (
+              !sidecars.state.list.some(({ id }) => id === saved.id)
+            ) continue;
+            sidecars.connection(saved.id).attention.restore(saved.attention);
+            sidecars.connection(saved.id).requests.restore(saved.requests);
+          }
+        },
+      },
+    },
+  });
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    try {
+      reload.checkpoint();
+    } catch (cause) {
+      console.error("Reload checkpoint diagnostic", cause);
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  };
+  globalThis.addEventListener("beforeunload", beforeUnload);
+  onCleanup(() => globalThis.removeEventListener("beforeunload", beforeUnload));
   const current = createCurrentClient(
     () => session.state.selection,
     (id) => sidecars.connection(id),
@@ -123,11 +175,37 @@ export function createShellState(
         action,
       ),
   });
+  reload.register("transcripts", {
+    snapshot: () => session.transcripts.snapshot(),
+    restore(value) {
+      session.transcripts.restore(value, (target, send) => {
+        const operation = sidecars.connection(target.sidecarId).requests
+          .operations()
+          .find(({ state }) =>
+            state.ref.clientID === send.intent.clientID &&
+            state.ref.key === send.intent.key
+          );
+        actions.delivery(target).resume(
+          send,
+          operation?.result as
+            | Promise<import("@otk/protocol").PromptReceipt | null>
+            | undefined,
+        );
+      });
+    },
+  });
   const rename = createSessionRename({
     rename: actions.rename,
     title: (target) =>
       resources.entry(target.sidecarId, target.sessionID)?.title,
     factory: solidState,
+  });
+  reload.register("rename", rename);
+  reload.register("server-addition", {
+    snapshot: () => sidecars.state.addition,
+    restore(value) {
+      if (value) sidecars.editAdd?.(value as { url: string; label: string });
+    },
   });
   const revert = createSessionRevert({
     session,
@@ -243,6 +321,7 @@ export function createShellState(
     if (value) resources.syncTabs(value.p, value.input, value.selected);
   });
   return {
+    reload,
     confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,

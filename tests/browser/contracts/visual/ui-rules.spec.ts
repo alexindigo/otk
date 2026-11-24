@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { subagent, subagents } from "../../pages/crumbs.ts";
 import type { Page, TestInfo } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -387,9 +388,13 @@ test.describe("mandatory helper crumbs", () => {
         });
       }
       await openSession(state, page, "tstv1-otk");
-      // WP3: every working member of the family remains visible.
-      await expect(page.locator('[data-crumb="tstv1-helper"]')).toHaveCount(1);
-      await expect(page.locator('[data-crumb="tstv1-nested"]')).toHaveCount(1);
+      // D67: the parent shows no off-path crumbs; both remain in the inventory.
+      await expect(page.locator('[data-crumb="tstv1-helper"]')).toHaveCount(0);
+      await expect(page.locator('[data-crumb="tstv1-nested"]')).toHaveCount(0);
+      await subagents(page).click();
+      await expect(subagent(page, "tstv1-helper")).toBeVisible();
+      await expect(subagent(page, "tstv1-nested")).toBeVisible();
+      await subagents(page).click();
       await page.locator('[data-session="tstv1-nested"]').click();
       for (const theme of themes) {
         await paint(state, page, theme);
