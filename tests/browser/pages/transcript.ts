@@ -588,6 +588,7 @@ async function revealMeasured(page: Page, selector: string, required: boolean) {
   }
   await expect.poll(async () => {
     state = await probe();
+    while (state.disclosed) state = await probe();
     if (state.delta === undefined) return required ? Infinity : 0;
     const remaining = Math.abs(state.delta);
     // Publication can grow again after the first measurement. Reposition the
