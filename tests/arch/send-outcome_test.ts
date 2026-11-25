@@ -145,7 +145,15 @@ Deno.test("Send outcome audit detects void contracts, silent catch and early ret
 Deno.test("all exported submission entry contracts are closed outcomes", async () => {
   assertEquals(
     outcomeKinds(await Deno.readTextFile("packages/client/send-outcome.ts")),
-    ["accepted", "committed", "failed", "refused", "unconfirmed"],
+    [
+      "accepted",
+      "committed",
+      "failed",
+      "refused",
+      "started",
+      "unconfirmed",
+      "withdrawn",
+    ],
   );
   for (
     const [file, owner, method] of [

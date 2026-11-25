@@ -9,6 +9,65 @@ import { V2Client } from "../client.ts";
 import { preparePrompt, V2Prompt } from "../prompt.ts";
 import { selectAction, sessionActions } from "../session-actions.ts";
 import type { NativeSession } from "../messages.ts";
+
+for (const race of [false, true]) {
+  Deno.test(`V2 withdraw confirms inbox cancellation${race ? " versus promotion race" : ""}`, async () => {
+    const sessionID = "opcv2-ses_root", messageID = "msg_target";
+    const order: string[] = [];
+    let queued = false, delivered = false;
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    const client = new V2Client(
+      { endpoint: { url: "http://localhost:4000" }, pid: 1, version: "2.2.6" },
+      1000,
+      new AbortController().signal,
+      (input, init) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith(`/inbox/${messageID}`) && init?.method === "DELETE") {
+          order.push("cancel");
+          queued = false;
+          delivered = race;
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        if (path.endsWith("/inbox")) {
+          order.push("inbox");
+          return Promise.resolve(
+            Response.json({ data: queued ? [{ id: messageID }] : [] }),
+          );
+        }
+        if (path.endsWith(`/message/${messageID}`)) {
+          order.push("message");
+          return Promise.resolve(
+            delivered
+              ? Response.json({ data: { id: messageID, type: "user" } })
+              : Response.json({ _tag: "MessageNotFoundError" }, {
+                status: 404,
+              }),
+          );
+        }
+        throw new Error(`Unexpected fixture request ${path}`);
+      },
+    );
+    const owner = new V2Prompt(() => client);
+    const withdraw = Reflect.get(owner, "withdraw");
+    assertEquals(typeof withdraw, "function");
+    await Promise.all([
+      client.sequence("ses_root", async () => {
+        entered.resolve();
+        await gate.promise;
+        queued = true;
+        order.push("dispatch");
+      }),
+      (async () => {
+        await entered.promise;
+        const stopped = withdraw.call(owner, sessionID, messageID);
+        gate.resolve();
+        assertEquals(await stopped, { state: race ? "started" : "withdrawn" });
+      })(),
+    ]);
+    assertEquals(order, ["dispatch", "inbox", "cancel", "inbox", "message"]);
+  });
+}
 function fixture(variant = "default") {
   const calls: {
       path: string;

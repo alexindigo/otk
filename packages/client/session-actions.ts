@@ -6,6 +6,9 @@ import type {
   PermissionReply,
   PromptPart,
 } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
+import { sessionRunning } from "./entity-state.ts";
+import type { SessionActivity } from "./primary-action.ts";
 import type { CurrentClient } from "./current.ts";
 import { liveSessionInfo, sessionKey } from "./index.ts";
 import type { PromptChoices } from "./prompt-selection.ts";
@@ -25,7 +28,7 @@ import {
   createSessionDelivery,
   type SessionDelivery,
 } from "./session-delivery.ts";
-import type { StateFactory } from "./state.ts";
+import { createState, type StateFactory } from "./state.ts";
 import type { DraftSendCapture } from "./drafts.ts";
 import { pendingMessage, pendingMessageID } from "./pending-send.ts";
 import {
@@ -36,7 +39,9 @@ import {
 
 export interface SessionActions {
   delivery(target: Selection): SessionDelivery;
-  stop(): void;
+  dispose(): void;
+  stop(target?: Selection): Promise<void>;
+  activity(target?: Selection): SessionActivity;
   rpc(target: Selection): InboxRpc["call"];
   eligibility(
     target: Selection,
@@ -136,6 +141,21 @@ export function createSessionActions(o: {
         factory: o.factory,
         title: () => resources.entry(target.sidecarId, target.sessionID)?.title,
         transcript: () => session.transcripts?.get(target),
+        interruptLateStart: () => {
+          if (working(target)) {
+            void actions.abort(target).catch((cause) => {
+              resources.sidecars.connection(target.sidecarId).rpc.feedback(
+                target.sessionID,
+              ).fail(cause);
+            });
+          }
+        },
+        withdraw: (messageID) =>
+          resources.sidecars.connection(target.sidecarId).rpc.call(
+            "session.withdraw",
+            { sessionID: target.sessionID, messageID },
+            { owner: target.sessionID },
+          ),
         committed: o.promptCommitted,
       });
       deliveries.set(key, value);
@@ -257,15 +277,83 @@ export function createSessionActions(o: {
         )).items,
     );
   };
-  const working = (target: Selection) => {
-    const status = resources.entry(target.sidecarId, target.sessionID)?.status;
-    return !!status && status !== "idle";
-  };
-  return {
+  const working = (target: Selection) =>
+    sessionRunning(
+      resources.inbox(target.sidecarId).entities,
+      entityKey("session", target.sessionID),
+    );
+  const stopping = new Map<string, Promise<void>>();
+  const stopChanges = (o.factory ?? createState)({ revision: 0 });
+  const publishStop = () => stopChanges.update((state) => state.revision++);
+  const actions: SessionActions = {
     delivery,
-    stop() {
+    dispose() {
       for (const owner of deliveries.values()) owner.stop();
       deliveries.clear();
+    },
+    activity(target = session.state.selection) {
+      if (!target) return { running: false, unstarted: 0 };
+      void stopChanges.state.revision;
+      return {
+        running: working(target),
+        unstarted: delivery(target).state.unstarted.length,
+        stopping: stopping.has(sessionKey(target.sidecarId, target.sessionID)),
+      };
+    },
+    async stop(target = current.context().selection) {
+      const key = sessionKey(target.sidecarId, target.sessionID);
+      const currentStop = stopping.get(key);
+      if (currentStop) return await currentStop;
+      const work = Promise.withResolvers<void>();
+      stopping.set(key, work.promise);
+      publishStop();
+      void (async () => {
+        const withdrawing = delivery(target).withdraw();
+        let initial: Promise<PromiseSettledResult<void>> | undefined;
+        const interruptRunning = () => {
+          if (!initial && working(target)) {
+            initial = actions.abort(target).then(
+              () => ({ status: "fulfilled", value: undefined }),
+              (reason) => ({ status: "rejected", reason }),
+            );
+          }
+        };
+        // Some native RPCs settle only after execution. While waiting for the
+        // receipt, interrupt a run as soon as its authoritative evidence arrives.
+        const release = resources.inbox(target.sidecarId).entities
+          .observeChanges(
+            interruptRunning,
+          );
+        let sends: Awaited<typeof withdrawing>;
+        try {
+          interruptRunning();
+          sends = await withdrawing;
+        } finally {
+          release();
+        }
+        const interrupt = await initial;
+        if (
+          sends.some((send) => send.state === "started") ||
+          (sends.some((send) => send.state === "unconfirmed") &&
+            working(target))
+        ) await actions.abort(target);
+        if (interrupt?.status === "rejected") throw interrupt.reason;
+        if (sends.some((send) => send.restored)) {
+          resources.sidecars.connection(target.sidecarId).rpc.feedback(
+            target.sessionID,
+          ).fail({
+            kind: "info",
+            text:
+              "Stopped before it started. Your message is back in the composer.",
+          });
+        }
+      })().then(work.resolve, work.reject);
+      try {
+        await work.promise;
+      } finally {
+        stopping.delete(key);
+        publishStop();
+      }
     },
     rpc: (target) => (method, params, input) =>
       resources.sidecars.connection(target.sidecarId).rpc.call(
@@ -596,4 +684,5 @@ export function createSessionActions(o: {
       };
     },
   };
+  return actions;
 }

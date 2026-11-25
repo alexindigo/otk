@@ -37,6 +37,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.shell": { kind: "mutation", pending: "Running command" },
   "session.command": { kind: "mutation", pending: "Running command" },
   "session.abort": { kind: "mutation", pending: "Stopping session" },
+  "session.withdraw": { kind: "mutation", pending: "Stopping" },
   "session.revert": { kind: "mutation", pending: "Rolling back" },
   "session.revertCode": { kind: "mutation", pending: "Reverting code changes" },
   "commands.list": { kind: "read", pending: "Loading commands" },
@@ -136,7 +137,10 @@ export interface PromptInput {
 /** Native acceptance is not transcript admission or visible presentation. */
 export interface PromptReceipt {
   messageID: string;
-  state: "accepted" | "queued";
+  state: "accepted" | "queued" | "started";
+}
+export interface WithdrawReceipt {
+  state: "withdrawn" | "started" | "absent" | "unconfirmed";
 }
 /** Completion without a correlatable source identity is not silent success. */
 export type SubmissionReceipt =
@@ -291,6 +295,10 @@ export interface RpcMethods
     result: null;
   };
   "session.abort": { params: { sessionID: string }; result: null };
+  "session.withdraw": {
+    params: { sessionID: string; messageID: string };
+    result: WithdrawReceipt;
+  };
   "session.revert": {
     params: { sessionID: string; messageID: string };
     result: ContentSession;
@@ -358,6 +366,7 @@ export interface CoreRequestReceipts {
   "shell-settled": { completed: true; submission?: SubmissionReceipt };
   "command-settled": { completed: true; submission?: SubmissionReceipt };
   "interrupt-sent": { completed: true };
+  "prompt-withdrawal": WithdrawReceipt;
   "permission-replied": { completed: true };
   "question-replied": { completed: true };
   "question-rejected": { completed: true };

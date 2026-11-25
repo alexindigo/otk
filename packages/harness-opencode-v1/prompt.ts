@@ -10,7 +10,8 @@ import {
   uploadSize,
 } from "@otk/protocol";
 import { HarnessError, type PromptCapability } from "@otk/harness";
-import type { Client } from "./client.ts";
+import { type Client, HttpFailure, NativeRequestFailure } from "./client.ts";
+import { Messages } from "./messages.ts";
 import type { Directory } from "./directory.ts";
 import type { RawPromptPart } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
@@ -24,17 +25,29 @@ export function prompt(
   submitted?: (
     sessionID: string,
     messageID: string,
-    origin: import("@otk/protocol").RequestOrigin,
+    origin?: import("@otk/protocol").RequestOrigin,
   ) => void,
+  reader = new Messages(client, directory.cached),
+  dispatched: (sessionID: string, messageID: string) => boolean = () => false,
 ): PromptCapability {
+  const pending = new Map<string, Promise<Response>>();
+  const abort: PromptCapability["abort"] = async (id, operation) => {
+    await client.json(`/session/${encodeURIComponent(ids.decode(id))}/abort`, {
+      method: "POST",
+      ...(operation ? { classification: "effect" as const, operation } : {}),
+      query: { directory: directory.cached(id) },
+    });
+    cancel(id);
+  };
   return {
     async prompt(input, operation) {
       const dir = await directory.resolve(input.sessionID);
       const parts = await mapPromptParts(input.parts, dir, operation, policy);
       const origin = operation?.key.origin;
       const messageID = input.messageID ?? submissionID();
-      if (submitted && origin) submitted(input.sessionID, messageID, origin);
-      await client.request(
+      submitted?.(input.sessionID, messageID, origin);
+      const key = `${input.sessionID}/${messageID}`;
+      const request = client.request(
         `/session/${
           encodeURIComponent(ids.decode(input.sessionID))
         }/prompt_async`,
@@ -53,20 +66,96 @@ export function prompt(
           },
         },
       );
+      pending.set(key, request);
+      try {
+        await request;
+      } finally {
+        if (pending.get(key) === request) pending.delete(key);
+      }
       return { messageID, state: "accepted" };
     },
-    async abort(id, operation) {
-      await client.json(
-        `/session/${encodeURIComponent(ids.decode(id))}/abort`,
-        {
-          method: "POST",
-          ...(operation
-            ? { classification: "effect" as const, operation }
-            : {}),
-          query: { directory: directory.cached(id) },
-        },
-      );
-      cancel(id);
+    abort,
+    async withdraw(id, messageID, operation) {
+      const request = pending.get(`${id}/${messageID}`);
+      try {
+        await request;
+      } catch (error) {
+        if (error instanceof OperationFailure && error.outcome === "rejected") {
+          return { state: "absent" };
+        }
+      }
+      const native = ids.decode(id),
+        dir = await directory.resolve(id, operation?.signal);
+      const signal = AbortSignal.any([
+        AbortSignal.timeout(10_000),
+        ...(operation ? [operation.signal] : []),
+      ]);
+      let rounds = 0;
+      try {
+        while (rounds < 3) {
+          await abort(id, operation);
+          const status = await client.json<Record<string, { type: string }>>(
+            "/session/status",
+            {
+              query: { directory: dir },
+              signal,
+            },
+          );
+          if (status[native] && status[native].type !== "idle") {
+            rounds++;
+            continue;
+          }
+          const replies = new Set<string>();
+          const users = new Set<string>();
+          for await (const { info } of reader.scan(id, dir, signal)) {
+            if (
+              info.role === "assistant" && info.parentID &&
+              info.parentID >= messageID
+            ) replies.add(info.parentID);
+            if (info.role === "user" && info.id >= messageID) {
+              users.add(info.id);
+            }
+          }
+          if (
+            users.has(messageID) &&
+            [...replies].some((parent) => users.has(parent))
+          ) return { state: "started" };
+          if (!users.has(messageID)) {
+            if (!request && !dispatched(id, messageID)) {
+              return { state: "absent" };
+            }
+            // HTTP 204 acknowledges the async handler, not the message write.
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+            signal.throwIfAborted();
+            continue;
+          }
+          try {
+            await client.json(
+              `/session/${encodeURIComponent(native)}/message/${
+                encodeURIComponent(messageID)
+              }`,
+              {
+                method: "DELETE",
+                query: { directory: dir },
+                ...(operation
+                  ? { classification: "effect" as const, operation }
+                  : {}),
+              },
+            );
+            return { state: "withdrawn" };
+          } catch (e) {
+            const cause = e instanceof NativeRequestFailure ? e.original : e;
+            if (
+              !(cause instanceof HttpFailure) ||
+              cause.detail.kind !== "SessionBusyError"
+            ) throw e;
+            rounds++;
+          }
+        }
+      } catch (e) {
+        if (operation?.signal.aborted || !signal.aborted) throw e;
+      }
+      return { state: "unconfirmed" };
     },
   };
 }

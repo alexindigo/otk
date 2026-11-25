@@ -284,7 +284,7 @@ export function createShellState(
     globalThis.removeEventListener("focus", observePresence);
     globalThis.removeEventListener("blur", observePresence);
     transcriptScopes.stop();
-    actions.stop();
+    actions.dispose();
   });
   createEffect(() => ({
     project: navigation.state.project,

@@ -99,7 +99,10 @@ Deno.test("Prompt and takeovers use the persistent shared primary control and ow
   const text = await Deno.readTextFile(
     "packages/ui/components/PrimaryAction.tsx",
   );
-  assert(text.includes("disabled={!props.state.available}"));
+  assert(
+    text.includes('aria-disabled={props.state.available ? "false" : "true"}'),
+  );
+  assert(!/\sdisabled=/.test(text));
   assert(text.includes("aria-description={props.state.reason"));
   assert(!/\bhidden=|<Show\b/.test(text));
   const takeover = await Deno.readTextFile(

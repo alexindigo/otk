@@ -25,6 +25,32 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
 
+Deno.test("a reply to a newer real prompt proves the earlier prompt started", () => {
+  const owner = createTranscriptProjection();
+  owner.merge([
+    {
+      id: "first",
+      sessionID: "tstv1-s",
+      role: "user",
+      time: { created: 1 },
+      parts: [],
+    },
+    {
+      id: "later",
+      sessionID: "tstv1-s",
+      role: "user",
+      time: { created: 2 },
+      parts: [],
+    },
+  ]);
+  const started = (id: string) => Reflect.get(owner, "started").call(owner, id);
+  assertEquals(started("first"), false);
+  owner.merge([step("reply", "later", 3)]);
+  assertEquals(started("first"), true);
+  assertEquals(started("later"), true);
+  assertEquals(started("missing"), false);
+});
+
 Deno.test("canonical transcript busy follows own work evidence even when the lamp stays blocked", () => {
   const connection = new SidecarConnection("http://example.test", {
     status() {},

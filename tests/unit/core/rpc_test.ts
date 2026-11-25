@@ -270,7 +270,7 @@ test("each optional registration contributes only its present capability and cor
     "usage",
   ] as const;
   const methods = [
-    ["session.prompt", "session.abort"],
+    ["session.prompt", "session.abort", "session.withdraw"],
     ["session.shell"],
     ["commands.list", "session.command"],
     ["history.prompt", "history.list", "history.attachments"],

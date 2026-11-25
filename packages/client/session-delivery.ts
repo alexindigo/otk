@@ -3,6 +3,7 @@ import {
   type ContentClock,
   randomID,
   type SubmissionReceipt,
+  type WithdrawReceipt,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { TranscriptOwner } from "./transcript.ts";
@@ -31,13 +32,14 @@ export interface DeliveryReceipt {
 }
 export interface SendCustody {
   admit?(messageID: string, check: () => void): void;
-  outcome(value: SendOutcome): void;
+  outcome(value: SendOutcome): boolean | void;
 }
 export interface SessionDelivery {
   readonly state: {
     receipts: readonly DeliveryReceipt[];
     follow: number;
     last?: DeliveryReceipt;
+    unstarted: readonly { id: string; messageID: string; stopping: boolean }[];
   };
   subscribe(listener: () => void): () => void;
   send(
@@ -51,6 +53,14 @@ export interface SessionDelivery {
   /** The viewport reports real visible native sources through its existing port. */
   presented(ids: readonly string[]): void;
   reload(): Promise<void>;
+  withdraw(): Promise<
+    readonly {
+      messageID: string;
+      state: WithdrawReceipt["state"];
+      custody: boolean;
+      restored?: true;
+    }[]
+  >;
   stop(): void;
 }
 /** Source-free submission receipts borrow the canonical projection and read owner. */
@@ -58,6 +68,8 @@ export function createSessionDelivery(input: {
   target: Selection;
   title(): string | undefined;
   transcript(): TranscriptOwner | undefined;
+  withdraw?(messageID: string): Promise<WithdrawReceipt>;
+  interruptLateStart?(): void;
   /** The canonical native prompt once its applied model is known, never speculative input. */
   committed?(message: import("@otk/protocol").UserMessage): void;
   factory?: StateFactory;
@@ -89,28 +101,43 @@ export function createSessionDelivery(input: {
     string,
     ReturnType<typeof Promise.withResolvers<SendOutcome>>
   >();
-  // Receipts are for presentation and may disappear before native identity
-  // resolves. Only the custody observer outlives that projection.
-  const watches = new Map<
-    string,
-    { messageID: string; custody: SendCustody }
-  >();
+  // Presentation receipts may disappear; execution and custody do not.
+  type Watch = {
+    messageID: string;
+    custody?: SendCustody;
+    dispatched: boolean;
+    stopping: boolean;
+    settled: ReturnType<typeof Promise.withResolvers<void>>;
+    result?: SubmissionReceipt | null;
+    entry?: PendingSend;
+    retired?: boolean;
+    rejected?: boolean;
+    committed?: boolean;
+    stopUnconfirmed?: boolean;
+  };
+  const watches = new Map<string, Watch>();
   const observe = (id: string, outcome: SendOutcome) => {
     const watch = watches.get(id);
     if (!watch) return;
     if (
-      outcome.kind === "committed" || outcome.kind === "refused" ||
+      outcome.kind === "started" || outcome.kind === "withdrawn" ||
+      outcome.kind === "refused" ||
       outcome.kind === "failed" && outcome.certainty === "definite"
-    ) watches.delete(id);
-    watch.custody.outcome(outcome);
+    ) {
+      watches.delete(id);
+      watch.retired = true;
+      commit(() => {});
+    }
+    return watch.custody?.outcome(outcome);
   };
   const finish = (id: string, outcome: SendOutcome) => {
-    observe(id, outcome);
+    const restored = observe(id, outcome);
     const pending = outcomes.get(id);
-    if (!pending) return;
+    if (!pending) return restored;
     outcomes.delete(id);
     pending.resolve(outcome);
     update(id, (receipt) => receipt.outcome = outcome);
+    return restored;
   };
   // Native queue/admission can precede applied selection metadata. Presentation
   // releases the visible receipt, not this identity-only bookkeeping obligation.
@@ -139,8 +166,20 @@ export function createSessionDelivery(input: {
   };
   const inspect = () => {
     if (stopped) return;
-    for (const [id, { messageID }] of watches) {
-      if (committedMessage(messageID)) {
+    for (const [id, watch] of watches) {
+      const { messageID, entry, result } = watch;
+      const known = result?.state !== "unconfirmed" && !!(entry || result);
+      if (
+        !watch.stopping && committedMessage(messageID) &&
+        transcript?.projection.started(messageID)
+      ) {
+        if (watch.stopUnconfirmed && !known) continue;
+        // Start ends withdrawal eligibility and draft custody. It does not
+        // settle the captured submission while its RPC is still in flight.
+        observe(id, { kind: "started", messageID });
+        if (watch.stopUnconfirmed) input.interruptLateStart?.();
+      } else if (!watch.committed && committedMessage(messageID)) {
+        watch.committed = true;
         observe(id, { kind: "committed", messageID });
       }
     }
@@ -235,7 +274,14 @@ export function createSessionDelivery(input: {
   const owner: SessionDelivery = {
     get state() {
       void binding.state.revision;
-      return store.state;
+      return {
+        ...store.state,
+        unstarted: [...watches].map(([id, watch]) => ({
+          id,
+          messageID: watch.messageID,
+          stopping: watch.stopping,
+        })),
+      };
     },
     subscribe: (listener) => store.subscribe(listener),
     resume(entry, result) {
@@ -299,6 +345,18 @@ export function createSessionDelivery(input: {
         }
         const outcome = Promise.withResolvers<SendOutcome>();
         outcomes.set(id, outcome);
+        const identity = entry?.message.id ?? messageID;
+        const watch: Watch | undefined = identity
+          ? {
+            messageID: identity,
+            custody,
+            dispatched: false,
+            stopping: false,
+            settled: Promise.withResolvers<void>(),
+            entry,
+          }
+          : undefined;
+        if (watch) watches.set(id, watch);
         commit((s) => {
           s.receipts.push({
             id,
@@ -367,10 +425,13 @@ export function createSessionDelivery(input: {
           timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
         }
         void (async () => {
-          let result: SubmissionReceipt | null;
+          let result: SubmissionReceipt | null | undefined;
           let dispatched = false;
           try {
             result = await action(() => {
+              if (watch?.stopping) {
+                throw new Error("Send was stopped before dispatch.");
+              }
               if (stopped) {
                 throw new Error("The submission owner is no longer active.");
               }
@@ -378,9 +439,9 @@ export function createSessionDelivery(input: {
               const identity = entry?.message.id ?? messageID;
               if (identity && custody) {
                 custody.admit?.(identity, () => void owner.reload());
-                watches.set(id, { messageID: identity, custody });
               }
               dispatched = true;
+              if (watch) watch.dispatched = true;
               if (entry) {
                 transcript?.send?.({ ...currentEntry(), dispatched: true });
               } else if (!timers.has(id)) {
@@ -391,6 +452,13 @@ export function createSessionDelivery(input: {
               }
             });
           } catch (cause) {
+            if (watch?.stopping) {
+              if (
+                cause instanceof RequestFailure &&
+                cause.failure.facts?.outcome === "rejected"
+              ) watch.rejected = true;
+              return;
+            }
             if (stopped) return;
             clear(id);
             const receipt = store.state.receipts.find((r) => r.id === id);
@@ -472,8 +540,21 @@ export function createSessionDelivery(input: {
                 : refusedSend(cause),
             );
             return;
+          } finally {
+            if (watch) {
+              if (
+                result !== undefined && result?.state !== "unconfirmed" &&
+                result?.messageID
+              ) watch.messageID = result.messageID;
+              if (result !== undefined) watch.result = result;
+              watch.settled.resolve();
+            }
           }
           if (stopped) return;
+          if (watch?.stopping || watch?.retired && !watch.dispatched) return;
+          if (result?.state === "started") {
+            finish(id, { kind: "started", messageID: result.messageID });
+          }
           update(id, (receipt) => receipt.settled = true);
           // A pending entry carries OTK's supplied identity, so receipt-less
           // acceptance is observed by that ID within the entry's bounded
@@ -530,11 +611,9 @@ export function createSessionDelivery(input: {
           update(id, (r) => {
             r.messageID = result?.messageID ?? entry?.message.id ?? messageID;
             if (r.phase !== "admitted" && r.phase !== "presented") {
-              r.phase = result?.state ?? "accepted";
+              r.phase = result?.state === "queued" ? "queued" : "accepted";
             }
           });
-          const watch = watches.get(id);
-          if (watch && result?.messageID) watch.messageID = result.messageID;
           bind();
           if (entry) {
             // The pending transcript entry now owns this send (2.39): it
@@ -592,6 +671,84 @@ export function createSessionDelivery(input: {
         }
         return outcome;
       }
+    },
+    async withdraw() {
+      const stops = [...watches].filter(([, watch]) => !watch.stopping);
+      for (const [, watch] of stops) watch.stopping = true;
+      commit(() => {});
+      return await Promise.all(stops.map(async ([id, watch]) => {
+        let state: WithdrawReceipt["state"] = "absent";
+        if (watch.dispatched) {
+          await watch.settled.promise;
+          try {
+            if (
+              watch.result?.state === "started" ||
+              transcript?.projection.committed(watch.messageID) &&
+                transcript.projection.started(watch.messageID)
+            ) state = "started";
+            else if (watch.rejected) state = "absent";
+            else if (
+              watch.result?.state === "unconfirmed" ||
+              (!watch.result && !watch.entry) || !input.withdraw
+            ) {
+              state = "unconfirmed";
+            } else {
+              state = (await input.withdraw(watch.messageID)).state;
+              if (state === "absent") state = "unconfirmed";
+            }
+            // A transcript reply received during the Stop cannot be withdrawn.
+            if (
+              transcript?.projection.committed(watch.messageID) &&
+              transcript.projection.started(watch.messageID)
+            ) state = "started";
+          } catch {
+            state = "unconfirmed";
+          }
+        }
+        const { messageID } = watch;
+        let restored: boolean | void = undefined;
+        if (state === "unconfirmed") {
+          watch.stopUnconfirmed = true;
+          watch.stopping = false;
+          finish(id, {
+            kind: "unconfirmed",
+            stop: true,
+            reason: "Couldn't confirm the stop; your message is kept.",
+          });
+          commit(() => {});
+        } else {
+          clear(id);
+          const outcome: SendOutcome = state === "started"
+            ? { kind: "started", messageID }
+            : { kind: "withdrawn", messageID, native: state };
+          restored = finish(id, outcome);
+          if (state !== "started") {
+            if (watch.custody || !watch.dispatched) {
+              transcript?.cancelSend?.(messageID, watch.dispatched);
+            } else if (watch.entry) {
+              transcript?.send?.({
+                ...watch.entry,
+                phase: "failed",
+                retry: undefined,
+                feedback: {
+                  kind: "info",
+                  text:
+                    "Stopped before it started. The message is retained here. Copy it to the composer to send it.",
+                },
+              });
+            }
+            commit((s) => {
+              s.receipts = s.receipts.filter((receipt) => receipt.id !== id);
+            });
+          }
+        }
+        return {
+          messageID,
+          state,
+          custody: !!watch.custody,
+          ...(restored ? { restored: true as const } : {}),
+        };
+      }));
     },
     presented(ids) {
       visible = new Set(ids);

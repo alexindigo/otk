@@ -248,7 +248,7 @@ export function sessionActions(ports: {
           );
           // Native shell joins its own shell lifetime before replying. It is not
           // a session execution, so execution.wait cannot certify this effect.
-          return { messageID, state: "accepted" as const };
+          return { messageID, state: "started" as const };
         });
       },
     },
