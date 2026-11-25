@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { randomID } from "@otk/protocol";
+import { sendDiagnostic } from "./diagnostics.ts";
 export interface PrimaryActionState<M = unknown> {
   readonly mode?: M;
   readonly label: string;
@@ -120,4 +122,184 @@ export function promptUnavailable(input: {
   }
   if (input.chips.some((chip) => chip.pending)) return "Waiting for attachment";
   if (!input.content) return "Write a message";
+}
+
+/** Draft facts, not element existence, determine ordinary Send readiness. */
+export type ComposerSource = "enter" | "button" | "interrupt";
+export interface ComposerFacts extends SessionActivity {
+  active: boolean;
+  suspended: boolean;
+  connected: boolean;
+  supported: boolean;
+  stopSupported: boolean;
+  content: boolean;
+  chips: readonly { pending?: boolean; error?: unknown }[];
+  sending: boolean;
+  /** Explicit local commands are input, not a native submission. */
+  local?: boolean;
+}
+export interface ComposerVerdict {
+  kind: "send" | "stop" | "none";
+  available: boolean;
+  reason?: string;
+}
+
+/** The same live facts decide the affordance and every activation. */
+export function composerAction(
+  facts: ComposerFacts,
+  source: ComposerSource,
+): ComposerVerdict {
+  const mode = composerMode({
+    ...facts,
+    blank: !facts.content && !facts.chips.length,
+  });
+  const verdict = (kind: ComposerVerdict["kind"], reason?: string) => ({
+    kind,
+    available: reason === undefined,
+    reason,
+  });
+  const blocked = !facts.active
+    ? "Composer is no longer active"
+    : facts.suspended
+    ? "Answer the pending request first"
+    : undefined;
+  if (source === "interrupt" || mode === "stop") {
+    if (source === "enter") return verdict("none", "Type a message to send");
+    return verdict(
+      "stop",
+      blocked ??
+        (!facts.connected
+          ? "Reconnect to stop"
+          : !facts.stopSupported
+          ? "Stopping is not supported here"
+          : facts.stopping
+          ? "Stopping"
+          : !canStop(facts)
+          ? "There is no response to stop"
+          : undefined),
+    );
+  }
+
+  const kind = facts.content || facts.chips.length ? "send" : "none";
+  if (facts.local && !blocked) return verdict("send");
+  return verdict(
+    kind,
+    blocked ??
+      (!facts.connected
+        ? kind === "send" ? "Reconnecting - message kept" : "Reconnect to send"
+        : !facts.supported
+        ? "Sending is not supported here"
+        : facts.chips.some((chip) => chip.error)
+        ? "Remove or retry the failed attachment"
+        : facts.chips.some((chip) => chip.pending)
+        ? "Waiting for attachment"
+        : !facts.content
+        ? "Write a message"
+        : facts.sending
+        ? "Previous message still sending"
+        : undefined),
+  );
+}
+
+export interface ComposerActionOwner {
+  readonly state: PrimaryActionState<ComposerMode> & { sending: boolean };
+  verdict(source: ComposerSource): ComposerVerdict;
+  subscribe(listener: () => void): () => void;
+  activate(source: ComposerSource): Promise<void>;
+}
+
+export function createComposerAction<T>(options: {
+  facts(draft: T): Omit<ComposerFacts, "sending" | "local">;
+  draft(): T;
+  local?(draft: T): (() => Promise<void>) | undefined;
+  prepare(): Promise<void>;
+  send(draft: T, activation: string): Promise<void>;
+  stop(): Promise<void>;
+  refuse(
+    reason: string,
+    source: ComposerSource,
+    recheckAs: ComposerSource,
+  ): void;
+  begin(): void;
+}): ComposerActionOwner {
+  let sending = false;
+  const listeners = new Set<() => void>();
+  const publish = () => {
+    for (const listener of listeners) listener();
+  };
+  const project = (source: ComposerSource, draft: T, current = false) => {
+    const facts = options.facts(draft);
+    const local = source === "interrupt" ? undefined : options.local?.(draft);
+    return {
+      verdict: composerAction({
+        ...facts,
+        sending: sending && !current,
+        local: !!local,
+      }, source),
+      facts,
+      local,
+    };
+  };
+  return {
+    verdict: (source: ComposerSource) =>
+      project(source, options.draft()).verdict,
+    get state(): PrimaryActionState<ComposerMode> & { sending: boolean } {
+      const { verdict, facts, local } = project("button", options.draft());
+      const mode = verdict.kind === "stop" ? "stop" : "send";
+      return {
+        ...verdict,
+        mode,
+        label: composerLabel(mode),
+        visible: true,
+        sending,
+        pending: mode === "stop" ? !!facts.stopping : sending && !local,
+      };
+    },
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    async activate(source: ComposerSource): Promise<void> {
+      const activation = randomID();
+      sendDiagnostic("activation", { activation, state: source });
+      const refuse = (reason: string, recheckAs = source) => {
+        sendDiagnostic("refused", { activation, state: reason });
+        options.refuse(reason, source, recheckAs);
+      };
+      const initial = project(source, options.draft());
+      if (initial.verdict.reason) return refuse(initial.verdict.reason);
+      if (initial.verdict.kind === "stop") {
+        options.begin();
+        return await options.stop();
+      }
+      if (initial.local) {
+        options.begin();
+        return await initial.local();
+      }
+
+      sending = true;
+      try {
+        options.begin();
+        publish();
+        await options.prepare();
+        const draft = options.draft();
+        // An attempt to send can never turn into Stop while preparing.
+        const prepared = project("enter", draft, true);
+        if (prepared.verdict.reason) {
+          return refuse(prepared.verdict.reason, "enter");
+        }
+        if (prepared.local) return await prepared.local();
+        sendDiagnostic("admitted", { activation });
+        await options.send(draft, activation);
+      } catch (cause) {
+        sendDiagnostic("refused", { activation });
+        throw cause;
+      } finally {
+        sending = false;
+        publish();
+      }
+    },
+  };
 }
