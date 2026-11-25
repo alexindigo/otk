@@ -69,6 +69,7 @@ import {
   registerToolPart,
   registerUnknownPart,
   RightPanel,
+  Select,
   SessionProvider,
   Setup,
   Sidebar,
@@ -177,6 +178,7 @@ export function PickerLifetime(): Element {
     { key: "beta", value: "exact beta", label: "Beta choice" },
   ]);
   const [picked, setPicked] = createSignal("");
+  const [choice, setChoice] = createSignal("alpha");
   const search = new URL(location.href).searchParams.has("search");
   return (
     <CommandProvider commands={new CommandHub()}>
@@ -207,6 +209,17 @@ export function PickerLifetime(): Element {
           Update surviving choice
         </button>
         <output data-picked>{picked()}</output>
+        <Select
+          label="Choice"
+          name="choice"
+          value={choice()}
+          onValue={setChoice}
+          options={[
+            { value: "alpha", label: "Alpha" },
+            { value: "beta", label: "Beta", unavailable: "Unavailable" },
+            { value: "gamma", label: "Gamma" },
+          ]}
+        />
         <ListPicker
           label="Live catalog"
           trigger="Choose"

@@ -84,7 +84,7 @@ export default function ListPicker<T = string>(props: {
   }>();
   let popover!: PopoverControl,
     window: VirtualListControl | undefined,
-    root: HTMLDivElement | undefined,
+    list: HTMLElement | undefined,
     search: HTMLInputElement | undefined;
   // Catalog projection has no query/candidate dependency. A query scans once;
   // each row then borrows indexed facts rather than rebuilding the population.
@@ -104,6 +104,12 @@ export default function ListPicker<T = string>(props: {
       key !== undefined && snapshot().items.has(key) ? [`option:${key}`] : []
     )
   );
+  const optionID = (key: string) => `${id}-${encodeURIComponent(key)}`;
+  const activeDescendant = () => {
+    const key = candidate();
+    return key === undefined ? undefined : optionID(key);
+  };
+  const focusTarget = () => props.search ? search : list;
   createEffect(
     () => opened() ? { key: candidate(), snapshot: snapshot() } : undefined,
     (current) => {
@@ -118,7 +124,7 @@ export default function ListPicker<T = string>(props: {
     },
   );
   createEffect(opened, (open) => {
-    if (open) (props.search ? search : root)?.focus();
+    if (open) focusTarget()?.focus();
   });
   createEffect(
     () => opened() ? { snapshot: snapshot(), focused: focused() } : undefined,
@@ -129,7 +135,7 @@ export default function ListPicker<T = string>(props: {
       if (
         active === target.control ||
         (!target.control.isConnected && active === document.body)
-      ) (props.search ? search : root)?.focus({ preventScroll: true });
+      ) focusTarget()?.focus({ preventScroll: true });
       setFocused(undefined);
     },
   );
@@ -188,7 +194,7 @@ export default function ListPicker<T = string>(props: {
         setOpened(false);
         setFocused(undefined);
         window = undefined;
-        root = undefined;
+        list = undefined;
         search = undefined;
       }}
     >
@@ -196,10 +202,6 @@ export default function ListPicker<T = string>(props: {
         <div
           class="otk-picker-content"
           aria-busy={props.loading ? "true" : "false"}
-          ref={(el) => {
-            root = el;
-          }}
-          tabindex={-1}
           onKeyDown={(event) => {
             if (event.isComposing) return;
             if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
@@ -236,9 +238,7 @@ export default function ListPicker<T = string>(props: {
               placeholder={props.search}
               value={query()}
               aria-controls={id}
-              aria-activedescendant={candidate() === undefined
-                ? undefined
-                : `${id}-${encodeURIComponent(candidate()!)}`}
+              aria-activedescendant={activeDescendant()}
               role="combobox"
               aria-expanded="true"
               aria-autocomplete="list"
@@ -253,6 +253,10 @@ export default function ListPicker<T = string>(props: {
             id={id}
             class="otk-picker-groups"
             listRole="listbox"
+            activeDescendant={props.search ? undefined : activeDescendant()}
+            focusTarget={props.search ? undefined : (el) => {
+              list = el;
+            }}
             label={props.label}
             keys={snapshot().keys}
             revision={snapshot()}
@@ -309,7 +313,7 @@ export default function ListPicker<T = string>(props: {
                     return (
                       <div
                         role="option"
-                        id={`${id}-${encodeURIComponent(item().key)}`}
+                        id={optionID(item().key)}
                         data-picker-key={item().key}
                         aria-disabled={item().unavailable ? "true" : undefined}
                         aria-posinset={row().position}
