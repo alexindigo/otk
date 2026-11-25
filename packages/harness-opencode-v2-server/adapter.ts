@@ -304,6 +304,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#shells.interrupt(this.stream.client, id, operation),
       (id, messageID, origin) =>
         this.transcript.submission(id, messageID, origin),
+      this.transcript.reader,
     );
     const catalogCapabilities: Capabilities = this.catalogs
       ? {
@@ -346,6 +347,8 @@ export class OpencodeV2ServerAdapter implements Harness {
             () => this.prompts.prompt(input, operation),
           ),
         abort: (id, operation) => this.prompts.abort(id, operation),
+        withdraw: (id, messageID, operation) =>
+          this.prompts.withdraw(id, messageID, operation),
       },
       permissions: this.pending.permissions,
       forms: this.pending.forms,

@@ -4,7 +4,11 @@ import type { PromptInput } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
-import { nativeEffect, nativeExecution } from "../requests/policies.ts";
+import {
+  metadataReceipt,
+  nativeEffect,
+  nativeExecution,
+} from "../requests/policies.ts";
 import {
   completionReceipt,
   promptSelectionReceipt,
@@ -70,5 +74,37 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         await capability.abort(id, operation);
         return null;
       }, interrupted),
+  });
+  const withdraw = capability.withdraw?.bind(capability);
+  const withdrawal = metadataReceipt("prompt-withdrawal", (value) => {
+    const { state } = object(value);
+    if (
+      state !== "withdrawn" && state !== "started" && state !== "absent" &&
+      state !== "unconfirmed"
+    ) {
+      throw new TypeError("Invalid withdrawal receipt");
+    }
+    return { state };
+  });
+  rpc.register("session.withdraw", {
+    execution: {
+      ...nativeExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        withdrawal,
+      ),
+      priority: "interrupt",
+    },
+    params: (p) => ({
+      sessionID: sessionID(p)!,
+      messageID: text(p, "messageID")!,
+    }),
+    handler: (ctx, input) =>
+      nativeEffect(
+        ctx,
+        (operation) =>
+          withdraw?.(input.sessionID, input.messageID, operation) ??
+            Promise.resolve({ state: "unconfirmed" }),
+        withdrawal,
+      ),
   });
 }

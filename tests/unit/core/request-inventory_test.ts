@@ -336,6 +336,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.shell",
     "session.command",
     "session.abort",
+    "session.withdraw",
     "session.get",
     "session.children",
     "sessions.list",
@@ -410,7 +411,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     }
     assertEquals(counts, {
       read: 31, // Retained archive pages have an independent cancellable read.
-      native: 20,
+      native: 21,
       local: 11,
       "prepared-local": 6,
       lease: 2,

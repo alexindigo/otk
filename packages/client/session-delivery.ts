@@ -530,7 +530,7 @@ export function createSessionDelivery(input: {
           update(id, (r) => {
             r.messageID = result?.messageID ?? entry?.message.id ?? messageID;
             if (r.phase !== "admitted" && r.phase !== "presented") {
-              r.phase = result?.state ?? "accepted";
+              r.phase = result?.state === "queued" ? "queued" : "accepted";
             }
           });
           const watch = watches.get(id);

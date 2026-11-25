@@ -339,7 +339,7 @@ test("OC2A4 shell stays non-LLM; commands prepare inputs before checkpointed sel
     shellInput,
     op.context,
   );
-  assertEquals(shellReceipt, { messageID: shellMessageID, state: "accepted" });
+  assertEquals(shellReceipt, { messageID: shellMessageID, state: "started" });
   const rows = await native.api.message.list({
     sessionID: target.nativeID,
     limit: 200,
@@ -434,7 +434,7 @@ test("OC2A5 skill invocation uses the native skill ID and preserves arguments an
   assert(!rows.some((m) => m.id === old.id));
   const user = rows.find((m) => m.type === "user");
   assert(user?.type === "user");
-  assertEquals(skillReceipt, { messageID: user.id, state: "accepted" });
+  assertEquals(skillReceipt, { messageID: user.id, state: "queued" });
   assertEquals(user.text, "Review these exact bytes");
   assertEquals(user.files?.[0].name, "contract.txt");
   assertEquals(user.files?.[0].data, btoa("contract bytes"));

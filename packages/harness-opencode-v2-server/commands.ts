@@ -238,7 +238,7 @@ export function commands(
           );
         }
         if (operation) await c.settled(raw.id, operation);
-        return messageID ? { messageID, state: "accepted" as const } : {
+        return messageID ? { messageID, state: "queued" as const } : {
           state: "unconfirmed" as const,
           reason: `opencode completed the ${
             command ? "command" : "skill"
