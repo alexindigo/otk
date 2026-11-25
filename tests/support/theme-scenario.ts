@@ -30,6 +30,7 @@ import {
 import { publishUsage, turnDetail } from "./usage-summary.ts";
 import { themeUsage } from "./theme-usage.ts";
 import { resources } from "./resources.ts";
+import { styleListScene } from "./style-list-scene.ts";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { PermissionRequest } from "@otk/protocol";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
@@ -486,6 +487,7 @@ export async function themeScenario() {
   });
   const overflow: { ids: string[]; tasks: string[] } = { ids: [], tasks: [] };
   let lease: TestLease | undefined;
+  let lists: ReturnType<typeof styleListScene> | undefined;
   const info = {
     root,
     url: f.url,
@@ -527,6 +529,7 @@ export async function themeScenario() {
         case "observe":
           return {
             entries: f.entries,
+            lists: await (lists ??= styleListScene(join(root, "lists"))),
             scenes,
             native: {
               url: sidecar.url,

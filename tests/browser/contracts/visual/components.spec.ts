@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { subagentRows, subagents } from "../../pages/crumbs.ts";
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -328,19 +330,24 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "lists");
-    const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);
+    const { lists } = await state.observe<{
+      lists: { entries: IndexEntry[]; inbox: InboxSnapshot };
+    }>();
+    const ids = lists.entries.map(({ id }) => id);
+    const selected = `[data-crumb="${ids[9]}"]`;
+    const editing = `[data-crumb="${ids[7]}"]`;
+    const other = `[data-crumb="${ids[1]}"]`;
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify(ids)},'session-9','session-7')`,
+      `styleTest.lists(...${JSON.stringify([ids, ids[9], ids[7], lists])})`,
     );
-    await expect(page.locator('[data-crumb="session-7"] input')).toHaveValue(
+    await expect(page.locator(`${editing} input`)).toHaveValue(
       "session-7",
     );
-    const original = await page.locator('[data-crumb="session-9"]')
-      .elementHandle();
-    const otherOriginal = await page.locator('[data-crumb="session-1"]')
-      .elementHandle();
+    const original = await page.locator(selected).elementHandle();
+    const otherOriginal = await page.locator(other).elementHandle();
     await page.setViewportSize({ width: 600, height: 800 });
-    await expect(page.locator(".otk-subagents > button")).toBeVisible();
+    const inventory = subagents(page);
+    await expect(inventory).toBeVisible();
     const visible = () =>
       page.locator("[data-crumb]").evaluateAll((els) =>
         els.filter((el) => !el.closest("[hidden]")).map((el) =>
@@ -348,18 +355,18 @@ test(
         )
       );
     const shown = await visible();
-    expect(shown).toContain("session-9");
-    expect(shown).toContain("session-7");
+    expect(shown).toContain(ids[9]);
+    expect(shown).toContain(ids[7]);
     expect(shown).toEqual(ids);
     expect(shown).toEqual(ids.filter((id) => shown.includes(id)));
     expect(
-      await page.locator('[data-crumb="session-9"]').evaluate(
+      await page.locator(selected).evaluate(
         (el, old) => el === old,
         original,
       ),
     ).toBe(true);
     expect(
-      await page.locator('[data-crumb="session-1"]').evaluate(
+      await page.locator(other).evaluate(
         (el, old) => el === old,
         otherOriginal,
       ),
@@ -375,18 +382,15 @@ test(
         Math.abs(value - sessionBefore[index]) <= 1
       ),
     ).toBe(true);
-    const before = await bounds(page, ".otk-subagents > button");
-    await page.locator(".otk-subagents > button").click();
-    await expect(page.locator(".otk-subagents [role=menuitem]").first())
-      .toBeVisible();
-    expect(
-      (await bounds(page, ".otk-subagents > button")).every((v, i) =>
-        Math.abs(v - before[i]) <= 1
-      ),
-    ).toBe(true);
-    const omitted = await page.locator(
-      ".otk-subagents [data-subagent]",
-    ).evaluateAll((els) => els.map((el) => el.getAttribute("data-subagent")));
+    const before = await inventory.boundingBox();
+    await inventory.click();
+    const rows = subagentRows(page);
+    await expect(rows.first()).toBeVisible();
+    const after = await inventory.boundingBox();
+    expect(after).toEqual(before);
+    const omitted = await rows.evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-subagent"))
+    );
     // D67 keeps every ancestor; the composer inventory is independent.
     const currentShown = await visible();
     expect(omitted).toEqual(ids.slice(1));
@@ -407,7 +411,7 @@ test(
     await page.evaluate("styleTest.lists([])");
     await expect(page.locator("[data-crumb]")).toHaveCount(0);
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify(ids.slice().reverse())},'session-4')`,
+      `styleTest.lists(...${JSON.stringify([ids.slice().reverse(), ids[4]])})`,
     );
     await page.getByRole("button", { name: "Reactive list menu", exact: true })
       .click();
