@@ -114,6 +114,45 @@ test("seed-only reconciliation clears previously observed busy activity using de
     await waitFor(() => complete, (n) => n === 2);
     assertEquals(index.getMetadata(entry.id)?.status, "idle");
     assertEquals(errors, []);
+    index.upsertMetadata({
+      ...entry,
+      activity: { terminal: 5, terminalOrigin: "historical" },
+    });
+    const event = (type: string, properties: object) =>
+      stream.enqueue(
+        new TextEncoder().encode(`data: ${
+          JSON.stringify({
+            directory: entry.directory,
+            payload: { type, properties },
+          })
+        }\n\n`),
+      );
+    event("message.updated", {
+      info: {
+        role: "assistant",
+        id: "new-reply",
+        sessionID: "observed",
+        parentID: "new-prompt",
+        finish: "stop",
+        time: { created: 6, completed: 10 },
+      },
+    });
+    // The sink still carries the old terminal's metadata when idle promotes
+    // the new candidate to published evidence.
+    await waitFor(
+      () => index.getMetadata(entry.id)?.timeUpdated,
+      (n) => n === 10,
+    );
+    index.upsertMetadata({
+      ...index.getMetadata(entry.id)!,
+      activity: { terminal: 5, terminalOrigin: "historical" },
+    });
+    event("session.idle", { sessionID: "observed" });
+    await waitFor(
+      () => index.getMetadata(entry.id)?.activity?.terminal,
+      (n) => n === 10,
+    );
+    assertEquals(index.getMetadata(entry.id)?.activity?.terminalOrigin, "live");
   } finally {
     await adapter.core.stop();
   }
