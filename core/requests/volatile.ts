@@ -83,11 +83,11 @@ export class VolatileRequests implements RequestRepository {
     ).length;
   }
   inFlight(after: ReceiptKey | undefined, limit: number): RequestRecord[] {
-    return [...this.#rows.values()].filter((row) =>
-      active(row) && (!after || key(row) > key(after))
-    ).sort((a, b) => key(a).localeCompare(key(b))).slice(0, limit).map((row) =>
-      structuredClone(row)
-    );
+    const rows = [...this.#rows.values()];
+    return rows.slice(
+      after ? rows.findIndex((row) => key(row) === key(after)) + 1 : 0,
+    )
+      .filter(active).slice(0, limit).map((row) => structuredClone(row));
   }
   sweep(now: number, limit: number): number {
     let removed = 0;

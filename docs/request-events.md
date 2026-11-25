@@ -30,11 +30,14 @@ native effect cannot overtake an earlier one. Features explicitly declare
 `ordering: "target"` when conflicting metadata needs its own lifetime permission
 (the feature's resource, or its method/session target), so an older pending
 enable cannot overwrite a later disable and membership intents for the same task
-retain their order. A resource identity alone does not imply serialization:
-closing a task remains independent of held membership validation, which must
-revalidate ownership before writing. Independent metadata does not borrow either
-permission. Interrupts retain their explicit priority bypass. Neither yielding
-nor re-queuing resends a handler or weakens its intent duplicate fence, atomic
+retain their order. Ordered local intents keep their place while a failed write
+awaits storage recovery, and restart rebuilds that order from durable admission
+before accepting replacement input. Neither wait keeps an executing turn. A
+resource identity alone does not imply serialization: closing a task remains
+independent of held membership validation, which must revalidate ownership
+before writing. Independent metadata does not borrow either permission.
+Interrupts retain their explicit priority bypass. Neither yielding nor
+re-queuing resends a handler or weakens its intent duplicate fence, atomic
 metadata receipt, dispatch fence or cancellation cleanup.
 
 Registrations distinguish strictly local metadata from `prepared-local` metadata
