@@ -1201,20 +1201,21 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     const rows: SessionMetadata[] = [];
     for (const id of new Set(keys)) {
       const raw = await this.#ensure(id, signal), entry = metadata(raw);
-      const previous = this.storage.read(id);
-      if (!previous) {
-        this.storage.transaction(() =>
-          this.storage.write(entry, {
-            summary: { state: "digesting", revision: 0 },
-            turns: { upsert: {}, remove: [] },
-            deleted: null,
-          })
-        );
-      }
+      this.#seed(entry);
       rows.push(entry);
       await this.#yield(signal);
     }
     return rows;
+  }
+  #seed(entry: SessionMetadata): void {
+    if (this.storage.read(entry.id)) return;
+    this.storage.transaction(() =>
+      this.storage.write(entry, {
+        summary: { state: "digesting", revision: 0 },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      })
+    );
   }
   // Transcript work never enumerates the session population. V1 contributes the
   // keyed index/list provider; these compatibility ports leave it unacquired.
@@ -1849,43 +1850,27 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   }
   async transcriptMetadata(
     id: string,
-    _turns: readonly string[],
+    turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
     boundary?: import("@otk/harness").DigestBoundary,
   ): Promise<TranscriptMetadata> {
-    const raw = await this.#ensure(id, signal);
-    if (boundary) {
-      if (!this.storage.read(id)) await this.hydrate([id], signal);
-      const facts = await this.transcript.facts({
-          sessionID: id,
-          messages: [boundary.messageID],
-          cutoff,
-        }, signal),
-        target = facts.contexts[boundary.messageID]?.order;
-      while (
-        this.pending(id) &&
-        (this.#scan(id)?.after_seq == null || target === undefined ||
-          this.#scan(id)!.after_seq! > target)
-      ) {
-        await this.step({
-          sessionID: id,
-          provider: this.identity,
-          updated: millis(raw.time.updated),
-          revision: 0,
-        }, {
-          rows: this.policy.batch,
-          until: performance.now() + this.policy.slicems,
-        }, signal);
-        await this.#yield(signal);
-      }
-      this.readiness.demanded?.(metadata(raw));
-    }
-    return (await this.transcript.facts({
+    const raw = await this.#ensure(id, signal, false);
+    // Native facts certify the requested page. The rebuildable usage scan's
+    // publication credits and lifetime belong to the digest scheduler, not
+    // to the read that owns the transcript cursor.
+    const { metadata: result } = await this.transcript.facts({
       sessionID: id,
-      messages: [..._turns],
+      messages: boundary ? [...turns, boundary.messageID] : [...turns],
       cutoff,
-    }, signal)).metadata;
+    }, signal);
+    signal.throwIfAborted();
+    if (boundary) {
+      const entry = metadata(raw);
+      this.#seed(entry);
+      this.readiness.demanded?.(entry);
+    }
+    return result;
   }
   async #helperStep(
     job: DigestJob,
