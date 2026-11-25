@@ -123,6 +123,7 @@ export class EntityStates {
   #listingRevision = 0;
   #forms = new Map<string, number>();
   #checkoutDependencies = new Map<string, number>();
+  #terminalOwners: (id: string) => number = () => 0;
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
   #placement = new Map<
@@ -154,6 +155,9 @@ export class EntityStates {
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
+  }
+  terminalOwners(count: (id: string) => number): void {
+    this.#terminalOwners = count;
   }
   /** The live keyed map, copied by snapshot assembly like the other maps. */
   values(): Map<string, EntityState> {
@@ -990,6 +994,7 @@ export class EntityStates {
       // Preserve its marker without interpreting that observation as a run outcome.
       ...(entry.attention.error ? { error: true as const } : {}),
     };
+    const dependencies = this.#terminalOwners(entry.id);
     return {
       kind: "session",
       id: entry.id,
@@ -1001,9 +1006,7 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts,
-      ...(verdict.dependencies
-        ? { dependencies: verdict.dependencies.running }
-        : {}),
+      ...(dependencies ? { dependencies } : {}),
       ...(verdict.terminal ? { terminal: verdict.terminal } : {}),
       ...(verdict.outcome ? { outcome: verdict.outcome } : {}),
       ...(verdict.terminalOrigin
