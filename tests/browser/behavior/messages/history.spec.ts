@@ -108,8 +108,19 @@ test("messages.revert-files-counted-strip-reload", {
     lease: state.lease.lease,
     files: { "revert.txt": "before\n" },
   });
+  const v2 = state.controller.info!.version.startsWith("2."),
+    controls = ["agent-switched", "model-switched"].map((type) => ({
+      id: "msg_" + randomUUID().replaceAll("-", ""),
+      type,
+      ...(type === "agent-switched"
+        ? { agent: "build" }
+        : { model: { providerID: "fake", id: "scripted" } }),
+    }));
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Revert rendering",
+    // The contract preserves two pre-prompt native controls. Seed those exact
+    // records instead of assuming Send must switch already-applied defaults.
+    ...(v2 ? { messages: controls } : {}),
   });
   const frames = await wire(page);
   await openSession(state, page, session.id);
@@ -166,12 +177,17 @@ test("messages.revert-files-counted-strip-reload", {
         "[data-message][data-role=user], [data-message][data-role=assistant]",
       ),
     ).toHaveCount(0);
-    if (state.controller.info!.version.startsWith("2.")) {
+    if (v2) {
       await expect(page.locator("[data-message][data-role=context]"))
         .toHaveCount(2);
-      for (const kind of ["agent-switched", "model-switched"]) {
-        await expect(page.locator(`[data-native-record="opencode-v2/${kind}"]`))
-          .toBeVisible();
+      for (const control of controls) {
+        await expect(page.locator(`[data-message="${control.id}"]`))
+          .toContainText(
+            control.type === "agent-switched" ? "build" : "scripted",
+          );
+        await expect(
+          page.locator(`[data-native-record="opencode-v2/${control.type}"]`),
+        ).toBeVisible();
       }
     } else await expect(page.locator("[data-message]")).toHaveCount(0);
   };
