@@ -28,6 +28,7 @@ test("composer.pending-send-survives-reconnect-and-sidecar-restart", {
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const pending = page.locator('[data-send-state="pending"]');
   await expect(pending).toBeInViewport();
+  await expect(prompt(page)).toHaveValue("");
   const id = await pending.getAttribute("data-message");
   const entry = page.locator(`[data-message="${id}"]`);
   const key = await entry.getAttribute("data-send-key");
@@ -74,8 +75,11 @@ test("composer.pending-native-message-commits-before-send-acknowledgement", {
   await prompt(page).fill("Commit by identity, never by text.");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   const entry = page.locator("[data-send-key]");
+  await expect.poll(() =>
+    frames.sent.some(({ frame }) => frame.method === "session.prompt")
+  ).toBe(true);
+  await expect(prompt(page)).toHaveValue("");
   await expect(entry).toHaveAttribute("data-send-state", "committed");
-  await expect(prompt(page)).toHaveValue("Commit by identity, never by text.");
   await expect(entry).toHaveCount(1);
   const key = await entry.getAttribute("data-send-key");
   expect(

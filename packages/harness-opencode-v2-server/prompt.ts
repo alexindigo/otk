@@ -16,7 +16,7 @@ import {
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { interrupt } from "./interrupt.ts";
-import { selectionModel } from "./selection.ts";
+import { applySelection } from "./selection.ts";
 import { submissionID } from "./submission-id.ts";
 type NativeInput = Parameters<OpenCodeClient["session"]["prompt"]>[0];
 type Prepared = Pick<NativeInput, "text" | "files" | "agents">;
@@ -274,39 +274,30 @@ export class V2Prompt implements PromptCapability {
         this.policy,
         operation?.signal,
       );
-      const model = await selectionModel(client, session, input, operation);
-      if (input.agent !== undefined && input.agent !== session.agent) {
-        await client.effect(
-          (api) =>
-            api.session.switchAgent({ sessionID: native, agent: input.agent! }),
-          operation,
-        );
-        await operation?.checkpoint("prompt-selection", {
-          kind: "prompt-selection",
-          value: { sessionID: input.sessionID, agent: input.agent },
-        });
-      }
-      if (
-        model &&
-        (model.providerID !== session.model?.providerID ||
-          model.id !== session.model?.id ||
-          (model.variant ?? "default") !==
-            (session.model?.variant ?? "default"))
-      ) {
-        await client.effect(
-          (api) => api.session.switchModel({ sessionID: native, model }),
-          operation,
-        );
-        await operation?.checkpoint("prompt-selection", {
-          kind: "prompt-selection",
-          value: {
-            sessionID: input.sessionID,
-            model: { provider: model.providerID, model: model.id },
-            ...(model.variant === undefined ? {} : { variant: model.variant }),
-            ...(input.agent === undefined ? {} : { agent: input.agent }),
-          },
-        });
-      }
+      await applySelection(
+        client,
+        session,
+        input,
+        operation,
+        async (raw, change) => {
+          await operation?.checkpoint("prompt-selection", {
+            kind: "prompt-selection",
+            value: change === "agent"
+              ? { sessionID: input.sessionID, agent: input.agent }
+              : {
+                sessionID: input.sessionID,
+                model: {
+                  provider: raw.model!.providerID,
+                  model: raw.model!.id,
+                },
+                ...(raw.model!.variant === undefined
+                  ? {}
+                  : { variant: raw.model!.variant }),
+                ...(input.agent === undefined ? {} : { agent: input.agent }),
+              },
+          });
+        },
+      );
       const origin = operation?.key.origin;
       const id = input.messageID ?? submissionID();
       if (this.submitted && origin) {

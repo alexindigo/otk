@@ -98,7 +98,10 @@ export default function RequestLifetimeScene() {
     rpc: send as SessionPorts["rpc"],
     directory: () => Promise.resolve("/repo"),
     act: (action) => action(),
-    submit: (action) => action(),
+    submit: async (action) => {
+      await action(undefined, () => {}, "msg_fixture");
+      return { kind: "committed", messageID: "msg_fixture" };
+    },
     history: () => Promise.resolve([]),
     attachments: (parts) => Promise.resolve(parts),
   };

@@ -685,7 +685,7 @@ export class OpencodeV1Adapter implements Harness {
             operation?: Parameters<typeof capability.command>[1],
           ) => {
             try {
-              await capability.command(input, operation);
+              return await capability.command(input, operation);
             } catch (error) {
               if (!operation?.signal.aborted) {
                 this.#requestFailure(

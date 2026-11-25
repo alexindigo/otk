@@ -9,6 +9,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
 import {
   openRecord,
+  readRecordBody,
   revealTool,
   shellOutput,
   shellRun,
@@ -86,7 +87,7 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Enter");
   await revealTool(page, shellRun(state, "running"));
   await expect(page.locator(shellRun(state, "running"))).toBeVisible();
-  await expect(prompt(page)).toHaveValue("sleep 31; echo long-shell-finished");
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
     .toContainText("Running command");
   await prompt(page).fill("next draft during command");
@@ -108,7 +109,9 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
         JSON.stringify(row.getAttribute("data-virtual-key"))
       }] ${selector}`;
   }, shellRun(state, "completed"));
-  await openRecord(page, completedSource);
+  if (state.controller.info!.version.startsWith("2.")) {
+    await readRecordBody(page, completedSource);
+  } else await openRecord(page, completedSource);
   await expect(
     shellOutput(state, page, "completed").filter({
       hasText: "long-shell-finished",

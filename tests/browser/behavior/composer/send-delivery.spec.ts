@@ -94,6 +94,19 @@ test(
       );
       await page.locator(".otk-prompt button[type=submit]").click();
       await expect(prompt(page)).toHaveValue("");
+      // Draft custody transfers at dispatch, before native queue admission.
+      // Establish the requested native order before sending from the other
+      // client; the empty editor is not a delivery acknowledgement.
+      await expect.poll(() => {
+        const sent = frames.sent.find(({ frame }) =>
+          frame.method === "session.prompt"
+        )?.frame;
+        return !!sent &&
+          frames.received.some((frame) =>
+            frame.t === "request.result" && frame.ref?.key === sent.ref?.key &&
+            (frame.outcome as { ok: boolean }).ok
+          );
+      }).toBe(true);
       await state.native(`/session/${session.id}/prompt_async`, "POST", {
         parts: [{ type: "text", text: "External client queues after OTK" }],
       });

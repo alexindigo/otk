@@ -56,3 +56,66 @@ test("V1 next selection follows the latest user-role message while prompt identi
     native.close();
   }
 });
+
+test("V1 synthetic compaction/shell records keep the newest prompt's applied variant (2.62)", async () => {
+  for (
+    const [label, promptVariant, syntheticModel, expected] of [
+      ["inherits", "high", "scripted", "high"],
+      ["explicit Default stays Default", undefined, "scripted", undefined],
+      ["a different model does not inherit", "high", "other", undefined],
+    ] as const
+  ) {
+    const root = await tempDir("prompt-selection-variant-"),
+      file = join(root, "native.db"),
+      writer = new DatabaseSync(file);
+    writer.exec(
+      "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
+    );
+    writer.prepare(
+      "INSERT INTO session VALUES('ses_c',NULL,'/p','p','Compact',1,2,NULL)",
+    ).run();
+    const user = (
+      id: string,
+      created: number,
+      model: Record<string, unknown>,
+    ) =>
+      writer.prepare("INSERT INTO message VALUES(?,'ses_c',?)").run(
+        id,
+        JSON.stringify({
+          role: "user",
+          agent: "build",
+          model,
+          time: { created },
+        }),
+      );
+    user("msg_1", 1, {
+      providerID: "fake",
+      modelID: "scripted",
+      ...(promptVariant ? { variant: promptVariant } : {}),
+    });
+    writer.prepare("INSERT INTO part VALUES('prt_1','msg_1','ses_c',?)").run(
+      JSON.stringify({ type: "text", text: "prompt" }),
+    );
+    // V1 summarize records its identity without a variant.
+    user("msg_3", 3, { providerID: "fake", modelID: syntheticModel });
+    writer.prepare("INSERT INTO part VALUES('prt_3','msg_3','ses_c',?)").run(
+      JSON.stringify({ type: "compaction", auto: false }),
+    );
+    writer.close();
+    const native = new DigestNativeDb(file);
+    try {
+      assertEquals(
+        native.transcriptMetadata("opcv1-ses_c", []).prompt,
+        {
+          id: "msg_1",
+          agent: "build",
+          model: { provider: "fake", model: syntheticModel },
+          ...(expected ? { variant: expected } : {}),
+        },
+        label,
+      );
+    } finally {
+      native.close();
+    }
+  }
+});

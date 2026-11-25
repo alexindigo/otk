@@ -75,7 +75,7 @@ export interface BranchHistory {
     permit?: BranchSendPermit,
     draft?: Draft,
   ): Promise<void>;
-  beforeSend(target: Selection): Promise<BranchSendPermit>;
+  beforeSend(target: Selection, captured?: Draft): Promise<BranchSendPermit>;
   saveCopy(): Promise<void>;
   retryCopy(): Promise<void>;
   keepWithoutCopy(): void;
@@ -974,9 +974,9 @@ export function createBranchHistory(options: {
         );
       }
     },
-    async beforeSend(t) {
+    async beforeSend(t, captured) {
       const target = { ...t },
-        draft = cloneDraft(options.drafts.current(draftKey(t))),
+        draft = cloneDraft(captured ?? options.drafts.current(draftKey(t))),
         record = (options.current?.(t) ?? await options.session(t)).revert;
       const permit: BranchSendPermit = {
         target,

@@ -246,6 +246,16 @@ test.describe("native picker choices", () => {
         request.reasoning_effort === "high"
       ),
     ).toBe(true);
+    if (state.controller.info!.version.startsWith("2.")) {
+      // WP1.9 holds the unconfirmed command separately from the next draft.
+      await expect(prompt(page)).toHaveValue("");
+      await expect(
+        page.getByRole("button", { name: "Check send", exact: true }),
+      ).toBeVisible();
+      await expect(page.locator(".otk-composer-notice")).toContainText(
+        "did not provide a way to confirm its message",
+      );
+    } else await expect(prompt(page)).toHaveValue("");
     await prompt(page).press("!");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
     await expect(page.locator(".otk-variant-picker")).toHaveCount(0);

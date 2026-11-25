@@ -2,6 +2,7 @@
 import type { Element } from "solid-js";
 import type {
   CommandHub,
+  DraftSendCapture,
   PromptChoices,
   PromptSelection,
   PromptSource,
@@ -25,10 +26,12 @@ export interface PromptProps {
     variant?: string;
   };
   onChange(value: DraftChange): Draft;
+  captureSend?(draft: Draft): DraftSendCapture;
   onSubmit(
     parts: PromptPart[],
     mode: Draft["mode"],
     selection: PromptChoices,
+    capture?: DraftSendCapture,
   ): Promise<void>;
   onAbort(): Promise<void>;
 }
@@ -65,6 +68,7 @@ export interface PromptFeature {
     draft: Draft,
     parts: PromptPart[],
     selection: PromptChoices,
+    capture?: DraftSendCapture,
   ): boolean | Promise<boolean>;
   submitted?(
     draft: Draft,

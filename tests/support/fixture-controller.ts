@@ -615,7 +615,8 @@ try {
                         requestms: 90000,
                       }
                       : {}),
-                    ...(profile === "transport-freeze"
+                    ...(profile === "transport-freeze" ||
+                        profile === "transport-stall"
                       ? { heartbeattimeout: 2 }
                       : {}),
                   },

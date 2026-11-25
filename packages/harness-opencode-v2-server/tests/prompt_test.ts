@@ -7,9 +7,9 @@ import {
 } from "@otk/protocol";
 import { V2Client } from "../client.ts";
 import { preparePrompt, V2Prompt } from "../prompt.ts";
-import { selectAction } from "../session-actions.ts";
+import { selectAction, sessionActions } from "../session-actions.ts";
 import type { NativeSession } from "../messages.ts";
-function fixture() {
+function fixture(variant = "default") {
   const calls: {
       path: string;
       body: Record<string, unknown> | undefined;
@@ -18,7 +18,7 @@ function fixture() {
     receipts: ReceiptData[] = [];
   let fence = 0,
     agent = "build",
-    model = { providerID: "fake", id: "scripted", variant: "default" },
+    model = { providerID: "fake", id: "scripted", variant },
     fail = "";
   const submissions: { sessionID: string; messageID: string }[] = [];
   const operation: OperationContext = {
@@ -51,6 +51,9 @@ function fixture() {
         return Promise.reject(new TypeError("transport lost"));
       }
       if (init?.method === "GET") {
+        if (/\/message$/.test(path)) {
+          return Promise.resolve(Response.json({ data: [], cursor: {} }));
+        }
         if (path === "/api/agent") {
           return Promise.resolve(Response.json({
             data: [{
@@ -72,6 +75,18 @@ function fixture() {
       }
       if (path.endsWith("/agent")) agent = body.agent;
       if (path.endsWith("/model")) model = body.model;
+      if (path.endsWith("/compact")) {
+        return Promise.resolve(Response.json({
+          data: {
+            id: "msg_0123456789abcdefghij",
+            sessionID: "ses_root",
+            time: { created: 1 },
+            type: "compaction",
+            payload: {},
+            delivery: "steer",
+          },
+        }));
+      }
       return Promise.resolve(
         path.endsWith("/prompt")
           ? Response.json({ data: {} })
@@ -275,5 +290,65 @@ Deno.test("V2 prepared upload and agent mentions preserve offsets and exact byte
         mention: { start: 0, end: 6, text: "@agent" },
       }], "/repo"),
     OperationFailure,
+  );
+});
+
+Deno.test("V2 prompt and action keep the applied variant and switch only on an explicit change (2.62)", async () => {
+  const applied = { provider: "fake", model: "scripted" };
+  for (
+    const [variant, expected] of [
+      ["high", undefined],
+      ["low", { providerID: "fake", id: "scripted", variant: "low" }],
+    ] as const
+  ) {
+    for (const action of [false, true]) {
+      const f = fixture("high");
+      const input = { agent: "build", model: applied, variant };
+      if (action) {
+        await selectAction(
+          f.client,
+          {
+            id: "ses_root",
+            agent: "build",
+            location: { directory: "/repo" },
+            model: { providerID: "fake", id: "scripted", variant: "high" },
+          } as NativeSession,
+          input,
+          f.operation,
+        );
+      } else {
+        await f.prompt.prompt({
+          ...input,
+          sessionID: "opcv2-ses_root",
+          mode: "normal",
+          parts: [{ kind: "text", text: "keep the applied variant" }],
+        }, f.operation);
+      }
+      assertEquals(
+        f.calls.find((c) => c.path.endsWith("/model"))?.body,
+        expected && { model: expected },
+        `${variant} ${action ? "action" : "prompt"}`,
+      );
+    }
+  }
+});
+
+Deno.test("V2 compaction never switches the applied model or variant (2.62)", async () => {
+  const f = fixture("high");
+  const { sessionActions: actions } = sessionActions({
+    client: () => f.client,
+    observed() {},
+    removed: () => Promise.resolve(),
+  });
+  await actions!.compact("opcv2-ses_root", {
+    provider: "fake",
+    model: "scripted",
+  });
+  assert(f.calls.some((c) => c.path.endsWith("/compact")));
+  assertEquals(
+    f.calls.filter((c) =>
+      c.path.endsWith("/model") || c.path.endsWith("/agent")
+    ),
+    [],
   );
 });

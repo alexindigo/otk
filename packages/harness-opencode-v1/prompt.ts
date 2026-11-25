@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeModel, nativeVariant } from "./selection.ts";
 import { fromFileUrl, relative, resolve, toFileUrl } from "@std/path";
 import {
   type AttachmentPolicy,
@@ -46,11 +47,9 @@ export function prompt(
           body: {
             messageID,
             parts,
-            variant: input.variant,
+            variant: nativeVariant(input.variant),
             agent: input.agent,
-            model: input.model
-              ? { providerID: input.model.provider, modelID: input.model.model }
-              : undefined,
+            model: input.model ? nativeModel(input.model) : undefined,
           },
         },
       );

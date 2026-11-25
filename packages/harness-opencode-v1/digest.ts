@@ -10,6 +10,7 @@ import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { HistoryReader } from "./history.ts";
 import { sessionDirectory } from "./directory.ts";
+import { inheritedVariant } from "./selection.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Derived,
@@ -551,7 +552,8 @@ export class OpencodeV1DigestSink implements DigestSink {
       created = -Infinity,
       cutoffCreated: number | undefined,
       // Native selection authority: the newest user-role message of any kind.
-      selection: Info | undefined;
+      selection: Info | undefined,
+      promptInfo: Info | undefined;
     let before: string | undefined;
     let satisfied = false;
     do {
@@ -580,6 +582,7 @@ export class OpencodeV1DigestSink implements DigestSink {
             (info.time.created === created && info.id > (prompt?.id ?? "")))
         ) {
           created = info.time.created;
+          promptInfo = info;
           prompt = {
             id: info.id,
             ...(typeof info.agent === "string" ? { agent: info.agent } : {}),
@@ -622,6 +625,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     } while (before && !satisfied);
     if (prompt && selection) {
       const { id } = prompt;
+      const variant = inheritedVariant(selection, promptInfo);
       prompt = {
         id,
         ...(typeof selection.agent === "string"
@@ -633,9 +637,7 @@ export class OpencodeV1DigestSink implements DigestSink {
               provider: selection.model.providerID,
               model: selection.model.modelID,
             },
-            ...(typeof selection.model.variant === "string"
-              ? { variant: selection.model.variant }
-              : {}),
+            ...(variant === undefined ? {} : { variant }),
           }
           : {}),
       };

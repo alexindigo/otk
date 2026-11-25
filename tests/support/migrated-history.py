@@ -1,8 +1,25 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-only
 """Guest-only: stock V1 initializes DB, seed stopped clone, stock V2 migrates."""
-import base64, json, os, pathlib, re, shutil, signal, sqlite3, subprocess, time, urllib.request
+import atexit, base64, json, os, pathlib, re, shutil, signal, socket, sqlite3, subprocess, time, urllib.request
 W=pathlib.Path.cwd(); R=W/'.test-state'/('migrated-history-'+str(time.time_ns()))
+leases=[]
+atexit.register(lambda:[record.unlink(missing_ok=True) for record in leases])
+def free_port():
+    # Same kernel-assigned port and lease records as tests/support/opencode.ts
+    # freePort: a fixed port can collide with concurrent integration fixtures.
+    root=os.environ.get('OTK_TEST_PORTS_ROOT')
+    if root:pathlib.Path(root).mkdir(parents=True,exist_ok=True)
+    for _ in range(64):
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
+        if not root:return port
+        record=pathlib.Path(root)/(str(port)+'.json')
+        try:fd=os.open(record,os.O_WRONLY|os.O_CREAT|os.O_EXCL)
+        except FileExistsError:continue
+        with os.fdopen(fd,'w') as out:json.dump({'owner':'migrated-history','pid':os.getpid(),'port':port},out)
+        leases.append(record);return port
+    raise RuntimeError('No free leased port')
 R.mkdir(parents=True,exist_ok=False)
 env=dict(os.environ)
 for key,sub in {'HOME':'home','TMPDIR':'tmp','XDG_CONFIG_HOME':'config','XDG_DATA_HOME':'data','XDG_STATE_HOME':'state','XDG_CACHE_HOME':'cache'}.items():
@@ -25,15 +42,18 @@ def start(version,port):
     p=subprocess.Popen(args,env=env,cwd=project,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
     return p,log
 def stop(p,log):
-    os.killpg(p.pid,signal.SIGTERM)
+    # A native that already exited (e.g. failed startup) keeps its own error.
+    try:os.killpg(p.pid,signal.SIGTERM)
+    except ProcessLookupError:pass
     try:p.wait(timeout=20)
     except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
     log.close()
-p,log=start('1.19.3',49193)
+v1=free_port()
+p,log=start('1.19.3',v1)
 try:
     for _ in range(150):
         try:
-            session=req('http://127.0.0.1:49193/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
+            session=req('http://127.0.0.1:'+str(v1)+'/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
         except Exception:
             assert p.poll() is None;time.sleep(.2)
     else:raise RuntimeError('V1 startup deadline')
@@ -79,11 +99,11 @@ db.close()
 if os.environ.get('INV_E_V1_READ')=='1':
     # Optional extra probe, not needed to exercise the actual native migration.
     # This currently times out on the seeded restart; failed logs are retained.
-    p,log=start('1.19.3',49193)
+    p,log=start('1.19.3',v1)
     try:
         for _ in range(150):
             try:
-                observed=req('http://127.0.0.1:49193/session/'+sid+'/message?directory='+str(project));break
+                observed=req('http://127.0.0.1:'+str(v1)+'/session/'+sid+'/message?directory='+str(project));break
             except urllib.error.URLError:
                 assert p.poll() is None;time.sleep(.2)
         else:raise RuntimeError('V1 reload deadline')
@@ -91,7 +111,8 @@ if os.environ.get('INV_E_V1_READ')=='1':
         native=[{**m['info'],'parts':m['parts']} for m in observed if m['info']['role']=='assistant']
     finally:stop(p,log)
 (R/'config/opencode/opencode.json').write_text('{}')
-p,log=start('2.2.6',49226)
+# The managed V2 service publishes its OS-assigned endpoint in the registration.
+p,log=start('2.2.6',0)
 try:
     registration=R/'state/opencode/service.json'
     for _ in range(600):

@@ -456,14 +456,6 @@ export function createTranscript(
     binding.subscribe(() => listener(state));
   const setState = (change: (draft: TranscriptState) => void) => {
     currentStore.update(change);
-    const descriptor = Object.getOwnPropertyDescriptor(
-      state.content,
-      "messages",
-    );
-    if (descriptor && "value" in descriptor) {
-      projection.replace(descriptor.value);
-      attach(state.content);
-    } else if (!descriptor) attach(state.content);
     state.messageIDs = projection.state.messageIDs;
     state.messagesByID = projection.state.messagesByID;
     state.replyIDs = projection.state.replyIDs;
@@ -774,6 +766,7 @@ export function createTranscript(
           state.clock?.epoch === page.clock.epoch && state.version &&
           compareTranscriptVersion(state.version, page.version) === 0
         ? projection.messages().filter((message) =>
+          projection.committed(message.id) &&
           compareMessages(message, messages[0]) < 0
         )
         : [];
@@ -962,7 +955,10 @@ export function createTranscript(
       draft.version = undefined;
       draft.latestPrompt = undefined;
       draft.siblings = [];
-      draft.content = emptyContent();
+      // Window lifetime changes do not turn projected local sends into native
+      // input. Replace only the native window; pending entries survive it.
+      projection.replace([]);
+      draft.content = attach(emptyContent());
       draft.loading = !!selection;
       draft.continuity = selection ? "loading" : "ready";
       draft.paging = false;
@@ -1032,11 +1028,8 @@ export function createTranscript(
           }
         }
         draft.exhausted = false;
+        projection.retain(retained);
       }
-      draft.content = {
-        ...contentMetadata(draft.content),
-        messages,
-      };
     });
   };
   const reserve = () => {

@@ -179,15 +179,33 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   await page.keyboard.press("Escape");
   await expect(page.locator(".otk-turn-usage :popover-open")).toHaveCount(0);
   await expect(page.locator(".otk-turn-usage > button")).toBeFocused();
-  for (
-    const selector of [
-      '[data-message-command="reply.fork"]',
-      ".otk-copy-message",
-    ]
+  // A native completion can contribute a real control between usage and Fork.
+  // Traverse that control when Tab reaches it, without requiring every native
+  // response to have a separate completion record or racing its publication.
+  await page.keyboard.press("Tab");
+  await expect.poll(() =>
+    page.evaluate(() =>
+      document.activeElement?.matches(
+        '.otk-record-completion button, [data-message-command="reply.fork"]',
+      ) ?? false
+    )
+  ).toBe(true);
+  const completion = page.getByRole("button", {
+    name: "Completion details",
+    exact: true,
+  });
+  if (
+    await completion.evaluateAll((nodes) =>
+      nodes.some((node) => node === document.activeElement)
+    )
   ) {
+    await expect(completion).toBeFocused();
     await page.keyboard.press("Tab");
-    await expect(page.locator(selector)).toBeFocused();
   }
+  await expect(page.locator('[data-message-command="reply.fork"]'))
+    .toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".otk-copy-message")).toBeFocused();
   await page.locator(".otk-user-bubble").focus();
   await expect(page.locator("[data-role=user] .otk-message-footer time"))
     .toHaveCSS("visibility", "visible");

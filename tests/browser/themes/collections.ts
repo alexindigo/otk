@@ -1204,7 +1204,9 @@ export async function collections456(input: Inputs) {
             n = el.getBoundingClientRect(),
             frame = document.querySelector(".otk-composer-frame")!
               .getBoundingClientRect(),
-            dock = document.querySelector(".otk-composer-dock")!
+            destination = document.querySelector(".otk-composer-activity-slot")!
+              .getBoundingClientRect(),
+            transcript = document.querySelector(".otk-messages")!
               .getBoundingClientRect();
           return {
             row: r.height,
@@ -1212,10 +1214,12 @@ export async function collections456(input: Inputs) {
             icon: i ? [i.width, i.height] : [],
             text: Math.abs(t.top + t.height / 2 - r.top - r.height / 2),
             iconOffset: i ? i.top + i.height / 2 - r.top - r.height / 2 : null,
-            // Runtime notices anchor above the dock's reserved helper row.
-            // Its outer frame, not the bordered inner input, owns their width.
+            // Approved M1 notice flow: transcript, destination, notice, input.
+            // The outer input frame still owns the joined notice's width.
             joined: n.left === frame.left && n.right === frame.right &&
-              Math.abs(n.bottom - dock.top) <= 1,
+              Math.abs(n.bottom - frame.top) <= 1 &&
+              n.top >= destination.bottom - 1 &&
+              n.top >= transcript.bottom - 1,
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };

@@ -104,7 +104,10 @@ Deno.test("registered slash aliases retain canonical native names and MCP source
     supports: () => true,
     sessionID: () => "session",
     attachments: (parts: unknown[]) => Promise.resolve(parts),
-    submit: (action: () => Promise<unknown>) => action(),
+    submit: async (action: Parameters<PromptContext["submit"]>[0]) => {
+      await action(undefined, () => {}, "msg_fixture");
+      return { kind: "committed", messageID: "msg_fixture" };
+    },
     rpc: (method: string, params: Record<string, unknown>) => {
       if (method === "commands.list") {
         return Promise.resolve([{
@@ -409,7 +412,10 @@ Deno.test("palette native slash waits for composer readiness and sends the curre
     supports: () => true,
     sessionID: () => "session",
     attachments: (parts: unknown[]) => Promise.resolve(parts),
-    submit: (action: () => Promise<unknown>) => action(),
+    submit: async (action: Parameters<PromptContext["submit"]>[0]) => {
+      await action(undefined, () => {}, "msg_fixture");
+      return { kind: "committed", messageID: "msg_fixture" };
+    },
     ready: () => pending,
     change: (change: (value: typeof draft) => typeof draft) => change(draft),
     nextSelection: () =>
@@ -454,6 +460,7 @@ Deno.test("palette native slash waits for composer readiness and sends the curre
     await sent;
     assertEquals(received, [{
       sessionID: "session",
+      messageID: "msg_fixture",
       command: "probe",
       arguments: "",
       agent: "review",
@@ -486,7 +493,10 @@ Deno.test("overlapping prompt construction defers command ownership until the pr
       supports: () => true,
       sessionID: () => sessionID,
       attachments: (parts: unknown[]) => Promise.resolve(parts),
-      submit: (action: () => Promise<unknown>) => action(),
+      submit: async (action: Parameters<PromptContext["submit"]>[0]) => {
+        await action(undefined, () => {}, "msg_fixture");
+        return { kind: "committed", messageID: "msg_fixture" };
+      },
       rpc: () => {
         received.push(sessionID);
         return Promise.resolve();
