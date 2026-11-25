@@ -9,6 +9,7 @@ import { readRpcMessages } from "../support/message-pages.ts";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
+import { ascendingID } from "@otk/protocol";
 test("shell RPC honors configured primary agent and bypasses model bash permission", async () => {
   const f = await nativeFixture({ bash: "deny" }, {
     config: { default_agent: "plan" },
@@ -22,10 +23,13 @@ test("shell RPC honors configured primary agent and bypasses model bash permissi
       server = await f.sidecar();
     client = new WsClient(server.url);
     await client.connect();
-    await client.rpc("session.shell", {
+    const messageID = ascendingID("msg");
+    const receipt = await client.rpc("session.shell", {
       sessionID: session.id,
+      messageID,
       command: "echo otk",
     });
+    assertEquals(receipt, { messageID, state: "accepted" });
     const messages = await waitFor(
       () => readRpcMessages(client!, session.id),
       (rows) =>
@@ -38,6 +42,7 @@ test("shell RPC honors configured primary agent and bypasses model bash permissi
         ),
     );
     const assistant = messages.find((m) => m.role === "assistant")!;
+    assertEquals(messages.some((m) => m.id === messageID), true);
     assertEquals(assistant.agent, "plan");
     const part = assistant.parts.find((p) => p.kind === "tool");
     if (part?.kind !== "tool" || part.call.tool !== "bash") {

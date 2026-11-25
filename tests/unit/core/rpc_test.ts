@@ -330,9 +330,19 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       prompt: (input) => record("prompt", input),
       abort: (id) => record("abort", id),
     },
-    shell: { shell: (input) => record("shell", input) },
+    shell: {
+      shell: (input) =>
+        record("shell", input).then(() => ({
+          messageID: "shell",
+          state: "accepted" as const,
+        })),
+    },
     commands: {
-      command: (input) => record("command", input),
+      command: (input) =>
+        record("command", input).then(() => ({
+          messageID: "command",
+          state: "accepted" as const,
+        })),
       listCommands: () => Promise.resolve([]),
     },
     history: {
@@ -483,7 +493,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         command: "pwd",
         model,
       }),
-      null,
+      { messageID: "shell", state: "accepted" },
     );
     assertEquals(
       await rpc.dispatch("session.command", {
@@ -492,7 +502,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         parts: [],
         model,
       }),
-      null,
+      { messageID: "command", state: "accepted" },
     );
     assertEquals(
       await rpc.dispatch("find.files", { sessionID: "tstv1-s" }),

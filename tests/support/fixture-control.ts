@@ -110,6 +110,7 @@ export const profiles = {
   "transport-deleted-seen": "v1",
   "transport-shell": "v1",
   "transport-freeze": "v1",
+  "transport-stall": "v1",
   "transport-reconnect": "v1",
   "transport-bootstrap": "v1",
   "transport-errors-http": "v1",

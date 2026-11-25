@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeCommandModel, nativeVariant } from "./selection.ts";
 import { type CommandsCapability, HarnessError } from "@otk/harness";
 import type { AttachmentPolicy, CommandOption } from "@otk/protocol";
 import type { Client } from "./client.ts";
@@ -8,6 +9,7 @@ import { mapPromptParts } from "./prompt.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type { DirectoryCatalogs } from "./catalogs.ts";
 import { nativeCommands } from "./command-vocabulary.ts";
+import { submissionID } from "./submission-id.ts";
 export function commands(
   client: Client,
   directory: Directory,
@@ -38,6 +40,7 @@ export function commands(
       return mergeCommands(mapCommands(commands), skills);
     },
     async command(input, operation) {
+      const messageID = input.messageID ?? submissionID();
       const dir = await directory.resolve(input.sessionID);
       if (input.skill) {
         const native = await client.json<{ name: string; source?: string }[]>(
@@ -69,13 +72,12 @@ export function commands(
           classification: "effect",
           ...(operation ? { operation } : {}),
           body: {
+            messageID,
             command: input.skill?.name ?? input.command,
             arguments: input.arguments,
             agent: input.agent,
-            variant: input.variant,
-            model: input.model
-              ? `${input.model.provider}/${input.model.model}`
-              : undefined,
+            variant: nativeVariant(input.variant),
+            model: input.model ? nativeCommandModel(input.model) : undefined,
             parts: await mapPromptParts(
               input.parts || [],
               dir,
@@ -86,6 +88,7 @@ export function commands(
         },
       );
       if (operation && launched) await launched.settled;
+      return { messageID, state: "accepted" };
     },
   };
 }

@@ -65,6 +65,8 @@ for (
             kind: "text",
             text: "Capture the choice made during readiness",
           }]);
+          // No native receipt: the pending entry owns the send under OTK's
+          // supplied identity (2.39), so the composer releases the draft.
           await expect(prompt(page)).toHaveValue("");
           await page.locator(".otk-agent-picker > button").click();
           await page.locator('.otk-agent-picker [data-picker-key="review"]')
@@ -246,6 +248,13 @@ test.describe("input-referenced catalog", () => {
       await expect(page.locator("[data-role=assistant] .otk-text"))
         .toHaveText("Referenced command delivered.");
       await expect(prompt(page)).toHaveValue("");
+      if (state.controller.info!.version.startsWith("2.")) {
+        await expect(page.locator(".otk-composer-notice")).toContainText(
+          "did not provide a way to confirm its message",
+        );
+        await expect(page.getByRole("button", { name: "Check send" }))
+          .toBeVisible();
+      }
       expect(submissions()).toHaveLength(1);
       expect(submissions()[0].frame.method).toBe("session.command");
       expect(submissions()[0].frame.params).toMatchObject({

@@ -27,6 +27,8 @@ export interface CommandContext {
   transition?: true;
   /** Prevent reentrant text commands from invoking their own input owner. */
   command?: string;
+  /** Invocation-local Send custody; not a command argument or RPC field. */
+  draftSend?: import("./drafts.ts").DraftSendCapture;
 }
 /** Data-only owner metadata; discovery visibility does not hide key labels. */
 export interface CommandMetadata {
@@ -40,7 +42,7 @@ export interface CommandMetadata {
   readonly scope?: string;
   readonly instance?: string;
   readonly source?: "builtin" | "server" | "mcp" | "skill" | "unknown";
-  /** Submissions participate in the prompt's captured send/clear lifecycle. */
+  /** Submissions participate in the prompt's captured Send lifecycle. */
   readonly kind?: "action" | "submission";
   /** An adapter contribution borrows the semantic owner's schema and behavior. */
   readonly action?: string;
@@ -64,15 +66,19 @@ export interface ActionControl {
 }
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   /** Feature-owned context contribution; args are the target's captured data. */
-  context?: {
-    kind: string | readonly string[];
-    title?(args: A): string;
-    confirm?(args: A): string;
-    /** One feature registration may project several invocation-specific choices. */
-    items?(args: A): { key?: string; title: string; args: A }[];
-    destructive?: boolean;
-    order?: number;
-  };
+  context?:
+    & {
+      kind: string | readonly string[];
+      title?(args: A): string;
+      confirm?(args: A): string;
+      destructive?: boolean;
+      order?: number;
+    }
+    & ({ items?: undefined; arguments?: never } | {
+      /** Override only when a source target differs from generated arguments. */
+      arguments?: CommandArguments;
+      items(args: A): { key?: string; title: string; args: A }[];
+    });
   enabled?(context: CommandContext, args?: A): boolean;
   availability?(context: CommandContext, args?: A): CommandAvailability;
   run(context: CommandContext, args: A): R | Promise<R>;
@@ -139,6 +145,9 @@ export class CommandHub {
       ...commandMetadata(command),
       context: command.context && Object.freeze({
         ...command.context,
+        ...(command.context.arguments
+          ? { arguments: freezeCommandArguments(command.context.arguments) }
+          : {}),
         kind: typeof command.context.kind === "string"
           ? command.context.kind
           : Object.freeze([...command.context.kind]),
@@ -339,22 +348,38 @@ export class CommandHub {
         Number(b.context?.destructive ?? false) ||
       (a.context?.order ?? 0) - (b.context?.order ?? 0)
     ).flatMap((command) => {
-      const items = command.context?.items?.(target.data) ??
-        (command.context?.items ? [] : [{
-          key: "",
-          title: command.context?.title?.(target.data) ?? command.title,
-          args: command.arguments?.type === "none" || !command.arguments
-            ? undefined
-            : target.data,
-        }]);
+      const contribution = command.context;
+      if (contribution?.items) {
+        try {
+          validateCommandArguments(
+            contribution.arguments ?? this.metadata(command.id)!.arguments ??
+              noCommandArguments,
+            target.data,
+          );
+        } catch {
+          return [];
+        }
+      }
+      const items: { key?: string; title?: string; args: unknown }[] =
+        command.context?.items?.(target.data) ??
+          (command.context?.items ? [] : [{
+            key: "",
+            args: command.arguments?.type === "none" || !command.arguments
+              ? undefined
+              : target.data,
+          }]);
       return items.filter((item) =>
         this.enabled(command.id, context, item.args)
       ).map((item) => {
+        // Presentation consumes the same admitted arguments as invocation. An
+        // area may exist before its target resource has finished reloading.
+        const title = item.title ?? command.context?.title?.(item.args) ??
+          command.title;
         const confirm = command.context?.confirm?.(item.args);
         const action = {
           id: command.id,
-          key: JSON.stringify([command.id, item.key ?? item.title]),
-          title: item.title,
+          key: JSON.stringify([command.id, item.key ?? title]),
+          title,
           args: item.args,
           destructive: command.context?.destructive ?? false,
           ...(confirm === undefined ? {} : { confirm }),

@@ -51,6 +51,8 @@ test.describe("pre-message rejection", () => {
     await expect(local).toHaveCount(1);
     await scrollTranscript(page, false);
     await expect(local).toContainText("Keep this unsent draft intact");
+    await expect(local.getByRole("button", { name: "Retry", exact: true }))
+      .toHaveCount(0);
     expect((await state.native<{ info: { role: string } }[]>(
       `/session/${session.id}/message`,
     )).filter((message) => message.info.role === "user")).toHaveLength(0);

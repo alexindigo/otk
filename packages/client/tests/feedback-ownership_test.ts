@@ -81,3 +81,60 @@ Deno.test("local pre-admission failures retain one presentation owner without a 
   );
   rpc.requests.stop();
 });
+
+Deno.test("late bookkeeping preserves a local Send outcome until a new primary intent", async () => {
+  const rpc = new Rpc(() => {}), owner = "tstv1-one";
+  rpc.requests.connect({
+    id: crypto.randomUUID(),
+    expiresAt: Date.now() + 60000,
+  }, 64);
+  const sink = rpc.feedback(owner);
+  sink.fail(
+    new RequestFailure({
+      code: "send.unconfirmed",
+      diagnosticID: "send",
+      retry: "none",
+      facts: { reason: "The message could not be confirmed" },
+    }),
+  );
+  const visitOperation = rpc.start("projects.visit", {
+    directory: "/project",
+    active: true,
+  }, { owner });
+  const complete = (ref: typeof visitOperation.state.ref) => {
+    rpc.receive({
+      t: "request.accepted",
+      ref,
+      seq: 1,
+      acceptedAt: Date.now(),
+      retentionUntil: Date.now() + 60000,
+      replayed: false,
+    });
+    rpc.receive({
+      t: "request.result",
+      ref,
+      seq: 2,
+      outcome: { ok: true, result: null },
+    });
+  };
+  const visit = visitOperation.result;
+  complete(visitOperation.state.ref);
+  try {
+    assertEquals(
+      sink.current()?.failure?.reason,
+      "The message could not be confirmed",
+    );
+    const renameOperation = rpc.start("session.rename", {
+      sessionID: owner,
+      title: "Next intent",
+    }, { owner });
+    const rename = renameOperation.result;
+    complete(renameOperation.state.ref);
+    assertEquals(sink.current()?.failure, undefined);
+    rpc.requests.stop();
+    await rename;
+  } finally {
+    rpc.requests.stop();
+    await visit;
+  }
+});

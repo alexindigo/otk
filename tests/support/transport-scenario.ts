@@ -15,11 +15,17 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
   let holding = false, entered = false, reads = 0, effects = 0;
   let shellReceipt: unknown;
   let clockAborts = 0, stripped = 0, permissionAcceptedAt: number | undefined;
+  // transport-stall: open native event streams, and those currently stalled.
+  // A stall keeps the socket open and forwards no bytes; later streams flow.
+  const streams = new Set<() => void>();
+  let stalled: Promise<void> | undefined, resume = () => {};
+  let opened = 0, stalls = 0;
   const assistantMessages = new Set<string>();
   const release = () => {
     holding = false;
     held.resolve();
     freeze?.thaw();
+    resume();
   };
   resources().defer("release native transport scenario", release);
   const proxy = [
@@ -29,6 +35,7 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
       "transport-errors-http",
       "transport-errors-late",
       "transport-enrichment",
+      "transport-stall",
     ].includes(profile)
     ? serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
@@ -121,6 +128,38 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
               headers,
             });
         }
+        // Every native event stream (V2 also streams per session), not one path.
+        if (
+          profile === "transport-stall" && response.body &&
+          response.headers.get("content-type")?.includes("text/event-stream")
+        ) {
+          opened++;
+          const upstream = response.body.getReader();
+          let gate: Promise<void> | undefined;
+          const stall = () => gate = stalled;
+          streams.add(stall);
+          const headers = new Headers(response.headers);
+          headers.delete("content-encoding");
+          headers.delete("content-length");
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                const next = await upstream.read();
+                // A stalled stream withholds bytes but never closes the socket.
+                if (gate) await gate;
+                if (next.done) {
+                  streams.delete(stall);
+                  controller.close();
+                } else controller.enqueue(next.value);
+              },
+              cancel(reason) {
+                streams.delete(stall);
+                return upstream.cancel(reason);
+              },
+            }),
+            { status: response.status, headers },
+          );
+        }
         if (profile === "transport-enrichment") {
           if (
             request.method === "GET" &&
@@ -212,6 +251,8 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
       clockAborts,
       stripped,
       permissionAcceptedAt,
+      opened,
+      stalls,
     }),
     control(action: "hold" | "release" | "freeze" | "thaw", id?: string) {
       if (action === "hold") {
@@ -223,7 +264,19 @@ export function transportScenario(oc: BrowserNative, profile: Profile) {
         holding = true;
         entered = false;
       } else if (action === "release") release();
-      else {
+      else if (profile === "transport-stall") {
+        // Stall every event stream open now; reconnections are unaffected.
+        if (action === "freeze") {
+          stalls++;
+          const wait = Promise.withResolvers<void>();
+          stalled = wait.promise;
+          resume = () => {
+            stalled = undefined;
+            wait.resolve();
+          };
+          for (const stall of streams) stall();
+        } else resume();
+      } else {
         if (!freeze) throw new Error("Scenario does not own a freeze proxy");
         if (action === "freeze") freeze.freeze();
         else freeze.thaw();

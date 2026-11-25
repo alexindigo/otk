@@ -1,15 +1,42 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import {
   createInbox,
+  createSessionDelivery,
   createSessionSubmission,
   createTabs,
+  createTranscriptProjection,
   type InboxRpc,
   IntentGroup,
   RequestTracker,
   type TabInput,
 } from "@otk/client";
+import type { TranscriptOwner } from "../transcript.ts";
 import type { RequestControl, TaskRecord } from "@otk/protocol";
+
+function delivery(sessionID = "original", messageID = "submitted") {
+  const projection = createTranscriptProjection();
+  projection.merge([{
+    id: messageID,
+    sessionID,
+    role: "user",
+    time: { created: 1 },
+    parts: [],
+  }]);
+  return createSessionDelivery({
+    target: { sidecarId: "server", sessionID },
+    title: () => "Submission",
+    transcript: () =>
+      ({
+        projection,
+        state: { clock: { epoch: "source", seq: 1 } },
+        subscribe: () => () => {},
+        pin: () => () => {},
+      }) as unknown as TranscriptOwner,
+    clock: { set() {}, clear() {} },
+  });
+}
+const receipt = { messageID: "submitted", state: "accepted" as const };
 
 Deno.test("composed Send dispatches under the fresh welcome after restart during admission", async () => {
   const sent: RequestControl[] = [];
@@ -54,6 +81,7 @@ Deno.test("composed Send dispatches under the fresh welcome after restart during
   const directory = Promise.withResolvers<string>();
   const submit = createSessionSubmission({
     sessionID: "opcv2-ses_composed",
+    delivery: delivery("opcv2-ses_composed", "composed"),
     group: () => new IntentGroup(tracker.intent()),
     directory: () => directory.promise,
     tabs: () => ({ send: (_id, action) => action() }),
@@ -71,7 +99,7 @@ Deno.test("composed Send dispatches under the fresh welcome after restart during
   current = "fresh-window";
   tracker.connect({ id: current, expiresAt: Date.now() + 100000 }, 8);
   directory.resolve("/original");
-  assertEquals(await send, { messageID: "composed", state: "accepted" });
+  assertEquals(await send, { kind: "committed", messageID: "composed" });
   assertEquals(
     sent.filter((frame) => frame.t === "request").map((frame) =>
       frame.ref.window
@@ -135,6 +163,7 @@ Deno.test("session submission waits for directory resolution and shares promotio
   const f = fixture(), directory = Promise.withResolvers<string>();
   const submit = createSessionSubmission({
     sessionID: "original",
+    delivery: delivery(),
     directory: () => directory.promise,
     inbox: f.inbox,
     tabs: (value) => {
@@ -144,12 +173,15 @@ Deno.test("session submission waits for directory resolution and shares promotio
   });
   const action = () => {
     f.calls.push("submitted to original");
-    return Promise.resolve(42);
+    return Promise.resolve(receipt);
   };
   const first = submit(action), second = submit(action);
   assertEquals(f.calls, []);
   directory.resolve("/original");
-  assertEquals(await Promise.all([first, second]), [42, 42]);
+  assertEquals(await Promise.all([first, second]), [{
+    kind: "committed",
+    messageID: "submitted",
+  }, { kind: "committed", messageID: "submitted" }]);
   assertEquals(f.calls, [
     ["tasks.create", {
       directory: "/original",
@@ -173,20 +205,28 @@ Deno.test("session submission cannot admit or record a visit after failed promot
   const f = fixture();
   const submit = createSessionSubmission({
     sessionID: "original",
+    delivery: delivery(),
     directory: () => Promise.resolve("/original"),
     inbox: f.inbox,
     tabs: () => f.tabs,
   });
   f.failPromotion(true);
   let admitted = 0;
-  const action = () => Promise.resolve(++admitted);
-  await assertRejects(() => submit(action), Error, "Cannot promote");
+  const action = () => {
+    admitted++;
+    return Promise.resolve(receipt);
+  };
+  assertEquals((await submit(action)).kind, "refused");
   assertEquals(admitted, 0);
   assertEquals(f.calls.map((value) => (value as unknown[])[0]), [
     "tasks.create",
   ]);
   f.failPromotion(false);
-  assertEquals(await submit(action), 1);
+  assertEquals(await submit(action), {
+    kind: "committed",
+    messageID: "submitted",
+  });
+  assertEquals(admitted, 1);
   assertEquals(f.calls.map((value) => (value as unknown[])[0]), [
     "tasks.create",
     "tasks.create",
@@ -198,19 +238,22 @@ Deno.test("session submission preserves action errors without visits and retries
   const f = fixture();
   const submit = createSessionSubmission({
     sessionID: "original",
+    delivery: delivery(),
     directory: () => Promise.resolve("/original"),
     inbox: f.inbox,
     tabs: () => f.tabs,
   });
-  await assertRejects(
-    () => submit(() => Promise.reject(new Error("Native rejection"))),
-    Error,
-    "Native rejection",
+  assertEquals(
+    (await submit(() => Promise.reject(new Error("Native rejection")))).kind,
+    "refused",
   );
   assertEquals(f.calls.map((value) => (value as unknown[])[0]), [
     "tasks.create",
   ]);
-  assertEquals(await submit(() => Promise.resolve("accepted")), "accepted");
+  assertEquals(await submit(() => Promise.resolve(receipt)), {
+    kind: "committed",
+    messageID: "submitted",
+  });
   assertEquals(f.calls.map((value) => (value as unknown[])[0]), [
     "tasks.create",
     "projects.visit",
@@ -221,20 +264,17 @@ Deno.test("session submission propagates directory failure before creating a tas
   const f = fixture();
   const submit = createSessionSubmission({
     sessionID: "original",
+    delivery: delivery(),
     directory: () => Promise.reject(new Error("No directory")),
     inbox: f.inbox,
     tabs: () => f.tabs,
   });
   let admitted = false;
-  await assertRejects(
-    () =>
-      submit(() => {
-        admitted = true;
-        return Promise.resolve();
-      }),
-    Error,
-    "No directory",
-  );
+  const outcome = await submit(() => {
+    admitted = true;
+    return Promise.resolve(receipt);
+  });
+  assertEquals(outcome.kind, "refused");
   assertEquals(admitted, false);
   assertEquals(f.calls, []);
 });

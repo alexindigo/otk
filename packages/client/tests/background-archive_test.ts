@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import {
   createBranchHistory,
   createDrafts,
@@ -237,7 +237,10 @@ Deno.test("background archive: held save cannot delay reversible Revert, but com
     assertEquals(f.values.size, 0);
     sending = f.actions.submission(target)(() => {
       sent = true;
-      return Promise.resolve();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
     });
     await turns();
     assertEquals(sent, false, "A committing Send must wait for preservation");
@@ -289,9 +292,14 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     f.quota();
     const sending = f.actions.submission(target)(() => {
       sent = true;
-      return Promise.resolve();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
     });
-    const canceled = assertRejects(() => sending, DOMException);
+    const canceled = sending.then((outcome) =>
+      assertEquals(outcome.kind, "refused")
+    );
     await turns();
     assertEquals(sent, false);
     f.held.resolve();
@@ -425,9 +433,14 @@ Deno.test("background archive: background failure follows its target across sele
     let sent = false;
     const sending = f.actions.submission(target)(() => {
       sent = true;
-      return Promise.resolve();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
     });
-    const canceled = assertRejects(() => sending, DOMException);
+    const canceled = sending.then((outcome) =>
+      assertEquals(outcome.kind, "refused")
+    );
     await waitForPermanence(f.history);
     assertEquals(sent, false);
     assert(f.history.state.error);

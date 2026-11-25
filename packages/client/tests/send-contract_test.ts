@@ -34,14 +34,15 @@ for (const outcome of ["disabled", "refused", "sent"] as const) {
         intent.submit(() => {
           if (outcome === "refused") reason = "Reconnect to send";
           return Promise.resolve("retained draft");
-        }, () =>
-          delivery.send(() => {
+        }, async () => {
+          await delivery.send(() => {
             dispatched++;
             return Promise.resolve({
               messageID: "native-user-id",
               state: "queued",
             });
-          })),
+          });
+        }),
     });
     const before = primary.state;
     try {

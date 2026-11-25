@@ -9,6 +9,8 @@ import { createTranscriptProjection } from "@otk/client";
 import { cfg } from "../../../tests/support/config.ts";
 import { eventMessage } from "../messages.ts";
 import { requestFailureFacts } from "../request-failure.ts";
+import { mapMessage as projectNative } from "../map.ts";
+import { referenced } from "../native-source.ts";
 
 const sid = "opcv2-ses_fixture";
 /** Only the named durable records can be read; any other read is a defect. */
@@ -153,6 +155,81 @@ Deno.test("NT3 live terminal-only compaction, streamed lifecycle and selection r
     );
   } finally {
     await transcript.stop();
+  }
+});
+Deno.test("NT3 compaction event sources equal native records through every lifecycle", async () => {
+  const variants: NativeMessage["metadata"][] = [
+    undefined,
+    {},
+    { owner: "native" },
+  ];
+  for (const metadata of variants) {
+    for (const started of [false, true]) {
+      for (const failed of [false, true]) {
+        const { transcript, projection } = liveFixture();
+        const tokens = {
+          input: 20,
+          output: 3,
+          reasoning: 2,
+          cache: { read: 5, write: 0 },
+        };
+        try {
+          if (started) {
+            await transcript.event({
+              type: "session.compaction.started",
+              id: "evt_compaction",
+              created: 1,
+              metadata,
+              data: { sessionID: "ses_fixture", reason: "manual" },
+            });
+            await transcript.event({
+              type: "session.compaction.delta",
+              id: "evt_delta",
+              created: 2,
+              data: { sessionID: "ses_fixture", text: "partial summary" },
+            });
+          }
+          const error = { type: "aborted", message: "Interrupted" },
+            model = { providerID: "fixture", id: "model" },
+            native = { messages: [] },
+            summary = "complete summary";
+          const terminal = {
+            ...(failed ? { error } : { model, native, text: summary }),
+            cost: 0,
+            tokens,
+          };
+          await transcript.event({
+            type: `session.compaction.${failed ? "failed" : "ended"}`,
+            id: started ? "evt_terminal" : "evt_compaction",
+            created: 3,
+            metadata,
+            data: { sessionID: "ses_fixture", reason: "manual", ...terminal },
+          });
+          const raw = {
+            id: "msg_compaction",
+            type: "compaction",
+            status: failed ? "failed" : "completed",
+            reason: "manual",
+            metadata,
+            time: { created: started ? 1 : 3 },
+            cost: terminal.cost,
+            tokens,
+            ...(failed ? { error } : { model, native, summary }),
+          } as NativeMessage;
+          assertEquals(
+            projection.messages(),
+            [
+              referenced(
+                projectNative(raw, sid, { order: started ? 3 : 1 }),
+                raw.id,
+              ),
+            ],
+          );
+        } finally {
+          await transcript.stop();
+        }
+      }
+    }
   }
 });
 Deno.test("NT3 retry history and unknown delivered records survive repeat delivery, source stays on demand, active retry ends", async () => {

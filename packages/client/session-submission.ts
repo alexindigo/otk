@@ -2,14 +2,28 @@
 import type { InboxModel } from "./inbox.ts";
 import type { ClientTabs } from "./tabs.ts";
 import type { IntentGroup, RequestOptions } from "./requests.ts";
-import type { RequestOrigin } from "@otk/protocol";
+import {
+  ascendingID,
+  type RequestOrigin,
+  type SubmissionReceipt,
+} from "@otk/protocol";
+import type { SessionDelivery } from "./session-delivery.ts";
+import type { PendingSend } from "./pending-send.ts";
+import type { SendOutcome } from "./send-outcome.ts";
+import type { DraftSendCapture } from "./drafts.ts";
 
 /** Every session submission, independent of its mode-specific transport. */
 export interface SessionSubmission {
-  <T>(
-    action: (options?: RequestOptions) => Promise<T>,
+  (
+    action: (
+      options: RequestOptions | undefined,
+      dispatch: () => void,
+      messageID: string,
+    ) => Promise<SubmissionReceipt | null>,
     origin?: RequestOrigin,
-  ): Promise<T>;
+    entry?: PendingSend,
+    capture?: DraftSendCapture,
+  ): Promise<SendOutcome>;
 }
 
 /** Bind identity and owners before asynchronous admission; never read selection.
@@ -21,16 +35,23 @@ export function createSessionSubmission({
   tabs,
   wrap,
   group,
+  delivery,
 }: {
   sessionID: string;
   directory(): Promise<string>;
   inbox: Pick<InboxModel, "act">;
   tabs(directory: string): Pick<ClientTabs, "send">;
   /** Session-owned completion lifetime around the same real admission port. */
-  wrap?: SessionSubmission;
+  wrap?<T>(action: () => Promise<T>, capture?: DraftSendCapture): Promise<T>;
   group?(): IntentGroup;
+  delivery: Pick<SessionDelivery, "send">;
 }): SessionSubmission {
-  const admit: SessionSubmission = async (action, origin = "composer") => {
+  const admit = async (
+    action: Parameters<SessionSubmission>[0],
+    dispatch: () => void,
+    messageID: string,
+    origin: RequestOrigin,
+  ): Promise<SubmissionReceipt | null> => {
     const intent = group?.();
     const promotion = intent?.options("promote", sessionID);
     const send = { ...intent?.options("send", sessionID), origin };
@@ -38,10 +59,29 @@ export function createSessionSubmission({
     const project = await directory();
     return await tabs(project).send(
       sessionID,
-      () => inbox.act(project, () => action(send), visit),
+      () => inbox.act(project, () => action(send, dispatch, messageID), visit),
       promotion,
     );
   };
-  return (action, origin) =>
-    wrap ? wrap(() => admit(action, origin)) : admit(action, origin);
+  return (action, origin = "composer", entry, capture) => {
+    const messageID = entry?.message.id ?? ascendingID("msg");
+    let settle: ((outcome: SendOutcome) => void) | undefined;
+    return delivery.send(
+      (dispatch) => {
+        const run = () => admit(action, dispatch, messageID, origin);
+        return wrap ? wrap(run, capture) : run();
+      },
+      entry,
+      messageID,
+      capture && {
+        admit(id, check) {
+          settle = capture.take(id, check);
+          if (!settle) {
+            throw new Error("The captured draft is no longer active.");
+          }
+        },
+        outcome: (outcome) => settle?.(outcome),
+      },
+    );
+  };
 }

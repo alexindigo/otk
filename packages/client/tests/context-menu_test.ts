@@ -91,6 +91,10 @@ Deno.test("context contributions: one command projects multiple independently av
     arguments: { type: "object" },
     context: {
       kind: "session",
+      arguments: {
+        type: "object",
+        properties: { session: { type: "string" } },
+      },
       items: (input: Input) =>
         tasks.map((task) => ({
           key: task,
@@ -237,4 +241,89 @@ Deno.test("context areas: one command serves several kinds and shared app action
     ),
     ["new", "palette"],
   );
+});
+
+Deno.test("context presentation uses the invocation owner's argument and availability admission", () => {
+  const commands = new CommandHub();
+  let available = true;
+  const presented: string[] = [];
+  commands.register({
+    id: "session.target",
+    title: "Target",
+    category: "Session",
+    arguments: {
+      type: "object",
+      properties: { sidecarId: { type: "string" } },
+    },
+    context: {
+      kind: "session",
+      title: (target: { sidecarId: string }) => {
+        presented.push(`title:${target.sidecarId}`);
+        return `Target ${target.sidecarId}`;
+      },
+      confirm: (target: { sidecarId: string }) => {
+        presented.push(`confirm:${target.sidecarId}`);
+        return `Confirm ${target.sidecarId}`;
+      },
+    },
+    enabled: () => available,
+    run: () => {},
+  });
+  // A session area survives while its resource is reloading. It is not yet a
+  // command target, so no target-dependent presentation may dereference it.
+  for (const data of [undefined, null, {}, { sidecarId: 42 }]) {
+    assertEquals(commands.contextActions({ kind: "session", data }), []);
+  }
+  const target = { kind: "session", data: { sidecarId: "native" } };
+  available = false;
+  assertEquals(commands.contextActions(target), []);
+  assertEquals(presented, []);
+  available = true;
+  const [action] = commands.contextActions(target);
+  assertEquals(action.title, "Target native");
+  assertEquals(action.confirm, "Confirm native");
+  assertEquals(presented, ["title:native", "confirm:native"]);
+});
+
+Deno.test("context item factories admit source targets separately from generated invocation arguments", () => {
+  const commands = new CommandHub();
+  let projections = 0;
+  commands.register({
+    id: "task.projected",
+    title: "Add to task",
+    category: "Session",
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        taskID: { type: "string" },
+      },
+    },
+    context: {
+      kind: "session",
+      arguments: {
+        type: "object",
+        properties: { sidecarId: { type: "string" } },
+      },
+      items: (target: { sidecarId: string; taskID?: string }) => {
+        projections++;
+        return [{
+          key: "task",
+          title: `Add ${target.sidecarId}`,
+          args: { ...target, taskID: "selected" },
+        }];
+      },
+    },
+    run: () => {},
+  });
+  for (const data of [undefined, null, {}, { sidecarId: 42 }]) {
+    assertEquals(commands.contextActions({ kind: "session", data }), []);
+  }
+  assertEquals(projections, 0);
+  const [action] = commands.contextActions({
+    kind: "session",
+    data: { sidecarId: "native" },
+  });
+  assertEquals(projections, 1);
+  assertEquals(action.args, { sidecarId: "native", taskID: "selected" });
 });

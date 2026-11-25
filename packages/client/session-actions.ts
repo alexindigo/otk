@@ -26,7 +26,13 @@ import {
   type SessionDelivery,
 } from "./session-delivery.ts";
 import type { StateFactory } from "./state.ts";
+import type { DraftSendCapture } from "./drafts.ts";
 import { pendingMessage, pendingMessageID } from "./pending-send.ts";
+import {
+  refusedSend,
+  requireCommittedSend,
+  type SendOutcome,
+} from "./send-outcome.ts";
 
 export interface SessionActions {
   delivery(target: Selection): SessionDelivery;
@@ -48,7 +54,11 @@ export interface SessionActions {
   submission(target: Selection): SessionSubmission;
   group(target: Selection): IntentGroup;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
-  prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
+  prompt(
+    parts: PromptPart[],
+    selection: PromptChoices,
+    capture?: DraftSendCapture,
+  ): Promise<SendOutcome>;
   abort(target?: Selection, options?: RequestOptions): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   archive(target: Selection, archived: boolean): Promise<ContentSession>;
@@ -189,6 +199,7 @@ export function createSessionActions(o: {
   ): SessionSubmission =>
     createSessionSubmission({
       sessionID: target.sessionID,
+      delivery: delivery(target),
       group: () =>
         captured ??
           new IntentGroup(
@@ -198,7 +209,7 @@ export function createSessionActions(o: {
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
-      wrap: (action) => {
+      wrap: (action, capture) => {
         const admit = () => {
           if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
             return Promise.reject(
@@ -209,9 +220,14 @@ export function createSessionActions(o: {
             const changing = boundaryReady(target);
             if (changing) await changing;
             const allowed = permit ??
-              await o.branchHistory?.beforeSend?.(target);
+              await o.branchHistory?.beforeSend?.(target, capture?.draft);
             if (!permit) {
-              await o.branchHistory?.beforeCommit(target, undefined, allowed);
+              await o.branchHistory?.beforeCommit(
+                target,
+                undefined,
+                allowed,
+                capture?.draft,
+              );
             }
             try {
               return await action();
@@ -425,68 +441,87 @@ export function createSessionActions(o: {
           },
         ));
     },
-    async prompt(parts, selection) {
-      const { selection: target, rpc } = current.context();
-      const group = new IntentGroup(rpc.intent());
-      const intent = group.options("send", target.sessionID).intent!;
-      const messageID = pendingMessageID(intent);
-      const message = pendingMessage(
-        messageID,
-        target.sessionID,
-        parts,
-        o.promptBlocks,
-      );
-      const send = async (captured: IntentGroup): Promise<void> => {
-        const changing = boundaryReady(target);
-        if (changing) await changing;
-        const permit = o.branchHistory?.beforeSend
-          ? await o.branchHistory.beforeSend(target)
-          : undefined;
-        return delivery(target).send(
-          (dispatch) =>
-            submission(target, captured, permit)(async (options) => {
-              const prepared = await attachments(parts, target.sidecarId);
-              const transcript = session.transcripts?.get(target);
-              const pending = transcript?.projection.entry(messageID)?.send;
-              if (pending && pending.phase !== "committed") {
-                transcript?.send?.({
-                  ...pending,
-                  message: {
-                    ...pending.message,
-                    parts: pendingMessage(
-                      messageID,
-                      target.sessionID,
-                      prepared,
-                      o.promptBlocks,
-                    ).parts,
-                  },
-                });
-              }
-              if (permit) {
-                await o.branchHistory?.beforeCommit(target, undefined, permit);
-              }
-              dispatch();
-              return await rpc.call("session.prompt", {
-                sessionID: target.sessionID,
-                messageID,
-                mode: "normal",
-                parts: prepared,
-                ...selection,
-              }, options);
-            }),
-          {
-            intent,
-            message,
-            phase: "pending",
-            retry: () => {
-              void send(new IntentGroup(rpc.intent())).catch((cause) => {
-                console.error("Pending-send retry diagnostic", target, cause);
-              });
-            },
-          },
+    async prompt(parts, selection, capture) {
+      try {
+        const { selection: target, rpc } = current.context();
+        const group = new IntentGroup(rpc.intent());
+        const intent = group.options("send", target.sessionID).intent!;
+        const messageID = pendingMessageID(intent);
+        const message = pendingMessage(
+          messageID,
+          target.sessionID,
+          parts,
+          o.promptBlocks,
         );
-      };
-      await send(group);
+        const send = async (
+          captured: IntentGroup,
+          draft?: DraftSendCapture,
+        ): Promise<SendOutcome> => {
+          try {
+            const changing = boundaryReady(target);
+            if (changing) await changing;
+            const permit = o.branchHistory?.beforeSend
+              ? await o.branchHistory.beforeSend(target, draft?.draft)
+              : undefined;
+            return await submission(target, captured, permit)(
+              async (options, dispatch) => {
+                const prepared = await attachments(parts, target.sidecarId);
+                const transcript = session.transcripts?.get(target);
+                const pending = transcript?.projection.entry(messageID)?.send;
+                if (pending && pending.phase !== "committed") {
+                  transcript?.send?.({
+                    ...pending,
+                    message: {
+                      ...pending.message,
+                      parts: pendingMessage(
+                        messageID,
+                        target.sessionID,
+                        prepared,
+                        o.promptBlocks,
+                      ).parts,
+                    },
+                  });
+                }
+                if (permit) {
+                  await o.branchHistory?.beforeCommit(
+                    target,
+                    undefined,
+                    permit,
+                    draft?.draft,
+                  );
+                }
+                dispatch();
+                return await rpc.call("session.prompt", {
+                  sessionID: target.sessionID,
+                  messageID,
+                  mode: "normal",
+                  parts: prepared,
+                  ...selection,
+                }, options);
+              },
+              "composer",
+              {
+                intent,
+                message,
+                phase: "pending",
+                retry: () => {
+                  void send(new IntentGroup(rpc.intent())).then(
+                    requireCommittedSend,
+                  ).catch((cause) => {
+                    rpc.feedback(target.sessionID).fail(cause);
+                  });
+                },
+              },
+              draft,
+            );
+          } catch (cause) {
+            return refusedSend(cause);
+          }
+        };
+        return await send(group, capture);
+      } catch (cause) {
+        return refusedSend(cause);
+      }
     },
     async abort(target = current.context().selection, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;

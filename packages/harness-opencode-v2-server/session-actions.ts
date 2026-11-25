@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
 import {
+  ascendingID,
   type Capabilities,
   type ContentSession,
-  type ModelRef,
   type OperationContext,
   OperationFailure,
 } from "@otk/protocol";
@@ -17,17 +17,16 @@ import {
 import { mapSession, millis } from "./map.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { readSessionActivity } from "./recency.ts";
-import { selectionModel } from "./selection.ts";
+import { applySelection, type SelectionInput } from "./selection.ts";
 
 /** Selection checkpoints contain metadata only, never command or prompt bodies. */
 export async function selectAction(
   client: V2Client,
   raw: NativeSession,
-  input: { agent?: string; model?: ModelRef; variant?: string },
+  input: SelectionInput,
   operation?: OperationContext,
 ): Promise<void> {
-  const model = await selectionModel(client, raw, input, operation);
-  const checkpoint = async () => {
+  await applySelection(client, raw, input, operation, async (raw) => {
     await operation?.checkpoint("session-selection", {
       kind: "session-selection",
       value: {
@@ -41,29 +40,7 @@ export async function selectAction(
           : {}),
       },
     });
-  };
-  if (input.agent !== undefined && input.agent !== raw.agent) {
-    await client.effect(
-      (api) =>
-        api.session.switchAgent({ sessionID: raw.id, agent: input.agent! }),
-      operation,
-    );
-    raw = { ...raw, agent: input.agent };
-    await checkpoint();
-  }
-  if (
-    model &&
-    (model.providerID !== raw.model?.providerID ||
-      model.id !== raw.model?.id ||
-      (model.variant ?? "default") !== (raw.model?.variant ?? "default"))
-  ) {
-    await client.effect(
-      (api) => api.session.switchModel({ sessionID: raw.id, model }),
-      operation,
-    );
-    raw = { ...raw, model };
-    await checkpoint();
-  }
+  });
 }
 
 const revertRecords = new WeakMap<
@@ -258,13 +235,20 @@ export function sessionActions(ports: {
       async shell(input, operation) {
         return await ordered(input.sessionID, operation, async () => {
           const client = ports.client(),
-            sessionID = ids.decode(input.sessionID);
+            sessionID = ids.decode(input.sessionID),
+            messageID = input.messageID ?? ascendingID("msg");
           await client.effect(
-            (api) => api.session.shell({ sessionID, command: input.command }),
+            (api) =>
+              api.session.shell({
+                sessionID,
+                id: messageID,
+                command: input.command,
+              }),
             operation,
           );
           // Native shell joins its own shell lifetime before replying. It is not
           // a session execution, so execution.wait cannot certify this effect.
+          return { messageID, state: "accepted" as const };
         });
       },
     },
@@ -292,10 +276,11 @@ export function sessionActions(ports: {
       },
       remove: (id, operation) =>
         ordered(id, operation, () => ports.removed(id, operation)),
-      async compact(id, model, operation) {
+      async compact(id, _model, operation) {
         return await ordered(id, operation, async () => {
+          // Native compaction keeps the applied model and variant. A model
+          // argument would be a selection change the user never made (2.62).
           const client = ports.client(), raw = await get(id, operation);
-          await selectAction(client, raw, { model }, operation);
           await client.effect(
             (api) => api.session.compact({ sessionID: raw.id }),
             operation,

@@ -203,6 +203,10 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
+  // The saved reader starts at the top after reload. Acquire its nested
+  // metadata window through the saved pane, not the live transcript.
+  await saved.locator(".otk-saved-messages").hover();
+  await page.mouse.wheel(0, 2_000);
   await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
     .toHaveAttribute(
       "datetime",

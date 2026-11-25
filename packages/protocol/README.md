@@ -243,6 +243,14 @@ neutral catalog data; native vocabulary and precedence live only in each
 harness. `CommandInput.skill` explicitly selects a skill independently of a
 same-named server command.
 
+Shell and command inputs accept an optional native-compatible `messageID` from
+the shared identity owner. Their `SubmissionReceipt` is accepted/queued with the
+correlated native message ID, or unconfirmed with a reason when the native API
+cannot correlate its message. Completion receipts retain that metadata across
+replay, never input or attachment bodies. Older completion-only receipts remain
+readable as unconfirmed, not fabricated commitment. Native acceptance and the
+client's canonical transcript commitment are distinct observations.
+
 `ModelCatalog.defaultState` distinguishes a reported configured default from
 unknown, and `free` is `boolean|null`. Search pattern/count, diff path and todo
 priority may be absent; unknown diff status is explicit.

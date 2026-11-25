@@ -5,7 +5,7 @@ import { duration, humanDuration } from "../../packages/client/format.ts";
 import { runningWorkElapsed } from "../../packages/client/live-work.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
-import { rules, selectorAlternatives } from "./styles.ts";
+import { outOfFlow, rules, selectorAlternatives } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
@@ -150,6 +150,46 @@ Deno.test("UI convention: informational connection actions keep the shared feedb
     "packages/ui/components/ConnectionStatus.tsx",
   );
   assert(source.includes("subgrid={props.subgrid && !!feedback().failure}"));
+});
+
+Deno.test("UI convention: every composer notice occupies the shared flow track", async () => {
+  const violations = (css: string) =>
+    rules(css).filter((rule) =>
+      rule.selector.includes(".otk-composer-feedback") &&
+      outOfFlow(rule.declarations)
+    ).map((rule) => rule.selector);
+  assertEquals(
+    violations(".otk-composer-feedback { position: relative; }"),
+    [],
+  );
+  for (
+    const layout of [
+      "position: absolute",
+      "position: fixed",
+      "margin-top: -1px",
+    ]
+  ) {
+    assertEquals(
+      violations(`.otk-composer-feedback.is-runtime { ${layout}; }`),
+      [
+        ".otk-composer-feedback.is-runtime",
+      ],
+    );
+  }
+  assertEquals(
+    violations(
+      await Deno.readTextFile(
+        "packages/ui/components/ComposerTakeovers.css",
+      ),
+    ),
+    [],
+  );
+  for (const name of ["ComposerTakeovers", "SessionView"]) {
+    assert(
+      !(await Deno.readTextFile(`packages/ui/components/${name}.tsx`))
+        .includes("noticeFlow"),
+    );
+  }
 });
 
 Deno.test("UI convention: syntax enhancement cannot publish user-action failures in source", async () => {

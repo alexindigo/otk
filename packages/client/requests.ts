@@ -911,16 +911,31 @@ export function createSubmissionIntent<T>(options: {
   target?(): import("@otk/protocol").FailureTarget | undefined;
   unavailable?(): string | undefined;
   recovery?(reason: string): string;
+  /** A refusal that cites the captured send ends when that send settles. */
+  retire?(diagnosticID: string): void;
 }): SubmissionIntent<T> {
   const input = createFormIntent<void, { result: Promise<void> } | undefined>({
     ...options,
     capture: () => undefined,
   });
   const effect = createFormIntent<T, void>(options);
-  const refuse = (reason: string, recovery: string): never => {
+  const waiting = new Set<string>();
+  effect.subscribe(() => {
+    if (effect.state.pending || !waiting.size) return;
+    const retired = [...waiting];
+    waiting.clear();
+    for (const id of retired) options.retire?.(id);
+  });
+  const refuse = (
+    reason: string,
+    recovery: string,
+    whileSending = false,
+  ): never => {
+    const diagnosticID = randomID();
+    if (whileSending && effect.state.pending) waiting.add(diagnosticID);
     throw new RequestFailure({
       code: "prompt.refused",
-      diagnosticID: randomID(),
+      diagnosticID,
       retry: "new-intent",
       facts: {
         actionLabel: "Sending prompt",
@@ -971,6 +986,7 @@ export function createSubmissionIntent<T>(options: {
           refuse(
             "Another message is still being sent",
             "Wait for that send to settle, then send the retained draft",
+            true,
           );
         }
         require();

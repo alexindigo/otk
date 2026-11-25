@@ -49,6 +49,7 @@ export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
 export * from "./session-delivery.ts";
+export * from "./send-outcome.ts";
 export { archiveAttention, projectGroup } from "./inbox.ts";
 export {
   createTranscript,

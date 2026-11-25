@@ -68,7 +68,10 @@ Deno.test("revert RPC never starts capture; preservation still precedes every sh
   events.length = 0;
   await actions.submission(target)(() => {
     events.push("mode-specific-send");
-    return Promise.resolve();
+    return Promise.resolve({
+      state: "unconfirmed",
+      reason: "Fixture native receipt has no transcript.",
+    });
   });
   assertEquals(
     events.filter((e) =>
@@ -110,14 +113,10 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     Error,
     "storage-full",
   );
-  await assertRejects(
-    () =>
-      actions.submission(target)(() => {
-        throw new Error("native must not run");
-      }),
-    Error,
-    "storage-full",
-  );
+  const outcome = await actions.submission(target)(() => {
+    throw new Error("native must not run");
+  });
+  assertEquals(outcome.kind, "refused");
   assertEquals(
     f.calls.filter((c) =>
       ["session.compact", "session.prompt"].includes(
@@ -166,6 +165,75 @@ Deno.test("a permanence choice waits before pending-send publication and capture
   assertEquals((call[2] as { sessionID: string }).sessionID, "selected");
   actions.stop();
   f.resources.stop();
+});
+
+Deno.test("Retry publishes an early refusal once without another native Send", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  let attempts = 0;
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      beforeCommit: () => Promise.resolve(),
+      settled: () => Promise.resolve(),
+      beforeSend: () =>
+        ++attempts === 1 ? Promise.resolve({ target }) : Promise.reject(
+          new client.RequestFailure({
+            code: "preservation.refused",
+            diagnosticID: "retry-refusal",
+            retry: "new-intent",
+            facts: { reason: "Draft preservation unavailable" },
+          }),
+        ),
+    },
+  });
+  f.reply((_id, method) =>
+    method === "session.prompt"
+      ? Promise.reject(
+        new client.RequestFailure({
+          code: "native.refused",
+          diagnosticID: "native-refusal",
+          retry: "new-intent",
+          facts: { reason: "Native send refused", outcome: "rejected" },
+        }),
+      )
+      : Promise.resolve(
+        method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+      )
+  );
+  const sink = f.resources.sidecars.connection("local").rpc.feedback(
+    "selected",
+  );
+  let visible = 0;
+  const release = sink.subscribe(() => {
+    if (sink.current()) visible++;
+  });
+  try {
+    const outcome = await actions.prompt([{
+      kind: "text",
+      text: "Retained prompt",
+    }], {});
+    if (outcome.kind !== "failed") {
+      throw new Error("Expected a retryable native failure");
+    }
+    outcome.retry();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(
+      sink.current()?.failure?.reason,
+      "Draft preservation unavailable",
+    );
+    assertEquals(visible, 1);
+    assertEquals(
+      f.calls.filter((call) => call[1] === "session.prompt").length,
+      1,
+    );
+  } finally {
+    release();
+    actions.stop();
+    f.resources.stop();
+  }
 });
 
 for (const kind of ["revert", "restore"] as const) {

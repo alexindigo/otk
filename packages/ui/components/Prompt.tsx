@@ -28,7 +28,6 @@ import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
-  clearDraft,
   createFailurePresenter,
   createPrimaryAction,
   createSubmissionIntent,
@@ -56,6 +55,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     unavailable: () => unavailable(),
     recovery: () =>
       "Resolve the stated Send reason, then send the retained draft",
+    // Only the exact refusal still on display ends; a newer outcome stays.
+    retire: (id) => {
+      if (session?.feedback?.current()?.diagnosticID === id) {
+        session.feedback.clear();
+      } else if (feedback()?.diagnosticID === id) setFeedback(undefined);
+    },
   });
   const [revision, setRevision] = createSignal(0);
   onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
@@ -172,18 +177,23 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     return draft;
   };
   const performSend = async (draft: PromptProps["value"]) => {
+    const draftSend = props.captureSend?.(draft);
     const parts = serialize(draft);
     const effective = ctx.nextSelection(draft);
     const selection = effective.input;
     let handled = false;
     for (const feature of features) {
-      if (await feature.submit?.(draft, parts, selection)) {
+      if (await feature.submit?.(draft, parts, selection, draftSend)) {
         handled = true;
         break;
       }
     }
-    if (!handled) await send({ parts, mode: draft.mode, selection });
-    change((current) => current === draft ? clearDraft(current) : current);
+    if (!handled) {
+      await send({ parts, mode: draft.mode, selection }, {
+        ...ports.commands.context(),
+        draftSend,
+      });
+    }
     for (const feature of features) {
       try {
         await feature.submitted?.(draft, selection, handled);
@@ -192,7 +202,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = () => intent.submit(submit, performSend);
+  const submitInput = async () => {
+    try {
+      await intent.submit(submit, performSend);
+    } catch (cause) {
+      // Every activation route publishes through the same session-owned sink.
+      // Keyboard dispatch must not borrow a navigation/global error handler.
+      ctx.fail(cause);
+    }
+  };
   const primary = createPrimaryAction({
     label: () => "Send",
     unavailable,
@@ -215,13 +233,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
     enabled: composerReady,
     run: (
-      _ctx,
+      context,
       args: {
         parts: import("@otk/protocol").PromptPart[];
         mode: PromptProps["value"]["mode"];
         selection: PromptChoices;
       },
-    ) => props.onSubmit(args.parts, args.mode, args.selection),
+    ) =>
+      props.onSubmit(args.parts, args.mode, args.selection, context.draftSend),
   });
   ownedCommand(ports, {
     id: "prompt.submit",

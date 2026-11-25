@@ -88,6 +88,10 @@ export function publicFailure(
         ? cause.facts
         : undefined),
       ...(cause instanceof OperationFailure ? { outcome: cause.outcome } : {}),
+      ...(cause instanceof HarnessError &&
+          (cause.code === "method" || cause.code === "params")
+        ? { outcome: "rejected" as const }
+        : {}),
     },
   };
 }

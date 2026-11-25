@@ -137,6 +137,10 @@ export interface PromptReceipt {
   messageID: string;
   state: "accepted" | "queued";
 }
+/** Completion without a correlatable source identity is not silent success. */
+export type SubmissionReceipt =
+  | PromptReceipt
+  | { state: "unconfirmed"; reason: string };
 export interface FileMatch {
   path: string;
   directory: boolean;
@@ -169,6 +173,7 @@ export interface PermissionReply {
 }
 export interface ShellInput {
   sessionID: string;
+  messageID?: string;
   command: string;
   agent?: string;
   model?: ModelRef;
@@ -190,6 +195,7 @@ export interface CommandOption {
 }
 export interface CommandInput {
   sessionID: string;
+  messageID?: string;
   command: string;
   /** Explicit skill selection stays distinct from a same-named server command. */
   skill?: { id?: string; name: string };
@@ -246,10 +252,10 @@ export interface RpcMethods
     result: ContentSession;
   };
   "session.prompt": { params: PromptInput; result: PromptReceipt | null };
-  "session.shell": { params: ShellInput; result: null };
+  "session.shell": { params: ShellInput; result: SubmissionReceipt };
   "session.command": {
     params: Omit<CommandInput, "arguments"> & { arguments?: string };
-    result: null;
+    result: SubmissionReceipt;
   };
   "commands.list": { params: { sessionID: string }; result: CommandOption[] };
   "history.list": { params: Record<string, never>; result: HistoryEntry[] };
@@ -347,8 +353,8 @@ export interface CoreRequestReceipts {
     model?: ModelRef;
     variant?: string;
   };
-  "shell-settled": { completed: true };
-  "command-settled": { completed: true };
+  "shell-settled": { completed: true; submission?: SubmissionReceipt };
+  "command-settled": { completed: true; submission?: SubmissionReceipt };
   "interrupt-sent": { completed: true };
   "permission-replied": { completed: true };
   "question-replied": { completed: true };

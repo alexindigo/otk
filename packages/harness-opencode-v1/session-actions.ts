@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeModel } from "./selection.ts";
 import type { SessionActionsCapability } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -30,7 +31,9 @@ export function sessionActions(
           query: { directory: dir },
           classification: "effect",
           ...(operation ? { operation } : {}),
-          body: { providerID: model.provider, modelID: model.model },
+          // V1 summarize requires an identity and cannot carry a variant; the
+          // applied variant survives through the selection reader instead.
+          body: nativeModel(model),
         },
       );
       if (operation && launched) await launched.settled;

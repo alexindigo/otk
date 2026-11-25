@@ -297,7 +297,10 @@ function Consumer() {
               prefs: () => DEFAULT_PREFS,
               dirty() {},
               act: (action) => action(),
-              submit: (action) => action(),
+              submit: async (action) => {
+                await action(undefined, () => {}, "msg_fixture");
+                return { kind: "committed", messageID: "msg_fixture" };
+              },
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             };
