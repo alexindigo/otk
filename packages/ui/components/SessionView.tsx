@@ -56,6 +56,7 @@ import {
   errorFeedback,
   type FailureValue,
   failureValue,
+  isReplaced,
   placeFailure,
   replyKey,
   RequestFailure,
@@ -334,7 +335,7 @@ export default function SessionView(props: {
     !!props.branchHistory?.state.choice ||
     !!props.branchHistory?.state.error && !rollbackState().record ||
     !!props.branchHistory?.state.branches.some((branch) =>
-      !branch.pending && branch.replaced
+      !branch.pending && isReplaced(branch)
     );
   const branchFailureVisible = () => {
     const value = props.branchHistory?.state.error;

@@ -143,7 +143,7 @@ Deno.test("Restore cancels a waiting Send rather than releasing it on the restor
   const rejected = assertRejects(() => pending, DOMException);
   await f.choice();
   f.clear();
-  await f.owner.settled(target, true);
+  f.owner.restored(target);
   await rejected;
   assertEquals(f.owner.state.permanence, undefined);
   assertEquals(f.drafts.current("local/s").input, "Captured replacement");

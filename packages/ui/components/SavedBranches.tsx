@@ -6,6 +6,7 @@ import {
   branchDraftLabels,
   type BranchHistory,
   errorFeedback,
+  isReplaced,
   savedBranchProjection,
   savedPromptDraft,
 } from "@otk/client";
@@ -100,7 +101,9 @@ export function SavedBranchNotice(
       </Show>
       <Show
         when={props.navigationVisible !== false &&
-          state().branches.find((branch) => !branch.pending && branch.replaced)}
+          state().branches.find((branch) =>
+            !branch.pending && isReplaced(branch)
+          )}
       >
         {(branch) => (
           <ComposerNoticeRow icon={RevertIcon}>
@@ -228,7 +231,7 @@ export default function SavedBranches(
             >
               <div class="otk-saved-header">
                 <p>
-                  {saved().replaced
+                  {isReplaced(saved())
                     ? "This earlier branch was replaced; you can read it and reuse its prompts."
                     : "This is a saved earlier branch; you can read it and reuse its prompts."}
                   {" "}

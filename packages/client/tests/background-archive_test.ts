@@ -366,7 +366,7 @@ Deno.test("background archive: Restore cancels stale capture without waiting and
     await f.history.beforeCommit(target);
     assertEquals(f.values.size, 1, "Only the restored capture may save");
     assertEquals(f.history.state.branches[0].pending, false);
-    assertEquals(f.history.state.branches[0].replaced, false);
+    assertEquals(f.history.state.branches[0].committedAt, undefined);
     assert(
       f.history.state.branches[0].drafts.some((d) =>
         d.value.input === "Original unsent draft"

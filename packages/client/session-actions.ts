@@ -98,7 +98,7 @@ export function createSessionActions(o: {
   current: CurrentClient;
   revertReady?(target: Selection): Promise<void> | undefined;
   branchHistory?:
-    & Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">
+    & Pick<BranchHistory, "prepare" | "beforeCommit" | "restored">
     & Partial<Pick<BranchHistory, "beforeSend">>;
   /** Wrap the common submission lifetime, including shell/native commands. */
   submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
@@ -249,11 +249,7 @@ export function createSessionActions(o: {
                 capture?.draft,
               );
             }
-            try {
-              return await action();
-            } finally {
-              await o.branchHistory?.settled(target);
-            }
+            return await action();
           })();
         };
         return o.submitted ? o.submitted(target, admit) : admit();
@@ -459,14 +455,10 @@ export function createSessionActions(o: {
         target,
         async () => {
           await o.branchHistory?.beforeCommit(target);
-          try {
-            return await rpc.call("session.compact", {
-              sessionID: target.sessionID,
-              model,
-            });
-          } finally {
-            await o.branchHistory?.settled(target);
-          }
+          return await rpc.call("session.compact", {
+            sessionID: target.sessionID,
+            model,
+          });
         },
       );
     },
@@ -524,7 +516,7 @@ export function createSessionActions(o: {
             const result = await rpc.call("session.restore", {
               sessionID: target.sessionID,
             }, options);
-            await o.branchHistory?.settled(target, true);
+            o.branchHistory?.restored(target);
             return result;
           },
         ));
