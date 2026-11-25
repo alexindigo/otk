@@ -8,10 +8,16 @@ export type SendOutcome =
   | { kind: "committed"; messageID: string }
   /** Native accepted a send whose pending transcript entry carries its
    * identity. That entry owns commitment in place or its bounded observation
-   * failure with Retry (2.39); the composer's draft lifetime ends here. */
+   * failure with Retry (2.39). */
   | { kind: "accepted"; messageID: string }
   | { kind: "refused"; reason: string; failure?: PublicFailure }
-  | { kind: "failed"; reason: string; retry(): void; failure?: PublicFailure }
+  | {
+    kind: "failed";
+    certainty: "definite" | "uncertain";
+    reason: string;
+    retry(): void;
+    failure?: PublicFailure;
+  }
   | { kind: "unconfirmed"; reason: string; failure?: PublicFailure };
 
 export function refusedSend(cause: unknown): SendOutcome {
@@ -24,12 +30,11 @@ export function refusedSend(cause: unknown): SendOutcome {
   };
 }
 
-/** A UI adapter may clear a captured draft only after canonical commitment,
- * or once a pending transcript entry owns the accepted send.
- * Non-success uses the existing structured failure presenter, not a second UI. */
+/** Report non-success through the existing structured failure presenter. */
 export function requireCommittedSend(outcome: SendOutcome): void {
   if (outcome.kind === "committed" || outcome.kind === "accepted") return;
-  const uncertain = outcome.kind === "unconfirmed";
+  const uncertain = outcome.kind === "unconfirmed" ||
+    outcome.kind === "failed" && outcome.certainty === "uncertain";
   const feedback = presentFailure(
     outcome.failure ?? {
       code: `send.${outcome.kind}`,

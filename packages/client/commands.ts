@@ -27,6 +27,8 @@ export interface CommandContext {
   transition?: true;
   /** Prevent reentrant text commands from invoking their own input owner. */
   command?: string;
+  /** Invocation-local Send custody; not a command argument or RPC field. */
+  draftSend?: import("./drafts.ts").DraftSendCapture;
 }
 /** Data-only owner metadata; discovery visibility does not hide key labels. */
 export interface CommandMetadata {
@@ -40,7 +42,7 @@ export interface CommandMetadata {
   readonly scope?: string;
   readonly instance?: string;
   readonly source?: "builtin" | "server" | "mcp" | "skill" | "unknown";
-  /** Submissions participate in the prompt's captured send/clear lifecycle. */
+  /** Submissions participate in the prompt's captured Send lifecycle. */
   readonly kind?: "action" | "submission";
   /** An adapter contribution borrows the semantic owner's schema and behavior. */
   readonly action?: string;

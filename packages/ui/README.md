@@ -522,12 +522,16 @@ preferences, history, attachment resolution, dirty-state and successful-action
 callbacks. The common `submit(action)` port owns task promotion and successful
 inbox-action bookkeeping for normal, shell and native-command submissions;
 features supply only their mode-specific RPC callback. Native-command execution
-uses it whether invoked by typed slash or the palette. `act(action)` is for
-non-submitting actions such as attention replies. There are no per-feature
-callbacks or capability flags on `Prompt`. The session `supports` port reads
-reactive advertised capabilities: an initial welcome activates already-mounted
-consumers, and reconnecting retains feature owners and their unsent input.
-Transport readiness is a separate input to actions.
+uses it whether invoked by typed slash or the palette. Bind `captureSend` to the
+session's `Drafts` owner and forward the capture through `onSubmit`, including
+when a prompt feature handles submission itself. The submission owner transfers
+the captured draft at native dispatch; `Prompt` never clears the caller's draft
+after an await. `act(action)` is for non-submitting actions such as attention
+replies. There are no per-feature callbacks or capability flags on `Prompt`. The
+session `supports` port reads reactive advertised capabilities: an initial
+welcome activates already-mounted consumers, and reconnecting retains feature
+owners and their unsent input. Transport readiness is a separate input to
+actions.
 
 The plain `shell/session-ports.ts` binding captures a selection once and
 delegates session operations to the client SessionActions owner. Its ordinary

@@ -99,10 +99,13 @@ for (const mode of ["prompt", "command"] as const) {
             mode === "command" &&
             state.controller.info!.version.startsWith("2.")
           ) {
-            expect(await readDraft()).toEqual(original);
+            await expect(prompt(page)).toHaveValue("");
+            await expect(chips(page)).toHaveCount(0);
             await expect(page.locator(".otk-composer-notice")).toContainText(
               "did not provide a way to confirm its message",
             );
+            await expect(page.getByRole("button", { name: "Check send" }))
+              .toBeVisible();
           } else {
             await expect(prompt(page)).toHaveValue("");
             await expect(chips(page)).toHaveCount(0);

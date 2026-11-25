@@ -9,6 +9,9 @@ import type { TranscriptOwner } from "../transcript.ts";
 import type { PromptReceipt, UserMessage } from "@otk/protocol";
 import { RequestFailure } from "../failures.ts";
 import { pendingMessage } from "../pending-send.ts";
+import type { SendOutcome } from "../send-outcome.ts";
+import { createDrafts, type Draft } from "../drafts.ts";
+import { createSessionSubmission } from "../session-submission.ts";
 
 function fixture(committed?: (message: UserMessage) => void) {
   const projection = createTranscriptProjection();
@@ -154,6 +157,127 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
     f.owner.stop();
   });
 }
+
+Deno.test("send custody sees live commitment while the dispatch promise is held", async () => {
+  const f = fixture();
+  const reply = Promise.withResolvers<PromptReceipt>();
+  const seen: SendOutcome[] = [];
+  const pending = f.owner.send(
+    (dispatch) => {
+      dispatch();
+      return reply.promise;
+    },
+    undefined,
+    "native-send",
+    { outcome: (value) => seen.push(value) },
+  );
+  try {
+    f.message("unrelated");
+    assertEquals(seen, []);
+    f.message("native-send");
+    assertEquals(seen, [{ kind: "committed", messageID: "native-send" }]);
+  } finally {
+    reply.resolve({ messageID: "native-send", state: "accepted" });
+    await pending;
+    f.owner.stop();
+  }
+});
+
+Deno.test("send custody stays correlated after an unconfirmed receipt disappears", async () => {
+  const f = fixture();
+  const seen: SendOutcome[] = [];
+  try {
+    await f.owner.send(
+      (dispatch) => {
+        dispatch();
+        return Promise.resolve({
+          state: "unconfirmed",
+          reason: "Cannot confirm",
+        });
+      },
+      undefined,
+      "native-send",
+      { outcome: (value) => seen.push(value) },
+    );
+    assertEquals(f.owner.state.receipts, []);
+    f.message("native-send");
+    f.message("native-send");
+    assertEquals(seen.map((value) => value.kind), ["unconfirmed", "committed"]);
+  } finally {
+    f.owner.stop();
+  }
+});
+
+Deno.test("send custody restores the untouched composer once with its whole original draft", async () => {
+  const f = fixture();
+  const drafts = createDrafts();
+  const key = "server/session";
+  const original: Draft = {
+    input: "  exact\nraw text ",
+    mode: "shell",
+    agent: "reviewer",
+    variant: undefined,
+    editor: { text: "unsaved editor buffer", chipID: "image" },
+    chips: [{
+      id: "image",
+      label: "image.png",
+      part: {
+        kind: "file",
+        source: "upload",
+        name: "image.png",
+        mime: "image/png",
+        dataBase64: "ABCD",
+      },
+    }],
+  };
+  const draft = drafts.writer(key)(original);
+  const submit = createSessionSubmission({
+    sessionID: "opcv2-root",
+    delivery: f.owner,
+    directory: () => Promise.resolve("/p"),
+    tabs: () => ({ send: (_id, send) => send() }),
+    inbox: { act: (_directory, send) => send() },
+  });
+  const capture = drafts.captureSend?.(key, draft);
+  const response = Promise.withResolvers<PromptReceipt>();
+  const dispatched = Promise.withResolvers<string>();
+  const outcome = submit(
+    (_opts, dispatch, id) => {
+      dispatch();
+      dispatched.resolve(id);
+      return response.promise;
+    },
+    "composer",
+    undefined,
+    capture,
+  );
+  try {
+    const id = await dispatched.promise;
+    assertEquals(drafts.current(key), {
+      input: "",
+      chips: [],
+      mode: "normal",
+      agent: "reviewer",
+      variant: undefined,
+    });
+    response.reject(
+      new RequestFailure({
+        code: "native.refused",
+        diagnosticID: "known",
+        retry: "new-intent",
+        facts: { outcome: "rejected" },
+      }),
+    );
+    await outcome;
+    assertEquals(drafts.current(key), original);
+    assertEquals(drafts.recoveries(key), []);
+    drafts.writer(key)((value) => ({ ...value, input: "newer" }));
+    f.message(id);
+    assertEquals(drafts.current(key).input, "newer");
+  } finally {
+    f.owner.stop();
+  }
+});
 
 Deno.test("send bookkeeping observes only its canonical native identity once, including admission before acknowledgement", async () => {
   const seen: UserMessage[] = [], f = fixture((message) => seen.push(message));
@@ -454,6 +578,7 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
         retry: "new-intent",
         diagnosticID: "refused",
         facts: {
+          outcome: "rejected",
           reason: "The selected model is unavailable.",
           origin: "composer",
           record: { messageID: "native-failure" },

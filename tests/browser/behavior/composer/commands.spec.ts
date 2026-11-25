@@ -42,9 +42,9 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
     }),
   ).toContainText("continued arguments");
   if (state.controller.info!.version.startsWith("2.")) {
-    await expect(prompt(page)).toHaveValue(
-      "/probe inline args\ncontinued arguments",
-    );
+    await expect(prompt(page)).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Check send", exact: true }))
+      .toBeVisible();
     try {
       await expect(page.locator(".otk-composer-notice")).toContainText(
         "did not provide a way to confirm its message",
@@ -163,7 +163,7 @@ for (const origin of ["keyboard", "button"] as const) {
       else await send.click();
       await expect.poll(() => frames.held.length).toBeGreaterThan(0);
       await expectPrimaryBlocked(send, "Sending");
-      await expect(input).toHaveValue(first);
+      await expect(input).toHaveValue("");
       await info.attach("held-send-before-input-command", {
         body: JSON.stringify({ origin, held: frames.held, sent: frames.sent }),
         contentType: "application/json",
@@ -249,7 +249,7 @@ test.describe("long command", () => {
       await openSession(state, page, session.id);
       await prompt(page).fill("/probe multiline\narguments");
       await prompt(page).press("Enter");
-      await expect(prompt(page)).toHaveValue("/probe multiline\narguments");
+      await expect(prompt(page)).toHaveValue("");
       await expect(page.locator("[data-role=user] .otk-text")).toContainText(
         "LONG-COMMAND multiline",
       );

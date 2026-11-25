@@ -134,8 +134,14 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
   const prompt = await Deno.readTextFile(
     new URL("packages/ui/components/Prompt.tsx", root),
   );
-  assert(prompt.includes("feature.submit?.(draft, parts, selection)"));
-  assert(prompt.includes("send({ parts, mode: draft.mode, selection })"));
+  assert(
+    prompt.includes("feature.submit?.(draft, parts, selection, draftSend)"),
+  );
+  assert(
+    /send\(\{ parts, mode: draft\.mode, selection \}, \{[^}]*\bdraftSend,/.test(
+      prompt,
+    ),
+  );
   assertEquals(readinessErrors(prompt), []);
   const picker = await Deno.readTextFile(
     new URL("packages/ui/components/ListPicker.tsx", root),

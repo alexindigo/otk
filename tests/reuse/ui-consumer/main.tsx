@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, type Element, For, Show } from "solid-js";
 import { render } from "@solidjs/web";
-import { CommandHub, NotificationHub, SidecarConnection } from "@otk/client";
+import {
+  CommandHub,
+  createDrafts,
+  createSessionSubmission,
+  NotificationHub,
+  SidecarConnection,
+} from "@otk/client";
 import {
   booleanPreference,
   type CapabilityName,
@@ -19,7 +25,6 @@ import {
   DialogHost,
   DisplayMenu,
   Docks,
-  emptyDraft,
   LIGHT_STATES,
   type LightState,
   Message,
@@ -35,6 +40,7 @@ import {
   SelectionContent,
   type SessionPorts,
   SessionProvider,
+  solidState,
   StatusLight,
   ThemeEngine,
   ThemeRegistry,
@@ -50,6 +56,7 @@ import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import SharedControls, {
+  deliverFixturePrompt,
   ErrorBoundaries,
   Indicators,
   InteractionFailures,
@@ -340,7 +347,7 @@ function Consumer(): Element {
           Inject draft
         </button>
       ),
-      async submit(_draft, parts, selection) {
+      async submit(_draft, parts, selection, capture) {
         await ctx.props.onSubmit(
           [...parts, {
             kind: "text",
@@ -348,6 +355,7 @@ function Consumer(): Element {
           }],
           "normal",
           selection,
+          capture,
         );
         return true;
       },
@@ -355,10 +363,17 @@ function Consumer(): Element {
   });
   const [summary, setSummary] = createSignal("Initial result"),
     [opened, setOpened] = createSignal(""),
-    [draft, setDraft] = createSignal(emptyDraft()),
     [submitted, setSubmitted] = createSignal(""),
     [capabilities, setCapabilities] = createSignal<CapabilityName[]>([]),
     [dockClicks, setDockClicks] = createSignal(0);
+  const drafts = createDrafts(solidState);
+  const submit = createSessionSubmission({
+    sessionID: "session",
+    directory: () => Promise.resolve(""),
+    inbox: { act: (_dir, action) => action() },
+    tabs: () => ({ send: (_id, action) => action() }),
+    delivery: { send: deliverFixturePrompt },
+  });
   const call = (): ExternalCall => ({
     tool: "external",
     callID: "probe",
@@ -524,24 +539,27 @@ function Consumer(): Element {
               prefs,
               dirty: () => {},
               act: (action) => action(),
-              submit: async (action) => {
-                await action(undefined, () => {}, "msg_fixture");
-                return { kind: "committed", messageID: "msg_fixture" };
-              },
+              submit,
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             }}
           >
             <Prompt
-              value={draft()}
-              onChange={(change) => {
-                setDraft(change);
-                return draft();
-              }}
+              value={drafts.get("session")}
+              onChange={drafts.writer("session")}
+              captureSend={(draft) => drafts.captureSend("session", draft)}
               connected
-              onSubmit={(parts) => {
-                setSubmitted(JSON.stringify(parts));
-                return Promise.resolve();
+              onSubmit={async (parts, _mode, _selection, capture) => {
+                await submit(
+                  (_options, dispatch, messageID) => {
+                    dispatch();
+                    setSubmitted(JSON.stringify(parts));
+                    return Promise.resolve({ messageID, state: "accepted" });
+                  },
+                  "composer",
+                  undefined,
+                  capture,
+                );
               }}
               onAbort={async () => {}}
             />

@@ -196,7 +196,7 @@ Deno.test("Retry publishes an early refusal once without another native Send", a
           code: "native.refused",
           diagnosticID: "native-refusal",
           retry: "new-intent",
-          facts: { reason: "Native send refused" },
+          facts: { reason: "Native send refused", outcome: "rejected" },
         }),
       )
       : Promise.resolve(

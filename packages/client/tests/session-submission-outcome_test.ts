@@ -45,6 +45,7 @@ Deno.test("the composer adapter retains the draft and exposes failed Retry throu
   try {
     requireCommittedSend({
       kind: "failed",
+      certainty: "definite",
       reason: "Native send refused",
       retry: () => retries++,
     });

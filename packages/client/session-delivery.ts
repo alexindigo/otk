@@ -29,6 +29,10 @@ export interface DeliveryReceipt {
   outcome?: SendOutcome;
   settled?: boolean;
 }
+export interface SendCustody {
+  admit?(messageID: string, check: () => void): void;
+  outcome(value: SendOutcome): void;
+}
 export interface SessionDelivery {
   readonly state: {
     receipts: readonly DeliveryReceipt[];
@@ -40,6 +44,7 @@ export interface SessionDelivery {
     action: (dispatch: () => void) => Promise<SubmissionReceipt | null>,
     entry?: PendingSend,
     messageID?: string,
+    custody?: SendCustody,
   ): Promise<SendOutcome>;
   /** Reattach receipt observation only; never replay the submission preparation. */
   resume(entry: PendingSend, result?: Promise<SubmissionReceipt | null>): void;
@@ -84,7 +89,23 @@ export function createSessionDelivery(input: {
     string,
     ReturnType<typeof Promise.withResolvers<SendOutcome>>
   >();
+  // Receipts are for presentation and may disappear before native identity
+  // resolves. Only the custody observer outlives that projection.
+  const watches = new Map<
+    string,
+    { messageID: string; custody: SendCustody }
+  >();
+  const observe = (id: string, outcome: SendOutcome) => {
+    const watch = watches.get(id);
+    if (!watch) return;
+    if (
+      outcome.kind === "committed" || outcome.kind === "refused" ||
+      outcome.kind === "failed" && outcome.certainty === "definite"
+    ) watches.delete(id);
+    watch.custody.outcome(outcome);
+  };
   const finish = (id: string, outcome: SendOutcome) => {
+    observe(id, outcome);
     const pending = outcomes.get(id);
     if (!pending) return;
     outcomes.delete(id);
@@ -109,16 +130,24 @@ export function createSessionDelivery(input: {
     pins.get(id)?.();
     pins.delete(id);
   };
+  const committedMessage = (id: string) => {
+    const message = transcript?.projection.state.messagesByID[id];
+    return message?.sessionID === input.target.sessionID &&
+        transcript?.projection.committed(id)
+      ? message
+      : undefined;
+  };
   const inspect = () => {
     if (stopped) return;
+    for (const [id, { messageID }] of watches) {
+      if (committedMessage(messageID)) {
+        observe(id, { kind: "committed", messageID });
+      }
+    }
     for (const receipt of [...store.state.receipts]) {
       if (!receipt.messageID || receipt.phase === "presented") continue;
-      const message = transcript?.projection.state
-        .messagesByID[receipt.messageID];
-      if (
-        message?.sessionID !== input.target.sessionID
-      ) continue;
-      if (!transcript?.projection.committed(receipt.messageID)) continue;
+      const message = committedMessage(receipt.messageID);
+      if (!message) continue;
       if (receipt.phase !== "admitted") {
         update(receipt.id, (r) => {
           r.phase = "admitted";
@@ -141,11 +170,9 @@ export function createSessionDelivery(input: {
       }
     }
     for (const id of applied) {
-      const message = transcript?.projection.state.messagesByID[id];
+      const message = committedMessage(id);
       if (
-        message?.sessionID !== input.target.sessionID ||
-        message.role !== "user" || !message.model ||
-        !transcript?.projection.committed(id)
+        message?.role !== "user" || !message.model
       ) continue;
       applied.delete(id);
       try {
@@ -168,7 +195,7 @@ export function createSessionDelivery(input: {
     const current = store.state.receipts.find((receipt) => receipt.id === id);
     if (
       !current?.settled && current?.messageID &&
-      transcript?.projection.committed(current.messageID)
+      committedMessage(current.messageID)
     ) {
       update(id, (receipt) => receipt.settled = true);
       inspect();
@@ -198,6 +225,7 @@ export function createSessionDelivery(input: {
       ?.feedback?.failure?.value;
     finish(id, {
       kind: "failed",
+      certainty: "uncertain",
       reason: failure?.facts?.reason ??
         "The native message has not been observed.",
       retry: () => void owner.reload(),
@@ -246,7 +274,7 @@ export function createSessionDelivery(input: {
             : Promise.resolve(null));
       }, recovered);
     },
-    async send(action, entry, messageID) {
+    async send(action, entry, messageID, custody) {
       let activated: string | undefined;
       try {
         if (stopped) {
@@ -262,7 +290,7 @@ export function createSessionDelivery(input: {
           (entry && transcript?.projection.entry(entry.message.id)?.send) ??
             entry!;
         if (entry) {
-          if (transcript?.projection.committed(entry.message.id)) {
+          if (committedMessage(entry.message.id)) {
             return { kind: "committed", messageID: entry.message.id };
           }
           const previous = outcomes.get(id)?.promise ??
@@ -296,7 +324,7 @@ export function createSessionDelivery(input: {
           };
           const failObservation = () => {
             const receipt = store.state.receipts.find((r) => r.id === id);
-            if (transcript?.projection.committed(entry.message.id)) {
+            if (committedMessage(entry.message.id)) {
               update(id, (receipt) => receipt.settled = true);
               inspect();
               return;
@@ -328,6 +356,7 @@ export function createSessionDelivery(input: {
             });
             finish(id, {
               kind: "failed",
+              certainty: "uncertain",
               reason: feedback?.failure?.reason ??
                 "The native message has not been observed within ten seconds.",
               retry: observeAgain,
@@ -342,6 +371,15 @@ export function createSessionDelivery(input: {
           let dispatched = false;
           try {
             result = await action(() => {
+              if (stopped) {
+                throw new Error("The submission owner is no longer active.");
+              }
+              if (dispatched) return;
+              const identity = entry?.message.id ?? messageID;
+              if (identity && custody) {
+                custody.admit?.(identity, () => void owner.reload());
+                watches.set(id, { messageID: identity, custody });
+              }
               dispatched = true;
               if (entry) {
                 transcript?.send?.({ ...currentEntry(), dispatched: true });
@@ -353,21 +391,24 @@ export function createSessionDelivery(input: {
               }
             });
           } catch (cause) {
+            if (stopped) return;
             clear(id);
             const receipt = store.state.receipts.find((r) => r.id === id);
             const correlated = receipt?.messageID ?? entry?.message.id;
-            if (correlated && transcript?.projection.committed(correlated)) {
+            if (correlated && committedMessage(correlated)) {
               update(id, (receipt) => receipt.settled = true);
               finish(id, { kind: "committed", messageID: correlated });
               bind();
               return;
             }
+            const failure = cause instanceof RequestFailure
+              ? cause.failure
+              : undefined;
+            const certainty = failure?.facts?.outcome === "rejected"
+              ? "definite"
+              : "uncertain";
             const retry = () => {
-              if (
-                !entry || cause instanceof RequestFailure &&
-                  (cause.failure.facts?.outcome === "unknown" ||
-                    cause.failure.facts?.outcome === "unavailable")
-              ) {
+              if (!entry || custody || certainty === "uncertain") {
                 void owner.reload();
               } else entry.retry?.();
             };
@@ -382,11 +423,12 @@ export function createSessionDelivery(input: {
                   target: { ...input.target, label: input.title() },
                 })) ?? presentFailure({
                   code: "send.released",
-                  retry: "new-intent",
+                  retry: "none",
                   diagnosticID: id,
                   facts: {
                     actionLabel: "Sending prompt",
                     target: { ...input.target, label: input.title() },
+                    outcome: "unknown",
                     reason: "The send was released before completion.",
                   },
                 });
@@ -397,26 +439,31 @@ export function createSessionDelivery(input: {
                     view: input.target,
                   })
                   : classified;
+                // A definite rejection returns custody to the draft owner.
+                // Keep the failed send visible, but there is no native send to
+                // reconcile and only the recovered draft can submit again.
+                const restored = !!custody && certainty === "definite";
                 transcript?.send?.({
                   ...currentEntry(),
                   phase: "failed",
                   feedback: feedback &&
-                    { ...feedback, action: { label: "Retry", run: retry } },
-                  retry,
+                    (restored ? { ...feedback, action: undefined } : {
+                      ...feedback,
+                      action: { label: "Retry", run: retry },
+                    }),
+                  retry: restored ? undefined : retry,
                 });
               }
             }
             commit((s) => {
               s.receipts = s.receipts.filter((r) => r.id !== id);
             });
-            const failure = cause instanceof RequestFailure
-              ? cause.failure
-              : undefined;
             finish(
               id,
               dispatched
                 ? {
                   kind: "failed",
+                  certainty,
                   reason: failure?.facts?.reason ??
                     "The message could not be sent.",
                   retry,
@@ -433,7 +480,8 @@ export function createSessionDelivery(input: {
           // observation. Only sends without an entry lack any correlation.
           if (result?.state === "unconfirmed" || !result && !entry) {
             bind();
-            if (entry && transcript?.projection.committed(entry.message.id)) {
+            const identity = entry?.message.id ?? messageID;
+            if (identity && committedMessage(identity)) {
               return;
             }
             clear(id);
@@ -480,11 +528,13 @@ export function createSessionDelivery(input: {
             );
           }
           update(id, (r) => {
-            r.messageID = result?.messageID ?? entry?.message.id;
+            r.messageID = result?.messageID ?? entry?.message.id ?? messageID;
             if (r.phase !== "admitted" && r.phase !== "presented") {
               r.phase = result?.state ?? "accepted";
             }
           });
+          const watch = watches.get(id);
+          if (watch && result?.messageID) watch.messageID = result.messageID;
           bind();
           if (entry) {
             // The pending transcript entry now owns this send (2.39): it
@@ -505,7 +555,7 @@ export function createSessionDelivery(input: {
           }
           // Read-only recovery joins the existing authority. It never submits input.
           if (
-            !result || !transcript?.projection.committed(result.messageID)
+            !result || !committedMessage(result.messageID)
           ) {
             void transcript?.reconcile(result ? [result.messageID] : []).then(
               inspect,
@@ -518,8 +568,19 @@ export function createSessionDelivery(input: {
             });
           }
         })().catch((cause) => {
+          if (stopped) return;
           clear(id);
-          finish(id, refusedSend(cause));
+          finish(
+            id,
+            watches.has(id)
+              ? {
+                kind: "failed",
+                certainty: "uncertain",
+                reason: "The message could not be confirmed.",
+                retry: () => void owner.reload(),
+              }
+              : refusedSend(cause),
+          );
         });
         return await outcome.promise;
       } catch (cause) {
@@ -537,6 +598,7 @@ export function createSessionDelivery(input: {
       bind();
     },
     async reload() {
+      if (stopped) return;
       commit((s) => {
         s.follow++;
       });
@@ -565,7 +627,7 @@ export function createSessionDelivery(input: {
         )?.messageID;
         finish(
           id,
-          messageID && transcript?.projection.committed(messageID)
+          messageID && committedMessage(messageID)
             ? { kind: "committed", messageID }
             : {
               kind: "unconfirmed",
@@ -574,6 +636,13 @@ export function createSessionDelivery(input: {
             },
         );
       }
+      for (const id of watches.keys()) {
+        observe(id, {
+          kind: "unconfirmed",
+          reason: "The submission owner stopped.",
+        });
+      }
+      watches.clear();
     },
   };
   return owner;

@@ -7,6 +7,7 @@ import type {
 import { createSignal } from "solid-js";
 import {
   createHarnessCommands,
+  type DraftSendCapture,
   requireCommittedSend,
   type SendOutcome,
 } from "@otk/client";
@@ -27,32 +28,38 @@ export function submitPromptCommand(
     skill?: SkillOption;
   } = {},
   origin: import("@otk/protocol").RequestOrigin = "composer",
+  capture?: DraftSendCapture,
 ): Promise<SendOutcome> {
-  return ctx.submit(async (options, dispatch, messageID) => {
-    if (!args.selection) await ctx.ready();
-    const selection = args.selection ??
-      ctx.nextSelection(ctx.change((draft) => draft)).input;
-    const parts = (await ctx.attachments(args.parts ?? [])).filter((
-      part,
-    ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file");
-    dispatch();
-    return await ctx.rpc("session.command", {
-      sessionID: ctx.sessionID(),
-      messageID,
-      command: command.name,
-      ...(args.skill
-        ? {
-          skill: {
-            name: args.skill.name,
-            ...(args.skill.id ? { id: args.skill.id } : {}),
-          },
-        }
-        : {}),
-      arguments: args.arguments ?? "",
-      ...selection,
-      parts,
-    }, options);
-  }, origin);
+  return ctx.submit(
+    async (options, dispatch, messageID) => {
+      if (!args.selection) await ctx.ready();
+      const selection = args.selection ??
+        ctx.nextSelection(ctx.change((draft) => draft)).input;
+      const parts = (await ctx.attachments(args.parts ?? [])).filter((
+        part,
+      ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file");
+      dispatch();
+      return await ctx.rpc("session.command", {
+        sessionID: ctx.sessionID(),
+        messageID,
+        command: command.name,
+        ...(args.skill
+          ? {
+            skill: {
+              name: args.skill.name,
+              ...(args.skill.id ? { id: args.skill.id } : {}),
+            },
+          }
+          : {}),
+        arguments: args.arguments ?? "",
+        ...selection,
+        parts,
+      }, options);
+    },
+    origin,
+    undefined,
+    capture,
+  );
 }
 export function registerSlashPrompt(prompt: PromptRegistry): void {
   prompt.register({
@@ -66,8 +73,8 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         available: () =>
           ctx.active() && !ctx.props.suspended && ctx.props.connected &&
           ctx.supports("commands"),
-        execute: (command, args, origin) =>
-          submitPromptCommand(ctx, command, args, origin).then(
+        execute: (command, args, origin, capture) =>
+          submitPromptCommand(ctx, command, args, origin, capture).then(
             requireCommittedSend,
           ),
       });
@@ -190,7 +197,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           }
           return true;
         },
-        async submit(draft, parts, selection) {
+        async submit(draft, parts, selection, draftSend) {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
@@ -209,7 +216,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             ): part is Extract<PromptPart, { kind: "file" }> =>
               part.kind === "file"
             ),
-          });
+          }, { ...ctx.commands.context(), draftSend });
           return true;
         },
       };

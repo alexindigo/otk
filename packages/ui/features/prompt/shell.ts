@@ -30,19 +30,26 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         ),
       );
       return {
-        async submit(draft, parts, selection) {
+        async submit(draft, parts, selection, capture) {
           if (draft.mode !== "shell") return false;
-          const outcome = await ctx.submit((options, dispatch, messageID) => {
-            dispatch();
-            return ctx.rpc("session.shell", {
-              sessionID: ctx.sessionID(),
-              messageID,
-              command: parts.filter((p) => p.kind === "text").map((p) => p.text)
-                .join("\n"),
-              agent: selection.agent,
-              model: selection.model,
-            }, options);
-          });
+          const outcome = await ctx.submit(
+            (options, dispatch, messageID) => {
+              dispatch();
+              return ctx.rpc("session.shell", {
+                sessionID: ctx.sessionID(),
+                messageID,
+                command: parts.filter((p) => p.kind === "text").map((p) =>
+                  p.text
+                )
+                  .join("\n"),
+                agent: selection.agent,
+                model: selection.model,
+              }, options);
+            },
+            "composer",
+            undefined,
+            capture,
+          );
           requireCommittedSend(outcome);
           return true;
         },

@@ -861,8 +861,11 @@ export default function Shell(
                               onOlder={() => commands.run("session.older")}
                               onRetry={() => commands.run("session.retry")}
                               onDraft={drafts.writer(draftKey())}
-                              onPrompt={(parts, _mode, selection) =>
-                                actions.prompt(parts, selection).then(
+                              captureSend={(draft) =>
+                                drafts.captureSend(draftKey(), draft)}
+                              draftRecoveries={drafts.recoveries(draftKey())}
+                              onPrompt={(parts, _mode, selection, capture) =>
+                                actions.prompt(parts, selection, capture).then(
                                   requireCommittedSend,
                                 )}
                               onAbort={actions.abort}

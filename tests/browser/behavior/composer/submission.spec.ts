@@ -61,9 +61,12 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
         );
         await page.locator(".otk-prompt button[type=submit]").click();
         if (unconfirmed) {
-          // Approved M1 receipt extension: an uncorrelatable V2 completion is
-          // explicit uncertainty, not permission to erase the captured input.
-          await expect(prompt(page)).toHaveValue(`/probe turn-${turn}`);
+          // WP1.9: uncertainty keeps the submitted input in custody, not in
+          // the fresh composer. Recovery only checks the existing send.
+          await expect(prompt(page)).toHaveValue("");
+          await expect(
+            page.getByRole("button", { name: "Check send", exact: true }),
+          ).toHaveCount(turn + 1);
           await expect(page.locator(".otk-composer-notice")).toContainText(
             "did not provide a way to confirm its message",
           );

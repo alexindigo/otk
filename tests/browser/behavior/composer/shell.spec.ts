@@ -87,7 +87,7 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Enter");
   await revealTool(page, shellRun(state, "running"));
   await expect(page.locator(shellRun(state, "running"))).toBeVisible();
-  await expect(prompt(page)).toHaveValue("sleep 31; echo long-shell-finished");
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
     .toContainText("Running command");
   await prompt(page).fill("next draft during command");

@@ -247,13 +247,14 @@ test.describe("native picker choices", () => {
       ),
     ).toBe(true);
     if (state.controller.info!.version.startsWith("2.")) {
-      // M1 addenda 1-2: a V2 command without a correlatable message ends as
-      // explicitly unconfirmed and retains its draft; the user clears it.
-      await expect(prompt(page)).toHaveValue("/probe chosen");
+      // WP1.9 holds the unconfirmed command separately from the next draft.
+      await expect(prompt(page)).toHaveValue("");
+      await expect(
+        page.getByRole("button", { name: "Check send", exact: true }),
+      ).toBeVisible();
       await expect(page.locator(".otk-composer-notice")).toContainText(
         "did not provide a way to confirm its message",
       );
-      await prompt(page).fill("");
     } else await expect(prompt(page)).toHaveValue("");
     await prompt(page).press("!");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");

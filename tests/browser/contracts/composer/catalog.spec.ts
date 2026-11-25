@@ -247,12 +247,14 @@ test.describe("input-referenced catalog", () => {
       frames.release();
       await expect(page.locator("[data-role=assistant] .otk-text"))
         .toHaveText("Referenced command delivered.");
+      await expect(prompt(page)).toHaveValue("");
       if (state.controller.info!.version.startsWith("2.")) {
-        await expect(prompt(page)).toHaveValue(text);
         await expect(page.locator(".otk-composer-notice")).toContainText(
           "did not provide a way to confirm its message",
         );
-      } else await expect(prompt(page)).toHaveValue("");
+        await expect(page.getByRole("button", { name: "Check send" }))
+          .toBeVisible();
+      }
       expect(submissions()).toHaveLength(1);
       expect(submissions()[0].frame.method).toBe("session.command");
       expect(submissions()[0].frame.params).toMatchObject({

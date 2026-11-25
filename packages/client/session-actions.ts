@@ -26,6 +26,7 @@ import {
   type SessionDelivery,
 } from "./session-delivery.ts";
 import type { StateFactory } from "./state.ts";
+import type { DraftSendCapture } from "./drafts.ts";
 import { pendingMessage, pendingMessageID } from "./pending-send.ts";
 import {
   refusedSend,
@@ -53,7 +54,11 @@ export interface SessionActions {
   submission(target: Selection): SessionSubmission;
   group(target: Selection): IntentGroup;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
-  prompt(parts: PromptPart[], selection: PromptChoices): Promise<SendOutcome>;
+  prompt(
+    parts: PromptPart[],
+    selection: PromptChoices,
+    capture?: DraftSendCapture,
+  ): Promise<SendOutcome>;
   abort(target?: Selection, options?: RequestOptions): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   archive(target: Selection, archived: boolean): Promise<ContentSession>;
@@ -204,7 +209,7 @@ export function createSessionActions(o: {
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
-      wrap: (action) => {
+      wrap: (action, capture) => {
         const admit = () => {
           if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
             return Promise.reject(
@@ -215,9 +220,14 @@ export function createSessionActions(o: {
             const changing = boundaryReady(target);
             if (changing) await changing;
             const allowed = permit ??
-              await o.branchHistory?.beforeSend?.(target);
+              await o.branchHistory?.beforeSend?.(target, capture?.draft);
             if (!permit) {
-              await o.branchHistory?.beforeCommit(target, undefined, allowed);
+              await o.branchHistory?.beforeCommit(
+                target,
+                undefined,
+                allowed,
+                capture?.draft,
+              );
             }
             try {
               return await action();
@@ -431,7 +441,7 @@ export function createSessionActions(o: {
           },
         ));
     },
-    async prompt(parts, selection) {
+    async prompt(parts, selection, capture) {
       try {
         const { selection: target, rpc } = current.context();
         const group = new IntentGroup(rpc.intent());
@@ -443,12 +453,15 @@ export function createSessionActions(o: {
           parts,
           o.promptBlocks,
         );
-        const send = async (captured: IntentGroup): Promise<SendOutcome> => {
+        const send = async (
+          captured: IntentGroup,
+          draft?: DraftSendCapture,
+        ): Promise<SendOutcome> => {
           try {
             const changing = boundaryReady(target);
             if (changing) await changing;
             const permit = o.branchHistory?.beforeSend
-              ? await o.branchHistory.beforeSend(target)
+              ? await o.branchHistory.beforeSend(target, draft?.draft)
               : undefined;
             return await submission(target, captured, permit)(
               async (options, dispatch) => {
@@ -474,6 +487,7 @@ export function createSessionActions(o: {
                     target,
                     undefined,
                     permit,
+                    draft?.draft,
                   );
                 }
                 dispatch();
@@ -498,12 +512,13 @@ export function createSessionActions(o: {
                   });
                 },
               },
+              draft,
             );
           } catch (cause) {
             return refusedSend(cause);
           }
         };
-        return await send(group);
+        return await send(group, capture);
       } catch (cause) {
         return refusedSend(cause);
       }

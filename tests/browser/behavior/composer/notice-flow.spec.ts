@@ -9,13 +9,15 @@ test("composer.notice-flow-keeps-transcript-tail-uncovered", {
   tag: ["@composer", "@messages", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
   test.setTimeout(120_000);
+  // A missing native command need not give V1 a definite RPC rejection.
+  // Exercise this layout with a deterministic pre-native refusal on both lanes.
   await wire(
     page,
     (frame) =>
       frame.method === "session.command"
         ? {
           ...frame,
-          params: { ...frame.params, command: "missing-notice-probe" },
+          method: "test.refused-notice-probe",
         }
         : frame,
   );

@@ -2,6 +2,22 @@
 import type { ModelRef, PromptPart } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import { createDraftReverts, type DraftReverts } from "./draft-revert.ts";
+import type { SendOutcome } from "./send-outcome.ts";
+
+export interface DraftSendCapture {
+  readonly draft: Draft;
+  take(
+    messageID: string,
+    check: () => void,
+  ): ((outcome: SendOutcome) => void) | undefined;
+}
+
+export interface DraftRecovery {
+  readonly id: string;
+  readonly kind: "uncertain" | "recoverable";
+  readonly draft: Draft;
+  run(): void;
+}
 
 export interface Chip {
   id: string;
@@ -59,11 +75,22 @@ export interface Drafts {
   /** Invocation-current, non-creating read without framework publication tracking. */
   current(key: string): Draft;
   writer(key: string): (change: DraftChange) => Draft;
+  captureSend(key: string, draft: Draft): DraftSendCapture;
+  recoveries(key: string): readonly DraftRecovery[];
   drop(key: string): void;
   subscribe(listener: () => void): () => void;
 }
 export function createDrafts(factory: StateFactory = createState): Drafts {
-  const values = new Map<string, { draft: Draft }>();
+  const values = new Map<string, {
+    draft: Draft;
+    revision: number;
+    sends: Map<string, { draft: Draft; recovery?: DraftRecovery }>;
+  }>();
+  const newOwner = (draft: Draft) => ({
+    draft,
+    revision: 0,
+    sends: new Map<string, { draft: Draft; recovery?: DraftRecovery }>(),
+  });
   const store = factory({ revision: 0 });
   const current = (key: string) => values.get(key)?.draft ?? emptyDraft();
   const get = (key: string): Draft => {
@@ -77,7 +104,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
   const writer = (key: string, transaction = false) => {
     let owner = values.get(key);
     if (!owner) {
-      owner = { draft: emptyDraft() };
+      owner = newOwner(emptyDraft());
       values.set(key, owner);
     }
     const captured = owner;
@@ -87,6 +114,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
       const next = typeof change === "function" ? change(previous) : change;
       captured.draft = next;
       if (next !== previous) {
+        captured.revision++;
         if (!transaction) reverts.changed(key);
         changed();
       }
@@ -115,7 +143,9 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
     },
     restore(value) {
       const snapshot = value as { drafts: [string, Draft][]; reverts: unknown };
-      for (const [key, draft] of snapshot.drafts) values.set(key, { draft });
+      for (const [key, draft] of snapshot.drafts) {
+        values.set(key, newOwner(draft));
+      }
       reverts.restore(snapshot.reverts);
       changed();
     },
@@ -123,6 +153,81 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
     get,
     current,
     writer: (key) => writer(key),
+    captureSend(key, draft) {
+      const owner = values.get(key);
+      const revision = owner?.draft === draft ? owner.revision : undefined;
+      const captured = structuredClone(draft);
+      let taken = false;
+      return {
+        draft: captured,
+        take(id, check) {
+          if (
+            taken || !owner || values.get(key) !== owner || owner.sends.has(id)
+          ) return;
+          taken = true;
+          const value: { draft: Draft; recovery?: DraftRecovery } = {
+            draft: captured,
+          };
+          owner.sends.set(id, value);
+          const write = writer(key);
+          const vacancy = revision === owner.revision
+            ? revision + 1
+            : undefined;
+          if (vacancy !== undefined) write(clearDraft(owner.draft));
+          const active = () =>
+            values.get(key) === owner && owner.sends.get(id) === value;
+          const offer = (kind: DraftRecovery["kind"]) => {
+            if (value.recovery?.kind === kind) return;
+            const recovery: DraftRecovery = {
+              id,
+              kind,
+              get draft() {
+                void store.state.revision;
+                return value.draft;
+              },
+              run() {
+                if (!active() || value.recovery !== recovery) return;
+                if (kind === "uncertain") return check();
+                // An explicit exchange keeps the displaced full draft too;
+                // that parked draft has no outstanding native send.
+                const recovered = value.draft;
+                value.draft = owner.draft;
+                write(recovered);
+              },
+            };
+            value.recovery = recovery;
+            changed();
+          };
+          return (outcome) => {
+            if (!active() || value.recovery?.kind === "recoverable") return;
+            if (outcome.kind === "accepted") return;
+            if (outcome.kind === "committed") {
+              owner.sends.delete(id);
+              changed();
+            } else if (
+              outcome.kind === "unconfirmed" ||
+              outcome.kind === "failed" && outcome.certainty === "uncertain"
+            ) {
+              offer("uncertain");
+            } else if (owner.revision === vacancy) {
+              owner.sends.delete(id);
+              write(value.draft);
+            } else {
+              offer("recoverable");
+            }
+          };
+        },
+      };
+    },
+    recoveries(key) {
+      void store.state.revision;
+      const owner = values.get(key);
+      return owner
+        ? [...owner.sends.values()].flatMap(({ recovery }) =>
+          recovery ? [recovery] : []
+        )
+        : [];
+    },
     drop(key) {
       reverts.drop(key);
       if (values.delete(key)) changed();

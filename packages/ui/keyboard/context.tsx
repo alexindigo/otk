@@ -79,7 +79,7 @@ export function commandHints(ports: CommandPorts): {
 export function ownedCommand<A = void, R = void>(
   ports: CommandPorts,
   command: CommandDefinition<A, R>,
-): (args: A) => Promise<R> {
+): (args: A, context?: import("@otk/client").CommandContext) => Promise<R> {
   let mounted = false;
   onSettled(() => {
     const release = ports.commands.register<A, R>(command);
@@ -89,9 +89,9 @@ export function ownedCommand<A = void, R = void>(
       release();
     };
   });
-  return (args) =>
+  return (args, context) =>
     mounted
-      ? ports.commands.run<R>(command.id, args)
+      ? ports.commands.run<R>(command.id, args, context)
       : Promise.reject(new Error(`Command owner inactive: ${command.id}`));
 }
 /** Independently mountable controls get isolated, owner-scoped action IDs. */

@@ -145,6 +145,8 @@ export default function SessionView(props: {
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
+  captureSend?: PromptProps["captureSend"];
+  draftRecoveries?: readonly import("@otk/client").DraftRecovery[];
   onPrompt: PromptProps["onSubmit"];
   onAbort(): Promise<void>;
 }): Element {
@@ -324,7 +326,7 @@ export default function SessionView(props: {
     !!props.branchHistory?.state.recovery &&
     (!rollbackState().record || !!rollbackState().dismissed);
   const noticed = () =>
-    !!props.forkNote || !!feedback() ||
+    !!props.forkNote || !!feedback() || !!props.draftRecoveries?.length ||
     !!props.branchHistory?.state.permanence ||
     copyRecovery() ||
     !!props.branchHistory?.state.choice ||
@@ -366,6 +368,28 @@ export default function SessionView(props: {
           />
         )}
       </Show>
+      <For each={props.draftRecoveries}>
+        {(recovery) => (
+          <OperationFeedback
+            feedback={{
+              kind: "info",
+              text: recovery.kind === "uncertain"
+                ? "Send not confirmed. The submitted draft is kept separately."
+                : `Draft kept separately: ${
+                  recovery.draft.input.trim() ||
+                  recovery.draft.chips.map((chip) => chip.label).join(", ") ||
+                  "Empty draft"
+                }`,
+              action: {
+                label: recovery.kind === "uncertain"
+                  ? "Check send"
+                  : "Recover draft",
+                run: recovery.run,
+              },
+            }}
+          />
+        )}
+      </For>
       <Show when={props.forkNote}>
         {(note) => (
           <ForkFact
@@ -1116,8 +1140,8 @@ export default function SessionView(props: {
                       value={props.draft}
                       connected={props.connected}
                       onChange={writeDraft}
-                      onSubmit={(parts, mode, selection) =>
-                        props.onPrompt(parts, mode, selection)}
+                      captureSend={props.captureSend}
+                      onSubmit={props.onPrompt}
                       onAbort={() => props.onAbort()}
                     />
                   </div>

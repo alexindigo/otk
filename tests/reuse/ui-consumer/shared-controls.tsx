@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import {
   CommandHub,
+  createDrafts,
   createInbox,
   createNativeSources,
   createSessionRename,
@@ -19,6 +20,7 @@ import {
   type MergedEntry,
   NotificationHub,
   relativeTime,
+  type SessionDelivery,
   type SidecarState,
 } from "@otk/client";
 import {
@@ -974,12 +976,26 @@ export function ErrorBoundaries(props: { onTheme(id: string): void }): Element {
   );
 }
 
+// This alternate consumer has no native transcript. Model the successful
+// delivery boundary, while the real submission and draft owners do the work.
+export const deliverFixturePrompt: SessionDelivery["send"] = async (
+  action,
+  _entry,
+  id = "msg_fixture",
+  custody,
+) => {
+  await action(() => custody?.admit?.(id, () => {}));
+  const outcome = { kind: "committed", messageID: id } as const;
+  custody?.outcome(outcome);
+  return outcome;
+};
+
 export function SecondaryFailures(
   props: { onTheme(id: string): void },
 ): Element {
   const commands = new CommandHub(), ui = createUiRegistries();
-  const [draft, setDraft] = createSignal(emptyDraft()),
-    [sent, setSent] = createSignal(0),
+  const drafts = createDrafts(solidState);
+  const [sent, setSent] = createSignal(0),
     [diagnostic, setDiagnostic] = createSignal("");
   const inbox = createInbox(
     {
@@ -990,12 +1006,7 @@ export function SecondaryFailures(
   );
   const submit = createSessionSubmission({
     sessionID: "probe",
-    delivery: {
-      send: async (action) => {
-        await action(() => {});
-        return { kind: "committed", messageID: "fixture-submitted" };
-      },
-    },
+    delivery: { send: deliverFixturePrompt },
     directory: () => Promise.resolve("/project"),
     inbox,
     tabs: () => ({ send: (_id, action) => action() }),
@@ -1056,20 +1067,24 @@ export function SecondaryFailures(
             }}
           >
             <Prompt
-              value={draft()}
-              onChange={(change) => {
-                setDraft(change);
-                return draft();
-              }}
+              value={drafts.get("probe")}
+              onChange={drafts.writer("probe")}
+              captureSend={(draft) => drafts.captureSend("probe", draft)}
               connected
-              onSubmit={async () => {
-                await submit(() => {
-                  setSent((value) => value + 1);
-                  return Promise.resolve({
-                    messageID: "fixture-submitted",
-                    state: "accepted",
-                  });
-                });
+              onSubmit={async (_parts, _mode, _selection, capture) => {
+                await submit(
+                  (_options, dispatch, messageID) => {
+                    dispatch();
+                    setSent((value) => value + 1);
+                    return Promise.resolve({
+                      messageID,
+                      state: "accepted",
+                    });
+                  },
+                  "composer",
+                  undefined,
+                  capture,
+                );
               }}
               onAbort={() => Promise.resolve()}
             />
