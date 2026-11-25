@@ -244,12 +244,13 @@ there is no recall-specific failure timer.
 
 ## Request event consumers
 
-`createPrimaryAction` owns the composer's persistent primary affordance, live
-availability/reason, synchronous pending admission and invocation. Its inputs
-borrow current draft, connection and request state; it retains no second draft
-or RPC lifetime. `promptUnavailable` projects ordinary Send's draft facts. Every
-invocation rechecks the same contract, including after asynchronous preparation,
-while the existing submission intent retains captured send settlement.
+`createComposerAction` owns composer activation. Its `composerAction` projection
+combines draft, transport, capability, takeover and session activity facts for
+the button, Enter and explicit interrupt. One reservation spans preparation and
+Send; after preparation the owner rechecks the same projection. Explicit local
+commands do not acquire a native Send reservation. Refusals leave the draft
+untouched and publish the live reason; custody begins only at dispatch.
+`createPrimaryAction` is the generic primary owner for request docks.
 
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
 values, synchronous pending reservation, joined submission promise and safe
@@ -259,22 +260,6 @@ the captured values and a later explicit submit gets a new key. Presentation
 subscriptions can detach without cancelling the captured work. `failureFeedback`
 handles typed request failures, silent releases and locally diagnosed exceptions
 through one presenter, without rendering arbitrary exception text.
-
-`createSubmissionIntent` separates input preparation from captured send
-settlement. Repeated preparation joins synchronously and repeated sends cannot
-replace an in-flight payload. A later input command can still prepare and run
-while a send or its follow-up bookkeeping remains pending; command handling is
-not mistaken for a duplicate send. Send eligibility is captured at activation:
-preparation that starts during Sending cannot admit a prompt, shell or native
-command effect after the earlier send settles. A later explicit activation can
-send the retained draft. Both lifetimes stay framework-free, with native input
-and focus owned by the UI adapter.
-
-Submission readiness rechecks use the intent owner's `require()` boundary.
-Readiness loss and captured-send admission refusal publish classified feedback
-with action, target, reason and recovery instead of resolving as an unsent
-success. An explicitly handled input command remains distinct from refused
-dispatch.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and

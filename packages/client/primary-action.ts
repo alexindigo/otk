@@ -82,7 +82,7 @@ export interface SessionActivity {
 export function canStop(activity: SessionActivity): boolean {
   return activity.unstarted > 0 || activity.running;
 }
-export function composerMode(
+function composerMode(
   facts: SessionActivity & { blank: boolean },
 ): ComposerMode {
   return facts.blank && (canStop(facts) || facts.stopping) ? "stop" : "send";
@@ -90,40 +90,6 @@ export function composerMode(
 export function composerLabel(mode: ComposerMode): string {
   return mode === "stop" ? "Stop" : "Send";
 }
-export function stopUnavailable(
-  facts: {
-    active: boolean;
-    suspended: boolean;
-    connected: boolean;
-    supported: boolean;
-  },
-): string | undefined {
-  if (!facts.active) return "Composer is no longer active";
-  if (facts.suspended) return "Answer the pending request first";
-  if (!facts.connected) return "Reconnect to stop";
-  if (!facts.supported) return "Stopping is not supported here";
-}
-
-/** Draft facts, not element existence, determine ordinary Send readiness. */
-export function promptUnavailable(input: {
-  active: boolean;
-  suspended: boolean;
-  connected: boolean;
-  supported: boolean;
-  content: boolean;
-  chips: readonly { pending?: boolean; error?: unknown }[];
-}): string | undefined {
-  if (!input.active) return "Composer is no longer active";
-  if (input.suspended) return "Answer the pending request first";
-  if (!input.connected) return "Reconnect to send";
-  if (!input.supported) return "Sending is not supported here";
-  if (input.chips.some((chip) => chip.error)) {
-    return "Remove or retry the failed attachment";
-  }
-  if (input.chips.some((chip) => chip.pending)) return "Waiting for attachment";
-  if (!input.content) return "Write a message";
-}
-
 /** Draft facts, not element existence, determine ordinary Send readiness. */
 export type ComposerSource = "enter" | "button" | "interrupt";
 export interface ComposerFacts extends SessionActivity {

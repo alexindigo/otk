@@ -1,56 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import {
-  CommandHub,
-  createPrimaryAction,
-  promptUnavailable,
-  stopUnavailable,
-} from "@otk/client";
+import { CommandHub, createPrimaryAction } from "@otk/client";
 
-Deno.test("composer mode follows only draft and session activity", async () => {
-  const { composerMode } = await import("../primary-action.ts") as Record<
-    string,
-    unknown
-  >;
-  const mode = composerMode as (
-    facts: { blank: boolean; unstarted: number; running: boolean },
-  ) => string;
-  for (const blank of [false, true]) {
-    for (const unstarted of [0, 1]) {
-      for (const running of [false, true]) {
-        assertEquals(
-          mode({ blank, unstarted, running }),
-          blank && (unstarted > 0 || running) ? "stop" : "send",
-        );
-      }
-    }
-  }
-});
-
-Deno.test("Stop has its own availability and captures the primary mode at invocation", async () => {
-  const ready = {
-    active: true,
-    suspended: false,
-    connected: true,
-    supported: true,
-  };
-  assertEquals(stopUnavailable(ready), undefined);
-  assertEquals(
-    stopUnavailable({ ...ready, active: false }),
-    "Composer is no longer active",
-  );
-  assertEquals(
-    stopUnavailable({ ...ready, suspended: true }),
-    "Answer the pending request first",
-  );
-  assertEquals(
-    stopUnavailable({ ...ready, connected: false }),
-    "Reconnect to stop",
-  );
-  assertEquals(
-    stopUnavailable({ ...ready, supported: false }),
-    "Stopping is not supported here",
-  );
+Deno.test("primary actions capture their mode at invocation", async () => {
   const gate = Promise.withResolvers<void>();
   let mode: "send" | "stop" = "stop";
   const calls: ("send" | "stop" | undefined)[] = [];
@@ -71,50 +23,6 @@ Deno.test("Stop has its own availability and captures the primary mode at invoca
   gate.resolve();
   await stopping;
   assertEquals(calls, ["stop"]);
-});
-
-Deno.test("primary action stays visible, reports actual blockers and admits no unavailable intent", async () => {
-  const ready = {
-    active: true,
-    suspended: false,
-    connected: true,
-    supported: true,
-    content: true,
-    chips: [],
-  };
-  const cases = [
-    [{ content: false }, "Write a message"],
-    [{ connected: false }, "Reconnect to send"],
-    [{ supported: false }, "Sending is not supported here"],
-    [{ suspended: true }, "Answer the pending request first"],
-    [{ active: false }, "Composer is no longer active"],
-    [{ chips: [{ pending: true }] }, "Waiting for attachment"],
-    [
-      { chips: [{ error: "upload rejected" }] },
-      "Remove or retry the failed attachment",
-    ],
-  ] as const;
-  let calls = 0;
-  for (const [facts, reason] of cases) {
-    const owner = createPrimaryAction({
-      label: () => "Send",
-      unavailable: () => promptUnavailable({ ...ready, ...facts }),
-      pendingReason: "Sending",
-      run: () => {
-        calls++;
-      },
-    });
-    assertEquals(owner.state, {
-      label: "Send",
-      visible: true,
-      available: false,
-      pending: false,
-      reason,
-    });
-    await owner.invoke();
-    assertEquals(calls, 0);
-  }
-  assertEquals(promptUnavailable(ready), undefined);
 });
 
 Deno.test("primary action reserves pending synchronously across click, Enter and commands", async () => {
