@@ -8,6 +8,8 @@ const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
 const main = "tstv1-otk";
 const pillText = "2 running · 1 needs you · 3 not returned";
 const rowsInOrder = [0, 1, 2, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
+const longTitle =
+  "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs";
 
 const openTask = async (
   state: Parameters<typeof openSession>[0],
@@ -160,7 +162,9 @@ test(
           .toBeLessThanOrEqual(.5);
         expect.soft(pos.truncated, context).toBe(false);
         expect.soft(pos.title, context).toBe(
-          `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
+          rowsInOrder[index] === "tstv1-disp-6"
+            ? longTitle
+            : `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
         );
         if (index < 2) {
           expect(pos.gaps, context).toBeDefined();

@@ -839,10 +839,22 @@ export async function sessionsScenario(profile: Profile) {
               throw new Error("Unsupported sessions scenario action");
             }
             const now = Date.now();
+            const agents = [
+              "explore",
+              "junior",
+              "general",
+              "explore",
+              undefined,
+              "general",
+              "junior-openrouter",
+            ];
             for (let n = 0; n < 7; n++) {
               const id = `tstv1-disp-${n}`;
               const parentID = n === 6 ? "tstv1-disp-0" : base.id;
-              const title = `Disposition helper ${n + 1}`;
+              const title = n === 6
+                ? "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs"
+                : `Disposition helper ${n + 1}`;
+              const agent = agents[n];
               f.add({
                 ...base,
                 id,
@@ -851,6 +863,7 @@ export async function sessionsScenario(profile: Profile) {
                   ? join(root, "helper-checkout")
                   : base.directory,
                 title,
+                ...(agent === undefined ? {} : { agent }),
                 timeCreated: base.timeCreated + n,
               });
               if (n === 0 || n === 1 || n === 3) {
