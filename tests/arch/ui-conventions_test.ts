@@ -16,6 +16,48 @@ import {
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
 
+Deno.test("UI convention: syntax enhancement cannot publish user-action failures in source", async () => {
+  const failures = (text: string) =>
+    new Source(text).all.flatMap((node) =>
+      node.type === "ImportDeclaration"
+        ? node.specifiers.map((part) =>
+          part.type === "ImportSpecifier"
+            ? part.imported.type === "Identifier"
+              ? part.imported.name
+              : part.imported.value
+            : node.source.value.endsWith("/FeedbackStatus.tsx")
+            ? "FeedbackStatus"
+            : part.local.name
+        )
+        : []
+    ).filter((name) =>
+      ["FeedbackStatus", "failureValue", "errorFeedback"].includes(name)
+    );
+  assertEquals(
+    failures(await Deno.readTextFile("packages/ui/components/Code.tsx")),
+    [],
+  );
+  assertEquals(
+    failures('import {failureValue as diagnose} from "@otk/client";'),
+    ["failureValue"],
+  );
+  assertEquals(
+    failures('import {normalizeError as diagnose} from "@otk/protocol";'),
+    [],
+  );
+  assertEquals(failures('import FeedbackStatus from "./FeedbackStatus.tsx";'), [
+    "FeedbackStatus",
+  ]);
+  assertEquals(failures('import Status from "./FeedbackStatus.tsx";'), [
+    "FeedbackStatus",
+  ]);
+  assert(
+    (await Deno.readTextFile("packages/ui/highlight/client.ts")).includes(
+      "Syntax highlighting diagnostic:",
+    ),
+  );
+});
+
 Deno.test("UI convention: folded record counts are neutral metadata, not per-kind hidden rows", async () => {
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
@@ -221,6 +263,7 @@ type Rule =
   | "meta-list"
   | "failure-signal"
   | "presentation"
+  | "failure-wording"
   | "settings-name"
   | "list-order"
   | "sidebar-row"
@@ -249,6 +292,8 @@ const owners: Record<Rule, string> = {
     "One failure signal: use FailureSignal, not a red chip outline",
   presentation:
     "FailurePresentation is produced by the client presenter, never reconstructed by a view or fixture",
+  "failure-wording":
+    "Failure reasons and next steps are plain; storage APIs, byte counts and quotas belong in Details",
   "settings-name":
     "One surface name: navigation says Settings / servers, matching Settings",
   "list-order":
@@ -677,6 +722,32 @@ export function conventionErrors(
     fail("navigation label");
   }
   for (const node of source.all) {
+    if (rule === "failure-wording") {
+      const inputs = node.type === "ObjectProperty" &&
+          ["reason", "recovery", "actionLabel"].includes(
+            property(node.key) ?? "",
+          )
+        ? [node.value]
+        : node.type === "CallExpression" && source.name(node.callee) === "fail"
+        ? node.arguments.slice(1, 4)
+        : [];
+      for (const input of inputs) {
+        if (
+          source.all.some((child) =>
+            child.start! >= input.start! && child.end! <= input.end! &&
+            /localStorage|\bbytes\b|\b\d+\s*MB\b/i.test(
+              child.type === "StringLiteral"
+                ? child.value
+                : child.type === "TemplateElement"
+                ? child.value.raw
+                : "",
+            )
+          )
+        ) {
+          fail(`technical failure wording on line ${node.loc?.start.line}`);
+        }
+      }
+    }
     if (rule === "list-order") {
       const orderingOwner =
         /packages\/client\/(?:stable-order|tabs|inbox|project-projection|server-resources|session-tree|index)\.ts$/
@@ -974,6 +1045,29 @@ function staticText(source: Source, node: t.Node): string | undefined {
   }
   return source.string(value);
 }
+
+Deno.test("UI convention: failure wording rejects diagnostics outside Details", () => {
+  for (
+    const text of [
+      'const facts = {reason: "localStorage is full"};',
+      "const facts = {recovery: `Free 5 MB (${bytes} bytes)`};",
+      'fail(target, "Could not save 123 bytes", "Retry", "Saving");',
+    ]
+  ) {
+    assert(
+      conventionErrors("failure-wording", "Fixture.ts", text).length > 0,
+      text,
+    );
+  }
+  assertEquals(
+    conventionErrors(
+      "failure-wording",
+      "Fixture.ts",
+      'const facts = {reason: "Storage is full", recovery: "Retry", details: "localStorage: 123 bytes, 5 MB quota"};',
+    ),
+    [],
+  );
+});
 
 Deno.test("UI convention: list ordering rejects activity/state keys and accepts saved moves and creation", () => {
   for (

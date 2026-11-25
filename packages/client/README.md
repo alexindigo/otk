@@ -100,12 +100,18 @@ viewed server/project.
 
 Sessions mounts its measured hierarchy after its demanded list page and the
 project's inbox baseline agree. Its page/query resource requests source-wide
-search and older pages near the acquired end, retains last-good rows while
+search and older pages near the projected end, retains last-good rows while
 loading, and acquires necessary ancestor context by key. Same-project
 visible-row lease changes keep readiness and keyed row DOM, including focus and
 retained scroll anchors. Query replacement and reconnect fence retired request
 identities, epochs and revisions. Child navigation follows the same bounded list
 cursor.
+
+List advancement borrows the current hierarchy/task/stable-order projection from
+ServerResources, including after request settlement. Native activity-page order
+never defines the visible paging frontier. Standalone lists can use their source
+order; projected consumers supply the current visible-order accessor at the same
+viewport boundary.
 
 Changing tasksFollowParent sends the new view before refreshing hierarchy list
 owners. Active lists replace their reads; inactive cached lists become dirty
@@ -539,6 +545,9 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Same-authority newest-page reconciliation retains acquired messages preceding
+its covered suffix. Covered absences, explicit removals, a complete source page
+and changed epoch or transcript version still retire their authoritative scope.
 Replacement pages and recovery parts preserve last-good unfinished text when
 native source coverage is shorter or empty. The existing stream stamp carries
 optional UTF-16 `sourceLength`, so Markdown presentation changes do not
@@ -1194,16 +1203,15 @@ target and draft effects run. There is no browser failure deadline for that
 publication wait; selection/disposal retires the observation. RPC admission
 never substitutes for the consumer seeing the result.
 
-The hierarchy owner also exports `sessionFamily`, `familyTask` and
-`familySelection`. Shell's location projection intentionally matches only the
-requested ID and the selected root without filtering directories; its task
-membership predicate uses full ancestry and the indexed directory. These remain
-distinct call shapes of the same pure task projection.
+The hierarchy helpers export `sessionFamily`, `familyTask` and
+`familySelection`. `familyTask` is a compatibility lookup of raw saved
+membership, not a task-identity authority. Shipped session actions borrow the
+same scoped tab partition as the strip, crumbs and Sessions for task labels and
+membership.
 
-Family membership resolves the nearest grouped identity before task order. Tab
-preview, accepted metadata reconciliation and remembered-session validation
-share that projection, so late task/ancestry data cannot strand a helper in an
-idle phantom or replace the viewed identity with its root.
+Tab preview, accepted metadata reconciliation and remembered-session validation
+share human-root ownership. Late task/ancestry data cannot strand a helper in an
+independent phantom or replace the viewed identity with its root.
 
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,
@@ -1352,28 +1360,33 @@ virtual session-row continuation flags from the complete projected preorder,
 never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
-`update({directory, entries, inbox})` and exposes task, mandatory phantom and
-single-preview tabs. Every ungrouped mandatory session, including a child, has
-its own phantom and lamp. Helper navigation selects the checkout-local display
-root or owning task; foreign parents are breadcrumb links. Native family
-identity, local anchors and task ownership come from SessionHierarchy;
-standalone consumers use the same neutral projector. `tasksFollowParent`
-defaults off and crosses server connections through the view, not by rewriting
-stored membership or native paths. `select`, `preview`, `pin` (also the
-double-click action), `rename(sessionID, title, callback)` and
-`send(sessionID, callback)` own tab transitions. Required activity tabs never
-disappear when a preview is replaced; an idle/seen selected phantom remains
-until selection leaves. Inputs remain owned by their index/metadata models, and
-tabs never delete sessions. Concurrent pins share promotion; late completion
-cannot steal a newer selection. `belongsToTab(tabID, sessionID)` borrows the
-exact supervision membership for lamp presentation: a task's owned sessions, or
-a phantom's own session. Consumers do not reconstruct it from raw ancestry.
+`update({directory, entries, inbox})` and exposes saved task and human-root
+phantom groups. `projectTabGroups` is the task-identity owner: helpers belong to
+their proven human root's group, never an independent activity/selection group.
+Legacy helper-only task records cannot split that group. Unresolved or cyclic
+ancestry cannot establish a task identity; Sessions retains those rows. Group
+member sets are disjoint, including quiet descendants. Selection, remembered
+views, lamps, breadcrumbs and metadata demand borrow this partition. Opening a
+helper keeps its exact view but selects the human group's tab. Pin and send
+promote that root, never the helper; helper rename is not task promotion. Native
+ancestry comes from SessionHierarchy. `tasksFollowParent` defaults off and
+crosses server connections through the view, not by rewriting stored membership
+or native paths. `select`, `preview`, `pin` (also the double-click action),
+`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
+transitions. Required activity tabs never disappear when a preview is replaced;
+an idle/seen selected phantom remains until selection leaves. Inputs remain
+owned by their index/metadata models, and tabs never delete sessions. Concurrent
+pins share promotion; late completion cannot steal a newer selection.
+`belongsToTab(tabID, sessionID)` borrows complete group membership for lamp
+presentation, including quiet descendants. The task lamp rolls up its members;
+each session crumb retains its own session state (D35). Consumers do not
+reconstruct membership from raw ancestry.
 
 Directly selecting a validated phantom preserves that exact tab and viewed
-session across metadata updates. Helper preview/navigation still uses its local
-display root or owning task. Breadcrumbs borrow complete ancestry context and
-insert foreign links relative to their displayed ancestors and descendants,
-preserving explicit local member order even when intermediate links are quiet.
+session across metadata updates. Preview and reconciliation share that same
+group selection. Breadcrumbs borrow complete ancestry context and insert foreign
+links relative to their displayed ancestors and descendants, preserving explicit
+local member order even when intermediate links are quiet.
 
 `crumbs()` presents the complete path to the open session followed by working
 helpers of its task, in session start order, without duplicate path identities.
@@ -1399,29 +1412,41 @@ lookup). Tab commands read current inputs before validation, so a deferred
 rendering effect cannot reject a newly available tab. Pin/send resolve missing
 session metadata without waiting for index replication; concurrent calls share
 resolution and promotion, and validate the invocation's project and session
-identity before acting. `TabSession` contains only identity, directory and
-title: promotion never requires a replicated status/attention row. `update`
-remains the view-invalidation port and the input port for consumers that update
-synchronously.
+identity before acting. `TabSession` contains identity, directory, title and
+parent identity: promotion never requires a replicated status/attention row.
+`update` remains the view-invalidation port and the input port for consumers
+that update synchronously.
 
 Tab state also exposes its selected `sessionID` and an input `revision` for
-reactive bindings. `sessionFor(taskID)` resolves the remembered member/helper or
-first member; `select(selection, sessionID?)` keeps that session inside its
-task. `createTaskActions(rpc, directory)` captures server/project ownership for
-task editors before asynchronous interaction. `contextMeter(messages, catalog?)`
-uses the latest reported assistant token footprint (including reasoning and
-caches). Charged costs belong exclusively to the usage owner. When the catalog
-reports a finite positive context limit for that exact assistant provider/model,
-it also supplies the limit and a clamped fill fraction; unknown windows stay
-unknown. The session's shared catalog loads independently of the transcript and
-rejects stale results; refresh errors retain last good metadata. The meter binds
-the owner's whole-session reported cost directly, independently of its
-latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` preserves
-explicit membership order and adds working, blocked and unseen-finished
-descendants of every member. A finished helper retires only once acknowledged.
-Traversal is iterative, cycle-safe and stops at another task's explicit
-membership. Helper URLs retain their owning task; removing membership preserves
-the viewed helper under its top-level parent's phantom task.
+reactive bindings. `sessionFor(taskID)` resolves a still-owned remembered
+member, then the first projected root, then the first projected member when no
+root is local. A foreign ancestor link is never a default member.
+`select(selection, sessionID?)` keeps that session inside its task.
+`createTaskActions(rpc, directory)` captures server/project ownership for task
+editors before asynchronous interaction. `contextMeter(messages, catalog?)` uses
+the latest reported assistant token footprint (including reasoning and caches).
+Charged costs belong exclusively to the usage owner. When the catalog reports a
+finite positive context limit for that exact assistant provider/model, it also
+supplies the limit and a clamped fill fraction; unknown windows stay unknown.
+The session's shared catalog loads independently of the transcript and rejects
+stale results; refresh errors retain last good metadata. The meter binds the
+owner's whole-session reported cost directly, independently of its
+latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
+shared partition and preserves explicit membership order. Visible crumbs contain
+explicit task members (or a phantom's own session), mandatory group members and
+the open group member. Quiet helpers retire when no longer open, including quiet
+intermediate members on the open session's ancestry. Mandatory membership
+borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
+Tabs and standalone crumbs share per-entry hierarchy resolution: compatible
+published nodes survive mixed catalogs, while missing or mismatched nodes use
+the neutral projection. An explicit absent task member can pass ownership to a
+present child within its resolved checkout scope; unknown parents cannot create
+phantoms or cross checkout boundaries. `TaskCrumb.kind` distinguishes local
+`member`, orientation `ancestor` and cross-checkout `family` links. Family links
+keep active helpers reachable without inheriting local task membership.
+Traversal is iterative and cycle-safe. Helper URLs retain native ancestry
+independently of selected group; removing task membership preserves the human
+group's phantom while its helpers need attention.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;
@@ -1432,11 +1457,10 @@ Repeating an intent is idempotent; adding a member owned by another task still
 rejects rather than moving it implicitly.
 
 `sessionTree(entries, tasks, directory, query?)` projects ordered task groups
-followed by “Not in a task”, with parent/child depth. Helpers inherit the
-nearest explicitly grouped ancestor; explicit helper membership takes
-precedence. Title search retains matching ancestor paths, while missing parents
-and malformed cycles cannot hide sessions. Keep each server's entries separate
-at the caller.
+followed by “Not in a task”, with parent/child depth. Helpers inherit the same
+human-root task partition; helper membership never creates a new heading. Title
+search retains matching ancestor paths, while missing parents and malformed
+cycles cannot hide sessions. Keep each server's entries separate at the caller.
 
 Hierarchy construction indexes parents, explicit membership, inherited ownership
 and child adjacency once, then walks iteratively. Deep chains cannot overflow

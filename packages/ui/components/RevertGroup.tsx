@@ -3,6 +3,7 @@ import "./RevertGroup.css" with { type: "text" };
 import { createMemo, type Element, For, Show } from "solid-js";
 import {
   type ActivityGroup as Group,
+  type BranchHistory,
   errorFeedback,
   savedBranchProjection,
   type SessionRevert,
@@ -16,6 +17,8 @@ import Clock from "./Clock.tsx";
 import { CloseIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import FailureContent from "./FailureContent.tsx";
+import { BranchCopyRecovery } from "./SavedBranches.tsx";
+import FittedActions from "./FittedActions.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
@@ -42,6 +45,7 @@ export default function RevertGroup(props: {
   group: Group;
   state: SessionRevertState;
   owner?: SessionRevert;
+  history?: BranchHistory;
   prefs: Preferences;
   target?: {
     sidecarId: string;
@@ -89,8 +93,9 @@ export default function RevertGroup(props: {
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
         failed={!!failure() && !props.state.dismissed}
+        wrapActions
         icon={RevertIcon}
-        label={() => (
+        label={(open) => (
           <span class="otk-revert-heading-content">
             <ChromeMeta class="otk-revert-label otk-control-label">
               <span>Reverted from</span>
@@ -104,7 +109,9 @@ export default function RevertGroup(props: {
                 {label()}
               </span>
             </ChromeMeta>
-            <Show when={!props.state.dismissed && failure()?.failure}>
+            <Show
+              when={!open() && !props.state.dismissed && failure()?.failure}
+            >
               {(value) => (
                 <ChromeMeta
                   class="otk-control-label otk-revert-reason"
@@ -124,7 +131,7 @@ export default function RevertGroup(props: {
             </Show>
           </span>
         )}
-        trailing={() => (
+        trailing={(open) => (
           <Show when={!props.state.dismissed}>
             <Show when={pending()}>
               <ActivityIndicator
@@ -147,55 +154,55 @@ export default function RevertGroup(props: {
             </Show>
             <Show when={props.state.phase === "saved"}>
               <ChromeMeta>Copy saved</ChromeMeta>
-              <Show when={props.onOpenCopy}>
-                <button
-                  type="button"
-                  class="otk-pill"
-                  onClick={() => props.onOpenCopy?.()}
-                >
-                  Open copy
-                </button>
-              </Show>
             </Show>
-            <Show
-              when={props.state.phase === "staged" && props.state.copyRemoved}
-            >
-              <button
-                type="button"
-                class="otk-pill"
-                onClick={() => void props.owner?.retry()}
-              >
-                Save copy
-              </button>
-            </Show>
-            <Show when={props.state.phase === "failed" && props.state.record}>
-              <button
-                type="button"
-                class="otk-pill"
-                onClick={() => void props.owner?.retry()}
-              >
-                Retry
-              </button>
-            </Show>
-            <button
-              type="button"
-              class="otk-pill otk-revert-restore"
-              aria-label="Restore conversation"
-              disabled={pending() || !props.owner}
-              onClick={() => void props.owner?.restore()}
-            >
-              Restore
-            </button>
-            <button
-              type="button"
-              class="otk-icon-button"
-              aria-label="Dismiss revert"
-              title="Dismiss revert"
-              disabled={pending() || !props.owner}
-              onClick={() => props.owner?.dismiss()}
-            >
-              <CloseIcon />
-            </button>
+            <FittedActions
+              inline
+              items={[
+                ...(props.state.phase === "saved" && props.onOpenCopy
+                  ? [{
+                    key: "open",
+                    label: "Open copy",
+                    run: () => props.onOpenCopy?.(),
+                  }]
+                  : []),
+                ...(props.state.phase === "staged" && props.state.copyRemoved
+                  ? [{
+                    key: "save",
+                    label: "Save copy",
+                    run: () => {
+                      void props.owner?.retry();
+                    },
+                  }]
+                  : []),
+                ...(!open() && props.state.phase === "failed" &&
+                    props.state.record
+                  ? [{
+                    key: "retry",
+                    label: "Retry",
+                    run: () => {
+                      void props.owner?.retry();
+                    },
+                  }]
+                  : []),
+                ...(!pending() && props.owner
+                  ? [{
+                    key: "restore",
+                    label: "Restore",
+                    class: "otk-revert-restore",
+                    ariaLabel: "Restore conversation",
+                    run: () => {
+                      void props.owner?.restore();
+                    },
+                  }, {
+                    key: "dismiss",
+                    label: "Dismiss revert",
+                    icon: CloseIcon,
+                    title: "Dismiss revert",
+                    run: () => props.owner?.dismiss(),
+                  }]
+                  : []),
+              ]}
+            />
           </Show>
         )}
         body={() => (
@@ -206,9 +213,13 @@ export default function RevertGroup(props: {
                   <FailureContent
                     failure={value()}
                     placement="record"
+                    expanded
                     signal={false}
                   />
                 )}
+              </Show>
+              <Show when={failure()?.failure && props.history?.state.recovery}>
+                <BranchCopyRecovery owner={props.history!} />
               </Show>
               <For each={props.state.record?.files}>
                 {(file) => (

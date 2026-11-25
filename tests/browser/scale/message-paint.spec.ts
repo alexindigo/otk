@@ -31,10 +31,10 @@ for (let repetition = 0; repetition < 5; repetition++) {
         landing = initial.manifest.sessions[251],
         openMain = `[data-project=${
           JSON.stringify(selected.directory)
-        }] .otk-project-open`,
+        }] .otk-project-attention`,
         openLanding = `[data-project=${
           JSON.stringify(landing.directory)
-        }] .otk-project-open`;
+        }] .otk-project-attention`;
       await page.setViewportSize({ width: 1280, height: 900 });
       await measureMessagePaint(
         { send: (_method, { source }) => page.addInitScript(source) },
@@ -43,6 +43,12 @@ for (let repetition = 0; repetition < 5; repetition++) {
       );
       await page.goto(`${state.url}/#/local/${landing.id}`);
       await expect(page.locator("textarea[name=prompt]")).toBeVisible();
+      // This profile deliberately uses the compact rail. Its neutral lamp is
+      // the visible Open project control; the expanded name button is hidden.
+      await expect(page.locator(openMain)).toHaveAccessibleName(
+        "Open project project",
+      );
+      await expect(page.locator(openMain)).toBeVisible();
       await expect.poll(() =>
         page.evaluate("messageMeasurements.snapshots.length > 0")
       ).toBe(true);

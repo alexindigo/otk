@@ -8,6 +8,7 @@ import {
   createState,
   emptyContent,
   emptyDraft,
+  errorFeedback,
   type SessionState,
 } from "@otk/client";
 import type { MessagePage } from "@otk/protocol";
@@ -164,6 +165,7 @@ function fixture() {
   return {
     ...f,
     history,
+    revertOwner,
     actions,
     drafts,
     held,
@@ -178,11 +180,48 @@ function fixture() {
     stage: () => {
       staged = true;
     },
-    quota: () => {
-      quota = true;
+    quota: (value = true) => {
+      quota = value;
     },
   };
 }
+
+Deno.test("background archive: group and notice Retry share retained capture and publish the same outcome", async () => {
+  const f = fixture();
+  f.quota();
+  f.held.resolve();
+  let retries = 0;
+  const retry = f.history.retryCopy;
+  f.history.retryCopy = () => {
+    retries++;
+    return retry();
+  };
+  await f.revert();
+  await turns();
+  assertEquals(f.revertOwner.state.phase, "failed");
+  assertEquals(
+    errorFeedback(f.revertOwner.state.error)?.diagnosticID,
+    errorFeedback(f.history.state.error)?.diagnosticID,
+  );
+  await f.revertOwner.retry();
+  assertEquals(retries, 1);
+  assertEquals(f.revertOwner.state.phase, "failed");
+  assertEquals(
+    errorFeedback(f.revertOwner.state.error)?.diagnosticID,
+    errorFeedback(f.history.state.error)?.diagnosticID,
+  );
+  f.quota(false);
+  await f.history.retryCopy();
+  assertEquals(retries, 2);
+  assertEquals(f.revertOwner.state.phase, "saved");
+  assertEquals(f.history.state.recovery, undefined);
+  assertEquals(
+    f.history.state.branches[0].drafts[0].value.input,
+    "Original unsent draft",
+  );
+  f.revertOwner.dispose();
+  f.resources.stop();
+});
 
 Deno.test("background archive: held save cannot delay reversible Revert, but committing Send joins it", async () => {
   const f = fixture();
@@ -261,11 +300,20 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     assert(feedback);
     const failure = feedback.failure;
     assert(failure);
-    assertEquals(failure.action, "Saving an earlier branch");
+    assertEquals(failure.action, "Saving the earlier conversation");
     assertEquals(failure.value.facts?.target?.sessionID, target.sessionID);
     assertEquals(failure.target, { label: "" });
-    assert(failure.reason.includes("localStorage is full"));
-    assert(failure.recovery?.includes("Delete a saved branch"));
+    assertEquals(
+      failure.reason,
+      "The earlier conversation couldn't be saved: storage is full.",
+    );
+    assert(failure.details?.includes("localStorage is full"));
+    assert(failure.details?.includes("bytes"));
+    assert(failure.details?.includes("about 5 MB per origin"));
+    assertEquals(
+      failure.recovery,
+      "Free space, then Retry, or Keep without a saved copy.",
+    );
     assertEquals(
       f.options.feedback(target).current()?.diagnosticID,
       failure.value.diagnosticID,

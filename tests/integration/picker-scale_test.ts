@@ -129,6 +129,7 @@ Deno.test({
           results,
         };
         console.log(JSON.stringify(evidence, null, 2));
+        await Deno.mkdir(".test-state/do", { recursive: true });
         await Deno.writeTextFile(
           ".test-state/do/inv-p-native-measurement.json",
           JSON.stringify(evidence, null, 2),

@@ -581,6 +581,9 @@ export default function ProjectTabs(props: {
                     <button
                       type="button"
                       data-overflow-target={id()}
+                      data-crumb-kind={crumbs().find((crumb) =>
+                        crumb.id === id()
+                      )?.kind}
                       ref={contextTarget(() => sessionTarget(id()))}
                       data-otk-selection="vertical"
                       {...selection({
@@ -590,7 +593,7 @@ export default function ProjectTabs(props: {
                       onClick={() => run(openCrumb(id()))}
                     >
                       <SelectionContent>
-                        {title(id())}
+                        <span class="otk-crumb-title">{title(id())}</span>
                       </SelectionContent>
                     </button>
                   )}
@@ -605,14 +608,14 @@ export default function ProjectTabs(props: {
                   sessionID: crumb().id,
                 }, "chip");
               const Control = dynamic(() =>
-                editing() ? "div" : crumb().external ? "a" : "button"
+                editing() ? "div" : crumb().kind === "ancestor" ? "a" : "button"
               );
               return (
                 <>
                   {(() => {
                     const native = nativeAttributes(() => ({
                       onClick: (event: MouseEvent) => {
-                        if (crumb().external) {
+                        if (crumb().kind === "ancestor") {
                           if (
                             event.button !== 0 || event.ctrlKey ||
                             event.metaKey || event.shiftKey || event.altKey
@@ -630,8 +633,10 @@ export default function ProjectTabs(props: {
                           </span>
                         </Show>
                         <Control
-                          type={crumb().external ? undefined : "button"}
-                          href={crumb().external
+                          type={crumb().kind === "ancestor"
+                            ? undefined
+                            : "button"}
+                          href={crumb().kind === "ancestor"
                             ? hashFor({
                               sidecarId: props.project.sidecarId,
                               sessionID: crumb().id,
@@ -660,6 +665,7 @@ export default function ProjectTabs(props: {
                           data-helper={String(crumb().helper)}
                           data-depth={crumb().depth}
                           data-crumb={crumb().id}
+                          data-crumb-kind={crumb().kind}
                           aria-label={`${
                             props.session?.id === crumb().id
                               ? props.session.title
@@ -767,12 +773,10 @@ export default function ProjectTabs(props: {
         </output>
       </div>
       <Show
-        when={crumbs().some((crumb) =>
-          props.rename?.matches({
-            sidecarId: props.project.sidecarId,
-            sessionID: crumb.id,
-          }, "chip")
-        )}
+        when={crumbs().some((crumb) => props.rename?.matches({
+          sidecarId: props.project.sidecarId,
+          sessionID: crumb.id,
+        }, "chip"))}
       >
         <div class="otk-crumb-feedback">
           <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />

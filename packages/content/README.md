@@ -6,6 +6,11 @@ buffers. No harness, sidecar, database, browser or UI is needed. OTK package
 dependencies point only to `@otk/protocol`; parsing uses Marked 17.0.6 and diff
 8.0.4.
 
+The tokenizer treats EOF as a line ending when a fence interrupts a paragraph,
+without inventing a newline in source coordinates. Complete and streaming parses
+share that CommonMark boundary. Missing opening fences are never inferred from
+intent; a genuinely empty fence pair remains empty.
+
 ## Public API
 
 Import only `@otk/content`; `mod.ts` is the single public entry point. Output

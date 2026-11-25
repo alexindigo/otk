@@ -765,6 +765,28 @@ export function createTranscript(
         nextClock = frame.clock;
         replay.push(frame);
       }
+      // A newest page covers only its suffix, not already acquired history.
+      // Retain the uncovered prefix only under the exact same source authority;
+      // a complete page, new epoch or boundary revision remains a replacement.
+      const prefix = hasBaseline && page.older !== null && messages[0] &&
+          state.clock?.epoch === page.clock.epoch && state.version &&
+          compareTranscriptVersion(state.version, page.version) === 0
+        ? projection.messages().filter((message) =>
+          compareMessages(message, messages[0]) < 0
+        )
+        : [];
+      const retainedIDs = new Set(prefix.map((message) => message.id));
+      const boundaries = prefix.flatMap((message) => {
+        const boundary = projection.boundary(
+          message.role === "assistant"
+            ? message.replyTo ?? message.id
+            : message.id,
+        );
+        return boundary ? [boundary] : [];
+      });
+      const recoveringPrefix = state.recovering.filter((value) =>
+        retainedIDs.has(value.messageID)
+      );
       clock = nextClock;
       authority = minimum = page.version;
       cursor = page.older;
@@ -798,17 +820,20 @@ export function createTranscript(
       hasBaseline = true;
       initialResync = false;
       setState((draft) => {
-        projection.replace(messages);
+        projection.replace([...prefix, ...messages]);
         projection.helpers(helper);
         projection.boundaries(
-          Object.values(page.turns).map((turn) => turn.boundary),
+          [
+            ...boundaries,
+            ...Object.values(page.turns).map((turn) => turn.boundary),
+          ],
         );
         let content: ContentState = attach({
           ...contentMetadata(draft.content),
           revert: info.revert || null,
           error: info.error,
           errorState: info.errorState,
-          recovering: page.recovering,
+          recovering: [...recoveringPrefix, ...page.recovering],
           selection: info.selection,
         });
         let latestPrompt = page.prompt;

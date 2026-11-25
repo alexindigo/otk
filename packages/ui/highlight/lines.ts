@@ -212,6 +212,18 @@ export class CodeProjection {
     return group;
   }
 
+  /** Decorations may describe source bytes, never supply different content. */
+  verifySource(start: number, tokens: HighlightToken[]) {
+    if (!Number.isInteger(start) || start < 0 || start > this.source.length) {
+      throw new Error("Invalid highlight source offset");
+    }
+    for (const token of tokens) {
+      if (!this.source.startsWith(token.content, start)) {
+        throw new Error("Highlight tokens do not match source");
+      }
+      start += token.content.length;
+    }
+  }
   /** Reject a stale generation before accepting its suffix/recall. */
   *accept(lang: string, text: string, from: number, tokens: HighlightToken[]) {
     if (lang !== this.lang || !this.source.startsWith(text)) return;
@@ -219,6 +231,7 @@ export class CodeProjection {
       throw new Error("Invalid recall");
     }
     let offset = this.#tokens[from]?.start ?? this.#tokens.at(-1)?.end ?? 0;
+    this.verifySource(offset, tokens);
     const replaced = this.#tokens.at(-1)?.end ?? offset;
     this.#tokens.length = from;
     this.#mark(offset, replaced);
@@ -263,6 +276,7 @@ export class CodeProjection {
     tokens: HighlightToken[],
   ): HighlightToken[][] | undefined {
     if (start !== group.start) return;
+    this.verifySource(start, tokens);
     const positions: PositionedToken[] = [];
     let offset = start;
     for (const token of tokens) {

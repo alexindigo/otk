@@ -13,6 +13,8 @@ export default function FailureContent(props: {
   action?: Feedback["action"];
   onReveal?(messageID: string): void;
   compact?: boolean;
+  /** An expanded disclosure keeps the full reason visible at every width. */
+  expanded?: boolean;
   time?: number;
   /** The surrounding row already supplies the action and target heading. */
   placement?: "record";
@@ -62,6 +64,7 @@ export default function FailureContent(props: {
         "otk-failure-content",
         "otk-disclosure-layout",
         compact() ? "is-compact" : "",
+        props.expanded ? "is-expanded" : "",
         props.failure.reference ? "is-reference" : "",
         props.placement === "record" ? "is-record" : "",
         props.subgrid ? "uses-subgrid" : "",
@@ -148,6 +151,11 @@ export default function FailureContent(props: {
                     <Clock at={props.time!} class="otk-failure-time" />
                   </Show>
                   {diagnostic()}
+                  <Show when={props.failure.details}>
+                    {(details) => (
+                      <p class="otk-failure-diagnostic">{details()}</p>
+                    )}
+                  </Show>
                 </ScrollRegion>
               </Show>
             </div>

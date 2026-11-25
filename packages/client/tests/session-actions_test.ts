@@ -611,7 +611,7 @@ Deno.test("session actions abort and replies use invocation-current act and neve
   f.resources.stop();
 });
 
-Deno.test("session actions preserve root-only location and full-ancestry directory-scoped inTask", () => {
+Deno.test("session actions location and membership share the scoped human task owner", () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("local", [
     shellEntry("root"),
@@ -619,25 +619,38 @@ Deno.test("session actions preserve root-only location and full-ancestry directo
     shellEntry("leaf", "/p", "middle"),
   ]);
   const metadata = f.resources.inbox("local").state.inbox;
-  metadata.tasks = [
+  let revision = 0;
+  const tasks = (tasks: typeof metadata.tasks) =>
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "task-identity",
+      revision: revision++,
+      summaryRevision: 0,
+      inbox: { ...metadata, tasks },
+    });
+  tasks([
     shellTask("middle-task", ["middle"]),
     shellTask("foreign-root", ["root"], "/other"),
-  ];
+  ]);
   const target = { sidecarId: "local", sessionID: "leaf", rootID: "root" };
   assertEquals(
     actions.location(target, "leaf"),
-    "p, foreign-root",
-    "location deliberately ignores directory and middle ancestry",
+    "p, leaf",
+    "foreign metadata and helper-only records cannot define task identity",
   );
   assertEquals(
     actions.inTask(target),
-    true,
-    "inTask finds middle ancestry in the same directory",
+    false,
+    "helper-only membership cannot create an independent task",
   );
-  metadata.tasks = [shellTask("foreign-root", ["root"], "/other")];
+  tasks([shellTask("foreign-root", ["root"], "/other")]);
   assertEquals(actions.inTask(target), false);
-  assertEquals(actions.location(target, "missing"), "foreign-root");
-  metadata.tasks = [];
+  assertEquals(actions.location(target, "missing"), "");
+  tasks([shellTask("human-root", ["root"])]);
+  assertEquals(actions.location(target, "leaf"), "p, human-root");
+  assertEquals(actions.inTask(target), true);
+  assertEquals(actions.location(target, "missing"), "human-root");
+  tasks([]);
   assertEquals(actions.location(target, "leaf"), "p, leaf");
   assertEquals(actions.family({ ...target, rootID: "middle" }), target);
   f.session.state.selection = target;

@@ -787,6 +787,32 @@ export function createServerResources(o: {
     }
     return model;
   };
+  const sessionRows = (
+    p: ProjectSelection,
+    query?: string,
+  ): SessionListRow[] => {
+    const lists = listsFor(p, query),
+      key = JSON.stringify([p.sidecarId, p.directory]);
+    let tree = trees.get(key);
+    if (!tree) trees.set(key, tree = createSessionTree());
+    const model = tabs(p);
+    model.update(tabInput(p));
+    const taskOrder = model.tabs().map((tab) => tab.id);
+    return model.orderRows(tree.rows(
+      [...new Map(
+        lists.flatMap((list) =>
+          listOwner(p.sidecarId).structures(list, listContext(p))
+        ).map((entry) => [entry.id, entry]),
+      ).values()],
+      inbox(p.sidecarId).state.inbox.tasks,
+      p.directory,
+      query,
+      projectOwner(p.sidecarId).scopes(
+        projectOwner(p.sidecarId).resolve(p.directory),
+      ),
+      taskOrder,
+    ));
+  };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
     if (
@@ -939,7 +965,13 @@ export function createServerResources(o: {
       sendView();
       listOwner(project.sidecarId).activate(listInputs(project, query));
       for (const list of listsFor(project, query)) {
-        listOwner(project.sidecarId).viewport(list, rows);
+        listOwner(project.sidecarId).viewport(
+          list,
+          rows,
+          () =>
+            sessionRows(project, query).filter((row) => row.kind === "session")
+              .map((row) => row.key),
+        );
       }
     },
     async projectSession(project, preferred, attention) {
@@ -1061,29 +1093,7 @@ export function createServerResources(o: {
             : "",
         ).find((page) => page.loading) ?? listsFor(p)[0],
       ),
-    sessionRows: (p, query) => {
-      const lists = listsFor(p, query),
-        key = JSON.stringify([p.sidecarId, p.directory]);
-      let tree = trees.get(key);
-      if (!tree) trees.set(key, tree = createSessionTree());
-      const model = tabs(p);
-      model.update(tabInput(p));
-      const taskOrder = model.tabs().map((tab) => tab.id);
-      return model.orderRows(tree.rows(
-        [...new Map(
-          lists.flatMap((list) =>
-            listOwner(p.sidecarId).structures(list, listContext(p))
-          ).map((entry) => [entry.id, entry]),
-        ).values()],
-        inbox(p.sidecarId).state.inbox.tasks,
-        p.directory,
-        query,
-        projectOwner(p.sidecarId).scopes(
-          projectOwner(p.sidecarId).resolve(p.directory),
-        ),
-        taskOrder,
-      ));
-    },
+    sessionRows,
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);

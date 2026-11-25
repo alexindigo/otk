@@ -2,9 +2,64 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { prompt, scrollTranscript } from "../../pages/transcript.ts";
 import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
 import { pick, rightClick } from "../../pages/menus.ts";
+import type { Locator, Page } from "@playwright/test";
+
+const plainReason =
+  "The earlier conversation couldn't be saved: storage is full.";
+async function failureDetails(surface: Locator) {
+  await expect(surface.locator(".otk-failure-detail-body")).toHaveCount(0);
+  await expect(surface).not.toContainText(/localStorage|\bbytes\b|5 MB/);
+  await surface.getByRole("button", { name: "Details", exact: true }).click();
+  const details = surface.locator(".otk-failure-detail-body");
+  await expect(details).toContainText("Browser localStorage is full");
+  await expect(details).toContainText(/require [\d,]+ bytes/);
+  await expect(details).toContainText("UTF-16, including the key");
+  await expect(details).toContainText("about 5 MB per origin");
+  await expect(details).toContainText("cannot fit here");
+  await expect(details).toContainText(
+    "Older saved conversations were not removed",
+  );
+  await surface.getByRole("button", { name: "Details", exact: true }).click();
+}
+async function noClippedRecovery(page: Page) {
+  const row = page.locator(".otk-composer-notice .otk-fitted-actions");
+  const visible = () =>
+    row.locator(".otk-overflow-items button:visible")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const box = button.getBoundingClientRect(),
+            clip = button.closest(".otk-overflow-items")!
+              .getBoundingClientRect();
+          return {
+            text: button.textContent!.trim(),
+            fits: button.scrollWidth <= button.clientWidth &&
+              box.left >= clip.left - 1 && box.right <= clip.right + 1,
+          };
+        })
+      );
+  await expect.poll(
+    async () => (await visible()).every((control) => control.fits),
+    { message: "All visible recovery controls fit whole after layout settles" },
+  ).toBe(true);
+  const keep = row.getByRole("button", {
+    name: "Keep without a saved copy",
+    exact: true,
+  });
+  if (!await keep.isVisible()) {
+    await row.getByRole("button", { name: "More actions", exact: true })
+      .click();
+    await expect(
+      page.getByRole("menu").getByRole("menuitem", {
+        name: "Keep without a saved copy",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
+}
 
 test.use({
   profile: "revert-native",
@@ -278,11 +333,21 @@ test(
     await expect(alert).toContainText("Reverted from");
     await expect(alert).not.toContainText("Quota-protected branch");
     await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(alert).toContainText("were not saved");
-    await expect(alert).toContainText("localStorage is full");
+    await expect(alert).toContainText(plainReason);
+    await expect(alert).not.toContainText(/localStorage|\bbytes\b|5 MB/);
     await alert.locator(".otk-record-group-toggle").click();
-    await alert.getByRole("button", { name: "Details", exact: true }).click();
-    await expect(alert).toContainText("Delete a saved branch");
+    await expect(alert.locator(".otk-revert-reason")).toHaveCount(0);
+    await expect(alert.locator(".otk-failure-reason:visible")).toHaveCount(1);
+    await page.setViewportSize({ width: 760, height: 1000 });
+    await expect(alert.locator(".otk-revert-reason")).toHaveCount(0);
+    await expect(alert.locator(".otk-failure-reason:visible")).toHaveText(
+      plainReason,
+    );
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await expect(alert).toContainText(
+      "Free space, then Retry, or Keep without a saved copy.",
+    );
+    await failureDetails(alert);
     expect(
       (await state.product("session.get", { sessionID: source.id })).revert,
     ).toBeTruthy();
@@ -296,6 +361,19 @@ test(
     );
     await expect(alert).toHaveCount(0);
     await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
+      plainReason + " The replacement was not sent.",
+    );
+    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+      "Save copy, Send anyway, or Cancel.",
+    );
+    await failureDetails(choice);
+    await choice.getByRole("button", { name: "Save copy", exact: true })
+      .click();
+    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+      "Save copy, Send anyway, or Cancel.",
+    );
+    await failureDetails(choice);
     await expect(page.getByRole("button", { name: "Save copy", exact: true }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "Send anyway", exact: true }))
@@ -354,7 +432,7 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
   const group = page.locator(".otk-revert-group");
-  await expect(group).toContainText("localStorage is full");
+  await expect(group).toContainText(plainReason);
   await expect(group).not.toContainText("replacement was not sent");
   const input = page.locator("textarea[name=prompt]");
   await input.fill("Keep this edited replacement");
@@ -368,12 +446,18 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
     }),
   ).toBeVisible();
   await expect(page.locator(".otk-composer-notice")).toContainText(
-    "Saving a copy after Restore",
+    "Saving the earlier conversation",
   );
+  await expect(page.locator(".otk-composer-notice .otk-failure-reason:visible"))
+    .toHaveText(plainReason + " The conversation was restored.");
   await expect(page.locator(".otk-composer-notice")).not.toContainText(
     "replacement was not sent",
   );
   await expect(input).toHaveValue("Keep this edited replacement");
+  await expect(page.locator(".otk-composer-notice")).not.toContainText(
+    /\bRestore\b/,
+  );
+  await failureDetails(page.locator(".otk-composer-notice"));
   for (
     const [theme, id] of [["dark", "otk-dark"], ["linen", "otk-light"], [
       "stone",
@@ -393,6 +477,7 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
         document.querySelectorAll(".otk-composer-notice button"),
       )
         .filter((button) =>
+          (button as HTMLElement).offsetParent &&
           ["Retry", "Keep without a saved copy"].includes(
             button.textContent!.trim(),
           )
@@ -414,6 +499,9 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
       path: test.info().outputPath(`restore-copy-failure-${theme}.png`),
       fullPage: true,
     });
+    await page.setViewportSize({ width: 760, height: 1000 });
+    await noClippedRecovery(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
   }
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(
@@ -440,7 +528,7 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.locator('[data-message-command="prompt.revert"]').click();
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
-  await expect(group).toContainText("localStorage is full");
+  await expect(group).toContainText(plainReason);
   await input.fill("Keep this edited replacement");
   await page.getByRole("button", { name: "Restore conversation", exact: true })
     .click();
@@ -508,7 +596,8 @@ test("revert.dismissed-background-failure-keeps-recovery-and-send-consent", {
       exact: true,
     }),
   ).toBeVisible();
-  await expect(notice).toContainText("localStorage is full");
+  await expect(notice).toContainText(plainReason);
+  await failureDetails(notice);
   await expect(notice).not.toContainText("replacement was not sent");
   await notice.getByRole("button", {
     name: "Keep without a saved copy",
@@ -525,3 +614,95 @@ test("revert.dismissed-background-failure-keeps-recovery-and-send-consent", {
   await choice.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(input).toHaveValue("Explicit consent is still required");
 });
+
+test(
+  "revert.narrow-copy-actions-fit-whole-and-overflow-actions-still-restore-and-keep",
+  {
+    tag: ["@revert", "@isolated"],
+  },
+  async ({ isolatedState: state, page }) => {
+    const source = await state.native<{ id: string }>("/session", "POST", {
+      title: "Narrow recovery controls",
+    });
+    await openSession(state, page, source.id);
+    await state.queue(["Earlier conversation retained."]);
+    await prompt(
+      page,
+      "Earlier prompt retained " + "with a long preview ".repeat(30),
+    );
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Earlier conversation retained.",
+    );
+    await expect(page.locator(`[data-session="${source.id}"]`)).toHaveAttribute(
+      "data-status",
+      "idle",
+    );
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith("otk.branch-history")) {
+          throw new DOMException("full", "QuotaExceededError");
+        }
+        original.call(this, key, value);
+      };
+    });
+    await page.locator(".otk-user-bubble").focus();
+    await page.locator('[data-message-command="prompt.revert"]').click();
+    await page.getByRole("button", { name: "Confirm revert", exact: true })
+      .click();
+    const group = page.locator(".otk-revert-group");
+    await expect(group).toHaveAttribute("data-phase", "failed");
+    await expect(
+      group.getByRole("button", { name: "Restore conversation", exact: true }),
+    ).toBeVisible();
+    const input = page.locator("textarea[name=prompt]");
+    await input.fill("Keep this narrow draft");
+    await page.setViewportSize({ width: 760, height: 1000 });
+    const header = group.locator(".otk-record-group-heading");
+    const fit = () =>
+      header.locator(".otk-fitted-actions button:visible").evaluateAll((
+        buttons,
+      ) =>
+        buttons.map((button) => {
+          const box = button.getBoundingClientRect(),
+            lane = button.closest(".otk-record-group-heading")!
+              .getBoundingClientRect();
+          return button.scrollWidth <= button.clientWidth &&
+            box.left >= lane.left - 1 && box.right <= lane.right + 1;
+        })
+      );
+    await expect.poll(async () => (await fit()).every(Boolean), {
+      message: "All visible header controls fit whole after layout settles",
+    }).toBe(true);
+    const restore = header.getByRole("button", {
+      name: "Restore conversation",
+      exact: true,
+    });
+    if (await restore.isVisible()) {
+      await restore.click();
+    } else {
+      await header.getByRole("button", { name: "More actions", exact: true })
+        .click();
+      await page.getByRole("menuitem", {
+        name: "Restore conversation",
+        exact: true,
+      }).click();
+    }
+    await expect(group).toHaveCount(0);
+    await scrollTranscript(page, true);
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Earlier conversation retained.",
+    );
+    await expect(input).toHaveValue("Keep this narrow draft");
+    await noClippedRecovery(page);
+    const notice = page.locator(".otk-composer-notice");
+    await notice.getByRole("button", { name: "More actions", exact: true })
+      .click();
+    await page.getByRole("menuitem", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }).click();
+    await expect(notice).toHaveCount(0);
+    await expect(input).toHaveValue("Keep this narrow draft");
+  },
+);

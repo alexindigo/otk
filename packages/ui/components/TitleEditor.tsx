@@ -54,7 +54,19 @@ export default function TitleEditor(
         value={title()}
         readonly={props.owner.state.pending}
         onInput={(event) => setTitle(event.currentTarget.value)}
-        onBlur={() => void props.owner.commit(title())}
+        onBlur={() => {
+          const editing = props.owner.state.editing, value = title();
+          // Keyed moves can natively blur a connected editor. Let rendering and
+          // its retained-focus owner settle before treating that as departure.
+          onSettled(() =>
+            queueMicrotask(() => {
+              if (
+                input.isConnected && document.activeElement !== input &&
+                props.owner.state.editing === editing
+              ) void props.owner.commit(value);
+            })
+          );
+        }}
         onKeyDown={(event) => {
           event.stopPropagation();
           if (event.isComposing) return;

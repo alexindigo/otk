@@ -119,7 +119,8 @@ export async function remainder(
           "Alpha",
         );
         await page.evaluate(`styleTest.fieldFailure('${name}')`);
-        const field = page.locator(`[name=${name}]`);
+        // Select keeps a hidden native value; the visible control owns validity.
+        const field = page.locator(`[name=${name}]:not([type=hidden])`);
         await expect(field).toHaveAttribute("aria-invalid", "true");
         const description = await field.evaluate((el) => {
           const ids = el.getAttribute("aria-describedby")!.split(" ");
@@ -296,7 +297,9 @@ export async function remainder(
       rightView: "sessions",
     });
     await page.goto(state.url + "/#/local/" + content.sessionID);
-    await page.locator("[data-role=assistant] .otk-message-agent").first()
+    await page.locator(
+      "[data-role=assistant] .otk-reply-agent .otk-entity-pill",
+    ).first()
       .scrollIntoViewIfNeeded();
     await page.mouse.move(1, 1);
     const reply = page.locator("[data-role=assistant]").first();
@@ -491,7 +494,8 @@ export async function remainder(
       expect(await copy.boundingBox()).toEqual(slot);
       await state.product("prefs.set", { key: "timestamps", value: true });
       await expect.poll(() =>
-        page.locator(".otk-created-time").evaluateAll((els) =>
+        page.locator(".otk-message-footer time").evaluateAll((els) =>
+          els.length > 0 &&
           els.every((el) => getComputedStyle(el).visibility === "visible")
         )
       ).toBe(true);
@@ -701,24 +705,30 @@ export async function remainder(
           rightCollapsed: true,
           leftCollapsed: false,
         });
-        await expect(page.locator(".otk-tool-error-toggle").first())
+        await expect(
+          page.locator(".otk-tool-line.is-error .otk-failure-details").first(),
+        )
           .toBeVisible();
         expect(
-          await page.locator(".otk-tool-error-toggle").first().evaluate(
-            (action) => {
-              const row = action.parentElement!,
-                summary = row.querySelector(".otk-tool-brief")!,
-                r = row.getBoundingClientRect(),
-                a = action.getBoundingClientRect(),
-                s = summary.getBoundingClientRect();
-              return a.right <= r.right + .5 && s.right <= a.left + .5 &&
-                action.scrollWidth <= action.clientWidth &&
-                summary.getAttribute("title")!.includes(
-                  "every affected consumer",
-                ) && getComputedStyle(summary).textOverflow === "ellipsis" &&
-                summary.scrollWidth > summary.clientWidth;
-            },
-          ),
+          await page.locator(".otk-tool-line.is-error .otk-failure-details")
+            .first().evaluate(
+              (action) => {
+                const row = action.closest(".otk-tool-line")!,
+                  header = row.querySelector(".otk-tool-state")!
+                    .getBoundingClientRect(),
+                  summary = row.querySelector(".otk-tool-brief")!,
+                  r = row.getBoundingClientRect(),
+                  a = action.getBoundingClientRect(),
+                  s = summary.getBoundingClientRect();
+                return a.right <= r.right + .5 &&
+                  s.right <= header.right + .5 && a.top >= header.bottom - .5 &&
+                  action.scrollWidth <= action.clientWidth &&
+                  summary.getAttribute("title")!.includes(
+                    "every affected consumer",
+                  ) && getComputedStyle(summary).textOverflow === "ellipsis" &&
+                  summary.scrollWidth > summary.clientWidth;
+              },
+            ),
         ).toBe(true);
         await labels(page);
         await shot(`labels-transcript-${width}-${theme.id}`);
@@ -746,12 +756,22 @@ export async function remainder(
           await shot(`labels-${kind}-${width}-${theme.id}`);
           await page.keyboard.press("Escape");
         }
-        await page.locator(".otk-tool-error-toggle").first().click();
-        await expect(page.locator(".otk-tool-error[role=alert]").first())
+        await page.locator(".otk-tool-line.is-error .otk-failure-details")
+          .first().click();
+        await expect(
+          page.locator(
+            ".otk-tool-line.is-error .otk-feedback-status[role=alert]",
+          ).first(),
+        )
           .toBeVisible();
+        await expect(
+          page.locator(".otk-tool-line.is-error .otk-failure-detail-body")
+            .first(),
+        ).toBeVisible();
         await labels(page);
         await shot(`labels-error-${width}-${theme.id}`);
-        await page.locator(".otk-tool-error-toggle").first().click();
+        await page.locator(".otk-tool-line.is-error .otk-failure-details")
+          .first().click();
         await page.locator(".otk-tool-toggle").first().focus();
         await page.keyboard.press("Shift+F10");
         await expect(page.locator(":popover-open [role=menu]")).toBeVisible();
@@ -781,22 +801,21 @@ export async function remainder(
         const crowded = await page.locator(".otk-tool-toggle").evaluateAll(
           (els) =>
             els.map((el) => {
-              const row = el.parentElement!,
-                action = row.querySelector(".otk-tool-error-toggle")!,
+              const row = el.closest(".otk-tool-line")!,
+                action = row.querySelector(".otk-failure-details")!,
                 e = el.getBoundingClientRect(),
                 a = action.getBoundingClientRect(),
                 r = row.getBoundingClientRect(),
-                sameRow =
-                  Math.abs((e.top + e.bottom - a.top - a.bottom) / 2) < .5;
+                below = a.top >= e.bottom - .5;
               return {
-                sameRow,
+                below,
                 fits: el.scrollWidth <= el.clientWidth &&
                   e.right <= r.right + .5 && a.right <= r.right + .5 &&
-                  (sameRow ? e.right <= a.left : a.top >= e.bottom),
+                  action.scrollWidth <= action.clientWidth,
               };
             }),
         );
-        expect(crowded.every((r) => r.fits && r.sameRow === (width === 1280)))
+        expect(crowded.every((r) => r.fits && r.below))
           .toBe(true);
         await shot(`labels-panel-${width}-${theme.id}`);
         await state.product("layout.patch", { rightCollapsed: true });

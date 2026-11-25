@@ -262,6 +262,14 @@ test("revert.restore-settles-origin-draft-after-leaving-during-native-clear", {
     .click();
   await expect(page.locator(".otk-revert-group"))
     .toContainText("Restoring");
+  for (const name of ["Restore conversation", "Dismiss revert"]) {
+    await expect(
+      page.locator(".otk-revert-group").getByRole("button", {
+        name,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  }
   await openSession(state, page, other.id);
   await input.fill("Other draft stays");
   await action(state, "release");

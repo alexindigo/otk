@@ -25,15 +25,28 @@ function fixture() {
   };
   const probe = createScaleProbe(options);
   probe.armStream();
-  const frame = {
-    t: "content",
-    sessionID: "s",
-    event: { op: "part.blocks" },
-  } as unknown as ServerFrame;
+  let revision = 0;
   return {
     messages,
     probe,
-    frame,
+    get frame() {
+      revision++;
+      return {
+        t: "content",
+        sessionID: "s",
+        event: {
+          op: "part.blocks",
+          messageID: "new",
+          partID: "text",
+          stream: {
+            epoch: "e",
+            generation: 1,
+            version: revision,
+            sourceLength: revision * 10,
+          },
+        },
+      } as unknown as ServerFrame;
+    },
     flush() {
       for (const run of pending.splice(0)) run();
     },
@@ -95,6 +108,55 @@ Deno.test("stream work probe includes deferred binding reads before the consumer
     await Promise.resolve();
     f.flush();
     assert(f.probe.data.frames[0].historicalReads > 0);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("stream work probe counts source advancement across deltas and replacement delivery exactly once", () => {
+  const f = fixture();
+  try {
+    const first = f.frame;
+    f.probe.receive(first, () => {});
+    f.flush();
+    const replacement = (length: number, version: number) => ({
+      t: "content",
+      sessionID: "s",
+      event: {
+        op: "part.upsert",
+        messageID: "new",
+        part: {
+          kind: "text",
+          id: "text",
+          blocks: [],
+          stream: {
+            epoch: "e",
+            generation: 1,
+            version,
+            sourceLength: length,
+          },
+        },
+      },
+    } as unknown as ServerFrame);
+    for (
+      const frame of [
+        replacement(10, 1),
+        replacement(20, 2),
+        replacement(20, 3),
+        replacement(0, 4),
+      ]
+    ) {
+      f.probe.receive(frame, () => {});
+      f.flush();
+    }
+    assertEquals(f.probe.data.frames.map((frame) => frame.sourceLength), [
+      10,
+      20,
+    ]);
+    assertEquals(f.probe.data.frames.map((frame) => frame.historicalReads), [
+      0,
+      0,
+    ]);
   } finally {
     f.stop();
   }

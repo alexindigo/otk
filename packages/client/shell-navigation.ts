@@ -425,7 +425,7 @@ export function createShellNavigation(o: {
     if (
       disposition === "kept" && inboxStatus(entry, inbox) !== "none" &&
       !o.confirm(
-        `Close "${entry.title}"? It will stay visible as a phantom tab while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
+        `Close "${entry.title}"? Its task will stay visible while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )
     ) return false;
     const ids = disposition === "kept"

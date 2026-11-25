@@ -8,6 +8,43 @@ import { activity, collapsed, visibleOnScreen } from "../../pages/sessions.ts";
 test.describe("task tabs", () => {
   test.use({ profile: "contract-sessions-tabs" });
   test(
+    "sessions.human-task-identity-helper-crumb-attention-sticky-and-reload",
+    {
+      tag: ["@sessions", "@contracts", "@isolated"],
+    },
+    async ({ isolatedState: state, page }) => {
+      const root = "tstv1-otk", helper = "tstv1-helper";
+      await activity(state, helper, "hold");
+      await openSession(state, page, root);
+      const assertTask = async () => {
+        await expect(page.locator(`[data-tab="${helper}"]`)).toHaveCount(0);
+        await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        await expect(page.locator(`[data-crumb="${helper}"]`)).toBeVisible();
+      };
+      await assertTask();
+      await page.locator(`[data-crumb="${helper}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      await page.reload();
+      await assertTask();
+      const project = page.locator(
+        `.otk-project-row[data-project=${JSON.stringify(state.directory)}]`,
+      );
+      await project.locator(".otk-project-attention").click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      await openSession(state, page, "tstv1-atmosphera");
+      await project.locator(".otk-project-open").click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      expect(await state.product("tasks.list", { directory: state.directory }))
+        .toEqual([]);
+    },
+  );
+  test(
     "sessions.task-tabs-native-create-rename-order-close-crumbs-meter-draft-and-reload",
     { tag: ["@sessions", "@contracts", "@isolated"] },
     async ({ isolatedState: state, page }) => {

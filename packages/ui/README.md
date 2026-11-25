@@ -112,10 +112,11 @@ operation and editable next input separate, including a working Cancel action.
 measurement content, live content and one overflow-menu callback. Its ordered
 item frames and controls stay mounted in source order; omitted rows are hidden
 and inert. More renders independent controls rather than adopting row nodes.
-Fitting cannot move or replace a focused required frame. Required frames use
-their current measured width; other values use their inert measurement frames.
-More occupies a separate trailing grid track, so editor blur cannot move its
-pointer target between press and release as the live chip width changes. Its
+Fitting cannot move or replace a focused required frame. Required frames reserve
+their natural measurement width or a larger live editor width, never a
+compressed width left by optional neighbours. Other values use inert measurement
+frames. More occupies a separate trailing grid track, so editor blur cannot move
+its pointer target between press and release as the live chip width changes. Its
 control-height track aligns to the first item row, not the centre of a changing
 wrapped item collection, so ending an editor cannot shift it vertically either.
 ResizeObserver and font completion belong to this component. The client owns
@@ -1056,6 +1057,14 @@ language and streaming state. Replacing a message/header with equal code values
 preserves that snapshot and token nodes; unrelated metadata publication or theme
 paint cannot admit a duplicate capture or cache-disposal message.
 
+Source layout never depends on enhancement capability, including synchronous
+worker-construction refusal. Explicit plain-text modes acquire no worker or
+grammar. The shared highlighting client owns diagnostic reporting with the
+actual Error, stack and cause; Code never turns that optional enhancement into a
+failed user action or transcript alert. Worker error replies preserve structured
+Errors. Empty Markdown code source has no decorative card; explicit fence reveal
+and numbered file views retain their requested empty-source presentation.
+
 The dependency-free highlighting policy owns the 32-row source-group contract.
 Source coordinates, raw layout, worker preparation/progress, cached replay and
 the renderer's complete-group path consume that same constant; changing a group
@@ -1425,7 +1434,9 @@ rename owner; only the matching identity/origin renders `TitleEditor` in its
 title slot. The native input selects its text, commits on Enter or blur, cancels
 on Escape and retains typed text with local feedback on failure. An editing
 control uses a non-button frame so the input is never nested inside a button.
-The session-action owner also contributes Delete, whose first activation arms a
+Blur submission joins settled rendering and retained-focus restoration first;
+moving the same keyed editor cannot submit or discard its draft. The
+session-action owner also contributes Delete, whose first activation arms a
 shared CommandMenu item in attention paint. Its title names working-session
 interruption and the helper count. A second activation executes; row-to-row
 pointer/focus movement, Tab and dismissal disarm it. Generic Menu owns row
@@ -1462,14 +1473,16 @@ prompt lists the actual message identities before any native mutation.
 `RevertGroup` borrows `ActivityGroup`, RecordList, Clock and the shared failure
 presenter. It renders one boundary-anchored transcript group with the full
 retained messages, collapsed by default, and Restore. Saving and failure states
-stay in its header; failures expose the reason, Retry and Restore. Dismiss
-persists per session/boundary and leaves a muted marker with context-menu
-Restore. No revert overlay covers the transcript or composer. Restore requires
-the separately advertised `restore` capability. An independently advertised
-`revertCode` capability adds Revert code changes to the same prompt context
-menu. It uses the same owner and confirmation. Session targets similarly offer
-Archive or Unarchive only with `sessionArchive`, using authoritative state and
-the shared CommandMenu. No overlay or style is added to these native actions.
+stay in its header; failures expose the reason, Retry and Restore. Restore and
+Dismiss are absent while unavailable, rather than disabled secondary controls.
+Dismiss persists per session/boundary and leaves a muted marker with
+context-menu Restore. No revert overlay covers the transcript or composer.
+Restore requires the separately advertised `restore` capability. An
+independently advertised `revertCode` capability adds Revert code changes to the
+same prompt context menu. It uses the same owner and confirmation. Session
+targets similarly offer Archive or Unarchive only with `sessionArchive`, using
+authoritative state and the shared CommandMenu. No overlay or style is added to
+these native actions.
 
 The active revert offers Open copy from its own group. Dismiss hides that action
 with the rest of the header, and Restore leaves no saved-copy row in the

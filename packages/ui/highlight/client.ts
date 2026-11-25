@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { normalizeError, sha256 } from "@otk/protocol";
+import {
+  errorMessage,
+  isCancellation,
+  normalizeError,
+  sha256,
+} from "@otk/protocol";
 import type {
   HighlightChunk,
   HighlightCompletion,
@@ -10,7 +15,21 @@ import type {
   HighlightToken,
 } from "./types.ts";
 import { lineBreakCount, sourceLine } from "./lines.ts";
-import { HIGHLIGHT_GROUP_ROWS } from "./policy.ts";
+import { HIGHLIGHT_GROUP_ROWS, plainLanguage } from "./policy.ts";
+const diagnosed = new WeakSet<Error>();
+/** Enhancements have diagnostics, never user-action feedback or transcript state. */
+function diagnostic(cause: unknown, stage: string, lang?: string): Error {
+  const error = normalizeError(cause);
+  if (!isCancellation(error) && !diagnosed.has(error)) {
+    diagnosed.add(error);
+    console.warn("Syntax highlighting diagnostic:", errorMessage(error), {
+      stage,
+      lang,
+      error,
+    });
+  }
+  return error;
+}
 let worker: Worker | undefined, nextBlock = 0, nextRequest = 0;
 const users = new Set<() => void>();
 const pending = new Map<
@@ -89,7 +108,17 @@ function post(owner: Worker, request: HighlightRequest) {
   outgoing = batch;
   queueMicrotask(() => {
     if (outgoing === batch) outgoing = undefined;
-    if (worker === owner) owner.postMessage(batch.requests);
+    if (worker === owner) {
+      try {
+        owner.postMessage(batch.requests);
+      } catch (cause) {
+        const error = diagnostic(cause, "dispatch");
+        const blocks = new Set(batch.requests.map((request) => request.block));
+        for (const request of [...pending.values()]) {
+          if (blocks.has(request.block)) request.reject(error);
+        }
+      }
+    }
   });
 }
 const cancelled = () =>
@@ -109,7 +138,11 @@ export function highlightingScope(): () => void {
   const owner = () => {};
   let disposed = false;
   users.add(owner);
-  connect();
+  try {
+    connect();
+  } catch (cause) {
+    diagnostic(cause, "worker");
+  }
   return () => {
     if (disposed) return;
     disposed = true;
@@ -129,7 +162,18 @@ function connect(lang?: string, source?: string, block?: number): Worker {
   };
   worker.onerror = (event) => {
     event.preventDefault();
-    const error = new Error(event.message || "Highlight worker unavailable");
+    const error = diagnostic(
+      event.error ??
+        new Error(event.message || "Highlight worker unavailable", {
+          cause: {
+            filename: event.filename,
+            line: event.lineno,
+            column: event.colno,
+          },
+        }),
+      "worker",
+      lang,
+    );
     const failed = [...pending.values()];
     pending.clear();
     worker?.terminate();
@@ -219,8 +263,16 @@ export function highlightBlock(
   const prepared = new Map<string, Promise<void>>();
   const reset = () => prepared.clear();
   users.add(reset);
-  connect(lang, source, block);
-  const send = (value: HighlightRequest) =>
+  let acquisitionError: Error | undefined;
+  if (lang === undefined || !plainLanguage(lang)) {
+    try {
+      connect(lang, source, block);
+    } catch (cause) {
+      acquisitionError = diagnostic(cause, "worker", lang);
+    }
+  }
+  const send = (value: HighlightRequest) => {
+    if (acquisitionError) throw acquisitionError;
     post(
       connect(
         "lang" in value ? value.lang : lang,
@@ -229,6 +281,7 @@ export function highlightBlock(
       ),
       value,
     );
+  };
   const release = () => {
     for (const [id, request] of [...pending]) {
       if (request.block === block) {
@@ -241,11 +294,18 @@ export function highlightBlock(
   const abort = (capture: Capture) => {
     capture.cancelled = true;
     pending.delete(capture.id);
-    send({ type: "cancel", block, generation: capture.input.generation });
+    if (worker) {
+      post(worker, {
+        type: "cancel",
+        block,
+        generation: capture.input.generation,
+      });
+    }
     capture.reject(cancelled());
   };
   const prepare = (lang: string, source?: string): Promise<void> => {
     if (disposed) return Promise.reject(cancelled());
+    if (plainLanguage(lang)) return Promise.resolve();
     const old = prepared.get(lang);
     if (old) return old;
     const id = ++nextRequest;
@@ -262,7 +322,7 @@ export function highlightBlock(
             resolve();
           } else if (value.type === "error") {
             pending.delete(id);
-            reject(new Error(value.error));
+            reject(value.error);
           }
         },
       });
@@ -273,7 +333,9 @@ export function highlightBlock(
       send({ type: "prepare", id, block, lang, text });
     });
     prepared.set(lang, promise);
-    void promise.catch(() => {
+    void promise.catch((cause) => {
+      pending.delete(id);
+      diagnostic(cause, "prepare", lang);
       if (prepared.get(lang) === promise) prepared.delete(lang);
     });
     return promise;
@@ -286,8 +348,12 @@ export function highlightBlock(
     pending.delete(capture.id);
     if (active !== capture || capture.cancelled) return;
     active = undefined;
-    if (error) capture.reject(error);
-    else capture.resolve(value || {});
+    if (error) {
+      tokens = [];
+      release();
+      if (worker) post(worker, { type: "dispose", block });
+      capture.reject(diagnostic(error, "capture", capture.input.lang));
+    } else capture.resolve(value || {});
     if (queued) {
       const next = queued;
       queued = undefined;
@@ -349,7 +415,11 @@ export function highlightBlock(
           ) return;
           try {
             if (value.type === "error") {
-              finish(capture, undefined, new Error(value.error));
+              finish(
+                capture,
+                undefined,
+                value.error,
+              );
               return;
             }
             if (value.type === "projection") {
@@ -398,8 +468,8 @@ export function highlightBlock(
         )
       ) return;
       focus = ranges.map((range) => ({ ...range }));
-      if (active) {
-        send({
+      if (active && worker) {
+        post(worker, {
           type: "focus",
           block,
           generation: active.input.generation,
@@ -415,6 +485,11 @@ export function highlightBlock(
       project?: (value: { start: number; tokens: HighlightToken[] }) => void,
     ): Promise<HighlightCompletion> {
       if (disposed) return Promise.reject(cancelled());
+      if (plainLanguage(input.lang)) {
+        this.cancel();
+        tokens = [];
+        return Promise.resolve({ plain: true });
+      }
       return new Promise((resolve, reject) => {
         const capture: Capture = {
           id: ++nextRequest,

@@ -180,14 +180,17 @@ test.describe("native helper lifecycle", () => {
     });
     const parentTab = page.locator(`[data-tab="${parent.id}"]`);
     const childTab = page.locator(`[data-tab="${child.id}"]`);
-    // AXIOM 1 and decision 35: ungrouped helpers have their own visible tab;
-    // a parent's own lamp cannot substitute for that child's activity.
-    await expect(childTab.locator(".otk-status-light"))
-      .toHaveAttribute("data-state", "blocked");
-    await expect(parentTab).toHaveCount(0);
-    await childTab.click();
-    await expect(parentTab).toHaveAttribute("aria-selected", "true");
+    // 2.67: the human task rolls up activity; helpers retain their own crumbs.
     await expect(parentTab.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "blocked");
+    await expect(childTab).toHaveCount(0);
+    await parentTab.click();
+    await page.locator(`[data-crumb="${child.id}"]`).click();
+    await expect(parentTab).toHaveAttribute("aria-selected", "true");
+    const ancestor = page.locator(
+      `[data-crumb="${parent.id}"][data-crumb-kind="member"]`,
+    );
+    await expect(ancestor.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "none");
     const crumb = page.locator(`[data-crumb="${child.id}"]`);
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
@@ -218,7 +221,8 @@ test.describe("native helper lifecycle", () => {
     await crumb.click();
     await expect(page).toHaveURL(new RegExp(`${child.id}$`));
     await state.release(gate.gate);
-    await expect(crumb).toBeVisible();
+    // Answer 1: a quiet member stays in the trail while it is open.
+    await expect(crumb).toHaveAttribute("aria-current", "page");
     await expect(page.locator(`[data-session="${child.id}"]`)).toBeVisible();
     // The viewed finish is acknowledged; with no evidence left the lamp is grey.
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
@@ -227,9 +231,11 @@ test.describe("native helper lifecycle", () => {
     );
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await page.reload();
-    await expect(crumb).toBeVisible();
+    await expect(crumb).toHaveAttribute("aria-current", "page");
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
+    await page.locator(`[data-crumb="${parent.id}"]`).click();
+    await expect(crumb).toHaveCount(0);
   });
 });
 test(

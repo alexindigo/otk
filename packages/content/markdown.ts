@@ -2,6 +2,16 @@
 import { Lexer, type Links, type Token, Tokenizer, type Tokens } from "marked";
 import type { Block, Inline } from "@otk/protocol";
 class MarkdownTokenizer extends Tokenizer {
+  override paragraph(src: string): Tokens.Paragraph | undefined {
+    // Marked requires LF after a paragraph-interrupting fence. EOF is also a
+    // CommonMark line ending. Split at that boundary without adding synthetic
+    // source bytes (streaming offsets must still address the original text).
+    const boundary = src.lastIndexOf("\n") + 1;
+    if (boundary > 0 && this.fences(src.slice(boundary))) {
+      return super.paragraph(src.slice(0, boundary));
+    }
+    return super.paragraph(src);
+  }
   override lheading(src: string): Tokens.Heading | undefined {
     // Marked's GFM setext regex backtracks over every character before failing,
     // retaining a large native regex stack for long paragraphs. An underline

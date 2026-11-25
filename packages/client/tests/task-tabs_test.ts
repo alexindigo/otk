@@ -285,17 +285,16 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   nested.status = "busy";
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
-    ["root-task", "none"],
+    ["root-task", "working"],
     ["other-task", "none"],
-    ["child-task", "working"],
   ]);
   assertEquals(
     taskBreadcrumbs(meta.tasks[0], input.entries, meta.tasks).map((c) => c.id),
-    ["root"],
+    ["root", "nested"],
   );
 });
 
-Deno.test("ungrouped mandatory helpers keep their own tab and viewing them selects their root tab", () => {
+Deno.test("ungrouped mandatory helpers keep their human task visible (2.67 supersedes independent helper phantoms)", () => {
   const root = entry("root"),
     child = entry("child", 2, "root"),
     other = entry("other");
@@ -304,27 +303,27 @@ Deno.test("ungrouped mandatory helpers keep their own tab and viewing them selec
     input = { directory: "/p", entries: [root, child, other], inbox: meta };
   child.attention.questions = 1;
   tabs.update(input);
-  // AXIOM 1: a root's lamp cannot replace an ungrouped child's visible tab.
+  // 2.67: helper attention lives inside its human task, not a new task tab.
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "child",
+    "root",
     "blocked",
   ]]);
   tabs.preview(child.id);
   assertEquals(tabs.state.selected, { kind: "session", id: "root" });
   assertEquals(tabs.state.sessionID, "child");
-  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
-    ["child", "blocked"],
-    ["root", "none"],
-  ]);
+  assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
+    "root",
+    "blocked",
+  ]]);
   child.attention.questions = 0;
   meta.finishes.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "child",
+    "root",
     "finished",
-  ], ["root", "none"]]);
+  ]]);
   tabs.preview("other");
-  assertEquals(tabs.tabs().map((t) => t.id), ["child", "other"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["root", "other"]);
   meta.seen.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), ["other"]);
@@ -404,15 +403,15 @@ Deno.test("rename and pin share captured-name promotion without selecting a late
   failed.stop();
 });
 
-Deno.test("direct child phantom selection views the child under its root's selected tab across metadata updates", () => {
+Deno.test("direct helper navigation stays on its human group across metadata updates", () => {
   const root = entry("root"), child = entry("child", 2, root.id);
   child.attention.questions = 1;
   const tabs = model(),
     input = { directory: "/p", entries: [root, child], inbox: inbox() };
   try {
     tabs.update(input);
-    tabs.select({ kind: "session", id: child.id });
-    // Decision 3: the open session's root has the selected top-line tab.
+    tabs.preview(child.id);
+    // 2.67: activity cannot turn a helper into an independent task.
     for (let pass = 0; pass < 2; pass++) {
       assertEquals(tabs.state.selected, { kind: "session", id: root.id });
       assertEquals(tabs.state.sessionID, child.id);

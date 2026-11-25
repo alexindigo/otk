@@ -13,6 +13,7 @@ export interface ScaleFrame {
     outcome?: { ok: boolean };
     params?: {
       directory?: string;
+      query?: string;
       sessionID?: string;
       before?: string;
       kinds?: string[];
@@ -39,6 +40,14 @@ export function scaleWire(page: Page) {
     };
     socket.on("framesent", ({ payload }) => record("sent", payload));
     socket.on("framereceived", ({ payload }) => record("received", payload));
+    socket.on("close", () => {
+      frames.push({
+        socket: id,
+        direction: "received",
+        at: performance.now(),
+        frame: { t: "socket.closed", method: "" },
+      });
+    });
   });
   return frames;
 }

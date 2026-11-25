@@ -16,6 +16,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
+  /** Preserve the full measured row's intrinsic width in a wrapping action strip. */
+  intrinsic?: boolean;
   /** Readable content floor; required items reflow instead of clipping it. */
   minimumItemSize?(item: T): string;
   measure(item: T): Element;
@@ -41,7 +43,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
     );
     for (const key of props.required) {
       const current = liveFrames.get(key)?.getBoundingClientRect().width;
-      if (current) widths.set(key, current);
+      // A required item may already have shrunk to make room for its optional
+      // neighbours. Feeding that compressed width back into fitting lets those
+      // neighbours permanently squeeze it to zero. Reserve its natural width
+      // (or a larger live editor) before deciding which optional items fit.
+      if (current) widths.set(key, Math.max(widths.get(key) ?? 0, current));
     }
     const css = getComputedStyle(root);
     const next = {
@@ -108,6 +114,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
     <div
       class={["otk-overflow-row", {
         "has-overflow": snapshot().overflow.length > 0,
+        "is-intrinsic": props.intrinsic === true,
       }]}
       ref={(e) => root = e}
       onPointerDown={() => setGesture(fitted())}

@@ -39,6 +39,14 @@ test("demand.session-pages-loading-search-and-window-anchor", {
     });
     server.onMessage((message) => {
       const frame = JSON.parse(String(message));
+      // Atomic list chunks paint before the scalar result. Hold the owning
+      // delivery too, otherwise the list can page through the held results.
+      if (
+        hold && frame.t === "load.chunk" && frame.data.kind === "session-list"
+      ) {
+        held.push({ socket, message });
+        return;
+      }
       if (
         frame.t === "request.result" &&
         methods.get(frame.ref.key)?.method === "sessions.list" &&
@@ -117,10 +125,10 @@ test("demand.session-pages-loading-search-and-window-anchor", {
     body: JSON.stringify(geometry),
     contentType: "application/json",
   });
-  hold = false;
+  // Release only the initial delivery. Keep subsequent demand held so this
+  // small population cannot finish paging before the anchor is observed.
   for (const value of held.splice(0)) value.socket.send(value.message);
   await expect(page.locator(".otk-session-row").first()).toBeVisible();
-  await expect(loading).toHaveCount(0);
   expect(pages.every((page) => page.items.length <= 20)).toBe(true);
   expect(pages[0].items.length).toBe(20);
   const viewport = page.locator(".otk-project-session-tree");
@@ -132,12 +140,23 @@ test("demand.session-pages-loading-search-and-window-anchor", {
     expect(value.count).toBeLessThanOrEqual(Math.ceil(value.height / 30) + 12);
   };
   await mounted();
-  const beforeCount = pages.length;
-  const anchor = await viewport.evaluate((element) => {
+  const beforeCount = 1;
+  // Observe the settled scroll window before delivering its next page. A
+  // synchronous scrollTop write moves old rows before VirtualList can repaint.
+  hold = true;
+  await viewport.evaluate((element) => {
     element.scrollTop = Math.max(
       0,
       element.scrollHeight - element.clientHeight - 30,
     );
+  });
+  await expect.poll(() => held.length).toBeGreaterThan(0);
+  await page.evaluate(() =>
+    new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    )
+  );
+  const anchor = await viewport.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     const row = Array.from(
       element.querySelectorAll<HTMLElement>("[data-virtual-key]"),
@@ -148,7 +167,10 @@ test("demand.session-pages-loading-search-and-window-anchor", {
       top: row.getBoundingClientRect().top - bounds.top,
     };
   });
+  hold = false;
+  for (const value of held.splice(0)) value.socket.send(value.message);
   await expect.poll(() => pages.length).toBeGreaterThan(beforeCount);
+  await expect(loading).toHaveCount(0);
   await mounted();
   const delta = await viewport.evaluate((element, anchor) => {
     const row = Array.from(

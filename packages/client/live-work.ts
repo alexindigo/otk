@@ -39,7 +39,7 @@ export function runningDescendants(
       !entry.deleted && entry.activity?.work?.fresh &&
       entry.activity.work.keys.length
     ) {
-      result.push({ id: entry.id, helper: true, depth });
+      result.push({ id: entry.id, kind: "member", helper: true, depth });
     }
     for (const child of children.get(entry.id) ?? []) {
       stack.push({ entry: child, depth: depth + 1 });

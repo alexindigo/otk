@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fixture } from "./config.ts";
+import { markdown } from "@otk/content";
+import { codeblockExamples } from "../fixtures/codeblock-examples.ts";
 import { messageWindowScenario } from "./message-window-scenario.ts";
 import { messageUsageScenario } from "./message-usage-scenario.ts";
 import { messageCostScenario } from "./message-cost-scenario.ts";
@@ -215,6 +217,19 @@ export async function messagesScenario(profile: Profile) {
       prompt: () => Promise.resolve(),
       abort: () => Promise.resolve(),
     };
+  } else if (profile === "contract-messages-codeblocks") {
+    prefix = codeblockExamples.map((text, index) => ({
+      id: `codeblock-${index}`,
+      sessionID,
+      role: "user",
+      time: { created: 1000 + index },
+      parts: [{
+        id: `source-${index}`,
+        kind: "text",
+        synthetic: false,
+        blocks: markdown(text),
+      }],
+    }));
   } else if (profile === "contract-messages-highlight") {
     messages = [highlight("Baseline")];
   } else if (profile === "contract-messages-context") {

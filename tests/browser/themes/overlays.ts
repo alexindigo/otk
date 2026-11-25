@@ -40,8 +40,10 @@ async function command(page: Page, id: string, query: string) {
   await page.locator(`[data-command="${id}"]`).click();
 }
 export async function surface(page: Page) {
+  // An open overlay owns its direct surface. Closed pickers nested in that
+  // surface keep their own panels in the DOM and are not open surfaces.
   const owner = page.locator(
-    "dialog[open] .otk-surface,:popover-open .otk-surface",
+    "dialog[open] > .otk-surface,:popover-open > .otk-surface",
   );
   await expect(owner).toHaveCount(1);
   await frames(page);
@@ -97,7 +99,7 @@ export async function surface(page: Page) {
 }
 async function positioned(page: Page, anchor?: string) {
   await frames(page);
-  const g = await page.locator(":popover-open .otk-surface").evaluate(
+  const g = await page.locator(":popover-open > .otk-surface").evaluate(
     (el, anchor) => {
       const r = el.getBoundingClientRect(),
         p = el.closest(".otk-popover-panel")!.getBoundingClientRect(),
@@ -174,7 +176,11 @@ async function allMarks(
     expect(item.shift).toBe(0);
     expect(item.position).toBe("static");
     if (item.orientation === "vertical") {
-      expect([item.w, item.h, item.start]).toEqual([3, 14, 3]);
+      expect([item.w, item.h, item.start]).toEqual([
+        3,
+        14,
+        item.external ? 0 : 3,
+      ]);
       expect(item.centred).toBeLessThanOrEqual(.5);
     } else {expect([item.h, item.start, item.end, item.bottom]).toEqual([
         2,
@@ -237,7 +243,7 @@ export async function usage(
             rows.map((row) => {
               const c = row.querySelector(".otk-session-cost")!
                   .getBoundingClientRect(),
-                t = row.querySelector(".otk-row-title")!
+                t = row.querySelector(".otk-session-title")!
                   .getBoundingClientRect(),
                 l = row.querySelector(".otk-status-light")!
                   .getBoundingClientRect();
@@ -791,7 +797,7 @@ export async function surfaces(
           const g = await positioned(page, ".otk-display-menu > button");
           expect(g.scroll).toBeGreaterThan(g.body);
           await page.locator(
-            ".otk-display-menu :popover-open .otk-surface-body",
+            ".otk-display-menu :popover-open > .otk-surface > .otk-surface-scroll > .otk-surface-body",
           ).evaluate((el) => el.scrollTop = el.scrollHeight);
           expect(
             await page.locator(".otk-display-menu input[name=animationsOff]")
@@ -904,7 +910,14 @@ export async function lights(
                 ).trim(),
                 body: body.display,
                 shape: shape.display,
-                glyph: el.textContent?.trim(),
+                // StateShape draws state geometry; no font glyph carries it.
+                figure: Array.from(
+                  el.querySelectorAll(".otk-lamp-shape > *"),
+                  (part) =>
+                    part.tagName.toLowerCase() +
+                    (part.getAttribute("d") ?? ""),
+                ),
+                text: el.textContent?.trim(),
                 border: body.borderTopWidth,
                 rim: body.boxShadow,
                 gradient: body.backgroundImage,
@@ -1001,12 +1014,11 @@ export async function lights(
             expect(v).toBeGreaterThanOrEqual(i === 0 || i % 2 ? 4.5 : 3)
           );
         }
-        expect(lamps.slice(0, 4).map((l) => l.glyph)).toEqual([
-          "\u00d7",
-          "\u25d0",
-          "\u2713",
-          "\u25cb",
-        ]);
+        const figures = lamps.slice(0, 4).map((l) => l.figure);
+        expect(lamps.map((l) => l.text)).toEqual(lamps.map(() => ""));
+        expect(figures.map((f) => f.map((part) => part.slice(0, 4))))
+          .toEqual([["path"], ["circ", "path"], ["path"], ["circ"]]);
+        expect(new Set(figures.map((f) => f.join("|"))).size).toBe(4);
         const connections = await page.locator(
           "[data-theme-connections] .otk-connection-light",
         ).evaluateAll((els) =>
@@ -1021,7 +1033,14 @@ export async function lights(
                 .getPropertyValue("--otk-connection-" + slot).trim(),
               size: el.getBoundingClientRect().width,
               label: el.getAttribute("aria-label"),
-              glyph: el.textContent?.trim(),
+              // StateShape draws connection geometry; no font glyph carries it.
+              figure: Array.from(
+                el.querySelectorAll(".otk-connection-shape > *"),
+                (part) =>
+                  part.tagName.toLowerCase() + (part.getAttribute("d") ?? "") +
+                  (part.getAttribute("stroke-dasharray") ?? ""),
+              ),
+              text: el.textContent?.trim(),
               dot: getComputedStyle(el.querySelector(".otk-connection-dot")!)
                 .display,
               shape:
@@ -1037,13 +1056,14 @@ export async function lights(
           "disconnected",
           "error",
         ]);
-        expect(connections.map((c) => c.glyph)).toEqual([
-          "\u2713",
-          "\u25cc",
-          "\u21bb",
-          "\u25cb",
-          "\u00d7",
-        ]);
+        expect(connections.map((c) => c.text)).toEqual(
+          connections.map(() => ""),
+        );
+        expect(
+          connections.map((c) => c.figure.map((part) => part.slice(0, 4))),
+        ).toEqual([["path"], ["circ"], ["path"], ["circ"], ["path"]]);
+        expect(new Set(connections.map((c) => c.figure.join("|"))).size)
+          .toBe(5);
         for (const connection of connections) {
           expect(connection.color).toBe(connection.token);
           expect(connection.token).toMatch(/^#[\da-f]{6}$/i);
@@ -1065,9 +1085,11 @@ export async function lights(
             "wavy",
             "underline",
           ], ["double", "underline"]]);
-          await expect(page.locator(".otk-activity-shape")).toHaveText(
-            "\u25d0",
-          );
+          // The reduced activity shape is StateShape's half disc, not a glyph.
+          const activity = page.locator(".otk-activity-shape");
+          await expect(activity).toHaveText("");
+          await expect(activity.locator(":scope > circle")).toHaveCount(1);
+          await expect(activity.locator(":scope > path")).toHaveCount(1);
           await expect(page.locator(".otk-activity-spinner")).toHaveCSS(
             "display",
             "none",
