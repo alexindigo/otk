@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
+import type { SessionTreeKind } from "@otk/protocol";
 
 export type TreeDisclosureKind =
   | "project"
   | "discovered"
   | "archive"
   | "inactive"
-  | "task"
-  | "ungrouped"
-  | "session";
+  | SessionTreeKind;
 export interface TreeTarget {
   sidecarId?: string;
   id: string;

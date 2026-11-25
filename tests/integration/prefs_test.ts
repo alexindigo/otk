@@ -6,6 +6,48 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { selectedNative } from "../support/native-testing.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
+
+test("layout.tree merges collapse intents and deletes expanded keys", async () => {
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  const server = await SidecarTest.start(oc);
+  const a = new WsClient(server.url), b = new WsClient(server.url);
+  try {
+    await Promise.all([a.connect(), b.connect()]);
+    const task = { sidecarId: "local", kind: "task", id: "shared" };
+    const session = { ...task, kind: "session" };
+    const saved = async (client: WsClient) =>
+      (await client.rpc<Preferences>("prefs.get", {})).shellLayout
+        .treeCollapsed;
+    await Promise.all([
+      a.rpc("layout.tree", { ...task, collapsed: true }),
+      b.rpc("layout.tree", { ...session, collapsed: true }),
+    ]);
+    assertEquals(await saved(a), {
+      '["local","task","shared"]': true,
+      '["local","session","shared"]': true,
+    });
+    await a.rpc("layout.tree", { ...task, collapsed: false });
+    assertEquals(await saved(b), { '["local","session","shared"]': true });
+    for (
+      const invalid of [{ kind: "project" }, { id: "" }, { sidecarId: "" }, {
+        collapsed: "true",
+      }]
+    ) {
+      await assertRejects(() =>
+        a.rpc("layout.tree", { ...task, collapsed: true, ...invalid })
+      );
+    }
+    await assertRejects(() =>
+      a.rpc("layout.patch", { treeCollapsed: { invalid: false } })
+    );
+    assertEquals(await saved(a), { '["local","session","shared"]': true });
+  } finally {
+    await Promise.all([a.close(), b.close()]);
+    await server.stop();
+    await oc.stop();
+    await fake.stop();
+  }
+});
 test("prefs RPC persists across sidecar restart and broadcasts to other connections", async () => {
   const fake = new FakeLlm(), oc = await selectedNative(fake);
   const clients: WsClient[] = [], servers: SidecarTest[] = [];

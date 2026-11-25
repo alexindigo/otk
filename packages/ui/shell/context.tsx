@@ -58,6 +58,7 @@ export interface ShellPorts {
   projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   tree: TreeDisclosures;
+  treeCollapse: import("@otk/client").ServerResources["treeCollapse"];
   selection(): Selection | undefined;
 }
 const Context = createContext<ShellPorts>();

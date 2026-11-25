@@ -136,6 +136,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "layout.patch",
     "layout.location",
     "layout.project",
+    "layout.tree",
   ];
   const prepared = [
     "tasks.create",
@@ -387,6 +388,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "layout.patch",
     "layout.location",
     "layout.project",
+    "layout.tree",
     "navigation.default",
     "inbox.get",
     "projects.list",
@@ -431,7 +433,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     assertEquals(counts, {
       read: 34,
       native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
-      local: 11,
+      local: 12,
       "prepared-local": 6,
       lease: 2,
     });

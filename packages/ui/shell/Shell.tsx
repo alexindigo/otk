@@ -620,6 +620,7 @@ export default function Shell(
             projectProgress: resources.projectProgress,
             listInteraction,
             tree,
+            treeCollapse: resources.treeCollapse,
             selection: () => session.state.selection,
           }}
         >
