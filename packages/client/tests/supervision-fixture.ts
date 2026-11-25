@@ -151,12 +151,7 @@ export function fixtureSnapshot(
   ) {
     const partition = projectTabGroups(entries, value.tasks, input);
     for (const group of partition.groups) {
-      const id = taskEntityID(
-        group.id,
-        input.followParent,
-        input.directory,
-        group.kind,
-      );
+      const id = taskEntityID(group.kind, group.id);
       const members = group.members.map((id) =>
         projection.entities[entityKey("session", id)]
       ).filter(Boolean);

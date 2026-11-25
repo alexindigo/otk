@@ -162,7 +162,7 @@ export function createTabs(
   const groupKey = (id: string, kind: "task" | "session") =>
     entityKey(
       "task",
-      taskEntityID(id, input.followParent, input.directory, kind),
+      taskEntityID(kind, id),
     );
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");

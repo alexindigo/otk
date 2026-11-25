@@ -12,11 +12,9 @@ import {
   isSessionID,
   type ProjectRecord,
   type ProjectSummary,
-  projectTabGroups,
   type ServerFrame,
   type Supervision,
   taskEntityID,
-  taskEntityProjection,
   type TaskRecord,
   type ViewLease,
 } from "@otk/protocol";
@@ -100,73 +98,34 @@ interface InboxPublication {
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
   #taskScopes = new Map<string, () => ViewLease>();
-  #membershipScheduled = false;
-  #membershipDirty = false;
-  #membershipSignature = "";
-  /** Coalesce structural changes. Attention changes use the owner's reverse
-   * membership and never traverse the catalog. */
-  #taskMembership(topologyChanged = true): void {
-    this.#membershipDirty ||= topologyChanged;
-    if (this.#membershipScheduled) return;
-    this.#membershipScheduled = true;
+  #rootsScheduled = false;
+  #taskRoots(): void {
+    if (this.#rootsScheduled) return;
+    this.#rootsScheduled = true;
     queueMicrotask(() => {
-      this.#membershipScheduled = false;
+      this.#rootsScheduled = false;
       if (this.#closed) return;
-      const projections = new Map<
-        string,
-        { directory: string; followParent: boolean }
-      >();
-      for (const read of this.#taskScopes.values()) {
-        const view = read(), directory = this.#directory(view);
-        if (!directory) continue;
-        const followParent = view.tasksFollowParent ?? false;
-        projections.set(JSON.stringify([directory, followParent]), {
-          directory,
-          followParent,
-        });
-      }
-      const signature = JSON.stringify([...projections.keys()].sort());
-      if (!this.#membershipDirty && signature === this.#membershipSignature) {
-        return;
-      }
-      this.#membershipDirty = false;
-      this.#membershipSignature = signature;
-      const groups = new Map<string, readonly string[]>();
-      if (!projections.size) {
-        this.states.membership(groups);
-        return;
-      }
-      const entries = this.index.snapshotEntries();
-      for (const { directory, followParent } of projections.values()) {
-        const scopes = this.summaries.values.get(directory)?.scopes ??
-          [directory];
-        const partition = projectTabGroups(
-          entries,
-          this.#projectTasks(directory, followParent),
-          {
-            directory,
-            directories: scopes,
-            followParent,
-          },
-        );
-        for (const group of partition.groups) {
-          const id = taskEntityID(
-            group.id,
-            followParent,
-            directory,
-            group.kind,
-          );
-          groups.set(id, group.members);
+      const roots = new Map<string, string>();
+      for (const task of this.#tasks.values()) {
+        for (const id of task.sessions) {
+          const entry = this.index.snapshotEntry(id);
+          if (entry && !entry.parentID && !entry.deleted) {
+            roots.set(id, taskEntityID("task", task.id));
+          }
         }
       }
-      this.states.membership(groups);
+      this.states.roots(roots);
     });
   }
   #taskProjects = new Map<string, readonly TaskRecord[]>();
-  #taskVisible(id: string, view: ViewLease): boolean {
-    const projection = taskEntityProjection(id);
-    return !!projection && projection.directory === this.#directory(view) &&
-      projection.followParent === (view.tasksFollowParent ?? false);
+  *#listedTasks(view: ViewLease): Iterable<string> {
+    const directory = this.#directory(view);
+    if (!directory) return;
+    for (
+      const scope of this.summaries.values.get(directory)?.scopes ?? [directory]
+    ) {
+      yield* this.states.listed(this.summaries.leaf(scope));
+    }
   }
   #projectTasks(
     directory: string,
@@ -299,10 +258,30 @@ export class InboxFeature implements FrameSource {
     entries: () => ReadonlySet<string>,
   ): FrameSource {
     this.#taskScopes.set(id, view);
-    this.#taskMembership(false);
     const listeners = new Set<(frame: ServerFrame) => void>();
     let revision = 0;
     let deliveredTasks = new Map<string, TaskRecord>();
+    let deliveredTaskStates = new Map<string, EntityState>();
+    let deliveredListing = this.states.listingRevision;
+    const reconcileTaskStates = (): InboxOp[] => {
+      if (!delivered) return [];
+      const ops: InboxOp[] = [], next = new Map<string, EntityState>();
+      for (const id of this.#listedTasks(view())) {
+        const key = entityKey("task", id);
+        const value = this.states.get(key);
+        if (!value || next.has(key)) continue;
+        next.set(key, value);
+        if (value !== deliveredTaskStates.get(key)) {
+          ops.push({ op: "entity.upsert", value });
+        }
+      }
+      for (const key of deliveredTaskStates.keys()) {
+        if (!next.has(key)) ops.push({ op: "entity.remove", key });
+      }
+      deliveredTaskStates = next;
+      deliveredListing = this.states.listingRevision;
+      return ops;
+    };
     type Facts = {
       seen?: number;
       finish?: number;
@@ -401,6 +380,12 @@ export class InboxFeature implements FrameSource {
       deliveredTasks = new Map(
         inbox.tasks.map((task) => [task.id, structuredClone(task)]),
       );
+      deliveredTaskStates = new Map(
+        Object.entries(inbox.entities ?? {}).filter(([, value]) =>
+          value.kind === "task"
+        ),
+      );
+      deliveredListing = this.states.listingRevision;
       delivered = new Map([...entries()].map((id) => [id, {
         seen: inbox.seen[id],
         finish: inbox.finishes[id],
@@ -432,16 +417,21 @@ export class InboxFeature implements FrameSource {
               (this.summaries.values.get(directory)?.scopes ?? [directory])
                 .includes(change.directory)
             : true
-        ).map((change) => change.value).filter((op) => {
-          if (op.op === "entity.upsert" && op.value.kind === "task") {
-            return this.#taskVisible(op.value.id, scope);
-          }
-          const prefix = entityKey("task", "");
-          if (op.op === "entity.remove" && op.key.startsWith(prefix)) {
-            return this.#taskVisible(op.key.slice(prefix.length), scope);
-          }
-          return true;
-        });
+        ).map((change) => change.value).filter((op) =>
+          !(op.op === "entity.upsert" && op.value.kind === "task") &&
+          !(op.op === "entity.remove" &&
+            op.key.startsWith(entityKey("task", "")))
+        );
+      const listingChanged = deliveredListing !== this.states.listingRevision;
+      for (const { value } of listingChanged ? [] : changes) {
+        if (value.op !== "entity.upsert" || value.value.kind !== "task") {
+          continue;
+        }
+        const key = entityKey("task", value.value.id);
+        if (!deliveredTaskStates.has(key)) continue;
+        deliveredTaskStates.set(key, value.value);
+        ops.push(value);
+      }
       const sessions = new Set(
         changes.flatMap((change) =>
           change.sessionID === undefined ? [] : [change.sessionID]
@@ -455,6 +445,7 @@ export class InboxFeature implements FrameSource {
         ...(changes.some((change) => change.taskID !== undefined)
           ? reconcileTasks()
           : []),
+        ...(listingChanged ? reconcileTaskStates() : []),
       ]);
     };
     this.#publications.add(publish);
@@ -482,7 +473,9 @@ export class InboxFeature implements FrameSource {
           }
           emitOps(reconcileSessions(leased, leased), true);
         } else emitOps(reconcileSessions(ids, entries()), true);
-        if (whole || tasksOnly) emitOps(reconcileTasks());
+        if (whole || tasksOnly) {
+          emitOps([...reconcileTasks(), ...reconcileTaskStates()]);
+        }
       });
     };
     const entriesChanged = (rows?: readonly string[]) => {
@@ -493,8 +486,7 @@ export class InboxFeature implements FrameSource {
       } else wholeLease = true;
       schedule();
     };
-    const topologyChanged = (membershipDirty = true) => {
-      this.#taskMembership(membershipDirty);
+    const topologyChanged = () => {
       if (!delivered) return;
       taskTopology = true;
       schedule();
@@ -526,7 +518,7 @@ export class InboxFeature implements FrameSource {
       // moved, re-projected or deleted row can move inherited task
       // membership; those re-project tasks without scanning the lease.
       if (
-        (!previous ? !!entry.parentID : entry.parentID !== previous.parentID ||
+        (!previous || entry.parentID !== previous.parentID ||
           entry.directory !== previous.directory ||
           entry.projectID !== previous.projectID ||
           JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted))
@@ -562,7 +554,7 @@ export class InboxFeature implements FrameSource {
     return {
       entriesChanged,
       // A view change re-projects tasks; rows it admits arrive as frames.
-      viewChanged: () => topologyChanged(false),
+      viewChanged: topologyChanged,
       snapshot: async (signal) => {
         await hydrate(signal);
         const value = baseline();
@@ -577,6 +569,7 @@ export class InboxFeature implements FrameSource {
       close: () => {
         delivered = undefined;
         deliveredTasks.clear();
+        deliveredTaskStates.clear();
         stop();
         this.#publications.delete(publish);
         stopRows();
@@ -585,7 +578,6 @@ export class InboxFeature implements FrameSource {
         listeners.clear();
         this.#views.delete(id);
         this.#taskScopes.delete(id);
-        this.#taskMembership(false);
       },
     };
   }
@@ -830,17 +822,15 @@ export class InboxFeature implements FrameSource {
         }
         if (
           !previous || entry.parentID !== previous.parentID ||
-          entry.directory !== previous.directory ||
-          entry.projectID !== previous.projectID ||
           JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)
         ) {
-          this.#taskMembership();
+          this.#taskRoots();
         }
       }),
       index.observeRemoval((id) => {
         this.#supervise(id);
         this.summaries.remove(id);
-        this.#taskMembership();
+        this.#taskRoots();
       }),
       index.observeAuthority((value) => {
         this.summaries.authority(value);
@@ -851,7 +841,7 @@ export class InboxFeature implements FrameSource {
       index.observeSeeds((values) => {
         for (const entry of this.summaries.seed(values)) this.#observe(entry);
         this.index.hierarchy.invalidate();
-        this.#taskMembership();
+        this.#taskRoots();
       }),
       stores.projects.listen((change) => {
         this.#identity();
@@ -943,7 +933,7 @@ export class InboxFeature implements FrameSource {
             taskID: id,
           });
         }
-        this.#taskMembership();
+        this.#taskRoots();
       }),
       stores.templates.listen(({ templates }) => {
         this.#templates = templates;
@@ -952,7 +942,7 @@ export class InboxFeature implements FrameSource {
       }),
     );
     for (const entry of index.snapshotEntries()) this.#observe(entry);
-    this.#taskMembership();
+    this.#taskRoots();
     void this.#scan();
   }
   #discoveryProject(
@@ -1045,12 +1035,17 @@ export class InboxFeature implements FrameSource {
     }
     this.summaries?.refresh();
     for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
-    this.#taskMembership();
+    this.#taskRoots();
   }
   get(view?: ViewLease, leased?: ReadonlySet<string>): InboxSnapshot {
     this.#identity();
     const directory = view && this.#directory(view);
     if (view && !leased) leased = new Set();
+    const taskStates = new Set(
+      view ? this.#listedTasks(view) : [...this.#taskScopes.values()].flatMap((
+        read,
+      ) => [...this.#listedTasks(read())]),
+    );
     return {
       projects: [...this.#projects.values()].sort((a, b) =>
         a.order - b.order || a.directory.localeCompare(b.directory)
@@ -1091,15 +1086,16 @@ export class InboxFeature implements FrameSource {
           ? [
             ...[...this.states.values()].filter(([, value]) =>
               value.kind !== "session" &&
-              (value.kind !== "task" || !view ||
-                this.#taskVisible(value.id, view))
+              (value.kind !== "task" || taskStates.has(value.id))
             ),
             ...[...leased].flatMap((id) => {
               const value = this.states.get(entityKey("session", id));
               return value ? [[entityKey("session", id), value] as const] : [];
             }),
           ]
-          : this.states.values(),
+          : [...this.states.values()].filter(([, value]) =>
+            value.kind !== "task" || taskStates.has(value.id)
+          ),
       ),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],

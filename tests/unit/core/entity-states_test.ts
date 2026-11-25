@@ -383,48 +383,25 @@ test("live work belongs to the entity owner, including blocked helpers, title ch
   assertEquals(o.get("root")?.evidence?.liveWork, undefined);
 });
 
-test("task projections share the state owner and update only containing groups", () => {
+test("a task keeps the same identity and permission grace across checkout boundaries", () => {
   const o = owner();
-  const local = taskEntityID("task"), following = taskEntityID("task", true);
   o.put({ ...base, id: "parent", activity: { terminal: 10 } });
-  o.put({
-    ...base,
-    id: "helper",
-    parentID: "parent",
-    directory: "/other",
-    activity: { work: keys("run") },
-  });
-  o.states.membership(
-    new Map([[local, ["parent"]], [following, ["parent", "helper"]]]),
-  );
-  const get = (id: string) => o.states.get(entityKey("task", id));
-  assertEquals(get(local)?.state, "finished");
-  assertEquals(get(following)?.state, "working");
-  assertEquals(get(following)?.counts.unseen, 1);
-  o.published.length = 0;
-  o.put({
+  o.states.roots(new Map([["parent", "task/review"]]));
+  const child = {
     ...base,
     id: "helper",
     parentID: "parent",
     directory: "/other",
     activity: { permissions: keys("per_helper") },
-  });
-  assertEquals(get(following)?.state, "blocked");
-  assertEquals(get(following)?.cause, "permission");
-  assertEquals(get(following)?.requests, [{ id: "per_helper" }]);
-  assertEquals(
-    o.published.flatMap((p) => p.upserts).filter((v) => v.kind === "task").map((
-      v,
-    ) => v.id),
-    [following],
-  );
-  // Changing membership retires the old contribution without changing sessions.
-  o.states.membership(new Map([[local, ["parent", "helper"]]]));
-  assertEquals(get(following), undefined);
-  assertEquals(get(local)?.state, "blocked");
+  };
+  o.put(child);
+  const get = () => o.states.get(entityKey("task", "task/review"));
+  assertEquals(get()?.state, "blocked");
+  assertEquals(get()?.cause, "permission");
+  assertEquals(get()?.requests, [{ id: "per_helper" }]);
+  o.entries.delete("helper");
   o.states.remove("helper");
-  assertEquals(get(local)?.state, "finished");
-  assertEquals(get(local)?.requests, undefined);
+  assertEquals(get()?.state, "finished");
 });
 
 test("the inbox publishes session entities with the snapshot and as lease patches", async () => {
@@ -489,7 +466,7 @@ test("the inbox publishes session entities with the snapshot and as lease patche
   }
 });
 
-test("the inbox publishes both D8 task projections and refreshes state, moves and membership", async () => {
+test("the inbox leases one task identity independently of D8, and refreshes its state and membership", async () => {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
     tasksMigrations,
@@ -561,7 +538,6 @@ test("the inbox publishes both D8 task projections and refreshes state, moves an
     }
     await settle();
     const beforeRows = populationReads;
-    assertEquals(beforeRows > 0, true);
     demands[0].rows.push("parent");
     demands[0].epoch++;
     views[0].viewChanged?.();
@@ -572,21 +548,25 @@ test("the inbox publishes both D8 task projections and refreshes state, moves an
       beforeRows,
       "row-only scope changes cannot rebuild task membership",
     );
-    const get = (follow = false) =>
-      feature.get().entities
-        ?.[entityKey("task", taskEntityID(task.id, follow, "/p"))];
-    assertEquals(get()?.state, "finished");
-    assertEquals(get(true)?.state, "working");
+    const key = entityKey("task", taskEntityID("task", task.id));
+    const get = () => feature.get().entities?.[key];
+    assertEquals(get()?.state, "working");
+    for (const view of views) {
+      const frame = await view.snapshot!();
+      assertEquals(
+        frame?.t === "inbox.snapshot" && frame.inbox.entities?.[key]?.state,
+        "working",
+      );
+    }
     index.upsert({ ...child, activity: { permissions: keys("per_child") } });
     await settle();
-    assertEquals(get(true)?.state, "blocked");
-    assertEquals(get()?.state, "finished");
+    assertEquals(get()?.state, "blocked");
     assertEquals(
       frames.some((frame) =>
         frame.t === "inbox.patch" &&
         frame.ops.some((op) =>
           op.op === "entity.upsert" &&
-          op.value.id === taskEntityID(task.id, true, "/p") &&
+          op.value.id === taskEntityID("task", task.id) &&
           op.value.state === "blocked"
         )
       ),
@@ -599,12 +579,9 @@ test("the inbox publishes both D8 task projections and refreshes state, moves an
     stores.tasks.close(task.id);
     await settle();
     assertEquals(get(), undefined);
-    assertEquals(get(true), undefined);
-    // A phantom is an unpinned task/family, not its root session's own lamp.
     assertEquals(
       feature.get().entities
-        ?.[entityKey("task", taskEntityID("parent", true, "/p", "session"))]
-        ?.state,
+        ?.[entityKey("task", taskEntityID("session", "parent"))]?.state,
       "working",
     );
     assertEquals(
@@ -839,4 +816,70 @@ test("a deleted member stops counting toward its project's unseen finishes", () 
   assertEquals(state("project", "/repo")?.counts.unseen, 0);
   assertEquals(state("project", "/repo")?.state, "none");
   assertEquals(owner.values.get("/repo")?.unseenCount, 0);
+});
+test("D69/D70: one task spans checkouts and a project counts it once", () => {
+  const o = owner();
+  const get = (kind: EntityState["kind"], id: string) =>
+    o.states.get(entityKey(kind, id));
+  o.states.project("/repo", ["/p", "/other"]);
+  o.put(base);
+  o.states.roots(new Map([["s", "task/review"]]));
+  o.states.member("s", "/p");
+  o.states.member("helper", "/other");
+  const helper = {
+    ...base,
+    id: "helper",
+    parentID: "s",
+    directory: "/other",
+    activity: { work: keys("run") },
+  };
+  o.put(helper);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("helper")?.state, "working");
+  for (
+    const [kind, id] of [
+      ["task", "task/review"],
+      ["checkout", "/p"],
+      ["checkout", "/other"],
+      ["project", "/repo"],
+    ] as const
+  ) {
+    assertEquals(get(kind, id)?.state, "working");
+    assertEquals(get(kind, id)?.counts.working, 1);
+  }
+  const terminal = {
+    ...base,
+    id: "old",
+    parentID: "s",
+    activity: { terminal: 51 },
+  };
+  o.put(terminal);
+  assertEquals(get("task", "task/review")?.state, "working");
+  assertEquals(get("project", "/repo")?.counts.finished, 1);
+  o.put({ ...terminal, activity: { inputs: keys("q") } });
+  assertEquals(get("task", "task/review")?.state, "blocked");
+  assertEquals(get("project", "/repo")?.counts.blocked, 1);
+});
+
+test("D70: moving a parent moves its entire subtree, and unlinking retires the old task", () => {
+  const o = owner();
+  const get = (id: string) => o.states.get(entityKey("task", id));
+  o.put({ ...base, id: "a" });
+  o.put({ ...base, id: "b" });
+  const child = { ...base, id: "c", parentID: "a" };
+  o.put(child);
+  o.put({ ...base, id: "d", parentID: "c", activity: { work: keys("run") } });
+  assertEquals(get("session/a")?.counts.working, 1);
+  assertEquals(get("session/b")?.counts.working, 0);
+  o.put({ ...child, parentID: "b" });
+  assertEquals(get("session/a")?.counts.working, 0);
+  assertEquals(get("session/b")?.counts.working, 1);
+  o.states.roots(new Map([["b", "task/review"]]));
+  assertEquals(get("session/b"), undefined);
+  assertEquals(get("task/review")?.counts.working, 1);
+  o.entries.delete("c");
+  o.states.remove("c");
+  assertEquals(get("task/review")?.counts.working, 0);
+  assertEquals(o.get("d")?.state, "working");
+  assertEquals(get("session/d")?.counts.working, 1);
 });

@@ -86,28 +86,6 @@ export function entityRequiresVisibility(
     value.evidence?.awaitingDelivery === true);
 }
 
-/** Task membership is a view projection (D8), not a different state rule. */
-export const taskEntityID = (
-  id: string,
-  followParent = false,
-  directory = "",
-  kind: "task" | "session" = "task",
-): string => JSON.stringify([kind, id, directory, followParent]);
-
-/** Decode only the projection identity, never state or membership. */
-export function taskEntityProjection(id: string): {
-  directory: string;
-  followParent: boolean;
-} | undefined {
-  try {
-    const value: unknown = JSON.parse(id);
-    if (
-      Array.isArray(value) && value.length === 4 &&
-      (value[0] === "task" || value[0] === "session") &&
-      typeof value[1] === "string" && typeof value[2] === "string" &&
-      typeof value[3] === "boolean"
-    ) {
-      return { directory: value[2], followParent: value[3] };
-    }
-  } catch { /* Not a task projection identity. */ }
-}
+/** D69/D70: a task's identity is independent of checkout and view. */
+export const taskEntityID = (kind: "task" | "session", id: string): string =>
+  `${kind}/${id}`;
