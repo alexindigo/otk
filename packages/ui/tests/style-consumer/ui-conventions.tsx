@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For } from "solid-js";
-import {
-  duration,
-  humanDuration,
-  presentFailure,
-  runningWorkElapsed,
-} from "@otk/client";
+import { elapsed, presentFailure } from "@otk/client";
+import TimeText from "../../components/TimeText.tsx";
 import { DEFAULT_PREFS, type ToolCall, type UserMessage } from "@otk/protocol";
 import { useUiRegistries } from "../../registries/context.tsx";
 import Message from "../../components/Message.tsx";
@@ -219,8 +215,10 @@ export default function UiConventions() {
         />
         <h3>Elapsed metadata</h3>
         <ChromeMeta>
-          Loading messages... {humanDuration(65000)} / Worked for{" "}
-          {duration(65000)} / Live work {runningWorkElapsed(65000)}
+          Loading messages... <TimeText time={elapsed(65000)} /> / Worked for
+          {" "}
+          <TimeText time={elapsed(65000)} /> / Live work{" "}
+          <TimeText time={elapsed(65000)} />
         </ChromeMeta>
         <h3>Precise record time</h3>
         <Clock at={at} precise />

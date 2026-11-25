@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { duration } from "./format.ts";
 import {
   derivedValue,
   type InboxSnapshot,
@@ -111,4 +110,3 @@ export function runningWorkLabel(items: readonly RunningWork[]): string {
 }
 
 /** Compact elapsed clock for live-work rows; the view supplies the live clock. */
-export const runningWorkElapsed = duration;

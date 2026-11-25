@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { dependencySpecifiers, sourceInventory } from "./analysis.ts";
+import { dependencySpecifiers, Source, sourceInventory } from "./analysis.ts";
 import { dependencyBypasses } from "./bypasses.ts";
 dependencyBypasses((source) =>
   imports(source).flatMap((specifier) =>
@@ -1087,7 +1087,13 @@ Deno.test("notification registry is feature/channel agnostic and notification ac
   const hub = await Deno.readTextFile(
     new URL("packages/client/notifications.ts", root),
   );
-  assertEquals(imports(hub), []);
+  assertEquals(imports(hub), ["./format.ts"]);
+  const context = new Source(hub).all.find((node) =>
+    node.type === "ImportDeclaration" && node.source.value === "./format.ts"
+  );
+  assert(
+    context?.type === "ImportDeclaration" && context.importKind === "type",
+  );
   assert(
     !/Notification\b|AudioContext|document\b|window\b|solid-js|localStorage|\"(?:toast|os|sound|badge)\"/
       .test(hub),

@@ -7,11 +7,7 @@ import type {
 } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import { isAssistantTerminal } from "@otk/protocol";
-import {
-  duration,
-  hasActiveRecord,
-  type TranscriptProjectionState,
-} from "@otk/client";
+import { hasActiveRecord, type TranscriptProjectionState } from "@otk/client";
 export { hasActiveRecord } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
@@ -138,7 +134,6 @@ export function partGroups(
   }
   return groups;
 }
-export const elapsed = (start: number, end: number) => duration(end - start);
 export const segmentWorkingTime = (
   parts: readonly Part[],
   presentation: (part: Part) => PartPresentation,
@@ -157,7 +152,7 @@ export const segmentWorkingTime = (
     }),
   ]);
 };
-export { timingExplanation, workingTime, workingTimeValue } from "@otk/client";
+export { timingExplanation, workingTimeValue } from "@otk/client";
 /** One progress owner for the active turn, borrowing canonical queue membership. */
 export function activeProgressRecord(
   { messageIDs, messagesByID, queuedIDs }: Pick<

@@ -10,8 +10,8 @@ import {
 import {
   type ActionControl,
   countLabel,
+  elapsed,
   type LiveWorkOwner,
-  runningWorkElapsed,
   type TrailCrumb,
   type TrailModel,
   unknownTime,
@@ -22,6 +22,7 @@ import StatusLight from "./StatusLight.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import TimeValue from "./TimeValue.tsx";
+import TimeText from "./TimeText.tsx";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
@@ -145,8 +146,13 @@ export default function Subagents(
                 </div>
                 <ChromeMeta class="otk-subagent-time" aria-label="Running time">
                   {item().run
-                    ? runningWorkElapsed(
-                      (item().run!.endedAt ?? now()) - item().run!.startedAt,
+                    ? (
+                      <TimeText
+                        time={elapsed(
+                          (item().run!.endedAt ?? now()) -
+                            item().run!.startedAt,
+                        )}
+                      />
                     )
                     : (
                       <TimeValue

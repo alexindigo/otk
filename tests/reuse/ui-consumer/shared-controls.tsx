@@ -7,6 +7,7 @@ import {
   Show,
 } from "solid-js";
 import {
+  age,
   CommandHub,
   createDrafts,
   createInbox,
@@ -15,11 +16,10 @@ import {
   createSessionSubmission,
   createTabs,
   createTaskActions,
-  duration,
+  elapsed,
   exactCount,
   type MergedEntry,
   NotificationHub,
-  relativeTime,
   type SessionDelivery,
   type SidecarState,
 } from "@otk/client";
@@ -73,6 +73,7 @@ import {
   Setup,
   Sidebar,
   solidState,
+  TimeText,
   ToolLine,
   ToolOutput,
   ToolPath,
@@ -623,7 +624,8 @@ export function MetadataPolicy(): Element {
       <main>
         <h1>Independent metadata consumer</h1>
         <output data-format>
-          {exactCount(1234567)} {duration(1234)} {relativeTime(0, 90_000_000)}
+          {exactCount(1234567)} <TimeText time={elapsed(1234)} />{" "}
+          <TimeText time={age(0, 90_000_000)} />
         </output>
         <PathProvider paths={{ style: "win32", separator: "\\" }}>
           <div data-path>

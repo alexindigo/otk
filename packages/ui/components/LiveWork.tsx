@@ -3,14 +3,15 @@ import "./LiveWork.css" with { type: "text" };
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import {
   createEntityStateStore,
+  elapsed,
   lamp,
   type RunningWork,
-  runningWorkElapsed,
   runningWorkLabel,
   unknownTime,
 } from "@otk/client";
 import { entityKey } from "@otk/protocol";
 import TimeValue from "./TimeValue.tsx";
+import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import StatusLight from "./StatusLight.tsx";
@@ -97,9 +98,12 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
                         )}
                       />
                     )
-                    : `Running for ${
-                      runningWorkElapsed(now() - item().startedAt!)
-                    }`}
+                    : (
+                      <>
+                        Running for{" "}
+                        <TimeText time={elapsed(now() - item().startedAt!)} />
+                      </>
+                    )}
                 </ChromeMeta>
               </div>
             )}

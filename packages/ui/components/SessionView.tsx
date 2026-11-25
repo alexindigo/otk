@@ -26,7 +26,8 @@ import Message, { type MessageControl } from "./Message.tsx";
 import ActivityGroup, { CompletionToggle } from "./ActivityGroup.tsx";
 import RecordList from "./RecordList.tsx";
 import RecordKinds from "./RecordKinds.tsx";
-import { recordKindDisclosure } from "@otk/client";
+import { recordKindDisclosure, remaining } from "@otk/client";
+import TimeText from "./TimeText.tsx";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
@@ -825,10 +826,13 @@ export default function SessionView(props: {
                               </Show>
                               <Show when={retry().next !== undefined}>
                                 <span>
-                                  Next attempt in {Math.max(
-                                    0,
-                                    Math.ceil((retry().next! - now()) / 1000),
-                                  )}s
+                                  Next attempt in{" "}
+                                  <TimeText
+                                    time={remaining(
+                                      retry().next! - now(),
+                                      "second",
+                                    )}
+                                  />
                                 </span>
                               </Show>
                             </div>

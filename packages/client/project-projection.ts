@@ -15,11 +15,11 @@ import {
   type InboxProject,
   type InboxStatus,
   projectDirectory,
-  visitTime,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { projectName } from "./project-navigation.ts";
 import { projectPlacement } from "./project-placement.ts";
+import { age } from "./format.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -56,7 +56,6 @@ export function createProjectProjection(o: {
     discovered: boolean;
     ids?: string;
     row?: ProjectProjectionRow;
-    time?: string;
     metadata?: MergedMetadata[];
     structure?: MergedMetadata[];
     tasks: TaskRecord[];
@@ -428,12 +427,15 @@ export function createProjectProjection(o: {
       const time = inactive && record
         ? record.inactiveAt ?? record.lastVisit
         : now;
-      const text = record ? visitTime(record.lastVisit, time) : "";
+      const visit = record
+        ? age(record.lastVisit, time, inactive ? "inactive" : "now")
+        : undefined;
       if (
-        !p.row || p.time !== text || p.row.status !== status ||
+        !p.row || p.row.visit?.text !== visit?.text ||
+        p.row.visit?.iso !== visit?.iso ||
+        p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
         p.row.unread !== unread
       ) {
-        p.time = text;
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
           ...(record ?? {
@@ -457,7 +459,7 @@ export function createProjectProjection(o: {
           unseenCount: store
             ? store.get(key)?.counts.unseen ?? 0
             : summary?.unseenCount ?? null,
-          visitText: text,
+          visit,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,

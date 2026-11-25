@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestAgeText } from "./format.ts";
 export interface NoteAction {
   readonly label: string;
   readonly description?: string;
@@ -12,7 +13,7 @@ export interface Note {
   readonly sessionRef?: { readonly sidecar: string; readonly session: string };
   readonly title: string;
   readonly body?: string;
-  readonly context?: string;
+  readonly context?: RequestAgeText;
   /** Native request identity, distinct from the replaceable root note ID. */
   readonly dismissalKey?: string;
   /** Feature-owned, structured-cloneable detail; channels may ignore it. */
