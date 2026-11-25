@@ -276,6 +276,14 @@ export function sessionWorkStatus(
   return evidence.retry ? "retry" : evidence.work ? "busy" : "idle";
 }
 
+/** Run evidence excludes background shell work, not V1's native execution. */
+export function sessionRunning(store: EntityStateStore, key: string): boolean {
+  const evidence = sessionEvidence(store, key);
+  return !!evidence?.work &&
+    (!evidence.liveWork?.length ||
+      evidence.liveWork.some((item) => item.kind !== "shell"));
+}
+
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
   blocked: "Needs you",
   working: "Working",

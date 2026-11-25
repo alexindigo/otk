@@ -6,6 +6,8 @@ import type {
   PermissionReply,
   PromptPart,
 } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
+import { sessionRunning } from "./entity-state.ts";
 import type { CurrentClient } from "./current.ts";
 import { liveSessionInfo, sessionKey } from "./index.ts";
 import type { PromptChoices } from "./prompt-selection.ts";
@@ -257,10 +259,11 @@ export function createSessionActions(o: {
         )).items,
     );
   };
-  const working = (target: Selection) => {
-    const status = resources.entry(target.sidecarId, target.sessionID)?.status;
-    return !!status && status !== "idle";
-  };
+  const working = (target: Selection) =>
+    sessionRunning(
+      resources.inbox(target.sidecarId).entities,
+      entityKey("session", target.sessionID),
+    );
   return {
     delivery,
     stop() {

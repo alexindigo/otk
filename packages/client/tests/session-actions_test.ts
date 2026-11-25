@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertMatch, assertRejects } from "@std/assert";
 import * as client from "@otk/client";
-import type { PromptPart } from "@otk/protocol";
+import { entityKey, type PromptPart } from "@otk/protocol";
 import {
   shellEntry,
   shellFixture,
@@ -518,7 +518,32 @@ Deno.test("revert and restore capture target RPCs inside act without promotion",
 
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
-  f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);
+  f.entries("remote", [shellEntry("busy", "/busy")]);
+  const counts = { working: 1, blocked: 0, finished: 0, unseen: 0 };
+  f.resources.receive("remote", {
+    t: "inbox.snapshot",
+    generation: "run",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      ...f.resources.inbox("remote").state.inbox,
+      entities: {
+        [entityKey("session", "busy")]: {
+          id: "busy",
+          kind: "session",
+          state: "working",
+          previous: "none",
+          counts,
+          evidence: {
+            work: true,
+            permissions: 0,
+            questions: 0,
+            descendants: { ...counts, working: 0 },
+          },
+        },
+      },
+    },
+  });
   await actions.remove({ sidecarId: "remote", sessionID: "busy" });
   assertEquals(f.calls, [
     ["remote", "session.abort", { sessionID: "busy" }],
