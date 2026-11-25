@@ -72,6 +72,9 @@
 }
 .otk-composer-live-slot {
   flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 .otk-composer-task {
   flex: 0 1 auto;

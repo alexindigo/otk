@@ -4,7 +4,6 @@ import { createSignal, For, onCleanup, Show } from "solid-js";
 import {
   createEntityStateStore,
   elapsed,
-  lamp,
   type RunningWork,
   runningWorkLabel,
   unknownTime,
@@ -14,7 +13,7 @@ import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
-import StatusLight from "./StatusLight.tsx";
+import LiveCount from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import Popover from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
@@ -25,6 +24,9 @@ const absent = createEntityStateStore({ read: () => undefined });
 export default function LiveWork(props: { items: readonly RunningWork[] }) {
   const session = useOptionalSessionPorts();
   const entities = () => session?.entities?.() ?? absent;
+  const lampKey = () =>
+    session?.workEntityKey?.() ??
+      entityKey("session", session?.sessionID() ?? "");
   const shells = () => props.items.filter((item) => item.kind === "shell");
   const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -46,19 +48,11 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
         }}
         onClose={stop}
         trigger={
-          <>
-            <StatusLight
-              small
-              state={lamp(
-                entities(),
-                session?.workEntityKey?.() ??
-                  entityKey("session", session?.sessionID() ?? ""),
-              )}
-            />
-            <ChromeMeta class="otk-control-label">
-              {runningWorkLabel(shells())}
-            </ChromeMeta>
-          </>
+          <LiveCount
+            entities={entities()}
+            lampKey={lampKey()}
+            label={runningWorkLabel(shells())}
+          />
         }
       >
         <ScrollRegion

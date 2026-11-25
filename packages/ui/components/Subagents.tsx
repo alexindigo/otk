@@ -22,6 +22,7 @@ import {
 import { entityKey } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import ActionButton from "./ActionButton.tsx";
+import LiveCount from "./LiveCount.tsx";
 import StatusLight from "./StatusLight.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -99,12 +100,11 @@ export default function Subagents(
         }}
         onClose={stop}
         trigger={
-          <>
-            <StatusLight small state={lamp(entities(), props.trail.task)} />
-            <ChromeMeta>
-              {countLabel(ids()?.length ?? 0, "subagent")}
-            </ChromeMeta>
-          </>
+          <LiveCount
+            entities={entities()}
+            lampKey={props.trail.task}
+            label={countLabel(ids()?.length ?? 0, "subagent")}
+          />
         }
       >
         <For each={ids() ?? []}>
