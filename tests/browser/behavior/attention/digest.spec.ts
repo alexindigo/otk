@@ -18,7 +18,7 @@ test(
       await scenario(state, "hold", "tstv1-note");
       await expect(row).toHaveAttribute("data-status", "busy");
       await scenario(state, "release", "tstv1-note");
-      await expect(note.getByRole("button", { name: "Open", exact: true }))
+      await expect(note.locator("button.otk-toast-target"))
         .toBeVisible();
       await badge(page, 1);
     };
@@ -26,7 +26,7 @@ test(
     await scenario(state, "succeed");
     await expect(row.locator(".otk-session-cost")).toHaveText("$0.75");
     await badge(page, 1);
-    await note.getByRole("button", { name: "Open", exact: true }).click();
+    await note.locator("button.otk-toast-target").click();
     await expect(page).toHaveURL(/tstv1-note$/);
     await expect(note).toHaveCount(0);
     await badge(page, 0);

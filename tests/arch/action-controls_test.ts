@@ -112,7 +112,7 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/TakeoverHeader.tsx": 1,
   "packages/ui/components/ThemePicker.tsx": 3,
   "packages/ui/components/Timeline.tsx": 1,
-  "packages/ui/components/Toasts.tsx": 4,
+  "packages/ui/components/Toasts.tsx": 3,
   "packages/ui/components/WorkLog.tsx": 1,
   "packages/ui/components/parts/FilePart.tsx": 1,
   "packages/ui/components/parts/NativeSource.tsx": 1,

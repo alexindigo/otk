@@ -31,6 +31,7 @@ export default function ActionButton(props: {
   };
   pendingLabel?: string;
   busy?: boolean;
+  unoffered?: Element;
   children: Element;
   onShown?(): void;
   /** Compact surfaces can place feedback in their existing feedback region. */
@@ -102,7 +103,10 @@ export default function ActionButton(props: {
     props.inline ? "span" : props.href === undefined ? "button" : "a"
   );
   return (
-    <Show when={!unavailable()?.hidden || busy() || !!feedback()}>
+    <Show
+      when={!unavailable()?.hidden || busy() || !!feedback()}
+      fallback={props.unoffered}
+    >
       <Control
         id={props.id}
         type={!props.inline && props.href === undefined ? "button" : undefined}

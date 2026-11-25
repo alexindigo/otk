@@ -88,7 +88,7 @@ test(
       name: "Notifications",
       exact: true,
     })
-      .locator(".otk-toast-message").filter({
+      .locator(".otk-toast .otk-failure-content").filter({
         hasText: "Opening session link failed",
       });
     await expect(failure).toHaveCount(1);

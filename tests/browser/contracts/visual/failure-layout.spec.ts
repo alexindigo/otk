@@ -206,14 +206,30 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-target"))
           .toHaveText("Error presentation review");
-        const toastEdges = await page.locator(
+        const plain = page.locator('.otk-toast[data-note="ordinary-review"]');
+        await expect(plain.locator(".otk-toast-lead, [data-signal]"))
+          .toHaveCount(0);
+        await expect(plain.locator(".otk-toast-title")).toHaveText(
+          "Project saved",
+        );
+        const toastOffsets = await page.locator(
           ".otk-toast-title, .otk-toast .otk-failure-heading",
         ).evaluateAll((elements) =>
-          elements.map((element) => element.getBoundingClientRect().left)
+          elements.map((element) => {
+            const row = element.closest(".otk-toast-row")!;
+            const style = getComputedStyle(row);
+            const track = element.matches(".otk-failure-heading")
+              ? parseFloat(style.gridTemplateColumns) +
+                parseFloat(style.columnGap)
+              : 0;
+            return element.getBoundingClientRect().left -
+              row.getBoundingClientRect().left - track;
+          })
         );
-        expect(toastEdges).toHaveLength(2);
-        expect(Math.max(...toastEdges) - Math.min(...toastEdges))
-          .toBeLessThanOrEqual(1);
+        expect(toastOffsets).toHaveLength(2);
+        for (const offset of toastOffsets) {
+          expect(Math.abs(offset)).toBeLessThanOrEqual(1);
+        }
         const failure = page.locator(".otk-inbox-footer .otk-failure-details");
         const toggle = failure;
         await toggle.press("ArrowRight");

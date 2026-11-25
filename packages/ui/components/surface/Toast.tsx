@@ -6,18 +6,20 @@ import Surface from "./Surface.tsx";
 export default function Toast(props: {
   id: string;
   kind: string;
+  lead?: boolean;
+  signal?: "error" | "info";
   children: Element;
 }): Element {
   return (
-    <article class="otk-toast" data-note={props.id} data-kind={props.kind}>
+    <article
+      class={["otk-toast", { "has-lead": props.lead }]}
+      data-note={props.id}
+      data-kind={props.kind}
+    >
       <Surface
         layout="fill"
         staticChildren
-        signal={props.kind === "error"
-          ? "error"
-          : ["permission", "question"].includes(props.kind)
-          ? "attention"
-          : "success"}
+        signal={props.signal}
       >
         {props.children}
       </Surface>
