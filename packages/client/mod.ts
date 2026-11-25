@@ -84,6 +84,7 @@ export * from "./entity-state.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
+export { sendDiagnostic } from "./diagnostics.ts";
 export * from "./branch-history.ts";
 export * from "./branch-draft-labels.ts";
 export * from "./message-presentation.ts";

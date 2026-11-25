@@ -345,6 +345,7 @@ export interface InboxModel {
     directory: string,
     terminal?: number,
   ): Promise<void>;
+  visit(directory: string, options?: RequestOptions): Promise<unknown>;
   act<T>(
     directory: string,
     action: () => Promise<T>,
@@ -709,7 +710,10 @@ export function createInbox(
       await rpc.call("projects.visit", { directory });
       await rpc.call("sessions.seen", { sessionID, terminal });
     },
-    /** Wrap send/approve/answer/interrupt so every successful action resets visits. */
+    visit(directory: string, options?: RequestOptions) {
+      return rpc.call("projects.visit", { directory, active: true }, options);
+    },
+    /** Wrap approve/answer/interrupt so every successful action resets visits. */
     async act<T>(
       directory: string,
       action: () => Promise<T>,
@@ -718,7 +722,7 @@ export function createInbox(
       const result = await action();
       // The successful action is settled independently of its bookkeeping read/write.
       // A lost visit receipt must not keep an already-sent draft looking unsent.
-      void rpc.call("projects.visit", { directory, active: true }, options)
+      void this.visit(directory, options)
         .catch((error) => reportDiagnostic(report, error));
       return result;
     },

@@ -186,7 +186,7 @@ test(
       contentType: "application/json",
     });
     const status = page.locator(".otk-shell-progress");
-    await expect(status).toHaveText(/Loading messages\.\.\. \d+(?:\.\d+)?s/);
+    await expect(status).toHaveText("Loading history");
     const row = page.locator(".otk-session-row").first();
     const before = await row.boundingBox();
     const bodyBefore = await page.getByText("Core transcript", { exact: true })
@@ -196,7 +196,7 @@ test(
     );
     await page.clock.runFor(1100);
     await expect(status).toHaveText(
-      /Still loading messages \(1m(?: \d+(?:\.\d+)?s)?\): waiting for opencode to respond/,
+      /Still loading history \(1m(?: \d+(?:\.\d+)?s)?\): waiting for opencode to respond/,
     );
     await expect(page.locator(".otk-session-loading-row")).toContainText(
       /Still loading sessions/,
@@ -223,14 +223,14 @@ test(
     );
     await page.clock.runFor(1100);
     await expect(status).toHaveText(
-      /Still loading messages \(12d(?: \d+(?:\.\d+)?[hms]){0,2}\): waiting for opencode to respond/,
+      /Still loading history \(12d(?: \d+(?:\.\d+)?[hms]){0,2}\): waiting for opencode to respond/,
     );
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "release",
     });
     await expect(page.locator(".otk-session-loading-row")).toHaveCount(0);
-    await expect(status).not.toContainText(/loading messages/i);
+    await expect(status).not.toContainText(/loading (messages|history)/i);
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "freeze",

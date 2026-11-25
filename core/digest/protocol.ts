@@ -103,7 +103,7 @@ export type ToWorker =
     }
     | { t: "credit"; publications: number; workms?: number }
     | { t: "cancel"; request: number }
-    | { t: "native.acquire" }
+    | { t: "native.acquire"; lane?: import("@otk/harness").NativeReadLane }
     | { t: "native.release"; request: number }
     | { t: "stop" }
   );

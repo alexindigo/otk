@@ -237,25 +237,36 @@ export function register(
       }, createdReceipt.encode)
       : (created?.(value.directory), value);
   rpc.register("session.get", {
-    execution: readExecution((id: string) => ({ sessionID: id })),
-    params: (p) => sessionID(p)!,
-    handler: async (ctx, id) => {
+    execution: readExecution((p: { id: string }) => ({ sessionID: p.id })),
+    params: (p) => {
+      if (p.purpose !== undefined && p.purpose !== "send") {
+        throw new HarnessError("params", "Invalid session read purpose");
+      }
+      return {
+        id: sessionID(p)!,
+        purpose: p.purpose === "send" ? "send" as const : undefined,
+      };
+    },
+    handler: async (ctx, { id, purpose }) => {
       const load = begin(ctx, { kind: "session-metadata", sessionID: id }, {
         kind: "metadata",
       }, { kind: "session-metadata", session: null });
       const session = await ctx.harness.core.getSession(
         id,
         ctx.execution?.signal,
+        purpose,
       );
-      await hierarchy?.prepare(
-        [session],
-        (ids, signal) => ctx.harness.core.identities(ids, signal),
-        ctx.execution?.signal,
-      );
+      if (!purpose) {
+        await hierarchy?.prepare(
+          [session],
+          (ids, signal) => ctx.harness.core.identities(ids, signal),
+          ctx.execution?.signal,
+        );
+      }
       ctx.execution?.signal.throwIfAborted();
       return {
         ...session,
-        ...(hierarchy
+        ...(hierarchy && !purpose
           ? {
             hierarchy: hierarchy.node(
               id,

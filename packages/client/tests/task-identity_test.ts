@@ -99,7 +99,7 @@ for (const action of ["pin", "send", "rename"] as const) {
       tabs.preview("helper");
       if (action === "pin") await tabs.pin("helper");
       else if (action === "send") {
-        await tabs.send("helper", () => Promise.resolve(1));
+        await tabs.ensureTask("helper");
       } else {await tabs.rename("helper", "Renamed helper", () =>
           Promise.resolve(1));}
       assertEquals(promoted, action === "rename" ? [] : ["root"]);

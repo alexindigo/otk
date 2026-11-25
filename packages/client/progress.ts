@@ -6,6 +6,7 @@ import { elapsed, remaining } from "./format.ts";
 export interface ProgressDisplay {
   busy: boolean;
   text: string;
+  stalled?: boolean;
   rate?: number;
   eta?: [number, number];
 }
@@ -82,6 +83,7 @@ export class ProgressEstimate {
     if (stalled) {
       return {
         busy,
+        stalled,
         text: page
           ? `Still loading ${
             label.replace(/^Loading /, "")

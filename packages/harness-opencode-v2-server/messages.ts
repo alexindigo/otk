@@ -288,6 +288,7 @@ export class Messages {
           ...(type ? { type } : {}),
         }, { signal }),
       signal,
+      "bulk",
     );
     return {
       items: [...result.data].reverse(),

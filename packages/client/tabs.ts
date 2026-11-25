@@ -107,15 +107,12 @@ export interface ClientTabs {
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   close(sessionID: string): void;
+  /** Persist membership without taking over the currently selected view. */
+  ensureTask(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
   pin(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
   rename<T>(
     sessionID: string,
     title: string,
-    action: () => Promise<T>,
-    options?: RequestOptions,
-  ): Promise<T>;
-  send<T>(
-    sessionID: string,
     action: () => Promise<T>,
     options?: RequestOptions,
   ): Promise<T>;
@@ -344,7 +341,7 @@ export function createTabs(
     const entry = named ??
       input.entries.find((e) => e.id === sessionID && belongs(e.directory));
     if (!promotions.has(sessionID)) {
-      // One reservation owns pin, send and rename, independently of index or
+      // One reservation owns persistence and rename, independently of index or
       // inbox publication. Rename supplies its captured name and native result.
       const pending = Promise.resolve().then(async () => {
         if (ready) await ready;
@@ -581,13 +578,17 @@ export function createTabs(
         else draft.preview = rootFor(sessionID);
       });
     },
+    ensureTask(sessionID, options) {
+      refresh();
+      return persist(sessionID, options);
+    },
     async pin(
       sessionID: string,
       options?: RequestOptions,
     ): Promise<TaskRecord> {
-      refresh();
+      const pending = this.ensureTask(sessionID, options);
       const revision = selectionRevision;
-      const task = await persist(sessionID, options);
+      const task = await pending;
       if (!stopped && revision === selectionRevision) {
         selectionRevision++;
         store.update((draft) => {
@@ -638,15 +639,6 @@ export function createTabs(
           delete draft.preview;
         }
       });
-    },
-    async send<T>(
-      sessionID: string,
-      action: () => Promise<T>,
-      options?: RequestOptions,
-    ): Promise<T> {
-      await this.pin(sessionID, options);
-      if (stopped) throw new Error("Project tabs are stopped");
-      return await action();
     },
     stop() {
       if (stopped) return;

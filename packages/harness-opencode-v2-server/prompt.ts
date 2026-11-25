@@ -270,6 +270,7 @@ export class V2Prompt implements PromptCapability {
       const session = await client.read(
         (api) => api.session.get({ sessionID: native }),
         operation?.signal,
+        "control",
       );
       const prepared = await preparePrompt(
         input.parts,
