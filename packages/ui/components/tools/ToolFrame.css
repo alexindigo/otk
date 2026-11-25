@@ -88,13 +88,3 @@
 .otk-tool-line.is-error > .otk-tool-state {
   color: var(--otk-status-error);
 }
-.otk-tool-entity-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-.otk-tool-entity-heading > .otk-tool-toggle {
-  flex: none;
-}

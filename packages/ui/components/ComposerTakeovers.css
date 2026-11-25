@@ -1,14 +1,17 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-composer-dock {
+  --composer-bottom-inset: 20px;
+  position: relative;
   flex: 0 1 auto;
   min-height: 0;
-  padding: 0 var(--lane-gutter) 20px;
+  padding: 0 var(--lane-gutter) var(--composer-bottom-inset);
   display: flex;
   flex-direction: column;
   max-height: 100%;
   box-sizing: border-box;
 }
 .otk-composer {
+  position: relative;
   --prompt-input-outline: none;
   width: 100%;
   max-width: var(--lane-width);
@@ -25,9 +28,6 @@
 .otk-composer:focus-within {
   border-color: var(--otk-action-focus);
 }
-.otk-composer-body.is-noticed {
-  border-top: 1px solid var(--otk-border);
-}
 .otk-composer-activity {
   display: flex;
   align-items: center;
@@ -37,4 +37,49 @@
   margin-inline: auto;
   padding-block-end: 8px;
   flex: none;
+}
+.otk-composer-activity-slot {
+  block-size: calc(var(--control-size) + 8px);
+  flex: none;
+}
+.otk-composer-takeover-layer {
+  position: absolute;
+  inset-inline: var(--lane-gutter);
+  inset-block-end: var(--composer-bottom-inset);
+  max-block-size: calc(100cqh - var(--composer-bottom-inset));
+  display: flex;
+  flex-direction: column;
+  z-index: var(--layer-content);
+  pointer-events: none;
+}
+.otk-composer-takeover-layer > * {
+  pointer-events: auto;
+}
+.otk-composer.is-suspended {
+  visibility: hidden;
+}
+.otk-composer-notice-layer {
+  position: absolute;
+  inset-inline: var(--lane-gutter);
+  inset-block-end: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  max-block-size: max(0px, calc(100cqh - 100%));
+}
+.otk-composer-frame {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+}
+.otk-composer-dock[data-read-only="true"] {
+  --composer-bottom-inset: 0px;
+  flex: none;
+  block-size: 0;
+  padding-block: 0;
+}
+.otk-composer-dock[data-read-only="true"] > .otk-composer-activity-slot {
+  position: absolute;
+  inset-inline: var(--lane-gutter);
+  inset-block-end: 0;
 }

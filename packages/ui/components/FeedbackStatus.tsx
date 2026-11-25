@@ -15,12 +15,15 @@ export default function FeedbackStatus(props: {
   class?: string;
   ref?(element: HTMLDivElement): void;
   focusable?: boolean;
+  singleLine?: boolean;
 }): Element {
   const feedback = () => props.feedback ?? errorFeedback(props.error);
   const native = nativeAttributes(() =>
     feedbackState({
       feedback: feedback(),
-      class: `otk-feedback-status ${props.class ?? ""}`,
+      class: `otk-feedback-status ${props.singleLine ? "is-single-line" : ""} ${
+        props.class ?? ""
+      }`,
     })
   );
   return (
@@ -38,7 +41,12 @@ export default function FeedbackStatus(props: {
           : "otk-feedback-text otk-control-label"}
       >
         {feedback()?.failure
-          ? <FailureContent failure={feedback()!.failure!} />
+          ? (
+            <FailureContent
+              failure={feedback()!.failure!}
+              inline={props.singleLine}
+            />
+          )
           : feedback()?.text ?? "\u00a0"}
       </p>
       <Show when={feedback()?.action}>

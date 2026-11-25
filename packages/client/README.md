@@ -1,5 +1,15 @@
 # @otk/client
 
+`entityFacts(identity, sources)` projects explicit session, turn and tool
+scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
+markers and never borrow session/helper clocks. Session-now status borrows live
+supervision, including when a metadata entry is not leased. `runningWork` reads
+helpers from the shared tabs working projection and shells only from fresh
+adapter inventory items whose identities remain in that inventory. Transcript
+paging is not an input. `createLiveWork` owns capability checks and joined stop
+admission across presentation lifetimes; elapsed labels describe running time,
+not working time.
+
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
 available and later facts enrich it without adding a second toast. Transcript
@@ -760,6 +770,17 @@ chronological prompt identities, creation clocks, shared queued flags and
 borrowed source parts. It retains no content or paging state; consumers present
 parts through their own registry and page through the original session owner.
 
+The canonical projection's `records` value owns append-stable Activity spans,
+identical-fact folds, reveal ancestry and presentation revisions. An eligible
+singleton starts as a span; an already admitted individual row never becomes one
+after settling. Explicit failures break out in source order. Native plugins
+supply opaque summary kinds and singular/plural nouns; headings never classify
+records. Records without producer-owned summary facts stay individually visible.
+The existing transcript interaction owner retains all disclosure choices and
+opens reveal ancestors. Measurements use presentation revisions separately from
+logical row identity, so a topology or streamed-content revision cannot borrow
+an old extent, including when an unmounted row was previously empty.
+
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
 request cannot revive completed history, and idle retires pending state. Views
@@ -883,16 +904,17 @@ session/project/application title projection.
 Project clicks and cold/reloaded project routes call `navigation.default` on the
 selected server. One core resolver uses SessionHierarchy membership and the
 shared attention order first, then validates the exact remembered session
-(children included), then compares one newest native root per exact checkout
-scope. Explicit session links remain explicit selections, not project-default
-intents. ShellNavigation applies the result only while its captured revision is
-current; same-project clicks do not bypass resolution. Locations live in the
-existing host-sidecar `shellLayout` preference; `layout.location` merges one
-server/directory intent at the persistence owner, so concurrent project visits
-cannot overwrite one another. Pending saves bridge immediate switches;
-preference broadcasts own the saved snapshot. Current task membership resolves
-the restored session's tab, including helper ancestry. Missing, foreign or
-closed locations use the same resolver's newest-root fallback.
+(helpers resolve to their proven human root), then compares one newest native
+root per exact checkout scope. Explicit session links remain explicit
+selections, not project-default intents. ShellNavigation applies the result only
+while its captured revision is current; same-project clicks do not bypass
+resolution. Locations live in the existing host-sidecar `shellLayout`
+preference; `layout.location` merges one server/directory intent at the
+persistence owner, so concurrent project visits cannot overwrite one another.
+Pending saves bridge immediate switches; preference broadcasts own the saved
+snapshot. Current task membership resolves the restored session's tab, including
+helper ancestry. Missing, foreign or closed locations use the same resolver's
+newest-root fallback.
 
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without
@@ -1245,11 +1267,16 @@ through `ServerResources.sessionRows`. Live row facts continue to come from
 
 The same project owner supplies stable `projectMetadata` and keyed
 `metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
-`crumbs` share one keyed family/adjacency derivation; `entry` resolves crumb
-titles without a population search. `ClientIndex.partition` is cached by its
-partition clock, while `projectProgress` borrows incrementally maintained
-digest-state counts. Digest-only frames do not rebuild metadata or hierarchy
-inputs.
+`path`, `family` and `crumbs` share one keyed family/adjacency derivation.
+`path()` holds the open session and known ancestor links; `family()` carries
+explicit task members and mandatory descendants with each session's own state.
+`crumbs()` renders the path followed by off-path working, blocked and
+finished-unseen members. Settlement and acknowledgement retire only the off-path
+member, never open identity. `working()` borrows that family's working helpers
+for the composer. `entry` resolves crumb titles without a population search.
+`ClientIndex.partition` is cached by its partition clock, while
+`projectProgress` borrows incrementally maintained digest-state counts.
+Digest-only frames do not rebuild metadata or hierarchy inputs.
 
 `createWindow()` owns browser-independent measured viewport math. Supply ordered
 keys and role estimates with `update`, apply incremental sizes with `measure`,
@@ -1382,13 +1409,13 @@ registration identity, including after an item was armed.
 `createAttentionGrace({clock?, factory?})` owns one 500 ms deadline per
 sidecar/permission identity and one shared scheduler. Accepted evidence/content
 arrivals and settlements feed it independently of mounted views. Composer
-eligibility and reduced-motion lamp paint borrow that same deadline; late
-mounts, duplicates and preference changes never start another grace. A fresh
-inventory that no longer lists a presented request retires it from lamp grace
-but keeps its one deadline until the content removal settles it, so a reply's
-index update cannot hide and re-present the takeover. Questions remain
-immediate. Supervision, mandatory visibility, notification routing, badges and
-sound do not consume this presentation delay.
+eligibility, notification delivery and lamp paint borrow that same deadline;
+late mounts, duplicates and preference changes never start another grace. A
+fresh inventory that no longer lists a presented request retires it from lamp
+grace but keeps its one deadline until the content removal settles it, so a
+reply's index update cannot hide and re-present the takeover. Questions remain
+immediate. Supervision and mandatory visibility do not consume this presentation
+delay. Notification channels borrow request eligibility before delivery.
 
 Known question/form inputs retain their server/request identities across stale
 or absent evidence. Only a fresh per-session inventory, exact inputSettled call,
@@ -1456,6 +1483,20 @@ delivery. Real eviction, reparenting, archival and tombstones retract the
 appropriate notes. The legacy frame constructor/read/project ports remain
 independently usable through the ordinary canonical reducer and the same compact
 comparison owner.
+
+The shipped composition injects the same `AttentionGrace` used by takeovers and
+lamps into `NotificationTriggers`. Permissions borrow its read-only `eligible`
+query and subscription with current request identities, never root/kind timers.
+Same-count replacements retain surviving deadlines; settled or absent requests
+cannot notify. Settlement also retires the displayed request before index counts
+catch up; remaining already-alerted requests replace it quietly. Questions
+remain immediate. Standalone count-only consumers may omit the grace port and
+retain immediate delivery; request-aware consumers inject their lifetime owner.
+`stop()` releases the borrowed subscription, not the owner.
+
+Routing-only attention leases retain pending permission/input identities and
+freshness for this same owner, but no work or activity history. Notification
+detail still comes from the existing permission read after eligibility.
 
 NotificationTriggers uses the first snapshot after each connection's `reset` as
 a silent baseline. Root attention roll-ups already include children; roots

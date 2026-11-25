@@ -25,6 +25,8 @@ export interface TranscriptInteraction {
     set(value: boolean): void;
   };
   retire(key: string): void;
+  subscribe(listener: () => void, key: string): () => void;
+  reveal(ancestors: readonly string[]): void;
   generation(identity: string): string;
   retireIdentity(identity: string): void;
   measurements(window: string): Map<string, number>;
@@ -36,6 +38,10 @@ export function createTranscriptInteraction(): TranscriptInteraction {
   const choices = new Map<string, { generation: string; open?: boolean }>();
   const generations = new Map<string, number>();
   const windows = new Map<string, Map<string, number>>();
+  const listeners = new Map<string, Set<() => void>>();
+  const publish = (key: string) => {
+    for (const listener of listeners.get(key) ?? []) listener();
+  };
   let anchor: TranscriptAnchor | undefined;
   const defaultFor = (
     category: DisclosureCategory,
@@ -58,20 +64,45 @@ export function createTranscriptInteraction(): TranscriptInteraction {
   };
   return {
     defaultFor,
+    subscribe(listener, key) {
+      let selected = listeners.get(key);
+      if (!selected) listeners.set(key, selected = new Set());
+      selected.add(listener);
+      return () => {
+        selected.delete(listener);
+        if (!selected.size) listeners.delete(key);
+      };
+    },
+    reveal(ancestors) {
+      for (const key of ancestors) {
+        choices.set(key, {
+          generation: `${key}:${generations.get(key) ?? 0}`,
+          open: true,
+        });
+        publish(key);
+      }
+    },
     disclosure(key, generation) {
       let value = choices.get(key);
       if (value?.generation !== generation) {
         value = { generation };
         choices.set(key, value);
       }
-      const owner = value;
       return {
-        value: () => choices.get(key) === owner ? owner.open : undefined,
+        value: () =>
+          choices.get(key)?.generation === generation
+            ? choices.get(key)?.open
+            : undefined,
         expanded: (category, prefs, required = false) =>
-          (choices.get(key) === owner ? owner.open : undefined) ??
+          (choices.get(key)?.generation === generation
+            ? choices.get(key)?.open
+            : undefined) ??
             (required || defaultFor(category, prefs)),
         set(open) {
-          if (choices.get(key) === owner) owner.open = open;
+          if (choices.get(key)?.generation === generation) {
+            choices.get(key)!.open = open;
+            publish(key);
+          }
         },
       };
     },

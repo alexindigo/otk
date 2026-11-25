@@ -11,9 +11,19 @@ export interface ActivityGroup {
   count?: number;
   time?: { first: number; last: number };
   children?: ActivityGroup[];
+  revision: number;
+  direction?: Activity["direction"];
+  category?: Activity["category"];
 }
-
-/** Presentation of acquired records only; native states remain opaque. */
+export interface RecordProjection {
+  revision: number;
+  keys: string[];
+  groups: Record<string, ActivityGroup>;
+  parents: Record<string, string[]>;
+  owners: Record<string, string>;
+  revisions: Record<string, number>;
+}
+/** Opaque native kinds are never decoded by the client. */
 function foldable(reply: TranscriptReply | undefined): Activity | undefined {
   const message = reply?.message;
   if (
@@ -24,105 +34,215 @@ function foldable(reply: TranscriptReply | undefined): Activity | undefined {
   if (part.kind !== "external" || part.failure) return;
   const activity = part.activity;
   if (
-    !activity || activity.layout !== "row" || activity.tone === "error" ||
+    !activity?.summary || activity.layout !== "row" ||
+    activity.tone === "error" ||
     activity.state?.facts.active ||
     activity.state && activity.state.facts.terminal !== true
   ) return;
   return activity;
 }
-
-function countText(kind: string, count: number): string {
-  const labels: Record<string, [string, string]> = {
-    "subagent result": ["helper finished", "helpers finished"],
-    "shell result": ["shell", "shells"],
-    shell: ["shell", "shells"],
-    permission: ["permission", "permissions"],
-    execution: ["run", "runs"],
-    system: ["system update", "system updates"],
-  };
-  const word = kind.toLowerCase();
-  const label = labels[word] ?? [word, word.endsWith("s") ? word : word + "s"];
-  return `${count} ${label[count === 1 ? 0 : 1]}`;
+// Full source facts, not headings, define equality. Record/part IDs and the
+// envelope clock are identity, not content. Native source references remain facts.
+function signature(reply: TranscriptReply): string {
+  const part = reply.message.parts[0];
+  const { id: _id, ...facts } = part;
+  return JSON.stringify([facts, reply.message.source]);
 }
+const empty = (): RecordProjection => ({
+  revision: 0,
+  keys: [],
+  groups: Object.create(null),
+  parents: Object.create(null),
+  owners: Object.create(null),
+  revisions: Object.create(null),
+});
 
-/** One owner for span membership, identical subgroups and reveal ancestry. */
-export function activitySpans(
-  replyIDs: readonly string[],
-  repliesByID: Readonly<Record<string, TranscriptReply>>,
-) {
-  const keys: string[] = [];
-  const groups: Record<string, ActivityGroup> = Object.create(null);
-  const parents: Record<string, string[]> = Object.create(null);
-  const owners: Record<string, string> = Object.create(null);
-  let pending: { key: string; activity: Activity }[] = [];
-  const flush = () => {
-    if (!pending.length) return;
-    const members = pending.map((row) => row.key), key = members[0];
-    keys.push(key);
-    for (const member of members) owners[member] = key;
-    if (members.length > 1) {
-      const counts = new Map<string, number>();
-      const children: ActivityGroup[] = [];
-      let signature: string | undefined;
-      for (const row of pending) {
-        counts.set(
-          row.activity.kindLabel,
-          (counts.get(row.activity.kindLabel) ?? 0) + 1,
-        );
-        const next = JSON.stringify([
-          row.activity.kindLabel,
-          row.activity.title,
-          row.activity.detail ?? "",
-          row.activity.entity,
-        ]);
-        const previous = children.at(-1);
-        if (previous && next === signature) {
-          previous.members.push(row.key);
-          previous.count = previous.members.length;
-        } else {
-          children.push({
-            key: row.key,
-            members: [row.key],
-            title: row.activity.title,
-            entity: row.activity.entity,
-            detail: row.activity.detail,
-          });
-        }
-        signature = next;
-      }
-      groups[key] = {
-        key,
-        members,
-        title: "Activity",
-        detail: [...counts].map(([kind, count]) => countText(kind, count)).join(
-          " · ",
-        ),
-        time: {
-          first: repliesByID[key].message.time.created,
-          last: repliesByID[members.at(-1)!].message.time.created,
-        },
-        children,
-      };
-      for (const child of children) {
-        for (const member of child.members) {
-          parents[member] = [
-            key,
-            ...(child.count ? [`records:${child.key}`] : []),
-          ];
-        }
-      }
-    }
-    pending = [];
+/** Owned by the canonical transcript. Topology is assigned at first admission;
+ * terminal updates never absorb an already presented individual record. */
+export function createRecordProjection(): {
+  clear(): void;
+  retire(id: string): void;
+  update(key: string, sourceRevision: number): RecordProjection;
+  reconcile(
+    ids: readonly string[],
+    replies: Readonly<Record<string, TranscriptReply>>,
+  ): RecordProjection;
+} {
+  let value = empty();
+  const assignment = new Map<string, string>();
+  const children = new Map<string, string>();
+  const permanentRows = new Set<string>();
+  const versions = new Map<string, { facts: string; revision: number }>();
+  let presentationRevision = 0;
+  const revision = (key: string, facts: unknown) => {
+    const next = JSON.stringify(facts), old = versions.get(key);
+    if (old?.facts === next) return old.revision;
+    const revision = ++presentationRevision;
+    versions.set(key, { facts: next, revision });
+    return revision;
   };
-  for (const key of replyIDs) {
-    const activity = foldable(repliesByID[key]);
-    if (activity) pending.push({ key, activity });
-    else {
-      flush();
-      keys.push(key);
-      owners[key] = key;
-    }
-  }
-  flush();
-  return { keys, groups, parents, owners };
+  return {
+    update(key, sourceRevision) {
+      if (value.owners[key] !== key) return value;
+      const next = revision(key, sourceRevision);
+      if (value.revisions[key] === next) return value;
+      value = {
+        ...value,
+        revision: presentationRevision,
+        revisions: { ...value.revisions, [key]: next },
+      };
+      return value;
+    },
+    retire(id) {
+      assignment.delete(id);
+      children.delete(id);
+      permanentRows.delete(id);
+    },
+    clear() {
+      value = empty();
+      assignment.clear();
+      children.clear();
+      permanentRows.clear();
+      versions.clear();
+    },
+    reconcile(
+      ids: readonly string[],
+      replies: Readonly<Record<string, TranscriptReply>>,
+    ): RecordProjection {
+      const next = empty();
+      const splitOrigins = new Map<string, string>();
+      let previous: string | undefined;
+      for (const id of ids) {
+        const activity = foldable(replies[id]);
+        let key = assignment.get(id);
+        if (!activity) {
+          permanentRows.add(id);
+          key = id;
+          children.delete(id);
+        } else if (!key) {
+          key = previous && next.groups[previous] &&
+              next.groups[previous].direction === activity.direction
+            ? previous
+            : `activity:${id}`;
+        }
+        if (permanentRows.has(id)) key = id;
+        // An explicit failure/removal may split a span, never reorder records
+        // around the breakout row or reconnect across that boundary later.
+        if (key !== id && next.groups[key!] && previous !== key) {
+          const origin = key!;
+          key = previous && splitOrigins.get(previous) === origin
+            ? previous
+            : `activity:${id}`;
+          splitOrigins.set(key, origin);
+          children.delete(id);
+        }
+        assignment.set(id, key!);
+        next.owners[id] = key!;
+        if (key === id) {
+          next.keys.push(id);
+          next.revisions[id] = revision(id, replies[id].revision);
+        } else {
+          let group = next.groups[key!];
+          if (!group) {
+            next.keys.push(key!);
+            group = next.groups[key!] = {
+              key: key!,
+              members: [],
+              title: "Activity",
+              direction: activity!.direction,
+              children: [],
+              revision: 0,
+            };
+          }
+          group.members.push(id);
+          const prior = group.children!.at(-1);
+          let childKey = children.get(id);
+          if (
+            childKey && (
+              prior?.key === childKey
+                ? signature(replies[prior.members[0]]) !==
+                  signature(replies[id])
+                : group.children!.some((row) => row.key === childKey)
+            )
+          ) {
+            // Retained identity cannot reconnect a fold across intervening facts.
+            childKey = undefined;
+          }
+          if (!childKey) {
+            childKey = prior &&
+                signature(replies[prior.members[0]]) === signature(replies[id])
+              ? prior.key
+              : `records:${id}`;
+            children.set(id, childKey);
+          }
+          let child = group.children!.find((row) => row.key === childKey);
+          if (!child) {
+            child = {
+              key: childKey,
+              members: [],
+              title: activity!.title,
+              entity: activity!.entity,
+              detail: activity!.detail,
+              direction: activity!.direction,
+              category: activity!.category,
+              revision: 0,
+            };
+            group.children!.push(child);
+          }
+          child.members.push(id);
+          child.count = child.members.length;
+          next.parents[id] = [key!, childKey];
+        }
+        previous = key;
+      }
+      for (const group of Object.values(next.groups)) {
+        const counts = new Map<
+          string,
+          { noun: string; plural: string; count: number }
+        >();
+        for (const id of group.members) {
+          const summary = foldable(replies[id])?.summary;
+          if (!summary) continue;
+          const count = counts.get(summary.kind) ?? { ...summary, count: 0 };
+          count.count++;
+          counts.set(summary.kind, count);
+        }
+        group.detail = [...counts.values()].map((v) =>
+          `${v.count} ${v.count === 1 ? v.noun : v.plural}`
+        ).join(" · ");
+        group.time = {
+          first: replies[group.members[0]].message.time.created,
+          last: replies[group.members.at(-1)!].message.time.created,
+        };
+        for (const child of group.children!) {
+          child.revision = revision(
+            child.key,
+            child.members.map((id) => [id, signature(replies[id])]),
+          );
+        }
+        group.revision = revision(group.key, [
+          group.members,
+          group.detail,
+          group.time,
+          group.children,
+        ]);
+        next.revisions[group.key] = group.revision;
+      }
+      const retained = new Set(Object.values(next.parents).flat());
+      for (const key of next.keys) retained.add(key);
+      for (const key of versions.keys()) {
+        if (!retained.has(key)) versions.delete(key);
+      }
+      next.revision = presentationRevision;
+      value = next;
+      return value;
+    },
+  };
+}
+/** Detached compatibility projection. Shipped views borrow canonical state. */
+export function activitySpans(
+  ids: readonly string[],
+  replies: Readonly<Record<string, TranscriptReply>>,
+): RecordProjection {
+  return createRecordProjection().reconcile(ids, replies);
 }

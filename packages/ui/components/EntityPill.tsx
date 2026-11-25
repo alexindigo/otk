@@ -1,43 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./EntityPill.css" with { type: "text" };
 import { Show } from "solid-js";
-import { derivedValue, type ModelRef } from "@otk/protocol";
-import { duration } from "@otk/client";
-import { useSessionPorts } from "../registries/session.tsx";
+import { duration, type EntityFacts } from "@otk/client";
 import Popover from "./surface/Popover.tsx";
 import StatusLight from "./StatusLight.tsx";
 import { LIGHT_STATES } from "./status-light.ts";
 
-/** One agent label and fact preview, borrowing session data and navigation. */
+/** Data-only shared preview. No session lookup or cross-scope fallback. */
 export default function EntityPill(props: {
   label: string;
-  sessionID?: string;
-  model?: ModelRef;
-  finished?: number;
-  duration?: number;
+  facts: EntityFacts;
   onOpen?(id: string): void;
 }): import("solid-js").Element {
-  const session = useSessionPorts();
-  const entry = () =>
-    props.sessionID ? session?.entry(props.sessionID) : undefined;
-  const reported = () => derivedValue(entry()?.digest.last);
-  const model = () => props.model ?? reported()?.model;
-  const status = () =>
-    props.sessionID ? session?.status?.(props.sessionID) : undefined;
-  const time = () => derivedValue(entry()?.digest.helper?.progress)?.time;
-  const finished = () => props.finished ?? time()?.end;
-  const elapsed = () => {
-    const value = time();
-    return props.duration ??
-      (value?.end !== undefined ? value.end - value.start : undefined);
-  };
   const open = () => {
-    if (props.sessionID) props.onOpen?.(props.sessionID);
+    if (props.facts.session.id) props.onOpen?.(props.facts.session.id);
   };
+  const work = () => props.facts.reply ?? props.facts.tool;
   return (
     <Popover
       label={`${props.label} details`}
-      triggerLabel={props.sessionID && props.onOpen
+      triggerLabel={props.facts.session.id && props.onOpen
         ? `Open ${props.label} session`
         : `${props.label} details`}
       class="otk-entity"
@@ -47,56 +29,71 @@ export default function EntityPill(props: {
       size="content"
       preview
       pinOnClick
-      onActivate={props.sessionID && props.onOpen ? open : undefined}
+      onActivate={props.facts.session.id && props.onOpen ? open : undefined}
     >
       <dl class="otk-entity-facts">
         <dt>Agent</dt>
         <dd>{props.label}</dd>
-        <Show when={model()}>
-          {(value) => (
+        <Show when={props.facts.model}>
+          {(model) => (
             <>
               <dt>Model</dt>
-              <dd>{value().provider} / {value().model}</dd>
+              <dd>{model().provider} / {model().model}</dd>
             </>
           )}
         </Show>
-        <Show when={props.sessionID}>
+        <Show when={work()}>
+          {(value) => (
+            <>
+              <dt>{props.facts.reply ? "This reply" : "This tool"}</dt>
+              <dd title={props.facts.reply?.explanation}>
+                {value().working.known
+                  ? `Working time: ${duration(value().working.value!)}`
+                  : "Time unknown"}
+                <Show when={value().working.known && !value().working.final}>
+                  {" "}
+                  <em>counting...</em>
+                </Show>
+              </dd>
+              <Show when={value().completed.known}>
+                {
+                  <>
+                    <dt>Completed</dt>
+                    <dd>
+                      <time
+                        datetime={new Date(value().completed.value!)
+                          .toISOString()}
+                      >
+                        {new Date(value().completed.value!).toLocaleString()}
+                      </time>
+                    </dd>
+                  </>
+                }
+              </Show>
+            </>
+          )}
+        </Show>
+        <Show when={props.facts.session.id}>
           {(id) => (
             <>
               <dt>Session</dt>
-              <dd>{entry()?.title ?? id()}</dd>
+              <dd>{props.facts.session.title ?? id()}</dd>
             </>
           )}
         </Show>
-        <Show when={status()}>
-          {(value) => (
+        <Show when={props.facts.session.status}>
+          {(status) => (
             <>
-              <dt>Status</dt>
+              <dt>Session now</dt>
               <dd class="otk-entity-status">
-                <StatusLight state={value()} small />
-                {LIGHT_STATES[value()].label}
-              </dd>
-            </>
-          )}
-        </Show>
-        <Show when={elapsed() !== undefined}>
-          <dt>Duration</dt>
-          <dd>{duration(elapsed()!)}</dd>
-        </Show>
-        <Show when={finished()}>
-          {(value) => (
-            <>
-              <dt>Finished</dt>
-              <dd>
-                <time datetime={new Date(value()).toISOString()}>
-                  {new Date(value()).toLocaleString()}
-                </time>
+                <StatusLight state={status()} small />
+                {LIGHT_STATES[status()].label}
               </dd>
             </>
           )}
         </Show>
       </dl>
-      <Show when={props.sessionID && props.onOpen}>
+      <Show when={props.facts.session.id && props.onOpen}>
         <button type="button" class="otk-pill" onClick={open}>Open</button>
       </Show>
     </Popover>

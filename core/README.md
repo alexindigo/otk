@@ -102,13 +102,15 @@ same view, without preloading transcripts. Hierarchy and task grouping come from
 the shared server projection. Remembered selection uses authoritative keyed
 identity validation through `NavigationDefault`. Project clicks and
 cold/reloaded project routes share this read: supervision attention in the
-existing priority order, exact remembered identity (including children), then
-the newest top-level session across checkout scopes. Attention borrows
-SessionHierarchy membership; the fallback reads at most one native root per
-exact scope and never scans a transcript or acquires the project population.
-Host-sidecar layout memory is passed as a candidate, never accepted by a
-client-side shortcut. Recall resolves the selected identity before reading its
-project, never discovered sources.
+existing priority order, remembered identity, then the newest top-level session
+across checkout scopes. Attention borrows SessionHierarchy membership; the
+fallback reads at most one native root per exact scope and never scans a
+transcript or acquires the project population. Host-sidecar layout memory is
+passed as a candidate, never accepted by a client-side shortcut. Attention and
+remembered helpers resolve only through the hierarchy's complete `rootID` proof
+to their human root. Unresolved or cyclic ancestry falls through to the newest
+proven root, never an unproven helper. Recall resolves the selected identity
+before reading its project, never discovered sources.
 
 Index publication has one outstanding bounded chunk per socket. `index.applied`
 returns credit only after client reduction. Updates coalesce by key while credit
@@ -126,10 +128,11 @@ and close own its lifetime.
 RequestAttention contributes a feature-owned lease for pending manual
 permissions and questions on every connected server. Outside the ordinary view
 it publishes only routing identities, titles, project/parent links and pending
-counts, with no digest, usage or activity history. Existing permission/question
-reads deliver the pending request through their request-owned lifetime.
-Settlement evicts this metadata unless another view still owns it; automatic
-permissions do not acquire the user-attention lease.
+counts plus pending request identities/freshness, with no digest, usage or work
+history. Presentation grace borrows those same identities across project scopes.
+Existing permission/question reads deliver the pending request through their
+request-owned lifetime. Settlement evicts this metadata unless another view
+still owns it; automatic permissions do not acquire the user-attention lease.
 
 `FormsFeature` registers typed `form.list/reply/cancel` operations and publishes
 volatile `forms.pending` attention state. Answer values remain typed; completion

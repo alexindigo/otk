@@ -8,7 +8,7 @@ import type {
 } from "@otk/protocol";
 import { latestTerminal } from "@otk/protocol";
 import { sessionTitle } from "./session-title.ts";
-import { ATTENTION_GRACE_MS } from "./attention-grace.ts";
+import type { AttentionGrace } from "./attention-grace.ts";
 import {
   failureNote,
   notificationFailure,
@@ -28,6 +28,7 @@ type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
 interface Facts {
   status: IndexEntry["status"];
   permissions: number;
+  permissionIDs: readonly string[];
   questions: number;
   errorIdentity: string;
   error?: string;
@@ -41,6 +42,7 @@ const facts = (entry?: IndexEntry): Facts | undefined =>
   !entry || entry.deleted || entry.archived ? undefined : {
     status: entry.status,
     permissions: entry.attention.permissions,
+    permissionIDs: entry.activity?.permissions?.keys ?? [],
     questions: entry.attention.questions,
     error: entry.attention.error,
     observations: entry.attention.errorState?.observations.filter((item) =>
@@ -67,23 +69,63 @@ export class NotificationTriggers {
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
-  /** Input notes wait out the shared attention grace, so a request settled
-   * within it (e.g. auto-approved) never flashes a notification. */
-  #held = new Map<string, ReturnType<typeof setTimeout>>();
+  #held = new Map<string, {
+    note: Note;
+    requests: readonly string[];
+    presented?: { request: string; note: Note };
+  }>();
+  #delivered = new Map<string, Set<string>>();
+  #releaseGrace?: () => void;
   #outcomes = new Map<string, Note>();
-  #input(id: string, kind: Note["kind"], note: Note): void {
-    clearTimeout(this.#held.get(id));
-    this.#held.set(
-      id,
-      setTimeout(() => {
-        this.#held.delete(id);
-        if (this.#kinds.get(id) === kind) this.emit(note);
-      }, ATTENTION_GRACE_MS),
-    );
+  #flush(): void {
+    for (const [id, held] of this.#held) {
+      const server = held.note.sessionRef!.sidecar;
+      const delivered = this.#delivered.get(id) ?? new Set<string>();
+      const eligible = held.requests.filter((request) =>
+        this.grace!.eligible(server, request)
+      );
+      const fresh = eligible.find((request) => !delivered.has(request));
+      if (
+        !fresh && held.presented && eligible.includes(held.presented.request)
+      ) {
+        continue;
+      }
+      const request = fresh ?? eligible[0];
+      if (!request) {
+        if (held.presented) {
+          held.presented = undefined;
+          this.retract(id);
+        }
+        continue;
+      }
+      const previous = held.presented?.note;
+      const note = {
+        ...held.note,
+        dismissalKey: `permission/${request}`,
+      };
+      const repeated = delivered.has(request);
+      delivered.add(request);
+      this.#delivered.set(id, delivered);
+      held.presented = { request, note };
+      this.emit(note, repeated ? previous ?? note : undefined);
+    }
+  }
+  #input(note: Note, requests: readonly string[]): void {
+    if (note.kind !== "permission" || !this.grace) {
+      this.#held.delete(note.id);
+      this.emit(note);
+      return;
+    }
+    this.#held.set(note.id, {
+      note,
+      requests,
+      presented: this.#held.get(note.id)?.presented,
+    });
+    this.#flush();
   }
   #retractInput(id: string): void {
-    clearTimeout(this.#held.get(id));
     this.#held.delete(id);
+    this.#delivered.delete(id);
     this.retract(id);
   }
   #index?: ClientIndex;
@@ -95,7 +137,15 @@ export class NotificationTriggers {
       (_sidecar, entries) => entries,
     readonly read?: (sidecar: string) => readonly IndexEntry[],
     readonly changes?: (sidecar: string) => IndexChanges | undefined,
-  ) {}
+    readonly grace?: AttentionGrace,
+  ) {
+    this.#releaseGrace = grace?.subscribe(() => this.#flush());
+  }
+  stop(): void {
+    this.#releaseGrace?.();
+    this.#releaseGrace = undefined;
+    for (const sidecar of [...this.#connections.keys()]) this.reset(sidecar);
+  }
   reset(sidecar: string): void {
     this.#index?.remove(sidecar);
     this.#connections.delete(sidecar);
@@ -147,6 +197,13 @@ export class NotificationTriggers {
         entry.completedAt,
       );
     }
+    // Install current routing/settlement facts before grace publication can
+    // synchronously release a notification through an injected state factory.
+    for (const entry of change.changes) {
+      if (entry.after) {
+        this.grace?.observe(sidecar, entry.id, entry.after.activity);
+      }
+    }
   }
   // Standalone frame consumers borrow the ordinary canonical reducer as before.
   // Shipped consumers use entriesChanged and never call this compatibility path.
@@ -195,6 +252,9 @@ export class NotificationTriggers {
       );
     }
     for (const id of pending) this.#compare(sidecar, id, undefined, false);
+    for (const entry of rows) {
+      this.grace?.observe(sidecar, entry.id, entry.activity);
+    }
     this.#connections.get(sidecar)!.rev = rev;
   }
   #compare(
@@ -211,6 +271,7 @@ export class NotificationTriggers {
       {
         status: "idle",
         permissions: 0,
+        permissionIDs: [],
         questions: 0,
         errorIdentity: "",
         title: "",
@@ -358,10 +419,13 @@ export class NotificationTriggers {
         });
       }
     }
-    const kind: Note["kind"] | undefined = entry.permissions > old.permissions
-      ? "permission"
-      : entry.questions > old.questions
+    const newPermission = entry.permissions > old.permissions ||
+      entry.permissions > 0 &&
+        entry.permissionIDs.some((id) => !old.permissionIDs.includes(id));
+    const kind: Note["kind"] | undefined = entry.questions > old.questions
       ? "question"
+      : newPermission || this.#held.has(id) && entry.permissions > 0
+      ? "permission"
       : remaining;
     if (kind) {
       // Ordinary completion and input attention historically replace one root
@@ -369,8 +433,6 @@ export class NotificationTriggers {
       if (this.#outcomes.get(id)?.id === id) this.#outcomes.delete(id);
       this.#kinds.set(id, kind);
       this.#input(
-        id,
-        kind,
         {
           id,
           kind,
@@ -386,6 +448,7 @@ export class NotificationTriggers {
             default: true,
           }],
         },
+        entry.permissionIDs,
       );
     }
   }

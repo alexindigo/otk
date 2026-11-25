@@ -212,8 +212,8 @@ Deno.test("saved transcript visibility leaves live outcomes alerting while visib
     }
   }
 });
-for (const kind of ["permissions", "questions"] as const) {
-  Deno.test(`${kind} settled inside grace never emit a notification`, async () => {
+Deno.test("count-only consumers without a grace owner keep immediate input edges", () => {
+  for (const kind of ["permissions", "questions"] as const) {
     const emitted: Note[] = [];
     const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
     triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [entry()] });
@@ -225,27 +225,28 @@ for (const kind of ["permissions", "questions"] as const) {
       rev: 1,
       ops: [{ op: "upsert", entry: pending }],
     });
-    assertEquals(emitted, []);
+    assertEquals(emitted.map((n) => n.kind), [
+      kind === "permissions" ? "permission" : "question",
+    ]);
     triggers.receive("s", {
       t: "index.patch",
       rev: 2,
       ops: [{ op: "upsert", entry: entry() }],
     });
-    await grace();
-    assertEquals(emitted, []);
+    assertEquals(emitted.length, 1);
     triggers.receive("s", {
       t: "index.patch",
       rev: 3,
       ops: [{ op: "upsert", entry: pending }],
     });
-    await grace();
     assertEquals(emitted.map((n) => n.kind), [
+      kind === "permissions" ? "permission" : "question",
       kind === "permissions" ? "permission" : "question",
     ]);
     triggers.reset("s");
-  });
-}
-Deno.test("newly acquired live pending attention alerts after grace without acquiring unrelated working sessions", async () => {
+  }
+});
+Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
   triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [] });
@@ -259,14 +260,12 @@ Deno.test("newly acquired live pending attention alerts after grace without acqu
       }),
     }],
   });
-  assertEquals(emitted, []);
-  await grace();
   assertEquals(emitted.map((n) => [n.id, n.kind]), [[
     "s/pending",
     "permission",
   ]]);
 });
-Deno.test("notification triggers baseline per connection, batched root roll-up, priority, replay and resolution", async () => {
+Deno.test("notification triggers baseline per connection, batched root roll-up, priority, replay and resolution", () => {
   const emitted: Note[] = [], removed: string[] = [];
   const triggers = new NotificationTriggers(
     (n) => emitted.push(n),
@@ -304,8 +303,6 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
     rev: 4,
     ops: [{ op: "upsert", entry: child }, { op: "upsert", entry: root }],
   });
-  assertEquals(emitted.map((n) => n.kind), ["done"]);
-  await grace();
   assertEquals(emitted.map((n) => n.kind), ["done", "permission"]);
   triggers.receive("s", {
     t: "index.snapshot",
@@ -555,9 +552,9 @@ Deno.test("root notification resolution retains other pending family attention i
       entry: entry("a", { attention: { ...entry().attention, questions: 1 } }),
     }],
   });
-  assertEquals(emitted.map((n) => n.kind), ["permission"]);
-  await grace();
-  assertEquals(emitted.map((n) => n.kind), ["permission", "question"]);
+  // A question arriving alongside a permission takes the immediate input note;
+  // resolving that permission cannot clear the still-pending question badge.
+  assertEquals(emitted.map((n) => n.kind), ["question"]);
   assertEquals(removed, []);
   triggers.receive("s", {
     t: "index.patch",
@@ -607,8 +604,6 @@ Deno.test("question edges, archive/remove and async command completion preserve 
       }),
     }],
   });
-  assertEquals(emitted, []);
-  await grace();
   assertEquals(emitted.map((n) => n.kind), ["question"]);
   triggers.receive("s", {
     t: "index.patch",

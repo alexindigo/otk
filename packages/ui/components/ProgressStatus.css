@@ -5,6 +5,10 @@
   flex-shrink: 1;
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
   color: var(--otk-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 .otk-progress-status:empty {
   display: none;

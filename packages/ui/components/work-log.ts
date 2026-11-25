@@ -19,6 +19,8 @@ import type { PartPresentation } from "../registries/renderers.ts";
 export type { WorkTime } from "../registries/renderers.ts";
 export interface ReplyStart {
   messageID: string;
+  turnID?: string;
+  timing?: TurnTiming;
   agent: string;
   model?: AssistantMessage["model"];
   time: AssistantMessage["time"];

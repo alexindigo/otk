@@ -134,6 +134,7 @@ export default function Shell(
     entry,
     attention,
     observeEntries: resources.observeEntries,
+    grace: attentionPaint.grace,
   });
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {

@@ -42,6 +42,10 @@ test(
       pending = await state.native<{ id: string }[]>("/question");
       return pending.length;
     }).toBe(1);
+    // The independent question surface can cover the transcript tail. Collapse
+    // it without answering before inspecting the retained read-only record.
+    await page.getByRole("button", { name: "Hide the question", exact: true })
+      .click();
     await expandTool(page, "[data-tool=question]");
     await expect(page.locator(".otk-questions")).toContainText(
       "Awaiting answer",

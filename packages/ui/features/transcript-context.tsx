@@ -108,14 +108,22 @@ export function retainedDisclosure(
   prefs: () => Partial<Preferences> = () => ({}),
   identity = useContentIdentity(),
   required: () => boolean = () => false,
+  ownerKey?: string,
 ) {
   const interaction = useContext(Interaction) ?? createTranscriptInteraction();
   const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
+  const disclosureKey = ownerKey ?? key(identity) + ":" + kind;
   const choice = interaction.disclosure(
-    key(identity) + ":" + kind,
-    interaction.generation(id),
+    disclosureKey,
+    interaction.generation(ownerKey ?? id),
   );
   const [revision, setRevision] = createSignal(0);
+  onCleanup(
+    interaction.subscribe(
+      () => setRevision((value) => value + 1),
+      disclosureKey,
+    ),
+  );
   const expanded = () => {
     revision();
     return choice.expanded(
@@ -126,7 +134,6 @@ export function retainedDisclosure(
   };
   return [expanded, (open: boolean) => {
     choice.set(open);
-    setRevision((value) => value + 1);
   }] as const;
 }
 const key = (identity: ContentIdentity) =>

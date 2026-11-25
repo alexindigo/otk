@@ -8,7 +8,7 @@ import { solidState } from "./binding.ts";
 export function attentionPresentation(
   resources: ServerResources,
   animationsOff: () => boolean,
-): AttentionPresentation {
+): AttentionPresentation & { grace: ReturnType<typeof createAttentionGrace> } {
   const grace = createAttentionGrace({ factory: solidState });
   const media = matchMedia("(prefers-reduced-motion: reduce)");
   const [system, setSystem] = createSignal(media.matches);
@@ -56,6 +56,7 @@ export function attentionPresentation(
     removed: grace.removeServer,
   }));
   return {
+    grace,
     permission: (server, request) =>
       grace.permission(server, request.sessionID, request.id),
     light(scope, state) {

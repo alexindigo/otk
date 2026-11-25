@@ -208,7 +208,7 @@ test.describe("native helper lifecycle", () => {
     await crumb.click();
     await expect(page).toHaveURL(new RegExp(`${child.id}$`));
     await state.release(gate.gate);
-    await expect(crumb).toHaveCount(0);
+    await expect(crumb).toBeVisible();
     await expect(page.locator(`[data-session="${child.id}"]`)).toBeVisible();
     // The viewed finish is acknowledged; with no evidence left the lamp is grey.
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
@@ -217,7 +217,7 @@ test.describe("native helper lifecycle", () => {
     );
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await page.reload();
-    await expect(crumb).toHaveCount(0);
+    await expect(crumb).toBeVisible();
     await expect(tab).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   });
@@ -265,6 +265,12 @@ test(
     await state.queue(["Covered command completed"]);
     await prompt(page, "Use the approved echo pattern");
     await reply(page, session.id, "Covered command completed");
+    await openWorkLogs(page);
+    // Expanded earlier work can move the newer reply outside the virtual range.
+    // Use the public navigation owner before inspecting that reply's work.
+    await page.keyboard.press("Control+k");
+    await page.locator("input[name=command-search]").fill("Jump to latest");
+    await page.locator('[data-command="transcript.latest"]').click();
     await openWorkLogs(page);
     await expect(
       page.locator("[data-tool-status=completed]").filter({

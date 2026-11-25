@@ -43,6 +43,17 @@ test("sessions.working-helpers-share-composer-and-trail-lifetime", {
   await visibleOnScreen(crumb(helper));
   await visibleOnScreen(crumb(nested));
   await crumb(root).click();
+  await visibleOnScreen(crumb(helper));
+  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "finished",
+  );
+  await crumb(helper).click();
+  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "none",
+  );
+  await crumb(root).click();
   await expect(crumb(helper)).toHaveCount(0);
   await expect(crumb(nested)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Running work:/ }))
@@ -55,5 +66,16 @@ test("sessions.working-helpers-share-composer-and-trail-lifetime", {
   await expect(page.getByRole("button", { name: "Running work: 1 subagent" }))
     .toBeVisible();
   await activity(state, helper, "release");
+  await visibleOnScreen(crumb(helper));
+  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "finished",
+  );
+  await crumb(helper).click();
+  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "none",
+  );
+  await crumb(root).click();
   await expect(crumb(helper)).toHaveCount(0);
 });

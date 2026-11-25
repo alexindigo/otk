@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAssistantTerminal } from "@otk/protocol";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
@@ -106,6 +108,7 @@ function ReplyStart(props: {
   sessionID: string;
   onOpen(id: string): void;
 }) {
+  const session = useOptionalSessionPorts();
   const date = () =>
     new Date(props.source.time.lastOutput ?? props.source.time.created);
   return (
@@ -118,9 +121,12 @@ function ReplyStart(props: {
       <div class="otk-reply-agent">
         <EntityPill
           label={props.source.agent}
-          sessionID={props.sessionID}
-          model={props.source.model}
-          finished={props.source.time.completed}
+          facts={scopedEntityFacts(session, {
+            sessionID: props.sessionID,
+            turnID: props.source.turnID ?? props.source.messageID,
+            timing: props.source.timing,
+            model: props.source.model,
+          })}
           onOpen={props.onOpen}
         />
       </div>
@@ -179,6 +185,7 @@ export default function Message(
           ...(props.message.role === "assistant"
             ? {
               agent: props.message.agent,
+              turnID: props.message.replyTo ?? props.message.id,
               model: props.message.model,
               time: props.message.time,
             }
@@ -315,7 +322,10 @@ export default function Message(
                         <Show when={group().replyStart}>
                           {(source) => (
                             <ReplyStart
-                              source={source()}
+                              source={{
+                                ...source(),
+                                timing: presentation().time?.timing,
+                              }}
                               sessionID={props.message.sessionID}
                               onOpen={props.onOpenChild}
                             />

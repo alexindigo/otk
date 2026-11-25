@@ -10,13 +10,20 @@ import {
   sessionAncestors,
   type SessionHierarchyNode,
 } from "@otk/protocol";
-import { type InboxStatus, rollup, sessionAttentionStates } from "./inbox.ts";
+import {
+  type InboxStatus,
+  inboxStatus,
+  rollup,
+  sessionAttentionStates,
+} from "./inbox.ts";
 import { sortTabsByUrgency } from "./tab-urgency.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 import { type OperationAttention, rollupStatus } from "./inbox.ts";
-import { workingHelpers } from "./live-work.ts";
+export interface FamilyCrumb extends TaskCrumb {
+  status: InboxStatus;
+}
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -67,8 +74,10 @@ export interface ClientTabs {
   selectedTitle(): string | undefined;
   tasks(): readonly TaskRecord[];
   crumbs(): TaskCrumb[];
-  /** Every session of the open task family, for the running-helpers list. */
-  family(): TaskCrumb[];
+  /** Open-session identity and known ancestor links, independent of activity. */
+  path(): TaskCrumb[];
+  /** Explicit members and mandatory descendants, with their own session state. */
+  family(): FamilyCrumb[];
   /** Canonical running helpers shared by the breadcrumb trail and composer. */
   working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
@@ -137,7 +146,8 @@ export function createTabs(
   let derived: TabInput | undefined;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
   let cachedCrumbs: TaskCrumb[] = [],
-    cachedFamily: TaskCrumb[] = [],
+    cachedPath: TaskCrumb[] = [],
+    cachedFamily: FamilyCrumb[] = [],
     cachedWorking: TaskCrumb[] = [],
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
@@ -406,35 +416,50 @@ export function createTabs(
         }
         result.splice(at, 0, { id, helper: false, depth: 0, external: true });
       }
-      // Keep the open-session path, then the same working helpers the composer
-      // presents. Finished helpers remain in the family, never in this suffix.
+      const familyState = (id: string): InboxStatus => {
+        const state = byID.has(id)
+          ? inboxStatus(byID.get(id)!, input.inbox)
+          : "none";
+        return input.connected === false && state === "working"
+          ? "none"
+          : state;
+      };
+      cachedFamily = local.map((crumb) => ({
+        ...crumb,
+        status: familyState(crumb.id),
+      })).filter((crumb) => !crumb.helper || crumb.status !== "none");
+      cachedWorking = cachedFamily.filter((crumb) =>
+        crumb.helper && crumb.status === "working"
+      ).toSorted((a, b) =>
+        (byID.get(a.id)?.timeCreated ?? 0) -
+        (byID.get(b.id)?.timeCreated ?? 0)
+      );
+      const indexed = new Map(result.map((crumb) => [crumb.id, crumb]));
       const path = current
         ? [
           ...sessionAncestors(current, (id) => byID.get(id)).toReversed(),
           current,
         ]
-        : undefined;
-      cachedFamily = result;
-      cachedWorking = input.connected === false || !result.length
-        ? []
-        : workingHelpers(result, lookup, input.inbox);
-      const indexed = new Map(result.map((crumb) => [crumb.id, crumb]));
-      const trail = path
-        ? path.map((id, depth) =>
-          indexed.get(id) ?? {
-            id,
-            helper: !!byID.get(id)?.parentID,
-            depth,
-            external: foreign.has(id),
-          }
-        )
-        : result;
+          .filter((id, at, ids) => byID.has(id) && ids.indexOf(id) === at)
+        : [];
+      cachedPath = path.map((id, depth) =>
+        indexed.get(id) ?? {
+          id,
+          helper: !!byID.get(id)?.parentID,
+          depth,
+          external: foreign.has(id),
+        }
+      );
       return cachedCrumbs = [
-        ...trail,
-        ...cachedWorking.filter((crumb) =>
-          !trail.some((c) => c.id === crumb.id)
+        ...cachedPath,
+        ...cachedFamily.filter((crumb) =>
+          crumb.status !== "none" && !path.includes(crumb.id)
         ),
       ];
+    },
+    path() {
+      this.crumbs();
+      return cachedPath;
     },
     family() {
       this.crumbs();

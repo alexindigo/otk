@@ -3,6 +3,14 @@
 export interface EvidenceInventory {
   keys: readonly string[];
   fresh: boolean;
+  /** Optional adapter-owned scalar work facts, independent of acquired bodies. */
+  items?: readonly {
+    id: string;
+    kind: "shell" | "execution";
+    label: string;
+    title: string;
+    startedAt?: number;
+  }[];
 }
 export type TerminalOutcome = "succeeded" | "failed" | "interrupted";
 export interface TerminalEvidence {

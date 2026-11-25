@@ -89,6 +89,7 @@ export interface TranscriptState {
   replyIDs: string[];
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
+  records: import("./activity-spans.ts").RecordProjection;
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   load?: LoadCoverage;
@@ -165,6 +166,8 @@ export function createTranscript(
   policy: () => MessagePolicy | undefined = () =>
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
+  const requests = connection(target.sidecarId).attention;
+  const requestEntry = (id: string) => entry(target.sidecarId, id);
   const projection = createTranscriptProjection();
   const sources = createNativeSources({
     messages: () => projection.state.messagesByID,
@@ -310,6 +313,13 @@ export function createTranscript(
       : known?.digest.helper;
   };
   const attach = (content: Omit<ContentState, "messages">): ContentState => {
+    for (const kind of ["permissions", "questions", "forms"] as const) {
+      Object.defineProperty(content, kind, {
+        configurable: true,
+        enumerable: true,
+        get: () => requests[kind](target.sessionID, requestEntry),
+      });
+    }
     Object.defineProperty(content, "messages", {
       configurable: true,
       enumerable: true,
@@ -330,6 +340,10 @@ export function createTranscript(
     !projection.state.messagesByID[op.message.id] &&
     op.message.time.created < first.time.created;
   const apply = (content: ContentState, op: ContentOp): ContentState => {
+    if (isAttentionOp(op)) {
+      requests.receive(op);
+      return attach(contentMetadata(content));
+    }
     if (
       op.op === "message.upsert" && hasBaseline &&
       outsideAcquiredRange(op, firstRetained(), cursor !== null || tailDirty)
@@ -362,7 +376,21 @@ export function createTranscript(
           : undefined,
       );
     }
-    return projection.apply(op)
+    const recordBefore = projection.state.records;
+    const projected = projection.apply(op);
+    if (recordBefore !== projection.state.records) {
+      const before = new Set(Object.values(recordBefore.parents).flat());
+      const after = new Set(
+        Object.values(projection.state.records.parents).flat(),
+      );
+      for (const key of before) {
+        if (!after.has(key)) {
+          interaction.retire(key);
+          interaction.retireIdentity(key);
+        }
+      }
+    }
+    return projected
       ? attach(
         reduceRecovery(
           contentMetadata(content),
@@ -382,6 +410,7 @@ export function createTranscript(
     replyIDs: [],
     repliesByID: {},
     queuedIDs: new Set(),
+    records: projection.state.records,
     olderCursor: null,
     pageLoading: false,
     recovering: [],
@@ -412,6 +441,7 @@ export function createTranscript(
     state.replyIDs = projection.state.replyIDs;
     state.repliesByID = projection.state.repliesByID;
     state.queuedIDs = projection.state.queuedIDs;
+    state.records = projection.state.records;
     sources.sync();
     state.recovering = state.content.recovering ?? [];
     state.olderCursor = cursor;
@@ -552,10 +582,14 @@ export function createTranscript(
             : [];
           if (!valid()) return;
           setState((draft) => {
-            let content = attach({
-              ...contentMetadata(draft.content),
+            requests.replace(
+              "permission",
               permissions,
-            });
+              target.sessionID,
+              requestEntry,
+              [...attention.events.values()],
+            );
+            let content = attach(contentMetadata(draft.content));
             for (const op of attention.events.values()) {
               if (
                 op.op === "permission.upsert" || op.op === "permission.remove"
@@ -571,10 +605,14 @@ export function createTranscript(
             : [];
           if (!valid()) return;
           setState((draft) => {
-            let content = attach({
-              ...contentMetadata(draft.content),
+            requests.replace(
+              "question",
               questions,
-            });
+              target.sessionID,
+              requestEntry,
+              [...attention.events.values()],
+            );
+            let content = attach(contentMetadata(draft.content));
             for (const op of attention.events.values()) {
               if (op.op === "question.upsert" || op.op === "question.remove") {
                 content = apply(content, op);
@@ -953,6 +991,11 @@ export function createTranscript(
     }
   };
   const snapshotLifetime = new AbortController();
+  const releaseRequests = requests.subscribe(() =>
+    setState((draft) => {
+      draft.content = attach(contentMetadata(draft.content));
+    })
+  );
   const owner: TranscriptOwner = {
     progress: () => readProgress.display("page", readLabel),
     projection,
@@ -1221,6 +1264,7 @@ export function createTranscript(
         return;
       }
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        requests.retireSessions((id) => !!entry(sidecarId, id)?.deleted);
         const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
           known?.status !== undefined && known.status !== "idle",
@@ -1577,6 +1621,7 @@ export function createTranscript(
       return work;
     },
     stop(): void {
+      releaseRequests();
       snapshotLifetime.abort();
       readProgress.stop();
       interaction.clear();

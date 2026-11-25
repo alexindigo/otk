@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./LiveWork.css" with { type: "text" };
-import { createSignal, For, onCleanup, Show } from "solid-js";
+import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
 import {
+  type LiveWorkOwner,
   type RunningWork,
   runningWorkElapsed,
   runningWorkLabel,
@@ -10,16 +11,26 @@ import EntityPill from "./EntityPill.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { scopedEntityFacts } from "../entity-facts.ts";
 
 /** One quiet control; data and actions belong to the session composition. */
 export default function LiveWork(props: {
   items: readonly RunningWork[];
   onOpen(id: string): void;
-  onStop?(id: string): Promise<void>;
+  owner?: LiveWorkOwner;
   onError(error: unknown): void;
 }): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
-  const [stopping, setStopping] = createSignal<ReadonlySet<string>>(new Set());
+  const session = useOptionalSessionPorts();
+  const [revision, setRevision] = createSignal(0);
+  onSettled(() =>
+    props.owner?.subscribe(() => setRevision((value) => value + 1))
+  );
+  const stopping = (id: string) => {
+    revision();
+    return props.owner?.stopping(id);
+  };
   let timer: ReturnType<typeof setInterval> | undefined;
   let popover: PopoverControl | undefined;
   const stopClock = () => clearInterval(timer);
@@ -29,14 +40,10 @@ export default function LiveWork(props: {
     props.onOpen(id);
   };
   const stop = async (item: RunningWork) => {
-    if (!props.onStop || stopping().has(item.id)) return;
-    setStopping(new Set([...stopping(), item.id]));
     try {
-      await props.onStop(item.sessionID);
+      await props.owner?.stop(item.id);
     } catch (error) {
       props.onError(error);
-    } finally {
-      setStopping(new Set([...stopping()].filter((id) => id !== item.id)));
     }
   };
   return (
@@ -87,9 +94,9 @@ export default function LiveWork(props: {
                 >
                   <EntityPill
                     label={item().label}
-                    sessionID={item().kind === "helper"
-                      ? item().sessionID
-                      : undefined}
+                    facts={scopedEntityFacts(session, {
+                      sessionID: item().sessionID,
+                    })}
                     onOpen={item().kind === "helper" ? open : undefined}
                   />
                 </span>
@@ -117,17 +124,22 @@ export default function LiveWork(props: {
                     {item().title}
                   </button>
                 </Show>
-                <span class="otk-live-work-elapsed" aria-label="Elapsed time">
+                <span class="otk-live-work-elapsed" aria-label="Running for">
                   {item().startedAt === undefined
                     ? "Time unknown"
-                    : runningWorkElapsed(now() - item().startedAt!)}
+                    : `Running for ${
+                      runningWorkElapsed(now() - item().startedAt!)
+                    }`}
                 </span>
                 <div
                   class="otk-live-work-actions"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <Show when={item().kind === "helper"}>
-                    <Show when={props.onStop && !stopping().has(item().id)}>
+                    <Show
+                      when={props.owner?.canStop(item().id) &&
+                        !stopping(item().id)}
+                    >
                       <button
                         type="button"
                         class="otk-pill"
@@ -136,7 +148,7 @@ export default function LiveWork(props: {
                         Stop
                       </button>
                     </Show>
-                    <Show when={stopping().has(item().id)}>
+                    <Show when={stopping(item().id)}>
                       <span role="status">Stopping...</span>
                     </Show>
                   </Show>

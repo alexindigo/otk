@@ -72,8 +72,11 @@ hiddenTest(
     await expect.poll(async () =>
       (await state.observe<{ replying: boolean }>()).replying
     ).toBe(true);
-    await expect(page.locator(".otk-auto-approving")).toHaveText(
-      "Auto-approving\u2026",
+    // WP1 keeps automatic status in the policy shield and retained records.
+    await expect(page.locator(".otk-auto-approving")).toHaveCount(0);
+    await expect(page.locator(".otk-auto-approve-toggle")).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     await expect(page.locator(".otk-composer")).toBeVisible();

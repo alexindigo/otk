@@ -457,6 +457,7 @@ export function mapMessage(
       role: "context",
       parts: [activityPart(raw, {
         kindLabel: "Execution",
+        summary: { kind: "execution", noun: "run", plural: "runs" },
         title: `Execution ${raw.outcome}`,
         detail: raw.error ? errorText(raw.error) : undefined,
         layout: "row",
@@ -478,6 +479,11 @@ export function mapMessage(
       role: "context",
       parts: [activityPart(raw, {
         kindLabel: "System",
+        summary: {
+          kind: "system",
+          noun: "system update",
+          plural: "system updates",
+        },
         title: "System",
         layout: "row",
         category: "system",
@@ -494,6 +500,7 @@ export function mapMessage(
       role: "context",
       parts: [activityPart(raw, {
         kindLabel: "Skill",
+        summary: { kind: "skill", noun: "skill", plural: "skills" },
         title: `Skill ${raw.name}`,
         layout: "row",
         category: "record",
@@ -522,15 +529,18 @@ export function mapMessage(
         role: "context",
         parts: [activityPart(raw, {
           kindLabel: "Subagent result",
+          summary: {
+            kind: "subagent",
+            noun: "helper finished",
+            plural: "helpers finished",
+          },
           entity: agent
             ? {
               label: agent[0].toUpperCase() + agent.slice(1),
               sessionID,
             }
             : undefined,
-          title: `${
-            agent ? agent[0].toUpperCase() + agent.slice(1) : "Subagent"
-          } ${outcome}`,
+          title: agent ? outcome : `Subagent ${outcome}`,
           layout: "row",
           category: "delegation",
           tone: state === "error" ? "error" : "normal",
@@ -584,6 +594,11 @@ export function mapMessage(
       role: "context",
       parts: [activityPart(raw, {
         kindLabel: "Context",
+        summary: {
+          kind: "context",
+          noun: "context record",
+          plural: "context records",
+        },
         title: raw.description?.trim() || "Context sent to model",
         layout: "row",
         category: raw.description?.trim() ? "record" : "outgoing",
@@ -600,6 +615,11 @@ export function mapMessage(
     role: "context",
     parts: [activityPart(raw, {
       kindLabel: text(record(raw).type) ?? "Native record",
+      summary: {
+        kind: text(record(raw).type) ?? "native",
+        noun: "record",
+        plural: "records",
+      },
       title: text(record(raw).type) ?? "Native record",
       layout: "row",
       category: "record",
@@ -746,6 +766,7 @@ export function lifecycleRecord(event: V2Event, sessionID: string): Message {
       source,
       activity: retry ? retryActivity(event.data, false) : {
         kindLabel: event.type,
+        summary: { kind: event.type, noun: "record", plural: "records" },
         title: event.type,
         layout: "row",
         category: "record",
@@ -783,6 +804,7 @@ function shellActivity(
     failed = !!cause;
   return {
     kindLabel: "Shell result",
+    summary: { kind: "shell", noun: "shell", plural: "shells" },
     work: { kind: "shell" },
     title: cause ? `Shell: ${cause}` : "Shell",
     detail: text(facts.command),
@@ -829,6 +851,11 @@ export function requestOutcome(
       source,
       activity: {
         kindLabel,
+        summary: {
+          kind: permission ? "permission" : kindLabel.toLowerCase(),
+          noun: kindLabel.toLowerCase(),
+          plural: kindLabel.toLowerCase() + "s",
+        },
         title: `${kindLabel} ${state}`,
         detail,
         layout: "row",

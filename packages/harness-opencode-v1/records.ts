@@ -129,6 +129,7 @@ export function recordPart(part: RawPart): ExternalPart {
   }));
   const activity: ExternalPart["activity"] = {
     kindLabel: part.type,
+    summary: { kind: part.type, noun: "record", plural: "records" },
     layout: "row",
     category: "record",
     tone: "normal",
@@ -321,6 +322,11 @@ export function eventRecord(
       source,
       activity: {
         kindLabel: retry ? "retry" : permission ? "permission" : "question",
+        summary: {
+          kind: retry ? "retry" : permission ? "permission" : "question",
+          noun: retry ? "retry" : permission ? "permission" : "question",
+          plural: retry ? "retries" : permission ? "permissions" : "questions",
+        },
         category: "record",
         layout: "row",
         title,

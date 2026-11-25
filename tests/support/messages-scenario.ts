@@ -12,6 +12,7 @@ import { publicUiScenario } from "./public-ui-scenario.ts";
 import { recordedMessageScenario } from "./recorded-message-scenario.ts";
 import { pendingInventoryScenario } from "./pending-inventory-scenario.ts";
 import { returnAnchorScenario } from "./return-anchor-scenario.ts";
+import { runningTranscriptScenario } from "./running-transcript-scenario.ts";
 import { coreBackendFixture } from "./core-backend.ts";
 import { WsClient } from "./ws-client.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -36,6 +37,9 @@ import type {
 
 /** External-backend message contracts retain their original real core/UI owner. */
 export async function messagesScenario(profile: Profile) {
+  if (profile === "contract-messages-running-layout") {
+    return await runningTranscriptScenario();
+  }
   if (profile === "contract-messages-failure-ownership") {
     return await failureOwnershipScenario();
   }

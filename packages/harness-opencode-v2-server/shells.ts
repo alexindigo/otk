@@ -14,6 +14,7 @@ export interface RunningShell {
   sessionID: string;
   location: Location;
   started: number;
+  title?: string;
 }
 /** Scalar activity, independent of transcript demand and session executions. */
 export class V2Shells {
@@ -32,6 +33,18 @@ export class V2Shells {
     return [...this.#running.values()].filter((shell) =>
       shell.sessionID === sessionID
     ).map((shell) => shell.id);
+  }
+  items(sessionID: string) {
+    return [...this.#running.values()].filter((shell) =>
+      shell.sessionID === sessionID
+    )
+      .map((shell) => ({
+        id: shell.id,
+        kind: "shell" as const,
+        label: "Shell",
+        title: shell.title ?? "Shell",
+        startedAt: shell.started,
+      }));
   }
   clear(): void {
     this.#running.clear();
@@ -68,7 +81,15 @@ export class V2Shells {
       typeof sessionID !== "string" || sessionID === "global" ||
       info.status !== "running"
     ) return;
-    return { id: info.id, sessionID, location, started: info.time.started };
+    return {
+      id: info.id,
+      sessionID,
+      location,
+      started: info.time.started,
+      title: typeof info.metadata.description === "string"
+        ? info.metadata.description
+        : info.command,
+    };
   }
   event(event: V2Event): { sessionID: string; ended?: number } | undefined {
     const info = event.type === "shell.created"
