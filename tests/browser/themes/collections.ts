@@ -1681,7 +1681,9 @@ export async function collections456(input: Inputs) {
           if (name === "reading") {
             const bubble = ".otk-user-bubble";
             const prose = "[data-message=reading] .otk-text p";
-            const code = "[data-message=reading] .otk-code";
+            // CodeBlock owns the outer lane edges; .otk-code now measures
+            // only the inset text inside its frame.
+            const code = "[data-message=reading] .otk-code-block";
             // The transcript and its nested blocks have zero overscan. Compare
             // inline geometry after acquiring each row, not at one scrollTop.
             const bounds = async (selector: string) => {
