@@ -90,10 +90,13 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
     .toContainText("Running command");
+  await expect(composerSend(page)).toHaveAccessibleName("Stop");
+  await expect(composerSend(page)).toBeEnabled();
   await prompt(page).fill("next draft during command");
   await expect(prompt(page)).toBeEditable();
   await expect(page.locator(".otk-composer-dock [role=alert]")).toHaveCount(0);
-  // The running command holds the one send intent; Send says so.
+  // A new draft returns the control to Send without settling the shell RPC.
+  await expect(composerSend(page)).toHaveAccessibleName("Send");
   await expectPrimaryBlocked(composerSend(page), "Sending");
   const completedRun = page.locator(shellRun(state, "completed")).filter({
     hasText: "long-shell-finished",

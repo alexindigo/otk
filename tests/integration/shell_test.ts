@@ -29,7 +29,7 @@ test("shell RPC honors configured primary agent and bypasses model bash permissi
       messageID,
       command: "echo otk",
     });
-    assertEquals(receipt, { messageID, state: "accepted" });
+    assertEquals(receipt, { messageID, state: "started" });
     const messages = await waitFor(
       () => readRpcMessages(client!, session.id),
       (rows) =>

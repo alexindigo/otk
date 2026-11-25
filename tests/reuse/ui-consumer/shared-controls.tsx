@@ -896,7 +896,6 @@ export function InteractionFailures(
             <Prompt
               value={draft()}
               connected
-              busy={false}
               onChange={(update) => {
                 let next = draft();
                 setDraft((current) =>
@@ -905,7 +904,8 @@ export function InteractionFailures(
                 return next;
               }}
               onSubmit={() => Promise.resolve()}
-              onAbort={() => Promise.resolve()}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={() => Promise.resolve()}
             />
           </SessionProvider>
         </main>
@@ -1088,7 +1088,8 @@ export function SecondaryFailures(
                   capture,
                 );
               }}
-              onAbort={() => Promise.resolve()}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={() => Promise.resolve()}
             />
           </SessionProvider>
         </main>
@@ -1346,7 +1347,8 @@ export default function SharedControls(
             }}
             connected
             onSubmit={() => Promise.resolve()}
-            onAbort={() => Promise.resolve()}
+            activity={() => ({ running: false, unstarted: 0 })}
+            onStop={() => Promise.resolve()}
           />
           <Show when={mounted()}>
             <QuestionDock

@@ -4,7 +4,74 @@ import {
   CommandHub,
   createPrimaryAction,
   promptUnavailable,
+  stopUnavailable,
 } from "@otk/client";
+
+Deno.test("composer mode follows only draft and session activity", async () => {
+  const { composerMode } = await import("../primary-action.ts") as Record<
+    string,
+    unknown
+  >;
+  const mode = composerMode as (
+    facts: { blank: boolean; unstarted: number; running: boolean },
+  ) => string;
+  for (const blank of [false, true]) {
+    for (const unstarted of [0, 1]) {
+      for (const running of [false, true]) {
+        assertEquals(
+          mode({ blank, unstarted, running }),
+          blank && (unstarted > 0 || running) ? "stop" : "send",
+        );
+      }
+    }
+  }
+});
+
+Deno.test("Stop has its own availability and captures the primary mode at invocation", async () => {
+  const ready = {
+    active: true,
+    suspended: false,
+    connected: true,
+    supported: true,
+  };
+  assertEquals(stopUnavailable(ready), undefined);
+  assertEquals(
+    stopUnavailable({ ...ready, active: false }),
+    "Composer is no longer active",
+  );
+  assertEquals(
+    stopUnavailable({ ...ready, suspended: true }),
+    "Answer the pending request first",
+  );
+  assertEquals(
+    stopUnavailable({ ...ready, connected: false }),
+    "Reconnect to stop",
+  );
+  assertEquals(
+    stopUnavailable({ ...ready, supported: false }),
+    "Stopping is not supported here",
+  );
+  const gate = Promise.withResolvers<void>();
+  let mode: "send" | "stop" = "stop";
+  const calls: ("send" | "stop" | undefined)[] = [];
+  const primary = createPrimaryAction({
+    mode: () => mode,
+    label: () => mode,
+    unavailable: () => undefined,
+    pendingReason: (current) => current === "stop" ? "Stopping" : "Sending",
+    run: async (_, captured) => {
+      await gate.promise;
+      calls.push(captured);
+    },
+  });
+  const stopping = primary.invoke();
+  assertEquals(primary.state.reason, "Stopping");
+  mode = "send";
+  assertEquals(primary.state.available, true);
+  gate.resolve();
+  await stopping;
+  assertEquals(calls, ["stop"]);
+});
 
 Deno.test("primary action stays visible, reports actual blockers and admits no unavailable intent", async () => {
   const ready = {

@@ -23,11 +23,15 @@ export default function PrimaryAction(props: {
       class={props.class}
       data-primary-action="true"
       aria-label={props.state.label}
-      disabled={!props.state.available}
+      aria-disabled={props.state.available ? "false" : "true"}
       aria-busy={props.state.pending ? "true" : "false"}
       aria-description={props.state.reason ?? props.description}
       title={props.state.reason ?? props.title ?? props.state.label}
-      onClick={() => {
+      onClick={(event) => {
+        if (!props.state.available) {
+          event.preventDefault();
+          return;
+        }
         if (props.type !== "submit") props.onInvoke();
       }}
     >

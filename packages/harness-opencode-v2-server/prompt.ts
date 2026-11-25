@@ -12,10 +12,12 @@ import {
   type PromptPart,
   type PromptReceipt,
   uploadSize,
+  type WithdrawReceipt,
 } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { interrupt } from "./interrupt.ts";
+import { Messages } from "./messages.ts";
 import { applySelection } from "./selection.ts";
 import { submissionID } from "./submission-id.ts";
 type NativeInput = Parameters<OpenCodeClient["session"]["prompt"]>[0];
@@ -254,6 +256,7 @@ export class V2Prompt implements PromptCapability {
       messageID: string,
       origin: import("@otk/protocol").RequestOrigin,
     ) => Promise<void>,
+    readonly reader: Messages = new Messages(client),
   ) {}
   async prompt(
     input: PromptInput,
@@ -327,6 +330,42 @@ export class V2Prompt implements PromptCapability {
   abort(id: string, operation?: OperationContext): Promise<void> {
     if (this.interruptSession) return this.interruptSession(id, operation);
     return interrupt(this.client(), id, operation);
+  }
+  withdraw(
+    id: string,
+    messageID: string,
+    operation?: OperationContext,
+  ): Promise<WithdrawReceipt> {
+    const native = ids.decode(id), client = this.client();
+    return client.sequence(native, async () => {
+      const signal = operation?.signal ?? client.signal;
+      const queued = await this.reader.inbox(id, signal);
+      if (queued.state !== "available") return { state: "unconfirmed" };
+      const held = queued.items.some((item) => item.id === messageID);
+      if (held) {
+        await client.effect(
+          (api) =>
+            api.session.inbox.cancel({ sessionID: native, inboxID: messageID }),
+          operation,
+        );
+        const remaining = await this.reader.inbox(id, signal);
+        if (
+          remaining.state !== "available" ||
+          remaining.items.some((item) => item.id === messageID)
+        ) {
+          return { state: "unconfirmed" };
+        }
+      }
+      try {
+        await this.reader.get(id, messageID, signal);
+        return { state: "started" };
+      } catch (error) {
+        if (
+          !(error instanceof OperationFailure) || error.facts?.status !== 404
+        ) throw error;
+        return { state: held ? "withdrawn" : "absent" };
+      }
+    }, operation);
   }
   async stop(): Promise<void> {
     await Promise.allSettled([...this.#tails.values()]);

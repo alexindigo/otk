@@ -6,14 +6,21 @@ import {
 } from "../session-delivery.ts";
 import { createTranscriptProjection } from "../transcript-projection.ts";
 import type { TranscriptOwner } from "../transcript.ts";
-import type { PromptReceipt, UserMessage } from "@otk/protocol";
+import type {
+  AssistantMessage,
+  PromptReceipt,
+  UserMessage,
+} from "@otk/protocol";
 import { RequestFailure } from "../failures.ts";
 import { pendingMessage } from "../pending-send.ts";
 import type { SendOutcome } from "../send-outcome.ts";
 import { createDrafts, type Draft } from "../drafts.ts";
 import { createSessionSubmission } from "../session-submission.ts";
 
-function fixture(committed?: (message: UserMessage) => void) {
+function fixture(
+  committed?: (message: UserMessage) => void,
+  withdraw?: (id: string) => Promise<{ state: "withdrawn" }>,
+) {
   const projection = createTranscriptProjection();
   const listeners = new Set<() => void>(),
     timers = new Map<number, () => void>();
@@ -53,6 +60,7 @@ function fixture(committed?: (message: UserMessage) => void) {
     title: () => "Captured session",
     transcript: () => transcript,
     committed,
+    ...{ withdraw },
     clock: {
       set(run, ms) {
         assertEquals(ms, SEND_OBSERVATION_MS);
@@ -67,7 +75,7 @@ function fixture(committed?: (message: UserMessage) => void) {
   return {
     owner,
     projection,
-    message(id: string, model?: UserMessage["model"]) {
+    message(id: string, model?: UserMessage["model"], answer = false) {
       const message: UserMessage = {
         id,
         sessionID: "opcv2-root",
@@ -76,7 +84,25 @@ function fixture(committed?: (message: UserMessage) => void) {
         parts: [],
         ...(model ? { model } : {}),
       };
-      projection.merge([message]);
+      const reply: AssistantMessage = {
+        id: `${id}-reply`,
+        sessionID: message.sessionID,
+        role: "assistant",
+        replyTo: id,
+        model: { provider: "test", model: "test" },
+        agent: "build",
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        cost: 0,
+        interrupted: false,
+        time: { created: 2 },
+        parts: [],
+      };
+      projection.merge(answer ? [message, reply] : [message]);
       for (const listener of listeners) listener();
     },
     expire() {
@@ -93,6 +119,110 @@ function fixture(committed?: (message: UserMessage) => void) {
     }),
   };
 }
+
+Deno.test("Stop waits for a dispatched receipt and never guesses an unconfirmed identity", async () => {
+  const calls: string[] = [];
+  const { owner } = fixture(undefined, (id) => {
+    calls.push(id);
+    return Promise.resolve({ state: "withdrawn" });
+  });
+  const receipt = Promise.withResolvers<PromptReceipt>();
+  const send = owner.send(
+    (dispatch) => {
+      dispatch();
+      return receipt.promise;
+    },
+    undefined,
+    "send-id",
+  );
+  const unstarted = () => Reflect.get(owner.state, "unstarted");
+  assertEquals(unstarted().length, 1);
+  const stop = Reflect.get(owner, "withdraw").call(owner);
+  assertEquals(unstarted()[0].stopping, true);
+  assertEquals(calls, []);
+  receipt.resolve({ messageID: "native-id", state: "queued" });
+  assertEquals(await stop, [{
+    messageID: "native-id",
+    state: "withdrawn",
+    custody: false,
+  }]);
+  assertEquals((await send).kind, "withdrawn");
+  assertEquals(calls, ["native-id"]);
+  assertEquals(unstarted(), []);
+});
+
+Deno.test("a native reply retires the unstarted send but not its unsettled submission", async () => {
+  const f = fixture();
+  const receipt = Promise.withResolvers<PromptReceipt>();
+  const seen: SendOutcome["kind"][] = [];
+  const pending = f.owner.send(
+    (dispatch) => {
+      dispatch();
+      return receipt.promise;
+    },
+    undefined,
+    "prompt",
+    {
+      outcome: (value) => {
+        seen.push(value.kind);
+      },
+    },
+  );
+  let finished = false;
+  void pending.then(() => finished = true);
+  f.message("prompt", undefined, true);
+  try {
+    assertEquals(f.owner.state.unstarted.length, 0);
+    assertEquals(seen, ["started"]);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assertEquals(finished, false);
+  } finally {
+    receipt.resolve({ messageID: "prompt", state: "accepted" });
+    await pending;
+    f.owner.stop();
+  }
+  assertEquals(finished, true);
+});
+
+Deno.test("an unconfirmed Stop keeps custody recoverable without using a guessed ID", async () => {
+  const calls: string[] = [];
+  const { owner } = fixture(undefined, (id) => {
+    calls.push(id);
+    return Promise.resolve({ state: "withdrawn" });
+  });
+  const drafts = createDrafts();
+  const write = drafts.writer("target");
+  const draft = write((value) => ({ ...value, input: "/native argument" }));
+  const capture = drafts.captureSend("target", draft);
+  let outcome: ReturnType<typeof capture.take>;
+  const result = await owner.send(
+    (dispatch) => {
+      dispatch();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "The command did not return a native ID.",
+      });
+    },
+    undefined,
+    "browser-id",
+    {
+      admit(id, check) {
+        outcome = capture.take(id, check);
+      },
+      outcome(value) {
+        return outcome?.(value);
+      },
+    },
+  );
+  assertEquals(result.kind, "unconfirmed");
+  assertEquals((await owner.withdraw())[0].state, "unconfirmed");
+  assertEquals(calls, []);
+  assertEquals(drafts.current("target").input, "");
+  const [recovery] = drafts.recoveries("target");
+  assertEquals(recovery.cause, "stop-unconfirmed");
+  recovery.run();
+  assertEquals(drafts.current("target").input, "/native argument");
+});
 
 for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
   Deno.test(`reload reattaches ${outcome} input to the existing send lifecycle`, async () => {
@@ -169,7 +299,11 @@ Deno.test("send custody sees live commitment while the dispatch promise is held"
     },
     undefined,
     "native-send",
-    { outcome: (value) => seen.push(value) },
+    {
+      outcome: (value) => {
+        seen.push(value);
+      },
+    },
   );
   try {
     f.message("unrelated");
@@ -197,7 +331,11 @@ Deno.test("send custody stays correlated after an unconfirmed receipt disappears
       },
       undefined,
       "native-send",
-      { outcome: (value) => seen.push(value) },
+      {
+        outcome: (value) => {
+          seen.push(value);
+        },
+      },
     );
     assertEquals(f.owner.state.receipts, []);
     f.message("native-send");

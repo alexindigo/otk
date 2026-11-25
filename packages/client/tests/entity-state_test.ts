@@ -69,6 +69,37 @@ const session = (
 });
 const S = entityKey("session", "s"), P = entityKey("project", "/p");
 
+Deno.test("session execution excludes shell-only activity and stale evidence", async () => {
+  const { sessionRunning } = await import("../entity-state.ts") as Record<
+    string,
+    unknown
+  >;
+  const running = sessionRunning as (
+    store: ReturnType<typeof createEntityStateStore>,
+    id: string,
+  ) => boolean;
+  let value = session("working");
+  const store = createEntityStateStore({ read: () => ({ [S]: value }) });
+  assertEquals(running(store, S), true);
+  value = {
+    ...value,
+    evidence: {
+      ...value.evidence!,
+      liveWork: [{
+        id: "shell",
+        kind: "shell",
+        label: "Shell",
+        title: "Shell",
+        state: "working",
+      }],
+    },
+  };
+  assertEquals(running(store, S), false);
+  value = session("working");
+  store.stale(true);
+  assertEquals(running(store, S), false);
+});
+
 Deno.test("evidence observers update without fabricating a lamp transition", () => {
   const f = fixture(), evidence: unknown[] = [], transitions: unknown[] = [];
   const stop = f.store.observeChanges((keys) => evidence.push(keys));

@@ -65,7 +65,7 @@ export function createSessionSubmission({
   };
   return (action, origin = "composer", entry, capture) => {
     const messageID = entry?.message.id ?? ascendingID("msg");
-    let settle: ((outcome: SendOutcome) => void) | undefined;
+    let settle: ReturnType<DraftSendCapture["take"]>;
     return delivery.send(
       (dispatch) => {
         const run = () => admit(action, dispatch, messageID, origin);

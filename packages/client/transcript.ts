@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { entityKey, randomID } from "@otk/protocol";
-import { type EntityStateStore, sessionEvidence } from "./entity-state.ts";
+import { type EntityStateStore, sessionRunning } from "./entity-state.ts";
 import {
   type ClockedContent,
   compareTranscriptVersion,
@@ -121,7 +121,7 @@ export type ToolCompletionSource = (
 ) => () => void;
 export interface TranscriptOwner {
   send?(value: import("./pending-send.ts").PendingSend): void;
-  cancelSend?(messageID: string): void;
+  cancelSend?(messageID: string, withdrawn?: boolean): void;
   readonly deliveryDiagnostics?: ContentDeliveryDiagnostics;
   progress?(): ProgressDisplay;
   state: TranscriptState;
@@ -927,8 +927,7 @@ export function createTranscript(
     const nextView = deleted?.deleted ? "deleted" : "content";
     projection.busy(
       !!entities &&
-        !!sessionEvidence(entities, entityKey("session", target.sessionID))
-          ?.work,
+        sessionRunning(entities, entityKey("session", target.sessionID)),
     );
     view = nextView;
     completed.clear();
@@ -1066,8 +1065,8 @@ export function createTranscript(
       projection.send(value);
       setState(() => {});
     },
-    cancelSend(messageID) {
-      projection.cancelSend(messageID);
+    cancelSend(messageID, withdrawn) {
+      projection.cancelSend(messageID, withdrawn);
       setState(() => {});
     },
     interaction,
@@ -1366,8 +1365,7 @@ export function createTranscript(
         const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
           !!entities &&
-            !!sessionEvidence(entities, entityKey("session", target.sessionID))
-              ?.work,
+            sessionRunning(entities, entityKey("session", target.sessionID)),
         );
         if (projection.helpers(helper) || busyChanged) {
           setState((draft) => {
@@ -1790,8 +1788,7 @@ export function createTranscript(
     if (
       projection.busy(
         !!entities &&
-          !!sessionEvidence(entities, entityKey("session", target.sessionID))
-            ?.work,
+          sessionRunning(entities, entityKey("session", target.sessionID)),
       )
     ) {
       setState((draft) => {

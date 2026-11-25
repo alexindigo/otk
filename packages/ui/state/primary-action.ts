@@ -3,9 +3,9 @@ import { createSignal, onCleanup } from "solid-js";
 import type { PrimaryAction, PrimaryActionState } from "@otk/client";
 
 /** Observe admission without copying the owner's state or draft. */
-export function bindPrimaryAction<T>(
-  owner: PrimaryAction<T>,
-): () => PrimaryActionState {
+export function bindPrimaryAction<T, M>(
+  owner: PrimaryAction<T, M>,
+): () => PrimaryActionState<M> {
   const [revision, update] = createSignal(0);
   onCleanup(owner.subscribe(() => update((value) => value + 1)));
   return () => {

@@ -561,7 +561,8 @@ function Consumer(): Element {
                   capture,
                 );
               }}
-              onAbort={async () => {}}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={async () => {}}
             />
             <ComposerTakeovers />
           </SessionProvider>
