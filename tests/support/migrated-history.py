@@ -1,25 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-only
 """Guest-only: stock V1 initializes DB, seed stopped clone, stock V2 migrates."""
-import atexit, base64, json, os, pathlib, re, shutil, signal, socket, sqlite3, subprocess, time, urllib.request
+import base64, json, os, pathlib, re, shutil, signal, sqlite3, subprocess, time, urllib.request
 W=pathlib.Path.cwd(); R=W/'.test-state'/('migrated-history-'+str(time.time_ns()))
-leases=[]
-atexit.register(lambda:[record.unlink(missing_ok=True) for record in leases])
-def free_port():
-    # Same kernel-assigned port and lease records as tests/support/opencode.ts
-    # freePort: a fixed port can collide with concurrent integration fixtures.
-    root=os.environ.get('OTK_TEST_PORTS_ROOT')
-    if root:pathlib.Path(root).mkdir(parents=True,exist_ok=True)
-    for _ in range(64):
-        with socket.socket() as probe:
-            probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
-        if not root:return port
-        record=pathlib.Path(root)/(str(port)+'.json')
-        try:fd=os.open(record,os.O_WRONLY|os.O_CREAT|os.O_EXCL)
-        except FileExistsError:continue
-        with os.fdopen(fd,'w') as out:json.dump({'owner':'migrated-history','pid':os.getpid(),'port':port},out)
-        leases.append(record);return port
-    raise RuntimeError('No free leased port')
 R.mkdir(parents=True,exist_ok=False)
 env=dict(os.environ)
 for key,sub in {'HOME':'home','TMPDIR':'tmp','XDG_CONFIG_HOME':'config','XDG_DATA_HOME':'data','XDG_STATE_HOME':'state','XDG_CACHE_HOME':'cache'}.items():
@@ -35,9 +18,9 @@ for directory in [R/'config/opencode',project/'.opencode']:
 def req(url,body=None,auth='fixture'):
     data=None if body is None else json.dumps(body).encode()
     return json.load(urllib.request.urlopen(urllib.request.Request(url,data=data,headers={'Authorization':'Basic '+base64.b64encode(('opencode:'+auth).encode()).decode(),'Content-Type':'application/json'}),timeout=60))
-def start(version,port):
+def start(version):
     log=(R/('native-'+version+'.log')).open('w')
-    args=['/opt/otk-test/opencode/'+version+'/opencode','serve','--hostname','127.0.0.1','--port',str(port)]
+    args=['/opt/otk-test/opencode/'+version+'/opencode','serve','--hostname','127.0.0.1','--port','0']
     if version.startswith('2.'):args.append('--service')
     p=subprocess.Popen(args,env=env,cwd=project,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
     return p,log
@@ -48,12 +31,19 @@ def stop(p,log):
     try:p.wait(timeout=20)
     except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
     log.close()
-v1=free_port()
-p,log=start('1.19.3',v1)
+def v1_endpoint(p,log):
+    deadline=time.monotonic()+60
+    while time.monotonic()<deadline and p.poll() is None:
+        bound=re.search(r'^opencode server listening on (http://127\.0\.0\.1:[1-9]\d*)\r?\n',pathlib.Path(log.name).read_text(),re.M)
+        if bound:return bound[1]
+        time.sleep(.2)
+    raise RuntimeError('V1 did not announce its listener; see '+log.name)
+p,log=start('1.19.3')
 try:
+    v1=v1_endpoint(p,log)
     for _ in range(150):
         try:
-            session=req('http://127.0.0.1:'+str(v1)+'/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
+            session=req(v1+'/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
         except Exception:
             assert p.poll() is None;time.sleep(.2)
     else:raise RuntimeError('V1 startup deadline')
@@ -99,11 +89,12 @@ db.close()
 if os.environ.get('INV_E_V1_READ')=='1':
     # Optional extra probe, not needed to exercise the actual native migration.
     # This currently times out on the seeded restart; failed logs are retained.
-    p,log=start('1.19.3',v1)
+    p,log=start('1.19.3')
     try:
+        v1=v1_endpoint(p,log)
         for _ in range(150):
             try:
-                observed=req('http://127.0.0.1:'+str(v1)+'/session/'+sid+'/message?directory='+str(project));break
+                observed=req(v1+'/session/'+sid+'/message?directory='+str(project));break
             except urllib.error.URLError:
                 assert p.poll() is None;time.sleep(.2)
         else:raise RuntimeError('V1 reload deadline')
@@ -112,7 +103,7 @@ if os.environ.get('INV_E_V1_READ')=='1':
     finally:stop(p,log)
 (R/'config/opencode/opencode.json').write_text('{}')
 # The managed V2 service publishes its OS-assigned endpoint in the registration.
-p,log=start('2.2.6',0)
+p,log=start('2.2.6')
 try:
     registration=R/'state/opencode/service.json'
     for _ in range(600):

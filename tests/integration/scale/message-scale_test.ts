@@ -7,7 +7,7 @@ import type { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import { start } from "../../../main.ts";
 import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { freePort, waitFor } from "../../support/opencode.ts";
+import { waitFor } from "../../support/opencode.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
 import { SCALE } from "../../support/session-scale.ts";
 import { createScale, scaleDiscovery } from "../../support/scale-native.ts";
@@ -175,7 +175,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   );
   resources().defer("reserve proxy", () => proxy.shutdown());
   const config = cfg();
-  config.server.port = freePort();
+  config.server.port = 0;
   config.auth.type = "none";
   config.harness.url = `http://127.0.0.1:${(proxy.addr as Deno.NetAddr).port}`;
   config.harness.db = native.db;
@@ -229,7 +229,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   });
   resources().defer("reserve owner", () => owner.stop());
   const connection = new SidecarConnection(
-    `http://127.0.0.1:${config.server.port}`,
+    `http://127.0.0.1:${app.server.addr.port}`,
     {
       status() {},
       frame(frame) {
@@ -294,10 +294,10 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       },
     },
     {
-      fetcher: originFetch(`http://127.0.0.1:${config.server.port}`),
+      fetcher: originFetch(`http://127.0.0.1:${app.server.addr.port}`),
       socket: (url) =>
         Reflect.construct(WebSocket, [url, {
-          headers: { Origin: `http://127.0.0.1:${config.server.port}` },
+          headers: { Origin: `http://127.0.0.1:${app.server.addr.port}` },
         }]) as WebSocket,
     },
   );

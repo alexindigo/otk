@@ -3,11 +3,12 @@
 import { nativeBehavior } from "./native-testing.ts";
 import { withResources } from "./resources.ts";
 import { serve } from "./http.ts";
-import { freePort } from "./opencode.ts";
+import { FreezeProxy } from "./freeze-proxy.ts";
 
 await withResources("server discovery browser peers", async () => {
   const f = await nativeBehavior();
   const local = await f.sidecar();
+  const unavailable = new FreezeProxy();
   const origin = local.url;
   const alternate = origin.replace("127.0.0.1", "localhost");
   const blocked = await f.sidecar();
@@ -62,7 +63,7 @@ await withResources("server discovery browser peers", async () => {
       password: password.url,
       setup: setup.url,
       native: f.oc.url,
-      refused: `http://127.0.0.1:${await freePort()}`,
+      refused: `http://127.0.0.1:${unavailable.port}`,
       foreign: `http://127.0.0.1:${(foreign.addr as Deno.NetAddr).port}`,
       held: `http://127.0.0.1:${(held.addr as Deno.NetAddr).port}`,
       counters: `http://127.0.0.1:${(counters.addr as Deno.NetAddr).port}`,

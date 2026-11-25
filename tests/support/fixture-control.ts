@@ -244,6 +244,7 @@ export interface ControlResponse {
   error?: { message: string; stack?: string; causes?: Json[] };
 }
 export interface StackInfo {
+  statePath?: string;
   root: string;
   url: string;
   nativeUrl: string;

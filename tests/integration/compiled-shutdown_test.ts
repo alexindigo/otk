@@ -8,7 +8,8 @@ import {
 import { preparedBinary } from "../support/prepared-binaries.ts";
 import { ownedProcess } from "../support/process.ts";
 import { bounded, test } from "../support/resources.ts";
-import { freePort, waitFor } from "../support/opencode.ts";
+import { waitFor } from "../support/opencode.ts";
+import { otkEndpoint } from "../support/bound-endpoint.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 async function launch(oc: TestNative, port: number, level = "info") {
@@ -112,13 +113,8 @@ test("compiled debug logging reports each ignored real native event type once", 
   await preparedBinary();
   const fixture = await nativeFixture();
   try {
-    const port = await freePort();
-    const server = await launch(fixture.oc, port, "debug");
-    await waitFor(
-      async () => (await fetch(`http://127.0.0.1:${port}/api/health`)).json(),
-      (health) => health.ok === true,
-    );
-    const client = new WsClient(`http://127.0.0.1:${port}`);
+    const server = await launch(fixture.oc, 0, "debug");
+    const client = new WsClient((await otkEndpoint(server.child)).origin);
     await client.connect();
     await client.wait((frame) =>
       frame.t === "harness" && frame.state === "connected"

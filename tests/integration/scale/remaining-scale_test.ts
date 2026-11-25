@@ -274,13 +274,13 @@ test("ten real provider attachments across two isolated origins are batched, ord
       submitted,
       expected.map((bytes) => `data:application/pdf;base64,${bytes}`),
     );
-    for (const { native, server } of origins) {
+    for (const { server } of origins) {
       for (
         const name of ["otk.db", "otk.db-wal", "digest.db", "digest.db-wal"]
       ) {
         try {
           const bytes = new TextDecoder().decode(
-            await Deno.readFile(join(native.root, `otk-${server.port}`, name)),
+            await Deno.readFile(join(server.statePath, name)),
           );
           for (
             const value of [

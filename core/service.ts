@@ -146,9 +146,9 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   options.signal?.addEventListener("abort", cancelled, { once: true });
   try {
     check();
-    const auth = new AuthState(cfg);
     const listener = bind(cfg, undefined, diagnostic, options.requested);
     server = listener.server;
+    const auth = new AuthState(cfg, server.addr.port);
     const transport = connections = new Connections(
       backend,
       index,
