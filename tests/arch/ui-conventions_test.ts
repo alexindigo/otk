@@ -804,6 +804,17 @@ export function conventionErrors(
     if (rule === "time-text") {
       for (const node of source.all) {
         if (
+          ((node.type === "TSPropertySignature" ||
+            node.type === "ObjectProperty") &&
+            property(node.key) === "visitText") ||
+          ((node.type === "MemberExpression" ||
+            node.type === "OptionalMemberExpression") &&
+            property(node.property) === "visitText") ||
+          (node.type === "JSXAttribute" && property(node.name) === "visitText")
+        ) {
+          fail(`retired project visit text on line ${node.loc?.start.line}`);
+        }
+        if (
           path !== "packages/ui/components/TimeText.tsx" &&
           ((node.type === "StringLiteral" && timeClass.test(node.value)) ||
             (node.type === "TemplateElement" && timeClass.test(node.value.raw)))
@@ -1303,6 +1314,7 @@ const retiredTimeNames = new Set([
   "humanDuration",
   "relativeTime",
   "visitTime",
+  "visitText",
   "runningWorkElapsed",
 ]);
 const timeFormatters = new Set(["elapsed", "age", "remaining"]);
@@ -1465,6 +1477,12 @@ Deno.test("UI convention: TimeText owns time value markup, not attribute prose",
       'import { elapsed } from "@otk/client"; function View(time: ReturnType<typeof elapsed>) { return <span>{time.text}</span>; }',
       'export { elapsed as duration } from "@otk/client";',
       'import { relativeTime as age } from "@otk/client";',
+      'import { visitText } from "@otk/client";',
+      "interface Project { visitText?: string }",
+      'const row = { visitText: "now" };',
+      'const text = row?.["visitText"];',
+      "const { visitText } = row;",
+      '<Row visitText="now" />',
       '<span class={["meta", "otk-time-unit"]} />',
     ]
   ) assert(conventionErrors("time-text", path, text).length, text);
@@ -1479,6 +1497,7 @@ Deno.test("UI convention: TimeText owns time value markup, not attribute prose",
     const text of [
       "<span title={elapsed(x).text} />",
       "<TimeText time={elapsed(x)} />",
+      "<TimeText time={row.visit} />",
       "<span>{note.text}</span>",
     ]
   ) assertEquals(conventionErrors("time-text", path, text), [], text);
