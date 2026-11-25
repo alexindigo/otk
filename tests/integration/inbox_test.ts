@@ -267,6 +267,8 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
   const settings = cfg();
   settings.auth.type = "";
   settings.auth.username = "";
+  // Keep the login cookie valid across the two ephemeral listeners.
+  settings.auth.cookiename = "otk_inbox_restart";
   settings.server.port = 0;
   settings.state.path = join(root, "fresh-state");
   let app = await startApplication(settings, backend, root);
