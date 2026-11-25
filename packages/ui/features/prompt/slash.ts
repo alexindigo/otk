@@ -155,47 +155,53 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             }
           },
         },
-        async beforeSubmit(draft) {
+        localCommand(draft) {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
-          if (!parsed) return false;
-          await ctx.directoryCatalog?.ready("commands");
-          catalog();
-          let invocation;
+          if (!parsed) return;
+          let id;
           try {
-            invocation = ctx.commands.parse(parsed.command, parsed.arguments);
+            id = ctx.commands.resolveSlash(parsed.command);
           } catch (error) {
-            ctx.fail(error);
-            return true;
+            return () => {
+              ctx.fail(error);
+              return Promise.resolve();
+            };
           }
-          if (!invocation) return false;
-          if (ctx.commands.metadata(invocation.id)?.kind === "submission") {
-            return false;
-          }
-          const prepared = ctx.change((current) =>
-            current === draft
-              ? editDraft(
-                current,
-                current.input.slice(parsed.command.length + 1).replace(
-                  /^\s/,
-                  "",
-                ),
-              )
-              : current
-          );
-          try {
-            await ctx.commands.run(invocation.id, invocation.args, {
-              ...ctx.commands.context(),
-              command: "prompt.submit",
-            });
-          } catch (error) {
-            if (ctx.active()) {
-              ctx.change((current) => current === prepared ? draft : current);
+          if (!id || ctx.commands.metadata(id)?.kind === "submission") return;
+          return async () => {
+            let invocation;
+            try {
+              invocation = ctx.commands.parse(parsed.command, parsed.arguments);
+            } catch (error) {
+              ctx.fail(error);
+              return;
             }
-            ctx.fail(error);
-          }
-          return true;
+            if (!invocation) return;
+            const prepared = ctx.change((current) =>
+              current === draft
+                ? editDraft(
+                  current,
+                  current.input.slice(parsed.command.length + 1).replace(
+                    /^\s/,
+                    "",
+                  ),
+                )
+                : current
+            );
+            try {
+              await ctx.commands.run(invocation.id, invocation.args, {
+                ...ctx.commands.context(),
+                command: "prompt.submit",
+              });
+            } catch (error) {
+              if (ctx.active()) {
+                ctx.change((current) => current === prepared ? draft : current);
+              }
+              ctx.fail(error);
+            }
+          };
         },
         async submit(draft, parts, selection, draftSend) {
           const parsed = draft.mode === "normal"

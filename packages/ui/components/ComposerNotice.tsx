@@ -8,6 +8,14 @@ export default function ComposerNotice(props: { children: Element }): Element {
   return <div class="otk-composer-notice">{props.children}</div>;
 }
 
+export function ComposerActionNotice(props: { text: string }): Element {
+  return (
+    <div class="otk-composer-refusal" role="status" aria-atomic="true">
+      <span class="otk-control-label" title={props.text}>{props.text}</span>
+    </div>
+  );
+}
+
 /** One primary notice row for facts, disclosures and failures. */
 export function ComposerNoticeRow(props: {
   icon?: () => Element;
