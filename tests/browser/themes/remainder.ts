@@ -352,23 +352,31 @@ export async function remainder(
     expect(await replyBounds()).toEqual(fixed);
     for (const theme of themes) {
       await paint(theme);
-      await revealAcquired(page, replyMessage + " .otk-code pre");
       const selectors = [
         "html",
         ".otk-project-name",
-        ".otk-text",
-        ".otk-code pre",
+        replyMessage + " .otk-text p",
+        replyMessage + " .otk-code pre",
         ".otk-prompt textarea",
         // The visit label borrows ChromeMeta; connection frames aren't metadata.
         ".otk-project-visit",
       ];
-      const read = () =>
-        page.evaluate((selectors) =>
-          selectors.map((selector) => {
-            const el = document.querySelector(selector)!,
-              s = getComputedStyle(el);
-            return [s.fontSize, s.lineHeight];
-          }), selectors);
+      const read = async () => {
+        const styles: string[][] = [];
+        for (const selector of selectors) {
+          // A text-size change can retire previously mounted transcript blocks.
+          if (selector.startsWith(replyMessage)) {
+            await revealAcquired(page, selector);
+          }
+          styles.push(
+            await page.locator(selector).first().evaluate((el) => {
+              const s = getComputedStyle(el);
+              return [s.fontSize, s.lineHeight];
+            }),
+          );
+        }
+        return styles;
+      };
       const baseline = await read();
       await page.locator("html").evaluate((el) => {
         const s = (el as HTMLElement).style;
