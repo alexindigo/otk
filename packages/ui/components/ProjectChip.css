@@ -57,6 +57,8 @@
   font-weight: 600;
 }
 .otk-project-chip-menu-row {
+  --control-height: var(--menu-row-height);
+  --control-border: 0px;
   display: flex;
   align-items: center;
   gap: 0;

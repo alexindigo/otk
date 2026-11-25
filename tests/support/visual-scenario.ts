@@ -63,6 +63,15 @@ export async function visualScenario() {
             );
           }
           if (frame.params.sessionID !== undefined) {
+            if (frame.params.sessionID === "tstv1-crumb-path") {
+              for (let n = 1; n < 12; n++) {
+                f.update(`tstv1-visual-${n}`, {
+                  parentID: n > 1 ? `tstv1-visual-${n - 1}` : undefined,
+                });
+              }
+              f.update("tstv1-otk", { parentID: "tstv1-visual-11" });
+              return null;
+            }
             if (frame.params.sessionID !== "tstv1-row-action-phantom") {
               throw new Error("Unknown visual activity identity");
             }

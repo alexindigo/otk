@@ -2,7 +2,7 @@
 import { randomID } from "@otk/protocol";
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
@@ -498,18 +498,15 @@ export default function SessionView(props: {
                 mountViewport();
                 return (
                   <div class="otk-transcript-viewport">
-                    <div
+                    <ScrollRegion
                       role="region"
                       aria-label="Transcript"
                       aria-busy={transcriptBusy() ? "true" : "false"}
                       class={[
-                        scrollRegion(
-                          "both",
-                          props.prefs.scrollbar ? "thin" : "hidden",
-                        ),
                         "otk-messages",
                         { "is-empty": !count() },
                       ]}
+                      scrollbar={props.prefs.scrollbar ? "otk" : "hidden"}
                       ref={[
                         (element) => {
                           list = element;
@@ -846,7 +843,7 @@ export default function SessionView(props: {
                           }}
                         </Show>
                       </div>
-                    </div>
+                    </ScrollRegion>
                     <JumpToLatest
                       visible={!!geometry() &&
                         geometry()!.distanceFromBottom >

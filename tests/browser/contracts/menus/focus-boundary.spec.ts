@@ -7,6 +7,11 @@ test.use({ profile: "contract-themes" });
 test("menus.folded-menu-unpainted-focus-boundary", {
   tag: ["@menus", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    sessionID: "tstv1-crumb-path",
+  });
   await state.product("tasks.create", {
     directory: state.directory,
     name: "Geometry task",

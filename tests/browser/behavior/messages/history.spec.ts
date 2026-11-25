@@ -213,7 +213,7 @@ isolatedTest.describe("configured message details", () => {
       .toBeAttached();
     await prompt(page, "Queued prompt");
     await expect(page.locator(".otk-queued")).toBeVisible();
-    const agent = page.locator(".otk-message-agent");
+    const agent = page.locator(".otk-reply-start .otk-entity-pill");
     // Streaming can move the footer away from a stationary pointer. Keyboard
     // focus retains the same reveal state independently of that layout change.
     await agent.focus();
@@ -222,7 +222,9 @@ isolatedTest.describe("configured message details", () => {
     await expect(agent).toBeFocused();
     await expect(agent).toHaveCSS(
       "color",
-      "rgb(107, 172, 255)",
+      await page.locator(".otk-reply-start").evaluate((el) =>
+        getComputedStyle(el).color
+      ),
     );
     await expect(page.locator("[data-role=user]").first()).toHaveCSS(
       "border-left-width",
@@ -238,16 +240,17 @@ isolatedTest.describe("configured message details", () => {
     await expect.poll(() =>
       page.locator(".otk-message-footer").evaluateAll((footers) =>
         footers.length > 0 &&
-        footers.every((footer) =>
-          footer.textContent!.includes("build") &&
-          /\ds/.test(footer.textContent!)
-        )
+        footers.every((footer) => /\ds/.test(footer.textContent!))
       )
     ).toBe(true);
     const footers = await page.locator(".otk-message-footer").allTextContents();
     expect(
-      footers.every((footer) => footer.includes("build") && /\ds/.test(footer)),
+      footers.every((footer) => /\ds/.test(footer)),
     ).toBe(true);
+    await expect(page.locator(".otk-reply-start .otk-entity-pill")).toHaveText([
+      "build",
+      "build",
+    ]);
     await expect(
       page.locator(".otk-messages p").filter({ hasText: /^(step|unknown)$/ }),
     ).toHaveCount(0);

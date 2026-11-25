@@ -18,23 +18,28 @@ Settings owns a two-row page frame: the header stays in flow at its top and one
 scrollport, never a shell-imposed clearance. The serving sidecar's public
 defaults supply the remote-address hint; no port table lives in the UI.
 
-`ScrollRegion` is the shared native scrolling boundary. Its `otk-scroll` class
-owns `overflow: auto`, shrinkable minima and contained overscroll. Pass `axis`
-(`both`, `x` or `y`) to restrict a lane. Containment follows the owned axes:
-horizontal code, diff and table lanes delegate vertical wheels to their bounded
-enclosing viewport. Native fields, semantic elements and borrowed viewport roots
-use the exported `scrollRegion(axis)` class binding without another wrapper. The
-optional scrollbar paint (`native`, `thin`, `hidden`) is shared by the component
-and `scrollRegion(axis, scrollbar)` binding. Only the transcript opts into thin
-themed paint; nested scroll boundaries retain their own native paint. Layout,
-content and scroll-position owners stay with their components. Borrowed
-VirtualLists do not create another scrollport. Component CSS never redeclares
-scrolling or overscroll policy; the architecture gate enforces this with no
-exceptions, including code and table content. Full-shell application
-compositions import `web/src/viewport.css` to own their hosting document's
-viewport boundary. The shell keeps its existing 600px minimum below narrow
-viewports and clips within that document. Chrome is bounded by its owning
-region; standalone component galleries retain their hosting page's flow.
+`ScrollRegion` is the shared scrolling and OTK scrollbar boundary. Its
+`otk-scroll` class owns `overflow: auto`, shrinkable minima and contained
+overscroll. Pass `axis` (`both`, `x` or `y`) to restrict a lane. Containment
+follows the owned axes: horizontal code, diff and table lanes delegate vertical
+wheels to their bounded enclosing viewport. Native fields and semantic elements
+use its typed `as` input; borrowed windows use `borrowed` to remain flow content
+without another scrollport. The frame places the viewport and overlay tracks in
+shared grid slots, retaining the content width whether tracks are visible or
+hidden. `frameClass` styles the consumer's outer layout slot; `class`,
+attributes, events and `ref` address the actual viewport. Scrollbar paint is
+`otk` by default or `hidden`; legacy `native` and `thin` inputs select OTK paint
+too. Native artwork is always hidden. The transcript retains its persisted
+default-on opt-out. Hover, drag and scrolling reveal the themed thumb; idle
+hides it. Track and drag use the same proportional geometry. Keyboard and wheel
+remain native viewport input. Layout, content and scroll-position owners stay
+with their components. Borrowed VirtualLists do not create another scrollport.
+Component CSS never redeclares scrolling or overscroll policy; the architecture
+gate enforces this with no exceptions, including code and table content.
+Full-shell application compositions import `web/src/viewport.css` to own their
+hosting document's viewport boundary. The shell keeps its existing 600px minimum
+below narrow viewports and clips within that document. Chrome is bounded by its
+owning region; standalone component galleries retain their hosting page's flow.
 
 `ControlValue` owns the flexible label and square trailing accessory slot. Its
 size follows the control's height/border role; icons have equal inner-edge gaps.
@@ -724,8 +729,11 @@ the root independently. `followViewport` is an intent facade over that same
 owner. The owner retains anchored identity through measurement transactions,
 distinguishes native clamping from newer input, and follows the physical bottom
 only while follow intent is active. Frame/hunk scopes distinguish sibling
-collections without duplicating geometry math. Message's exposed reveal control
-focuses its visible bubble after owner-controlled positioning.
+collections without duplicating geometry math. Scrollbar input calls that same
+position owner's input port, including anchor capture and navigation
+cancellation. Thumb paint consumes committed scrollTop/contentHeight in the
+revisioned snapshot, never provisional virtual estimates. Message's exposed
+reveal control focuses its visible bubble after owner-controlled positioning.
 
 The same root publishes one immutable revisioned geometry snapshot: bottom
 distance, viewport height, follow intent and acquired source ends. Consumers
@@ -947,6 +955,14 @@ catalog binding through `ProjectTabs.projectChip`; standalone tabs retain the
 same neutral initial/path chip without a backend. Project identity is demanded
 at mount. Repository state is first demanded on menu open, explicitly refreshed
 on later opens, and renewed through the same native invalidation owner.
+
+Every project-menu row shares one icon/value/accessory layout, including nested
+branch/path triggers. Edit project opens registered project-settings content
+through DialogHost. Its title names the captured project; fields borrow the
+framework-free editor and Form feedback owner. Color swatches use the shared
+on/off binding. Upload/remove, name and startup text commit through Save
+changes; dirty dismissal asks before discarding. No project auto-accept field is
+shown.
 
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and

@@ -199,6 +199,14 @@ origin, auth and cookie behavior. Discovery adds no automatic time limit.
 
 ## Resumable request services
 
+`registerProjectEdit` selects the optional native project editor. It validates
+captured project ownership and writable fields before invoking the native
+effect, checkpoints only per-field hashes, and requires authoritative read-back.
+An uncertain outcome reconciles against the captured native project without
+re-dispatch; a newer resource witness prevents old intent confirmation. Startup
+scripts and icon bytes never become durable request receipts. This feature does
+not alter session/family permission policy.
+
 Native registrations use `nativeExecution` and `nativeEffect`: the core fences
 independent backends before invocation, adapters repeat the fence at I/O, and
 feature-owned encoders checkpoint only metadata. Creation/fork outcomes

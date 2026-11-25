@@ -9,7 +9,7 @@ export interface ActivityGroup {
   entity?: Activity["entity"];
   detail?: string;
   count?: number;
-  time?: { first: number; last: number };
+  time?: { first: number; last?: number };
   children?: ActivityGroup[];
   revision: number;
   direction?: Activity["direction"];
@@ -196,6 +196,20 @@ export function createRecordProjection(): {
         previous = key;
       }
       for (const group of Object.values(next.groups)) {
+        if (group.members.length === 1) {
+          const id = group.members[0];
+          // A presented singleton is an individual record for its lifetime.
+          // Later appends can start a span, never replace this row's component.
+          permanentRows.add(id);
+          assignment.set(id, id);
+          children.delete(id);
+          next.keys[next.keys.indexOf(group.key)] = id;
+          next.owners[id] = id;
+          delete next.parents[id];
+          delete next.groups[group.key];
+          next.revisions[id] = revision(id, replies[id].revision);
+          continue;
+        }
         const counts = new Map<
           string,
           { noun: string; plural: string; count: number }
@@ -210,10 +224,9 @@ export function createRecordProjection(): {
         group.detail = [...counts.values()].map((v) =>
           `${v.count} ${v.count === 1 ? v.noun : v.plural}`
         ).join(" · ");
-        group.time = {
-          first: replies[group.members[0]].message.time.created,
-          last: replies[group.members.at(-1)!].message.time.created,
-        };
+        const first = replies[group.members[0]].message.time.created;
+        const last = replies[group.members.at(-1)!].message.time.created;
+        group.time = { first, ...(last === first ? {} : { last }) };
         for (const child of group.children!) {
           child.revision = revision(
             child.key,

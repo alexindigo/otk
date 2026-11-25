@@ -6,7 +6,7 @@ import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
 import "./Shell.css" with { type: "text" };
-import { scrollRegion } from "../components/ScrollRegion.tsx";
+import ScrollRegion from "../components/ScrollRegion.tsx";
 import {
   createEffect,
   createMemo,
@@ -566,25 +566,25 @@ export default function Shell(
                   <Show
                     when={local().status !== "setup required"}
                     fallback={
-                      <div class={[scrollRegion(), "otk-auth-view"]}>
+                      <ScrollRegion class="otk-auth-view">
                         <Setup
                           onSetup={(input) =>
                             sidecars.connection(LOCAL_SIDECAR).setup(input)}
                         />
-                      </div>
+                      </ScrollRegion>
                     }
                   >
                     <Show
                       when={local().status !== "login required"}
                       fallback={
-                        <div class={[scrollRegion(), "otk-auth-view"]}>
+                        <ScrollRegion class="otk-auth-view">
                           <Login
                             label={local().label}
                             authType={local().authType}
                             onLogin={(input) =>
                               sidecars.connection(LOCAL_SIDECAR).login(input)}
                           />
-                        </div>
+                        </ScrollRegion>
                       }
                     >
                       <Show when={project()} keyed>
@@ -596,6 +596,7 @@ export default function Shell(
                               projectChip={
                                 <ProjectLocation
                                   directory={owner.directory}
+                                  sidecarId={owner.sidecarId}
                                   catalog={resources.declares(
                                       owner.sidecarId,
                                       "catalogs",

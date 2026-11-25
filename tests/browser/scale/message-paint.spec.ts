@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
+import { revealAcquired, scrollTranscript } from "../pages/transcript.ts";
 import {
   measureMessagePaint,
   type MessagePaintEvidence,
@@ -84,6 +85,12 @@ for (let repetition = 0; repetition < 5; repetition++) {
           page.locator(".otk-message-flow").getAttribute("data-message-count")
             .then(Number)
         ).toBeGreaterThanOrEqual(20);
+        // WP2 moved agent identity out of the footer. Keep the identity check
+        // at its actual consumer without timing a header outside the tail view.
+        await revealAcquired(page, ".otk-reply-start .otk-entity-pill");
+        await expect(page.locator(".otk-reply-start .otk-entity-pill").first())
+          .toHaveText("build");
+        await scrollTranscript(page, true);
         await page.locator(openLanding).click();
         await expect(page).toHaveURL(new RegExp(`/${landing.id}$`));
         await expect(page.locator("textarea[name=prompt]")).toBeVisible();

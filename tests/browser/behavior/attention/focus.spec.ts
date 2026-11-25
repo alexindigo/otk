@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -104,15 +104,18 @@ test(
     for (
       const selector of [
         ".otk-user-bubble",
-        ".otk-message-agent",
-        ".otk-last-output-time",
+        ".otk-reply-start .otk-entity-pill", // WP2 reply identity.
+        ".otk-turn-usage > button", // Reply clock is now noninteractive text.
       ]
     ) {
+      // WP1: focus only an acquired row; opening answers can move the window.
+      await revealAcquired(page, selector);
       await page.locator(selector).first().focus();
       await expect(page.locator(selector).first()).toHaveCSS(
         "outline-style",
         "solid",
       );
+      await page.keyboard.press("Escape");
     }
     await tool(state, "question", { questions: [questions[0]] });
     await prompt(page, "Ask to skip");

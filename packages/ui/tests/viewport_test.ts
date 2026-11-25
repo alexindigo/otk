@@ -2,6 +2,27 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
 
+Deno.test("scrollbar input retires follow and commits proportional navigation through the position owner", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    try {
+      owner.input(400);
+      flush();
+      await Promise.resolve();
+      assertEquals(pane.scrollTop, 400);
+      assertEquals(owner.snapshot().scrollTop, 400);
+      assertEquals(owner.following(), false);
+      owner.input(900);
+      flush();
+      await Promise.resolve();
+      assertEquals(owner.following(), true);
+      assertEquals(owner.snapshot().scrollTop, 900);
+    } finally {
+      lease.release();
+    }
+  });
+});
+
 Deno.test("current return-source acquisition retains ordinary measured restoration", async () => {
   await viewportFixture(async ({ pane, flush }) => {
     const lease = acquireViewport(pane), owner = lease.owner;
@@ -902,6 +923,8 @@ Deno.test("one geometry snapshot publishes committed bottom, intent and acquired
     const snapshot = owner.snapshot();
     assertEquals(snapshot.distanceFromBottom, 0);
     assertEquals(snapshot.viewportHeight, 100);
+    assertEquals(snapshot.contentHeight, 1400);
+    assertEquals(snapshot.scrollTop, 1300);
     assertEquals(snapshot.following, true);
     assertEquals(snapshot.history, {
       first: "first",

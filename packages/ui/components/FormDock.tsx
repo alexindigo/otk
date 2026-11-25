@@ -217,15 +217,11 @@ export default function FormDock(
     }
     setPending(true);
     setError("");
+    const settled = props.retention?.settlement("form", props.request.id);
     try {
       if (cancel) await props.onCancel(feedback);
       else await props.onReply(derived().answer);
-      props.retention?.retire(
-        "form",
-        props.request.id,
-        "settled-locally",
-        "local response confirmed",
-      );
+      settled?.();
       forgetForm(props.request.id);
       if (alive) props.onDirty?.(false);
     } catch (cause) {

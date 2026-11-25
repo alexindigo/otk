@@ -225,6 +225,7 @@ export function LayoutTabs(props: { onTheme(id: string): void }): Element {
   const commands = new CommandHub();
   const entries: MergedEntry[] = Array.from({ length: 12 }, (_, i) => ({
     id: `tstv1-independent-${i}`,
+    parentID: i ? `tstv1-independent-${i - 1}` : undefined,
     sidecarId: "independent",
     directory: "/independent",
     projectID: "independent",

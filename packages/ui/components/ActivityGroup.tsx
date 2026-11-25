@@ -9,6 +9,7 @@ import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import type { Preferences } from "@otk/protocol";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
+import { activityTimeRange } from "./activity-time.ts";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -76,11 +77,12 @@ export default function ActivityGroup(props: {
             {(time) => (
               <span
                 class="otk-record-group-time"
-                title={`${new Date(time().first).toLocaleString()} - ${
-                  new Date(time().last).toLocaleString()
-                }`}
+                title={activityTimeRange(
+                  time(),
+                  (value) => new Date(value).toLocaleString(),
+                )}
               >
-                {clock(time().first)} - {clock(time().last)}
+                {activityTimeRange(time(), clock)}
               </span>
             )}
           </Show>

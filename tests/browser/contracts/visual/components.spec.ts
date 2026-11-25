@@ -311,12 +311,12 @@ test(
     await scene(page, state.url, "lists");
     const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify(ids)},'session-4','session-7')`,
+      `styleTest.lists(${JSON.stringify(ids)},'session-9','session-7')`,
     );
     await expect(page.locator('[data-crumb="session-7"] input')).toHaveValue(
       "session-7",
     );
-    const original = await page.locator('[data-crumb="session-4"]')
+    const original = await page.locator('[data-crumb="session-9"]')
       .elementHandle();
     const otherOriginal = await page.locator('[data-crumb="session-1"]')
       .elementHandle();
@@ -329,12 +329,12 @@ test(
         )
       );
     const shown = await visible();
-    expect(shown).toContain("session-4");
+    expect(shown).toContain("session-9");
     expect(shown).toContain("session-7");
     expect(shown.length).toBeLessThan(ids.length);
     expect(shown).toEqual(ids.filter((id) => shown.includes(id)));
     expect(
-      await page.locator('[data-crumb="session-4"]').evaluate(
+      await page.locator('[data-crumb="session-9"]').evaluate(
         (el, old) => el === old,
         original,
       ),

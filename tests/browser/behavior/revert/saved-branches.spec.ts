@@ -114,9 +114,13 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  await expect(saved.locator(".otk-message-footer")).not.toContainText(
-    "Time unknown",
+  // WP2: saved reply facts live on its scoped identity, not an absent footer.
+  await expect(saved.locator(".otk-reply-start > time")).toHaveAttribute(
+    "datetime",
+    /\d{4}-/,
   );
+  await saved.locator(".otk-reply-start .otk-entity-pill").hover();
+  await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
     /Digesting|streaming|response in progress/,
   );
@@ -140,9 +144,12 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
-  await expect(saved.locator(".otk-message-footer")).not.toContainText(
-    "Time unknown",
+  await expect(saved.locator(".otk-reply-start > time")).toHaveAttribute(
+    "datetime",
+    /\d{4}-/,
   );
+  await saved.locator(".otk-reply-start .otk-entity-pill").hover();
+  await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
     /Digesting|streaming|response in progress/,
   );

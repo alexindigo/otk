@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { EmptyState } from "./View.tsx";
 import "./Sidebar.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
@@ -69,7 +69,7 @@ export default function Sidebar(
           {props.actions}
         </nav>
       </Show>
-      <div class={[scrollRegion("y"), "otk-sidebar-scroll"]}>
+      <ScrollRegion axis="y" class="otk-sidebar-scroll">
         <For each={props.sidecars} keyed={(item) => item.id}>
           {(sidecar) => (
             <section class="otk-sidecar-group" data-sidecar={sidecar().id}>
@@ -200,7 +200,7 @@ export default function Sidebar(
             No sessions yet. Start a session from a project.
           </EmptyState>
         </Show>
-      </div>
+      </ScrollRegion>
       <button
         type="button"
         class="otk-settings-entry"

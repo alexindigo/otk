@@ -32,8 +32,9 @@ export default function Scene() {
     finishes: {},
     pathTemplates: [],
   });
-  const entry = (id: string) => ({
+  const entry = (id: string, index: number, ids: string[]) => ({
     id,
+    parentID: index ? ids[index - 1] : undefined,
     sidecarId: "local",
     directory,
     projectID: "p",

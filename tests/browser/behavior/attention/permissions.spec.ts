@@ -114,7 +114,8 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   );
   await expect(page.locator(".otk-permission-command")).toHaveText("echo otk");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  // WP3: blocked helpers remain mandatory alongside the parent path.
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(1);
   await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "blocked");
   await expect(
@@ -125,9 +126,8 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
-  // The child's finish was never viewed; its session row retains the lamp,
-  // while the breadcrumb remains only the path to the open parent.
-  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  // WP3: a finished-unseen helper remains mandatory until acknowledged.
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(1);
   await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "finished");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);

@@ -217,7 +217,13 @@ test(
   "visual.task-form-submission-real-owner-and-more-exact-partition-navigation",
   tags,
   async ({ isolatedState: state, page }) => {
-    await openSession(state, page, "tstv1-otk");
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      sessionID: "tstv1-crumb-path",
+    });
+    await page.goto(`${state.url}/#/local/tstv1-otk`);
+    await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
     await page.locator(".otk-task-new").click();
     await page.locator("input[name=taskName]").fill("Created Dark");
     await page.locator("dialog[open] button[type=submit]").click();
@@ -230,7 +236,10 @@ test(
         { entries: { id: string; directory: string; title: string }[] }
       >(),
       entries = observed.entries.filter((e) => e.directory === state.directory),
-      ids = entries.map((e) => e.id);
+      ids = [
+        ...entries.filter((e) => e.id !== "tstv1-otk").map((e) => e.id),
+        "tstv1-otk",
+      ];
     await state.product("tasks.sessions", {
       id: tasks.find((t) => t.name === "Created Dark")!.id,
       sessions: ids,

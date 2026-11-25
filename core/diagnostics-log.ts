@@ -11,7 +11,7 @@ const levels: Record<LogLevel, number> = { warn: 0, info: 1, debug: 2 };
 export function diagnosticsLog(
   level: LogLevel,
   write: (level: LogLevel, line: string) => void = (level, line) =>
-    console[level](line),
+    level === "warn" ? console.warn(line) : console.error(line),
 ): DiagnosticSink {
   const reported = new WeakSet<object>();
   const sink: DiagnosticSink = (severity, message, cause) => {

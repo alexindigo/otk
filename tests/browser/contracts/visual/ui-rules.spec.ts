@@ -387,8 +387,9 @@ test.describe("mandatory helper crumbs", () => {
         });
       }
       await openSession(state, page, "tstv1-otk");
-      await expect(page.locator('[data-crumb="tstv1-helper"]')).toHaveCount(0);
-      await expect(page.locator('[data-crumb="tstv1-nested"]')).toHaveCount(0);
+      // WP3: every working member of the family remains visible.
+      await expect(page.locator('[data-crumb="tstv1-helper"]')).toHaveCount(1);
+      await expect(page.locator('[data-crumb="tstv1-nested"]')).toHaveCount(1);
       await page.locator('[data-session="tstv1-nested"]').click();
       for (const theme of themes) {
         await paint(state, page, theme);

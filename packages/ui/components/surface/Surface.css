@@ -54,7 +54,8 @@
 .otk-surface-menu {
   padding: var(--menu-block-inset) var(--menu-item-inset);
 }
-.otk-surface-menu > .otk-surface-body {
+.otk-surface-menu > .otk-surface-body,
+.otk-surface-menu > .otk-surface-scroll > .otk-surface-body {
   padding: 0;
   gap: var(--menu-block-inset);
 }

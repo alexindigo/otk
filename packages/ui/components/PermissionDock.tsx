@@ -11,7 +11,7 @@ import {
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./PermissionDock.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerPermissionDock(docks: DockRegistry): void {
@@ -179,14 +179,13 @@ function RequestDock(
     setPending(true);
     feedback?.clear();
     setError("");
+    const settled = session?.requests?.settlement(
+      "permission",
+      props.request.id,
+    );
     try {
       await props.onReply(input);
-      session?.requests?.retire(
-        "permission",
-        props.request.id,
-        "settled-locally",
-        "local response confirmed",
-      );
+      settled?.();
       if (active) props.onDirty(false);
     } catch (error) {
       if (feedback) feedback.fail(error);
@@ -420,8 +419,8 @@ function RequestDock(
             }}
           >
             <label>
-              Optional rejection message<textarea
-                class={scrollRegion()}
+              Optional rejection message<ScrollRegion
+                as="textarea"
                 name="rejection"
                 value={message()}
                 onInput={(event) => {

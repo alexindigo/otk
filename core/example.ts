@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Harness } from "@otk/harness";
+import { diagnosticsLog } from "./diagnostics-log.ts";
 import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
 import {
   type CoreServer,
@@ -18,10 +19,11 @@ export function serveBackend(
   cfg: ServiceConfig,
   staticRoot: string,
 ): Promise<CoreServer> {
+  const diagnostic = diagnosticsLog(cfg.log.level);
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     requestsMigrations,
-  ], cfg.storage);
+  ], { ...cfg.storage, diagnostic: (message) => diagnostic("info", message) });
   try {
     const prefs = new Prefs(store, prefsOptions),
       rpc = new RpcRegistry(backend, store);

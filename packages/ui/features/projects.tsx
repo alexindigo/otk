@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./projects.css" with { type: "text" };
-import { scrollRegion } from "../components/ScrollRegion.tsx";
+import ScrollRegion from "../components/ScrollRegion.tsx";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { createProjectPicker } from "@otk/client";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
@@ -14,8 +14,10 @@ import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import PreferenceControls from "../components/PreferenceControls.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
+import { registerProjectSettings } from "./project-settings.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
+  registerProjectSettings(dialogs);
   dialogs.register({
     id: "add-project",
     size: "form",
@@ -98,8 +100,9 @@ function AddProject(props: DialogProps) {
           />
         </label>
       </Form>
-      <section
-        class={[scrollRegion(), "otk-template-paths"]}
+      <ScrollRegion
+        as="section"
+        class="otk-template-paths"
         aria-label="Scanned projects"
       >
         <strong>From path templates</strong>
@@ -129,7 +132,7 @@ function AddProject(props: DialogProps) {
             path above.
           </p>
         </Show>
-      </section>
+      </ScrollRegion>
     </>
   );
 }

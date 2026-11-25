@@ -61,11 +61,13 @@ import { PermissionFeature } from "./core/features/approvals.ts";
 import { RequestAttention } from "./core/features/request-attention.ts";
 import { registerDigests } from "./core/features/digests.ts";
 import { NavigationDefault } from "./core/features/navigation-default.ts";
+import { registerProjectEdit } from "./core/features/project-edit.ts";
 import {
   createCatalogCodecs,
   registerCatalogs,
 } from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
+import { diagnosticsLog } from "./core/diagnostics-log.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export async function startApplication(
@@ -85,6 +87,7 @@ export async function startApplication(
     sources?: readonly FrameSource[];
   } = {},
 ): Promise<CoreServer> {
+  const diagnostic = options.diagnostic ?? diagnosticsLog(cfg.log.level);
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     frecencyMigrations,
@@ -98,7 +101,7 @@ export async function startApplication(
     sessionReferenceMigrations,
     requestsMigrations,
     pluginStorageMigrations,
-  ], cfg.storage);
+  ], { ...cfg.storage, diagnostic: (message) => diagnostic("info", message) });
   const sources: FrameSource[] = [...options.sources ?? []];
   try {
     options.signal?.throwIfAborted();
@@ -162,6 +165,7 @@ export async function startApplication(
       (directory, tx) => inbox.activate(directory, tx),
     );
     registerPrompt(rpc, backend);
+    registerProjectEdit(rpc, backend);
     registerShell(rpc, backend);
     registerCommands(rpc, backend);
     registerHistory(rpc, backend);

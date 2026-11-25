@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TurnUsage.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
 import { timingExplanation, workingTime } from "./work-log.ts";
@@ -55,8 +55,8 @@ export default function UsageDetail(
         )}
       </Show>
       {/* The focus target outlives loading, errors and complete ledger paint. */}
-      <div
-        class={[scrollRegion(), "otk-usage-scroll"]}
+      <ScrollRegion
+        class="otk-usage-scroll"
         tabindex={0}
         role="region"
         aria-label="Model calls"
@@ -170,7 +170,7 @@ export default function UsageDetail(
             </table>
           )}
         </Show>
-      </div>
+      </ScrollRegion>
       <Show when={props.usage}>
         {(usage) => (
           <div class="otk-usage-notes">

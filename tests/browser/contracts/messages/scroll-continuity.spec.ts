@@ -59,7 +59,7 @@ test(
       title: "Transcript position feedback",
     });
     await state.queue([
-      "The transcript keeps its native position feedback.\n\n".repeat(50) +
+      "The transcript keeps its OTK position feedback.\n\n".repeat(50) +
       "```ts\nconst nativeScrollbar = true;\n```",
     ]);
     await state.native(`/session/${session.id}/prompt_async`, "POST", {
@@ -67,23 +67,10 @@ test(
     });
     await openSession(state, page, session.id);
     const pane = page.getByRole("region", { name: "Transcript", exact: true });
+    const track = pane.locator("..").locator(":scope > .otk-scroll-track-y");
+    const thumb = track.locator(".otk-scroll-thumb");
     const paint = () =>
-      pane.evaluate((element) => {
-        const style = getComputedStyle(element);
-        const swatch = document.createElement("span");
-        element.append(swatch);
-        swatch.style.color = "var(--otk-fg-3)";
-        const thumb = getComputedStyle(swatch).color;
-        swatch.style.color = "var(--otk-bg)";
-        const track = getComputedStyle(swatch).color;
-        swatch.remove();
-        return {
-          width: style.scrollbarWidth,
-          color: style.scrollbarColor,
-          thumb,
-          track,
-        };
-      });
+      pane.evaluate((element) => getComputedStyle(element).scrollbarWidth);
     expect((await state.product("prefs.get", {})).scrollbar).toBe(true);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
@@ -91,13 +78,32 @@ test(
         "data-otk-theme",
         theme,
       );
-      await expect.poll(async () => {
-        const style = await paint();
+      await expect.poll(paint).toBe("none");
+      await expect(track).toBeVisible();
+      await pane.hover();
+      await expect.poll(() =>
+        track.evaluate((element) => Number(getComputedStyle(element).opacity))
+      ).toBe(1);
+      const geometry = await pane.evaluate((element) => {
+        const track = element.parentElement!.querySelector<HTMLElement>(
+          ".otk-scroll-track-y",
+        )!;
+        const thumb = track.firstElementChild!.getBoundingClientRect();
         return {
-          width: style.width,
-          themed: style.color === `${style.thumb} ${style.track}`,
+          actual: thumb.height,
+          expected: track.clientHeight * element.clientHeight /
+            element.scrollHeight,
         };
-      }).toEqual({ width: "thin", themed: true });
+      });
+      expect(Math.abs(geometry.actual - geometry.expected)).toBeLessThanOrEqual(
+        1,
+      );
+      if (process.env.OTK_WP8_SCREENSHOTS) {
+        await page.screenshot({
+          path: `${process.env.OTK_WP8_SCREENSHOTS}/${theme}.png`,
+          fullPage: true,
+        });
+      }
     }
     const nested = pane.locator("pre.otk-scroll").last();
     await expect.poll(() =>
@@ -105,28 +111,58 @@ test(
         width: getComputedStyle(element).scrollbarWidth,
         color: getComputedStyle(element).scrollbarColor,
       }))
-    ).toEqual({ width: "auto", color: "auto" });
+    ).toEqual({ width: "none", color: "auto" });
     const prompt = page.locator("textarea[name=prompt]");
     await expect.poll(() =>
       prompt.evaluate((element) => ({
         width: getComputedStyle(element).scrollbarWidth,
         color: getComputedStyle(element).scrollbarColor,
       }))
-    ).toEqual({ width: "auto", color: "auto" });
+    ).toEqual({ width: "none", color: "auto" });
+    const start = await track.boundingBox();
+    const handle = await thumb.boundingBox();
+    expect(start).not.toBeNull();
+    expect(handle).not.toBeNull();
+    await page.mouse.move(
+      handle!.x + handle!.width / 2,
+      handle!.y + handle!.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      handle!.x + handle!.width / 2,
+      start!.y + start!.height / 2,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect.poll(() =>
+      pane.evaluate((element) =>
+        element.scrollTop / (element.scrollHeight - element.clientHeight)
+      )
+    ).toBeLessThan(.75);
+    await expect.poll(() =>
+      pane.evaluate((element) =>
+        element.scrollTop / (element.scrollHeight - element.clientHeight)
+      )
+    ).toBeGreaterThan(.25);
+    const before = await thumb.boundingBox();
+    await page.mouse.click(start!.x + start!.width / 2, start!.y + 2);
+    await expect.poll(() => pane.evaluate((element) => element.scrollTop))
+      .toBeLessThan(10);
+    expect(before!.y).toBeGreaterThan(start!.y);
     await page.locator(".otk-display-menu > button").click();
     await page.locator("input[name=scrollbar]").click();
     await page.keyboard.press("Escape");
     expect((await state.product("prefs.get", {})).scrollbar).toBe(false);
-    await expect.poll(async () => (await paint()).width).toBe("none");
+    await expect(track).toBeHidden();
     await page.reload();
-    await expect.poll(async () => (await paint()).width).toBe("none");
+    await expect(track).toBeHidden();
     expect((await state.product("prefs.get", {})).scrollbar).toBe(false);
     await page.locator(".otk-display-menu > button").click();
     await page.locator("input[name=scrollbar]").click();
     await page.keyboard.press("Escape");
-    await expect.poll(async () => (await paint()).width).toBe("thin");
+    await expect(track).toBeVisible();
     await page.reload();
-    await expect.poll(async () => (await paint()).width).toBe("thin");
+    await expect(track).toBeVisible();
     expect((await state.product("prefs.get", {})).scrollbar).toBe(true);
   },
 );

@@ -62,7 +62,8 @@ for (const count of [2, 10]) {
         await stripShot(page, info, `u4-2-tabs-${theme.name}`);
       }
       await activity(state, "tstv1-helper", "hold");
-      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
+      // WP3: working helpers are mandatory, not only selected ancestry.
+      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(1);
       await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-helper`);
       await expect(
         page.locator(

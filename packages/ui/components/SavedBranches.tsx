@@ -13,7 +13,7 @@ import { ComposerNoticeRow } from "./ComposerNotice.tsx";
 import { RevertIcon } from "./ChromeIcons.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import Message from "./Message.tsx";
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -131,8 +131,9 @@ export default function SavedBranches(
                 </button>
               </div>
             </header>
-            <div
-              class={[scrollRegion("y"), "otk-saved-messages"]}
+            <ScrollRegion
+              axis="y"
+              class="otk-saved-messages"
               ref={(element) => {
                 viewport = element;
               }}
@@ -267,7 +268,7 @@ export default function SavedBranches(
                   </Show>
                 )}
               />
-            </div>
+            </ScrollRegion>
           </section>
         </TranscriptSnapshot>
       )}

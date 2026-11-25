@@ -3,7 +3,7 @@ import type { CatalogProject, CatalogRepository } from "@otk/protocol";
 import type { V2Client } from "./client.ts";
 
 /** Native avatar variants resolved at the plugin boundary, not in shared UI. */
-const colors: Readonly<Record<string, string>> = {
+export const projectColors: Readonly<Record<string, string>> = {
   orange: "#ee7330",
   yellow: "#e7af36",
   cyan: "#0096b8",
@@ -32,7 +32,8 @@ export function projectPresentation(project: {
       : project.canonical,
     icon: project.icon?.override || (color ? undefined : project.icon?.url),
     color: color
-      ? colors[color] ?? (/^#[a-f\d]{6}$/i.test(color) ? color : undefined)
+      ? projectColors[color] ??
+        (/^#[a-f\d]{6}$/i.test(color) ? color : undefined)
       : undefined,
     repository: project.vcs ? "Local repository" : undefined,
   };

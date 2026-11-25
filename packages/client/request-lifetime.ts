@@ -27,6 +27,7 @@ const key = (kind: RequestKind, id: string) =>
 /** One identity owns authority, local presentation and retained input. Views only project it. */
 export class RequestLifetimes {
   #records = new Map<string, RequestLifetime>();
+  #consumed = new WeakSet<RequestLifetime>();
   #listeners = new Set<() => void>();
   #revision = 0;
   #batch = 0;
@@ -150,6 +151,30 @@ export class RequestLifetimes {
   retire(
     kind: RequestKind,
     id: string,
+    state: "settled-remotely" | "retired",
+    reason: string,
+  ): void {
+    this.#retire(kind, id, state, reason);
+  }
+  /** Capture before sending. Native retirement may win delivery order, but a
+   * confirmed reply consumes only its submitted draft, never a newer one. */
+  settlement(kind: RequestKind, id: string): () => void {
+    const row = this.get(kind, id), draft = row?.draft;
+    return () => {
+      if (!row || this.get(kind, id) !== row) return;
+      this.#atomic(() => {
+        if (row.draft === draft) {
+          row.draft = undefined;
+          this.#consumed.add(row);
+        }
+        this.#retire(kind, id, "settled-locally", "local response confirmed");
+        this.#changed();
+      });
+    };
+  }
+  #retire(
+    kind: RequestKind,
+    id: string,
     state: Exclude<RequestLifetime["state"], "pending">,
     reason: string,
   ): void {
@@ -182,7 +207,11 @@ export class RequestLifetimes {
   }
   draft(kind: RequestKind, id: string, value?: unknown): unknown {
     const row = this.get(kind, id);
-    if (row && arguments.length === 3) row.draft = value;
+    if (
+      row && arguments.length === 3 &&
+      (value === undefined ||
+        row.state !== "settled-locally" && !this.#consumed.has(row))
+    ) row.draft = value;
     return row?.draft;
   }
   getFormDraft(id: string): import("./forms.ts").FormState | undefined {
@@ -193,6 +222,48 @@ export class RequestLifetimes {
   }
   forgetFormDraft(id: string): void {
     this.draft("form", id, undefined);
+  }
+  /** Capture canonical unsent input even when retirement unmounted its view
+   * before the session tombstone arrived. Consent consumes this exact scope. */
+  retention(
+    scope: string,
+    entry: SessionLookup,
+  ): import("./input-guard.ts").InputRetention {
+    const rows = [...this.#records.values()].filter((row) =>
+      this.#inScope(row, scope, entry) && row.draft !== undefined
+    );
+    const captured = rows.map((row) => ({ row, draft: row.draft }));
+    const inputs = new Map<string, string[]>();
+    for (const row of rows) {
+      const form = typeof row.draft === "object" && row.draft !== null
+        ? row.draft as import("./forms.ts").FormState
+        : undefined;
+      const value = typeof row.draft === "string" ? row.draft : form?.drafts &&
+          Object.values(form.drafts).some((draft) => draft.touched)
+        ? JSON.stringify(form.drafts)
+        : "";
+      if (!value) continue;
+      const owner = row.permission
+        ? "permissions"
+        : row.question
+        ? "questions"
+        : "forms";
+      const values = inputs.get(owner) ?? [];
+      values.push(value);
+      inputs.set(owner, values);
+    }
+    return {
+      owners: ["permissions", "questions", "forms"],
+      inputs: [...inputs].map(([owner, values]) => ({
+        owner,
+        value: values.join("\n"),
+      })),
+      discard: () => {
+        for (const { row, draft } of captured) {
+          if (row.draft === draft) row.draft = undefined;
+        }
+      },
+    };
   }
   retireSessions(deleted: (id: string) => boolean): void {
     this.#deleted = deleted;

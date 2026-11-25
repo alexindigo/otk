@@ -34,6 +34,7 @@ import {
 } from "./publication-order.ts";
 import { DigestBatch } from "./batch.ts";
 import { DigestProgress } from "./progress.ts";
+import { diagnosticsLog } from "../diagnostics-log.ts";
 
 let progress: DigestProgress | undefined;
 let diagnostics = false;
@@ -636,7 +637,10 @@ async function start(
         new DigestDb(message.statePath, [
           digestMigrations,
           selected.migrations,
-        ], { busyms: 0 }),
+        ], {
+          busyms: 0,
+          diagnostic: (message) => diagnosticsLog("info")("info", message),
+        }),
       lifetime.signal,
       policy,
       wait,

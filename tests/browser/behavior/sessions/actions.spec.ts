@@ -254,7 +254,8 @@ test(
     await expect(page.locator(`[data-session="${original.id}"]`))
       .toHaveAttribute("data-status", "idle");
     await revealAcquired(page, "[data-role=assistant]");
-    await page.locator("[data-role=assistant] .otk-message-agent").first()
+    // WP2: reply identity is now the shared entity pill.
+    await page.locator("[data-role=assistant] .otk-entity-pill").first()
       .click();
     await page.locator(
       '[data-role=assistant] [data-message-command="reply.fork"]',

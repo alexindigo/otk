@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Blocks.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
@@ -179,7 +179,7 @@ function Quote(props: { block: Block & { b: "quote" }; conceal?: boolean }) {
 }
 function Table(props: { block: Block & { b: "table" } }) {
   return (
-    <div class={[scrollRegion("x"), "otk-table-scroll"]}>
+    <ScrollRegion axis="x" class="otk-table-scroll">
       <table>
         <thead>
           <tr>
@@ -214,7 +214,7 @@ function Table(props: { block: Block & { b: "table" } }) {
           </For>
         </tbody>
       </table>
-    </div>
+    </ScrollRegion>
   );
 }
 function Rule() {
