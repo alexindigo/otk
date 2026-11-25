@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ActionControl, CommandHub, Selection } from "@otk/client";
+import {
+  type ActionControl,
+  type CommandHub,
+  errorFeedback,
+  failureValue,
+  type Selection,
+} from "@otk/client";
 
 function observedOpen(
   commands: CommandHub,
@@ -30,11 +36,39 @@ export function sessionOpenControl(
   commands: CommandHub,
   id: string,
   label: string,
+  onOpenChild?: (id: string) => void,
 ): ActionControl {
-  return observedOpen(commands, "session.child", id, {
+  const command = "session.child";
+  const target = {
     sidecarId: commands.context().sidecar ?? "",
     sessionID: id,
-  }, label);
+  };
+  const action = observedOpen(commands, command, id, target, label);
+  if (!onOpenChild) return action;
+  return {
+    availability: () =>
+      commands.has(command) ? action.availability() : { available: true },
+    subscribe: action.subscribe,
+    async run() {
+      // A registered shell owner is authoritative, even when it refuses the
+      // transition. An embedded host may supply only the renderer callback.
+      if (commands.has(command)) return await action.run();
+      try {
+        await onOpenChild(id);
+        return { kind: "shown" };
+      } catch (cause) {
+        const facts = {
+          actionLabel: "Open session",
+          target: { ...target, label },
+        };
+        return {
+          kind: "failed",
+          feedback: failureValue(cause, facts) ||
+            errorFeedback("The requested view did not open.", facts)!,
+        };
+      }
+    },
+  };
 }
 
 /** A selectable row, including the currently selected session. */
