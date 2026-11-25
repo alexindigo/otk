@@ -3,6 +3,7 @@ import { nativeLane } from "./lanes.ts";
 import { join } from "@std/path";
 import { browserGrep, pathsFromNul, select } from "./selection.ts";
 import { sourceTree } from "./source.ts";
+import { runStage } from "./stage.ts";
 
 export const tierIds = [
   "fmt",
@@ -187,22 +188,18 @@ export async function runCommit() {
   await receipt();
   for (const [id, args] of tiers) {
     const at = performance.now();
-    const child = await new Deno.Command(Deno.execPath(), {
+    const child = await runStage(
+      Deno.execPath(),
       args,
-      env: {
-        OTK_TEST_TREE: tree,
-        OTK_TEST_SELECTION: JSON.stringify(selection),
-        OTK_TEST_MATRIX_FULL: "0",
-      },
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    await Deno.writeFile(
       join(root, `${id}.log`),
-      new Uint8Array([...child.stdout, ...child.stderr]),
+      {
+        env: {
+          OTK_TEST_TREE: tree,
+          OTK_TEST_SELECTION: JSON.stringify(selection),
+          OTK_TEST_MATRIX_FULL: "0",
+        },
+      },
     );
-    console.log(new TextDecoder().decode(child.stdout));
-    console.error(new TextDecoder().decode(child.stderr));
     results.push({
       id,
       exit: child.code,

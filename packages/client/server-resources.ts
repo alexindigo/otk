@@ -1102,6 +1102,10 @@ export function createServerResources(o: {
     },
     projects: (now, ageing) => {
       void projectOrderClock.state.revision;
+      // The configured server list is durable before any server answers.
+      const serverOrder = new Map(
+        sidecars.state.list.map((s, i) => [s.id, i]),
+      );
       const rows = sidecars.state.list.flatMap((s) => {
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
@@ -1121,6 +1125,7 @@ export function createServerResources(o: {
             row,
           })),
           (row) => ({
+            source: serverOrder.get(row.row.sidecarId),
             position: row.row.source === "tracked" ? row.row.order : undefined,
           }),
         ).map((item) => item.row),

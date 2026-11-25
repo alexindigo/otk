@@ -1,14 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface OrderFacts {
+  /** Durable rank of the answering source (e.g. configured server order). */
+  source?: number;
   /** Durable position, changed only by an explicit user move. */
   position?: number;
   /** Immutable creation clock; absent sources retain discovery order. */
   created?: number;
 }
 
+/** True when saved keys both rows carry place `a` before `b`. Creation keys
+ * only seed a batch: a late row never splits rows by creation time. */
+function precedes(a: OrderFacts, b: OrderFacts): boolean {
+  if (
+    a.source !== undefined && b.source !== undefined && a.source !== b.source
+  ) return a.source < b.source;
+  return a.position !== undefined && b.position !== undefined &&
+    a.position < b.position;
+}
+
 /** Presentation order has no activity/state inputs or timers. Existing rows
- * retain their relative order, arrivals append, and only saved moves reorder.
- * Counted holds retain departing targets until their last interaction ends. */
+ * retain their relative order; only saved moves reorder. An arrival takes its
+ * saved-key place among them (a late answer from one source lands where its
+ * keys say, never by arrival time), otherwise the new-item place at the end.
+ * Counted holds retain departing targets until their last interaction ends;
+ * arrivals during a hold append and take their place once it ends. */
 export function createStableOrder<T extends { id: string }>(
   changed: () => void,
 ) {
@@ -23,16 +38,29 @@ export function createStableOrder<T extends { id: string }>(
     source: readonly unknown[];
     held: boolean;
   }>();
+  /** Arrivals appended during a hold, placed by their keys when it ends. */
+  const pending = new Set<string>();
   let order: string[] = [], stopped = false, moved = false;
   const compare = (a: string, b: string) => {
     const aa = items.get(a)!.facts, bb = items.get(b)!.facts;
-    return (aa.position ?? Infinity) - (bb.position ?? Infinity) ||
+    return (aa.source ?? 0) - (bb.source ?? 0) ||
+      (aa.position ?? Infinity) - (bb.position ?? Infinity) ||
       (aa.created ?? Infinity) - (bb.created ?? Infinity) || 0;
+  };
+  const place = (id: string) => {
+    const facts = items.get(id)!.facts;
+    const at = order.findIndex((other) =>
+      precedes(facts, items.get(other)!.facts)
+    );
+    if (at < 0) order.push(id);
+    else order.splice(at, 0, id);
   };
   const prune = () => {
     if (holds.size) return;
     for (const [id, item] of items) if (!item.present) items.delete(id);
-    order = order.filter((id) => items.has(id));
+    order = order.filter((id) => items.has(id) && !pending.has(id));
+    for (const id of pending) if (items.has(id)) place(id);
+    pending.clear();
   };
   return {
     sequence<R>(
@@ -93,7 +121,14 @@ export function createStableOrder<T extends { id: string }>(
       prune();
       const arrivals = [...items.keys()].filter((id) => !order.includes(id))
         .sort(compare);
-      order.push(...arrivals);
+      for (const id of arrivals) {
+        if (!holds.size) place(id);
+        else {
+          // Appending displaces no held target.
+          order.push(id);
+          pending.add(id);
+        }
+      }
       if (moved) {
         // Reorder the positioned slots only; unpositioned rows keep their places.
         const positioned = order.filter((id) =>
@@ -122,6 +157,7 @@ export function createStableOrder<T extends { id: string }>(
       sequences.clear();
       order = [];
       holds.clear();
+      pending.clear();
       moved = false;
     },
     stop() {
