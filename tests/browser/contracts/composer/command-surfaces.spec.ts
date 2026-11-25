@@ -217,10 +217,12 @@ test(
       model: "scripted",
     });
     const before = frames.sent.length;
-    await prompt(page).fill("/terminal");
+    // The shipped terminal action now matches /terminal in completion.
+    // Export remains unsupported by both native adapters.
+    await prompt(page).fill("/export");
     await prompt(page).press("Enter");
     await expect(page.locator(".otk-composer-dock [role=alert]")).toBeVisible();
-    await expect(prompt(page)).toHaveValue("/terminal");
+    await expect(prompt(page)).toHaveValue("/export");
     expect(
       frames.sent.slice(before).filter(({ frame }) =>
         ["session.prompt", "session.command", "session.shell"].includes(
