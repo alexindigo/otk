@@ -18,6 +18,7 @@ import type { IndexEntry } from "@otk/protocol";
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { fixture } from "../../support/config.ts";
+import { ManualClock } from "../../support/manual-clock.ts";
 
 test("core records real status edges at the single index owner and clears persisted inactive marks for working, blocked and unread activity", async () => {
   const db = new OtkDb(await fixture(), [
@@ -36,6 +37,7 @@ test("core records real status edges at the single index owner and clears persis
     templates: new ProjectTemplates(db),
   };
   const discovery = new Map<string, boolean>();
+  const clock = new ManualClock();
   const index = new IndexStore(),
     feature = new InboxFeature(
       stores,
@@ -47,6 +49,7 @@ test("core records real status edges at the single index owner and clears persis
       undefined,
       undefined,
       (directory, active) => discovery.set(directory, active),
+      clock,
     );
   const idle: IndexEntry = {
     digest: { state: "digesting", revision: 0, turns: {} },
@@ -98,7 +101,8 @@ test("core records real status edges at the single index owner and clears persis
       attention: { ...idle.attention, permissions: 1 },
       activity: { permissions: { keys: ["permission"], fresh: true } },
     });
-    await new Promise((done) => setTimeout(done, 525));
+    assertEquals(stores.projects.get("alice", "/p").inactive, true);
+    clock.runNext();
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     index.upsert(idle);
     stores.projects.inactive("alice", "/p", true);

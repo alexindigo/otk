@@ -3,11 +3,12 @@ import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 import { NotificationTriggers } from "../notification-triggers.ts";
 function fixture() {
-  let now = 0, seq = 0, revision = 0;
+  const clock = new ManualClock();
+  let revision = 0;
   let current: IndexEntry;
-  const timers = new Map<number, { due: number; run(): void }>();
   const states = new EntityStates(new SessionSupervision(), {
     getMetadata: () => current,
     ancestors: () => [],
@@ -31,16 +32,7 @@ function fixture() {
         ? { t: "index.patch", rev: ++revision, ops: [{ op: "upsert", entry }] }
         : { t: "index.snapshot", rev: ++revision, entries: [entry] },
     );
-  }, {
-    now: () => now,
-    set(run, ms) {
-      timers.set(++seq, { due: now + ms, run });
-      return seq;
-    },
-    clear(id) {
-      timers.delete(id as number);
-    },
-  });
+  }, clock);
   const notes: string[] = [], requests: (string | undefined)[] = [];
   const quiet: boolean[] = [];
   const removed: string[] = [];
@@ -85,21 +77,7 @@ function fixture() {
     };
     states.session(current, 0);
   };
-  const tick = (ms: number) => {
-    const end = now + ms;
-    while (true) {
-      const next = [...timers].filter(([, t]) =>
-        t.due <= end
-      ).sort((a, b) => a[1].due - b[1].due)[0];
-      if (!next) {
-        break;
-      }
-      now = next[1].due;
-      timers.delete(next[0]);
-      next[1].run();
-    }
-    now = end;
-  };
+  const tick = (ms: number) => clock.advanceTo(clock.now() + ms);
   send([]);
   return {
     notes,

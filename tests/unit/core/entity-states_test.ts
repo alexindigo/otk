@@ -28,6 +28,7 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { fixture } from "../../support/config.ts";
+import { ManualClock } from "../../support/manual-clock.ts";
 
 const base: IndexMetadata = {
   id: "s",
@@ -48,27 +49,8 @@ const base: IndexMetadata = {
 const keys = (...values: string[]) => ({ keys: values, fresh: true });
 
 function owner() {
-  let now = 0;
-  const timers = new Map<() => void, number>();
-  const clock = {
-    now: () => now,
-    set: (callback: () => void, delay: number) => {
-      timers.set(callback, now + delay);
-      return callback;
-    },
-    clear: (timer: unknown) => {
-      timers.delete(timer as () => void);
-    },
-  };
-  const mature = () => {
-    now += 500;
-    for (const [callback, due] of timers) {
-      if (due <= now) {
-        timers.delete(callback);
-        callback();
-      }
-    }
-  };
+  const clock = new ManualClock();
+  const mature = () => clock.runNext();
   const entries = new Map<string, IndexMetadata>();
   const published: { upserts: EntityState[]; removals: string[] }[] = [];
   const family = {
@@ -508,11 +490,18 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     templates: new ProjectTemplates(db),
   };
   const index = new IndexStore();
+  const clock = new ManualClock();
   const feature = new InboxFeature(
     stores,
     index,
     "alice",
     () => Promise.resolve([]),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    clock,
   );
   const settle = async () => {
     for (let i = 0; i < 4; i++) await Promise.resolve();
@@ -585,7 +574,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
       );
     }
     index.upsert({ ...child, activity: { permissions: keys("per_child") } });
-    await new Promise((done) => setTimeout(done, 525));
+    clock.runNext();
     await settle();
     assertEquals(get()?.state, "blocked");
     assertEquals(
@@ -633,7 +622,17 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
 });
 
 function summaries(marks: (id: string) => { seen: number; finish: number }) {
-  const owner = new ProjectSummaries(marks, () => {});
+  const clock = new ManualClock();
+  const owner = new ProjectSummaries(
+    marks,
+    () => {},
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    clock,
+  );
   owner.authority("current");
   owner.seed(["/repo", "/repo/tree"].map((directory) => ({
     directory,
@@ -650,7 +649,7 @@ function summaries(marks: (id: string) => { seen: number; finish: number }) {
   })));
   const state = (kind: "checkout" | "project" | "global", id: string) =>
     owner.states.get(entityKey(kind, id));
-  return { owner, state };
+  return { owner, state, clock };
 }
 const row = (
   id: string,
@@ -720,11 +719,11 @@ test("a fresh location form blocks its checkout and project with cause form", ()
   assertEquals(state("project", "/repo")?.state, "working");
 });
 
-test("an aggregate blocked only by permissions shares their grace cause", async () => {
-  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+test("an aggregate blocked only by permissions shares their grace cause", () => {
+  const { owner, state, clock } = summaries(() => ({ seen: 0, finish: 0 }));
   const asking = row("a", "/repo", { permissions: keys("per_1") });
   owner.entry({ ...asking, attention: { ...base.attention, permissions: 1 } });
-  await new Promise((done) => setTimeout(done, 525));
+  clock.runNext();
   assertEquals(state("project", "/repo")?.cause, "permission");
   assertEquals(state("global", "global")?.cause, "permission");
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_1" }]);
@@ -734,7 +733,7 @@ test("an aggregate blocked only by permissions shares their grace cause", async 
     attention: { ...base.attention, permissions: 1 },
   });
   assertEquals(state("project", "/repo")?.requests, undefined);
-  await new Promise((done) => setTimeout(done, 525));
+  clock.runNext();
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_2" }]);
   assertEquals(state("checkout", "/repo")?.requests, [{ id: "per_2" }]);
   owner.entry(row("b", "/repo", { inputs: keys("que_1") }));
