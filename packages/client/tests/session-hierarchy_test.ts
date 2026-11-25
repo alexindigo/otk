@@ -136,7 +136,11 @@ for (const prefix of ["opcv1", "opcv2"]) {
         location,
         history: {
           state: undefined,
-          replaceState() {},
+          replaceState(_state, _unused, url) {
+            if (url) {
+              location.hash = new URL(String(url), "http://localhost").hash;
+            }
+          },
           pushState(_state, _unused, url) {
             location.hash = String(url).slice(String(url).indexOf("#"));
           },

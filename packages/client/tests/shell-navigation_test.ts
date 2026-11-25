@@ -444,26 +444,33 @@ function fixture(
     }),
     drafts = client.createDrafts(),
     messages: string[] = [];
-  let consent = true, listener: (() => void) | undefined, historyState: unknown;
+  let consent = true, listener: (() => void) | undefined, at = 0;
+  const stack: { state: unknown; hash: string }[] = [{ state: null, hash }];
   const location = { hash, pathname: "/app", search: "?a=1" },
     pushes: string[] = [];
+  const hashFrom = (url: unknown) =>
+    new URL(String(url), "http://localhost").hash;
   const environment: client.NavigationEnvironment = {
     location,
     history: {
       get state() {
-        return historyState;
+        return stack[at].state;
       },
-      replaceState(value) {
-        historyState = value;
+      replaceState(state, _unused, url) {
+        location.hash = url ? hashFrom(url) : location.hash;
+        stack[at] = { state, hash: location.hash };
       },
-      pushState(value, _unused, url) {
-        historyState = value;
-        const text = String(url);
-        pushes.push(text);
-        const at = text.indexOf("#");
-        location.hash = at < 0 ? "" : text.slice(at);
+      pushState(state, _unused, url) {
+        pushes.push(String(url));
+        location.hash = hashFrom(url);
+        stack.splice(++at, Infinity, { state, hash: location.hash });
       },
-      go() {},
+      go(delta = 0) {
+        if (!stack[at + delta]) return;
+        at += delta;
+        location.hash = stack[at].hash;
+        listener?.();
+      },
     },
     listen(changed) {
       listener = changed;
@@ -519,6 +526,7 @@ function fixture(
     },
     external(next: string) {
       location.hash = next;
+      stack.splice(++at, Infinity, { state: null, hash: next });
       listener?.();
     },
     welcome(server = "local", reconnect = true) {
@@ -564,6 +572,111 @@ Deno.test("failed project default retries on welcome without a new navigation in
   } finally {
     f.stop();
   }
+});
+Deno.test("project defaults replace the pending entry even on traversal, preserving Forward", async () => {
+  const f = fixture();
+  try {
+    const project = { sidecarId: "local", directory: "/other" };
+    const { promise, resolve } = Promise.withResolvers<string>();
+    f.resources.projectSession = () => promise;
+    f.navigation.openProject(project);
+    assertEquals(f.location.hash, "#project/local/%2Fother");
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    f.navigation.showSettings();
+    assert(f.navigation.back());
+    assertEquals(f.navigation.state.settings, false);
+    resolve("tstv1-selected");
+    await settled();
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
+    assertEquals(f.navigation.state.history.at, 1);
+    assertEquals(f.pushes.length, 2);
+    assert(f.navigation.forward());
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("explicit Home remains a project page on traversal without resolving a default", () => {
+  const f = fixture();
+  try {
+    const before = f.calls.filter((c) => c[1] === "navigation.default").length;
+    assert(f.navigation.projectHome());
+    f.navigation.preview({ sidecarId: "local", sessionID: "tstv1-other" });
+    assert(f.navigation.back());
+    assertEquals(f.session.state.selection, undefined);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(
+      f.calls.filter((c) => c[1] === "navigation.default").length,
+      before,
+    );
+    assert(f.navigation.forward());
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("history labels prefer the index and only fall back to recorded labels when unavailable", () => {
+  const hash = "#/local/tstv1-other";
+  const recorded = { hash, title: "Old title", project: "Old project" };
+  const lookup = () => ({ title: "Current title", project: "Current project" });
+  const unavailable = () => undefined;
+  assertEquals(
+    client.historyTarget({ at: 1, back: recorded }, "back", lookup),
+    {
+      enabled: true,
+      label: "Back to Current title in Current project",
+      state: "live",
+    },
+  );
+  assertEquals(
+    client.historyTarget(
+      { at: 0, forward: recorded },
+      "forward",
+      () => ({ ...lookup(), deleted: true }),
+    ),
+    {
+      enabled: true,
+      label: "Forward to Current title in Current project (deleted)",
+      state: "deleted",
+    },
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: recorded }, "back", unavailable),
+    {
+      enabled: true,
+      label: "Back to Old title in Old project (unavailable)",
+      state: "unavailable",
+    },
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: { hash } }, "back", unavailable).label,
+    "Back to an unavailable session",
+  );
+  assertEquals(
+    client.historyTarget(
+      { at: 1, back: { hash: "#project/local/%2Fp", page: true } },
+      "back",
+      unavailable,
+    ).label,
+    "Back to the p project page",
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: { hash: "" } }, "back", unavailable)
+      .label,
+    "Back to the start page",
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: "unrecorded" }, "back", unavailable)
+      .label,
+    "Back to the previous page",
+  );
+  assertEquals(client.historyTarget({ at: 0 }, "forward", unavailable), {
+    enabled: false,
+    label: "No later session in this tab",
+    state: "unknown",
+  });
 });
 
 Deno.test("completed empty project defaults are not replayed by view observations or welcomes", async () => {
@@ -771,6 +884,11 @@ Deno.test("removing a direct-route server detaches even while its project metada
       "Removed server is still selected",
     );
     assertEquals(f.location.hash, "");
+    assertEquals(
+      f.navigation.state.history.at,
+      0,
+      "server removal replaces the release route",
+    );
     assert(
       f.calls.findIndex((call) => call[0] === "open") <
         f.calls.findIndex((call) => call[0] === "remove"),
@@ -1399,8 +1517,34 @@ Deno.test("close session removes only captured membership, clears its view and r
     ]]);
     assertEquals(f.location.hash, "#/local/tstv1-other");
     assertEquals(tabs.state.sessionID, undefined);
+    assertEquals(
+      f.navigation.state.history.at,
+      0,
+      "close replaces the released entry",
+    );
     assert(f.resources.entry("local", "tstv1-selected"));
     assertEquals(f.calls.some((c) => c[1] === "session.delete"), false);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("deleting the visible last session replaces it with a deliberate project page", async () => {
+  const f = fixture();
+  try {
+    assert(
+      await f.navigation.remove({
+        sidecarId: "local",
+        sessionID: "tstv1-selected",
+      }),
+    );
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(f.navigation.state.history.at, 0);
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    assertEquals(f.navigation.state.history.back, {
+      hash: "#project/local/%2Fp",
+      page: true,
+    });
   } finally {
     f.stop();
   }
@@ -1614,6 +1758,15 @@ for (const status of ["working", "blocked", "finished"] as const) {
 
 Deno.test("repeated view observations preserve canonical project identity without republishing the same selection", () => {
   const f = fixture();
+  const view = {
+    selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+    directory: "/p",
+    loading: false,
+    settings: false,
+    connected: true,
+    finish: 0,
+  };
+  f.navigation.observeView(view); // The first view also labels the history entry.
   let writes = 0;
   const original = f.navigation.state.project;
   const release = f.navigation.subscribe(() => {
@@ -1622,14 +1775,7 @@ Deno.test("repeated view observations preserve canonical project identity withou
   try {
     assert(original);
     for (let i = 0; i < 10; i++) {
-      f.navigation.observeView({
-        selected: { sidecarId: "local", sessionID: "tstv1-selected" },
-        directory: "/p",
-        loading: false,
-        settings: false,
-        connected: true,
-        finish: 0,
-      });
+      f.navigation.observeView(view);
     }
     assertStrictEquals(f.navigation.state.project, original);
     assertEquals(writes, 0);
