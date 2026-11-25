@@ -176,6 +176,7 @@ export default function Scene() {
         })()}
         current={session()?.id ?? ""}
         title={(id) => id}
+        agent={() => undefined}
         openAction={(id) =>
           commands.control("list.open-helper", undefined, {
             target: { label: id },

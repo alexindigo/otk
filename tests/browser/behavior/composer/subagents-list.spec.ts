@@ -177,7 +177,7 @@ test(
           };
         })
       );
-    const line = await lineBox(page), panel = await panelBox(page);
+      const line = await lineBox(page), panel = await panelBox(page);
       for (const [index, pos] of positions.entries()) {
         const context = `${label}/${rowsInOrder[index]}`;
         expect.soft(Math.abs(pos.timeRight - positions[0].timeRight), context)
@@ -295,5 +295,60 @@ test(
       contentType: "application/json",
     });
     await expect(page.locator(lineSelector)).toBeVisible();
+  },
+);
+
+test(
+  "composer.subagents-dropdown-shows-each-agent",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settings(state);
+    await openTask(state, page);
+    await page.locator(".otk-subagents-trigger").click();
+    const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+    const cell = (n: number) =>
+      menu.locator(`[data-subagent="tstv1-disp-${n}"] .otk-subagent-agent`);
+    const agents = [
+      [0, "explore"],
+      [1, "junior"],
+      [2, "general"],
+      [3, "explore"],
+      [4, ""],
+      [6, "junior-openrouter"],
+    ] as const;
+    await expect(menu.locator(".otk-subagent-agent")).toHaveCount(
+      agents.length,
+    );
+    for (const [n, agent] of agents) {
+      await expect(cell(n)).toHaveText(agent, { useInnerText: true });
+    }
+    const alignment = await menu.locator(".otk-subagent-agent").evaluateAll(
+      (cells) =>
+        cells.map((cell) => {
+          const label = cell.querySelector<HTMLElement>(".otk-control-label");
+          return {
+            left: cell.getBoundingClientRect().left,
+            lines: label
+              ? label.getBoundingClientRect().height /
+                parseFloat(getComputedStyle(label).lineHeight)
+              : 1,
+          };
+        }),
+    );
+    for (const { left, lines } of alignment) {
+      expect(Math.abs(left - alignment[0].left)).toBeLessThanOrEqual(.5);
+      expect(lines).toBeCloseTo(1, 1);
+    }
+    await cell(0).getByRole("menuitem", { name: "explore details" }).hover();
+    const preview = page.locator(
+      '.otk-popover-panel:popover-open[aria-label="explore"]',
+    );
+    await expect(preview.locator("dt").first()).toHaveText("Agent");
+    await expect(preview.locator("dd").first()).toHaveText("explore");
+    const line = await lineBox(page);
+    const rect = await preview.boundingBox();
+    expect(rect!.x).toBeGreaterThanOrEqual(line.left - .5);
+    expect(rect!.x + rect!.width).toBeLessThanOrEqual(line.right + .5);
   },
 );

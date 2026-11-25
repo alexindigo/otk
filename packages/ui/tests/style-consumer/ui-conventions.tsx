@@ -98,6 +98,7 @@ function SubagentTimes() {
         current={running[1][0]}
         owner={owner}
         title={(id) => id}
+        agent={() => undefined}
         openAction={(id) =>
           commands.control("time-units.open-helper", undefined, {
             target: { label: id },

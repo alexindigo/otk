@@ -93,6 +93,7 @@ export default function ComposerTakeovers(
                     entities={entities()}
                     owner={session.liveWork}
                     title={title}
+                    agent={(id) => session.entry(id)?.agent}
                     openAction={(id) =>
                       sessionSelectionControl(commands, {
                         sidecarId: session.failureTarget?.().sidecarId ?? "",
