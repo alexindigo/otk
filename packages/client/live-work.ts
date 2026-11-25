@@ -113,3 +113,14 @@ export function helperClock(
   const time = age(terminal, now);
   return { time, ago: !time.word };
 }
+
+export type ComposerLinkState = "none" | "idle" | "running";
+
+/** 2.78/D69/D65: the link reads the same task and shell inputs as the pills. */
+export function composerLinkState(
+  task: Pick<EntityState, "counts" | "helpers"> | undefined,
+  shells: number,
+): ComposerLinkState {
+  if (!task?.helpers?.ids.length && !shells) return "none";
+  return shells || (task?.counts.working ?? 0) > 0 ? "running" : "idle";
+}

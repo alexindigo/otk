@@ -138,6 +138,13 @@ export default function Subagents(
               entities={entities()}
               lampKey={props.taskKey}
               label={helperCountsLabel(publication().counts)}
+              compact={grouped().map((group) => ({
+                id: group.kind,
+                count: group.count,
+                lampKey: group.ids[0]
+                  ? entityKey("session", group.ids[0])
+                  : undefined,
+              }))}
             />
           }
         >

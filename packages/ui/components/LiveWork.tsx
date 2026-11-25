@@ -51,6 +51,7 @@ export default function LiveWork(props: { shells: readonly RunningWork[] }) {
             entities={entities()}
             lampKey={lampKey()}
             label={runningWorkLabel(props.shells)}
+            compact={[{ id: "shells", count: props.shells.length }]}
           />
         }
       >

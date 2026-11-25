@@ -12,6 +12,8 @@ export {
   type EntityIdentity,
 } from "./entity-facts.ts";
 export {
+  type ComposerLinkState,
+  composerLinkState,
   createLiveWork,
   helperClock,
   helperCountParts,

@@ -5,6 +5,7 @@ import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { nodes, property, type t } from "./syntax.ts";
 import { outOfFlow, rules, selectorAlternatives } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
+import { composerHeaderErrors } from "./composer-header.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
 import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
@@ -13,6 +14,63 @@ import {
   codeSeparatorErrors,
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
+
+const headerFixture = () =>
+  new Map([
+    [
+      "ComposerTakeovers.css",
+      ".otk-composer-live-slot{display:flex;gap:var(--space-4)}",
+    ],
+    ["LiveCount.css", ".otk-live-count{gap:var(--space-2)}"],
+    ["LiveWork.css", ".otk-live-work-trigger{display:flex}"],
+    [
+      "LiveLink.css",
+      ".otk-live-link{flex:1 1 0;min-inline-size:var(--space-6)}",
+    ],
+    ["Subagents.css", ".otk-subagent-row{grid-template-columns:subgrid}"],
+  ]);
+
+Deno.test("UI convention: composer header spacing and link borrow tokens and one owner", async () => {
+  const files = new Map(
+    await Promise.all(
+      [...headerFixture().keys(), "LiveLink.tsx"].map(async (file) => {
+        const contents = await Deno.readTextFile(
+          `packages/ui/components/${file}`,
+        ).catch((err) => {
+          if (err instanceof Deno.errors.NotFound) return "";
+          throw err;
+        });
+        return [file, contents] as const;
+      }),
+    ),
+  );
+  assertEquals(composerHeaderErrors(files), []);
+});
+
+Deno.test("UI convention: composer header rejects duplicated spacing and positional patches", () => {
+  const files = headerFixture();
+  files.set("LiveWork.css", ".otk-live-work-trigger{gap:var(--space-2)}");
+  files.set(
+    "LiveLink.css",
+    files.get("LiveLink.css") +
+      ".otk-live-link-light{position:absolute}@keyframes otk-live-link-travel{to{left:0}}",
+  );
+  files.set(
+    "Subagents.css",
+    files.get("Subagents.css") +
+      ".otk-subagent-row > .otk-subagent-time{margin-inline-start:1em}",
+  );
+  assertEquals(composerHeaderErrors(files), [
+    ".otk-live-work-trigger: trigger must not own lamp spacing",
+    ".otk-live-link-light: link must stay in flow",
+    "otk-live-link-travel: unexpected left",
+    ".otk-subagent-row>.otk-subagent-time: row layout must not use margin-inline-start",
+  ]);
+});
+
+Deno.test("UI convention: composer header accepts in-flow owner styles", () => {
+  assertEquals(composerHeaderErrors(headerFixture()), []);
+});
 
 Deno.test("UI convention: breadcrumb trails use one compact overflow row", async () => {
   const component = await Deno.readTextFile(
@@ -559,8 +617,21 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
   assertEquals(row.get("justify-content"), "space-between");
   const label =
     css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
-  assertEquals(label.get("min-inline-size"), "0");
-  assertEquals(label.get("flex"), "1");
+  assertEquals(label.get("min-inline-size"), "min(8ch,100%)");
+  assertEquals(label.get("flex"), "0 1 auto");
+  assert(
+    css.some((rule) =>
+      rule.condition.includes("@container composer-activity") &&
+      rule.declarations.get("--live-count-compact") === "flex"
+    ),
+  );
+  assert(
+    css.some((rule) =>
+      rule.condition.includes("@container composer-activity") &&
+      rule.declarations.get("--live-link-display") === "none" &&
+      rule.declarations.get("flex-wrap") === "wrap"
+    ),
+  );
 });
 
 Deno.test("UI convention: overflow More keeps the first control track when required items reflow", async () => {

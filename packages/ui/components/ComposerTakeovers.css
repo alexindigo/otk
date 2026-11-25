@@ -64,8 +64,8 @@
   flex: none;
 }
 .otk-composer-target {
-  flex: 1;
-  min-inline-size: 0;
+  flex: 0 1 auto;
+  min-inline-size: min(8ch, 100%);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -74,14 +74,16 @@
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  margin-inline-start: auto;
   gap: var(--space-4);
 }
 .otk-composer-task {
   flex: 0 1 auto;
-  min-inline-size: 0;
+  min-inline-size: min(8ch, 100%);
 }
 .otk-composer-destination {
-  flex: 0 0 auto;
+  flex: none;
   max-inline-size: 100%;
 }
 .otk-composer-chevron {
@@ -90,8 +92,51 @@
   block-size: var(--icon-compact);
 }
 .otk-composer-activity-slot {
-  block-size: calc(var(--control-size) + var(--space-2));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-block-size: calc(var(--control-size) + var(--space-2));
+  font-size: var(--text-meta);
+  container: composer-activity / inline-size;
   flex: none;
+}
+.otk-composer-activity {
+  min-block-size: calc(var(--control-size) + var(--space-2));
+}
+/* These are container widths in metadata ems: keep vocabulary at ordinary
+   widths, compact numbers before retiring decoration, then let flex decide
+   whether the information needs a second line. */
+@container composer-activity (inline-size < 33em) {
+  .otk-composer-activity {
+    --live-count-full: none;
+    --live-count-compact: flex;
+  }
+  .otk-composer-destination {
+    flex: 0 1 auto;
+  }
+  .otk-composer-task {
+    flex: 1 1 0;
+  }
+}
+@container composer-activity (inline-size < 16em) {
+  .otk-composer-activity {
+    --live-link-display: none;
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .otk-composer-live-slot {
+    max-inline-size: 100%;
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  /* A wrapped flex line uses the minimum, not the full title, to decide
+     whether the pills can stay on the line. */
+  .otk-composer-target {
+    flex: 1 1 0;
+  }
+  .otk-composer-target:has(.otk-composer-task) {
+    min-inline-size: min(calc(8ch + var(--icon-compact) + 2 * var(--space-1)),
+      100%);
+  }
 }
 .otk-composer-takeover-layer {
   position: absolute;

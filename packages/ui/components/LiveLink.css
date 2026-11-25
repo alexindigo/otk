@@ -1,0 +1,62 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+/* 2.78: dots are a mask over one grid cell; the light is the only animated
+   layer and animates translate only (compositor work, no layout or paint). */
+.otk-live-link {
+  --live-link-dot: calc(3 * var(--otk-unit));
+  --live-link-pitch: calc(8 * var(--otk-unit));
+  --live-link-light: calc(56 * var(--otk-unit));
+  --live-link-rest: color-mix(in srgb, var(--otk-fg-3) 45%, transparent);
+  --live-link-live: var(--status-light-working);
+  flex: 1 1 0;
+  min-inline-size: var(--space-6);
+  block-size: var(--live-link-pitch);
+  display: var(--live-link-display, grid);
+  grid-template: 100% / 100%;
+  overflow: clip;
+  container-type: inline-size;
+  background: var(--live-link-rest);
+  /* Soft-edged round dots: a hard edge clips to triangles on half pixels. */
+  mask: radial-gradient(
+    circle calc(var(--live-link-dot) / 2 + .5px),
+    #000 calc(var(--live-link-dot) / 2 - .5px),
+    transparent
+  ) 0 50% / var(--live-link-pitch) var(--live-link-pitch) space no-repeat;
+}
+.otk-live-link-light {
+  grid-area: 1 / 1;
+  justify-self: start;
+  inline-size: var(--live-link-light);
+  background: linear-gradient(to right, transparent, var(--live-link-live) 70%);
+  translate: calc(-1 * var(--live-link-light)) 0;
+  visibility: hidden;
+}
+.otk-live-link[data-state=running] .otk-live-link-light {
+  visibility: visible;
+  animation: otk-live-link-travel 2.6s linear infinite;
+}
+@keyframes otk-live-link-travel {
+  0% {
+    translate: calc(-1 * var(--live-link-light)) 0;
+  }
+  80%,
+  100% {
+    translate: 100cqi 0;
+  }
+}
+:root[data-otk-reduced-colors] .otk-live-link {
+  --live-link-live: var(--otk-fg);
+}
+:root[data-otk-animations-off] .otk-live-link[data-state=running] {
+  background: color-mix(in srgb, var(--live-link-live) 80%, transparent);
+}
+:root[data-otk-animations-off] .otk-live-link-light {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .otk-live-link[data-state=running] {
+    background: color-mix(in srgb, var(--live-link-live) 80%, transparent);
+  }
+  .otk-live-link[data-state=running] .otk-live-link-light {
+    visibility: hidden;
+  }
+}
