@@ -83,7 +83,7 @@ export interface OpencodeV1DigestReadiness {
   wait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
   ioWait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
   retryable?(error: unknown): boolean;
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?: import("@otk/harness").DigestPort["admission"];
   work?(elapsedMs: number): void;
   listed?(
     entries: readonly SessionMetadata[],

@@ -227,7 +227,7 @@ export interface RpcMethods
     TerminalRpcMethods,
     FormsRpcMethods {
   "session.get": {
-    params: { sessionID: string };
+    params: { sessionID: string; purpose?: "send" };
     result: ContentSession & { load: import("./session-list.ts").LoadCoverage };
   };
   "sessions.list": {

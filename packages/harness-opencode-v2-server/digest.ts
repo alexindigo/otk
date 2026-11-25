@@ -102,7 +102,7 @@ export interface V2DigestReadiness {
   work?(ms: number): void;
   wait?<T>(value: Promise<T>, join?: boolean): Promise<T>;
   ioWait?<T>(value: Promise<T>, join?: boolean): Promise<T>;
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?: import("@otk/harness").DigestPort["admission"];
   listed?(rows: readonly SessionMetadata[], signal: AbortSignal): Promise<void>;
   prefetchList?(
     input: import("@otk/protocol").SessionListInput,

@@ -131,8 +131,8 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.#version = initial?.version ?? "";
     this.stream = new V2Stream(
       {
-        admission: (signal) =>
-          digest?.admission?.(signal) ?? Promise.resolve(() => {}),
+        admission: (signal, lane) =>
+          digest?.admission?.(signal, lane) ?? Promise.resolve(() => {}),
         discover: async (signal) => {
           const service = await discoverV2(config.serviceFile, signal);
           if (service.version !== "2.2.6") {
@@ -545,8 +545,17 @@ export class OpencodeV2ServerAdapter implements Harness {
         }
         return result;
       },
-      getSession: async (id, signal) => {
+      getSession: async (id, signal, purpose) => {
         const native = ids.decode(id);
+        if (purpose === "send") {
+          const client = this.stream.client;
+          const raw = await client.read(
+            (api) => api.session.get({ sessionID: native }, { signal }),
+            signal,
+            "control",
+          );
+          return await revertSession(client, raw, signal);
+        }
         const raw = await readSessionActivity(
           this.stream.client,
           native,

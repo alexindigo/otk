@@ -11,7 +11,7 @@ export * from "./session-lists.ts";
 export * from "./history-reads.ts";
 export * from "./clock-reads.ts";
 export { DigestScheduler } from "./digest-scheduler.ts";
-export { ReadAdmission } from "./read-admission.ts";
+export { type NativeReadLane, ReadAdmission } from "./read-admission.ts";
 export { NativeReadiness } from "./native-readiness.ts";
 export { cachedStatements } from "./sqlite-statements.ts";
 export { DeliveryBackfill } from "./delivery-backfill.ts";
