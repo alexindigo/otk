@@ -420,11 +420,17 @@ test("detached daemon has its own SID and survives a signal to its owner's proce
       JSON.stringify(ready)
     },JSON.stringify({pid:d.pid,file:d.registrationFile}));\nawait Deno.stdin.read(new Uint8Array(1));\nawait d.shutdown();\nDeno.removeSignalListener("SIGUSR1",onSignal);\n`,
   );
-  const child = spawn(Deno.execPath(), ["run", "-A", toFileUrl(script).href], {
-    detached: true,
-    stdio: ["pipe", "ignore", "inherit"],
-    env: Deno.env.toObject(),
-  });
+  // Generated entrypoints can live outside the workspace in CI.
+  const config = fromFileUrl(new URL("../../deno.json", import.meta.url));
+  const child = spawn(
+    Deno.execPath(),
+    ["run", "-A", "--config", config, toFileUrl(script).href],
+    {
+      detached: true,
+      stdio: ["pipe", "ignore", "inherit"],
+      env: Deno.env.toObject(),
+    },
+  );
   const completion = new Promise<number | null>((resolve, reject) => {
     child.once("exit", resolve);
     child.once("error", reject);
