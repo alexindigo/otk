@@ -81,6 +81,13 @@ Deno.test("an absent stage closes a saved copy without consulting loaded message
 });
 Deno.test("revert owner serializes intents without optimistic content and retires old selection results", async () => {
   const f = revertFixture(), held = Promise.withResolvers<ContentSession>();
+  f.state.content.messages = [{
+    id: "prompt",
+    sessionID: "a",
+    role: "user",
+    time: { created: 1 },
+    parts: [],
+  }];
   f.result(held.promise);
   await f.owner.revertTo("prompt");
   const pending = f.owner.confirm();

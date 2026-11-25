@@ -60,6 +60,7 @@ import {
 } from "./native-source.ts";
 import {
   positionOrder,
+  requestKey,
   type RequestPosition,
   type RequestRetention,
   V2RequestRetention,
@@ -1392,33 +1393,56 @@ export class Transcript {
     ids.decode(id);
     signal.throwIfAborted();
     const owner = await this.#baseline(id, signal);
-    const from = this.replay.clock(id),
+    signal = AbortSignal.any([
+      signal,
+      owner.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    const ownedClock = () => {
+      signal.throwIfAborted();
+      const clock = this.replay.clock(id);
+      if (owner !== this.#baselines.get(id) || clock.epoch !== owner.epoch) {
+        throw new HarnessError("capture-stale", "Archive epoch changed");
+      }
+      return clock;
+    };
+    const from = ownedClock(),
       revisions = this.replay.revisions(id, scope.messageIDs);
     const items: Message[] = [];
     if (!scope.validate) {
-      const facts = await this.#facts({
-        sessionID: id,
-        messages: scope.messageIDs,
-      }, signal);
+      const retained = new Map<string, Message>();
+      const nativeIDs: string[] = [];
       for (const messageID of scope.messageIDs) {
         signal.throwIfAborted();
-        const retained = await this.requests.get(id, messageID);
-        if (retained?.outcome) {
-          const order = retained.position && positionOrder(retained.position);
-          items.push({
-            ...retained.outcome,
+        const entry = await this.requests.get(id, requestKey(messageID));
+        if (entry?.outcome) {
+          const order = entry.position && positionOrder(entry.position);
+          retained.set(messageID, {
+            ...entry.outcome,
+            id: messageID,
             ...(order === undefined ? {} : { sourceOrder: order }),
           });
+        } else nativeIDs.push(messageID);
+      }
+      signal.throwIfAborted();
+      const facts = nativeIDs.length
+        ? await this.#facts({ sessionID: id, messages: nativeIDs }, signal)
+        : undefined;
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const outcome = retained.get(messageID);
+        if (outcome) {
+          items.push(outcome);
           continue;
         }
-        const raw = await this.reader.get(id, messageID, signal),
-          context = facts.contexts[messageID];
-        if (!context) {
+        const context = facts?.contexts[messageID];
+        if (!facts || !context) {
           throw new HarnessError(
             "capture-stale",
             "Message metadata changed during archive capture",
           );
         }
+        const raw = await this.reader.get(id, messageID, signal);
         const mapped = raw.type === "idle" && raw.outcome === "failed"
           ? (await this.#executionFailureValue(
             id,
@@ -1441,15 +1465,14 @@ export class Transcript {
       }
     }
     signal.throwIfAborted();
-    const session = owner.presentation ??= await revertSession(
-      this.options.client(),
-      owner.raw,
-      signal,
-    );
-    const clock = this.replay.clock(id);
-    if (clock.epoch !== from.epoch) {
-      throw new HarnessError("capture-stale", "Archive epoch changed");
-    }
+    const session = scope.validate
+      ? mapSession(owner.raw)
+      : owner.presentation ??= await revertSession(
+        this.options.client(),
+        owner.raw,
+        signal,
+      );
+    const clock = ownedClock();
     const turns = [
       ...new Set(
         items.map((m) => m.role === "assistant" ? m.replyTo ?? m.id : m.id),
@@ -1661,7 +1684,7 @@ export class Transcript {
           clockRows = await Promise.all(unanchored.pending.map(async (key) => {
             const value = await this.requests.get(
               id,
-              key.replace(/^request:/, ""),
+              requestKey(key),
             );
             if (!value?.outcome) {
               throw new HarnessError(
@@ -2184,7 +2207,7 @@ export class Transcript {
     message: Message,
     signal: AbortSignal = this.#lifetime.signal,
   ): Promise<void> {
-    const key = message.id.replace(/^request:/, "");
+    const key = requestKey(message.id);
     const previous = await this.requests.get(message.sessionID, key);
     signal.throwIfAborted();
     await this.#observe(

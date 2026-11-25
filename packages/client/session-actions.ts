@@ -106,21 +106,19 @@ export function createSessionActions(o: {
   const { resources, session, current } = o;
   // Native boundary changes and committing submissions share this admission
   // boundary. A Send cannot inspect an old native stage while Revert is in flight.
-  const mutations = new Map<string, Promise<ContentSession>>();
+  const mutations = new Map<string, Promise<void>>();
   const changeBoundary = (
     target: Selection,
     action: () => Promise<ContentSession>,
   ) => {
     const key = sessionKey(target.sidecarId, target.sessionID);
-    const previous = mutations.get(key);
-    const promise = (async () => {
-      await previous;
-      return await action();
-    })().finally(() => {
-      if (mutations.get(key) === promise) mutations.delete(key);
+    const result = Promise.resolve(mutations.get(key)).then(action);
+    // Waiters borrow settlement, not the result of someone else's action.
+    const settled = result.then(() => {}, () => {}).finally(() => {
+      if (mutations.get(key) === settled) mutations.delete(key);
     });
-    mutations.set(key, promise);
-    return promise;
+    mutations.set(key, settled);
+    return result;
   };
   const boundaryReady = (target: Selection): Promise<void> | undefined => {
     const key = sessionKey(target.sidecarId, target.sessionID);

@@ -516,6 +516,38 @@ Deno.test("revert and restore capture target RPCs inside act without promotion",
   }
 });
 
+Deno.test("a rejected boundary change does not reject the queued successor", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const target = { sidecarId: "remote", sessionID: "background" };
+  const entered = Promise.withResolvers<void>();
+  const first = Promise.withResolvers<never>();
+  f.reply((_server, rpc) => {
+    if (rpc === "session.revert") {
+      entered.resolve();
+      return first.promise;
+    }
+    return Promise.resolve(
+      rpc === "session.get" || rpc === "session.restore"
+        ? shellInfo("background", "/resolved")
+        : null,
+    );
+  });
+  try {
+    const rejected = assertRejects(() => actions.revert(target, "boundary"));
+    await entered.promise;
+    const queued = actions.restore(target);
+    first.reject(new Error("Native revert refused"));
+    await rejected;
+    assertEquals((await queued).id, "background");
+    assertEquals(
+      f.calls.filter(([, rpc]) => rpc === "session.restore").length,
+      1,
+    );
+  } finally {
+    f.resources.stop();
+  }
+});
+
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("remote", [shellEntry("busy", "/busy")]);

@@ -271,34 +271,43 @@ export function createBranchHistory(options: {
     publishRecovery(t);
   };
   const failures = new Map<string, RequestFailure>();
-  const sends = new Map<
-    string,
-    {
-      target: Selection;
-      record: RevertInfo;
-      draft: Draft;
-      choice: NonNullable<BranchHistoryState["permanence"]>;
-      wait: ReturnType<typeof Promise.withResolvers<BranchSendPermit>>;
-    }
-  >();
+  type SendChoice = {
+    target: Selection;
+    record: RevertInfo;
+    draft: Draft;
+    choice: NonNullable<BranchHistoryState["permanence"]>;
+    wait: ReturnType<typeof Promise.withResolvers<BranchSendPermit>>;
+  };
+  const sends = new Map<string, SendChoice>();
+  const currentSend = (t = selected) => t && sends.get(draftKey(t));
+  const ownsSend = (pending: SendChoice) =>
+    currentSend(pending.target) === pending;
   const publishSend = (t: Selection) => {
     if (same(selected, t)) {
       store.update((s) => {
-        s.permanence = sends.get(draftKey(t))?.choice;
+        s.permanence = currentSend(t)?.choice;
       });
     }
   };
-  const cancelSend = (t = selected) => {
-    if (!t) return;
-    const pending = sends.get(draftKey(t));
+  const retireSend = (pending: SendChoice): boolean => {
+    if (!ownsSend(pending)) return false;
+    const t = pending.target;
     sends.delete(draftKey(t));
     publishSend(t);
-    pending?.wait.reject(
+    return true;
+  };
+  const rejectSend = (pending: SendChoice) => {
+    if (!retireSend(pending)) return;
+    pending.wait.reject(
       new DOMException(
         "The staged revert changed or Send was canceled",
         "AbortError",
       ),
     );
+  };
+  const cancelSend = (t = selected) => {
+    const pending = currentSend(t);
+    if (pending) rejectSend(pending);
   };
   const matchesPermit = (
     t: Selection,
@@ -309,9 +318,9 @@ export function createBranchHistory(options: {
     permit.record?.boundaryID === record?.boundaryID &&
     JSON.stringify(permit.record?.messageIDs) ===
       JSON.stringify(record?.messageIDs);
-  const allowSend = async (t: Selection, discard: boolean) => {
-    const pending = sends.get(draftKey(t));
-    if (!pending) return;
+  const allowSend = async (pending: SendChoice, discard: boolean) => {
+    if (!ownsSend(pending)) return;
+    const t = pending.target;
     const permit: BranchSendPermit = {
       target: pending.target,
       discard,
@@ -321,14 +330,12 @@ export function createBranchHistory(options: {
       },
     };
     if (!matchesPermit(t, permit, (await options.session(t)).revert)) {
-      cancelSend(t);
+      rejectSend(pending);
       return;
     }
-    if (sends.get(draftKey(t)) !== pending) return;
-    sends.delete(draftKey(t));
+    if (!retireSend(pending)) return;
     clearFailure(t);
     clearRecovery(t);
-    publishSend(t);
     pending.wait.resolve(permit);
   };
   const clearFailure = (t: Selection) => {
@@ -771,8 +778,8 @@ export function createBranchHistory(options: {
           await materialize(drafts.restored.current),
         );
       }
-      signal.throwIfAborted();
       await refreshCapture?.();
+      signal.throwIfAborted();
       save(t, branch, false, true, drafts.restored ? "restore" : undefined);
       clearRecovery(t);
       if (
@@ -1031,7 +1038,7 @@ export function createBranchHistory(options: {
       }
     },
     async saveCopy() {
-      const pending = selected && sends.get(draftKey(selected));
+      const pending = currentSend();
       if (!pending || pending.choice.saving) return;
       pending.choice = { ...pending.choice, saving: true };
       publishSend(pending.target);
@@ -1045,15 +1052,19 @@ export function createBranchHistory(options: {
           undefined,
           pending.draft,
         );
-        await allowSend(pending.target, false);
+        await allowSend(pending, false);
       } catch (cause) {
-        pending.choice = {
-          ...pending.choice,
-          error: sendFailure(pending.target, cause),
-        };
+        if (ownsSend(pending)) {
+          pending.choice = {
+            ...pending.choice,
+            error: sendFailure(pending.target, cause),
+          };
+        }
       } finally {
-        pending.choice = { ...pending.choice, saving: false };
-        publishSend(pending.target);
+        if (ownsSend(pending)) {
+          pending.choice = { ...pending.choice, saving: false };
+          publishSend(pending.target);
+        }
       }
     },
     async retryCopy() {
@@ -1076,7 +1087,8 @@ export function createBranchHistory(options: {
       });
     },
     async sendAnyway() {
-      if (selected) await allowSend({ ...selected }, true);
+      const pending = currentSend();
+      if (pending) await allowSend(pending, true);
     },
     cancelSend,
     stageEnded(t) {

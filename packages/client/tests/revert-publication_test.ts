@@ -35,7 +35,7 @@ const info = (revert?: RevertInfo): ContentSession => ({
   archived: false,
   revert,
 });
-function fixture() {
+function fixture(acquireBoundary = false) {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
     latestPrompt: { id: "p2" },
@@ -49,7 +49,21 @@ function fixture() {
   });
   const calls: string[] = [], drafts = createDrafts();
   const owner = createSessionRevert({
-    session,
+    session: {
+      ...session,
+      ...(acquireBoundary && {
+        transcripts: {
+          get: () => ({
+            ensure: (id: string) => {
+              session.update((state) => {
+                state.content.messages.push(message(id));
+              });
+              return Promise.resolve();
+            },
+          }),
+        },
+      }),
+    },
     drafts,
     status: { working: () => false, subscribe: () => () => {} },
     actions: {
@@ -144,7 +158,7 @@ Deno.test("redo waits for restored messages, not just a cleared boundary or comp
 });
 
 Deno.test("undo completion follows authoritative page epoch/cutoff rather than native ID ordering or a mounted prompt", async () => {
-  const f = fixture();
+  const f = fixture(true);
   f.session.update((state) => {
     state.latestPrompt = { id: "boundary" };
     state.content.messages = [message("z-older-history")];
@@ -158,6 +172,7 @@ Deno.test("undo completion follows authoritative page epoch/cutoff rather than n
     f.session.update((state) => {
       state.clock = { epoch: "authoritative-rollback", seq: 0 };
       state.content.revert = reverted("boundary");
+      state.content.messages = [message("z-older-history")];
     });
     const result = await Promise.race([
       operation.then(() => "complete"),

@@ -15,6 +15,7 @@ import { type Feedback, RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import type { ContentState } from "./reduce.ts";
+import type { TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
@@ -49,6 +50,7 @@ export interface SessionRevertState {
   key?: string;
   failure?: PublicFailure;
 }
+type RevertFlow = SessionRevertState & { preview?: Message[] };
 /** One projection for the rollback owner and its borrowed request feedback. */
 export function revertPresentation(
   state: SessionRevertState,
@@ -89,7 +91,11 @@ export interface SessionRevert {
 export function createSessionRevert(options: {
   session:
     & Pick<ClientSession, "state" | "subscribe">
-    & Partial<Pick<ClientSession, "transcripts">>;
+    & {
+      transcripts?: {
+        get(target: Selection): Pick<TranscriptOwner, "ensure"> | undefined;
+      };
+    };
   actions:
     & Pick<SessionActions, "revert" | "restore" | "abort">
     & Partial<Pick<SessionActions, "group">>;
@@ -117,7 +123,7 @@ export function createSessionRevert(options: {
   const store = (options.factory ?? createState)<SessionRevertState>({
     phase: "idle",
   });
-  const flows = new Map<string, SessionRevertState>();
+  const flows = new Map<string, RevertFlow>();
   const identity = () => {
     const t = options.session.state.selection;
     return t ? `${t.sidecarId}/${t.sessionID}` : "";
@@ -126,6 +132,7 @@ export function createSessionRevert(options: {
   let observedCommit: import("@otk/protocol").RevertCommit | undefined;
   let closedStage = false;
   let operation: AbortController | undefined;
+  let previewRead: AbortController | undefined;
   const settlements = new Map<string, Promise<void>>();
   const flow = () => flows.get(key) ?? { phase: "idle" as const };
   const publish = () =>
@@ -133,7 +140,11 @@ export function createSessionRevert(options: {
       for (const field of Object.keys(state)) {
         Reflect.deleteProperty(state, field);
       }
-      Object.assign(state, flow());
+      const { preview, ...value } = flow();
+      Object.assign(state, value);
+      if (state.phase === "confirming" || state.confirmation && !state.record) {
+        state.messages = preview;
+      }
       // Capture outcomes may arrive during native reconciliation. The active
       // mutation owns its phase until that publication wait has settled.
       if (state.pending) {
@@ -144,15 +155,14 @@ export function createSessionRevert(options: {
     });
   const updateAt = (
     targetKey: string,
-    change: (state: SessionRevertState) => void,
+    change: (state: RevertFlow) => void,
   ) => {
     const next = { ...flows.get(targetKey) };
     change(next);
     flows.set(targetKey, next);
     if (targetKey === key) publish();
   };
-  const update = (change: (state: SessionRevertState) => void) =>
-    updateAt(key, change);
+  const update = (change: (state: RevertFlow) => void) => updateAt(key, change);
   const dismissalKey = (target: Selection, boundaryID: string) =>
     "otk.revert-dismiss.v1/" +
     encodeURIComponent(
@@ -170,7 +180,23 @@ export function createSessionRevert(options: {
       return false;
     }
   };
+  const setStage = (
+    state: SessionRevertState,
+    target: Selection,
+    record: RevertInfo,
+  ) => {
+    if (state.record?.boundaryID !== record.boundaryID) {
+      state.dismissed = dismissed(target, record.boundaryID);
+      state.copyRemoved = undefined;
+    }
+    state.record = record;
+  };
+  const retirePreview = () => {
+    previewRead?.abort();
+    previewRead = undefined;
+  };
   const reset = () => {
+    retirePreview();
     update((state) => {
       state.pending = undefined;
       state.key = undefined;
@@ -309,14 +335,14 @@ export function createSessionRevert(options: {
     }
     closedStage = false;
     if (flow().record?.boundaryID !== record.boundaryID) {
+      retirePreview();
       update((state) => {
-        state.record = record;
+        setStage(state, target, record);
         state.phase = "staged";
         state.confirmation = undefined;
+        state.preview = undefined;
         state.error = undefined;
         state.failure = undefined;
-        state.dismissed = dismissed(target, record.boundaryID);
-        state.copyRemoved = undefined;
         state.messages = options.session.state.content.messages.filter((m) =>
           record.messageIDs.includes(m.id)
         );
@@ -378,6 +404,23 @@ export function createSessionRevert(options: {
       ).values(),
     ].sort(compareMessages);
   };
+  const preview = (messageID: string) => {
+    const messages = candidates();
+    const at = messages.findIndex((message) => message.id === messageID);
+    return at < 0 ? undefined : messages.slice(at);
+  };
+  const cancelConfirmation = () => {
+    retirePreview();
+    if (!flow().confirmation) return;
+    update((state) => {
+      state.confirmation = undefined;
+      state.phase = state.record ? "staged" : "idle";
+      state.preview = undefined;
+      state.error = undefined;
+      state.failure = undefined;
+    });
+    observe();
+  };
   const waitFor = (
     ready: () => boolean,
     subscribe: (listener: () => void) => () => void,
@@ -415,6 +458,7 @@ export function createSessionRevert(options: {
     if (
       (kind === "undo" || kind === "revert" || kind === "code") && !messageID
     ) return;
+    retirePreview();
     const captured = { ...target }, current = generation;
     const group = options.actions.group?.(captured);
     const interrupt = group?.options("interrupt", captured.sessionID);
@@ -474,9 +518,14 @@ export function createSessionRevert(options: {
       nativeCleared = (kind === "restore" || kind === "redo") && !result.revert;
       if (!active()) return;
       if (result.revert) {
+        const kept = [...flow().preview ?? [], ...candidates()];
         update((state) => {
-          state.record = result.revert;
-          state.dismissed = dismissed(captured, result.revert!.boundaryID);
+          setStage(state, captured, result.revert!);
+          const visible = new Map(kept.map((message) => [message.id, message]));
+          state.messages = result.revert!.messageIDs.flatMap((id) => {
+            const message = visible.get(id);
+            return message ? [message] : [];
+          });
         });
       }
       // RPC completion admits the mutation. The selected transcript remains
@@ -508,6 +557,7 @@ export function createSessionRevert(options: {
       update((state) => {
         state.phase = result.revert ? "staged" : "idle";
         state.confirmation = undefined;
+        state.preview = undefined;
       });
     } catch (error) {
       observe();
@@ -547,24 +597,30 @@ export function createSessionRevert(options: {
     if (!alive || pending || !options.session.state.selection || !messageID) {
       return;
     }
-    const target = { ...options.session.state.selection },
-      capturedGeneration = generation;
+    const target = { ...options.session.state.selection };
+    cancelConfirmation();
+    const read = previewRead = new AbortController();
     const transcript = options.session.transcripts?.get(target);
-    if (transcript && !candidates().some((m) => m.id === messageID)) {
-      await transcript.ensure(messageID);
-      if (!alive || generation !== capturedGeneration) return;
+    try {
+      let messages = preview(messageID);
+      if (!messages && transcript) {
+        await transcript.ensure(messageID, read.signal);
+        if (read.signal.aborted) return;
+        messages = preview(messageID);
+      }
+      if (!messages) return;
+      update((state) => {
+        state.phase = "confirming";
+        state.confirmation = { kind, messageID };
+        state.preview = JSON.parse(JSON.stringify(messages));
+        state.error = undefined;
+        state.failure = undefined;
+      });
+    } catch (error) {
+      if (!read.signal.aborted) throw error;
+    } finally {
+      if (previewRead === read) previewRead = undefined;
     }
-    const messages = candidates();
-    const at = messages.findIndex((message) => message.id === messageID);
-    update((state) => {
-      state.phase = "confirming";
-      state.confirmation = { kind, messageID };
-      state.messages = at < 0
-        ? []
-        : JSON.parse(JSON.stringify(messages.slice(at)));
-      state.error = undefined;
-      state.failure = undefined;
-    });
   };
   observe();
   return {
@@ -580,32 +636,24 @@ export function createSessionRevert(options: {
     async confirm() {
       const confirmation = flow().confirmation;
       if (!confirmation || pending) return;
-      const messages = candidates();
-      const at = messages.findIndex((message) =>
-        message.id === confirmation.messageID
-      );
-      const current = at < 0 ? [] : messages.slice(at);
+      const current = preview(confirmation.messageID);
+      if (!current) {
+        cancelConfirmation();
+        return;
+      }
       if (
         JSON.stringify(current.map((m) => m.id)) !==
-          JSON.stringify(flow().messages?.map((m) => m.id))
+          JSON.stringify(flow().preview?.map((m) => m.id))
       ) {
         update((state) => {
-          state.messages = JSON.parse(JSON.stringify(current));
+          state.preview = JSON.parse(JSON.stringify(current));
         });
         return;
       }
       await run(confirmation.kind, confirmation.messageID);
     },
     cancel() {
-      if (pending) return;
-      update((state) => {
-        state.confirmation = undefined;
-        state.phase = state.record ? "staged" : "idle";
-        state.messages = state.record ? state.messages : undefined;
-        state.error = undefined;
-        state.failure = undefined;
-      });
-      observe();
+      if (!pending) cancelConfirmation();
     },
     retry() {
       return options.branchHistory?.retryCopy?.().catch(() => {

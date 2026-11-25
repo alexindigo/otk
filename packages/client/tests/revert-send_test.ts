@@ -5,6 +5,8 @@ import type { ContentSession, MessagePage } from "@otk/protocol";
 const target = { sidecarId: "local", sessionID: "s" };
 function fixture(current = false) {
   let quota = true, staged = true, reads = 0;
+  let nextRead: (() => Promise<ContentSession>) | undefined;
+  let nextAttachment: (() => Promise<void>) | undefined;
   const values = new Map<string, string>();
   const session = (): ContentSession => ({
     id: "s",
@@ -39,7 +41,9 @@ function fixture(current = false) {
     },
     session: () => {
       reads++;
-      return Promise.resolve(session());
+      const read = nextRead;
+      nextRead = undefined;
+      return read?.() ?? Promise.resolve(session());
     },
     page: (_target, _before, _signal, scope): Promise<MessagePage> =>
       Promise.resolve({
@@ -72,7 +76,12 @@ function fixture(current = false) {
     source: () => {
       throw new Error("No source");
     },
-    attachments: (parts) => Promise.resolve(parts),
+    attachments: async (parts) => {
+      const wait = nextAttachment;
+      nextAttachment = undefined;
+      if (wait) await wait();
+      return parts;
+    },
   });
   owner.select(target);
   const choice = () =>
@@ -91,6 +100,12 @@ function fixture(current = false) {
     values,
     choice,
     reads: () => reads,
+    readOnce: (run: typeof nextRead) => {
+      nextRead = run;
+    },
+    attachOnce: (run: typeof nextAttachment) => {
+      nextAttachment = run;
+    },
     quota: (value: boolean) => {
       quota = value;
     },
@@ -137,6 +152,73 @@ Deno.test("Save copy retries preservation then releases Send only after a durabl
   assertEquals(f.owner.state.branches[0].messages.map((m) => m.id), ["p"]);
   await f.owner.beforeCommit(target, undefined, permit);
   assertEquals(f.owner.state.permanence, undefined);
+});
+
+Deno.test("Save copy can only grant its original Send choice", async () => {
+  const f = fixture();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const first = assertRejects(() => f.owner.beforeSend(target), DOMException);
+  await f.choice();
+  f.quota(false);
+  await f.owner.prepare(target, "p", {
+    boundaryID: "p",
+    messageIDs: ["p"],
+    files: [],
+  });
+  f.attachOnce(() => {
+    entered.resolve();
+    return release.promise;
+  });
+  const saving = f.owner.saveCopy();
+  await entered.promise;
+  f.owner.cancelSend();
+  await first;
+  f.quota(true);
+  const next = f.owner.beforeSend(target);
+  try {
+    await f.choice();
+    f.quota(false);
+    release.resolve();
+    await saving;
+    assertEquals(f.owner.state.permanence?.boundaryID, "p");
+    await f.owner.sendAnyway();
+    assertEquals((await next).discard, true);
+  } finally {
+    f.owner.cancelSend();
+    await next.catch(() => {});
+  }
+});
+
+Deno.test("a stale Send choice validation cannot cancel its successor", async () => {
+  const f = fixture();
+  const changed = Promise.withResolvers<ContentSession>();
+  const first = assertRejects(() => f.owner.beforeSend(target), DOMException);
+  await f.choice();
+  f.readOnce(() => changed.promise);
+  const allowing = f.owner.sendAnyway();
+  f.owner.cancelSend();
+  await first;
+  const next = f.owner.beforeSend(target);
+  const outcome = next.then((permit) => permit.discard, () => "canceled");
+  try {
+    await f.choice();
+    changed.resolve({
+      id: "s",
+      title: "S",
+      directory: "/repo",
+      projectID: "p",
+      archived: false,
+      time: { created: 1, updated: 1 },
+    });
+    await allowing;
+    assertEquals(f.owner.state.permanence?.boundaryID, "p");
+    await f.owner.sendAnyway();
+    assertEquals(await outcome, true);
+  } finally {
+    f.owner.cancelSend();
+    await outcome;
+  }
 });
 Deno.test("Restore cancels a waiting Send rather than releasing it on the restored conversation", async () => {
   const f = fixture(), pending = f.owner.beforeSend(target);

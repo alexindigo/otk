@@ -36,6 +36,9 @@ export interface RequestEdge {
   order?: number;
 }
 export type RequestIndex = "timeline" | "sequence" | "unanchored";
+/** Convert a projected request record ID to its durable retention key. */
+export const requestKey = (messageID: string): string =>
+  messageID.replace(/^request:/, "");
 /** V2 owns the record schema, migrations and position indexes. */
 export interface RequestRetention {
   bind(storage: PluginStorage): void;
@@ -279,7 +282,7 @@ export class V2RequestRetention implements RequestRetention {
       if (!rows.length) break;
       this.#write(() => {
         for (const row of rows) {
-          const id = String(JSON.parse(row.value).id).replace(/^request:/, "");
+          const id = requestKey(String(JSON.parse(row.value).id));
           const previous = this.#read(sessionID, id);
           if (previous) this.#replace(previous);
           else this.#delete(row.key);
