@@ -22,9 +22,9 @@ Deno.test("revert RPC never starts capture; preservation still precedes every sh
         events.push("save-draft");
         return Promise.resolve();
       },
-      settled: () => {
+      ...{ settled: () => events.push("settle") },
+      restored: () => {
         events.push("settle");
-        return Promise.resolve();
       },
     },
   });
@@ -64,7 +64,7 @@ Deno.test("revert RPC never starts capture; preservation still precedes every sh
   assertEquals(events.includes("settle"), false);
   compactResponse.resolve(null);
   await compact;
-  assertEquals(events.slice(0, 3), ["save-draft", "session.compact", "settle"]);
+  assertEquals(events, ["save-draft", "session.compact", "projects.visit"]);
   events.length = 0;
   await actions.submission(target)(() => {
     events.push("mode-specific-send");
@@ -77,7 +77,7 @@ Deno.test("revert RPC never starts capture; preservation still precedes every sh
     events.filter((e) =>
       ["save-draft", "mode-specific-send", "settle"].includes(e)
     ),
-    ["save-draft", "mode-specific-send", "settle"],
+    ["save-draft", "mode-specific-send"],
   );
   f.resources.stop();
 });
@@ -89,7 +89,7 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     branchHistory: {
       prepare: () => Promise.reject(new Error("storage-full")),
       beforeCommit: () => Promise.reject(new Error("storage-full")),
-      settled: () => Promise.resolve(),
+      restored: () => {},
     },
   });
   const target = { sidecarId: "local", sessionID: "selected" };
@@ -143,7 +143,7 @@ Deno.test("a permanence choice waits before pending-send publication and capture
     ...f,
     branchHistory: {
       prepare: () => Promise.resolve(),
-      settled: () => Promise.resolve(),
+      restored: () => {},
       beforeCommit: () => Promise.resolve(),
       beforeSend: () => {
         entered.resolve();
@@ -177,7 +177,7 @@ Deno.test("Retry publishes an early refusal once without another native Send", a
     branchHistory: {
       prepare: () => Promise.resolve(),
       beforeCommit: () => Promise.resolve(),
-      settled: () => Promise.resolve(),
+      restored: () => {},
       beforeSend: () =>
         ++attempts === 1 ? Promise.resolve({ target }) : Promise.reject(
           new client.RequestFailure({
@@ -257,7 +257,7 @@ for (const kind of ["revert", "restore"] as const) {
       ...f,
       branchHistory: {
         prepare: () => Promise.resolve(),
-        settled: () => Promise.resolve(),
+        restored: () => {},
         beforeCommit: () => Promise.resolve(),
         beforeSend: () => {
           preserving = true;
@@ -295,7 +295,7 @@ Deno.test("Send joins the revert owner's publication wait before checking preser
     revertReady: () => ready.promise,
     branchHistory: {
       prepare: () => Promise.resolve(),
-      settled: () => Promise.resolve(),
+      restored: () => {},
       beforeCommit: () => Promise.resolve(),
       beforeSend: () => {
         preserving = true;

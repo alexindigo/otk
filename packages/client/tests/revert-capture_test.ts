@@ -146,7 +146,7 @@ Deno.test("Restore after a completed failed capture keeps its immutable exact ID
   record.messageIDs.push("later");
   f.restore();
   f.quota(false);
-  await f.owner.settled(target, true);
+  f.owner.restored(target);
   await f.owner.beforeCommit(target);
   assertEquals(f.reads, ["p", "r", "p", "r"]);
   assertEquals(f.owner.state.branches[0].messages.map((m) => m.id), ["p", "r"]);
@@ -224,7 +224,7 @@ Deno.test("failed background and Restore copies retain explicit retry and keep-w
     restored: false,
   });
   f.restore();
-  await f.owner.settled(target, true);
+  f.owner.restored(target);
   await assertRejects(() => f.owner.beforeCommit(target));
   const restoredFailure = f.owner.state.error;
   assert(restoredFailure);

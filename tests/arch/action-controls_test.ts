@@ -102,7 +102,7 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/RequestDismiss.tsx": 2,
   "packages/ui/components/RevertGroup.tsx": 2,
   "packages/ui/components/RightPanel.tsx": 1,
-  "packages/ui/components/SavedBranches.tsx": 8,
+  "packages/ui/components/SavedBranches.tsx": 7,
   "packages/ui/components/SessionView.tsx": 1,
   "packages/ui/components/Settings.tsx": 2,
   "packages/ui/components/Sidebar.tsx": 4,

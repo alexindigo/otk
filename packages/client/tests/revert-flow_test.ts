@@ -82,7 +82,6 @@ function fixture() {
               prompts: [],
               drafts: [],
               pending: true,
-              replaced: false,
               bytes: 1,
             }];
           });
