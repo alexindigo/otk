@@ -113,7 +113,7 @@ export function sessionPorts(o: {
     location: (id) => actions.location(target, id),
     liveWork,
     delivery: actions.delivery(target),
-    runningWork: liveWork.items,
+    workItems: liveWork.items,
     trail: () => o.tabs?.()?.trail(),
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
     requests: connection.attention,

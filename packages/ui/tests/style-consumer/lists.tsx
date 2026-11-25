@@ -167,7 +167,8 @@ export default function Scene() {
         }}
       />
       <Subagents
-        model={(() => {
+        entities={tabs.entities()}
+        trail={(() => {
           void tabs.state.revision;
           return tabs.trail();
         })()}

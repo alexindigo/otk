@@ -1,11 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  derivedValue,
-  type InboxSnapshot,
-  type IndexEntry,
-  type Message,
-} from "@otk/protocol";
-import type { ClientTabs } from "./tabs.ts";
 import { createState } from "./state.ts";
 
 export interface RunningWork {
@@ -51,54 +44,6 @@ export function createLiveWork(input: {
       return work;
     },
   };
-}
-
-/** Borrow the shared family and native scalar inventory, never transcript pages. */
-export function runningWork(input: {
-  tabs: Pick<ClientTabs, "working">;
-  inbox: InboxSnapshot;
-  sessionID: string;
-  entry(id: string): IndexEntry | undefined;
-  /** Compatibility input, deliberately not consulted for live inventory. */
-  messages?: readonly Message[];
-  connected: boolean;
-}): RunningWork[] {
-  if (!input.connected) return [];
-  const items: RunningWork[] = [];
-  for (const crumb of input.tabs.working()) {
-    const entry = input.entry(crumb.id);
-    if (!entry) continue;
-    const work = entry.activity?.work;
-    items.push({
-      id: `helper/${entry.id}`,
-      kind: "helper",
-      label: derivedValue(entry.digest.last)?.agent ?? "Helper",
-      title: entry.title,
-      sessionID: entry.id,
-      startedAt: work?.fresh
-        ? work.items?.find((item) =>
-          item.kind === "execution" && work.keys.includes(item.id)
-        )?.startedAt
-        : undefined,
-    });
-  }
-  const current = input.entry(input.sessionID);
-  const work = current?.activity?.work;
-  if (!work?.fresh) return items;
-  const seen = new Set<string>();
-  for (const item of work.items ?? []) {
-    if (
-      item.kind !== "shell" || !work.keys.includes(item.id) || seen.has(item.id)
-    ) continue;
-    seen.add(item.id);
-    items.push({
-      ...item,
-      id: `shell/${item.id}`,
-      kind: "shell",
-      sessionID: input.sessionID,
-    });
-  }
-  return items;
 }
 
 export function runningWorkLabel(items: readonly RunningWork[]): string {

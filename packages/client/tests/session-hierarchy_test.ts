@@ -6,7 +6,7 @@ import { createTabs } from "./supervision-fixture.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
 
-Deno.test("cross-checkout helpers cannot enter a task trail without inheriting its membership", () => {
+Deno.test("cross-checkout helpers do not enter the breadcrumb until selected", () => {
   const root = shellEntry("human", "/repo");
   const child = shellEntry("failed", "/tree", root.id);
   const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
@@ -42,10 +42,6 @@ Deno.test("cross-checkout helpers cannot enter a task trail without inheriting i
     root.id,
     false,
   ]]);
-  assertEquals(
-    tabs.family().find((row) => row.id === child.id)?.status,
-    undefined,
-  );
   tabs.stop();
 });
 

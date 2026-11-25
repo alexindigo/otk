@@ -56,7 +56,7 @@ export interface SessionPorts {
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
   /** Borrowed family and active shell projection; no UI-owned activity store. */
-  runningWork?(): readonly RunningWork[];
+  workItems?(): readonly RunningWork[];
   trail?(): TrailModel | undefined;
   liveWork?: LiveWorkOwner;
   delivery?: SessionDelivery;

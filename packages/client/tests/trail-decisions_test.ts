@@ -85,13 +85,6 @@ Deno.test("D67 D66 D3 4.2 D58: ancestry and helpers use entity delivery and work
     tabs.crumbs().map((crumb) => [crumb.id, crumb.depth]),
     [["root", 0], ["active", 1], ["nested", 2]],
   );
-  assertEquals(tabs.trail().helpers.length, 3);
-  assertEquals(tabs.trail().helpers.map((helper) => helper.id), [
-    "active",
-    "cont-1",
-    "nested",
-  ]);
-  assertEquals(tabs.trail().status, "working");
   assertEquals(
     inbox.entities![entityKey("session", "cont-0")].counts.unseen,
     0,
@@ -100,9 +93,15 @@ Deno.test("D67 D66 D3 4.2 D58: ancestry and helpers use entity delivery and work
     inbox.entities![entityKey("session", "cont-1")].evidence!.awaitingDelivery,
     true,
   );
+  assertEquals(tabs.trail().task, "task:session/root");
   assertEquals(
-    tabs.trail().helpers.find((crumb) => crumb.id === "nested")?.run,
+    inbox.entities![entityKey("session", "nested")].evidence?.run,
     { startedAt: 10 },
   );
+  assertEquals(inbox.entities![tabs.trail().task!].helpers?.ids, [
+    "active",
+    "nested",
+    "cont-1",
+  ]);
   tabs.stop();
 });

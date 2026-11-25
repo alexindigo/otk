@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { taskHelpers } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -25,9 +26,13 @@ export default function ComposerTakeovers(
   const { takeovers, composerDocks } = useUiRegistries(),
     session = useSessionPorts();
   const { commands } = useCommandPorts();
-  const work = createMemo(() => session.runningWork?.() ?? []);
+  const work = createMemo(() => session.workItems?.() ?? []);
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";
+  const helpers = () => {
+    const store = session.entities?.();
+    return store && taskHelpers(store, session.trail?.()?.task);
+  };
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -44,7 +49,7 @@ export default function ComposerTakeovers(
     <ComposerProvider available={hasComposer}>
       <Show
         when={hasComposer() || active() || work().length ||
-          session.trail?.()?.helpers.length}
+          helpers()?.ids.length}
       >
         <div
           class="otk-composer-dock"
@@ -76,7 +81,8 @@ export default function ComposerTakeovers(
                 <Show when={session.trail?.()}>
                   {(trail) => (
                     <Subagents
-                      model={trail()}
+                      trail={trail()}
+                      entities={session.entities?.()}
                       owner={session.liveWork}
                       title={title}
                       openAction={(id) =>

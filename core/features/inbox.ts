@@ -131,6 +131,9 @@ export class InboxFeature implements FrameSource {
     directory: string,
     followParent = false,
   ): readonly TaskRecord[] {
+    const listed = new Set(
+      this.#listedTasks({ directory, epoch: 0, crumbs: [], rows: [] }),
+    );
     if (followParent) {
       const scopes = this.summaries.values.get(directory)?.scopes ??
         [directory];
@@ -142,7 +145,8 @@ export class InboxFeature implements FrameSource {
         ),
       );
       return [...this.#tasks.values()].filter((task) =>
-        scopes.includes(task.directory) || inherited.has(task.id)
+        scopes.includes(task.directory) || inherited.has(task.id) ||
+        listed.has(taskEntityID("task", task.id))
       );
     }
     let value = this.#taskProjects.get(directory);
@@ -154,7 +158,15 @@ export class InboxFeature implements FrameSource {
       );
       this.#taskProjects.set(directory, value);
     }
-    return value;
+    const local = new Set(value.map((task) => task.id));
+    return [
+      ...value,
+      ...[...listed].flatMap((identity) => {
+        if (!identity.startsWith("task/")) return [];
+        const id = identity.slice("task/".length), task = this.#tasks.get(id);
+        return task && !local.has(id) ? [task] : [];
+      }),
+    ];
   }
   #invalidateTasks(scope: string): void {
     for (const directory of this.#taskProjects.keys()) {
@@ -442,7 +454,8 @@ export class InboxFeature implements FrameSource {
       emitOps([
         ...ops,
         ...reconcileSessions(sessions, entries()),
-        ...(changes.some((change) => change.taskID !== undefined)
+        ...(listingChanged ||
+            changes.some((change) => change.taskID !== undefined)
           ? reconcileTasks()
           : []),
         ...(listingChanged ? reconcileTaskStates() : []),

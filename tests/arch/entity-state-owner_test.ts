@@ -323,7 +323,6 @@ const PENDING: string[] = [
   "packages/client/approval-attention.ts: raw-attention",
   "packages/client/inbox.ts: rollup-owner",
   "packages/client/inbox.ts: state-producer",
-  "packages/client/live-work.ts: raw-attention",
   "packages/client/notification-triggers.ts: raw-attention",
   "packages/client/project-projection.ts: raw-attention",
   "packages/client/reduce.ts: raw-attention",

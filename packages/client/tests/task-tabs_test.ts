@@ -368,7 +368,7 @@ Deno.test("D66 phantom crumbs isolate the native root within a multi-root task",
   assertEquals(tabs.crumbs().map((c) => [c.id, c.depth]), [
     ["b", 0],
   ]);
-  assertEquals(tabs.family().map((c) => c.id), ["child", "nested"]);
+  assertEquals(tabs.trail().task, "task:task/task");
   tabs.stop();
   child.attention.questions = 0;
   nested.status = "idle";

@@ -3,8 +3,10 @@ import type {
   BlockedCause,
   EntityRequestEvidence,
   EntityState,
+  HelperDisposition,
   ProjectStatus,
   SessionEvidence,
+  TaskHelpers,
 } from "@otk/protocol";
 import { rollupStatus } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
@@ -225,10 +227,11 @@ function permissionRequests(
  * timed from its own client arrival, so a replacement starts a new grace.
  * Questions, forms, operations and failed helpers are immediate. */
 export function lamp(
-  store: EntityStateStore,
-  k: string,
-  options: LampOptions,
+  store: EntityStateStore | undefined,
+  k: string | undefined,
+  options: LampOptions = { now: performance.now() },
 ): ProjectStatus {
+  if (!store || !k) return "none";
   const value = store.get(k);
   if (!value || store.isStale) return "none";
   if (value.state !== "blocked" || value.cause !== "permission") {
@@ -255,6 +258,19 @@ export function visibleLampStatus(
   states: readonly ProjectStatus[],
 ): ProjectStatus {
   return rollupStatus(...states);
+}
+
+export function taskHelpers(
+  store: EntityStateStore,
+  key?: string,
+): TaskHelpers | undefined {
+  return store.isStale || !key ? undefined : store.get(key)?.helpers;
+}
+export function helperDisposition(
+  store: EntityStateStore,
+  key: string,
+): HelperDisposition | undefined {
+  return sessionEvidence(store, key)?.helper;
 }
 
 /** Own-session evidence only. Descendant counts retain their explicit scope. */
