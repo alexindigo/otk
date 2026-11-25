@@ -337,7 +337,10 @@ export class CommandHub {
     return await this.#run<R>(current.id, current.args, this.context(), true);
   }
   /** Data-only menu projection; execution always rechecks the ordinary command. */
-  contextActions(target: ContextTarget): ContextAction[] {
+  contextActions(
+    target: ContextTarget,
+    includeUnavailable = false,
+  ): ContextAction[] {
     const context = this.context();
     return [...this.#commands.values()].filter((command) =>
       typeof command.context?.kind === "string"
@@ -368,9 +371,12 @@ export class CommandHub {
               ? undefined
               : target.data,
           }]);
-      return items.filter((item) =>
-        this.enabled(command.id, context, item.args)
-      ).map((item) => {
+      return items.flatMap((item) => {
+        const availability = this.availability(command.id, context, item.args);
+        if (
+          !availability.available &&
+          (!includeUnavailable || availability.hidden)
+        ) return [];
         // Presentation consumes the same admitted arguments as invocation. An
         // area may exist before its target resource has finished reloading.
         const title = item.title ?? command.context?.title?.(item.args) ??
@@ -382,10 +388,13 @@ export class CommandHub {
           title,
           args: item.args,
           destructive: command.context?.destructive ?? false,
+          ...(!availability.available
+            ? { unavailable: availability.reason }
+            : {}),
           ...(confirm === undefined ? {} : { confirm }),
         };
         this.#actions.set(action, { command, target });
-        return action;
+        return [action];
       });
     });
   }
@@ -460,6 +469,7 @@ export interface ContextAction {
   title: string;
   args: unknown;
   destructive: boolean;
+  unavailable?: string;
   confirm?: string;
 }
 /** Two innermost thing groups, then the nearest area; app only without a thing. */

@@ -26,11 +26,12 @@ import {
   ForkIcon,
   RevertIcon,
 } from "./ChromeIcons.tsx";
+import { RunIcon } from "./tools/ToolIcons.tsx";
 
 const actions = {
   prompt: ["prompt.revert", "prompt.copy"],
   reply: ["reply.fork", "reply.copy"],
-  code: ["code.copy"],
+  code: ["code.copy", "code.run"],
 };
 const COPY_FEEDBACK_MS = 1500;
 /** Data-only command consumer; availability never depends on pointer state. */
@@ -63,13 +64,13 @@ export default function MessageActions(props: {
     const commands = ports.commands.contextActions({
       kind: props.kind,
       data: props.target,
-    });
+    }, props.kind === "code");
     return actions[props.kind].flatMap((id) =>
       commands.filter((command) => command.id === id)
     );
   };
   const run = async (action: ContextAction) => {
-    if (pending()) return;
+    if (pending() || action.unavailable) return;
     const { id } = action;
     const facts = commandFailureFacts(action);
     setPending(id);
@@ -120,8 +121,10 @@ export default function MessageActions(props: {
                 aria-label={shown()
                   ? `${action().title} failed`
                   : action().title}
-                aria-description={shown()}
-                title={shown() ??
+                disabled={action().unavailable !== undefined}
+                aria-disabled={action().unavailable ? "true" : undefined}
+                aria-description={action().unavailable ?? shown()}
+                title={action().unavailable ?? shown() ??
                   hints.title(action().id, action().title)}
                 aria-busy={pending() === action().id ? "true" : undefined}
                 onClick={() => void run(action())}
@@ -138,6 +141,9 @@ export default function MessageActions(props: {
                   </Match>
                   <Match when={action().id === "prompt.revert"}>
                     <RevertIcon />
+                  </Match>
+                  <Match when={action().id === "code.run"}>
+                    <RunIcon />
                   </Match>
                 </Switch>
               </button>

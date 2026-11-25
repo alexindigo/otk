@@ -23,10 +23,14 @@ export {
   runningWorkLabel,
 } from "./live-work.ts";
 export {
+  type PendingRun,
   releaseTerminalBoxes,
+  TERMINAL_RUN_LABEL,
   TerminalBox,
   terminalBoxFor,
   type TerminalBoxMode,
+  terminalRunFailureOwned,
+  TERMINALS_UNAVAILABLE,
 } from "./terminal-boxes.ts";
 export * from "./code-blocks.ts";
 export {

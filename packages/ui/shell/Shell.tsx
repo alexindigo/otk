@@ -25,7 +25,10 @@ import {
   projectName,
   shellTitle,
 } from "@otk/client";
-import { registerPreferenceCommands } from "@otk/client";
+import {
+  registerPreferenceCommands,
+  terminalRunFailureOwned,
+} from "@otk/client";
 import {
   registerSessionCommands,
   registerSessionTargetCommands,
@@ -443,7 +446,9 @@ export default function Shell(
     pin: navigation.pin,
     close: navigation.close,
   }));
-  onCleanup(registerCodeBlockCommands(commands));
+  onCleanup(
+    registerCodeBlockCommands(commands, (id) => sidecars.connection(id)),
+  );
   onCleanup(commands.register({
     id: "session.title.copy",
     title: "Copy session title",
@@ -550,7 +555,8 @@ export default function Shell(
       <CommandProvider
         commands={commands}
         keyboard={keyboard}
-        failureOwned={resources.ownsFailure}
+        failureOwned={(cause) =>
+          resources.ownsFailure?.(cause) || terminalRunFailureOwned(cause)}
       >
         <ShellProvider
           reload={reload}
