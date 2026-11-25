@@ -7,7 +7,6 @@ import {
   projectBranchPresentation,
   projectGroup,
   projectTree,
-  type TreeDisclosure,
   type TreeDisclosures,
 } from "@otk/client";
 import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
@@ -55,6 +54,7 @@ import ChromeMeta, {
   SectionHeader,
 } from "./ChromeMeta.tsx";
 import TimeText from "./TimeText.tsx";
+import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { orderInteraction } from "./order-interaction.ts";
 import { connectionFeedback } from "./connection-light.ts";
 export interface ProjectRow extends ProjectProjectionRow {
@@ -131,26 +131,6 @@ export default function ProjectInbox(props: {
       setError(failureValue(error, { actionLabel: "Saving project layout" })),
   });
   const width = resize.width;
-  function DisclosureFeedback(item: { disclosure: TreeDisclosure }) {
-    const feedback = createMemo(() => {
-      const cause = item.disclosure.error();
-      if (!cause) return undefined;
-      return {
-        ...errorFeedback(
-          failureValue(cause, { actionLabel: "Saving project tree" }),
-        )!,
-        action: { label: "Retry", run: () => item.disclosure.retry() },
-      };
-    });
-    return (
-      <Show when={feedback()}>
-        <FeedbackStatus
-          class="otk-project-disclosure-error"
-          feedback={feedback()}
-        />
-      </Show>
-    );
-  }
   const open = ownedAction("project.open", props.onOpen, {
     arguments: {
       type: "object",
@@ -288,7 +268,13 @@ export default function ProjectInbox(props: {
               connected={connected}
             />
           )}
-          feedback={() => <DisclosureFeedback disclosure={intent} />}
+          feedback={() => (
+            <DisclosureFeedback
+              disclosure={intent}
+              actionLabel="Saving project tree"
+              class="otk-project-disclosure-error"
+            />
+          )}
           body={() => (
             <>
               <For each={children()} keyed={(child) => child.key}>
@@ -754,7 +740,11 @@ export default function ProjectInbox(props: {
               )
             )}
         />
-        <DisclosureFeedback disclosure={discoveredDisclosure} />
+        <DisclosureFeedback
+          disclosure={discoveredDisclosure}
+          actionLabel="Saving project tree"
+          class="otk-project-disclosure-error"
+        />
         <section
           aria-label="Discovered projects"
           class="otk-discovered-projects"

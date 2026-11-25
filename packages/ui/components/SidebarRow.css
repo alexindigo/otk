@@ -105,3 +105,18 @@
 .otk-sidebar-tree {
   --tree-height: var(--row-project);
 }
+.otk-sidebar-frame {
+  min-block-size: var(--row-project);
+}
+.otk-sidebar-frame .otk-sidebar-row-main:hover {
+  background: transparent;
+  color: inherit;
+}
+.otk-sidebar-frame .otk-sidebar-row-main:focus-visible {
+  outline: none;
+}
+.otk-sidebar-frame:has(.otk-sidebar-row-main:focus-visible) {
+  outline: 2px solid var(--control-focus);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-row);
+}

@@ -16,6 +16,7 @@ export interface TreeDisclosure {
   open(): boolean;
   pending(): boolean;
   error(): unknown;
+  failureOrder(): number;
   set(open: boolean): Promise<void>;
   retry(): Promise<void>;
 }
@@ -33,11 +34,13 @@ export function createTreeDisclosure(
   factory: StateFactory = createState,
 ): TreeDisclosures {
   const clock = factory({ revision: 0 });
+  let failures = 0;
   const entries = new Map<string, {
     intent?: boolean;
     revision: number;
     pending: boolean;
     error?: unknown;
+    failureOrder?: number;
     tail?: Promise<void>;
   }>();
   const publish = () =>
@@ -66,12 +69,16 @@ export function createTreeDisclosure(
         const revision = ++value.revision;
         value.intent = open;
         value.error = undefined;
+        value.failureOrder = undefined;
         value.pending = !!save;
         const persist = async () => {
           try {
             await save?.(open);
           } catch (error) {
-            if (value.revision === revision) value.error = error;
+            if (value.revision === revision) {
+              value.error = error;
+              value.failureOrder = ++failures;
+            }
           } finally {
             if (value.revision === revision) value.pending = false;
             publish();
@@ -94,6 +101,7 @@ export function createTreeDisclosure(
         },
         pending: () => read().pending,
         error: () => read().error,
+        failureOrder: () => read().failureOrder ?? 0,
         set,
         retry: () => set(value.intent ?? baseline()),
       };

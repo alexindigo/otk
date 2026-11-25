@@ -86,7 +86,7 @@ export default function SidebarRow(props: {
             frame().ref?.(el);
           }}
           {...selection({
-            class: frame().class,
+            class: `otk-sidebar-frame ${frame().class}`,
             kind: "current",
             selected: frame().selected,
           })}

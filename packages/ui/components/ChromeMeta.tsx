@@ -192,6 +192,7 @@ export function SectionHeader(props: {
   compact?: boolean;
   sidebar?: boolean;
   path?: readonly boolean[];
+  hasChildren?: boolean;
   leading?(): Element;
   attributes?: Record<string, unknown>;
   body?(): Element;
@@ -216,7 +217,8 @@ export function SectionHeader(props: {
       ].filter(Boolean).join(" ")}
       label={description()}
       open={props.open}
-      hasChildren
+      hasChildren={props.hasChildren ?? true}
+      showEmptyToggle
       onOpen={props.onOpen}
       feedback={props.feedback}
       body={props.body}

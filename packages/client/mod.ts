@@ -181,7 +181,12 @@ export * from "./requests.ts";
 export * from "./failures.ts";
 export * from "./failure-features.ts";
 export * from "./http-requests.ts";
-export { createSessionTree, type SessionListRow } from "./session-tree.ts";
+export {
+  createSessionTree,
+  type SessionListRow,
+  type SessionTreeItem,
+  sessionTreeView,
+} from "./session-tree.ts";
 export * from "./forms.ts";
 export * from "./request-lifetime.ts";
 export {

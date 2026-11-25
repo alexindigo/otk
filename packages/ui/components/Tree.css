@@ -10,9 +10,6 @@
   display: flex;
   grid-area: 1 / 1;
 }
-.otk-tree-rails.is-guide {
-  --tree-height: var(--row-compact);
-}
 .otk-tree-rails > .otk-tree-junction {
   inline-size: var(--tree-indent);
 }
@@ -228,4 +225,9 @@
 }
 .otk-tree-node.is-flat > .otk-tree-heading > .otk-tree-label {
   grid-column: 3;
+}
+/* A flat descendant borrows the same empty root track as a nested body. */
+.otk-tree-node.is-flat.is-connected > .otk-tree-heading > .otk-tree-rails::before {
+  content: "";
+  flex: 0 0 var(--tree-indent);
 }

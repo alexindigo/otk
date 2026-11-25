@@ -75,29 +75,17 @@ function Junction(
   );
 }
 
-function TreeRails(
-  props: { path: readonly boolean[]; tip?: boolean },
-): Element {
+function TreeRails(props: { path: readonly boolean[] }): Element {
   return (
     <span
-      class={["otk-tree-rails", { "is-guide": props.tip }]}
+      class="otk-tree-rails"
       aria-hidden="true"
     >
       <For each={props.path}>
-        {(continues, index) => (
-          <Junction
-            through={continues}
-            tip={props.tip && index() === props.path.length - 1 || false}
-          />
-        )}
+        {(continues) => <Junction through={continues} tip={false} />}
       </For>
     </span>
   );
-}
-
-/** Flat virtual hierarchies borrow the same junction cells without owning rows. */
-export function TreeGuide(props: { path: readonly boolean[] }): Element {
-  return <TreeRails path={props.path} tip />;
 }
 
 /** Supplies topology, never disclosure state. Safe across virtual row mounts. */
