@@ -272,7 +272,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       () => this.stream.client,
       (id) => this.#index.getMetadata(id),
       (id, op) => {
-        this.#sink?.content(id, op);
+        // Fanout needs the server's ancestor route, not browser index credit.
+        // The topology observer republishes from the pending owner on admission.
+        if (this.#index.getMetadata(id)) this.#sink?.content(id, op);
         if (op.op === "permission.remove" || op.op === "form.remove") {
           this.#setPending(
             `${
@@ -458,6 +460,7 @@ export class OpencodeV2ServerAdapter implements Harness {
             const entry = this.#index.getMetadata(key);
             if (entry) this.#upsert(entry);
           }
+          if (this.#index.getMetadata(id)) this.pending.publishOwner(id);
         });
         this.#sink = sink;
         if (digest) {
