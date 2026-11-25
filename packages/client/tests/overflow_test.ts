@@ -1,6 +1,59 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { fitOverflow, overflowPreference } from "../overflow.ts";
+Deno.test("D66 progressive fitting compacts every title before aggregating the whole row", () => {
+  const input = {
+    keys: ["root", "a", "b"],
+    widths: new Map([["root", 50], ["a", 150], ["b", 200]]),
+    compactWidths: new Map([["root", 30], ["a", 70], ["b", 80]]),
+    required: [],
+    moreWidth: 0,
+    gap: 4,
+  };
+  assertEquals(fitOverflow({ ...input, available: 408 }), {
+    visible: input.keys,
+    overflow: [],
+    mode: "full",
+  });
+  assertEquals(fitOverflow({ ...input, available: 248 }), {
+    visible: input.keys,
+    overflow: [],
+    mode: "compact",
+    widths: new Map([["root", 50], ["a", 90], ["b", 100]]),
+  });
+  assertEquals(fitOverflow({ ...input, available: 188 }), {
+    visible: input.keys,
+    overflow: [],
+    mode: "compact",
+    widths: input.compactWidths,
+  });
+  assertEquals(fitOverflow({ ...input, available: 187 }), {
+    visible: [],
+    overflow: input.keys,
+    mode: "collapsed",
+    widths: new Map(),
+  });
+  assertEquals(
+    fitOverflow({ ...input, available: 187, required: ["root", "b"] }),
+    {
+      visible: ["root", "b"],
+      overflow: ["a"],
+      mode: "collapsed",
+      widths: new Map([["root", 30], ["b", 80]]),
+    },
+  );
+  // D67: ancestry is never replaced by an aggregate. If whole first words
+  // cannot fit, retain their measured minima in the shared horizontal lane.
+  assertEquals(
+    fitOverflow({ ...input, available: 100, required: input.keys }),
+    {
+      visible: input.keys,
+      overflow: [],
+      mode: "compact",
+      widths: input.compactWidths,
+    },
+  );
+});
 Deno.test("overflow partitions by measured width, preserving required identity and preference order", () => {
   const keys = ["root", "a", "b", "selected", "tail"],
     widths = new Map(keys.map((key) => [key, 80]));

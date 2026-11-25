@@ -486,12 +486,12 @@ export async function surfaces(
           sessionID: "tstv1-crumb-path",
         });
         await page.setViewportSize({ width: 800, height: 900 });
-        await page.locator(".otk-folded-crumbs > button").click();
+        await page.locator(".otk-subagents > button").click();
         await surface(page);
         await menuGeometry(page);
         await allMarks(
           cdp,
-          ".otk-folded-crumbs .otk-menu-items [data-otk-selection]",
+          ".otk-subagents .otk-menu-items [data-otk-selection]",
           1,
         );
         await shot(`selection-more-${reduced}-${theme.id}`);
@@ -1081,10 +1081,7 @@ export async function lights(
                 return [s.textDecorationStyle, s.textDecorationLine];
               })
             ),
-          ).toEqual([["solid", "none"], ["dotted", "underline"], [
-            "wavy",
-            "underline",
-          ], ["double", "underline"]]);
+          ).toEqual(Array.from({ length: 4 }, () => ["solid", "none"]));
           // The reduced activity shape is StateShape's half disc, not a glyph.
           const activity = page.locator(".otk-activity-shape");
           await expect(activity).toHaveText("");

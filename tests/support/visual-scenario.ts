@@ -67,6 +67,7 @@ export async function visualScenario() {
               for (let n = 1; n < 12; n++) {
                 f.update(`tstv1-visual-${n}`, {
                   parentID: n > 1 ? `tstv1-visual-${n - 1}` : undefined,
+                  status: "busy",
                 });
               }
               f.update("tstv1-otk", { parentID: "tstv1-visual-11" });

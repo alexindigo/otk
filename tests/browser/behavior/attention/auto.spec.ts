@@ -45,7 +45,7 @@ hiddenTest(
       ).toBeVisible();
       await expect(
         page.getByRole("navigation", { name: "Task sessions" }).getByRole(
-          "button",
+          "link",
           {
             name: "Quiet automatic session",
             exact: true,

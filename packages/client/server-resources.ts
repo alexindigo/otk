@@ -137,13 +137,13 @@ export interface ServerResources {
   projectRow(
     project: ProjectSelection,
     now: number,
-    ageing?: readonly number[],
   ): ProjectProjectionRow | undefined;
   duplicateProjectName(name: string): boolean;
   projects(
     now: number,
-    ageing?: readonly number[],
   ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
+  /** The connection's entity states, for lamps and emphasis (decision 62). */
+  entities(server: string): import("./entity-state.ts").EntityStateStore;
   tabSnapshot(project: ProjectSelection): TabInput;
   syncTabs(
     project: ProjectSelection,
@@ -565,7 +565,6 @@ export function createServerResources(o: {
     owner.update(
       new Set([...previous?.sessions.keys() ?? [], ...next.sessions.keys()]),
     );
-    owner.operations(next.projectStates);
   };
   const projectOwner = (id: string) => {
     let owner = projectOwners.get(id);
@@ -575,6 +574,7 @@ export function createServerResources(o: {
       factory,
       membership: nameMembership,
       inbox: () => inbox(id).state.inbox,
+      entities: () => inbox(id).entities,
       taskActivity: () => operationAttention(id).tasks,
       entry: (sessionID) => {
         const raw = o.index.getMetadata(id, sessionID);
@@ -596,7 +596,6 @@ export function createServerResources(o: {
     projectOwners.set(id, owner);
     owner.inbox(inbox(id).state.inbox);
     owner.update(o.index.ids(id));
-    owner.operations(operationAttention(id).projectStates);
     projectReleases.set(id, [
       projection(id).subscribe((changes) =>
         owner!.update(changes.changes.map((c) => c.id))
@@ -605,6 +604,9 @@ export function createServerResources(o: {
         const previous = operationCache.get(id);
         if (changes.tasks) operationCache.delete(id);
         owner!.inbox(inbox(id).state.inbox, changes);
+        if (changes.baseline || changes.entities) {
+          owner!.entities(changes.baseline ? "all" : changes.entities!);
+        }
         if (changes.tasks) refreshOperations(id, previous);
       }),
     ]);
@@ -626,10 +628,15 @@ export function createServerResources(o: {
         o.error,
         () => sidecars.connection(id).viewEpoch,
         (request) => sidecars.connection(id).attention.arrival(request),
+        () => connected(id),
       );
       inboxes.set(id, model);
       const current = model;
+      current.entities.stale(!connected(id));
       current.observeChanges((changes) => {
+        if (changes.baseline || changes.entities) {
+          current.entities.stale(!connected(id));
+        }
         for (const cache of tabInputs.values()) {
           if (cache.server !== id) continue;
           if (changes.sessions.some((key) => cache.dependencies.has(key))) {
@@ -757,6 +764,9 @@ export function createServerResources(o: {
       get taskActivity() {
         return base.taskActivity;
       },
+      get entities() {
+        return base.entities;
+      },
     };
     tabInputs.set(key, {
       key,
@@ -869,7 +879,10 @@ export function createServerResources(o: {
         }
       }
     }
-    if (frame.t === "welcome") projections.get(id)?.reset();
+    if (frame.t === "welcome") {
+      projections.get(id)?.reset();
+      inbox(id).entities.stale(true);
+    }
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
     if (
@@ -906,6 +919,11 @@ export function createServerResources(o: {
   };
   const sidecars = o.sidecars(receive);
   const stopLinks = sidecars.subscribe(() => {
+    // Reconnection alone cannot revive old evidence. Accepted entity changes
+    // or a baseline make the replica fresh again in observeChanges above.
+    for (const [id, model] of inboxes) {
+      if (!connected(id)) model.entities.stale(true);
+    }
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
@@ -1056,12 +1074,12 @@ export function createServerResources(o: {
           ).filter(Boolean),
         ),
       ),
-    projectRow: (p, now, ageing) =>
+    projectRow: (p, now) =>
       projectOwner(p.sidecarId).row(
         projectOwner(p.sidecarId).resolve(p.directory),
         now,
-        ageing,
       ),
+    entities: (server) => inbox(server).entities,
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
     sessionRowsReady: (p) => {
@@ -1101,7 +1119,7 @@ export function createServerResources(o: {
       void nameClock.state.keys[name];
       return (names.get(name) ?? 0) > 1;
     },
-    projects: (now, ageing) => {
+    projects: (now) => {
       void projectOrderClock.state.revision;
       // The configured server list is durable before any server answers.
       const serverOrder = new Map(
@@ -1110,7 +1128,7 @@ export function createServerResources(o: {
       const rows = sidecars.state.list.flatMap((s) => {
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
-          const row = owner.row(directory, now, ageing)!;
+          const row = owner.row(directory, now)!;
           let labelled = labelledRows.get(row);
           if (!labelled || labelled.label !== s.label) {
             labelled = { ...row, sidecarId: s.id, label: s.label };

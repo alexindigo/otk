@@ -1067,7 +1067,7 @@ and choose its exact urgent or remembered session, even a helper. The separate
 project lamp requests `navigation.default` with `attention: true`: it opens the
 exact urgent session across the repository's checkout scopes, without human-root
 redirection. Mandatory descendants in other checkouts remain scalar family
-leases and appear in the trail and family without inheriting local tasks.
+leases; only the selected ancestry crosses task boundaries in the trail.
 ShellNavigation applies the result only while its captured revision is current;
 same-project clicks do not bypass resolution. Locations live in the existing
 host-sidecar `shellLayout` preference; `layout.location` merges one
@@ -1389,42 +1389,54 @@ virtual session-row continuation flags from the complete projected preorder,
 never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
-`update({directory, entries, inbox})` and exposes saved task and human-root
-phantom groups. `projectTabGroups` is the task-identity owner: helpers belong to
-their proven human root's group, never an independent activity/selection group.
-Legacy helper-only task records cannot split that group. Unresolved or cyclic
-ancestry cannot establish a task identity; Sessions retains those rows. Group
-member sets are disjoint, including quiet descendants. Selection, remembered
-views, lamps, breadcrumbs and metadata demand borrow this partition. Opening a
-helper keeps its exact view but selects the human group's tab. Pin and send
-promote that root, never the helper; helper rename is not task promotion. Native
-ancestry comes from SessionHierarchy. `tasksFollowParent` defaults off and
-crosses server connections through the view, not by rewriting stored membership
-or native paths. `select`, `preview`, `pin` (also the double-click action),
-`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
-transitions. Required activity tabs never disappear when a preview is replaced;
-an idle/seen selected phantom remains until selection leaves. Inputs remain
-owned by their index/metadata models, and tabs never delete sessions. Concurrent
-pins share promotion; late completion cannot steal a newer selection.
-`belongsToTab(tabID, sessionID)` borrows complete group membership for lamp
-presentation, including quiet descendants. The task lamp rolls up its members;
-each session crumb retains its own session state (D35). Consumers do not
-reconstruct membership from raw ancestry.
+`update({directory, entries, inbox, entities?})` and exposes saved task and
+human-root phantom groups. `projectTabGroups` is the task-identity owner:
+helpers belong to their proven human root's group, never an independent
+activity/selection group. Legacy helper-only task records cannot split that
+group. Unresolved or cyclic ancestry cannot establish a task identity; Sessions
+retains those rows. Group member sets are disjoint, including quiet descendants.
+Selection, remembered views, lamps, breadcrumbs and metadata demand borrow this
+partition. Opening a helper keeps its exact view but selects the human group's
+tab. Pin and send promote that root, never the helper; helper rename is not task
+promotion. Native ancestry comes from SessionHierarchy. `tasksFollowParent`
+defaults off and crosses server connections through the view, not by rewriting
+stored membership or native paths. `select`, `preview`, `pin` (also the
+double-click action), `rename(sessionID, title, callback)` and
+`send(sessionID, callback)` own tab transitions. Required activity tabs never
+disappear when a preview is replaced; an idle/seen selected phantom remains
+until selection leaves. Inputs remain owned by their index/metadata models, and
+tabs never delete sessions. Concurrent pins share promotion; late completion
+cannot steal a newer selection. `projectTabGroups` lives in protocol and is
+re-exported by client: server demand and browser placement share the same
+partition. The server publishes task states only for open view projections.
+Their opaque identities include group kind, group ID, directory and
+follow-parent mode; unpinned human groups are task aggregates too. Last view
+release retires those aggregates. `belongsToTab(tabID, sessionID)` borrows
+complete membership, including quiet descendants. `tabEntityKey(tab)` names that
+server aggregate, while each crumb reads its own session entity (D35).
+`entities()` exposes the borrowed replica to presentation. Standalone callers
+can supply `inbox.entities` instead. Metadata, supervision and client operation
+overlays never manufacture tab state. State revision and grace expiry invalidate
+cached paint without borrowing the catalog.
 
 Directly selecting a validated phantom preserves that exact tab and viewed
 session across metadata updates. Preview and reconciliation share that same
-group selection. Breadcrumbs borrow complete ancestry context and insert foreign
-links relative to their displayed ancestors and descendants, preserving explicit
-local member order even when intermediate links are quiet.
+group selection. The trail owner supplies complete ancestry and a separate
+eligible in-task helper inventory to the two D67 views.
 
-`crumbs()` presents the complete path to the open session followed by working
-helpers of its task, in session start order, without duplicate path identities.
-`working()` exposes the same helper selection to `runningWork` for the composer;
-both borrow the live-work owner and current supervision, never raw native
-status. Finished, failed, cancelled, blocked and disconnected work leaves the
-suffix. The open session and its ancestors remain regardless of activity.
-`family()` retains the broader task membership independently of that visible
-suffix.
+`task-breadcrumbs.ts/buildTrail` alone builds the D67/D66/D3 model. It borrows
+the disjoint partition and entity-state replica. `crumbs` and `path` contain
+every known native ancestor followed by the selected session, including quiet
+and delivered sessions. The main shows only itself; siblings never enter that
+path. Independently, `helpers` includes working and blocked in-task descendants
+plus finished helpers whose terminal has no matching parent delivery receipt.
+Human seen does not substitute for delivery. Delivered failures may still need
+human attention elsewhere but do not remain merely for that reason. Entities
+supply eligibility, lamps and native run clocks. `family` borrows `helpers`;
+`working` supplies positive execution lifetimes for Stop admission. `TaskTrail`
+delegates whole-first-word plus fitting-tail compaction to `OverflowRow`,
+keeping every ancestor reachable. `Subagents` renders the same owner's helper
+set in the composer header, using the shared Menu and duration formatter.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
@@ -1460,22 +1472,21 @@ supplies the limit and a clamped fill fraction; unknown windows stay unknown.
 The session's shared catalog loads independently of the transcript and rejects
 stale results; refresh errors retain last good metadata. The meter binds the
 owner's whole-session reported cost directly, independently of its
-latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
-shared partition and preserves explicit membership order. Visible crumbs contain
-explicit task members (or a phantom's own session), mandatory group members and
-the open group member. Quiet helpers retire when no longer open, including quiet
-intermediate members on the open session's ancestry. Mandatory membership
-borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
-Tabs and standalone crumbs share per-entry hierarchy resolution: compatible
-published nodes survive mixed catalogs, while missing or mismatched nodes use
-the neutral projection. An explicit absent task member can pass ownership to a
-present child within its resolved checkout scope; unknown parents cannot create
-phantoms or cross checkout boundaries. `TaskCrumb.kind` distinguishes local
-`member`, orientation `ancestor` and cross-checkout `family` links. Family links
-keep active helpers reachable without inheriting local task membership.
-Traversal is iterative and cycle-safe. Helper URLs retain native ancestry
-independently of selected group; removing task membership preserves the human
-group's phantom while its helpers need attention.
+latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` delegates to
+the same trail owner and disjoint partition. Quiet selected helpers remain
+visible as the final crumb; quiet background helpers remain orientation
+metadata. The separate helper disclosure borrows the same entity replica's
+activity, delivery and run-clock evidence; task and phantom lamps read their
+published task entities. Tabs and standalone crumbs share hierarchy resolution:
+compatible published nodes survive mixed catalogs, while missing or mismatched
+nodes use the neutral projection. An explicit absent task member can pass
+ownership to a present child within its resolved checkout scope; unknown parents
+cannot create phantoms or cross checkout boundaries. `TaskCrumb.kind`
+distinguishes local `member`, orientation `ancestor` and disclosure `helper`
+links. Cross-checkout ancestors are orientation links even with inherited
+membership. Traversal is iterative and cycle-safe. Helper URLs retain native
+ancestry independently of selected group; removing task membership preserves the
+human group's phantom while its helpers need attention.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;
@@ -1503,19 +1514,19 @@ projection supplies those inputs through `ServerResources.sessionRows`. Live row
 facts continue to come from `ClientIndex.get`, never cached hierarchy entries.
 
 The same project owner supplies stable `projectMetadata` and keyed
-`metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
-`path`, `family` and `crumbs` share one keyed family/adjacency derivation.
-`path()` holds the open session and known ancestor links; `family()` carries
-explicit task members and mandatory descendants with each session's own state.
+`metadataEntry` selectors to tabs, crumbs and Sessions. `path`, `family`,
+`working` and `crumbs` borrow the one TrailModel. `path()` holds the open
+session and known ancestors; `family()` borrows its eligible D66 helpers.
 
 Crumb clicks forward only the explicit session identity to guarded navigation.
 The accepted route reconciles its actual owning tab; the previously selected
 task never assigns membership or overrides a crumb's target.
 
-`crumbs()` renders the path followed by off-path working, blocked and
-finished-unseen members. Settlement and acknowledgement retire only the off-path
-member, never open identity. `working()` borrows that family's working helpers
-for the composer. `entry` resolves crumb titles without a population search.
+`crumbs()` contains only native ancestry, ending at the open session. Parent
+delivery removes finished helpers from `family()` without removing session
+history. `working()` borrows positive entity work evidence for native
+descendants, including across checkouts, for the composer's separate work
+inventory. `entry` resolves crumb titles without a population search.
 `ClientIndex.partition` is cached by its partition clock, while
 `projectProgress` borrows incrementally maintained digest-state counts.
 Digest-only frames do not rebuild metadata or hierarchy inputs.

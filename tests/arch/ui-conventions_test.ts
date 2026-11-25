@@ -16,6 +16,43 @@ import {
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
 
+Deno.test("UI convention: breadcrumb trails use one compact overflow row", async () => {
+  const component = await Deno.readTextFile(
+    "packages/ui/components/TaskTrail.tsx",
+  );
+  const overflow = await Deno.readTextFile(
+    "packages/ui/components/OverflowRow.css",
+  );
+  const chrome = await Deno.readTextFile(
+    "packages/ui/components/ProjectTabs.css",
+  );
+  const source = new Source(component);
+  assert(
+    source.all.some((node) =>
+      node.type === "JSXOpeningElement" &&
+      source.name(node.name) === "OverflowRow" && node.attributes.some((attr) =>
+        attr.type === "JSXAttribute" && property(attr.name) === "singleLine"
+      )
+    ),
+  );
+  assert(
+    /\.otk-overflow-row\.is-single-line\s+\.otk-overflow-items\s*\{\s*flex-wrap:\s*nowrap/
+      .test(overflow),
+  );
+  assert(
+    (await Deno.readTextFile("packages/ui/components/OverflowRow.tsx"))
+      .includes("<ScrollRegion"),
+  );
+  assert(/\.otk-breadcrumb-row\s*\{[^}]*flex-wrap:\s*nowrap/.test(chrome));
+  assert(!component.includes("props.model.helpers"));
+  const subagents = await Deno.readTextFile(
+    "packages/ui/components/Subagents.tsx",
+  );
+  assert(subagents.includes("props.model.helpers"));
+  assert(subagents.includes("runningWorkElapsed"));
+  assert(subagents.includes("<Menu"));
+});
+
 Deno.test("UI convention: framed composer rows borrow their owner's inline inset", async () => {
   const errors = (css: string, rows: readonly string[], owner: string) =>
     rules(css).flatMap((rule) =>

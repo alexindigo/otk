@@ -15,6 +15,7 @@ export type BlockedCause =
   | "question"
   | "form"
   | "operation"
+  | "failure"
   | "failedHelper";
 export interface EntityCounts {
   blocked: number;
@@ -29,6 +30,10 @@ export interface EntityRequestEvidence {
   arrivedAt?: number;
 }
 export interface SessionEvidence {
+  /** D66: a proven helper terminal not covered by its parent's result receipt. */
+  awaitingDelivery?: boolean;
+  /** Positive native execution clock, retained across its terminal transition. */
+  run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
   work: boolean;
   permissions: number;
@@ -48,6 +53,8 @@ export interface SessionEvidence {
   }[];
   retry?: { attempt: number; message?: string; next?: number };
   failure?: PublicFailure;
+  /** A current diagnostic observation, not proof that a native run failed. */
+  error?: true;
 }
 export interface EntityState {
   kind: EntityKind;
@@ -67,3 +74,37 @@ export interface EntityState {
 /** IDs are opaque and connection-local. No path or session identity is rewritten. */
 export const entityKey = (kind: EntityKind, id: string): string =>
   `${kind}:${id}`;
+
+/** Keep attention and undelivered helper results reachable (D62/D66). */
+export function entityRequiresVisibility(
+  value: EntityState | undefined,
+): boolean {
+  return !!value && (value.state !== "none" ||
+    value.evidence?.awaitingDelivery === true);
+}
+
+/** Task membership is a view projection (D8), not a different state rule. */
+export const taskEntityID = (
+  id: string,
+  followParent = false,
+  directory = "",
+  kind: "task" | "session" = "task",
+): string => JSON.stringify([kind, id, directory, followParent]);
+
+/** Decode only the projection identity, never state or membership. */
+export function taskEntityProjection(id: string): {
+  directory: string;
+  followParent: boolean;
+} | undefined {
+  try {
+    const value: unknown = JSON.parse(id);
+    if (
+      Array.isArray(value) && value.length === 4 &&
+      (value[0] === "task" || value[0] === "session") &&
+      typeof value[1] === "string" && typeof value[2] === "string" &&
+      typeof value[3] === "boolean"
+    ) {
+      return { directory: value[2], followParent: value[3] };
+    }
+  } catch { /* Not a task projection identity. */ }
+}

@@ -2,6 +2,7 @@
 import { errors, expect, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { TestState } from "../fixtures/test-state.ts";
+import { scrollTranscript } from "./transcript.ts";
 
 /** Explicit fixture-history observation, independent of OTK and the lossy V1 facade. */
 export async function nativeHistoryCount(
@@ -64,6 +65,16 @@ export async function acquireOlderHistory(
   let count = await acquired();
   while (count < total) {
     const before = count;
+    if (
+      await older.count() &&
+      await older.evaluate((control) => !!control.closest(".otk-messages"))
+    ) {
+      // Locator auto-scroll is not reader input: tail-follow can immediately
+      // move the control away again. Navigate through the viewport's native
+      // input boundary before using normal pointer actionability. Timeline's
+      // independent paging control has no transcript-follow intent to release.
+      await scrollTranscript(page, false);
+    }
     if (await older.count()) {
       try {
         await older.click({ timeout: 1000 });

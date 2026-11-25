@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createTabs } from "../tabs.ts";
+import { createTabs } from "./supervision-fixture.ts";
 import { runningWork, runningWorkLabel } from "../live-work.ts";
 import { shellEntry, shellTask } from "./shell-fixture.ts";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
+import { entitySnapshot } from "./supervision-fixture.ts";
 
 Deno.test("native running descendants count across task splits independently of three blocked lamps", () => {
   const root = shellEntry("root");
@@ -38,7 +39,11 @@ Deno.test("native running descendants count across task splits independently of 
     }])),
   };
   const tabs = createTabs(() => Promise.resolve(inbox.tasks[0]));
-  tabs.update({ directory: "/p", entries, inbox, connected: true });
+  const update = () => {
+    inbox.entities = entitySnapshot(inbox, entries);
+    tabs.update({ directory: "/p", entries, inbox, connected: true });
+  };
+  update();
   tabs.preview(root.id);
   const items = () =>
     runningWork({
@@ -55,9 +60,10 @@ Deno.test("native running descendants count across task splits independently of 
     "h3",
   ]);
   assertEquals(runningWorkLabel(items()), "4 subagents");
-  assertEquals(tabs.crumbs().some((c) => c.id === "h3"), true);
+  assertEquals(tabs.crumbs().map((c) => c.id), [root.id]);
+  assertEquals(tabs.family().some((c) => c.id === "h3"), true);
   helpers[1].activity.work.fresh = false;
-  tabs.update({ directory: "/p", entries, inbox, connected: true });
+  update();
   assertEquals(items().length, 3);
   tabs.preview("h2");
   assertEquals(tabs.working().map((c) => c.id), ["h3"]);

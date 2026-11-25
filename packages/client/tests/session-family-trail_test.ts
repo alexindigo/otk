@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createTabs } from "@otk/client";
+import { createTabs } from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexMetadata } from "@otk/protocol";
+import { entitySnapshot } from "./supervision-fixture.ts";
 
 const entry = (id: string, parentID?: string): IndexMetadata => ({
   id,
@@ -21,7 +22,7 @@ const entry = (id: string, parentID?: string): IndexMetadata => ({
   },
 });
 for (const grouped of [true, false]) {
-  Deno.test(`path and mandatory family have independent identities grouped=${grouped}`, () => {
+  Deno.test(`D66/D3 trail filters background helpers but always ends at quiet selection grouped=${grouped}`, () => {
     const entries = [
       entry("root"),
       entry("open", "root"),
@@ -53,15 +54,15 @@ for (const grouped of [true, false]) {
       },
     };
     const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
-    const update = () => tabs.update({ directory: "/p", entries, inbox });
+    const update = () => {
+      inbox.entities = entitySnapshot(inbox);
+      tabs.update({ directory: "/p", entries, inbox });
+    };
     update();
     tabs.preview("open");
     assertEquals(tabs.crumbs().map((c) => c.id), [
       "root",
       "open",
-      "blocked",
-      "unseen",
-      "working",
     ]);
     assertEquals(tabs.path().map((c) => c.id), ["root", "open"]);
     assertEquals(
@@ -73,7 +74,8 @@ for (const grouped of [true, false]) {
     inbox.supervision!.unseen = { state: "none", terminal: 2 };
     inbox.supervision!.blocked = { state: "none", terminal: 0 };
     update();
-    assertEquals(tabs.crumbs().map((c) => c.id), ["root", "open", "working"]);
+    assertEquals(tabs.crumbs().map((c) => c.id), ["root", "open"]);
+    assertEquals(tabs.family().map((c) => c.id), ["working"]);
     tabs.stop();
   });
 }

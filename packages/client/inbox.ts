@@ -4,7 +4,7 @@ import {
   createEntityStateStore,
   type EntityStateStore,
 } from "./entity-state.ts";
-import { DEFAULT_PROJECT_AGEING, entityKey, rollupStatus } from "@otk/protocol";
+import { entityKey, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
@@ -95,13 +95,6 @@ export function archiveAttention(
 export function visitTime(lastVisit: number, now: number): string {
   return relativeTime(lastVisit, now);
 }
-export function ageing(
-  lastVisit: number,
-  now: number,
-  thresholds: readonly number[] = DEFAULT_PROJECT_AGEING,
-): number {
-  return thresholds.filter((threshold) => now - lastVisit >= threshold).length;
-}
 export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   topology?: ProjectTopology;
   availability?: ProjectSummary["availability"];
@@ -120,7 +113,9 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   unread: boolean;
   unseenCount?: number | null;
   visitText: string;
-  ageing: number;
+  /** Unused: names are not tinted by visit age (S4). Optional only so
+   * standalone fixtures that still name it keep type-checking. */
+  ageing?: number;
 }
 /** Consume the owner's exact scope projection; never infer membership from paths. */
 export function projectDirectory(
@@ -239,7 +234,6 @@ export function inboxProjects(
   entries: readonly (IndexMetadata & OperationAttention)[],
   inbox: InboxSnapshot,
   now: number,
-  thresholds?: readonly number[],
 ): InboxProject[] {
   const resolve = (directory: string, repoID?: string) =>
     projectDirectory(directory, inbox.summaries ?? {}, repoID);
@@ -297,7 +291,6 @@ export function inboxProjects(
         unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
           sessions.some((s) => unread(s, inbox)),
         visitText: visitTime(project.lastVisit, clock),
-        ageing: ageing(project.lastVisit, clock, thresholds),
       };
     },
   );
@@ -332,7 +325,6 @@ export function inboxProjects(
       unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
         sessions.some((s) => unread(s, inbox)),
       visitText: "",
-      ageing: 0,
     };
   });
   const templates = [
@@ -349,7 +341,6 @@ export function inboxProjects(
       status: "none",
       unread: false,
       visitText: "",
-      ageing: 0,
     }));
   return projectHierarchy(
     [...tracked, ...discovered, ...templates].map((row) => {
@@ -433,6 +424,8 @@ export function createInbox(
   currentEpoch?: () => number,
   /** Client arrival of a request identity (the request-lifetime owner). */
   arrival?: (id: string) => number | undefined,
+  /** The connection's reactive state, for stale entity presentation (D6). */
+  connected?: () => boolean,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -451,6 +444,7 @@ export function createInbox(
     read: () => current.inbox.entities,
     factory,
     arrival,
+    connected,
   });
   const state: InboxState = {
     get ready() {

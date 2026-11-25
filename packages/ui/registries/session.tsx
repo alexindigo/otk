@@ -14,6 +14,7 @@ import type {
   SessionDelivery,
   SessionSubmission,
   ToolCompletionSource,
+  TrailModel,
 } from "@otk/client";
 import type {
   CapabilityName,
@@ -53,6 +54,7 @@ export interface SessionPorts {
   location?(id: string): string;
   /** Borrowed family and active shell projection; no UI-owned activity store. */
   runningWork?(): readonly RunningWork[];
+  trail?(): TrailModel | undefined;
   liveWork?: LiveWorkOwner;
   delivery?: SessionDelivery;
   stopHelper?(id: string): Promise<void>;

@@ -6,22 +6,33 @@ import type {
   SessionListRow,
   TaskRecord,
 } from "@otk/protocol";
-import { sessionAncestors, type SessionHierarchyNode } from "@otk/protocol";
-import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
+import {
+  entityKey,
+  entityRequiresVisibility,
+  type SessionHierarchyNode,
+  taskEntityID,
+} from "@otk/protocol";
+import type { InboxStatus, OperationAttention } from "./inbox.ts";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+  lamp,
+} from "./entity-state.ts";
 import { createStableOrder } from "./stable-order.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
-import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import {
+  buildTrail,
+  type TaskCrumb,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
   type TabGroups,
 } from "./tab-groups.ts";
-import { type OperationAttention, rollupStatus } from "./inbox.ts";
-import { runningDescendants } from "./live-work.ts";
-export interface FamilyCrumb extends TaskCrumb {
-  status: InboxStatus;
-}
+export type FamilyCrumb = TrailCrumb;
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -37,7 +48,8 @@ export interface InboxTab {
 export interface TabInput {
   /** Invalidation identity for source-free handles from the project projection. */
   version?: number;
-  /** Fresh work is only presented while the serving native link is connected. */
+  /** Source availability for standalone snapshots. Live callers borrow the
+   * entity replica's freshness; native work inventory also uses this hint. */
   connected?: boolean;
   directory: string;
   /** Resolved checkout membership supplied by the shared project owner. */
@@ -47,6 +59,7 @@ export interface TabInput {
   context?: readonly (IndexMetadata & OperationAttention)[];
   followParent?: boolean;
   taskActivity?: Readonly<Record<string, InboxStatus>>;
+  entities?: EntityStateStore;
   inbox: InboxSnapshot;
 }
 /** Promotion needs identity and naming metadata, not a replicated status row. */
@@ -68,7 +81,10 @@ export interface TabState {
   revision: number;
 }
 export interface ClientTabs {
+  trail(): TrailModel;
   state: TabState;
+  entities(): EntityStateStore;
+  tabEntityKey(tab: Pick<InboxTab, "id" | "kind">): string;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
   /** Naming for the selected task/phantom, independent of the tab population. */
@@ -77,12 +93,12 @@ export interface ClientTabs {
   orderRows(rows: readonly SessionListRow[]): SessionListRow[];
   /** Pointer, keyboard and portalled interactions share this ordering lifetime. */
   holdOrder(): () => void;
-  crumbs(): TaskCrumb[];
+  crumbs(): TrailCrumb[];
   /** Open-session identity and known ancestor links, independent of activity. */
-  path(): TaskCrumb[];
-  /** Explicit members and mandatory descendants, with their own session state. */
+  path(): TrailCrumb[];
+  /** Compatibility view of the trail's off-path working/blocked helpers. */
   family(): FamilyCrumb[];
-  /** Canonical running helpers shared by the breadcrumb trail and composer. */
+  /** Positive native descendant work from the trail owner's entity inputs. */
   working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
@@ -136,6 +152,17 @@ export function createTabs(
   };
   const belongs = (directory: string) =>
     (input.directories ?? [input.directory]).includes(directory);
+  let standaloneSnapshot: InboxSnapshot["entities"];
+  const standalone = createEntityStateStore({
+    read: () => standaloneSnapshot,
+    factory,
+  });
+  const entities = () => input.entities ?? standalone;
+  const groupKey = (id: string, kind: "task" | "session") =>
+    entityKey(
+      "task",
+      taskEntityID(id, input.followParent, input.directory, kind),
+    );
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
@@ -147,20 +174,26 @@ export function createTabs(
   let mandatory = new Set<string>();
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
+  let derivedEntities = -1;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
   const ordering = createStableOrder<InboxTab>(() => {
     cachedTabs = undefined;
     store.update((s) => s.revision++);
   });
-  let cachedCrumbs: TaskCrumb[] = [],
-    cachedPath: TaskCrumb[] = [],
-    cachedFamily: FamilyCrumb[] = [],
-    cachedWorking: TaskCrumb[] = [],
+  let cachedTrail: TrailModel = {
+      crumbs: [],
+      path: [],
+      helpers: [],
+      working: [],
+      status: "none",
+    },
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
-    if (derived === input) return;
+    const revision = entities().revision;
+    if (derived === input && derivedEntities === revision) return;
     derived = input;
+    derivedEntities = revision;
     const context = input.context ?? input.entries;
     nodes = resolveTabHierarchy(context, input.inbox.tasks, {
       project: (directory) => belongs(directory) ? input.directory : directory,
@@ -183,11 +216,13 @@ export function createTabs(
     taskByID = new Map(tasks.map((t) => [t.id, t]));
     partition = undefined;
     mandatory = new Set(
-      context.filter((entry) => {
-        const status = inboxStatus(entry, input.inbox);
-        if (input.connected === false && status === "working") return false;
-        return status !== "none" || nodes.get(entry.id)?.mandatory;
-      }).map((entry) => entry.id),
+      context.filter((entry) =>
+        !entry.deleted &&
+        (nodes.get(entry.id)?.mandatory ||
+          !entities().isStale && entityRequiresVisibility(
+              entities().get(entityKey("session", entry.id)),
+            ))
+      ).map((entry) => entry.id),
     );
     cachedTabs = undefined;
   };
@@ -225,13 +260,6 @@ export function createTabs(
       `${store.state.selected?.kind}/${store.state.selected?.id}/${store.state.preview}`;
     if (cachedTabs && selection === cachedSelection) return cachedTabs;
     cachedSelection = selection;
-    const { inbox, taskActivity } = input;
-    const families = new Map(
-      groups.groups.map((group) => [
-        group.id,
-        group.members.flatMap((id) => byID.has(id) ? [byID.get(id)!] : []),
-      ]),
-    );
     // Saved tasks and mandatory phantoms borrow the same disjoint partition.
     const result: InboxTab[] = tasks.filter((task) =>
       groups.groups.some((group) =>
@@ -247,19 +275,17 @@ export function createTabs(
         )!.roots,
       ],
       preview: false,
-      status: rollupStatus(
-        taskActivity?.[task.id],
-        rollup(
-          families.get(task.id) ?? [],
-          inbox,
-        ),
-      ),
+      status: lamp(entities(), groupKey(task.id, "task"), {
+        now: performance.now(),
+      }),
     }));
     for (const owner of groups.groups) {
       if (owner.kind !== "session") continue;
       const entry = byID.get(owner.id);
       if (!entry) continue;
-      const status = rollup(families.get(owner.id) ?? [], inbox);
+      const status = lamp(entities(), groupKey(owner.id, "session"), {
+        now: performance.now(),
+      });
       if (
         status !== "none" || owner.members.some((id) => mandatory.has(id)) ||
         store.state.preview === entry.id ||
@@ -348,6 +374,9 @@ export function createTabs(
   }
   const model: ClientTabs = {
     state: store.state,
+    entities,
+    tabEntityKey: (tab) =>
+      groupKey(tab.id, tab.kind === "task" ? "task" : "session"),
     subscribe: store.subscribe,
     tabs,
     selectedTitle() {
@@ -387,70 +416,33 @@ export function createTabs(
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      const key = `${id}/${store.state.sessionID}/${input.connected !== false}`;
-      if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
+      const replica = entities();
+      const key =
+        `${id}/${store.state.sessionID}/${replica.revision}/${replica.isStale}`;
+      if (rows === crumbTabs && key === crumbID) return cachedTrail.crumbs;
       crumbTabs = rows;
       crumbID = key;
-      const group = grouping().groups.find((group) => group.id === id);
-      const current = store.state.sessionID;
-      const path = current
-        ? [
-          ...sessionAncestors(current, (id) => byID.get(id)).toReversed(),
-          current,
-        ].filter((id) => byID.has(id))
-        : [];
-      const local = group
-        ? groupBreadcrumbs(group, byID, mandatory, store.state.sessionID)
-        : path.map((id, depth): TaskCrumb => ({
-          id,
-          kind: "member",
-          helper: !!byID.get(id)?.parentID,
-          depth,
-        }));
-      const familyState = (id: string): InboxStatus => {
-        const state = byID.has(id)
-          ? inboxStatus(byID.get(id)!, input.inbox)
-          : "none";
-        return input.connected === false && state === "working"
-          ? "none"
-          : state;
-      };
-      cachedFamily = local.filter((crumb) => crumb.kind !== "ancestor").map((
-        crumb,
-      ) => ({
-        ...crumb,
-        status: familyState(crumb.id),
-      })).filter((crumb) =>
-        !crumb.helper || crumb.status !== "none" || mandatory.has(crumb.id)
+      const group = grouping().groups.find((group) =>
+        group.id === id && group.kind === store.state.selected?.kind
       );
-      cachedWorking = runningDescendants(
-        current,
-        [...byID.values()],
-        input.connected !== false,
-      );
-      cachedPath = path.flatMap((id) =>
-        local.filter((crumb) => crumb.id === id)
-      );
-      return cachedCrumbs = [
-        ...cachedPath,
-        ...local.filter((crumb) =>
-          !path.includes(crumb.id) &&
-          (!current || mandatory.has(crumb.id) ||
-            familyState(crumb.id) !== "none")
-        ),
-      ];
+      cachedTrail = buildTrail(group, byID, replica, store.state.sessionID);
+      return cachedTrail.crumbs;
+    },
+    trail() {
+      this.crumbs();
+      return cachedTrail;
     },
     path() {
       this.crumbs();
-      return cachedPath;
+      return cachedTrail.path;
     },
     family() {
       this.crumbs();
-      return cachedFamily;
+      return cachedTrail.helpers;
     },
     working() {
       this.crumbs();
-      return cachedWorking;
+      return cachedTrail.working;
     },
     sessionFor,
     update(next: TabInput): void {
@@ -459,6 +451,11 @@ export function createTabs(
       const changedProject = next.directory !== input.directory;
       if (changedProject) ordering.reset();
       input = next;
+      if (!input.entities) {
+        standaloneSnapshot = input.inbox.entities;
+        standalone.stale(input.connected === false);
+        standalone.observe("all", "historical");
+      }
       derived = undefined;
       prepare();
       if (changedProject) selectionRevision++;
@@ -668,6 +665,7 @@ export function createTabs(
       if (stopped) return;
       stopped = true;
       ordering.stop();
+      standalone.stop();
       selectionRevision++;
       for (const waiters of taskWaiters.values()) {
         for (const resolve of waiters) resolve(false);

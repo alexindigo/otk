@@ -26,7 +26,7 @@ test("menus.folded-menu-unpainted-focus-boundary", {
   const observations: unknown[] = [];
   for (const reduced of [false, true]) {
     await state.product("prefs.set", { key: "reducedColors", value: reduced });
-    await page.locator(".otk-folded-crumbs > button").click();
+    await page.locator(".otk-subagents > button").click();
     const menu = page.locator(":popover-open [role=menu]");
     await expect(menu).toBeFocused();
     await expect(menu).toHaveCSS("outline-style", "none");
@@ -57,7 +57,16 @@ test("menus.folded-menu-unpainted-focus-boundary", {
 test("menus.crumb-coverage-rejects-an-omitted-ancestor", {
   tag: ["@menus", "@contracts"],
 }, () => {
-  assertCrumbCoverage(["root", "selected"], ["selected"], ["root"]);
-  expect(() => assertCrumbCoverage(["root", "selected"], ["selected"], []))
+  assertCrumbCoverage(
+    ["root", "selected"],
+    ["root", "selected"],
+    ["selected"],
+    ["selected"],
+  );
+  expect(() =>
+    assertCrumbCoverage(["root", "selected"], ["selected"], ["selected"], [
+      "selected",
+    ])
+  )
     .toThrow();
 });

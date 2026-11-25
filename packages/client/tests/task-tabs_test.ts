@@ -148,7 +148,7 @@ Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing th
   tabs.crumbs();
   tabs.tabs();
   tabs.entry(entries[0].id);
-  assertEquals(reads, { entries: 0, inbox: 1, taskActivity: 1 });
+  assertEquals(reads, { entries: 0, inbox: 0, taskActivity: 0 });
 });
 
 Deno.test("task tabs keep saved order through activity changes and accept explicit moves", () => {
@@ -241,6 +241,18 @@ Deno.test("pending operation lamp paint cannot change saved task order", () => {
     finished: { state: "finishedUnseen", terminal: 50 },
     newer: { state: "working", terminal: 0 },
   };
+  // Received operations are part of the server's task state, never a browser
+  // overlay on completion bookkeeping (D62).
+  meta.entities = Object.fromEntries(["finished", "newer"].map((id) => [
+    `task:${JSON.stringify(["task", id, "/p", false])}`,
+    {
+      kind: "task" as const,
+      id: JSON.stringify(["task", id, "/p", false]),
+      state: "working" as const,
+      previous: "none" as const,
+      counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+    },
+  ]));
   const tabs = canonicalTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({ directory: "/p", entries: [finished, newer], inbox: meta });
   assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
@@ -290,7 +302,7 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   ]);
   assertEquals(
     taskBreadcrumbs(meta.tasks[0], input.entries, meta.tasks).map((c) => c.id),
-    ["root", "nested"],
+    ["root"],
   );
 });
 
@@ -332,7 +344,7 @@ Deno.test("ungrouped mandatory helpers keep their human task visible (2.67 super
   assertEquals(tabs.tabs(), []);
 });
 
-Deno.test("phantom crumbs show all active descendants of every member and retire even while selected", () => {
+Deno.test("D66 phantom crumbs isolate the native root within a multi-root task", () => {
   const a = entry("a"),
     b = entry("b"),
     child = entry("child", 2, "b"),
@@ -341,24 +353,29 @@ Deno.test("phantom crumbs show all active descendants of every member and retire
   const members = task("task", ["a", "b"]), entries = [a, b, child, nested];
   assertEquals(taskBreadcrumbs(members, entries).map((c) => [c.id, c.depth]), [
     ["a", 0],
-    ["b", 0],
-    ["nested", 2],
   ]);
   child.attention.questions = 1;
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
-    "nested",
   ]);
+  const tabs = model();
+  tabs.update({
+    directory: "/p",
+    entries,
+    inbox: { ...inbox(), tasks: [members] },
+  });
+  tabs.select({ kind: "task", id: members.id }, b.id);
+  assertEquals(tabs.crumbs().map((c) => [c.id, c.depth]), [
+    ["b", 0],
+  ]);
+  assertEquals(tabs.family().map((c) => c.id), ["child", "nested"]);
+  tabs.stop();
   child.attention.questions = 0;
   nested.status = "idle";
-  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a", "b"]);
+  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a"]);
   members.sessions.push("child");
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
   ]);
 });
 
@@ -446,6 +463,7 @@ for (const followParent of [true, false]) {
         tabs.crumbs().find((crumb) => crumb.id === b.id)?.external,
         true,
       );
+      assertEquals(tabs.path().map((crumb) => crumb.id), [a.id, b.id, c.id]);
       assertEquals(tabs.state.sessionID, c.id);
     } finally {
       tabs.stop();

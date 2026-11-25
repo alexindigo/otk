@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import {
-  ageing,
   createInbox,
   createTabs,
   inboxProjects,
@@ -166,7 +165,9 @@ Deno.test("live-session unread borrows supervision independently of work and leg
   );
   assertEquals(inboxStatus(entry("s", "busy"), inbox), "working");
 });
-Deno.test("visit labels and ageing use the injected clock at exact 2h, 8h, 24h boundaries and configured thresholds", () => {
+// S4 (decision 62): names are not tinted by visit age; the neutral clock and
+// the stored ageing preference remain.
+Deno.test("visit labels use the injected clock and the stored ageing preference stays valid", () => {
   const h = 3_600_000, last = 1000;
   for (
     const [elapsed, text] of [
@@ -178,17 +179,6 @@ Deno.test("visit labels and ageing use the injected clock at exact 2h, 8h, 24h b
       [48 * h, "2d"],
     ] as const
   ) assertEquals(visitTime(last, last + elapsed), text);
-  for (
-    const [elapsed, level] of [
-      [2 * h - 1, 0],
-      [2 * h, 1],
-      [8 * h - 1, 1],
-      [8 * h, 2],
-      [24 * h - 1, 2],
-      [24 * h, 3],
-    ]
-  ) assertEquals(ageing(last, last + elapsed), level);
-  assertEquals(ageing(last, last + 30, [10, 20, 30]), 3);
   assertEquals(visitTime(last, 0), "now");
   assertEquals(DEFAULT_PREFS.projectAgeing, [2 * h, 8 * h, 24 * h]);
   assert(isPreference("projectAgeing", [10, 20, 30]));

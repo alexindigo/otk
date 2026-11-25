@@ -12,7 +12,6 @@
 .otk-tab-open,
 .otk-breadcrumb-row,
 .otk-task-crumbs,
-.otk-session-crumb,
 .otk-context-meter {
   display: flex;
   align-items: center;
@@ -61,48 +60,17 @@
 }
 .otk-breadcrumb-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
   color: var(--otk-fg-3);
   font-size: var(--text-ui);
-}
-.otk-task-crumbs,
-.otk-session-crumb {
-  --crumb-minimum: calc(6ch + var(--control-size) + var(--chrome-inset));
 }
 .otk-task-crumbs {
   flex: 1 1 20em;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-1);
-}
-.otk-crumb-link {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: var(--space-1);
-}
-.otk-crumb-separator {
-  display: flex;
-  color: var(--otk-fg-3);
-}
-.otk-crumb-chevron {
-  width: var(--icon-compact);
-  height: var(--icon-compact);
-}
-.otk-session-crumb {
-  --selection-padding: 0 var(--chrome-inset) 0 0;
-  padding: 0;
-  gap: 0;
-  color: var(--otk-fg-3);
-  min-width: 0;
-}
-.otk-crumb-title {
-  min-inline-size: 6ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .otk-new-session {
   display: inline-flex;
@@ -140,48 +108,20 @@
   height: 100%;
   background: var(--otk-fg-3);
 }
-.otk-tab-open.is-editing,
-.otk-session-crumb.is-editing {
+.otk-tab-open.is-editing {
   height: auto;
   min-height: var(--control-size);
   font-weight: 500;
 }
-.otk-tab-open.is-editing .otk-control-label,
-.otk-session-crumb.is-editing .otk-crumb-title {
+.otk-tab-open.is-editing .otk-control-label {
   overflow: visible;
 }
-.otk-session-crumb.is-deleted .otk-crumb-title,
 .otk-tab-open.is-deleted .otk-control-label {
   color: var(--deleted-fg);
   text-decoration: line-through;
 }
-.otk-crumb-link,
-.otk-session-crumb {
-  max-width: 100%;
-}
-.otk-session-crumb {
-  flex-shrink: 1;
-  height: var(--control-size);
-  min-inline-size: var(--crumb-minimum);
-}
-.otk-crumb-measure {
-  display: flex;
-  gap: var(--space-1);
-  align-items: center;
-}
-.otk-crumb-measure-content {
-  height: var(--control-size);
-}
-.otk-session-crumb.is-editing {
-  height: var(--row-compact);
-}
 .otk-crumb-feedback {
   padding-inline: var(--lane-gutter);
-}
-.otk-session-crumb[data-crumb-kind="ancestor"] .otk-crumb-title,
-.otk-folded-crumbs [data-crumb-kind="ancestor"] .otk-crumb-title {
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
 }
 .otk-session-selection {
   gap: 0;

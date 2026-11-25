@@ -20,6 +20,7 @@ import {
   type IndexEntry,
   type IndexMetadata,
   type ServerFrame,
+  taskEntityID,
 } from "@otk/protocol";
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
@@ -85,6 +86,72 @@ function owner() {
   return { entries, published, states, supervision, put, get };
 }
 
+test("D66: parent delivery and native run clocks survive human seen independently", () => {
+  const o = owner();
+  const entry = { ...base, parentID: "root" };
+  o.put({
+    ...entry,
+    activity: {
+      work: {
+        ...keys("run"),
+        items: [{
+          id: "run",
+          kind: "execution",
+          label: "Execution",
+          title: "Work",
+          startedAt: 10,
+        }],
+      },
+    },
+  });
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 10 });
+  const terminal = {
+    ...entry,
+    activity: { terminal: 50, outcome: "succeeded" as const },
+  };
+  o.put(terminal, 50);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 10, endedAt: 50 });
+  for (
+    const delivered of [
+      { parentID: "foreign", receipt: "result", terminal: 50 },
+      { parentID: "root", receipt: "", terminal: 50 },
+      { parentID: "root", receipt: "result", terminal: 49 },
+    ]
+  ) {
+    o.put({ ...terminal, activity: { ...terminal.activity, delivered } }, 50);
+    assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  }
+  o.put({
+    ...terminal,
+    activity: {
+      ...terminal.activity,
+      delivered: { parentID: "root", receipt: "result", terminal: 50 },
+    },
+  }, 50);
+  assertEquals(o.get("s")?.evidence?.awaitingDelivery, false);
+  o.put({ ...entry, activity: { work: keys("rerun"), terminal: 50 } }, 50);
+  assertEquals(o.get("s")?.evidence?.run, undefined);
+  o.put({
+    ...entry,
+    activity: {
+      work: {
+        ...keys("rerun"),
+        items: [{
+          id: "rerun",
+          kind: "execution",
+          label: "Execution",
+          title: "Rerun",
+          startedAt: 60,
+        }],
+      },
+      terminal: 50,
+    },
+  }, 50);
+  assertEquals(o.get("s")?.evidence?.run, { startedAt: 60 });
+});
+
 test("each supervision verdict maps to one session lamp state and cause", () => {
   const o = owner();
   o.put(base);
@@ -139,6 +206,49 @@ test("each supervision verdict maps to one session lamp state and cause", () => 
   o.put({ ...base, activity: { terminal: 50, outcome: "succeeded" } }, 50);
   assertEquals(o.get("s")?.state, "none");
   assertEquals(o.get("s")?.counts.unseen, 0);
+});
+
+test("current diagnostics retain their row marker without inventing a failed run", () => {
+  const o = owner();
+  const observed: IndexMetadata = {
+    ...base,
+    attention: {
+      ...base.attention,
+      error: "Unavailable",
+      errorState: {
+        revision: 1,
+        observations: [{ id: "http", source: "http", message: "Unavailable" }],
+      },
+    },
+  };
+  o.put(observed);
+  assertEquals(o.get("s")?.evidence?.error, true);
+  assertEquals(o.get("s")?.state, "none");
+  assertEquals(o.get("s")?.outcome, undefined);
+  assertEquals(o.get("s")?.evidence?.failure, undefined);
+  o.put({
+    ...observed,
+    attention: {
+      ...base.attention,
+      errorState: {
+        revision: 2,
+        observations: observed.attention.errorState!.observations.map((
+          item,
+        ) => ({
+          ...item,
+          cleared: true,
+        })),
+      },
+    },
+  });
+  assertEquals(o.get("s")?.evidence?.error, undefined);
+  o.put({
+    ...base,
+    attention: { ...base.attention, error: "Legacy current diagnostic" },
+  });
+  assertEquals(o.get("s")?.evidence?.error, true);
+  o.put(base);
+  assertEquals(o.get("s")?.evidence?.error, undefined);
 });
 
 test("auto-approved permissions do not block and carry no request identities", () => {
@@ -229,6 +339,50 @@ test("an unchanged session publishes nothing", () => {
   assertEquals(o.published, []);
 });
 
+test("task projections share the state owner and update only containing groups", () => {
+  const o = owner();
+  const local = taskEntityID("task"), following = taskEntityID("task", true);
+  o.put({ ...base, id: "parent", activity: { terminal: 10 } });
+  o.put({
+    ...base,
+    id: "helper",
+    parentID: "parent",
+    directory: "/other",
+    activity: { work: keys("run") },
+  });
+  o.states.membership(
+    new Map([[local, ["parent"]], [following, ["parent", "helper"]]]),
+  );
+  const get = (id: string) => o.states.get(entityKey("task", id));
+  assertEquals(get(local)?.state, "finished");
+  assertEquals(get(following)?.state, "working");
+  assertEquals(get(following)?.counts.unseen, 1);
+  o.published.length = 0;
+  o.put({
+    ...base,
+    id: "helper",
+    parentID: "parent",
+    directory: "/other",
+    activity: { permissions: keys("per_helper") },
+  });
+  assertEquals(get(following)?.state, "blocked");
+  assertEquals(get(following)?.cause, "permission");
+  assertEquals(get(following)?.requests, [{ id: "per_helper" }]);
+  assertEquals(
+    o.published.flatMap((p) => p.upserts).filter((v) => v.kind === "task").map((
+      v,
+    ) => v.id),
+    [following],
+  );
+  // Changing membership retires the old contribution without changing sessions.
+  o.states.membership(new Map([[local, ["parent", "helper"]]]));
+  assertEquals(get(following), undefined);
+  assertEquals(get(local)?.state, "blocked");
+  o.states.remove("helper");
+  assertEquals(get(local)?.state, "finished");
+  assertEquals(get(local)?.requests, undefined);
+});
+
 test("the inbox publishes session entities with the snapshot and as lease patches", async () => {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
@@ -285,6 +439,145 @@ test("the inbox publishes session entities with the snapshot and as lease patche
     assertEquals(leased.filter((key) => key.startsWith("session:")), []);
     assertEquals(leased.includes(entityKey("global", "global")), true);
   } finally {
+    stop();
+    feature.close();
+    db.close();
+  }
+});
+
+test("the inbox publishes both D8 task projections and refreshes state, moves and membership", async () => {
+  const db = new OtkDb(await fixture(), [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "alice",
+    () => Promise.resolve([]),
+  );
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+  };
+  const frames: ServerFrame[] = [];
+  const stop = feature.listen((frame) => frames.push(frame));
+  const views: ReturnType<InboxFeature["open"]>[] = [];
+  const demands: { rows: string[]; epoch: number }[] = [];
+  const snapshotEntries = index.snapshotEntries.bind(index);
+  let populationReads = 0;
+  index.snapshotEntries = () => {
+    populationReads++;
+    return snapshotEntries();
+  };
+  try {
+    const task = stores.tasks.create("/p", "Task", ["parent"]);
+    const parent = { ...base, id: "parent", activity: { terminal: 10 } };
+    const child = {
+      ...base,
+      id: "child",
+      directory: "/other",
+      parentID: "parent",
+      activity: { work: keys("run") },
+    };
+    index.reset([parent, child]);
+    await settle();
+    assertEquals(
+      Object.values(feature.get().entities ?? {}).filter((v) =>
+        v.kind === "task"
+      ),
+      [],
+    );
+    for (const followParent of [false, true]) {
+      const scope = {
+        epoch: 0,
+        directory: "/p",
+        crumbs: [] as string[],
+        rows: [] as string[],
+        tasksFollowParent: followParent,
+      };
+      demands.push(scope);
+      views.push(
+        feature.open(
+          () => scope,
+          String(followParent),
+          () => new Set(["parent", "child"]),
+        ),
+      );
+    }
+    await settle();
+    const beforeRows = populationReads;
+    assertEquals(beforeRows > 0, true);
+    demands[0].rows.push("parent");
+    demands[0].epoch++;
+    views[0].viewChanged?.();
+    views[1].viewChanged?.();
+    await settle();
+    assertEquals(
+      populationReads,
+      beforeRows,
+      "row-only scope changes cannot rebuild task membership",
+    );
+    const get = (follow = false) =>
+      feature.get().entities
+        ?.[entityKey("task", taskEntityID(task.id, follow, "/p"))];
+    assertEquals(get()?.state, "finished");
+    assertEquals(get(true)?.state, "working");
+    index.upsert({ ...child, activity: { permissions: keys("per_child") } });
+    await settle();
+    assertEquals(get(true)?.state, "blocked");
+    assertEquals(get()?.state, "finished");
+    assertEquals(
+      frames.some((frame) =>
+        frame.t === "inbox.patch" &&
+        frame.ops.some((op) =>
+          op.op === "entity.upsert" &&
+          op.value.id === taskEntityID(task.id, true, "/p") &&
+          op.value.state === "blocked"
+        )
+      ),
+      true,
+    );
+    index.upsert({ ...child, directory: "/p" });
+    await settle();
+    assertEquals(get()?.state, "working");
+    assertEquals(get()?.counts.unseen, 1);
+    stores.tasks.close(task.id);
+    await settle();
+    assertEquals(get(), undefined);
+    assertEquals(get(true), undefined);
+    // A phantom is an unpinned task/family, not its root session's own lamp.
+    assertEquals(
+      feature.get().entities
+        ?.[entityKey("task", taskEntityID("parent", true, "/p", "session"))]
+        ?.state,
+      "working",
+    );
+    assertEquals(
+      feature.get().entities?.[entityKey("session", "parent")]?.state,
+      "finished",
+    );
+    for (const view of views) view.close?.();
+    views.length = 0;
+    await settle();
+    assertEquals(
+      Object.values(feature.get().entities ?? {}).filter((v) =>
+        v.kind === "task"
+      ),
+      [],
+    );
+  } finally {
+    for (const view of views) view.close?.();
     stop();
     feature.close();
     db.close();
@@ -453,10 +746,10 @@ test("the inbox borrows received operations by target session", async () => {
   try {
     index.reset([base]);
     feature.operationAttention(
-      (id) => operations.get(id),
-      () => [...operations.keys()],
+      (target) => operations.get(target.id),
+      () => [...operations.keys()].map((id) => ({ kind: "session", id })),
       (changed) => {
-        notify = changed;
+        notify = (id) => changed({ kind: "session", id });
         return () => {};
       },
     );
@@ -472,4 +765,34 @@ test("the inbox borrows received operations by target session", async () => {
     feature.close();
     db.close();
   }
+});
+
+test("a received operation without a session colours its checkout and project", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  owner.entry(row("main", "/repo", { terminal: 5 }));
+  owner.states.checkoutOperation("/repo/tree", "working");
+  owner.touch("/repo/tree");
+  assertEquals(state("checkout", "/repo/tree")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(owner.values.get("/repo/tree")?.status, "working");
+  owner.states.checkoutOperation("/repo/tree", "blocked");
+  assertEquals(state("project", "/repo")?.state, "blocked");
+  assertEquals(state("project", "/repo")?.cause, "operation");
+  owner.states.checkoutOperation("/repo/tree");
+  owner.touch("/repo/tree");
+  assertEquals(state("project", "/repo")?.state, "finished");
+  assertEquals(owner.values.get("/repo/tree")?.status, "none");
+});
+
+test("a deleted member stops counting toward its project's unseen finishes", () => {
+  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+  const child = row("child", "/repo", { terminal: 10 }, "parent");
+  owner.entry(row("parent", "/repo", {}));
+  owner.entry(child);
+  assertEquals(state("project", "/repo")?.counts.unseen, 1);
+  assertEquals(state("project", "/repo")?.state, "finished");
+  owner.entry({ ...child, deleted: { at: 11, how: "provider" } });
+  assertEquals(state("project", "/repo")?.counts.unseen, 0);
+  assertEquals(state("project", "/repo")?.state, "none");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 0);
 });

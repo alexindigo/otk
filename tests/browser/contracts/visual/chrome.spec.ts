@@ -252,23 +252,34 @@ test(
     });
     await page.setViewportSize({ width: 800, height: 800 });
     await page.goto(state.url + "/#/local/tstv1-otk");
-    await page.locator(".otk-folded-crumbs > button").click();
+    await page.locator(".otk-subagents > button").click();
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
+      page.locator(".otk-subagents [data-subagent]").first(),
     ).toBeVisible();
     const visible = await page.locator("[data-crumb]").evaluateAll((els) =>
         els.filter((el) => !el.closest("[hidden]")).map((el) =>
           el.getAttribute("data-crumb")!
         )
       ),
-      hidden = await page.locator(".otk-folded-crumbs [data-overflow-target]")
+      hidden = await page.locator(".otk-subagents [data-subagent]")
         .evaluateAll((els) =>
-          els.map((el) => el.getAttribute("data-overflow-target")!)
+          els.map((el) => el.getAttribute("data-subagent")!)
         );
-    expect(visible.length + hidden.length).toBe(ids.length);
-    expect(hidden).toEqual(ids.filter((id) => !visible.includes(id)));
+    // This fixture is a native chain ending at otk, not sibling sessions.
+    // D67 retains the entire ancestry; the D66 set independently overlaps it.
+    expect(visible).toEqual(ids);
+    expect(new Set([...visible, ...hidden]).size).toBe(ids.length);
+    // The quiet open leaf stays in D67 ancestry, not in D66's active set.
+    expect(hidden).toEqual(ids.slice(1, -1));
+    expect(
+      ids.filter((id) => !visible.includes(id)).every((id) =>
+        hidden.includes(id)
+      ),
+    ).toBe(true);
     const target = hidden[0];
-    await page.locator(`.otk-folded-crumbs [data-overflow-target="${target}"]`)
+    await page.locator(
+      `.otk-subagents [data-subagent="${target}"] .otk-subagent-name`,
+    )
       .click();
     await expect(page).toHaveURL(new RegExp("/" + target + "$"));
     await expect(page.locator(`[data-crumb="${target}"]`)).toHaveAttribute(

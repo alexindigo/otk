@@ -24,7 +24,11 @@ test("sessions.tab-groups-disjoint-phantoms-ancestor-links-more-and-reload", {
     await expect(page.locator(`[data-crumb="${b}"]`)).toBeVisible();
     await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
     await page.locator(`[data-tab="${root}"]`).click();
-    await expect(page.locator(`[data-crumb="${a}"]`)).toBeVisible();
+    // D67: the ancestry stays separate from the composer's D66 inventory.
+    await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
+    await page.getByRole("button", { name: "Subagents", exact: true }).click();
+    await expect(page.locator(`[data-subagent="${a}"]`)).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);
     await page.locator(`[data-session="${quiet}"]`).click();
     await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
@@ -50,16 +54,8 @@ test("sessions.tab-groups-disjoint-phantoms-ancestor-links-more-and-reload", {
         box.right <= lane.right + 1;
     })
   ).toBe(true);
-  const more = page.getByRole("button", {
-    name: "More task sessions",
-    exact: true,
-  });
   const rootCrumb = page.locator(`[data-crumb="${root}"]`);
-  if (await more.isVisible() && !await rootCrumb.isVisible()) {
-    await more.click();
-    await page.locator(`.otk-folded-crumbs [data-overflow-target="${root}"]`)
-      .click();
-  } else await rootCrumb.click();
+  await rootCrumb.click();
   await expect(page.locator(`[data-crumb="${root}"]`)).toHaveAttribute(
     "aria-current",
     "page",

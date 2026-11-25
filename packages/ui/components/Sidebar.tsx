@@ -6,16 +6,23 @@ import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import {
+  createEntityStateStore,
+  type EntityStateStore,
+  label as stateLabel,
+  lamp,
   type MergedEntry,
   projectGroups,
   relativeTime,
   sessionKey,
+  sessionWorkStatus,
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
-import { sessionLight } from "./status-light.ts";
+import { entityKey } from "@otk/protocol";
+import SessionStateMeta from "./SessionStateMeta.tsx";
+import { onCleanup } from "solid-js";
 import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||
@@ -25,6 +32,7 @@ export default function Sidebar(
   props: {
     sidecars: SidecarState[];
     entries: MergedEntry[];
+    entities?(server: string): EntityStateStore;
     selected?: string;
     onOpen(entry: MergedEntry): void;
     onCreate(sidecarId: string, directory: string): void;
@@ -33,6 +41,9 @@ export default function Sidebar(
   },
 ): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
+  const absent = createEntityStateStore({ read: () => undefined });
+  onCleanup(() => absent.stop());
+  const entities = (server: string) => props.entities?.(server) ?? absent;
   const open = ownedAction(
     "sidebar.session.open",
     (entry: MergedEntry) => props.onOpen(entry),
@@ -133,7 +144,10 @@ export default function Sidebar(
                               sessionKey(entry().sidecarId, entry().id),
                           })}
                           data-session={entry().id}
-                          data-status={entry().status}
+                          data-status={sessionWorkStatus(
+                            entities(entry().sidecarId),
+                            entityKey("session", entry().id),
+                          )}
                           data-otk-selection="vertical"
                           onClick={() => void open(entry())}
                         >
@@ -149,50 +163,26 @@ export default function Sidebar(
                             </ChromeMeta>
                             <ChromeMeta class="otk-row-status">
                               <StatusLight
-                                attention={{
-                                  server: entry().sidecarId,
-                                  session: entry().id,
-                                }}
-                                state={sessionLight(entry())}
+                                state={lamp(
+                                  entities(entry().sidecarId),
+                                  entityKey("session", entry().id),
+                                  { now: performance.now() },
+                                )}
                                 event={entry().timeUpdated}
                               />
-                              {entry().status === "retry"
-                                ? `retry ${entry().retry?.attempt ?? ""}`
-                                : entry().status}
+                              {stateLabel(
+                                lamp(
+                                  entities(entry().sidecarId),
+                                  entityKey("session", entry().id),
+                                  { now: performance.now() },
+                                ),
+                              )}
                             </ChromeMeta>
                             <span class="otk-attention">
-                              <Show
-                                when={entry().attention.permissions +
-                                  entry().attention.childPermissions}
-                              >
-                                {(count) => (
-                                  <span title="Pending permissions">
-                                    P {count()}
-                                  </span>
-                                )}
-                              </Show>
-                              <Show
-                                when={entry().attention.questions +
-                                  entry().attention.childQuestions}
-                              >
-                                {(count) => (
-                                  <ChromeMeta
-                                    title="Pending questions"
-                                    aria-label="Pending questions"
-                                  >
-                                    <StatusLight small state="blocked" />{" "}
-                                    {count()}
-                                  </ChromeMeta>
-                                )}
-                              </Show>
-                              <Show when={entry().attention.error}>
-                                <span
-                                  title="The agent reported a session failure"
-                                  aria-label="Session error"
-                                >
-                                  Error
-                                </span>
-                              </Show>
+                              <SessionStateMeta
+                                entities={entities(entry().sidecarId)}
+                                entityKey={entityKey("session", entry().id)}
+                              />
                             </span>
                           </SelectionContent>
                         </button>

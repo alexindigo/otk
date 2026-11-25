@@ -21,10 +21,3 @@
   font-size: var(--text-heading);
   line-height: var(--line-heading);
 }
-.otk-ageing-fields {
-  display: flex;
-  gap: var(--space-3);
-}
-.otk-ageing-fields input {
-  width: 100%;
-}

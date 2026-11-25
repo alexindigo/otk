@@ -15,6 +15,15 @@ export function failedHelperNeedsAck(
 ): boolean {
   return !!entry.parentID && outcome === "failed";
 }
+/** WP11's run-correlated parent receipt, independently of human acknowledgement. */
+export function deliveredTerminal(entry: IndexMetadata): number {
+  const receipt = entry.activity?.delivered;
+  return receipt && receipt.parentID === entry.parentID &&
+      receipt.receipt.length > 0 &&
+      Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0
+    ? receipt.terminal
+    : 0;
+}
 /** Fresh positive evidence as the interpreter counts it; absence is zero. */
 export interface SessionInputs {
   work: boolean;
@@ -55,15 +64,8 @@ export class SessionSupervision {
           : {}),
       }
       : {};
-    const delivery = evidence?.delivered;
     const helperFailed = failedHelperNeedsAck(entry, outcome);
-    const delivered =
-      !helperFailed && delivery && delivery.parentID === entry.parentID &&
-        delivery.receipt.length > 0 &&
-        Number.isSafeInteger(delivery.terminal) &&
-        delivery.terminal > 0
-        ? delivery.terminal
-        : 0;
+    const delivered = helperFailed ? 0 : deliveredTerminal(entry);
     const unseen = terminal > Math.max(acknowledged, delivered);
     if (entry.deleted) {
       return {
@@ -76,7 +78,11 @@ export class SessionSupervision {
     }
     const inputs = this.inputs(entry);
     const needsInput = inputs.questions > 0 || inputs.permissions > 0;
-    const state = needsInput || helperFailed && unseen
+    // A failed top-level run needs acknowledgement, not a successful-finish
+    // lamp (2.72). Delivered-helper treatment remains the isolated C1 rule.
+    const failedRun = unseen &&
+      (helperFailed || !entry.parentID && outcome === "failed");
+    const state = needsInput || failedRun
       ? "needsYou"
       : inputs.work
       ? "working"
