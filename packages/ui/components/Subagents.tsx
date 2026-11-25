@@ -29,7 +29,7 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import ActionButton from "./ActionButton.tsx";
 import StatusLight from "./StatusLight.tsx";
-import LiveCount from "./LiveCount.tsx";
+import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import { StopIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -124,7 +124,7 @@ export default function Subagents(
         <Menu
           class="otk-subagents"
           place="bounds-end"
-          triggerClass="otk-subagents-trigger"
+          triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
           label="Subagents"
           title="Subagents"
           triggerLabel={`Subagents: ${

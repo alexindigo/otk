@@ -5,6 +5,8 @@ import { For } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 
+export const LIVE_COUNT_TRIGGER = "otk-live-count-trigger";
+
 /** Layout shared by the composer's work pills. */
 export default function LiveCount(props: {
   entities?: EntityStateStore;

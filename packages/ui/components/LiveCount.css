@@ -1,4 +1,15 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-live-count-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-size);
+  min-inline-size: 0;
+  font-size: var(--text-meta);
+  white-space: nowrap;
+  padding: 0;
+  background: transparent;
+  border-radius: var(--radius-pill);
+}
 .otk-live-count {
   display: flex;
   align-items: center;
@@ -16,4 +27,13 @@
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-4);
   min-inline-size: 0;
+}
+/* The header aligns its labels, while the interaction surface has its own
+   padding. Its paint box does not consume space from the caption or link. */
+.otk-live-count-trigger:is(:hover, :active, :focus-visible, [aria-expanded="true"]) {
+  background: var(--otk-hover);
+  box-shadow: 0 0 0 var(--pill-work-inset) var(--otk-hover);
+}
+button.otk-live-count-trigger:focus-visible {
+  outline-offset: calc(var(--focus-ring-offset) + var(--pill-work-inset));
 }

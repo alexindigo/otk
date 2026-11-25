@@ -1,15 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-live-work .otk-live-work-trigger {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-  font-size: var(--text-meta);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  min-block-size: var(--control-size);
-}
 .otk-live-work-list {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

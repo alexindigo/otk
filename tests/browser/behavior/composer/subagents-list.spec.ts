@@ -91,6 +91,86 @@ test(
 );
 
 test(
+  "composer.work-pills-pad-hover-and-keyboard-focus",
+  tags,
+  async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await settings(state);
+    await openTask(state, page);
+    const pill = page.locator(".otk-subagents-trigger");
+    await expect(pill).toBeVisible();
+    const measure = () =>
+      pill.evaluate((button) => {
+        const border = button.getBoundingClientRect();
+        // Zero-blur spread extends the painted button, not its layout box.
+        const css = getComputedStyle(button);
+        const spread = Number(css.boxShadow.match(/(-?[\d.]+)px$/)?.[1] ?? 0);
+        const content = button.querySelector(".otk-live-count.is-full")!;
+        const lamp = content.querySelector(".otk-status-light")!
+          .getBoundingClientRect();
+        const label = content.querySelector(".otk-control-label")!
+          .getBoundingClientRect();
+        const probe = document.createElement("span");
+        probe.style.inlineSize = "var(--pill-work-inset, var(--space-2))";
+        probe.style.blockSize = "var(--pill-block-inset, var(--space-1))";
+        probe.style.position = "absolute";
+        button.append(probe);
+        const token = probe.getBoundingClientRect().width;
+        const blockToken = probe.getBoundingClientRect().height;
+        probe.remove();
+        return {
+          token,
+          blockToken,
+          left: lamp.left - border.left + spread,
+          right: border.right - label.right + spread,
+          top: Math.min(lamp.top, label.top) - border.top + spread,
+          bottom: border.bottom - Math.max(lamp.bottom, label.bottom) + spread,
+          end: label.right,
+        };
+      });
+    const check = async (mode: string) => {
+      const { token, blockToken, left, right, top, bottom, end } =
+        await measure();
+      expect(token).toBeGreaterThan(0);
+      expect.soft(Math.min(left, right), `${mode}: inline padding`)
+        .toBeGreaterThanOrEqual(token - .5);
+      expect.soft(Math.abs(left - right), `${mode}: inline symmetry`)
+        .toBeLessThanOrEqual(1);
+      expect.soft(Math.min(top, bottom), `${mode}: block padding`)
+        .toBeGreaterThanOrEqual(blockToken - .5);
+      expect.soft(
+        Math.abs(end - (await lineBox(page)).right),
+        `${mode}: composer inset`,
+      )
+        .toBeLessThanOrEqual(.5);
+    };
+    await pill.hover();
+    await check("hover");
+    for (const [theme, label] of themes) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.screenshot({
+        path: info.outputPath(`work-pill-hover-${label}.png`),
+        fullPage: true,
+      });
+    }
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Tab");
+    await pill.focus();
+    await expect(pill).toBeFocused();
+    await expect(pill).toHaveCSS("outline-style", "solid");
+    await check("focus");
+    await page.screenshot({
+      path: info.outputPath("work-pill-focus-stone.png"),
+      fullPage: true,
+    });
+  },
+);
+
+test(
   "composer.subagents-dropdown-groups-align-and-keep-titles",
   tags,
   async ({ isolatedState: state, page }, info) => {

@@ -1,12 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-subagents-trigger {
-  display: flex;
-  align-items: center;
-  padding: 0;
-  min-block-size: var(--control-size);
-  min-inline-size: 0;
-  white-space: nowrap;
-}
 .otk-subagent-list {
   display: grid;
   grid-template-columns: minmax(min(8ch, 100%), 1fr) minmax(0, max-content)
