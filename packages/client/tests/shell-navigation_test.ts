@@ -14,6 +14,26 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
+Deno.test("explicit attention clicks retain their target and supersede pending project defaults", async () => {
+  const f = fixture(), held = Promise.withResolvers<string | undefined>();
+  const intents: unknown[] = [];
+  f.resources.projectSession = (project, _preferred, attention) => {
+    intents.push([project.directory, attention]);
+    return attention ? Promise.resolve("tstv1-failed-child") : held.promise;
+  };
+  try {
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    f.navigation.openAttention({ sidecarId: "local", directory: "/p" });
+    await settled();
+    held.resolve("tstv1-selected");
+    await settled();
+    assertEquals(intents, [["/p", undefined], ["/p", true]]);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-failed-child");
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("project defaults use attention before remembered child roots on click, cold start and reload", async () => {
   for (const cold of [false, true]) {
     const f = fixture(cold ? "#project/local/%2Fp" : undefined);

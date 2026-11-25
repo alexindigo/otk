@@ -27,6 +27,7 @@ export function register(
       params: (p) => ({
         directory: projectPath(text(p, "directory")!),
         preferred: sessionID(p, "preferred", true),
+        ...(p.attention === true ? { attention: true } : {}),
       }),
       handler: (ctx, p) =>
         navigation.resolve(ctx.harness.core, p, ctx.execution?.signal),

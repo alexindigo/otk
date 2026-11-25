@@ -29,6 +29,13 @@ available and later facts enrich it without adding a second toast. Transcript
 reply groups cannot precede their known causal prompt, including inbox prompts
 whose acquired source position follows an early selection failure.
 
+Terminal provenance follows the adapter through supervision and the attention
+projection. Snapshots, historical acquisition, lease admission and
+equal-terminal acknowledgement replay seed notification clocks without alerting.
+Restoring unseen eligibility never creates another terminal edge. Live failures
+borrow the paired native public cause and recovery, including when no transcript
+is acquired.
+
 Outcome enrichment carries its prior notification identity to quiet channel
 replacement; unchanged facts do not redeliver, and distinct failure diagnostics
 still alert. Input retirement precedes root-ID completion publication. Reply
@@ -285,7 +292,13 @@ composition can re-read configured state or offer an explicit fresh sign-in.
 `HttpRequests.read` gives read-only bootstrap observation a terminal transport
 failure and joined cancellation, without changing mutation receipt recovery.
 Admission status and event references/shapes are validated before tracker
-delivery. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
+delivery. HTTP readiness/proxy failures are availability observations, not event
+validation errors. The connection owner retries fresh session reads with backoff
+and honors Retry-After beyond its normal backoff cap. Only repeated malformed
+data across fresh attempts becomes an error, with its local validation reason.
+Its reconnecting state supplies the shared informational status; the next
+welcome renews request-window authority and clears the notice without a page
+reload. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
 steps. Each started step retains one result and its elapsed time. Elapsed time
 never creates a deadline: only a reported failure or explicit cancellation ends
 a held read. Public `/api/discovery` uses omitted credentials; the existing
@@ -787,6 +800,9 @@ records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
 that shared classification to queue admission and UI presentation. Part-owned
 record settlement updates the same queue; no component owns a second queue.
 Mixed replies retain assistant metadata independently of final source position.
+That metadata includes producer-owned `outcomeTime`; message presentation carries
+it independently of digest working time, including when a failed call has no
+streamed interval. Saved presentation preserves the same native instant.
 Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay
@@ -806,7 +822,10 @@ parts through their own registry and page through the original session owner.
 The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
 presentation revisions. The first background record mints its frame even while
-queued. Settlement changes child presentation, never the root partition.
+queued. Settlement changes child presentation, never the root partition. Folded
+frames show the producer-authored failure count in error tone and only their
+chronological breakouts. They never partition successful stretches into
+additional disclosure rows; all children remain in the one frame's details.
 Pending, active, blocked, unknown and failed records break out inside that frame
 in source order, then rejoin its compact children when settled. Native plugins
 supply opaque summary kinds and singular/plural nouns; headings never classify
@@ -945,15 +964,20 @@ selected server. One core resolver uses SessionHierarchy membership and the
 shared attention order first, then validates the exact remembered session
 (helpers resolve to their proven human root), then compares one newest native
 root per exact checkout scope. Explicit session links remain explicit
-selections, not project-default intents. ShellNavigation applies the result only
-while its captured revision is current; same-project clicks do not bypass
-resolution. Locations live in the existing host-sidecar `shellLayout`
-preference; `layout.location` merges one server/directory intent at the
-persistence owner, so concurrent project visits cannot overwrite one another.
-Pending saves bridge immediate switches; preference broadcasts own the saved
-snapshot. Current task membership resolves the restored session's tab, including
-helper ancestry. Missing, foreign or closed locations use the same resolver's
-newest-root fallback.
+selections, not project-default intents. Worktree clicks retain their checkout
+and choose its exact urgent or remembered session, even a helper. The separate
+project lamp requests `navigation.default` with `attention: true`: it opens the
+exact urgent session across the repository's checkout scopes, without human-root
+redirection. Mandatory descendants in other checkouts remain scalar family
+leases and appear in the trail and family without inheriting local tasks.
+ShellNavigation applies the result only while its captured revision is current;
+same-project clicks do not bypass resolution. Locations live in the existing
+host-sidecar `shellLayout` preference; `layout.location` merges one
+server/directory intent at the persistence owner, so concurrent project visits
+cannot overwrite one another. Pending saves bridge immediate switches;
+preference broadcasts own the saved snapshot. Current task membership resolves
+the restored session's tab, including helper ancestry. Missing, foreign or
+closed locations use the same resolver's newest-root fallback.
 
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without

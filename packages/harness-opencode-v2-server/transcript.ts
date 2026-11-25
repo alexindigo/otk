@@ -10,6 +10,7 @@ import {
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
   OperationFailure,
+  outcomeTime,
   sessionErrorMessage,
   sourceAt,
 } from "@otk/protocol";
@@ -62,6 +63,7 @@ import {
   V2RequestRetention,
 } from "./request-retention.ts";
 import {
+  type NativeHead,
   type PrefetchInput,
   type PrefetchPage,
   type TranscriptFacts,
@@ -108,6 +110,15 @@ interface LiveShell {
   location: { directory: string };
   controller: AbortController;
   task: Promise<void>;
+}
+interface HistoryCheck {
+  anchor?: string;
+  head?: NativeHead;
+  controller: AbortController;
+  task?: Promise<void>;
+  timer?: ReturnType<typeof setTimeout>;
+  dirty: boolean;
+  targets: Set<string>;
 }
 /** API snapshots and staged events describe the same boundary, including file mode. */
 function boundaryKey(revert: unknown): string {
@@ -258,6 +269,9 @@ export class Transcript {
   /** Kinds of observed queued inbox items, by session and inbox ID. */
   #queued = new Map<string, Map<string, string>>();
   #tasks = new Set<Promise<unknown>>();
+  #checking = false;
+  /** Scalar coverage only. Canonical bodies remain in native history. */
+  #history = new Map<string, HistoryCheck>();
   #backfills = new Map<string, AbortController>();
   #cancelBackfills(id?: string): void {
     for (const [session, controller] of this.#backfills) {
@@ -292,6 +306,234 @@ export class Transcript {
   }
   start(): void {
     if (this.#lifetime.signal.aborted) this.#lifetime = new AbortController();
+    this.#checking = true;
+    for (const [id, work] of this.#history) this.#armHistory(id, work);
+  }
+  #releaseHistory(id?: string): void {
+    for (const [key, work] of this.#history) {
+      if (id !== undefined && key !== id) continue;
+      this.#history.delete(key);
+      clearTimeout(work.timer);
+      work.controller.abort();
+    }
+  }
+  #armHistory(id: string, work: HistoryCheck): void {
+    if (
+      !this.#checking || work.timer !== undefined || work.task ||
+      this.#history.get(id) !== work || !this.#subscriptions.has(id)
+    ) return;
+    work.timer = setTimeout(() => {
+      work.timer = undefined;
+      void this.check(id).catch(this.options.diagnostic);
+    }, this.options.policy.retryms);
+  }
+  #seedHistory(id: string, anchor?: string): void {
+    if (!this.#subscriptions.has(id)) return;
+    // Only a new native tail page moves the acquisition frontier. Live upserts
+    // cannot certify the missing interval before them.
+    let work = this.#history.get(id);
+    if (!work) {
+      work = {
+        anchor,
+        controller: new AbortController(),
+        dirty: false,
+        targets: new Set(),
+      };
+      this.#history.set(id, work);
+    }
+    this.#armHistory(id, work);
+  }
+  #repairHistory(id: string, target?: string): void {
+    const work = this.#history.get(id);
+    if (!work) {
+      this.#publish(id, { op: "stream.reconcile" });
+      return;
+    }
+    work.dirty = true;
+    if (target) work.targets.add(target);
+    else this.#publish(id, { op: "stream.reconcile" });
+    // Repairs are owned and joined, but never wait in the serial SSE handler.
+    queueMicrotask(() => {
+      void this.check(id).catch(this.options.diagnostic);
+    });
+  }
+  /** Compare native history, independently of native-event dispatch progress. */
+  check(id: string): Promise<void> {
+    const work = this.#history.get(id), baseline = this.#baselines.get(id);
+    if (!work || !baseline || !this.#subscriptions.has(id)) {
+      return Promise.resolve();
+    }
+    if (work.task) return work.task;
+    clearTimeout(work.timer);
+    work.timer = undefined;
+    const signal = AbortSignal.any([
+      work.controller.signal,
+      baseline.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    let retryTargets: string[] = [];
+    const task = this.#own(
+      (async () => {
+        do {
+          const forced = work.dirty, targets = [...work.targets];
+          retryTargets = targets;
+          work.dirty = false;
+          work.targets.clear();
+          const cutoff = baseline.raw.revert?.messageID;
+          let head = this.options.digest
+            ? await this.options.digest.read("opcv2.transcript.head", {
+              sessionID: id,
+              cutoff,
+            }, {
+              owner: `v2-history:${id}`,
+              priority: "user",
+              signal,
+            })
+            : null;
+          let last: NativeMessage | undefined;
+          if (!head) {
+            last = (await this.reader.page(
+              id,
+              1,
+              cutoff ? nativeCursor(cutoff) : undefined,
+              signal,
+            )).items.at(-1);
+            head = last ? { id: last.id } : null;
+          }
+          signal.throwIfAborted();
+          if (!head) {
+            if (work.anchor) this.invalidate(id);
+            return;
+          }
+          if (
+            !forced && work.head &&
+            JSON.stringify(work.head) === JSON.stringify(head)
+          ) continue;
+          const publish = async (rows: NativeMessage[]) => {
+            const facts = await this.#facts({
+              sessionID: id,
+              messages: rows.map((r) => r.id),
+              cutoff,
+            }, signal);
+            signal.throwIfAborted();
+            this.#acceptFacts(baseline, facts);
+            for (const raw of rows) {
+              const context = facts.contexts[raw.id];
+              if (!context) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history changed during repair",
+                );
+              }
+              if (raw.type === "idle" && raw.outcome === "failed") {
+                await this.#executionFailure(
+                  id,
+                  raw.id,
+                  raw.error,
+                  millis(raw.time.created),
+                  context,
+                  baseline.raw.title,
+                  facts.source.startsWith("sql") ? context.order : undefined,
+                  signal,
+                );
+              } else {
+                const message = this.#map(raw, id, context);
+                if (message) {
+                  this.#publish(id, { op: "message.upsert", message });
+                }
+              }
+            }
+          };
+          // In-place changes may target an older, acquired native identity.
+          for (const target of targets) {
+            if (baseline.contexts.has(target)) {
+              await publish([
+                await this.reader.get(id, target, signal),
+              ]);
+            }
+          }
+          let anchor: NativeMessage | undefined;
+          try {
+            anchor = !work.anchor
+              ? undefined
+              : last?.id === work.anchor
+              ? last
+              : await this.reader.get(id, work.anchor, signal);
+          } catch (error) {
+            if (errorTag(error) !== "MessageNotFoundError") throw error;
+            // Removal/revert changes the acquisition boundary too. Its canonical
+            // page must reacquire the session header, not reuse this old cutoff.
+            this.invalidate(id);
+            return;
+          }
+          if (anchor) await publish([anchor]);
+          if (
+            !anchor ||
+            (this.#client ?? this.options.client()).service.version !== "2.2.6"
+          ) {
+            let cursor: string | undefined = cutoff
+              ? nativeCursor(cutoff)
+              : undefined;
+            do {
+              const page = await this.reader.page(
+                id,
+                SCAN_ROWS,
+                cursor,
+                signal,
+              );
+              const at = page.items.findIndex((r) => r.id === anchor?.id);
+              await publish(at < 0 ? page.items : page.items.slice(at + 1));
+              if (at >= 0 || !page.next) break;
+              if (page.next === cursor) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history cursor did not advance",
+                );
+              }
+              cursor = page.next;
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            } while (true);
+          } else if (anchor.id !== head.id) {
+            let cursor: string | undefined = nativeForwardCursor(anchor.id);
+            do {
+              const page = await this.reader.forward(id, cursor, signal);
+              const end = page.items.findIndex((r) => r.id === head.id);
+              // Seal only the head observed above. Later native appends belong to
+              // the next check; staged reverts never acquire their hidden suffix.
+              await publish(
+                end < 0 ? page.items : page.items.slice(0, end + 1),
+              );
+              if (end >= 0) break;
+              if (!page.next || page.next === cursor) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history head changed during repair",
+                );
+              }
+              cursor = page.next;
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            } while (true);
+          }
+          signal.throwIfAborted();
+          work.anchor = head.id;
+          work.head = head;
+          retryTargets = [];
+        } while (work.dirty);
+      })().catch((error) => {
+        if (signal.aborted) return;
+        work.dirty = true;
+        for (const target of retryTargets) work.targets.add(target);
+        // A failed observation is not a complete empty transcript. The canonical
+        // read owner surfaces failure and retries; preserve existing content.
+        this.#publish(id, { op: "stream.reconcile" });
+        throw error;
+      }).finally(() => {
+        work.task = undefined;
+        this.#armHistory(id, work);
+      }),
+    );
+    work.task = task;
+    return task;
   }
   readonly requests: RequestRetention;
   #executionFailures = new Map<string, Promise<Message>>();
@@ -693,6 +935,7 @@ export class Transcript {
     }
   }
   release(id?: string, retainLive = false): void {
+    this.#releaseHistory(id);
     this.colors?.release(id);
     this.#cancelBackfills(id);
     this.changed(id);
@@ -737,6 +980,7 @@ export class Transcript {
     if (id) this.options.digest?.release(`v2-prefetch:${id}`);
   }
   invalidate(id?: string, retain = false): void {
+    this.#releaseHistory(id);
     this.#cancelBackfills(id);
     this.changed(id);
     this.recovery.release(id);
@@ -784,6 +1028,7 @@ export class Transcript {
     }
   }
   disconnect(): void {
+    this.#releaseHistory();
     // Undelivered events are missed by contract; watermarks are per connection.
     // Unresolved observations keep their probed (or clock) position.
     this.#watermarks.clear();
@@ -979,7 +1224,11 @@ export class Transcript {
         text(record(raw.metadata).parentID),
       );
     }
-    let mapped = mapMessage(raw, id, context);
+    let mapped = mapMessage(
+      raw,
+      id,
+      settled ? { ...context, terminal: true } : context,
+    );
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
     mapped = this.#decorateHelpers(mapped);
@@ -1583,6 +1832,7 @@ export class Transcript {
         turn.summary = summaries[turnID];
       }
       signal.throwIfAborted();
+      if (!snapshot && !token) this.#seedHistory(id, nativeItems.at(-1)?.id);
       this.#next(id, owner, page.next);
       return result;
     } finally {
@@ -1915,9 +2165,13 @@ export class Transcript {
         );
       const missingParent = known.role === "context" && !known.replyTo &&
         context?.replyTo;
-      const message = missingOrigin || missingParent
+      const message = missingOrigin || missingParent ||
+          known.role === "context" && !known.outcomeTime
         ? {
           ...known,
+          ...(known.role === "context" && !known.outcomeTime
+            ? { outcomeTime: outcomeTime({ error: known.time.created }) }
+            : {}),
           ...(missingParent ? { replyTo: missingParent } : {}),
           parts: missingOrigin
             ? known.parts.map((part) =>
@@ -2083,6 +2337,15 @@ export class Transcript {
     this.release(id);
   }
   async event(event: V2Event): Promise<void> {
+    try {
+      await this.#event(event);
+    } catch (error) {
+      const sid = text(event.data.sessionID);
+      if (sid && sid !== "global") this.#repairHistory(ids.encode(sid));
+      throw error;
+    }
+  }
+  async #event(event: V2Event): Promise<void> {
     if (event.type === "agent.updated" || event.type === "config.updated") {
       this.colors?.reset(event.location?.directory);
     }
@@ -2090,6 +2353,15 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    const covered = this.#history.get(id)?.head?.seq;
+    if (
+      covered !== undefined && event.durable?.aggregateID === sid &&
+      event.durable.seq <= covered && knownSessionEvent(event.type)
+    ) {
+      // A canonical native checkpoint already contains this durable fact.
+      // Delayed stream starts must not regress a repaired terminal record.
+      return;
+    }
     if (
       event.durable && event.durable.aggregateID === sid &&
       Number.isSafeInteger(event.durable.seq)
@@ -2178,6 +2450,10 @@ export class Transcript {
       await this.deleted(id);
       return;
     }
+    if (event.type === "session.message.content.updated") {
+      this.#repairHistory(id, text(d.messageID));
+      return;
+    }
     // Retain delivered future records even without a viewer; known native-only
     // metadata/control families remain outside transcript placement (plan 8.17).
     if (
@@ -2191,6 +2467,7 @@ export class Transcript {
         outcome,
         await this.requests.get(id, outcome.id),
       );
+      this.#repairHistory(id, text(d.messageID) ?? text(d.assistantMessageID));
       return;
     }
     const retained = typeof d.assistantMessageID === "string" &&
@@ -2259,7 +2536,10 @@ export class Transcript {
         event.type === "session.skill.activated")
     ) {
       const raw = eventMessage(event);
-      if (!raw) return;
+      if (!raw) {
+        this.#repairHistory(id);
+        return;
+      }
       this.#publish(id, {
         op: "message.upsert",
         message: mapMessage(raw, id, contextFor(raw.id))!,
@@ -2273,6 +2553,7 @@ export class Transcript {
     ) {
       const shell = record(d.shell);
       if (typeof shell.id !== "string" || typeof shell.command !== "string") {
+        this.#repairHistory(id);
         return;
       }
       let nativeID = this.#projected.get(id)?.shells.get(shell.id) ??
@@ -2300,7 +2581,10 @@ export class Transcript {
           cursor = page.next;
         } while (cursor);
       }
-      if (!nativeID) return;
+      if (!nativeID) {
+        this.#repairHistory(id);
+        return;
+      }
       const previous = this.#shells.get(shell.id);
       if (event.type.endsWith("ended")) {
         previous?.controller.abort();
@@ -2355,7 +2639,7 @@ export class Transcript {
             op: "message.upsert",
             message: this.#map(raw, id, contextFor(nativeID))!,
           });
-        }
+        } else this.#repairHistory(id);
         return;
       }
       const raw = {
@@ -2508,7 +2792,10 @@ export class Transcript {
       if (
         typeof model.id !== "string" || typeof model.providerID !== "string" ||
         typeof d.agent !== "string"
-      ) return;
+      ) {
+        this.#repairHistory(id, messageID);
+        return;
+      }
       this.#clearRetry(id, messageID);
       const raw: Extract<NativeMessage, { type: "assistant" }> = {
         id: messageID,
@@ -2835,6 +3122,24 @@ export class Transcript {
       }
       return;
     }
+    // Known control-only observations have no chronological message. Any other
+    // change that did not map above must consult native history, not disappear.
+    if (
+      event.type.startsWith("session.") && !new Set([
+        "session.created",
+        "session.forked",
+        "session.renamed",
+        "session.metadata.updated",
+        "session.archived",
+        "session.unarchived",
+        "session.viewed",
+        "session.permissions",
+        "session.usage.recorded",
+        "session.usage.updated",
+        "session.execution.started",
+        "session.inbox.delivery.changed",
+      ]).has(event.type)
+    ) this.#repairHistory(id, text(d.messageID) ?? text(d.assistantMessageID));
   }
   #clearRetry(session: string, messageID?: string): void {
     for (const live of this.#live.values()) {
@@ -3059,6 +3364,7 @@ export class Transcript {
     this.changed(live.session);
   }
   async stop(): Promise<void> {
+    this.#checking = false;
     await this.colors?.stop();
     this.#lifetime.abort();
     this.#watermarks.clear();

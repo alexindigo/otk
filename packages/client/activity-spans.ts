@@ -19,9 +19,8 @@ export interface ActivityGroup {
   interval?: boolean;
   silent?: boolean;
   breakouts?: string[];
-  /** Fold-safe stretches separated by actionable records, within this frame. */
-  segments?: ActivityGroup[];
-  segment?: boolean;
+  /** Producer-authored failure counts, separate from normal meta copy. */
+  failureTitle?: string;
 }
 export interface RecordProjection {
   revision: number;
@@ -57,13 +56,18 @@ function signature(reply: TranscriptReply): string {
 function summary(
   ids: readonly string[],
   replies: Readonly<Record<string, TranscriptReply>>,
+  failures = false,
 ): string {
   const counts = new Map<
     string,
     { noun: string; plural: string; count: number }
   >();
   for (const id of ids) {
-    const fact = foldable(replies[id]) && activity(replies[id])?.summary;
+    const reply = replies[id], value = activity(reply);
+    const part = reply.message.parts[0];
+    const failed = value?.tone === "error" ||
+      part.kind === "external" && !!part.failure;
+    const fact = (failures ? failed : foldable(reply)) && value?.summary;
     if (!fact) continue;
     const count = counts.get(fact.kind) ?? { ...fact, count: 0 };
     count.count++;
@@ -205,6 +209,7 @@ export function createRecordProjection(): {
       }
       for (const group of Object.values(next.groups)) {
         group.title = summary(group.members, replies);
+        group.failureTitle = summary(group.members, replies, true);
         for (const child of group.children!) {
           for (const id of child.members) {
             next.parents[id] = child.count
@@ -217,45 +222,13 @@ export function createRecordProjection(): {
             child.members.map((id) => [id, replies[id].revision]),
           );
         }
-        const segments: ActivityGroup[] = [];
-        for (const child of group.children!) {
-          if (!foldable(replies[child.members[0]])) {
-            segments.push(child);
-            continue;
-          }
-          let segment = segments.at(-1);
-          if (!segment?.segment || segment.direction !== child.direction) {
-            segment = {
-              key: `stretch:${child.members[0]}`,
-              members: [],
-              title: "",
-              direction: child.direction,
-              segment: true,
-              children: [],
-              revision: 0,
-            };
-            segments.push(segment);
-          }
-          segment.members.push(...child.members);
-          segment.children!.push(child);
-        }
-        for (const segment of segments) {
-          if (!segment.segment) continue;
-          segment.title = summary(segment.members, replies);
-          segment.revision = revision(segment.key, [
-            segment.members,
-            segment.title,
-            segment.children,
-          ]);
-        }
-        group.segments = segments;
         group.revision = revision(group.key, [
           group.members,
           group.title,
           group.silent,
           group.breakouts,
           group.children,
-          group.segments,
+          group.failureTitle,
         ]);
         next.revisions[group.key] = group.revision;
       }
@@ -263,7 +236,7 @@ export function createRecordProjection(): {
         ...next.keys,
         ...Object.values(next.parents).flat(),
         ...Object.values(next.groups).flatMap((group) =>
-          [...group.children!, ...group.segments!].map((child) => child.key)
+          group.children!.map((child) => child.key)
         ),
       ]);
       for (const key of versions.keys()) {

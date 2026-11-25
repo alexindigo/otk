@@ -8,15 +8,12 @@
   align-items: center;
   gap: var(--space-1);
   padding: 0 var(--space-2);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--otk-action-text) 10%, var(--otk-bg));
+  border-radius: var(--radius-pill);
+  background: var(--otk-hover);
   color: var(--otk-fg);
   font: 500 var(--text-meta)/var(--line-meta) var(--font-ui);
   min-width: 0;
   max-width: 100%;
-}
-.otk-entity-pill:hover {
-  background: color-mix(in srgb, var(--otk-action-text) 18%, var(--otk-bg));
 }
 .otk-entity-facts {
   display: grid;

@@ -80,6 +80,12 @@ appear through registered global surfaces with project attention. They never
 acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
+Permission-not-found/already-settled tags and definite permission HTTP 404s
+retire the same pending identity as settled elsewhere. Later callers do not
+dispatch retired or unknown identities. Settlement barriers last for the pending
+owner's lifetime; stale inventories and events cannot resurrect them after a
+fixed number of newer settlements.
+
 Each successful kind/location inventory owns only its own absence facts. Failed
 inventories retain known unresolved identities and payloads for still-loaded
 directories but stale identities never drive needs-you. Failures publish safe
@@ -214,6 +220,16 @@ Delivered retry and future session lifecycle observations reuse the plugin's
 durable observation indexes, bounded page merge, revert and deletion lifetime.
 Their native source is loaded only through the plugin's opaque source reference.
 Native shutdown is continuity loss, never an invented idle success.
+
+Acquired transcripts independently compare a keyed native-head witness (ID,
+sequence and update time) at the existing recovery cadence. A changed witness
+repairs the checkpoint and its native forward suffix in bounded pages, through
+the same classifier; stream upserts alone never certify that interval. In-place
+content replacements reacquire their native identity. Unknown/unmapped changes
+request canonical repair, and stream handler/decoding failures reconnect and
+resync instead of logging a dropped fact. These checks borrow the credited worker
+read channel, acquire no unviewed histories and stop/join with the transcript
+subscription. Only scalar coverage is retained, never a second body cache.
 
 `delivery.ts` recognizes only materialized synthetic subagent reports and
 completed foreground calls whose result metadata is completed. Background

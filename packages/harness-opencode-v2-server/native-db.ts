@@ -7,6 +7,7 @@ import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type SessionFacts, terminalFacts } from "./metadata.ts";
 import { sessionRecencySql } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
+import { terminalFailure } from "./request-failure.ts";
 
 const required = {
   project: ["id", "worktree"],
@@ -106,7 +107,12 @@ export class V2NativeDb {
       (this.messageClocks
         ? "coalesce((SELECT json_extract(m.data,'$.time.completed') FROM session_message m WHERE m.session_id=s.id AND m.type='shell' AND json_valid(m.data) AND json_extract(m.data,'$.time.completed')>0 ORDER BY m.seq DESC LIMIT 1),0)"
         : "0") +
-      " AS terminal";
+      " AS terminal," +
+      (this.messageClocks && this.columns.has("time_idle") &&
+          this.columns.has("idle_outcome")
+        ? "(SELECT json_object('type',json_extract(m.data,'$.error.type'),'message',json_extract(m.data,'$.error.message')) FROM session_message m WHERE s.idle_outcome='failed' AND m.session_id=s.id AND m.type='idle' AND m.time_created=s.time_idle AND json_valid(m.data) AND json_extract(m.data,'$.outcome')='failed' ORDER BY m.seq DESC LIMIT 1)"
+        : "NULL") +
+      " AS terminal_error";
   }
   /** Optional saved topology, paged in this worker's already source-proven DB. */
   worktrees(
@@ -131,6 +137,22 @@ export class V2NativeDb {
     }));
   }
   #metadata(row: Record<string, unknown>): SessionMetadata {
+    const terminal = terminalFacts(
+      row.time_idle,
+      row.idle_outcome,
+      Number(row.terminal),
+    );
+    const failure = terminal.outcome === "failed" &&
+        terminal.terminal === Number(row.time_idle)
+      ? terminalFailure(
+        row.terminal_error == null
+          ? undefined
+          : JSON.parse(String(row.terminal_error)),
+        ids.encode(String(row.id)),
+        Number(row.time_idle),
+        String(row.title ?? "Untitled session"),
+      )
+      : undefined;
     return {
       id: ids.encode(String(row.id)),
       directory: String(row.directory),
@@ -154,11 +176,8 @@ export class V2NativeDb {
       status: "idle",
       activityAuthority: "unknown",
       activity: {
-        ...terminalFacts(
-          row.time_idle,
-          row.idle_outcome,
-          Number(row.terminal),
-        ),
+        ...terminal,
+        ...(failure ? { terminalFailure: failure } : {}),
       },
       attention: {
         permissions: 0,
@@ -199,6 +218,9 @@ export class V2NativeDb {
         projectID: String(row.project_id),
         activity: Number(row.activity_time),
         ...(Number(row.terminal) > 0 ? { terminal: Number(row.terminal) } : {}),
+        ...(row.terminal_error == null
+          ? {}
+          : { terminalError: JSON.parse(String(row.terminal_error)) }),
         location: { directory: String(row.directory) },
         ...(typeof row.path === "string" ? { subpath: row.path } : {}),
         ...(row.title == null ? {} : { title: String(row.title) }),

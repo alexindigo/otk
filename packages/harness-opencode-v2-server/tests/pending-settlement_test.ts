@@ -5,6 +5,22 @@ import type { V2Client } from "../client.ts";
 import { V2Pending } from "../pending.ts";
 import { emptyContent, reduce } from "@otk/client";
 
+Deno.test("a permission retirement cannot expire behind newer request settlements", async () => {
+  const owner = new V2Pending(() => undefined!, () => undefined, () => {});
+  owner.settle("permission", "per_old", "ses_one");
+  for (let n = 0; n < 4097; n++) {
+    owner.settle("permission", `per_${n}`, "ses_one");
+  }
+  owner.acceptPermission({ directory: "/repo" }, {
+    id: "per_old",
+    sessionID: "ses_one",
+    action: "read",
+    resources: ["README.md"],
+  });
+  assertEquals(owner.settled("permission", "per_old"), true);
+  assertEquals(await owner.permissions.listPermissions("opcv2-ses_one"), []);
+});
+
 Deno.test("request projection replacement cannot orphan a question", () => {
   let content = emptyContent();
   const owner = new V2Pending(() => undefined!, () => undefined, (_id, op) => {

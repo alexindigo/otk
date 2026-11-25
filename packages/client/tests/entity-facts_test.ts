@@ -11,6 +11,7 @@ Deno.test("reply facts use canonical work, never session age or helper endpoints
     sessionID: "s",
     turnID: "turn",
     timing: { state: "known", start: 100, end: 9000, workingMs: 2000 },
+    outcomeTime: { state: "known", at: 9000, source: "completed" },
   }, sources);
   assertEquals(facts.reply?.working, {
     known: true,
@@ -55,6 +56,11 @@ Deno.test("historical reply facts borrow current session supervision across reco
     sessionID: "s",
     turnID: "historical",
     timing: { state: "known" as const, start: 100, end: 200, workingMs: 100 },
+    outcomeTime: {
+      state: "known" as const,
+      at: 200,
+      source: "completed" as const,
+    },
   };
   assertEquals(entityFacts(identity, source).session.status, "none");
   status = "working";
@@ -62,6 +68,20 @@ Deno.test("historical reply facts borrow current session supervision across reco
   status = "none";
   assertEquals(entityFacts(identity, source).reply?.completed.value, 200);
   assertEquals(entityFacts(identity, source).session.status, "none");
+});
+
+Deno.test("failure completion survives unavailable working time in entity facts", () => {
+  const facts = entityFacts({
+    turnID: "failed",
+    outcomeTime: { state: "known", at: 1500, source: "completed" },
+  });
+  assertEquals(facts.reply?.working.known, false);
+  assertEquals(facts.reply?.completed, {
+    known: true,
+    value: 1500,
+    final: true,
+    active: false,
+  });
 });
 
 Deno.test("tool facts retain their own scope and never certify an unfinished endpoint", () => {

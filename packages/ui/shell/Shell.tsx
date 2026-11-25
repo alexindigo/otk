@@ -551,6 +551,7 @@ export default function Shell(
               prefs={toggles.state.prefs}
               ready={toggles.state.ready}
               onOpen={openProject}
+              onAttention={navigation.openAttention}
               onInactive={resources.inactive}
               onLayout={saveLayout}
               onProjectCollapse={resources.projectCollapse}

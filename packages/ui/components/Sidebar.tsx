@@ -13,7 +13,9 @@ import {
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
+import ConnectionStatus from "./ConnectionStatus.tsx";
 import StatusLight from "./StatusLight.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 import { sessionLight } from "./status-light.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
@@ -75,9 +77,7 @@ export default function Sidebar(
             <section class="otk-sidecar-group" data-sidecar={sidecar().id}>
               <h2>{sidecar().label}</h2>
               <ConnectionBadge sidecar={sidecar()} />
-              <Show when={sidecar().error}>
-                <p class="otk-error" role="alert">{sidecar().error}</p>
-              </Show>
+              <ConnectionStatus connection={sidecar()} />
               <Show
                 when={sidecar().status === "login required" ||
                   sidecar().status === "setup required"}
@@ -136,13 +136,15 @@ export default function Sidebar(
                         >
                           <SelectionContent class="otk-sidebar-session-content">
                             <span class="otk-row-title">{entry().title}</span>
-                            <time
-                              datetime={new Date(entry().timeUpdated)
-                                .toISOString()}
-                            >
-                              {relativeTime(entry().timeUpdated, now())}
-                            </time>
-                            <span class="otk-row-status">
+                            <ChromeMeta>
+                              <time
+                                datetime={new Date(entry().timeUpdated)
+                                  .toISOString()}
+                              >
+                                {relativeTime(entry().timeUpdated, now())}
+                              </time>
+                            </ChromeMeta>
+                            <ChromeMeta class="otk-row-status">
                               <StatusLight
                                 attention={{
                                   server: entry().sidecarId,
@@ -154,7 +156,7 @@ export default function Sidebar(
                               {entry().status === "retry"
                                 ? `retry ${entry().retry?.attempt ?? ""}`
                                 : entry().status}
-                            </span>
+                            </ChromeMeta>
                             <span class="otk-attention">
                               <Show
                                 when={entry().attention.permissions +
@@ -171,9 +173,13 @@ export default function Sidebar(
                                   entry().attention.childQuestions}
                               >
                                 {(count) => (
-                                  <span title="Pending questions">
-                                    Q {count()}
-                                  </span>
+                                  <ChromeMeta
+                                    title="Pending questions"
+                                    aria-label="Pending questions"
+                                  >
+                                    <StatusLight small state="blocked" />{" "}
+                                    {count()}
+                                  </ChromeMeta>
                                 )}
                               </Show>
                               <Show when={entry().attention.error}>

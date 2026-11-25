@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ModelRef, ToolCall, TurnTiming } from "@otk/protocol";
+import type {
+  ModelRef,
+  OutcomeTime,
+  ToolCall,
+  TurnTiming,
+} from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import type { InboxStatus } from "./inbox.ts";
 
@@ -7,6 +12,7 @@ export interface EntityIdentity {
   sessionID?: string;
   turnID?: string;
   timing?: TurnTiming;
+  outcomeTime?: OutcomeTime;
   model?: ModelRef;
   tool?: ToolCall;
 }
@@ -65,9 +71,11 @@ export function entityFacts(
             active,
           ),
           completed: fact(
-            final && timing && "end" in timing ? timing.end : undefined,
-            final,
-            active,
+            identity.outcomeTime?.state === "known"
+              ? identity.outcomeTime.at
+              : undefined,
+            identity.outcomeTime !== undefined,
+            !identity.outcomeTime && active,
           ),
           explanation: timing?.state === "unknown"
             ? timing.explanation

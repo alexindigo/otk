@@ -179,6 +179,19 @@ async function sendRaw(
   }
   signal.throwIfAborted();
   credits--;
+  if (value.t === "catalog" && sink?.delivered) {
+    const facts = new Map(
+      sink.delivered(value.entries.map((entry) => entry.id))
+        .map((fact) => [fact.id, fact.delivered]),
+    );
+    value = {
+      ...value,
+      entries: value.entries.map((entry) => ({
+        ...entry,
+        activity: { ...entry.activity, delivered: facts.get(entry.id) },
+      })),
+    };
+  }
   post(value);
   // A completed publication is one bounded chunk, even when more credit is ready.
   await yieldChunk(signal);

@@ -82,17 +82,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .otk-session-row time {
-    font-size: var(--text-meta);
-    font-variant-numeric: tabular-nums;
-    color: var(--secondary);
-  }
   .otk-row-status {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    font-size: var(--text-meta);
-    color: var(--secondary);
   }
   .otk-attention {
     display: flex;

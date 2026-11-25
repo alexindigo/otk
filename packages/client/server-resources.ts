@@ -79,6 +79,7 @@ export interface ServerResources {
   projectSession(
     project: ProjectSelection,
     preferred?: string,
+    attention?: boolean,
   ): Promise<string | undefined>;
   /** Presentation routing only; native/persisted directories remain unchanged. */
   projectDirectory?(
@@ -492,6 +493,8 @@ export function createServerResources(o: {
           time,
           true,
           supervision?.terminal === time ? supervision.outcome : undefined,
+          supervision?.unseen === true,
+          supervision,
         );
       }
     }
@@ -649,14 +652,17 @@ export function createServerResources(o: {
               : undefined;
             const unseen = supervision?.unseen === true;
             if (changes.admitted) {
-              owner.admitFinished(session, time, outcome, unseen);
-            } else {owner.finished(
+              owner.admitFinished(session, time, outcome, unseen, supervision);
+            } else {
+              owner.finished(
                 session,
                 time,
                 changes.baseline,
                 outcome,
                 unseen,
-              );}
+                supervision,
+              );
+            }
           }
         }
       });
@@ -927,11 +933,12 @@ export function createServerResources(o: {
         listOwner(project.sidecarId).viewport(list, rows);
       }
     },
-    async projectSession(project, preferred) {
+    async projectSession(project, preferred, attention) {
       const connection = sidecars.connection(project.sidecarId);
       return await connection.rpc.call("navigation.default", {
         directory: project.directory,
         preferred,
+        ...(attention ? { attention: true } : {}),
       }) ?? undefined;
     },
     projectDirectory: (sidecar, directory, repoID) =>

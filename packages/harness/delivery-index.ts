@@ -31,14 +31,14 @@ export class DeliveryIndex {
     if (reset || !stored.complete) {
       const page = scan(cursor);
       this.transaction(() => {
-        if (reset) {
+        if (stored && stored.source !== source) {
           this.sql.prepare(`DELETE FROM ${table} WHERE parent_id=?`).run(
             input.parentID,
           );
         }
         for (const { id, delivered } of page.updates) {
           this.sql.prepare(
-            `INSERT INTO ${table}(parent_id,receipt,child_id,terminal) VALUES(?,?,?,?) ON CONFLICT(parent_id,receipt) DO UPDATE SET child_id=excluded.child_id,terminal=excluded.terminal`,
+            `INSERT INTO ${table}(parent_id,receipt,child_id,terminal) VALUES(?,?,?,?) ON CONFLICT(parent_id,receipt) DO UPDATE SET child_id=excluded.child_id,terminal=max(terminal,excluded.terminal)`,
           ).run(input.parentID, delivered.receipt, id, delivered.terminal);
         }
         this.sql.prepare(
@@ -73,6 +73,22 @@ export class DeliveryIndex {
         ? { after: String(rows.at(-1)!.child_id) }
         : {}),
     };
+  }
+  /** Indexed child/run join, independent of native connection availability. */
+  facts(
+    ids: readonly string[],
+  ): import("./provider-reads.ts").DeliveryScalar[] {
+    if (!ids.length) return [];
+    return this.sql.prepare(
+      `SELECT child_id,parent_id,receipt,max(terminal) AS terminal FROM ${this.table} WHERE child_id IN (SELECT value FROM json_each(?)) GROUP BY child_id`,
+    ).all(JSON.stringify(ids)).map((row) => ({
+      id: String(row.child_id),
+      delivered: {
+        parentID: String(row.parent_id),
+        receipt: String(row.receipt),
+        terminal: Number(row.terminal),
+      },
+    }));
   }
   retire(id: string): void {
     this.transaction(() => {

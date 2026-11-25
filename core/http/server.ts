@@ -13,7 +13,10 @@ export function bind(
   requested?: () => void,
 ) {
   let handler: Deno.ServeHandler<Deno.NetAddr> = () =>
-    new Response("Starting", { status: 503 });
+    new Response("Starting", {
+      status: 503,
+      headers: { "Retry-After": "1", "Cache-Control": "no-store" },
+    });
   let server: Deno.HttpServer<Deno.NetAddr>;
   try {
     server = Deno.serve({

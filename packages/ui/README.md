@@ -326,7 +326,10 @@ Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
 not the pill. Available session/model facts retain their scope; a session click
 uses the same guarded navigation as the existing Open task action.
 
-Reply footers show model-call count, charged turn tokens and backend-reported
+Reply footers show outcome instants independently of working-duration availability. A native
+`outcomeTime` is shown in local time for success, failure and interruption; an
+unknown instant states that no native time was recorded and retains its reason.
+Reply footers also show model-call count, charged turn tokens and backend-reported
 cost after working time. Footers and opened detail bind the adapter's whole-turn
 result. Work-log headers pass their own contributed part clocks to the same
 timing owner for a busy-union-minus-waits result, never the turn total. Missing
@@ -949,9 +952,10 @@ boundaries; outgoing branches mirror that same grid. Disclosure state and
 callbacks remain in the existing interaction owner. `TreeGuide` borrows the same
 junction cells for already-expanded virtual session hierarchies, using plain
 client `treePaths` rather than mounted neighbours. No component paints a second
-nesting rail or elbow. Horizontal levels are 1.45 times the compact icon token,
-independent of row height, with boxes 0.7 times that token and half-cell dotted
-stubs. `TreeIcon` owns the leading artwork slot and the downward child rail;
+nesting rail or elbow. Horizontal levels use the named 19u tree indent,
+independent of row height, with the named 9u box size and half-cell dotted
+stubs. Outgoing grids reverse their tracks and header flow, never text
+direction. `TreeIcon` owns the leading artwork slot and the downward child rail;
 callers inject their lamp or kind artwork. The child junction is aligned with
 that parent icon, not its disclosure box. TreeIcon never invents artwork: it
 renders the caller's semantic kind icon or lamp, or an empty slot when there is
@@ -975,11 +979,14 @@ group; archive-only repositories retain their own header. Childless projects
 omit the box; TreeNode's `showEmptyToggle` input controls that presentation
 without changing its geometry or introducing local state.
 
-Archived, Discovered and Inactive labels share SectionHeaderMeta's adjacent
-label and count slots, with no intervening rule. ChromeMeta shares the visit
-clock's exact `--text-meta` size and `--otk-fg-3` colour; counts and annotations
-have no parentheses. The hierarchy projection supplies artwork eligibility,
-never section-local depth.
+Archived, Discovered, Inactive and Sessions groups share SectionHeader's
+TreeNode disclosure and SectionHeaderMeta's adjacent label/count slots, with the
+rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
+`--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
+record summaries/counts, running-work elapsed time and project annotations use
+that same owner. Project metadata borrows the elastic label slot, yielding
+before the project name. Counts and annotations have no parentheses. The
+hierarchy projection supplies artwork eligibility, never section-local depth.
 
 ## Example
 
@@ -1013,9 +1020,9 @@ Every project-menu row shares one icon/value/accessory layout, including nested
 branch/path triggers. Edit project opens registered project-settings content
 through DialogHost. Its title names the captured project; fields borrow the
 framework-free editor and Form feedback owner. Color swatches use the shared
-on/off binding. Upload/remove, name and startup text commit through Save
-changes; dirty dismissal asks before discarding. No project auto-accept field is
-shown.
+selection binding and underline, separate from focus paint. Upload/remove, name
+and startup text commit through Save changes; dirty dismissal asks before
+discarding. No project auto-accept field is shown.
 
 `ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
 Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
@@ -1081,7 +1088,8 @@ alone only fills; reduced colours retains both indicators.
 Binary buttons use the same state-binding module's `toggle({on, class?})`, which
 owns `is-on` and `aria-pressed` together. Shared theme paint supplies the
 on-state accent, without selection classes, orientation, pointer or underline.
-Native checkboxes retain checked semantics; disclosures retain expanded
+Checkbox borrows TaskMarker's artwork over a native input, keeping the same
+checked/focus semantics in settings and typed forms; disclosures retain expanded
 semantics. Panel tabs and question choices remain collection selections with
 their marks.
 

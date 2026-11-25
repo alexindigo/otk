@@ -1142,3 +1142,47 @@ Deno.test("a warm tail admits a newly observed message within its retained chron
     f.stop();
   }
 });
+
+for (const warm of [false, true]) {
+  Deno.test(`native source order admits a new identity with a copied old timestamp: warm=${warm}`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      const messages = f.messages("a").map((message, sourceOrder) => ({
+        ...message,
+        sourceOrder,
+      }));
+      for (let i = 0; i < 2; i++) {
+        const request = f.requests.shift()!;
+        replyRequest(
+          f.connection.rpc,
+          request,
+          fixturePage(
+            "a",
+            messages,
+            (request.params as { before?: string }).before,
+          ),
+        );
+        await turns();
+      }
+      if (warm) f.owner.setDemand({ scope: scope("/b"), sessions: [] });
+      const message = { ...messages[0], id: "native-new", sourceOrder: 80 };
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: 1 },
+        event: { op: "message.upsert", message },
+      }, true);
+      assertEquals(
+        f.owner.get(target("a"))?.state.messageIDs.at(-1),
+        "native-new",
+      );
+    } finally {
+      f.stop();
+    }
+  });
+}

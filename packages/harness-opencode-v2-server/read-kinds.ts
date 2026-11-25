@@ -17,6 +17,11 @@ declare module "@otk/harness" {
       result: TranscriptFacts;
       chunk: string;
     };
+    "opcv2.transcript.head": {
+      input: { sessionID: string; cutoff?: string };
+      result: import("./transcript-reads.ts").NativeHead | null;
+      chunk: string;
+    };
     "opcv2.request.anchor": {
       input: { sessionID: string; messageID?: string };
       result: { seq?: number };

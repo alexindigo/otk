@@ -2,6 +2,7 @@
 import {
   type ContextMessage,
   type FailureFacts,
+  outcomeTime,
   type PublicFailure,
   publicFailureReason,
 } from "@otk/protocol";
@@ -14,8 +15,8 @@ export function requestFailureFacts(
   credentials: readonly string[] = [],
 ): FailureFacts {
   const body = object(raw), data = object(body.data ?? body);
-  const kind = text(body._tag) ?? text(body.name) ?? "";
-  const lines = [text(data.message)];
+  const kind = text(body.type) ?? text(body._tag) ?? text(body.name) ?? "";
+  const lines = [text(raw) ?? text(data.message)];
   if (/ModelNotFound/.test(kind)) {
     lines.push(
       `Model not found: ${text(data.providerID) ?? ""}/${
@@ -54,15 +55,64 @@ export function requestFailureFacts(
     ? data.status
     : undefined;
   const httpStatus = status ?? nativeStatus;
+  const reason = publicFailureReason(
+    lines.filter(Boolean).join("\n") ||
+      (status === undefined
+        ? "Native operation failed"
+        : `Opencode request failed (${status}).`),
+    credentials,
+  );
   return {
-    reason: publicFailureReason(
-      lines.filter(Boolean).join("\n") ||
-        (status === undefined
-          ? "Native operation failed"
-          : `Opencode request failed (${status}).`),
-      credentials,
-    ),
+    reason,
     ...(httpStatus === undefined ? {} : { status: httpStatus }),
+    ...(kind === "provider.quota" ||
+        /usage limit|quota|insufficient.*(credit|balance)|credit.*(exhaust|limit)|billing/i
+          .test(reason)
+      ? {
+        recovery: kind === "provider.quota"
+          ? "Check your provider quota or choose another available model, then send a new prompt."
+          : "Check your provider credits or usage limits, then retry the task.",
+      }
+      : {}),
+  };
+}
+/** The producer's error envelope is the cause, not arbitrary result prose. */
+export function helperFailure(
+  cause: unknown,
+  sessionID: string | undefined,
+  label: string | undefined,
+  recordID: string,
+): PublicFailure {
+  const facts = requestFailureFacts(cause);
+  return {
+    code: "helper.failure",
+    retry: "none",
+    diagnosticID: `helper/${recordID}`,
+    facts: {
+      actionLabel: "Running helper",
+      target: { sessionID, label },
+      recovery: "Open the task and retry it.",
+      ...facts,
+    },
+  };
+}
+/** Scalar terminal acquisition uses the same public native-cause codec as events. */
+export function terminalFailure(
+  raw: unknown,
+  sessionID: string,
+  terminal: number,
+  label?: string,
+): PublicFailure | undefined {
+  if (!raw || !terminal) return;
+  return {
+    code: "session.failure",
+    retry: "none",
+    diagnosticID: `execution/${sessionID}/${terminal}`,
+    facts: {
+      actionLabel: "Running session",
+      target: { sessionID, label },
+      ...requestFailureFacts(raw),
+    },
   };
 }
 const object = (value: unknown): Record<string, unknown> =>
@@ -76,7 +126,7 @@ const text = (value: unknown): string | undefined =>
 export function requestFailureRecord(
   sessionID: string,
   failure: PublicFailure,
-  created = Date.now(),
+  created?: number,
   replyTo?: string,
 ): ContextMessage {
   const id = `request:failure:${failure.diagnosticID}`;
@@ -97,8 +147,9 @@ export function requestFailureRecord(
     id,
     sessionID,
     role: "context",
+    outcomeTime: outcomeTime({ error: created }),
     ...(replyTo ? { replyTo } : {}),
-    time: { created },
+    time: { created: created ?? Date.now() },
     parts: [{
       kind: "external",
       id: `${id}:failure`,

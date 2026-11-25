@@ -19,7 +19,7 @@
 }
 .otk-preference-segments {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-1);
   min-width: 0;
 }

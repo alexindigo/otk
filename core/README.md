@@ -87,6 +87,10 @@ does not rewrite seen marks or finish/outcome history, and cannot acknowledge a
 later run. Every count, mandatory family, lamp and notification borrows this
 projection.
 
+Failed helpers require explicit per-user acknowledgement: delivery to a parent
+does not acknowledge the failure. Their unacknowledged terminal takes needs-you
+priority through this same supervision owner, including project rollups.
+
 Historical delivery acquisition uses the existing worker/native connection and
 credited `supervision.deliveries` channel. Plugin-private digest tables retain
 only receipt scalars and resumable parent coverage. Coalesced parent work gives
@@ -625,15 +629,14 @@ optional `FrameSource.connection` hook, including the initial connecting state
 before backend startup. Automatic scans retain dirty owners while disconnected
 and run on connection readiness, not on a metadata publication that may precede
 the native client. Connection edges fence in-flight scans independently of index
-replacement. Proven-not-dispatched unavailable replies finish their journal
-intent and become eligible on the next connected edge. Explicit index
-replacement (`index.snapshot`) also clears failed-request memoization and
-re-enqueues enabled sessions, allowing unavailable replies to be retried without
-another connected edge. Actual refusals stay memoized by request fingerprint
-across connection edges; uncertain dispatched replies stay unconfirmed and
-cannot be resent. Unrelated index updates cannot repeat a failed attempt or
-journal row. Policy revisions and affected-family activity invalidations are
-separate feature-owned frames.
+replacement. Automatic dispatch belongs to the session/request identity, never
+its mutable details, an index snapshot or a location's temporary absence.
+Proven-not-dispatched unavailable replies alone may retry, after 250 ms then
+1000 ms backoff, at most three attempts total and only while connected.
+Readiness and snapshot changes cannot bypass the delay or reset the bound.
+Actual refusals stay suppressed across all publications; uncertain dispatched
+replies stay unconfirmed and cannot be resent. Policy revisions and
+affected-family activity invalidations are separate feature-owned frames.
 
 Permission activity stores application-selected `PublicFailure` facts separately
 from legacy diagnostic error text. The existing activity row shows its safe

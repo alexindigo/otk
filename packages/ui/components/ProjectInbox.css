@@ -49,7 +49,7 @@
   flex: 1;
   min-width: 0;
   height: var(--row-project);
-  padding: 0 var(--chrome-inset) 0 0;
+  padding: 0 var(--chrome-inset) 0 var(--project-gap);
   border: 0;
   text-align: left;
   color: inherit;
@@ -74,6 +74,9 @@
   padding-block-end: var(--space-1);
 }
 .otk-project-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   font-size: var(--text-ui);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -82,19 +85,12 @@
 .otk-project-name[data-unread=true] {
   font-weight: 600;
 }
-.otk-project-machine {
-  font-size: var(--text-meta);
-  color: var(--otk-fg-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .otk-project-trailing {
   display: grid;
   align-items: center;
   justify-items: end;
   flex: none;
-  min-width: var(--space-6);
-  padding-inline-end: var(--space-1);
+  min-width: var(--control-size);
 }
 .otk-project-trailing > * {
   grid-area: 1 / 1;
@@ -117,32 +113,15 @@
   list-style: none;
   padding: var(--space-1);
   color: var(--secondary);
-  width: var(--space-6);
-  height: var(--space-6);
+  width: var(--control-size);
+  height: var(--control-size);
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
 }
-.otk-inactive-toggle,
-.otk-archived-toggle,
-.otk-discovered-toggle {
-  --control-height: var(--row-project);
-  width: 100%;
-  height: var(--row-project);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  text-align: left;
+.otk-inactive-section,
+.otk-discovered-section {
   margin-top: var(--chrome-inset);
-  padding: 0;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-}
-.otk-inactive-toggle[aria-expanded=true] .otk-inactive-chevron {
-  transform: rotate(90deg);
-}
-.otk-discovered-toggle[aria-expanded=true] .otk-discovered-chevron {
-  transform: rotate(90deg);
 }
 .otk-inactive-projects {
   padding-top: var(--space-1);
@@ -197,8 +176,7 @@
   padding: 0 var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-open {
-  justify-content: center;
-  padding: 0;
+  display: none;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-footer {
   padding: var(--space-2) var(--space-1);
@@ -228,21 +206,11 @@
   justify-content: center;
   padding: 0;
 }
-.otk-project-inbox[data-collapsed=true] .otk-discovered-toggle {
-  width: var(--control-height);
-  margin-inline: auto;
-  justify-content: center;
-  padding-inline: 0;
-}
 .otk-project-inbox[data-collapsed=true] .otk-server-status {
   padding: 0;
 }
 .otk-project-tree {
   --tree-height: var(--row-project);
-}
-.otk-project-parent {
-  min-width: 0;
-  font-size: var(--text-meta);
 }
 /* The project row is one control: focus paints the whole row, never only
    its open button between the selection bar and the menu. */
@@ -260,10 +228,13 @@
 .otk-project-row > .otk-project-content {
   grid-area: 1 / 1 / 2 / -1;
 }
-.otk-project-inbox[data-collapsed=true] .otk-archived-toggle {
-  justify-content: center;
-}
-.otk-archived-toggle {
-  margin-top: 0;
-  gap: var(--project-gap);
+.otk-project-attention {
+  display: grid;
+  place-items: center;
+  inline-size: var(--tree-indent);
+  block-size: var(--tree-indent);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
 }

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { derivedValue, isAssistantTerminal } from "@otk/protocol";
-import type { Derived, Message, TurnTiming, UsageSummary } from "@otk/protocol";
+import type {
+  Derived,
+  Message,
+  OutcomeTime,
+  TurnTiming,
+  UsageSummary,
+} from "@otk/protocol";
 import { countLabel } from "./count.ts";
 import { usageCost, usageTokens } from "./usage.ts";
 import { reportedTokens } from "./session-summary.ts";
@@ -8,7 +14,7 @@ import { reportedTokens } from "./session-summary.ts";
 export interface MessagePresentation {
   streaming: boolean;
   progress: boolean;
-  time?: { timing?: TurnTiming; fallback?: string };
+  time?: { timing?: TurnTiming; fallback?: string; outcome?: OutcomeTime };
   usage?: { summary?: Derived<UsageSummary> };
   facts: string[];
 }
@@ -30,6 +36,9 @@ export function messagePresentation(
       time: {
         timing: value?.timing,
         fallback: streaming ? "streaming" : "Time unknown",
+        ...(!streaming && message.role !== "user" && message.outcomeTime
+          ? { outcome: message.outcomeTime }
+          : {}),
       },
       usage: { summary },
       facts: [],
@@ -48,8 +57,16 @@ export function messagePresentation(
     streaming: false,
     progress: false,
     facts,
-    ...(value?.timing?.state === "known"
-      ? { time: { timing: value.timing } }
+    ...(value?.timing?.state === "known" ||
+        message.role !== "user" && message.outcomeTime
+      ? {
+        time: {
+          timing: value?.timing,
+          ...(message.role !== "user" && message.outcomeTime
+            ? { outcome: message.outcomeTime }
+            : {}),
+        },
+      }
       : {}),
   };
 }

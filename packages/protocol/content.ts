@@ -396,6 +396,7 @@ export interface UserMessage {
 export interface AssistantMessage {
   /** Native settlement is a fact even when its exact clock was lost. */
   terminal?: boolean;
+  outcomeTime?: import("./outcome-time.ts").OutcomeTime;
   id: string;
   sessionID: string;
   role: "assistant";
@@ -421,6 +422,7 @@ export interface ContextMessage {
   id: string;
   sessionID: string;
   role: "context";
+  outcomeTime?: import("./outcome-time.ts").OutcomeTime;
   /** Native turn association, without making a context record a prompt anchor. */
   replyTo?: string;
   sourceOrder?: number;

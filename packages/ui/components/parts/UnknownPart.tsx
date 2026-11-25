@@ -54,7 +54,10 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       activity()?.body?.length ||
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
       reference());
-  const label = () => activity()?.title ?? `Unsupported part: ${name()}`;
+  const label = () => {
+    const title = activity()?.title ?? `Unsupported part: ${name()}`;
+    return failure() ? `${title}: ${failure()!.reason}` : title;
+  };
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
     const value = activity()?.state?.label;
@@ -63,14 +66,12 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       ? value
       : undefined;
   };
-  const child = (ref: ChildRef, value?: boolean) => (
-    <button
-      type="button"
-      class={value ? "otk-native-value" : undefined}
-      onClick={() => props.onOpenChild(ref.sessionID)}
-    >
-      {ref.label}
-    </button>
+  const child = (ref: ChildRef) => (
+    <EntityPill
+      label={ref.label}
+      facts={scopedEntityFacts(session, ref)}
+      onOpen={props.onOpenChild}
+    />
   );
   const heading = () => (
     <>
@@ -89,7 +90,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   );
   return (
     <Show
-      when={failure()}
+      when={!activity() ? failure() : undefined}
       fallback={
         <section
           class={["otk-tool-line otk-native-record", {
@@ -104,6 +105,11 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             outgoing={activity()?.direction === "outgoing" ? true : undefined}
             open={expanded()}
             onOpen={details() ? setExpanded : undefined}
+            feedback={failure()?.recovery
+              ? () => (
+                <span class="otk-native-recovery">{failure()!.recovery}</span>
+              )
+              : undefined}
             header={() => (
               <header class="otk-tool-state otk-control-row">
                 <TreeIcon>
@@ -211,7 +217,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                                             </span>
                                           }
                                         >
-                                          {(ref) => child(ref(), true)}
+                                          {(ref) => child(ref())}
                                         </Show>
                                       }
                                     >

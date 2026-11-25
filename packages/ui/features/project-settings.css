@@ -22,20 +22,17 @@
   margin-block-end: var(--space-2);
 }
 .otk-project-color {
+  --selection-padding: 0;
   display: grid;
   place-items: center;
   width: var(--form-control-size);
   height: var(--form-control-size);
   padding: 0;
 }
-.otk-project-color.is-on {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
 .otk-project-color-swatch {
   width: calc(18 * var(--otk-unit));
   height: calc(18 * var(--otk-unit));
-  border-radius: var(--space-1);
+  border-radius: var(--radius-inline-code);
   background: var(--project-swatch);
 }
 .otk-project-startup-hints p {

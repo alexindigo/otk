@@ -14,6 +14,7 @@ export { ReadAdmission } from "./read-admission.ts";
 export { NativeReadiness } from "./native-readiness.ts";
 export { cachedStatements } from "./sqlite-statements.ts";
 export { DeliveryBackfill } from "./delivery-backfill.ts";
+export { DeliveryJoin } from "./delivery-join.ts";
 export { DeliveryIndex } from "./delivery-index.ts";
 /** Harness-neutral lifecycle, session contracts and optional capabilities. */
 export * from "./types.ts";
