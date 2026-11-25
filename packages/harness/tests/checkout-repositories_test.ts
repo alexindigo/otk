@@ -104,3 +104,67 @@ Deno.test("naming names no repository when several discovered repositories match
     await Deno.remove(base, { recursive: true });
   }
 });
+
+Deno.test("an unreadable Git marker or registration does not discard native inventory or other Git evidence", async () => {
+  const base = await Deno.makeTempDir();
+  const blocked = join(base, "blocked");
+  const marker = join(blocked, ".git");
+  try {
+    const repo = await layout(base);
+    const invalid = join(repo, ".git", "worktrees", "00-bad", "gitdir");
+    await Deno.mkdir(invalid, { recursive: true });
+    await Deno.mkdir(blocked);
+    await Deno.writeTextFile(marker, "gitdir: unavailable\n", { mode: 0 });
+    const owner = await CheckoutRepositories.discover([blocked, repo]);
+    const unavailable = seed(blocked, blocked);
+    const removed = join(base, "repo.removed");
+    const [unchanged, healthy] = await owner.seeds(
+      [unavailable, seed(removed, removed)],
+      new AbortController().signal,
+    );
+    assertEquals(unchanged, unavailable);
+    assertEquals(healthy.identities![0].repository, {
+      checkout: removed,
+      root: repo,
+      present: false,
+      evidence: "worktree-metadata",
+    });
+  } finally {
+    await Deno.remove(base, { recursive: true });
+  }
+});
+
+Deno.test("a separate Git directory's main checkout owns its linked and removed worktrees", async () => {
+  const base = await Deno.makeTempDir();
+  try {
+    const repo = await layout(base);
+    const name = "not-a-dot-git-directory";
+    const common = join(base, name);
+    await Deno.rename(join(repo, ".git"), common);
+    await Deno.writeTextFile(join(repo, ".git"), `gitdir: ../${name}\n`);
+    const live = join(base, "repo.live");
+    const removed = join(base, "repo.removed");
+    await Deno.writeTextFile(
+      join(live, ".git"),
+      `gitdir: ${join(common, "worktrees", "repo.live")}\n`,
+    );
+    for (const roots of [[repo, live], [live, repo]]) {
+      const owner = await CheckoutRepositories.discover(roots);
+      const rows = await owner.seeds(
+        [repo, live, removed].map((path) => seed(path, path)),
+        new AbortController().signal,
+      );
+      assertEquals(rows.map((row) => row.identities![0].repository?.root), [
+        repo,
+        repo,
+        repo,
+      ]);
+      assertEquals(
+        rows[2].identities![0].repository?.evidence,
+        "worktree-metadata",
+      );
+    }
+  } finally {
+    await Deno.remove(base, { recursive: true });
+  }
+});
