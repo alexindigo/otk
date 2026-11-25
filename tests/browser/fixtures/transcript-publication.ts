@@ -15,6 +15,7 @@ export async function observeTranscript(context: BrowserContext) {
     globalThis.WebSocket = class extends Native {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols);
+        if (new URL(url, location.href).pathname !== "/ws") return;
         this.addEventListener("message", (event) => {
           const frame = JSON.parse(event.data);
           const messages = frame.t === "load.chunk" &&

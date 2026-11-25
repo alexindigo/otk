@@ -456,7 +456,10 @@ export const uiSources = async () =>
     ),
   );
 
-export function dependencySpecifiers(source: string): (string | undefined)[] {
+export function dependencySpecifiers(
+  source: string,
+  { runtime = false }: { runtime?: boolean } = {},
+): (string | undefined)[] {
   const result: (string | undefined)[] = [];
   const specifier = (node: t.Node | undefined): string | undefined => {
     if (
@@ -474,6 +477,22 @@ export function dependencySpecifiers(source: string): (string | undefined)[] {
       node.type === "ExportNamedDeclaration" ||
       node.type === "ExportAllDeclaration"
     ) {
+      if (runtime) {
+        if (
+          node.type === "ImportDeclaration"
+            ? node.importKind === "type" ||
+              node.specifiers.length > 0 && node.specifiers.every((item) =>
+                  item.type === "ImportSpecifier" && item.importKind === "type"
+                )
+            : node.exportKind === "type" ||
+              node.type === "ExportNamedDeclaration" &&
+                node.specifiers.length > 0 && node.specifiers.every((item) =>
+                  item.type === "ExportSpecifier" && item.exportKind === "type"
+                )
+        ) {
+          continue;
+        }
+      }
       if (node.source) result.push(specifier(node.source));
     } else if (
       node.type === "CallExpression" && node.callee.type === "Import"
@@ -481,7 +500,7 @@ export function dependencySpecifiers(source: string): (string | undefined)[] {
       result.push(specifier(node.arguments[0]));
     } else if (node.type === "ImportExpression") {
       result.push(specifier(node.source));
-    } else if (node.type === "TSImportType") {
+    } else if (node.type === "TSImportType" && !runtime) {
       result.push(specifier(node.argument));
     } else if (node.type === "TSExternalModuleReference") {
       result.push(specifier(node.expression));

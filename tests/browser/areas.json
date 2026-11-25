@@ -149,6 +149,11 @@
       "v2-shell-activity_test.ts",
       "v2-transcripts_test.ts",
       "helper-delivery_test.ts"
+    ],
+    "terminal": [
+      "terminals_daemon_test.ts",
+      "terminals_test.ts",
+      "terminals_rejection_test.ts"
     ]
   },
   "areas": [
@@ -161,9 +166,16 @@
     "menus",
     "visual",
     "transport",
-    "harness"
+    "harness",
+    "terminal"
   ],
   "rules": [
+    {
+      "id": 13,
+      "pattern": "^packages/(ui|client)/.*[Tt]erminal|^packages/ui/terminal/|^tests/browser/behavior/terminal/",
+      "areas": ["terminal"],
+      "themes": "always"
+    },
     {
       "id": 1,
       "pattern": "(?i)^packages/(ui|client)/.*(prompt|composer|editor|attachment)",

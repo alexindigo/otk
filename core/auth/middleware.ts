@@ -34,9 +34,12 @@ const middleware: Middleware = async (request, { app }) => {
       response.headers.set("Access-Control-Allow-Origin", "*");
     };
   }
+  const upgrade = request.headers.get("upgrade")?.split(",").some((token) =>
+    token.trim().toLowerCase() === "websocket"
+  );
   if (
     !allowedOrigin(request._raw, app.cfg) &&
-    (request.method !== "GET" || request.path === "/api/ws")
+    (request.method !== "GET" || upgrade)
   ) throw new HttpError(403, { code: "origin", message: "Origin not allowed" });
   if (request.method === "OPTIONS") {
     const origin = request.headers.get("origin")!;

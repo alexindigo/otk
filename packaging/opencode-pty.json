@@ -1,0 +1,18 @@
+{
+  "version": "0.5.0",
+  "protocol": 8,
+  "targets": {
+    "x86_64-unknown-linux-gnu": {
+      "package": "@opencode/pty-linux-x64-gnu",
+      "tarball": "https://registry.npmjs.org/@opencode/pty-linux-x64-gnu/-/pty-linux-x64-gnu-0.5.0.tgz",
+      "integrity": "sha512-XaMnBSh1QvJmcYKSOtx1fVvldZ+x212zAHaq8ovyafufqp6/Xl3AuqPCXwPFnycW2PfbUDwfZ7dBCXThQtOt3Q==",
+      "sha256": "af0d4d01e5c953aed6a901fac7fd7026ccc9289f596576498c26aba8a3032684"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "package": "@opencode/pty-linux-arm64-gnu",
+      "tarball": "https://registry.npmjs.org/@opencode/pty-linux-arm64-gnu/-/pty-linux-arm64-gnu-0.5.0.tgz",
+      "integrity": "sha512-vNiHKopfKrX6vj8OmDXYxZ+5JEZwf5djDzt3LOqeYuwStQRX2rxcl2/zjrvd5i8rAJw30RpJ+PTdS1t08vqtLA==",
+      "sha256": "397d107e0e86a73c66215e23d88384a22bf94355d3f06bd718b2ea7c511233e2"
+    }
+  }
+}

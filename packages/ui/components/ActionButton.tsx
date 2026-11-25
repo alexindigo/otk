@@ -19,6 +19,7 @@ export default function ActionButton(props: {
   class?: string;
   label?: string;
   title?: string;
+  expanded?: boolean;
   href?: string;
   ref?(element: HTMLElement): void;
   selection?: ReturnType<typeof selection>;
@@ -86,6 +87,11 @@ export default function ActionButton(props: {
         ref={[(element: HTMLElement) => props.ref?.(element), native.ref]}
         {...native.attributes}
         aria-label={props.label}
+        aria-expanded={props.expanded === undefined
+          ? undefined
+          : props.expanded
+          ? "true"
+          : "false"}
         title={unavailable()?.reason ?? props.title}
         disabled={props.href === undefined ? disabled() : undefined}
         aria-disabled={props.href !== undefined && disabled()

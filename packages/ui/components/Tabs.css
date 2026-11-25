@@ -16,7 +16,8 @@
   color: var(--otk-fg-3);
 }
 .otk-tabs-strip {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 /* Only the panels scroll; the strip above and the actions below stay put. */
 .otk-tabs-panels {
@@ -36,4 +37,42 @@
 }
 .otk-tabs-panel > * {
   margin: 0;
+}
+.otk-tabs-header,
+.otk-tabs-item,
+.otk-tabs-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.otk-tabs-actions {
+  gap: var(--space-1);
+}
+.otk-tabs-header {
+  gap: var(--space-1);
+  flex: none;
+}
+.otk-tabs-item {
+  flex: none;
+}
+.otk-tabs-actions {
+  margin-inline-start: auto;
+  flex: none;
+}
+.otk-tabs.is-compact .otk-tabs-strip {
+  flex-wrap: nowrap;
+}
+.otk-tabs-strip-frame {
+  flex: 1;
+  min-inline-size: 0;
+}
+.otk-tabs.is-compact .otk-tabs-panel {
+  min-height: 0;
+}
+.otk-tabs.is-compact .otk-tabs-item {
+  max-width: 100%;
+}
+.otk-tabs.is-compact .otk-tabs-item > [role=tab] {
+  flex: 1 1 auto;
+  min-width: 0;
 }

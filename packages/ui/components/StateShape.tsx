@@ -8,6 +8,7 @@ export type StateShapeKind =
   | "half-disc"
   | "check"
   | "circle"
+  | "diamond"
   | "loading"
   | "retry";
 export default function StateShape(
@@ -16,7 +17,7 @@ export default function StateShape(
   return (
     <svg
       class={["otk-state-shape", props.class]}
-      viewBox="0 0 10 10"
+      viewBox={props.kind === "diamond" ? "0 0 12 12" : "0 0 10 10"}
       aria-hidden="true"
     >
       <Switch>
@@ -28,6 +29,9 @@ export default function StateShape(
         </Match>
         <Match when={props.kind === "circle"}>
           <circle cx="5" cy="5" r="4" />
+        </Match>
+        <Match when={props.kind === "diamond"}>
+          <path d="M6 1 11 6 6 11 1 6ZM4 6h4" />
         </Match>
         <Match when={props.kind === "half-disc"}>
           <circle cx="5" cy="5" r="4" />

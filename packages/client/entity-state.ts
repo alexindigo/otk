@@ -280,6 +280,7 @@ export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
   blocked: "Needs you",
   working: "Working",
   finished: "Finished, not seen",
+  dependencies: "Running in terminal",
   none: "No known activity",
 };
 export function label(state: ProjectStatus, _cause?: BlockedCause): string {

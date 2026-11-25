@@ -502,6 +502,7 @@ export default function ProjectTabs(props: {
                       leading={
                         <StatusLight
                           small
+                          dependencies={tab().dependencies}
                           state={lamp(
                             props.model.entities(),
                             props.model.tabEntityKey(tab()),

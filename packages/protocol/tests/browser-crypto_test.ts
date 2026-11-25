@@ -30,7 +30,16 @@ Deno.test("plain HTTP SHA-256 matches native UTF-8 fingerprints at padding bound
     "Plain HTTP - \u{1f642} \u00e9",
     ...[55, 56, 63, 64, 65, 127, 128, 1000].map((n) => "x".repeat(n)),
   ];
-  const expected = await Promise.all(values.map(sha256));
+  const expected = await Promise.all(values.map(async (value) => {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(value),
+    );
+    return Array.from(
+      new Uint8Array(digest),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+  }));
   assertEquals(
     expected[0],
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

@@ -60,6 +60,8 @@ import { deletedFacts, sessionEvidence } from "@otk/client";
 import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
 import { AttentionProvider } from "../registries/attention.tsx";
+import { insertChip } from "../components/prompt/model.ts";
+import { createTerminalConnectionOwner } from "../terminal/connections.ts";
 import { attentionPresentation } from "../state/attention-grace.ts";
 
 /** Reusable application shell; web/src selects modules and the API address. */
@@ -103,6 +105,12 @@ export default function Shell(
   } = resources;
   const draftKey = actions.key;
   const draft = () => drafts.get(draftKey());
+  const terminalConnections = createTerminalConnectionOwner();
+  createEffect(
+    () => sidecars.state.list.map((server) => sidecars.connection(server.id)),
+    terminalConnections.update,
+  );
+  onCleanup(terminalConnections.stop);
   const toggles = createToggles(resources.setPreference);
   const recentModel = createModelRecency({
     get: () => toggles.state.prefs["models.recent"],
@@ -490,6 +498,19 @@ export default function Shell(
             inbox,
             approvals,
             openProject,
+            addToPrompt: (text, label) => {
+              const write = drafts.writer(draftKey());
+              write((current) =>
+                insertChip(
+                  current,
+                  current.input.length,
+                  current.input.length,
+                  label,
+                  { kind: "text", text },
+                )
+              );
+              void commands.run("prompt.focus").catch(fail);
+            },
             project,
             entries,
             entry,

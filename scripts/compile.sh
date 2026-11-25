@@ -11,11 +11,13 @@ output=$(realpath -m -- "$2")
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 deno install --frozen
+deno run --allow-net --allow-read --allow-write scripts/fetch-opencode-pty.ts "$target"
 deno task build:web
 # Reflective routes and file-backed assets must be embedded as whole trees.
 # Keep this list here: source packages and release assets use this same recipe.
 deno compile --frozen --node-modules-dir=none --exclude-unused-npm \
-  --allow-net --allow-read --allow-write --allow-env --allow-run=git --allow-sys=systemMemoryInfo \
+  --allow-net --allow-read --allow-write --allow-env --allow-run --allow-sys=systemMemoryInfo \
+  --include "build/opencode-pty/$target/opencode-pty" \
   --include core/digest/worker.ts \
   --include packages/harness-opencode-v1/digest-migrations \
   --include packages/harness-opencode-v2-server/digest-migrations \

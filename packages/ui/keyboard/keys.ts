@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { localKeyboard } from "./ownership.ts";
 // Ported from kosmozoo/client/js/keys.mjs: data targets, canonical combos,
 // case-insensitive bare letters, context conflicts, overrides and reset.
 export interface KeyEvent {
@@ -222,7 +223,10 @@ export function makeKeymap(adapter: {
       return actions.map((a) => ({ ...a, overridden: a.key !== a.defaultKey }));
     },
     dispatch(e: KeyEvent): boolean {
-      if (e.isComposing || e.repeat || e.defaultPrevented) return false;
+      if (
+        e.isComposing || e.repeat || e.defaultPrevented ||
+        localKeyboard(e.target)
+      ) return false;
       for (const a of actions) {
         if (
           !a.key || !bindingMatches(a.key, e, mac) ||

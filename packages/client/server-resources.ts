@@ -22,12 +22,7 @@ import type {
   MergedEntry,
   MergedMetadata,
 } from "./index.ts";
-import {
-  createInbox,
-  type InboxModel,
-  inboxStatus,
-  projectHierarchy,
-} from "./inbox.ts";
+import { createInbox, type InboxModel, projectHierarchy } from "./inbox.ts";
 import {
   createProjectProjection,
   type ProjectProjectionRow,
@@ -45,7 +40,11 @@ import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
 import { requestAttention } from "./request-attention.ts";
 import { createSessionTree, type SessionListRow } from "./session-tree.ts";
-import { createCatalogCodecs } from "@otk/protocol";
+import {
+  createCatalogCodecs,
+  entityKey,
+  entityRequiresVisibility,
+} from "@otk/protocol";
 import {
   type ClientDirectoryCatalogs,
   createDirectoryCatalogs,
@@ -397,7 +396,12 @@ export function createServerResources(o: {
       for (const id of rowDemand.rows) required.add(id);
     }
     for (const entry of input.entries) {
-      if (entry.deleted || inboxStatus(entry, input.inbox) !== "none") {
+      if (
+        entry.deleted ||
+        entityRequiresVisibility(
+          input.entities?.get(entityKey("session", entry.id)),
+        )
+      ) {
         required.add(entry.id);
       }
     }

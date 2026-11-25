@@ -7,6 +7,7 @@ import type { ApprovalRequestReceipts } from "./approvals.ts";
 import type { CoreRequestReceipts } from "./rpc.ts";
 import type { SessionActionsRequestReceipts } from "./capabilities/session-actions.ts";
 import type { ProjectEditRequestReceipts } from "./project-edit.ts";
+import type { TerminalRequestReceipts } from "./terminals.ts";
 import { isSessionID } from "./session-id.ts";
 /** Additive request services. Wire composition selects these at activation. */
 export interface RequestWindow {
@@ -194,6 +195,7 @@ export interface RequestReceipts
     ApprovalRequestReceipts,
     CoreRequestReceipts,
     SessionActionsRequestReceipts,
+    TerminalRequestReceipts,
     ProjectEditRequestReceipts {}
 export type ReceiptData = {
   [K in keyof RequestReceipts]: { kind: K; value: RequestReceipts[K] };
