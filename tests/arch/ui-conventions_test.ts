@@ -906,8 +906,10 @@ export function conventionErrors(
       ) fail("handwritten message action control");
       if (
         modulePath(imported?.module ?? "").endsWith("/MessageActions.tsx") &&
-        path !== "packages/ui/components/MessageFooter.tsx"
-      ) fail("message actions outside MessageFooter");
+        !(path === "packages/ui/components/MessageFooter.tsx" ||
+          path === "packages/ui/components/CodeBlock.tsx" &&
+            source.string(source.attr(node, "kind")) === "code")
+      ) fail("content actions outside MessageFooter or CodeBlock");
       if (
         source.string(source.attr(node, "class"))?.includes(
           "otk-message-footer",

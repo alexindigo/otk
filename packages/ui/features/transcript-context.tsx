@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
+  type CodeBlockSource,
   createTranscriptInteraction,
   type NativeSourceOwner,
   recordKindDisclosure,
@@ -37,6 +38,7 @@ export interface ContentIdentity {
   directory?: string;
 }
 export interface ContentTarget extends ContentIdentity {
+  code?: CodeBlockSource;
   lastID?: string;
   completed?: boolean;
   queued?: boolean;
@@ -235,8 +237,6 @@ export function TranscriptContext(
     const [kind, title] of [
       ["prompt", "Copy prompt"],
       ["reply", "Copy reply"],
-      ["code", "Copy code"],
-      ["diff", "Copy code"],
     ]
   ) {
     ownedCommand(ports, {

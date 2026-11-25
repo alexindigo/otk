@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../tools/ToolFrame.css" with { type: "text" };
-import "./NativeSource.css" with { type: "text" };
+import CodeBlock from "../CodeBlock.tsx";
 import {
   createEffect,
   createMemo,
@@ -143,7 +143,10 @@ export default function NativeSource(props: {
                           {value().bytes}{" "}
                           bytes{value().truncated ? " - Preview truncated" : ""}
                         </small>
-                        <pre class="otk-native-preview">{value().text}</pre>
+                        <CodeBlock
+                          source={{ kind: "output", text: value().text }}
+                          textClass="otk-native-preview"
+                        />
                       </>
                     )}
                   </Show>

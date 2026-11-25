@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./PermissionSummary.css" with { type: "text" };
+import CodeBlock from "./CodeBlock.tsx";
 import { createSignal, For, Match, Show, Switch } from "solid-js";
 import DisclosureToggle from "./DisclosureToggle.tsx";
 import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
@@ -40,7 +41,10 @@ export default function PermissionSummary(
         <Match when={detailOf(props.request.detail, "bash")}>
           {(detail) => (
             <>
-              <pre class="otk-permission-command">{detail().command}</pre>
+              <CodeBlock
+                source={{ kind: "request", text: detail().command }}
+                textClass="otk-permission-command"
+              />
               <Show when={detail().cwd}>
                 <p class="otk-muted otk-path">{detail().cwd}</p>
               </Show>

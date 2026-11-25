@@ -192,103 +192,89 @@ function TerminalContent(
     ),
     (id) => !model.state.closing.includes(id),
   );
-  const unavailable = () => {
-    const error = model.terminals.state.error;
-    return !!error &&
-      ["terminal-unavailable", "method"].includes(
-        error.failure?.value.code ?? "",
-      );
-  };
   return (
     <section
       class="otk-terminal"
       aria-label="Terminal"
       ref={contextTarget(() => ({ kind: "terminal", data: undefined }))}
     >
+      <Show when={model.state.error || model.terminals.state.error}>
+        {(feedback) => <PaneState feedback={feedback() || undefined} />}
+      </Show>
       <Show
-        when={!unavailable()}
+        when={model.terminals.state.list.length}
         fallback={
-          <p class="otk-muted">Terminal is unavailable on this server.</p>
+          <PaneState>
+            <Show
+              when={!model.terminals.state.loading && !model.state.creating}
+              fallback={<p role="status">Opening terminal...</p>}
+            >
+              <ActionButton
+                action={create}
+                pendingLabel="Opening terminal..."
+              >
+                New terminal
+              </ActionButton>
+            </Show>
+          </PaneState>
         }
       >
-        <Show when={model.state.error || model.terminals.state.error}>
-          {(feedback) => <PaneState feedback={feedback() || undefined} />}
-        </Show>
-        <Show
-          when={model.terminals.state.list.length}
-          fallback={
-            <PaneState>
-              <Show
-                when={!model.terminals.state.loading && !model.state.creating}
-                fallback={<p role="status">Opening terminal...</p>}
-              >
+        <Tabs
+          label="Terminals"
+          compact
+          tabs={tabs()}
+          selected={model.selectedIndex()}
+          onSelect={model.selectIndex}
+          closeAction={close}
+          leading={() => (
+            <Show when={props.box.mode !== "expanded"}>
+              <h2 class="otk-terminal-heading">Terminal</h2>
+            </Show>
+          )}
+          actions={() => (
+            <>
+              <Show when={model.state.selection}>
+                <ActionButton action={add}>
+                  Add to prompt
+                </ActionButton>
+              </Show>
+              <Show when={model.state.creating}>
+                <span role="status">Opening terminal...</span>
+              </Show>
+              <Show when={!model.state.creating}>
                 <ActionButton
                   action={create}
-                  pendingLabel="Opening terminal..."
+                  class="otk-icon-button"
+                  label="New terminal"
+                  title="New terminal"
                 >
-                  New terminal
+                  <PlusIcon />
                 </ActionButton>
               </Show>
-            </PaneState>
-          }
-        >
-          <Tabs
-            label="Terminals"
-            compact
-            tabs={tabs()}
-            selected={model.selectedIndex()}
-            onSelect={model.selectIndex}
-            closeAction={close}
-            leading={() => (
-              <Show when={props.box.mode !== "expanded"}>
-                <h2 class="otk-terminal-heading">Terminal</h2>
-              </Show>
-            )}
-            actions={() => (
-              <>
-                <Show when={model.state.selection}>
-                  <ActionButton action={add}>
-                    Add to prompt
-                  </ActionButton>
-                </Show>
-                <Show when={model.state.creating}>
-                  <span role="status">Opening terminal...</span>
-                </Show>
-                <Show when={!model.state.creating}>
-                  <ActionButton
-                    action={create}
-                    class="otk-icon-button"
-                    label="New terminal"
-                    title="New terminal"
-                  >
-                    <PlusIcon />
-                  </ActionButton>
-                </Show>
-                <ActionButton
-                  action={resize}
-                  class="otk-icon-button"
-                  label={sizeLabel()}
-                  title={sizeLabel()}
+              <ActionButton
+                action={resize}
+                class="otk-icon-button"
+                label={sizeLabel()}
+                title={sizeLabel()}
+              >
+                <Show
+                  when={props.box.mode === "expanded"}
+                  fallback={<ExpandIcon />}
                 >
-                  <Show
-                    when={props.box.mode === "expanded"}
-                    fallback={<ExpandIcon />}
-                  >
-                    <CollapseIcon />
-                  </Show>
-                </ActionButton>
-                <ActionButton
-                  action={hide}
-                  class="otk-icon-button"
-                  label="Hide terminal"
-                  title="Hide terminal"
-                >
-                  <ChevronDownIcon />
-                </ActionButton>
-              </>
-            )}
-          />
-        </Show>
+                  <CollapseIcon />
+                </Show>
+              </ActionButton>
+              <ActionButton
+                action={hide}
+                class="otk-icon-button"
+                label="Hide terminal"
+                title="Hide terminal"
+              >
+                <ChevronDownIcon />
+              </ActionButton>
+            </>
+          )}
+        />
       </Show>
     </section>
   );
@@ -327,6 +313,7 @@ function OpenTerminal(
       focus();
     },
     solidState,
+    props.box,
   );
   onSettled(() => {
     void model.start();

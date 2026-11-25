@@ -1090,8 +1090,8 @@ export class GhosttyTerminalSurface {
     }, 150);
   }
 
-  // Flush on release so immediate typing reaches a shell with the settled width.
-  private readonly onWindowPointerRelease = () => {
+  // Pointer release and Run both need to settle the grid before sending input.
+  private readonly flushResize = () => {
     if (this.disposed || this.resizeNotifyTimer === null) return;
     this.fit();
     if (this.resizeNotifyTimer === null) return;
@@ -1125,6 +1125,15 @@ export class GhosttyTerminalSurface {
     this.pasteShortcutToken += 1;
     if (text.length === 0) return;
     this.sendInput(() => this.core.encodePaste(text), admission);
+  }
+
+  /** The same paste encoding as a native paste, with one explicit submission. */
+  pasteAndSubmit(text: string): void {
+    const admission = this.inputAdmission;
+    if (text && admission !== null) {
+      this.flushResize();
+      this.sendInput(() => this.core.encodePaste(text) + "\r", admission);
+    }
   }
 
   // The terminal selection is the only browser-readable PRIMARY-like buffer.
@@ -2159,10 +2168,10 @@ export class GhosttyTerminalSurface {
     this.scrollbar.addEventListener("pointerup", this.onScrollbarPointerUp);
     this.scrollbar.addEventListener("pointercancel", this.onScrollbarPointerUp);
     this.scrollbar.addEventListener("keydown", this.onScrollbarKeyDown);
-    globalThis.addEventListener("pointerup", this.onWindowPointerRelease, true);
+    globalThis.addEventListener("pointerup", this.flushResize, true);
     globalThis.addEventListener(
       "pointercancel",
-      this.onWindowPointerRelease,
+      this.flushResize,
       true,
     );
   }
@@ -2207,12 +2216,12 @@ export class GhosttyTerminalSurface {
     this.scrollbar.removeEventListener("keydown", this.onScrollbarKeyDown);
     globalThis.removeEventListener(
       "pointerup",
-      this.onWindowPointerRelease,
+      this.flushResize,
       true,
     );
     globalThis.removeEventListener(
       "pointercancel",
-      this.onWindowPointerRelease,
+      this.flushResize,
       true,
     );
   }

@@ -57,6 +57,7 @@ export interface TerminalRenderer {
   visible(value: boolean): void;
   theme(colors: ThemeColors): void;
   focus(): void;
+  run(text: string): void;
   selection(): string;
   dispose(): void;
 }
@@ -93,6 +94,7 @@ export async function createTerminalRenderer(
     visible: (value) => active.setVisible(value),
     theme: (colors) => active.setTheme(terminalTheme(colors)),
     focus: () => active.focus(),
+    run: (text) => active.pasteAndSubmit(text),
     selection: () => active.getSelection(),
     dispose: () => active.dispose(),
   };
