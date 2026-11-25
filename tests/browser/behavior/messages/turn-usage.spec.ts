@@ -4,6 +4,16 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { hoverCompletedUsage, prompt } from "../../pages/transcript.ts";
+
+/** The display's one duration owner (packages/client/format.ts) rounds to
+ * tenths half-up; toFixed(1) on a binary 0.x5 rounds down (150 ms -> 0.1). */
+const shownSeconds = (
+  timing: { state: string; workingMs?: number } | undefined,
+) =>
+  `${
+    Math.round((timing?.state === "known" ? timing.workingMs! : NaN) / 100) /
+    10
+  }s`;
 test.use({ profile: "messages-priced" });
 test("messages.priced-native-multistep-usage-display-persistence", {
   tag: ["@messages", "@contracts"],
@@ -123,13 +133,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     }
     expect(Math.abs(Number(values[i][8].replace(/[$,]/g, "")) - m.cost!))
       .toBeLessThanOrEqual(.005);
-    expect(values[i][9]).toBe(
-      `${
-        Number(((detail.calls[i].timing?.state === "known"
-          ? detail.calls[i].timing.workingMs
-          : NaN) / 1000).toFixed(1))
-      }s`,
-    );
+    expect(values[i][9]).toBe(shownSeconds(detail.calls[i].timing));
   }
   const totals = await page.locator(".otk-usage-breakdown tfoot tr").evaluate(
     (row) => Array.from(row.children, (cell) => cell.textContent),
@@ -150,11 +154,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   for (const [i, rate] of [2, 4, 4, .5, 3].entries()) {
     expect(Math.abs(costs[i] - sums[i] * rate / 1e6)).toBeLessThanOrEqual(1e-9);
   }
-  const turnTime = `${
-    Number(((detail.summary.timing?.state === "known"
-      ? detail.summary.timing.workingMs
-      : NaN) / 1000).toFixed(1))
-  }s`;
+  const turnTime = shownSeconds(detail.summary.timing);
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,
   );
