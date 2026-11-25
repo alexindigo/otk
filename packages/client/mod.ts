@@ -28,6 +28,7 @@ export {
   terminalBoxFor,
   type TerminalBoxMode,
 } from "./terminal-boxes.ts";
+export * from "./code-blocks.ts";
 export {
   createNativeSources,
   type NativeSourceOwner,
