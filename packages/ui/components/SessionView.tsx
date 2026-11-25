@@ -56,7 +56,6 @@ import {
   errorFeedback,
   type FailureValue,
   failureValue,
-  isReplaced,
   placeFailure,
   replyKey,
   RequestFailure,
@@ -333,10 +332,7 @@ export default function SessionView(props: {
     !!props.branchHistory?.state.permanence ||
     copyRecovery() ||
     !!props.branchHistory?.state.choice ||
-    !!props.branchHistory?.state.error && !rollbackState().record ||
-    !!props.branchHistory?.state.branches.some((branch) =>
-      !branch.pending && isReplaced(branch)
-    );
+    !!props.branchHistory?.state.error && !rollbackState().record;
   const branchFailureVisible = () => {
     const value = props.branchHistory?.state.error;
     return !value || value.diagnosticID !== feedback()?.diagnosticID;
@@ -420,25 +416,6 @@ export default function SessionView(props: {
   let following: ReturnType<typeof followViewport> | undefined;
   const [geometry, setGeometry] = createSignal<ViewportSnapshot>();
   const commandPorts = useCommandPorts(), hints = commandHints(commandPorts);
-  ownedCommand(commandPorts, {
-    id: "session.savedBranches",
-    title: "Saved earlier branches",
-    category: "Session",
-    scope: "session",
-    arguments: { type: "object", optional: true },
-    context: { kind: "session", order: 26 },
-    enabled: (_ctx, target?: { sidecarId?: string; sessionID?: string }) =>
-      (!target ||
-        target.sidecarId === props.sidecarId &&
-          target.sessionID === props.info?.id) &&
-      !!props.branchHistory?.state.branches.some((branch) => !branch.pending),
-    run: () => {
-      const branch = props.branchHistory?.state.branches.find((branch) =>
-        !branch.pending
-      );
-      if (branch) props.branchHistory!.open(branch.id);
-    },
-  });
   const latest = ownedCommand(commandPorts, {
     id: "transcript.latest",
     name: "latest",

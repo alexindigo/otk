@@ -84,6 +84,7 @@ export interface BranchHistory {
   stageEnded(target: Selection): void;
   committed(target: Selection, boundaryID: string, at: number): void;
   restored(target: Selection): void;
+  finished(target: Selection): readonly SavedBranch[];
   open(id?: string): void;
   reuse(branchID: string, draft: Draft, label: string): void;
   choose(saved: boolean): void;
@@ -900,6 +901,14 @@ export function createBranchHistory(options: {
         : undefined;
     },
     subscribe: (listener) => store.subscribe(listener),
+    finished(t) {
+      try {
+        const branches = same(selected, t) ? store.state.branches : load(t);
+        return branches.filter((branch) => !branch.pending);
+      } catch {
+        return []; // The owner already reported the storage failure.
+      }
+    },
     select(target) {
       if (target && same(selected, target)) return;
       selected = target && { ...target };
@@ -1080,15 +1089,21 @@ export function createBranchHistory(options: {
       } catch { /* Storage failures are published by the archive owner. */ }
     },
     committed(t, boundaryID, at) {
-      if (sends.get(draftKey(t))?.record.boundaryID === boundaryID) cancelSend(t);
+      if (sends.get(draftKey(t))?.record.boundaryID === boundaryID) {
+        cancelSend(t);
+      }
       try {
         const branch = load(t).find((b) => b.boundary === boundaryID);
-        if (!branch || isReplaced(branch) ||
-          (branch.session.revertCommitted?.at ?? -Infinity) >= at) return;
+        if (
+          !branch || isReplaced(branch) ||
+          (branch.session.revertCommitted?.at ?? -Infinity) >= at
+        ) return;
         branch.pending = false;
         branch.committedAt = at;
         save(t, branch, true);
-      } catch { /* A native fact cannot roll back the user's admitted action. */ }
+      } catch {
+        /* A native fact cannot roll back the user's admitted action. */
+      }
     },
     restored(t) {
       cancelSend(t);
