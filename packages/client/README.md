@@ -1661,13 +1661,13 @@ public entry to update independent selected counters, resolve aliases and
 release ownership.
 
 Commands may contribute
-`context: {kind, title?, items?, order?, destructive?, confirm?}`. The kind is
-feature-owned (a string or a list of shared kinds for one action), and the
-optional title projects a captured target's data. A contribution can instead
-return `items(data) → [{key?, title, args}]` to offer several choices through
-one registration. Give choices stable keys when their order can change. The
-ordinary enabled predicate and run handler receive each choice's args (or the
-target data for a single action). `contextActions({kind, data})` exposes
+`context: {kind, title?, items?, arguments?, order?, destructive?, confirm?}`.
+The kind is feature-owned (a string or a list of shared kinds for one action),
+and the optional title projects a captured target's data. A contribution can
+instead return `items(data) -> [{key?, title, args}]` to offer several choices
+through one registration. Give choices stable keys when their order can change.
+The ordinary enabled predicate and run handler receive each choice's args (or
+the target data for a single action). `contextActions({kind, data})` exposes
 data-only available actions without exposing callbacks. Targets may declare
 `area: true` for an enclosing application region, through the same target
 contract and kinds. `contextGroups(hub, targets)` keeps the first two nonempty
@@ -1687,6 +1687,16 @@ outside the returned action's weak owner metadata. Optional `confirm(args)`
 projects an armed title as data on a ContextAction. The menu owns its
 press-twice lifetime; the hub still owns invocation-time availability and
 registration identity, including after an item was armed.
+
+Projection uses the invocation owner's schema and availability before calling a
+single action's title or confirmation factory. An enclosing area with a loading
+or invalid target therefore contributes no target-dependent action. Item
+factories likewise validate their source data before projection, using the
+command's argument schema by default. Only a transformation that requires a
+different source shape declares `context.arguments`; generated choices still
+pass ordinary invocation admission. Registration freezes that source schema as
+well as the command schema. Neither menus nor target components infer readiness
+or duplicate those checks.
 
 ## Notifications
 
