@@ -4,6 +4,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
 import {
   appActions,
+  composerInputActions,
   dismiss,
   groups,
   menuLabels,
@@ -41,8 +42,7 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
       [".otk-prompt-actions", [[
         "Choose agent",
         "Choose model",
-        "Edit prompt",
-        "Attach files",
+        ...composerInputActions,
       ], appActions]],
     ] as const
   ) {

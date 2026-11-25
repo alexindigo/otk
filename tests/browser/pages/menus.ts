@@ -22,6 +22,11 @@ export const panelActions = [
   "Find a session",
   "Collapse right panel",
 ];
+export const composerInputActions = [
+  "Edit prompt",
+  "Attach files",
+  "Toggle terminal",
+];
 /** An open native shell can precede its reactive action projection. Geometry
  * baselines belong to the complete visible menu, not that intermediate shell.
  */

@@ -5,6 +5,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import {
   appActions,
   clipboard,
+  composerInputActions,
   contextMenu,
   copied,
   dismiss,
@@ -218,7 +219,7 @@ test(
     await prompt.fill("Keep this prompt");
     await rightClick(page, ".otk-prompt-actions", true);
     expect(await groups(page)).toEqual([
-      ["Edit prompt", "Attach files"],
+      composerInputActions,
       appActions,
     ]);
     await pick(page, "Edit prompt");
