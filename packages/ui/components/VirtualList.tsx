@@ -115,6 +115,8 @@ const frame = () =>
 export default function VirtualList(props: {
   id?: string;
   listRole?: "list" | "listbox";
+  activeDescendant?: string;
+  focusTarget?(element: HTMLElement): void;
   keys: readonly string[];
   label: string;
   scope?: string;
@@ -908,13 +910,18 @@ export default function VirtualList(props: {
       }}
     >
       <ScrollRegion
-        ref={container}
+        ref={(element) => {
+          container = element;
+          props.focusTarget?.(element);
+        }}
         id={props.id}
         borrowed={borrowed}
         class={`otk-virtual-list ${borrowed ? "otk-virtual-borrowed" : ""} ${
           props.class ?? ""
         }`}
         role={props.listRole ?? "list"}
+        tabindex={props.focusTarget ? -1 : undefined}
+        aria-activedescendant={props.activeDescendant}
         aria-label={props.label}
         data-acquired-count={props.keys.length}
         onFocusIn={(event) => acceptFocus(event.target)}

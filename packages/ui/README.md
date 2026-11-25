@@ -1725,11 +1725,11 @@ application, RPC implementation or native backend. `Toasts` renders the returned
 toast model: information/done chips expire after six seconds, keyed input chips
 are active and errors sticky. Each message borrows the shared feedback binding's
 alert/status semantics and names itself with the owner's complete notification
-text. Toast owns a non-scrolling Surface body. The viewport-fitted stack shows
-at most three cards, newest first, and delegates its overflow row to an injected
-Sessions-opening callback. Opening that view detaches the stack so it cannot
-cover the session lamps. Each card has a square top-right close slot and a
-trailing Dismiss action. Both dismiss presentation; action buttons use
+text. Toast's Surface body scrolls when the viewport constrains it. The stack
+shows at most three cards, newest first, and delegates its overflow row to an
+injected Sessions-opening callback. Opening that view detaches the stack so it
+cannot cover the session lamps. Each card has a square top-right close slot and
+a trailing Dismiss action. Both dismiss presentation; action buttons use
 delivery-scoped public command IDs. Permission details use the shared summary's
 compact, single-line target with the full text in its title. Session activity
 labels and stale-resume descriptions come from the client formatter. Attention

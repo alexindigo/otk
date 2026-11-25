@@ -3,6 +3,24 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "contract-messages-public-ui" });
 
+test("messages.constrained-toasts-keep-detail-and-actions-reachable", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.setViewportSize({ width: 400, height: 220 });
+  await page.goto(`${state.url}/?action-toasts&tall`);
+  const stack = page.getByRole("region", { name: "Notifications" });
+  const toast = stack.locator('[data-note="other"]');
+  const lastDetail = toast.getByText("Detail 14 for other", { exact: true });
+  const dismiss = toast.getByRole("button", { name: "Dismiss", exact: true });
+  await expect(toast.getByText("Target other", { exact: true }))
+    .toBeInViewport();
+  await lastDetail.scrollIntoViewIfNeeded();
+  await expect(lastDetail).toBeInViewport();
+  await dismiss.click();
+  await expect(toast).toHaveCount(0);
+  await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+});
+
 for (const scenario of ["lifetime", "source"] as const) {
   test(`messages.lazy-preview-${scenario}`, {
     tag: ["@messages", "@contracts"],
