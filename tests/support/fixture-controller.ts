@@ -97,7 +97,11 @@ try {
               owner.fake.port,
               owner.oc.port,
               owner.oc.nativePort,
-              ...owner.servers.map((server) => server.port),
+              ...owner.servers.flatMap((server) =>
+                server.port === server.nativePort
+                  ? [server.port]
+                  : [server.port, server.nativePort]
+              ),
             ]),
           ],
           sidecarPort: fixture.servers[0]?.port,
@@ -624,6 +628,7 @@ try {
                 : ["messages-cooling", "messages-temperature"].includes(profile)
                 ? { messages: { coolms: 2500, preloadms: 1500 } }
                 : {},
+              { stableOrigin: profile !== "ordinary" },
             )
           );
           if (record) {
@@ -633,10 +638,13 @@ try {
                 pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
                 sidecarPort: server.port,
                 ports: [
-                  fixture.fake.port,
-                  fixture.oc.port,
-                  server.port,
-                  fixture.oc.nativePort,
+                  ...new Set([
+                    fixture.fake.port,
+                    fixture.oc.port,
+                    server.port,
+                    server.nativePort,
+                    fixture.oc.nativePort,
+                  ]),
                 ],
               }),
             );
@@ -682,16 +690,20 @@ try {
           return {
             root: fixture.oc.root,
             url: server.url,
+            statePath: server.statePath,
             nativeUrl: fixture.oc.url,
             binary: nativeBinary,
             version: nativeVersion,
             pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
             ports: [
-              ...extraPorts,
-              fixture.fake.port,
-              fixture.oc.port,
-              server.port,
-              fixture.oc.nativePort,
+              ...new Set([
+                ...extraPorts,
+                fixture.fake.port,
+                fixture.oc.port,
+                server.port,
+                server.nativePort,
+                fixture.oc.nativePort,
+              ]),
             ],
           };
         }
@@ -1011,10 +1023,9 @@ try {
           else {
             const server = fixture!.servers.at(-1)!;
             await client!.close();
-            await server.stop();
-            // The isolated restart journey proves missed terminal data, rather
-            // than relying on future chunks after a successful reconnection.
-            if (profile === "transport-restart") {
+            await server.restart(async () => {
+              // Prove missed terminal data, not future chunks after reconnect.
+              if (profile !== "transport-restart") return;
               fixture!.fake.releaseAll();
               gates.clear();
               await waitFor(() => fixture!.fake.active, (count) => count === 0);
@@ -1036,12 +1047,8 @@ try {
                     ),
                 );
               }
-            }
-            const replacement = await fixture!.sidecar({
-              server: { port: server.port },
-              state: { path: join(fixture!.oc.root, `otk-${server.port}`) },
             });
-            client = new WsClient(replacement.url);
+            client = new WsClient(server.url);
             await client.connect(fixture!.oc.directory);
             await recordOwnership();
           }

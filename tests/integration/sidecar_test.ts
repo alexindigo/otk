@@ -7,7 +7,7 @@ import type { ContentSession, Message } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { ownSocket, WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
@@ -785,7 +785,7 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
   try {
     const extraOrigin = "http://127.0.0.1:31502";
     const server = await f.sidecar({
-      server: { port: freePort(), origins: [extraOrigin] },
+      server: { origins: [extraOrigin] },
       auth: {
         type: "password",
         username: "tester",

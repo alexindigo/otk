@@ -12,13 +12,12 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   });
   await openSession(state, page, session.id);
   const readSchema = () => {
-    const port = new URL(state.url).port,
-      db = new DatabaseSync(
-        state.controller.info!.root + `/otk-${port}/otk.db`,
-        {
-          readOnly: true,
-        },
-      );
+    const db = new DatabaseSync(
+      state.controller.info!.statePath! + "/otk.db",
+      {
+        readOnly: true,
+      },
+    );
     try {
       expect(
         db.prepare(

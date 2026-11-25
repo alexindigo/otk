@@ -20,6 +20,7 @@ import { resources, withResources } from "../support/resources.ts";
 import { waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { FreezeProxy } from "../support/freeze-proxy.ts";
 
 Deno.test({
   name:
@@ -256,9 +257,8 @@ Deno.test({
         "no credentials were sent (harness.url fallback)",
       );
 
-      const closed = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-      const url = `http://127.0.0.1:${closed.addr.port}`;
-      closed.close();
+      const unavailable = new FreezeProxy();
+      const url = `http://127.0.0.1:${unavailable.port}`;
       const unreachable = await assertRejects(
         () => selectHarness({ ...config, url }, env),
         Error,

@@ -4,7 +4,7 @@ import { join } from "@std/path";
 import { resources } from "../support/resources.ts";
 import { v1NativeTests } from "../support/native-contract.ts";
 const test = v1NativeTests(
-  "V1 numeric port collision recovery and custom-tool readiness; V2 binds port zero atomically",
+  "V1 listener ownership across generations and custom-tool readiness",
   ["tests/integration/v2-fixture-readiness_test.ts#OC2R1"],
 );
 import { nativeFixture } from "../support/native-fixture.ts";
@@ -33,7 +33,7 @@ test("native public endpoint keeps its initial socket instead of rebinding a rel
   }
 });
 
-test("native generation reallocates a proven occupied private port without borrowing its listener", async () => {
+test("native restart keeps its owned public endpoint and only admits the new generation", async () => {
   const f = await nativeFixture();
   await f.oc.stop();
   const foreign = Deno.serve(
@@ -45,7 +45,6 @@ test("native generation reallocates a proven occupied private port without borro
   );
   let foreignRequests = 0;
   const occupied = foreign.addr.port, publicURL = f.oc.url;
-  f.oc.nativePort = occupied;
   try {
     await f.oc.restart();
     assert(f.oc.nativePort !== occupied);
@@ -62,12 +61,12 @@ test("native generation reallocates a proven occupied private port without borro
     assertEquals(foreignRequests, 1);
     const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
-      body: { title: "Reallocated real native" },
+      body: { title: "Restarted real native" },
     });
-    f.fake.queue({ chunks: ["Actual native reply after port collision."] });
+    f.fake.queue({ chunks: ["Actual native reply after restart."] });
     await f.oc.request(`/session/${session.id}/prompt_async`, {
       method: "POST",
-      body: { parts: [{ type: "text", text: "Prove reallocated native" }] },
+      body: { parts: [{ type: "text", text: "Prove restarted native" }] },
     });
     const messages = await waitFor(
       () =>
@@ -86,32 +85,28 @@ test("native generation reallocates a proven occupied private port without borro
       messages.some((row) =>
         row.parts.some((part) =>
           part.type === "text" &&
-          part.text === "Actual native reply after port collision."
+          part.text === "Actual native reply after restart."
         )
       ),
     );
     assertEquals(foreignRequests, 1);
-    assertEquals(
-      (f.oc.log.match(/Native pre-admission port collision;/g) ?? []).length,
-      1,
-    );
   } finally {
     await foreign.shutdown();
   }
 });
 
-test("native startup does not reallocate unrelated pre-readiness failures", async () => {
+test("invalid native configuration fails without admitting a replacement", async () => {
   const f = await nativeFixture();
   await f.oc.stop();
-  const port = f.oc.nativePort;
+  const pid = f.oc.process.pid;
   await Deno.writeTextFile(
     join(f.oc.root, "config/opencode/opencode.json"),
     "{invalid config",
   );
   await assertRejects(() => f.oc.restart(), Error);
-  assertEquals(f.oc.nativePort, port);
-  assertEquals(
-    (f.oc.log.match(/Native pre-admission port collision;/g) ?? []).length,
-    0,
+  assert(f.oc.process.pid !== pid);
+  assert(f.oc.process.exitCode !== null || f.oc.process.signalCode !== null);
+  await assertRejects(() =>
+    fetch(f.oc.url, { signal: AbortSignal.timeout(5000) })
   );
 });

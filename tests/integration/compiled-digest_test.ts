@@ -7,7 +7,8 @@ import { createIndex } from "@otk/client";
 import type { IndexEntry, MessagePage, TurnUsageDetail } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { helperParent } from "../support/helper-parent.ts";
-import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
+import { otkEndpoint } from "../support/bound-endpoint.ts";
 import { ownedProcess } from "../support/process.ts";
 import { tempDir } from "../support/resources.ts";
 import { v1NativeTests } from "../support/native-contract.ts";
@@ -30,11 +31,10 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     method: "POST",
     body: { title: "Compiled supervision" },
   });
-  const port = await freePort(), url = `http://127.0.0.1:${port}`;
   const state = join(root, "state"), config = join(root, "otk.toml");
   await Deno.writeTextFile(
     config,
-    `[server]\nport=${port}\n[auth]\ntype="none"\n[state]\npath=${
+    `[server]\nport=0\n[auth]\ntype="none"\n[state]\npath=${
       JSON.stringify(state)
     }\n[harness]\nurl=${JSON.stringify(oc.url)}\ndb=${
       JSON.stringify(oc.db)
@@ -64,7 +64,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     process.child.stderr!.on("data", (chunk) => {
       log += chunk.toString();
     });
-    await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
+    const url = (await otkEndpoint(process.child)).origin;
     const client = new WsClient(url);
     client.lease({
       directory: oc.directory,

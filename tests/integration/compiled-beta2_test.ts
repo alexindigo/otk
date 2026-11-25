@@ -20,7 +20,8 @@ import {
 } from "../support/beta1-state.ts";
 import { DatabaseSync } from "node:sqlite";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
+import { otkEndpoint } from "../support/bound-endpoint.ts";
 import { ownedProcess } from "../support/process.ts";
 import { resources, tempDir } from "../support/resources.ts";
 import { v1NativeTests } from "../support/native-contract.ts";
@@ -85,11 +86,10 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
   authConfig.auth.type = "";
   await new AuthState(authConfig).setup({ type: "none" });
   const authText = await Deno.readTextFile(authPath);
-  const port = freePort(), url = `http://127.0.0.1:${port}`;
   const overlay = join(root, "otk.toml");
   await Deno.writeTextFile(
     overlay,
-    `[server]\nport=${port}\n[auth]\ntype="none"\n[state]\npath=${
+    `[server]\nport=0\n[auth]\ntype="none"\n[state]\npath=${
       JSON.stringify(state)
     }\n[harness]\ntype="opencode1"\nurl=${JSON.stringify(native.url)}\ndb=${
       JSON.stringify(native.db)
@@ -125,7 +125,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
     process.child.stderr!.on("data", (chunk) => {
       log += chunk.toString();
     });
-    await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
+    const url = (await otkEndpoint(process.child)).origin;
     const client = new WsClient(url);
     client.lease({
       directory: native.directory,

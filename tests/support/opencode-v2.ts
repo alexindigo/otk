@@ -136,7 +136,7 @@ export class OpencodeV2Test implements NativeFixture {
     this.process = owner.child;
     this.#stop = resources().defer("V2 native generation", async () => {
       try {
-        await this.proxy?.stop();
+        this.proxy?.retarget();
       } finally {
         await owner.stop();
       }
@@ -204,7 +204,8 @@ export class OpencodeV2Test implements NativeFixture {
       await this.api.model.list({ location }, { signal });
       const nativePort = Number(new URL(endpoint.url).port);
       this.nativePort = nativePort;
-      this.proxy = new FreezeProxy(nativePort, { port: this.proxy?.port });
+      this.proxy ??= new FreezeProxy();
+      this.proxy.retarget(nativePort);
       this.url = `http://127.0.0.1:${this.proxy.port}`;
       const state = join(this.root, "discovery");
       await Deno.mkdir(join(state, "opencode"), { recursive: true });

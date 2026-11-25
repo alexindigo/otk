@@ -3,7 +3,9 @@ import { DatabaseSync } from "node:sqlite";
 import { dirname, isAbsolute, join, resolve } from "@std/path";
 import { opencodeV1SessionID as ids } from "@otk/harness-opencode-v1";
 import { nativeBinary, nativeVersion } from "./native.ts";
-import { freePort, waitFor } from "./opencode.ts";
+import { waitFor } from "./opencode.ts";
+import { announcedEndpoint } from "./bound-endpoint.ts";
+import { nativeListeningURL } from "./native-announcement.ts";
 import { ownedProcess } from "./process.ts";
 import { resources, withResources } from "./resources.ts";
 import {
@@ -96,8 +98,15 @@ export interface SnapshotManifest {
 
 /** Own stock-server lifecycle and disk-backed XDG tree; never uses operator state. */
 export class SessionScale {
-  readonly port = freePort();
-  readonly url = `http://127.0.0.1:${this.port}`;
+  #endpoint?: URL;
+  get url(): string {
+    if (!this.#endpoint) throw new Error("Scale server has not bound");
+    return this.#endpoint.origin;
+  }
+  get port(): number {
+    if (!this.#endpoint) throw new Error("Scale server has not bound");
+    return Number(this.#endpoint.port);
+  }
   readonly directory: string;
   readonly db: string;
   manifest!: ScaleManifest;
@@ -615,7 +624,7 @@ export class SessionScale {
       "--hostname",
       "127.0.0.1",
       "--port",
-      String(this.port),
+      "0",
     ], {
       cwd: this.directory,
       env: this.#env,
@@ -632,6 +641,11 @@ export class SessionScale {
         );
       });
     }
+    this.#endpoint = await announcedEndpoint(
+      process.child,
+      "stdout",
+      (line) => nativeListeningURL(line, "opencode-v1"),
+    );
     await waitFor(
       async () => {
         try {
@@ -673,6 +687,7 @@ export class SessionScale {
     if (owner) {
       await owner.stop();
       this.#process = undefined;
+      this.#endpoint = undefined;
     }
   }
 }

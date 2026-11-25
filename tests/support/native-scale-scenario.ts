@@ -4,7 +4,6 @@ import { start } from "../../main.ts";
 import { staticResponse } from "../../core/mod.ts";
 import { cfg } from "./config.ts";
 import { browserProvider, browserScenarioPath } from "./browser-native.ts";
-import { freePort } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
 import { SCALE } from "./session-scale.ts";
 import { createScale, scaleDiscovery } from "./scale-native.ts";
@@ -78,7 +77,7 @@ export async function nativeScaleScenario(profile: Profile) {
   const uiURL = `http://127.0.0.1:${ui.addr.port}`;
   const config = cfg();
   config.auth.type = "none";
-  config.server.port = freePort();
+  config.server.port = 0;
   config.server.origins = [uiURL];
   config.state.path = join(root, "state");
   config.harness.url = profile === "contract-scale-heap"
@@ -105,7 +104,7 @@ export async function nativeScaleScenario(profile: Profile) {
     }
     return read(...args);
   };
-  const client = new WsClient(`http://127.0.0.1:${config.server.port}`);
+  const client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
   await client.connect();
   resources().defer("scale client", () => client.close());
   if (profile !== "contract-scale-heap") {
@@ -121,7 +120,7 @@ export async function nativeScaleScenario(profile: Profile) {
   }
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const url = new URL(uiURL);
-  url.searchParams.set("api", `http://127.0.0.1:${config.server.port}`);
+  url.searchParams.set("api", `http://127.0.0.1:${app.server.addr.port}`);
   url.searchParams.set("a", a.id);
   url.searchParams.set("b", b.id);
   url.searchParams.set("directory", a.directory);
@@ -134,7 +133,7 @@ export async function nativeScaleScenario(profile: Profile) {
     binary: nativeBinary,
     version: nativeVersion,
     pids: [Deno.pid],
-    ports: [ui.addr.port, config.server.port, native.port, fake.port],
+    ports: [ui.addr.port, app.server.addr.port, native.port, fake.port],
   };
   const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
   if (record) await Deno.writeTextFile(record, JSON.stringify(info));
