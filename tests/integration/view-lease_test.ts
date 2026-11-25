@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { ServerFrame } from "@otk/protocol";
+import { entityKey, type ServerFrame } from "@otk/protocol";
 import { test } from "../support/resources.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
@@ -248,6 +248,55 @@ test("project and visible-row acquisition scopes inbox marks, policies and retai
   }
 });
 
+test("history-only view demand admits metadata without admitting ancestry or turn bodies", async () => {
+  const app = await coreBackendFixture(await fixture());
+  const client = new WsClient(app.url);
+  try {
+    const parent = app.app.index.get("tstv1-core")!;
+    const neighbor = {
+      ...parent,
+      id: "tstv1-history-neighbor",
+      parentID: parent.id,
+    };
+    app.app.index.upsertMetadata(neighbor);
+    await client.connect();
+    await client.wait((frame) => frame.t === "index.snapshot");
+    client.send({
+      t: "view",
+      epoch: 1,
+      crumbs: [],
+      rows: [],
+      historyNeighbors: [neighbor.id],
+    });
+    const patch = await client.wait((frame) =>
+      frame.t === "index.patch" && frame.epoch === 1
+    );
+    assert(patch.t === "index.patch");
+    assertEquals(
+      patch.ops.map((op) => op.op === "upsert" ? op.entry.id : op.id),
+      [neighbor.id],
+    );
+    const admitted = patch.ops[0];
+    assert(admitted.op === "upsert");
+    assertEquals(admitted.entry.digest.turns, {});
+    client.send({
+      t: "view",
+      epoch: 2,
+      crumbs: [],
+      rows: [],
+      historyNeighbors: [],
+    });
+    const eviction = await client.wait((frame) =>
+      frame.t === "index.patch" && frame.epoch === 2
+    );
+    assert(eviction.t === "index.patch");
+    assertEquals(eviction.ops, [{ op: "evict", id: neighbor.id }]);
+  } finally {
+    await client.close();
+    await app.app.stop();
+  }
+});
+
 test("@load @transport view leases exclude unrelated sessions and fence replacements", async () => {
   const app = await coreBackendFixture(await fixture());
   const client = new WsClient(app.url);
@@ -391,6 +440,8 @@ for (const admission of ["attention", "task"]) {
     const client = new WsClient(app.url),
       rpc = new Rpc((frame) => recovery.push(frame)),
       consumer = createInbox(rpc);
+    const stateOf = (id: string) =>
+      consumer.entities.get(entityKey("session", id));
     const send = client.send.bind(client), held: unknown[] = [];
     let hold = true;
     client.send = (frame) => {
@@ -434,7 +485,7 @@ for (const admission of ["attention", "task"]) {
       await client.connect(seed.directory, seed.id);
       await client.wait((frame) => frame.t === "inbox.snapshot");
       assert(held.length > 0, "the initial index chunk must still own credit");
-      assertEquals(consumer.state.inbox.supervision?.[child.id], undefined);
+      assertEquals(stateOf(child.id), undefined);
       const active = {
         ...child,
         activity: {
@@ -472,8 +523,13 @@ for (const admission of ["attention", "task"]) {
       await client.rpc("prefs.get", {});
       assertEquals(consumer.state.inbox.finishes[child.id], 100);
       assertEquals(consumer.state.inbox.seen[child.id], 100);
-      assertEquals(consumer.state.inbox.supervision?.[child.id], {
-        state: admission === "attention" ? "needsYou" : "none",
+      const state = stateOf(child.id);
+      assertEquals({
+        state: state?.state,
+        terminal: state?.terminal,
+        unseen: state ? state.counts.unseen > 0 : undefined,
+      }, {
+        state: admission === "attention" ? "blocked" : "none",
         terminal: 100,
         unseen: false,
       });
@@ -486,7 +542,7 @@ for (const admission of ["attention", "task"]) {
         );
       }
       assertEquals(consumer.state.inbox.finishes[unrelated.id], undefined);
-      assertEquals(consumer.state.inbox.supervision?.[unrelated.id], undefined);
+      assertEquals(stateOf(unrelated.id), undefined);
       const at = client.frames.length;
       app.app.index.upsertMetadata({
         ...active,
@@ -504,7 +560,11 @@ for (const admission of ["attention", "task"]) {
         client.frames.slice(at).flatMap((frame) =>
           frame.t === "inbox.patch"
             ? frame.ops.filter((op) =>
-              "sessionID" in op && op.sessionID === child.id
+              ("sessionID" in op && op.sessionID === child.id) ||
+              (op.op === "entity.upsert" && op.value.kind === "session" &&
+                op.value.id === child.id) ||
+              (op.op === "entity.remove" &&
+                op.key === entityKey("session", child.id))
             )
             : []
         ),

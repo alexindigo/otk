@@ -624,12 +624,13 @@ async function start(
           },
           ioWait: nativeWait,
           retryable: sqliteBusy,
-          admission: (signal) =>
+          admission: (signal, lane) =>
             nativeReadsGate.acquire(
               signal,
               execution.getStore()?.turn.priority === "interactive",
               () =>
                 scheduler!.interruptIO(signal),
+              lane,
             ),
           work: (ms) => execution.getStore()?.turn.charge(ms),
         },
@@ -927,7 +928,12 @@ function handle(message: ToWorker): void {
         release?: () => void;
       };
     servingReads.set(message.id, value);
-    void nativeReadsGate.acquire(controller.signal, true).then((release) => {
+    void nativeReadsGate.acquire(
+      controller.signal,
+      true,
+      undefined,
+      message.lane,
+    ).then((release) => {
       if (controller.signal.aborted) {
         release();
         return;

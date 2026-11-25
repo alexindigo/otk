@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { NativeReadLane } from "./read-admission.ts";
 /** Shared bounded native operation. Permission and settlement never occupy execution. */
 export class NativeReadiness {
   constructor(
     readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T>,
-    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
+    readonly admission?: (
+      signal: AbortSignal,
+      lane?: NativeReadLane,
+    ) => Promise<() => void>,
   ) {}
   async run<T>(
     signal: AbortSignal,
     work: () => Promise<T>,
     admit = true,
+    lane?: NativeReadLane,
   ): Promise<T> {
     let release: (() => void) | undefined;
     if (this.admission && admit) {
-      const permission = this.admission(signal);
+      const permission = this.admission(signal, lane);
       try {
         release = await this.wait(permission);
       } catch (error) {

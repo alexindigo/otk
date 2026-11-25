@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { entitySnapshot, sessionEntity } from "./supervision-fixture.ts";
 import { assertEquals } from "@std/assert";
-import { NotificationTriggers } from "@otk/client";
+import { type Note, NotificationTriggers } from "@otk/client";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
 
 function fixture(finishes: Record<string, number> = {}) {
-  const f = shellFixture(), notes: string[] = [];
+  const f = shellFixture(), notes: string[] = [], replacements: Note[] = [];
   const trigger = new NotificationTriggers(
-    (note) => notes.push(note.kind),
+    (note, previous) => {
+      if (previous) replacements.push(previous);
+      notes.push(note.kind);
+    },
     () => {},
   );
   f.resources.observeEntries(
@@ -29,7 +32,14 @@ function fixture(finishes: Record<string, number> = {}) {
   return {
     ...f,
     notes,
-    finish(id: string, time: number) {
+    replacements,
+    finish(
+      id: string,
+      time: number,
+      outcome: "succeeded" | "failed" | "unknown" = "succeeded",
+      unseen = true,
+      terminalOrigin?: "live" | "historical",
+    ) {
       f.resources.receive("local", {
         t: "inbox.patch",
         generation: "fixture",
@@ -40,10 +50,11 @@ function fixture(finishes: Record<string, number> = {}) {
           {
             op: "entity.upsert",
             value: sessionEntity(id, {
-              state: "finishedUnseen",
-              unseen: true,
+              state: unseen ? "finishedUnseen" : "none",
+              unseen,
               terminal: time,
-              outcome: "succeeded",
+              outcome: outcome === "unknown" ? undefined : outcome,
+              terminalOrigin,
             }),
           },
           { op: "finish", sessionID: id, time },
@@ -52,6 +63,26 @@ function fixture(finishes: Record<string, number> = {}) {
     },
   };
 }
+
+Deno.test("same-terminal failure enriches a live outcome but does not revive acknowledged or historical finishes", () => {
+  const f = fixture();
+  try {
+    f.finish("root", 10, "unknown", true, "historical");
+    f.finish("root", 10, "failed", true, "historical");
+    assertEquals(f.notes, []);
+    f.finish("root", 20, "unknown", true, "live");
+    f.finish("root", 20, "failed");
+    assertEquals(f.notes, ["info", "error"]);
+    assertEquals(f.replacements.map((note) => note.kind), ["info"]);
+    f.finish("root", 30, "unknown", true, "live");
+    f.finish("root", 30, "unknown", false, "live");
+    f.finish("root", 30, "failed", false);
+    f.finish("root", 30, "failed", true, "live");
+    assertEquals(f.notes, ["info", "error", "info"]);
+  } finally {
+    f.resources.stop();
+  }
+});
 
 Deno.test("authoritative finish clocks notify when scoped publication skipped the busy frame", () => {
   const f = fixture();

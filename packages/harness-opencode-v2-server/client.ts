@@ -97,7 +97,10 @@ export class V2Client {
     readonly requestms: number,
     readonly signal: AbortSignal,
     readonly fetcher: typeof fetch = fetch,
-    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
+    readonly admission?: (
+      signal: AbortSignal,
+      lane?: import("@otk/harness").NativeReadLane,
+    ) => Promise<() => void>,
     readonly wait: <T>(value: Promise<T>, join?: boolean) => Promise<T> = (
       value,
     ) => value,
@@ -278,6 +281,7 @@ export class V2Client {
   async read<T>(
     run: (api: OpenCodeClient) => Promise<T>,
     signal?: AbortSignal,
+    lane?: import("@otk/harness").NativeReadLane,
   ): Promise<T> {
     this.#checkConnection();
     signal?.throwIfAborted();
@@ -288,6 +292,8 @@ export class V2Client {
       const value = await this.#own(this.readiness.run(
         AbortSignal.any([this.signal, ...(signal ? [signal] : [])]),
         () => this.#reads.run(context, () => run(this.#api)),
+        true,
+        lane,
       ));
       this.#checkConnection();
       signal?.throwIfAborted();

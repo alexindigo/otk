@@ -44,7 +44,10 @@ export function decodeEvent(value: unknown): V2Event | undefined {
   return value as unknown as V2Event;
 }
 export interface StreamPorts {
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?(
+    signal: AbortSignal,
+    lane?: import("@otk/harness").NativeReadLane,
+  ): Promise<() => void>;
   discover(signal: AbortSignal): Promise<DiscoveredService>;
   /** Acquire snapshot without publishing. The returned commit is abort-fenced. */
   resync(
@@ -90,7 +93,10 @@ export class V2Stream {
       replaybytes: number;
     },
     readonly fetcher: typeof fetch = fetch,
-    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
+    readonly admission?: (
+      signal: AbortSignal,
+      lane?: import("@otk/harness").NativeReadLane,
+    ) => Promise<() => void>,
   ) {}
   get client(): V2Client {
     if (!this.#client) {

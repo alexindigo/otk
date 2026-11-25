@@ -21,7 +21,8 @@ import { entityKey, type EntityState } from "@otk/protocol";
 import type { TerminalChange } from "../../../core/terminals/tracking.ts";
 
 Deno.test("terminal dependency facts reach the scoped entity owner without changing Inactive policy", async () => {
-  const db = new OtkDb(":memory:", [
+  const path = await Deno.makeTempDir();
+  const db = new OtkDb(path, [
     projectsMigrations,
     tasksMigrations,
     seenMigrations,
@@ -126,6 +127,7 @@ Deno.test("terminal dependency facts reach the scoped entity owner without chang
     projection.close?.();
     feature.close();
     db.close();
+    await Deno.remove(path, { recursive: true });
   }
 });
 

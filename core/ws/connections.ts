@@ -252,6 +252,9 @@ export class Connections {
         !Number.isSafeInteger(raw.epoch) || Number(raw.epoch) < 0 ||
         raw.directory !== undefined && typeof raw.directory !== "string" ||
         raw.selected !== undefined && !isSessionID(raw.selected) ||
+        raw.historyNeighbors !== undefined &&
+          (!Array.isArray(raw.historyNeighbors) ||
+            raw.historyNeighbors.length > 2) ||
         raw.query !== undefined && typeof raw.query !== "string" ||
         raw.tasksFollowParent !== undefined &&
           typeof raw.tasksFollowParent !== "boolean"
@@ -264,6 +267,9 @@ export class Connections {
         selected: raw.selected as string | undefined,
         crumbs: list(raw.crumbs),
         rows: list(raw.rows),
+        historyNeighbors: raw.historyNeighbors === undefined
+          ? undefined
+          : list(raw.historyNeighbors),
         query: raw.query as string | undefined,
         tasksFollowParent: raw.tasksFollowParent as boolean | undefined,
       };

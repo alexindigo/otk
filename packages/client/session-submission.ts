@@ -11,6 +11,7 @@ import type { SessionDelivery } from "./session-delivery.ts";
 import type { PendingSend } from "./pending-send.ts";
 import type { SendOutcome } from "./send-outcome.ts";
 import type { DraftSendCapture } from "./drafts.ts";
+import { reportDiagnostic, sendDiagnostic } from "./diagnostics.ts";
 
 /** Every session submission, independent of its mode-specific transport. */
 export interface SessionSubmission {
@@ -36,11 +37,15 @@ export function createSessionSubmission({
   wrap,
   group,
   delivery,
+  beforeDispatch,
+  report = (error) => console.debug("Send bookkeeping", error),
 }: {
   sessionID: string;
   directory(): Promise<string>;
-  inbox: Pick<InboxModel, "act">;
-  tabs(directory: string): Pick<ClientTabs, "send">;
+  inbox: Pick<InboxModel, "visit">;
+  tabs(directory: string): Pick<ClientTabs, "ensureTask">;
+  beforeDispatch?(): void;
+  report?(error: unknown): void;
   /** Session-owned completion lifetime around the same real admission port. */
   wrap?<T>(action: () => Promise<T>, capture?: DraftSendCapture): Promise<T>;
   group?(): IntentGroup;
@@ -51,24 +56,54 @@ export function createSessionSubmission({
     dispatch: () => void,
     messageID: string,
     origin: RequestOrigin,
+    activation?: string,
   ): Promise<SubmissionReceipt | null> => {
     const intent = group?.();
     const promotion = intent?.options("promote", sessionID);
     const send = { ...intent?.options("send", sessionID), origin };
     const visit = intent?.options("visit", sessionID);
-    const project = await directory();
-    return await tabs(project).send(
-      sessionID,
-      () => inbox.act(project, () => action(send, dispatch, messageID), visit),
-      promotion,
-    );
+    const trace = { activation, messageID, request: send.intent?.key };
+    // Resolve project identity for bookkeeping only. Native admission already
+    // has its captured session identity, including when the index is cold.
+    let project: Promise<string | undefined> | undefined;
+    const bookkeep = () => {
+      project ??= Promise.resolve().then(directory).catch((error) => {
+        reportDiagnostic(report, error);
+        return undefined;
+      });
+      return project;
+    };
+    const promote = () => {
+      if (project) return;
+      void bookkeep().then((path) => {
+        if (path !== undefined) {
+          return tabs(path).ensureTask(sessionID, promotion);
+        }
+      }).catch((error) => reportDiagnostic(report, error));
+    };
+    const result = await action(send, () => {
+      beforeDispatch?.();
+      dispatch();
+      sendDiagnostic("dispatch", trace);
+      promote();
+    }, messageID);
+    sendDiagnostic("receipt", {
+      ...trace,
+      state: result?.state ?? "unconfirmed",
+    });
+    promote();
+    void bookkeep().then((path) => {
+      if (path !== undefined) return inbox.visit(path, visit);
+    }).catch((error) => reportDiagnostic(report, error));
+    return result;
   };
   return (action, origin = "composer", entry, capture) => {
     const messageID = entry?.message.id ?? ascendingID("msg");
     let settle: ReturnType<DraftSendCapture["take"]>;
     return delivery.send(
       (dispatch) => {
-        const run = () => admit(action, dispatch, messageID, origin);
+        const run = () =>
+          admit(action, dispatch, messageID, origin, capture?.activation);
         return wrap ? wrap(run, capture) : run();
       },
       entry,

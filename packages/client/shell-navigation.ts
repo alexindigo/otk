@@ -10,9 +10,14 @@ import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
 import type { ForkNotes } from "./fork-notes.ts";
 import { sessionKey } from "./index.ts";
-import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
+import {
+  createNavigation,
+  type NavigationEnvironment,
+  type NavigationHistory,
+} from "./navigation.ts";
 import {
   projectHash,
+  projectName,
   projectRoute,
   type ProjectSelection,
 } from "./project-navigation.ts";
@@ -32,6 +37,57 @@ export interface ShellNavigationState {
   selectionNotice?: string;
   settings: boolean;
   error: FailureValue;
+  history: NavigationHistory;
+}
+
+export interface HistoryTarget {
+  enabled: boolean;
+  label: string;
+  state: "live" | "deleted" | "unavailable" | "page" | "unknown";
+}
+
+export function historyTarget(
+  history: NavigationHistory,
+  direction: "back" | "forward",
+  lookup: (
+    selection: Selection,
+  ) => { title: string; project: string; deleted?: boolean } | undefined,
+): HistoryTarget {
+  const entry = history[direction];
+  if (!entry) {
+    return {
+      enabled: false,
+      label: `No ${
+        direction === "back" ? "earlier" : "later"
+      } session in this tab`,
+      state: "unknown",
+    };
+  }
+  const to = direction === "back" ? "Back to" : "Forward to";
+  const target = (
+    destination: string,
+    state: HistoryTarget["state"],
+  ): HistoryTarget => ({ enabled: true, label: `${to} ${destination}`, state });
+  if (entry === "unrecorded") return target("the previous page", "unknown");
+  if (!entry.hash) return target("the start page", "page");
+  const project = projectRoute(entry.hash);
+  if (project) {
+    return target(`the ${projectName(project.directory)} project page`, "page");
+  }
+  const selection = route(entry.hash);
+  const live = selection && lookup(selection);
+  if (live) {
+    const name = `${live.title} in ${live.project}`;
+    return live.deleted
+      ? target(`${name} (deleted)`, "deleted")
+      : target(name, "live");
+  }
+  const name = entry.title &&
+    [entry.title, entry.project].filter(Boolean).join(" in ");
+  return target(
+    name ? `${name} (unavailable)` : "an unavailable session",
+    "unavailable",
+  );
 }
 export interface ShellView {
   selected?: Selection;
@@ -45,6 +101,9 @@ export interface ShellNavigation {
   state: ShellNavigationState;
   subscribe(listener: (state: ShellNavigationState) => void): () => void;
   navigate(selection: Selection): boolean;
+  back(): boolean;
+  forward(): boolean;
+  traverse(direction: "back" | "forward"): Promise<boolean>;
   openProject(project: ProjectSelection): void;
   openAttention(project: ProjectSelection): void;
   /** False when the guarded navigation refused the transition. */
@@ -88,9 +147,13 @@ export function createShellNavigation(o: {
   const store = (o.factory ?? createState)<ShellNavigationState>({
     settings: false,
     error: "",
+    history: { at: 0 },
   });
-  let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
-  let projectDefault = false, projectPageOnly = false;
+  let revision = 0, viewed = "", viewedFinish = 0;
+  const pendingProject = (): ProjectSelection | undefined => {
+    const entry = navigation.current();
+    return entry && !entry.page ? projectRoute(entry.hash) : undefined;
+  };
   const fail = (error: unknown): void => {
     if (resources.ownsFailure?.(error)) return;
     store.update((draft) => {
@@ -204,12 +267,11 @@ export function createShellNavigation(o: {
     intent: () => {
       revision++;
     },
-    apply(hash) {
+    apply(hash, entry) {
       store.update((draft) => {
         delete draft.selectionNotice;
+        draft.settings = false;
       });
-      projectOnly = false;
-      projectDefault = false;
       const target = route(hash),
         projectTarget = projectRoute(hash),
         previous = session.state.selection;
@@ -235,8 +297,6 @@ export function createShellNavigation(o: {
         session.open();
         project();
       } else {
-        projectOnly = !!projectTarget;
-        projectDefault = !!projectTarget && !projectPageOnly;
         clearError();
         session.open(target);
         project(
@@ -262,7 +322,7 @@ export function createShellNavigation(o: {
             projectTarget,
             resources.connected(projectTarget.sidecarId),
           );
-          if (projectDefault) resolveProject(projectTarget);
+          if (!entry.page) resolveProject(projectTarget);
         }
       }
       if (changes) guard.clear();
@@ -273,9 +333,15 @@ export function createShellNavigation(o: {
         target?.sessionID === previous?.sessionID) || guard.release();
     },
   }, o.environment);
-  const navigate = (input: Selection): boolean => {
+  const releaseHistory = navigation.subscribe(() => {
+    const history = navigation.history();
+    store.update((draft) => {
+      draft.history = history;
+    });
+  });
+  const navigate = (input: Selection, mode?: "push" | "replace"): boolean => {
     const selection = actions.family(input), previous = session.state.selection;
-    if (!navigation.open(hashFor(selection))) return false;
+    if (!navigation.open(hashFor(selection), mode)) return false;
     closeSettings();
     if (
       previous?.sidecarId === selection.sidecarId &&
@@ -299,9 +365,7 @@ export function createShellNavigation(o: {
     }
     const value = projectIntent?.at === revision
       ? projectIntent.target
-      : projectDefault
-      ? store.state.project
-      : undefined;
+      : pendingProject();
     const target = value &&
       { sidecarId: value.sidecarId, directory: value.directory };
     if (
@@ -333,8 +397,12 @@ export function createShellNavigation(o: {
         if (revision === attempt.at) {
           clearError();
           if (id) {
+            const pending = pendingProject();
+            const mode = pending && projectHash(pending) === projectHash(target)
+              ? "replace"
+              : "push";
             if (
-              navigate({ sidecarId: target.sidecarId, sessionID: id }) &&
+              navigate({ sidecarId: target.sidecarId, sessionID: id }, mode) &&
               !explicitAttention && id !== preferred
             ) {
               const title = resources.entry(target.sidecarId, id)?.title ?? id;
@@ -362,16 +430,10 @@ export function createShellNavigation(o: {
     });
   };
   // Home/close are explicit project-page intents, not default-selection intents.
-  const projectPage = (target: ProjectSelection): boolean => {
-    projectPageOnly = true;
-    try {
-      return navigation.open(projectHash(target));
-    } finally {
-      projectPageOnly = false;
-      projectDefault = false;
-      projectIntent = undefined;
-    }
-  };
+  const projectPage = (
+    target: ProjectSelection,
+    mode?: "push" | "replace",
+  ): boolean => navigation.open(projectHash(target), mode, { page: true });
   const createIn = async (
     sidecarId: string,
     directory: string,
@@ -460,8 +522,9 @@ export function createShellNavigation(o: {
       // succeeded. Consume only that owner's marks before guarded routing.
       guard.clear();
       const next = entry.parentID ?? remaining;
-      if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
-      else projectPage(p);
+      if (next) {
+        navigate({ sidecarId: target.sidecarId, sessionID: next }, "replace");
+      } else projectPage(p, "replace");
     }
     for (const id of ids) model.close(id);
     return true;
@@ -470,6 +533,9 @@ export function createShellNavigation(o: {
     state: store.state,
     subscribe: store.subscribe,
     navigate,
+    back: () => navigation.go(-1),
+    forward: () => navigation.go(1),
+    traverse: (direction) => navigation.traverse(direction === "back" ? -1 : 1),
     createIn,
     fail,
     clearError,
@@ -496,7 +562,6 @@ export function createShellNavigation(o: {
         return;
       }
       if (navigation.open(projectHash(target))) {
-        projectDefault = true;
         closeSettings();
         resolveProject(target);
       }
@@ -565,7 +630,8 @@ export function createShellNavigation(o: {
     removeServer(id) {
       if (
         (session.state.selection?.sidecarId === id ||
-          store.state.project?.sidecarId === id) && !navigation.open("")
+          store.state.project?.sidecarId === id) &&
+        !navigation.open("", "replace")
       ) {
         return false;
       }
@@ -582,7 +648,8 @@ export function createShellNavigation(o: {
       if (!value.selected) {
         const target = store.state.project;
         if (
-          projectOnly && target && value.directory === target.directory &&
+          projectRoute(navigation.current()?.hash ?? "") && target &&
+          value.directory === target.directory &&
           !value.settings
         ) {
           observeProject(target, value.connected);
@@ -599,16 +666,16 @@ export function createShellNavigation(o: {
       const directory = indexed?.directory ??
         (!value.loading ? value.directory : undefined);
       if (directory && !value.settings && value.connected) {
-        project(
-          presentation(
-            { sidecarId: value.selected.sidecarId, directory },
-            indexed?.projectID,
-          ),
-        );
-        remember(
-          { sidecarId: value.selected.sidecarId, directory },
-          value.selected.sessionID,
-        );
+        const location = { sidecarId: value.selected.sidecarId, directory };
+        const presented = presentation(location, indexed?.projectID);
+        project(presented);
+        remember(location, value.selected.sessionID);
+        if (indexed) {
+          navigation.describe(hashFor(value.selected), {
+            title: indexed.title,
+            project: projectName(presented.directory),
+          });
+        }
       }
       if (
         !value.directory || value.loading ||
@@ -641,6 +708,7 @@ export function createShellNavigation(o: {
     stop() {
       revision++;
       navigation.stop();
+      releaseHistory();
       releaseLocations();
       acceptedLocations.clear();
     },

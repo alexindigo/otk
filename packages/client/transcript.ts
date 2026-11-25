@@ -279,6 +279,8 @@ export function createTranscript(
     retryRecovery = false,
     reading: () => void = () => {},
   ) => {
+    const deadline = AbortSignal.timeout(75_000);
+    const requestSignal = AbortSignal.any([signal, deadline]);
     const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
     const intent = rpc.intent();
     const early = Promise.withResolvers<MessagePage & { load: LoadCoverage }>();
@@ -301,10 +303,10 @@ export function createTranscript(
         sessionID: target.sessionID,
         before,
         ...(retryRecovery ? { retryRecovery: true } : {}),
-      }, { intent, signal }).then((page) => {
-        if (signal.aborted || boundaryRead !== request) {
+      }, { intent, signal: requestSignal }).then((page) => {
+        if (requestSignal.aborted || boundaryRead !== request) {
           early.reject(
-            signal.reason ??
+            requestSignal.reason ??
               new DOMException("Message boundary was replaced", "AbortError"),
           );
           return;
@@ -315,11 +317,16 @@ export function createTranscript(
           finishCoverage();
         }
       });
-    }, signal).catch((error) => {
-      if (!pending?.streamed) early.reject(error);
+    }, requestSignal).catch((error) => {
+      const cause = deadline.aborted && !signal.aborted
+        ? new Error("History is taking longer than expected. Retry messages.")
+        : error;
+      if (!pending?.streamed) early.reject(cause);
       else if (!signal.aborted && boundaryRead === pending) {
+        if (readFacts) readStage("ready", readFacts.generation);
         setState((draft) => {
-          draft.pageError = failureValue(error);
+          draft.load = undefined;
+          draft.pageError = draft.error = failureValue(cause);
         });
       }
     });
@@ -479,6 +486,7 @@ export function createTranscript(
   let buffer: ClockedContent[] = [], bufferBytes = 0, fetching = false;
   let clock: ContentClock | undefined, cursor: MessageCursor | null = null;
   let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
+  let recoveryAttempted = false;
   let hasBaseline = false;
   let initialResync = false;
   let authority: TranscriptVersion | undefined,
@@ -544,13 +552,16 @@ export function createTranscript(
   const current = (id: number, request: number) =>
     id === generation && request === load;
   const schedule = () => {
-    if (retry !== undefined || !selected) return;
+    if (retry !== undefined || recoveryAttempted || !selected) return;
     const settings = policy();
     if (!settings) return;
     const id = generation;
     retry = setTimeout(() => {
       retry = undefined;
-      if (selected && id === generation) void refetch();
+      if (selected && id === generation) {
+        recoveryAttempted = true;
+        void refetch();
+      }
     }, settings.retryms);
   };
   const invalidate = () => {
@@ -567,6 +578,7 @@ export function createTranscript(
       draft.loading = false;
       draft.paging = false;
       draft.continuity = "missing";
+      draft.load = undefined;
     });
     schedule();
   };
@@ -869,6 +881,7 @@ export function createTranscript(
         draft.continuity = "ready";
         draft.exhausted = page.older === null;
       });
+      recoveryAttempted = false;
       queueMicrotask(reserve);
       deliveryDiagnostics.record({
         ...target,
@@ -893,6 +906,7 @@ export function createTranscript(
       setState((draft) => {
         draft.loading = false;
         draft.continuity = "missing";
+        draft.load = undefined;
         draft.error = failureValue(error);
         draft.pageError = draft.error;
       });
@@ -913,6 +927,7 @@ export function createTranscript(
       selection?.sessionID === selected?.sessionID
     ) { if (!force) return; }
     generation++;
+    recoveryAttempted = false;
     clearTimeout(retry);
     retry = undefined;
     load++;
@@ -1061,7 +1076,17 @@ export function createTranscript(
   );
   const owner: TranscriptOwner = {
     deliveryDiagnostics,
-    progress: () => readProgress.display("page", readLabel),
+    progress: () => {
+      const history = state.load?.state === "loading" && !state.loading &&
+        !state.paging && state.continuity === "ready";
+      const progress = readProgress.display(
+        "page",
+        history ? "Loading history" : readLabel,
+      );
+      return history && !progress.stalled
+        ? { ...progress, text: "Loading history" }
+        : progress;
+    },
     projection,
     send(value) {
       projection.send(value);

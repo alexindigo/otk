@@ -12,7 +12,6 @@ export default function Toast(props: {
     <article class="otk-toast" data-note={props.id} data-kind={props.kind}>
       <Surface
         layout="fill"
-        scrollable={false}
         staticChildren
         signal={props.kind === "error"
           ? "error"

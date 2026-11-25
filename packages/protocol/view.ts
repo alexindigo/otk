@@ -8,6 +8,8 @@ export interface ViewLease {
   pageSettled?: boolean;
   crumbs: string[];
   rows: string[];
+  /** At most two non-presentational identities for browser history labels. */
+  historyNeighbors?: string[];
   query?: string;
   /** Host-sidecar preference projected onto this connection's task view. */
   tasksFollowParent?: boolean;

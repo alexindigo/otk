@@ -373,8 +373,8 @@ Deno.test("send custody restores the untouched composer once with its whole orig
     sessionID: "opcv2-root",
     delivery: f.owner,
     directory: () => Promise.resolve("/p"),
-    tabs: () => ({ send: (_id, send) => send() }),
-    inbox: { act: (_directory, send) => send() },
+    tabs: () => ({ ensureTask: () => Promise.withResolvers<never>().promise }),
+    inbox: { visit: () => Promise.resolve() },
   });
   const capture = drafts.captureSend?.(key, draft);
   const response = Promise.withResolvers<PromptReceipt>();

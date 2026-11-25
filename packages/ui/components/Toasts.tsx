@@ -6,7 +6,6 @@ import {
   type Element,
   For,
   onCleanup,
-  onSettled,
   Show,
 } from "solid-js";
 import { CloseIcon } from "./ChromeIcons.tsx";
@@ -25,11 +24,11 @@ export default function Toasts(
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [items, setItems] = createSignal(props.model.state.items);
-  const [limit, setLimit] = createSignal(3);
+  const limit = 3;
   const [offset, setOffset] = createSignal(0);
   const overflow = () => {
     const remaining = items().filter((_item, index) =>
-      index < offset() || index >= offset() + limit()
+      index < offset() || index >= offset() + limit
     );
     const failures = remaining.filter((item) => item.note.kind === "error")
       .reduce(
@@ -52,39 +51,18 @@ export default function Toasts(
       other ? `${other} more notifications` : "",
     ].filter(Boolean).join(", ");
   };
-  let stack!: HTMLElement;
   onCleanup(props.model.subscribe((state) => setItems(state.items)));
-  const fit = () => {
-    if (stack.getBoundingClientRect().top < 0 && limit() > 1) {
-      setLimit(limit() - 1);
-    }
-  };
   createEffect(() => items(), () => {
-    setLimit(3);
     setOffset(0);
-  });
-  onSettled(() => {
-    const observer = new ResizeObserver(fit);
-    observer.observe(stack);
-    const resize = () => {
-      setLimit(3);
-      fit();
-    };
-    globalThis.addEventListener("resize", resize);
-    return () => {
-      observer.disconnect();
-      globalThis.removeEventListener("resize", resize);
-    };
   });
   return (
     <section
-      ref={stack}
       class="otk-toasts"
       aria-label="Notifications"
       aria-live="polite"
     >
       <For
-        each={items().slice(offset(), offset() + limit())}
+        each={items().slice(offset(), offset() + limit)}
         keyed={(item) => item.note.id}
       >
         {(item) => {
@@ -195,13 +173,13 @@ export default function Toasts(
           );
         }}
       </For>
-      <Show when={items().length > limit()}>
+      <Show when={items().length > limit}>
         <button
           type="button"
           class="otk-toasts-more"
           onClick={() => {
             setOffset(
-              offset() + limit() >= items().length ? 0 : offset() + limit(),
+              offset() + limit >= items().length ? 0 : offset() + limit,
             );
           }}
         >

@@ -25,6 +25,7 @@ export default function EntityPill(props: {
   label: string;
   facts: EntityFacts;
   open?: ActionControl;
+  onOpenChild?(id: string): void;
 }): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const open = createMemo(() =>
@@ -34,6 +35,7 @@ export default function EntityPill(props: {
           commands,
           props.facts.session.id,
           props.facts.session.title ?? props.label,
+          props.onOpenChild,
         )
         : undefined)
   );

@@ -6,6 +6,7 @@ import type { SendOutcome } from "./send-outcome.ts";
 
 export interface DraftSendCapture {
   readonly draft: Draft;
+  readonly activation?: string;
   take(
     messageID: string,
     check: () => void,

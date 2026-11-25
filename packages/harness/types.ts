@@ -121,7 +121,11 @@ export interface HarnessCore {
     ids: readonly string[],
     signal?: AbortSignal,
   ): Promise<SessionIdentity[]>;
-  getSession(id: string, signal?: AbortSignal): Promise<ContentSession>;
+  getSession(
+    id: string,
+    signal?: AbortSignal,
+    purpose?: "send",
+  ): Promise<ContentSession>;
   listSessions(
     input: import("@otk/protocol").SessionListInput,
     signal?: AbortSignal,

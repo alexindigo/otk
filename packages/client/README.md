@@ -1279,23 +1279,21 @@ the local layout/preference RPC ports share this owner.
 `createInbox(rpc, factory?, report?)` receives connection-local `inbox.snapshot`
 and `inbox.patch` frames, including the snapshot sent on every hello.
 `openProject`, `openSession` and `act` reset the server-owned visit clock;
-opening a session also acknowledges its captured terminal token. Wrap sends,
-approvals, answers and interrupts in `act(directory, callback)`. Successful
-actions request activation through the same visit bookkeeping port;
-opening/viewing never requests activation. Session creation is tracked by the
-server's creation registration. For submissions,
+opening a session also acknowledges its captured terminal token. Wrap approvals,
+answers and interrupts in `act(directory, callback)`. Successful actions request
+activation through the same visit bookkeeping port; opening/viewing never
+requests activation. Session creation is tracked by the server's creation
+registration. For submissions,
 `createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
-session-bound admission port: it resolves the captured project's directory,
-enters the existing tab `send` promotion, then runs the mode-specific callback
-through inbox `act`. Normal prompts, shell commands and native commands
-(including palette execution) use this same port. Promotion failure prevents
-native admission; action failure propagates without recording a successful
-visit. Concurrent submissions reuse the tab owner's promotion, independently of
-metadata broadcast delivery. Approvals, answers and interrupts use `act`
-directly, without promoting a session merely for responding to it.
-`promote(session)` creates a title-named task with its initial session
-atomically. These are UI-independent ports: callers own navigation guards,
-action callbacks and failure presentation.
+session-bound admission port. Normal prompts, shell commands and native commands
+(including palette execution) dispatch against the captured session without
+waiting for project identity or tab promotion. The tab owner still coalesces
+promotion; directory, promotion and visit failures stay separate from the native
+result. A failed native action does not record a successful visit. Approvals,
+answers and interrupts use `act` directly, without promoting a session merely
+for responding to it. `promote(session)` creates a title-named task with its
+initial session atomically. These are UI-independent ports: callers own
+navigation guards, action callbacks and failure presentation.
 
 `SessionSubmission`, `SessionActions.prompt` and `SessionDelivery.send` return
 the closed `SendOutcome`: committed with a canonical native message ID, refused

@@ -1308,7 +1308,10 @@ export function connectBranchHistory(options: {
         signal,
       }),
     session: (target) =>
-      rpc(target).call("session.get", { sessionID: target.sessionID }),
+      rpc(target).call("session.get", {
+        sessionID: target.sessionID,
+        purpose: "send",
+      }),
     current: (target) => {
       const state = transcripts.get(target)?.state;
       return state?.info && state.continuity === "ready" && !state.loading &&

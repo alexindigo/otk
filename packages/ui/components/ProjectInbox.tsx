@@ -70,6 +70,7 @@ export default function ProjectInbox(props: {
   selected?: ProjectSelection;
   prefs: Preferences;
   ready: boolean;
+  history?: import("solid-js").Element;
   holdOrder?(): () => void;
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
@@ -619,7 +620,10 @@ export default function ProjectInbox(props: {
       bodyClass="otk-inbox-scroll"
       header={
         <div class="otk-inbox-brand">
-          <strong>OTK</strong>
+          <div class="otk-inbox-identity">
+            <Show when={!collapsed()}>{props.history}</Show>
+            <strong>OTK</strong>
+          </div>
           <button
             type="button"
             class="otk-icon-button otk-add-project"
@@ -635,20 +639,23 @@ export default function ProjectInbox(props: {
         </div>
       }
       leading={
-        <nav class="otk-inbox-commands" aria-label="Search">
-          <button
-            type="button"
-            class="otk-inbox-search"
-            aria-label="Search commands"
-            title={hints.title("palette.open", "Search commands")}
-            onClick={() => void commands.run("palette.open")}
-          >
-            <ControlIcon>
-              <SearchIcon class="otk-inbox-search-icon" />
-            </ControlIcon>
-            <Show when={!collapsed()}>Search</Show>
-          </button>
-        </nav>
+        <div class="otk-inbox-leading">
+          <Show when={collapsed()}>{props.history}</Show>
+          <nav class="otk-inbox-commands" aria-label="Search">
+            <button
+              type="button"
+              class="otk-inbox-search"
+              aria-label="Search commands"
+              title={hints.title("palette.open", "Search commands")}
+              onClick={() => void commands.run("palette.open")}
+            >
+              <ControlIcon>
+                <SearchIcon class="otk-inbox-search-icon" />
+              </ControlIcon>
+              <Show when={!collapsed()}>Search</Show>
+            </button>
+          </nav>
+        </div>
       }
       footer={
         <footer class="otk-inbox-footer">

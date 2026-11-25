@@ -444,12 +444,15 @@ export class DigestBridge implements DigestPort {
       signal.removeEventListener("abort", abort)
     );
   }
-  async admission(signal: AbortSignal): Promise<() => void> {
+  async admission(
+    signal: AbortSignal,
+    lane?: import("@otk/harness").NativeReadLane,
+  ): Promise<() => void> {
     await this.start();
     const worker = this.#worker, run = this.#run;
     const request = this.#id + 1;
     await this.#request(
-      { t: "native.acquire" },
+      { t: "native.acquire", lane },
       signal,
       (value) =>
         value.t === "native.granted" ? { value: undefined } : undefined,

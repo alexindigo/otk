@@ -37,8 +37,10 @@ import {
   effectiveSelection,
   type Feedback,
   promptUnavailable,
+  sendDiagnostic,
   stopUnavailable,
 } from "@otk/client";
+import { randomID } from "@otk/protocol";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import type { PromptChoices } from "../registries/prompt.ts";
@@ -179,8 +181,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     intent.require();
     return draft;
   };
-  const performSend = async (draft: PromptProps["value"]) => {
-    const draftSend = props.captureSend?.(draft);
+  const performSend = async (
+    draft: PromptProps["value"],
+    activation: string,
+  ) => {
+    const capture = props.captureSend?.(draft);
+    const draftSend = capture && { ...capture, activation };
     const parts = serialize(draft);
     const effective = ctx.nextSelection(draft);
     const selection = effective.input;
@@ -205,10 +211,16 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = async () => {
+  const submitInput = async (source: "enter" | "button") => {
+    const activation = randomID();
+    sendDiagnostic("activation", { activation, state: source });
     try {
-      await intent.submit(submit, performSend);
+      await intent.submit(submit, (draft) => {
+        sendDiagnostic("admitted", { activation });
+        return performSend(draft, activation);
+      });
     } catch (cause) {
+      sendDiagnostic("refused", { activation });
       // Every activation route publishes through the same session-owned sink.
       // Keyboard dispatch must not borrow a navigation/global error handler.
       ctx.fail(cause);
@@ -230,7 +242,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     run: (_input, mode) =>
       mode === "stop"
         ? ports.commands.run("session.interrupt").then(() => {})
-        : submitInput(),
+        : submitInput("button"),
   });
   const primaryState = bindPrimaryAction(primary);
   ownedCommand(ports, {
@@ -272,7 +284,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     enabled: composerReady,
     // Input commands can prepare while a captured send is still settling.
     // The submission intent, not this input route, admits the next effect.
-    run: () => mode() === "send" ? submitInput() : undefined,
+    run: () => mode() === "send" ? submitInput("enter") : undefined,
   });
   ownedCommand(ports, {
     id: "prompt.newline",

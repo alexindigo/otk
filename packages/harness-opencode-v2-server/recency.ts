@@ -85,6 +85,7 @@ export async function withSessionActivity<
           ...(cursor ? { cursor } : { order: "desc" }),
         }, { signal }),
       signal,
+      "bulk",
     );
     const failed = page.data.find((row) =>
       row.type === "idle" &&

@@ -646,10 +646,25 @@ Deno.test("session actions prompt captures invocation target and enters submissi
   f.entries("local", [shellEntry("selected")]);
   const held = Promise.withResolvers<unknown>();
   const admitted = Promise.withResolvers<void>();
-  f.reply((_id, method) => {
+  f.reply((_id, method, params) => {
     if (method === "tasks.create") {
+      return Promise.resolve(shellTask("task", ["selected"]));
+    }
+    if (method === "history.attachments") {
       admitted.resolve();
-      return held.promise;
+      return held.promise.then(() => ({
+        items: (params as { refs: { messageID: string; partID: string }[] })
+          .refs.map((ref) => ({
+            ref,
+            part: {
+              kind: "file",
+              source: "upload",
+              name: ref.partID,
+              mime: "text/plain",
+              dataBase64: btoa(`bytes:${ref.partID}`),
+            },
+          })),
+      }));
     }
     return Promise.resolve(null);
   });
@@ -686,31 +701,9 @@ Deno.test("session actions prompt captures invocation target and enters submissi
   assertMatch(captured.messageID!, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
   await admitted.promise;
   f.session.state.selection = { sidecarId: "remote", sessionID: "newer" };
-  f.reply((_id, method, params) =>
-    method === "history.attachments"
-      ? Promise.resolve({
-        items: (params as { refs: { messageID: string; partID: string }[] })
-          .refs.map((ref) => ({
-            ref,
-            part: {
-              kind: "file",
-              source: "upload",
-              name: ref.partID,
-              mime: "text/plain",
-              dataBase64: btoa(`bytes:${ref.partID}`),
-            },
-          })),
-      })
-      : Promise.resolve(null)
-  );
-  held.resolve(shellTask("task", ["selected"]));
+  held.resolve(undefined);
   await sending;
-  assertEquals(f.calls, [
-    ["local", "tasks.create", {
-      directory: "/p",
-      name: "selected",
-      sessions: ["selected"],
-    }],
+  assertEquals(f.calls.filter((call) => call[1] !== "tasks.create"), [
     ["remote", "history.attachments", {
       refs: [{ messageID: "m", partID: "foreign" }],
     }],

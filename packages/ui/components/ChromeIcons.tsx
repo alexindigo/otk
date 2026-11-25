@@ -11,6 +11,16 @@ function Icon(props: { children: Element; class?: string }): Element {
     </SvgIcon>
   );
 }
+export const ArrowLeftIcon = () => (
+  <Icon>
+    <path d="m11 18-6-6 6-6M19 12H5" />
+  </Icon>
+);
+export const ArrowRightIcon = () => (
+  <Icon>
+    <path d="m13 6 6 6-6 6M5 12h14" />
+  </Icon>
+);
 export const PanelLeftIcon = () => (
   <Icon>
     <rect x="3" y="3" width="18" height="18" rx="2" />

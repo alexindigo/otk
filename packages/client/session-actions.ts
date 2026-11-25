@@ -210,6 +210,11 @@ export function createSessionActions(o: {
       return action(path);
     }, visit);
   };
+  const ensureTarget = (target: Selection) => {
+    if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
+      throw new Error("This session was deleted from the agent service");
+    }
+  };
   const submission = (
     target: Selection,
     captured?: IntentGroup,
@@ -227,28 +232,23 @@ export function createSessionActions(o: {
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
+      beforeDispatch: () => ensureTarget(target),
       wrap: (action, capture) => {
-        const admit = () => {
-          if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
-            return Promise.reject(
-              new Error("This session was deleted from the agent service"),
+        const admit = async () => {
+          ensureTarget(target);
+          const changing = boundaryReady(target);
+          if (changing) await changing;
+          const allowed = permit ??
+            await o.branchHistory?.beforeSend?.(target, capture?.draft);
+          if (!permit) {
+            await o.branchHistory?.beforeCommit(
+              target,
+              undefined,
+              allowed,
+              capture?.draft,
             );
           }
-          return (async () => {
-            const changing = boundaryReady(target);
-            if (changing) await changing;
-            const allowed = permit ??
-              await o.branchHistory?.beforeSend?.(target, capture?.draft);
-            if (!permit) {
-              await o.branchHistory?.beforeCommit(
-                target,
-                undefined,
-                allowed,
-                capture?.draft,
-              );
-            }
-            return await action();
-          })();
+          return await action();
         };
         return o.submitted ? o.submitted(target, admit) : admit();
       },
