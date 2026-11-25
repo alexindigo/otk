@@ -31,7 +31,8 @@ async function geometry(page: Page, responsiveHeader = false) {
       // Style7 finding 7: required breadcrumb controls reflow instead of clipping
       // (notes/2026-11-21-style7fix.md:72-74; decision 3, AXIOMS section 1).
       // Keep the exact rectangle relative to that independently measured header;
-      // composer/notices/takeovers still cannot move either trailing edge.
+      // Only an in-flow composer notice may reallocate the bottom track;
+      // helpers and the remaining takeovers keep their existing allocation.
       const header = responsiveHeader
         ? document.querySelector(".otk-project-tabs")!.getBoundingClientRect()
           .height
@@ -60,8 +61,12 @@ async function geometry(page: Page, responsiveHeader = false) {
     responsiveHeader,
   );
 }
-async function frameProbe(page: Page, responsiveHeader = false) {
-  await page.evaluate((responsiveHeader) => {
+async function frameProbe(
+  page: Page,
+  responsiveHeader = false,
+  noticeFlow = false,
+) {
+  await page.evaluate(({ responsiveHeader, noticeFlow }) => {
     const g = globalThis as typeof globalThis & {
       wp1Frames: number[][];
       wp1Sampling: boolean;
@@ -76,11 +81,22 @@ async function frameProbe(page: Page, responsiveHeader = false) {
         ? document.querySelector(".otk-project-tabs")!.getBoundingClientRect()
           .height
         : 0;
-      g.wp1Frames.push([b.x, b.y - header, b.width, b.height + header]);
+      g.wp1Frames.push([
+        b.x,
+        b.y - header,
+        b.width,
+        b.height + header,
+        ...(noticeFlow
+          ? [
+            document.querySelector(".otk-composer-feedback")
+              ?.getBoundingClientRect().height ?? 0,
+          ]
+          : []),
+      ]);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, responsiveHeader);
+  }, { responsiveHeader, noticeFlow });
   return async () =>
     await page.evaluate(() => {
       const g = globalThis as typeof globalThis & {
@@ -152,9 +168,29 @@ test(
     await expect(page.locator(".otk-response-progress")).toBeVisible();
     await throughDuration(300, async () => {});
     const before = await geometry(page, true),
-      stop = await frameProbe(page, true);
+      stop = await frameProbe(page, true, true);
     const inventory = subagents(page);
     const helpers = page.locator(".otk-subagents [data-subagent]");
+    const allocation = async () => {
+      const result = await page.locator(".otk-messages").evaluate((pane) => {
+        const b = pane.getBoundingClientRect();
+        const header = document.querySelector(".otk-project-tabs")!
+          .getBoundingClientRect().height;
+        const notice = document.querySelector(".otk-composer-feedback")
+          ?.getBoundingClientRect();
+        return {
+          viewport: [b.x, b.y - header, b.width, b.height + header],
+          noticeHeight: notice?.height ?? 0,
+          noticeAfterTranscript: !notice?.height || notice.top >= b.bottom - .5,
+        };
+      });
+      expect(result.viewport.slice(0, 3)).toEqual(before.viewport.slice(0, 3));
+      expect(Math.abs(
+        result.viewport[3] + result.noticeHeight - before.viewport[3],
+      )).toBeLessThanOrEqual(.5);
+      expect(result.noticeAfterTranscript).toBe(true);
+      return result;
+    };
     for (let n = 0; n < 3; n++) {
       await scenario(state, "succeed");
       const count = [1, 4, 0][n];
@@ -199,13 +235,20 @@ test(
         contentType: "image/png",
       });
     }
-    expect(noticeBounds!.y + noticeBounds!.height).toBeLessThanOrEqual(
-      chipBounds!.y + 1,
+    // Approved M1 option A: destination, then notice, then composer, all in flow.
+    expect(chipBounds!.y + chipBounds!.height).toBeLessThanOrEqual(
+      noticeBounds!.y + 1,
     );
-    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
+    const noticed = await allocation();
+    expect(noticed.noticeHeight).toBeGreaterThan(0);
+    expect(noticed.viewport[3]).toBeLessThan(before.viewport[3]);
+    await info.attach("running-notice-flow-allocation", {
+      body: JSON.stringify({ before: before.viewport, after: noticed }),
+      contentType: "application/json",
+    });
     await scenario(state, "hold", session);
     await expect(page.locator(".otk-permission-dock")).toBeVisible();
-    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
+    await allocation();
     await scenario(state, "stop");
     await scenario(state, "freeze", session);
     await expect(
@@ -214,7 +257,7 @@ test(
       .toBeVisible();
     await page.getByRole("region", { name: "Pending question", exact: true })
       .getByRole("button", { name: /Keep working/ }).click();
-    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
+    await allocation();
     await scenario(state, "stop");
     await scenario(state, "thaw");
     await expect(page.getByText("Runtime form", { exact: true })).toBeVisible();
@@ -235,18 +278,21 @@ test(
         { name: "Send answers", exact: true },
       ),
     ).toBeVisible();
-    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
+    await allocation();
     await scenario(state, "stop");
     await scenario(state, "disconnect");
     await throughDuration(
       180,
-      async () =>
-        expect((await geometry(page, true)).viewport).toEqual(before.viewport),
+      async () => {
+        await allocation();
+      },
     );
     await scenario(state, "stop");
     const frames = await stop();
     for (const frame of frames) {
-      expect(frame).toEqual(before.viewport);
+      expect(frame.slice(0, 3)).toEqual(before.viewport.slice(0, 3));
+      expect(Math.abs(frame[3] + frame[4] - before.viewport[3]))
+        .toBeLessThanOrEqual(.5);
     }
     await info.attach("running-runtime-chrome-frames", {
       body: JSON.stringify(frames),

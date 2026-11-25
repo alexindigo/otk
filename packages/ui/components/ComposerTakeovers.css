@@ -98,13 +98,6 @@
   min-block-size: 0;
   flex: 0 1 auto;
 }
-.otk-composer-feedback.is-independent {
-  position: absolute;
-  inline-size: auto;
-  inset-inline: var(--lane-gutter);
-  inset-block-end: 100%;
-  max-block-size: max(0px, calc(100cqh - 100%));
-}
 .otk-composer-frame {
   position: relative;
   inline-size: 100%;
