@@ -1392,7 +1392,20 @@ export class Transcript {
     ids.decode(id);
     signal.throwIfAborted();
     const owner = await this.#baseline(id, signal);
-    const from = this.replay.clock(id),
+    signal = AbortSignal.any([
+      signal,
+      owner.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    const ownedClock = () => {
+      signal.throwIfAborted();
+      const clock = this.replay.clock(id);
+      if (owner !== this.#baselines.get(id) || clock.epoch !== owner.epoch) {
+        throw new HarnessError("capture-stale", "Archive epoch changed");
+      }
+      return clock;
+    };
+    const from = ownedClock(),
       revisions = this.replay.revisions(id, scope.messageIDs);
     const items: Message[] = [];
     if (!scope.validate) {
@@ -1441,15 +1454,14 @@ export class Transcript {
       }
     }
     signal.throwIfAborted();
-    const session = owner.presentation ??= await revertSession(
-      this.options.client(),
-      owner.raw,
-      signal,
-    );
-    const clock = this.replay.clock(id);
-    if (clock.epoch !== from.epoch) {
-      throw new HarnessError("capture-stale", "Archive epoch changed");
-    }
+    const session = scope.validate
+      ? mapSession(owner.raw)
+      : owner.presentation ??= await revertSession(
+        this.options.client(),
+        owner.raw,
+        signal,
+      );
+    const clock = ownedClock();
     const turns = [
       ...new Set(
         items.map((m) => m.role === "assistant" ? m.replyTo ?? m.id : m.id),

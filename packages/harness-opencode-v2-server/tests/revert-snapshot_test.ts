@@ -4,10 +4,11 @@ import { Transcript } from "../transcript.ts";
 import { factsFrom, scalarMessage } from "../transcript-reads.ts";
 import type { V2Client } from "../client.ts";
 import type { MessagePolicy } from "@otk/protocol";
-import type { NativeMessage } from "../messages.ts";
+import type { NativeMessage, NativeSession } from "../messages.ts";
 
-Deno.test("V2 scoped archive reads only requested bodies and validates without bodies despite unrelated activity", async () => {
+function fixture(revert?: NativeSession["revert"]) {
   const id = "opcv2-ses_fixture", reads: string[] = [];
+  let scans = 0;
   const row: NativeMessage = {
     id: "p",
     type: "user",
@@ -23,6 +24,7 @@ Deno.test("V2 scoped archive reads only requested bodies and validates without b
           title: "Fixture",
           location: { directory: "/repo" },
           time: { created: 1, updated: 1 },
+          revert,
         }),
       message: {
         get: (input: { messageID: string }) => {
@@ -37,6 +39,7 @@ Deno.test("V2 scoped archive reads only requested bodies and validates without b
     },
     message: {
       list: () => {
+        scans++;
         throw new Error("Archive must not scan the transcript");
       },
     },
@@ -69,6 +72,11 @@ Deno.test("V2 scoped archive reads only requested bodies and validates without b
         source: "sql",
       }),
   });
+  return { t, id, reads, scans: () => scans };
+}
+
+Deno.test("V2 scoped archive reads only requested bodies and validates without bodies despite unrelated activity", async () => {
+  const { t, id, reads } = fixture();
   try {
     const signal = new AbortController().signal;
     const page = await t.snapshot(id, undefined, signal, { messageIDs: ["p"] });
@@ -88,6 +96,23 @@ Deno.test("V2 scoped archive reads only requested bodies and validates without b
       validate: true,
     });
     assertEquals(changed.revisions!.p > page.revisions!.p, true);
+  } finally {
+    await t.stop();
+  }
+});
+
+Deno.test("a cold V2 witness-only snapshot reads the staged boundary without acquiring presentation", async () => {
+  const { t, id, reads, scans } = fixture({ messageID: "p" });
+  try {
+    const validation = await t.snapshot(id, undefined, undefined, {
+      messageIDs: ["p"],
+      validate: true,
+    });
+    assertEquals(scans(), 0);
+    assertEquals(reads, []);
+    assertEquals(validation.session.revert?.boundaryID, "p");
+    assertEquals(validation.items, []);
+    assertEquals(validation.revisions, { p: 0 });
   } finally {
     await t.stop();
   }
