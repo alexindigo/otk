@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FailurePresentation, Feedback } from "@otk/client";
 import { createSignal, Show } from "solid-js";
-import { TreeNode } from "./Tree.tsx";
+import DisclosureToggle from "./DisclosureToggle.tsx";
 import Clock from "./Clock.tsx";
 import FailureSignal from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
@@ -20,6 +20,10 @@ export default function FailureContent(props: {
   signal?: boolean;
   /** Compatibility with single-line feedback tracks. */
   inline?: boolean;
+  /** Borrow a containing owner's signal/content tracks without offset math. */
+  subgrid?: boolean;
+  /** Size to the facts instead of filling an already bounded feedback track. */
+  intrinsic?: boolean;
 }) {
   const compact = () => props.compact || props.inline;
   const [open, setOpen] = createSignal(false);
@@ -50,12 +54,17 @@ export default function FailureContent(props: {
   return (
     <FailureSignal
       as="div"
-      enabled={props.signal !== false && !props.failure.reference}
+      enabled={props.signal !== false && !props.failure.reference &&
+        props.failure.tone !== "neutral"}
       informational={props.failure.tone === "info"}
       class={[
         "otk-failure-content",
+        "otk-disclosure-layout",
         compact() ? "is-compact" : "",
         props.failure.reference ? "is-reference" : "",
+        props.placement === "record" ? "is-record" : "",
+        props.subgrid ? "uses-subgrid" : "",
+        props.intrinsic ? "is-intrinsic" : "",
       ].filter(Boolean).join(" ")}
     >
       <Show
@@ -120,51 +129,46 @@ export default function FailureContent(props: {
                   </button>
                 )}
               </Show>
-              <TreeNode
+              <DisclosureToggle
                 class="otk-failure-details"
-                label="Failure details"
+                label="Details"
                 open={open()}
                 onOpen={setOpen}
-                header={() => (
-                  <button
-                    type="button"
-                    class="otk-failure-detail-toggle"
-                    aria-expanded={open() ? "true" : "false"}
-                    onClick={() => setOpen(!open())}
+              >
+                <span class="otk-failure-detail-toggle">Details</span>
+              </DisclosureToggle>
+              <Show when={open()}>
+                <ScrollRegion axis="y" class="otk-failure-detail-body">
+                  <div class="otk-failure-disclosed-reason">{reason()}</div>
+                  <Show
+                    when={props.placement === "record" &&
+                      props.time !== undefined}
                   >
-                    Details
-                  </button>
-                )}
-                body={() => (
-                  <ScrollRegion axis="y" class="otk-failure-detail-body">
-                    <div class="otk-failure-disclosed-reason">{reason()}</div>
-                    <Show
-                      when={props.placement === "record" &&
-                        props.time !== undefined}
-                    >
-                      <Clock at={props.time!} class="otk-failure-time" />
-                    </Show>
-                    {diagnostic()}
-                  </ScrollRegion>
-                )}
-              />
+                    <Clock at={props.time!} class="otk-failure-time" />
+                  </Show>
+                  {diagnostic()}
+                </ScrollRegion>
+              </Show>
             </div>
           </>
         }
       >
         {(reference) => (
-          <a
-            class="otk-control-label"
-            title={reference().label}
-            href={props.failure.target.href}
-            onClick={(event) => {
-              if (!props.onReveal) return;
-              event.preventDefault();
-              props.onReveal(reference().messageID);
-            }}
+          <Show
+            when={props.onReveal}
+            fallback={<span>{reference().label}</span>}
           >
-            {reference().label}
-          </a>
+            {(reveal) => (
+              <button
+                class="otk-failure-reference otk-control-label"
+                type="button"
+                title={reference().label}
+                onClick={() => reveal()(reference().messageID)}
+              >
+                {reference().label}
+              </button>
+            )}
+          </Show>
         )}
       </Show>
     </FailureSignal>

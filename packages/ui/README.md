@@ -3,8 +3,10 @@
 Local sends use ordinary Message, not a receipt bubble. Its transcript-owned
 `send` input supplies pending/committed/failed state. Pending metadata borrows
 ChromeMeta and the shared ActivityIndicator; failures borrow FeedbackStatus and
-its owner-provided Retry. The user metadata track retains the shared control
-height through commitment, and native-only actions are absent before commitment.
+its owner-provided Retry. One user-column grid bounds both the bubble and
+failure and gives them the same trailing edge. The user metadata track retains
+the shared control height through commitment, and native-only actions are absent
+before commitment.
 
 All Copy actions borrow `clipboard.ts`: native clipboard writes on secure pages,
 then a selection-preserving textarea/execCommand fallback, including plain HTTP.
@@ -18,6 +20,14 @@ are the public protocol and client entries. This library has no application/core
 imports and knows no native backend.
 
 ## Composition and API
+
+Every style fix adds its check to `tests/arch/ui-conventions_test.ts`.
+Conventions are executable owner contracts, not a one-time grep sweep: Clock
+owns instants, the client duration formatter owns elapsed text, icon slots take
+components, FailurePresenter owns targets and outcome tone, and shared controls
+own their geometry. Include reject and accept fixtures so a gate catches the
+problem class without banning legitimate numeric formatting or intrinsic layout.
+Style scenes build failures through the same production presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
@@ -58,11 +68,12 @@ Markdown tasks use the shared non-interactive TaskMarker, not disabled native
 checkboxes. Its Done/Not done image name and glyph share one input, and its
 square slot derives from the prose line height. The list owns a two-column
 marker/content grid, keeping the marker centred on the first content line.
-`Select` retains one native value/focus target under a noninteractive decorative
-slot. FormSelect, preferences and ListPicker borrow these owners, including the
-composer's injected trigger content. Callers supply content/classes, never arrow
-offsets. Select's `containerClass` styles the whole control through a
-caller-owned slot; ordinary native attributes still address the native select.
+`Select` receives typed options and a value/change port. Its hidden form value
+and shared ListPicker menu replace the browser-native menu. FormSelect and
+preferences borrow that owner. ListPicker's trigger borrows ControlValue,
+including the composer's injected content. Callers supply content/classes, never
+arrow offsets. Select's `containerClass` styles the whole control; the trigger's
+name and field descriptions travel through the Popover-owned attribute port.
 Form fills its owning body; AuthColumn and Dialog's `form` role share
 `--form-width`. Dialog registrations forward `form`, `standard` or `editor` size
 without dispatching IDs. Editor content flexes inside that viewport-bounded
@@ -145,19 +156,33 @@ absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
 
 FailureContent owns the neutral reason and recovery text, available action and
-initially collapsed TreeNode Details disclosure. Its record placement borrows
-the surrounding row's action/target heading rather than repeating it. Standalone
-feedback retains its heading. All content and action text share the same inset;
-the TreeNode junction occupies its own track. Error colour belongs to the shared
+initially collapsed DisclosureToggle Details disclosure. Its record placement
+borrows the surrounding row's action/target heading rather than repeating it.
+Standalone feedback retains its heading. DisclosureToggle owns a control-height
+square gutter and the shared disclosure-layout grid: headings, reasons, actions
+and Details labels share its content edge, independently of whether a signal is
+painted. Toast messages borrow that same grid and failure content borrows its
+subgrid without size containment. Record headers borrow the same content gutter;
+TreeIcon keeps its artwork and guide in the native tree-indent cell, with any
+remaining gutter in a trailing track. Error colour belongs to the shared
 FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
 its surface edge. Compact callers and containers at or below 320px show the
 heading and controls, with complete reasons inside Details. The shared
 ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
 with full-value titles. FeedbackStatus normalizes text-only errors through the
-client presenter too. ConnectionStatus owns the single connection state line;
-ConnectionBadge supplies only the lamp and server label. Quiet connection copy
-borrows ChromeMeta. The sidebar gives it the server label's grid track below the
-connection control, never a separate left edge.
+client presenter too. ConnectionBadge owns the lamp, optional label/action and
+ConnectionStatus grid on every surface. A containing title replaces its label;
+otherwise the single state line shares that label's column. Quiet connection
+copy borrows ChromeMeta.
+
+FailurePresenter receives the current view and suppresses that session's target
+on every inline surface; notifications and genuinely cross-session targets keep
+navigation. Retained-record reveals are callback-backed buttons, not self-links.
+Its discriminated outcome/tone contract makes pending presentations neutral.
+FailureContent's subgrid and intrinsic sizing modes borrow containment from the
+bounded parent frame, so containment cannot erase inherited or content-sized
+tracks. The client duration owner formats work, loading, idle and live-work
+elapsed values identically.
 
 Failure records contribute their public failure through the part registry. The
 reply's legacy assistant error is a fallback only when its retained execution
@@ -167,6 +192,24 @@ Producer-supplied known outcomeTime values render through the shared Clock
 owns its outcome instant; a failure block omits that same instant. Unknown or
 absent clocks stay absent. Record observation time is not a substitute. This
 does not compute run timing or change footer timing evidence.
+
+Clock also owns prompt, Timeline, activity, rollback, saved-branch and entity
+completion instants. Full date/zone tooltips use clockTitle. Interface progress
+and truncation text uses ASCII three dots. Attachment failures retain filename
+identity through the same attachmentFailure builder used by style scenes; their
+feedback owns the signal, without a second error outline on the chip. StateShape
+owns real SVG fallback artwork for activity, supervision and connection
+indicators; their state definitions name shapes rather than font glyphs.
+
+SessionView never renders acquisition status inside its message flow. It exports
+the transcriptStatus projection; Shell shows it in its existing reserved header
+metadata slot, so loading and paging never displace a message. A load error with
+no messages remains in PaneState. Permission scope and failure Details use the
+same DisclosureToggle, which owns its tracks, gap and inline padding. Tree
+guides end at the junction cell; no box/artwork paints a background mask. Folded
+interval meta borrows ChromeMeta's shared metaList join, also used by
+tool/footer meta. All metadata stays plain muted; failure breakouts own the
+signal.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
@@ -231,21 +274,21 @@ collapsed summary and status/permission/error frame, so external renderers
 receive the same behavior. An optional third `presentation(call)` registration
 argument supplies `{icon, verb, target?, summary?, category?}` with the caller's
 directory as a second context argument; path-owning features supply relative
-targets. Icons accept strings or feature-owned SVG render functions. The shared
-frame has no concrete tool list. The path presenter keeps project descendants
-relative and outside paths absolute; body labels use `ToolPath` with the same
-directory input, including instruction, working-directory and diff labels.
-Structured result paths use that presenter inside `ToolOutput`; file contents
-use the same `Code` owner as writes, with native first-line numbering and
-extension-based highlighting. Grep results carry path, line and text. Custom
-tool consumers can import `ToolPath` and `relativeTarget` from the public UI
-entry to share the same body and header presentation. The presentation context
-also supplies preferences: edit/patch/write owners start collapsed unless
-Display's persisted Expand file changes by default toggle is on. Headers retain
-paths and reported change counts; explicit disclosure choices stay owned by the
-shared client disclosure owner. Helper cards start collapsed. Typed tool modules
-use `tools.registerTyped(kind, Component)`, whose call type derives from the
-open protocol `ToolKinds` map. Separate registration namespaces let an external
+targets. Icons accept feature-owned render components only. The shared frame has
+no concrete tool list. The path presenter keeps project descendants relative and
+outside paths absolute; body labels use `ToolPath` with the same directory
+input, including instruction, working-directory and diff labels. Structured
+result paths use that presenter inside `ToolOutput`; file contents use the same
+`Code` owner as writes, with native first-line numbering and extension-based
+highlighting. Grep results carry path, line and text. Custom tool consumers can
+import `ToolPath` and `relativeTarget` from the public UI entry to share the
+same body and header presentation. The presentation context also supplies
+preferences: edit/patch/write owners start collapsed unless Display's persisted
+Expand file changes by default toggle is on. Headers retain paths and reported
+change counts; explicit disclosure choices stay owned by the shared client
+disclosure owner. Helper cards start collapsed. Typed tool modules use
+`tools.registerTyped(kind, Component)`, whose call type derives from the open
+protocol `ToolKinds` map. Separate registration namespaces let an external
 `edit` coexist with typed OTK `edit` without either renderer receiving the
 other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
@@ -332,8 +375,8 @@ and unfinished assistant ownership still fence the scan; SessionView only binds
 its result. The neutral active-record predicate belongs to the client owner.
 
 Missing-seed recovery is separate plain in-flow text beside the logical reply:
-“Refreshing response…” while source is unaligned, or an unavailable message and
-available Retry response callback after a checkpoint failure. The canonical
+"Refreshing response..." while source is unaligned, or an unavailable message
+and available Retry response callback after a checkpoint failure. The canonical
 client resource owns this state. It does not alter supervision lights, disable
 controls or add a loading overlay.
 
@@ -704,14 +747,14 @@ content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
 legends are layout-neutral grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
-right-panel views. Icons may be strings or feature-owned render functions; the
-host does not dispatch concrete view icons. `RightPanel` mounts available
-registrations with a neutral icon strip, keyboard/pointer resizing (280–480px,
-320 default) and injected layout persistence. Unknown or unavailable stored view
-IDs fall back to the first available view without overwriting the stored
-preference. `registerSessionsPanel` contributes the project-local, task-grouped
-searchable parent/child tree. Its feature adapter reads common `ShellPorts`
-resources; the panel knows no views.
+right-panel views. Icons are feature-owned render components; the host does not
+dispatch concrete view icons. `RightPanel` mounts available registrations with a
+neutral icon strip, keyboard/pointer resizing (280–480px, 320 default) and
+injected layout persistence. Unknown or unavailable stored view IDs fall back to
+the first available view without overwriting the stored preference.
+`registerSessionsPanel` contributes the project-local, task-grouped searchable
+parent/child tree. Its feature adapter reads common `ShellPorts` resources; the
+panel knows no views.
 
 RightPanel's body owns one content column for headings, feature content and
 empty/loading/error feedback, including adapter fallbacks and host failures.
@@ -995,6 +1038,14 @@ renders the caller's semantic kind icon or lamp, or an empty slot when there is
 none. Body-only leaf content needs no icon or disclosure. Header and body
 factories borrow ContentSlot so record updates retain the mounted preview
 lifetime.
+
+DisclosureToggle owns that SVG artwork, keyboard expansion and one button.
+TreeNode's toggleHeader associates its decorative junction label with the
+header's single native button. The button keeps its text and focus target;
+clicking the box activates that same control, without a hit-area overlay or a
+second tab stop. Sibling entity/navigation controls remain independent. Feedback
+resets branch and direction context. Standalone failure disclosures borrow only
+DisclosureToggle, never the tree's topology or connectors.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in

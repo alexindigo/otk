@@ -30,7 +30,9 @@ async function geometry(nodes: Locator) {
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon",
+        // The content gutter can be wider than the native junction cell. The
+        // child guide follows the artwork axis, not the gutter's outer box.
+        ":scope > .otk-tree-heading .otk-tree-icon-art",
       )?.getBoundingClientRect();
       const parentJunction = parent?.querySelector(
         ":scope > .otk-tree-heading > .otk-tree-own",
@@ -177,7 +179,13 @@ test.describe("work tree", () => {
     const root = page.locator(".otk-work-log > .otk-tree-node");
     await expect(root.locator(":scope > .otk-tree-heading .otk-tree-icon-art"))
       .toBeEmpty();
-    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-toggle");
+    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
+    await expect(root.locator(":scope > .otk-tree-heading [aria-expanded]"))
+      .toHaveCount(1);
+    await root.locator(":scope > .otk-tree-heading label.otk-tree-toggle")
+      .click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await toggle.press("ArrowLeft");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
@@ -339,7 +347,7 @@ test.describe("activity tree", () => {
     const run = span.locator(".otk-record-group");
     await expect(run).toHaveCount(1);
     const toggle = run.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-toggle",
+      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-control",
     );
     await toggle.focus();
     await page.keyboard.press("ArrowRight");

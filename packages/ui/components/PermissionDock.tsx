@@ -333,7 +333,7 @@ function RequestDock(
               <FeedbackStatus
                 ref={(element) => pendingStatus = element}
                 focusable
-                feedback={{ kind: "pending", text: "Sending response…" }}
+                feedback={{ kind: "pending", text: "Sending response..." }}
               />
             </Show>
             <Switch>

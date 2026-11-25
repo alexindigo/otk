@@ -59,9 +59,9 @@ Deno.test("session lights render the supervision projection and default to No kn
   }
   assertEquals(LIGHT_STATES.none.label, "No known activity");
   assertEquals(Object.values(LIGHT_STATES).map((state) => state.shape), [
-    "×",
-    "◐",
-    "✓",
-    "○",
+    "cross",
+    "half-disc",
+    "check",
+    "circle",
   ]);
 });

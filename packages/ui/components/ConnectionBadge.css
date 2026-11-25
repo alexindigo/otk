@@ -1,9 +1,51 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-connection {
-  display: flex;
+  container: otk-failure / inline-size;
+  display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  column-gap: var(--space-2);
+  min-inline-size: 0;
   font-size: var(--text-meta);
-  color: var(--secondary);
+  color: var(--otk-fg-3);
+}
+.otk-connection-heading {
+  grid-column: 1 / -1;
+  align-self: start;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-block-size: var(--control-size);
+  min-inline-size: 0;
+  padding: 0;
+  color: inherit;
+  text-align: start;
+}
+.otk-connection > .otk-connection-status {
+  grid-column: 2;
+  min-inline-size: 0;
+}
+.otk-connection.is-unlabelled > .otk-connection-heading {
+  grid-area: 1 / 1;
+  grid-template-columns: 1fr;
+}
+.otk-connection.is-unlabelled > .otk-connection-status {
+  grid-area: 1 / 2;
+}
+.otk-connection.is-lamp-only {
+  grid-template-columns: var(--control-size);
+  column-gap: 0;
+}
+.otk-server-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A failure spans the row: its signal gutter is the lamp track, so its text
+   starts on the server label's edge. */
+.otk-connection > .otk-connection-status.has-failure {
+  grid-column: 1 / -1;
+}
+.otk-connection.is-unlabelled > .otk-connection-status.has-failure {
+  grid-row: 2;
 }

@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-failure-content {
-  display: grid;
-  gap: var(--space-1);
+  row-gap: var(--space-1);
   min-inline-size: 0;
   inline-size: 100%;
   color: var(--otk-fg);
@@ -9,6 +8,28 @@
   white-space: normal;
   text-align: start;
   container: otk-failure / inline-size;
+}
+.otk-failure-content.uses-subgrid {
+  container-type: normal;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.otk-failure-content.is-intrinsic {
+  container-type: normal;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+}
+.otk-failure-content > .otk-failure-controls {
+  grid-column: 1 / -1;
+}
+/* The gutter track holds the stripe; painting it takes no inline space. */
+.otk-failure-content.otk-failure-signal {
+  border: 0;
+  padding-inline-start: 0;
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+.otk-failure-content.otk-failure-signal.is-informational {
+  box-shadow: inset 2px 0 0 var(--otk-fg-3);
 }
 .otk-failure-heading {
   display: flex;
@@ -47,13 +68,20 @@
 }
 .otk-failure-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: subgrid;
   justify-items: start;
   gap: var(--space-1);
+  column-gap: inherit;
   min-inline-size: 0;
 }
+.otk-failure-controls > * {
+  grid-column: 2;
+}
+.otk-failure-controls > .otk-failure-details {
+  grid-column: 1 / -1;
+}
 .otk-failure-details {
-  inline-size: 100%;
+  inline-size: fit-content;
   min-inline-size: 0;
 }
 .otk-failure-action,
@@ -63,17 +91,15 @@
   text-align: start;
   color: var(--otk-fg-2);
 }
-.otk-failure-heading,
-.otk-failure-main-reason,
-.otk-failure-count,
-.otk-failure-action {
-  margin-inline-start: var(--tree-indent);
-}
 .otk-failure-detail-body {
   display: grid;
   gap: var(--space-2);
   padding-block: var(--space-1);
   max-block-size: min(40dvh, 20rem);
+}
+.otk-failure-detail-toggle {
+  display: flex;
+  align-items: center;
 }
 .otk-failure-diagnostic {
   display: grid;
@@ -83,6 +109,14 @@
 .otk-failure-content.is-reference {
   border: 0;
   padding: 0;
+}
+.otk-failure-reference {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0;
+  text-align: start;
+  text-decoration: underline;
+  font-weight: inherit;
 }
 .otk-failure-disclosed-reason,
 .otk-failure-content.is-compact .otk-failure-main-reason {

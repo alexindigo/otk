@@ -28,13 +28,15 @@ export default function WorkLog(
   return (
     <section class="otk-work-log">
       <TreeNode
+        toggleHeader
         label={label()}
         open={open()}
         onOpen={(value) => setOpen(value)}
-        header={() => (
+        header={(_connected, toggleID) => (
           <button
-            class="otk-work-fold"
+            id={toggleID}
             type="button"
+            class="otk-work-fold otk-tree-control"
             aria-expanded={open() ? "true" : "false"}
             onClick={() => void toggle()}
           >

@@ -34,3 +34,9 @@
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
+.otk-feedback-status.uses-subgrid,
+.otk-feedback-status.uses-subgrid > .otk-feedback-text {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+}

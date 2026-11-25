@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Tree.css" with { type: "text" };
-import { createContext, type Element, For, Show, useContext } from "solid-js";
+import {
+  createContext,
+  createUniqueId,
+  type Element,
+  For,
+  Show,
+  useContext,
+} from "solid-js";
 import ContentSlot from "./ContentSlot.tsx";
+import DisclosureToggle, { DisclosureIcon } from "./DisclosureToggle.tsx";
 
 type Branch = { last: boolean; outgoing?: boolean };
 const BranchContext = createContext<Branch | null>(null);
@@ -13,8 +21,14 @@ export function TreeIcon(
   props: { children?: Element; class?: string },
 ): Element {
   const stem = useContext(IconStemContext);
+  const outgoing = useContext(DirectionContext);
   return (
-    <span class={["otk-tree-icon", props.class, { "has-stem": stem() }]}>
+    <span
+      class={["otk-tree-icon", props.class, {
+        "has-stem": stem(),
+        "is-outgoing": outgoing,
+      }]}
+    >
       <span class="otk-tree-icon-stem" aria-hidden="true" />
       <span class="otk-tree-icon-art">
         {props.children}
@@ -39,6 +53,7 @@ function Junction(
     class?: string;
     through?: boolean;
     tip?: boolean;
+    toggle?: boolean;
     children?: Element;
   },
 ): Element {
@@ -47,6 +62,7 @@ function Junction(
       class={["otk-tree-junction", props.class, {
         "is-through": props.through,
         "is-tip": props.tip ?? true,
+        "has-toggle": props.toggle,
       }]}
     >
       <span class="otk-tree-upper" aria-hidden="true" />
@@ -106,22 +122,20 @@ export function TreeNode(props: {
   showEmptyToggle?: boolean;
   bodyVisible?: boolean;
   onOpen?(open: boolean): void;
+  /** The junction labels the header's sole button, rather than adding another. */
+  toggleHeader?: boolean;
   outgoing?: boolean;
-  header(connected: boolean): Element;
+  header(connected: boolean, toggleID: string): Element;
   feedback?(): Element;
   body?(): Element;
 }): Element {
   const branch = useContext(BranchContext);
+  const headerID = createUniqueId();
+  const toggleID = headerID + "-toggle";
   const direction = useContext(DirectionContext);
   const outgoing = () => props.outgoing ?? branch?.outgoing ?? direction;
   const visible = () =>
     !!props.body && (props.bodyVisible ?? props.open ?? true);
-  const key = (event: KeyboardEvent) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    event.stopPropagation();
-    props.onOpen?.(event.key === "ArrowRight");
-  };
   return (
     <section
       class={["otk-tree-node", props.class, {
@@ -129,41 +143,54 @@ export function TreeNode(props: {
         "is-last": branch?.last ?? true,
         "is-outgoing": outgoing(),
         "has-body": visible(),
+        "has-header-toggle": props.toggleHeader,
       }]}
       data-tree-node=""
     >
-      <div class="otk-tree-heading">
+      <div
+        class="otk-tree-heading"
+        onKeyDown={(event) => {
+          if (
+            (event.target as HTMLElement).id !== toggleID ||
+            event.key !== "ArrowLeft" && event.key !== "ArrowRight"
+          ) return;
+          event.preventDefault();
+          event.stopPropagation();
+          props.onOpen?.(event.key === "ArrowRight");
+        }}
+      >
         <Junction
           class={branch ? "otk-tree-own otk-tree-incoming" : "otk-tree-own"}
+          toggle={!!props.onOpen &&
+            ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
         >
           <Show
             when={props.onOpen &&
               ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
           >
-            <button
-              type="button"
-              class="otk-tree-toggle"
-              aria-label={props.open ? "Collapse branch" : "Expand branch"}
-              aria-description={props.label}
-              aria-expanded={props.open ? "true" : "false"}
-              onClick={() => props.onOpen?.(!props.open)}
-              onKeyDown={key}
+            <Show
+              when={props.toggleHeader}
+              fallback={
+                <DisclosureToggle
+                  class="otk-tree-toggle otk-tree-control"
+                  label={props.label ??
+                    (props.open ? "Collapse branch" : "Expand branch")}
+                  open={props.open}
+                  onOpen={(open) => props.onOpen?.(open)}
+                />
+              }
             >
-              <svg viewBox="0 0 9 9" fill="none" aria-hidden="true">
-                <rect x=".5" y=".5" width="8" height="8" />
-                <path d="M2.5 4.5h4" />
-                <Show when={!props.open}>
-                  <path d="M4.5 2.5v4" />
-                </Show>
-              </svg>
-            </button>
+              <label class="otk-tree-toggle" for={toggleID} aria-hidden="true">
+                <DisclosureIcon open={props.open} />
+              </label>
+            </Show>
           </Show>
         </Junction>
-        <div class="otk-tree-label">
+        <div class="otk-tree-label" id={headerID}>
           <BranchContext value={null}>
             <DirectionContext value={outgoing()}>
               <IconStemContext value={visible}>
-                <ContentSlot content={() => props.header(!!branch)} />
+                <ContentSlot content={() => props.header(!!branch, toggleID)} />
               </IconStemContext>
             </DirectionContext>
           </BranchContext>
@@ -172,7 +199,11 @@ export function TreeNode(props: {
       <Show when={props.feedback}>
         <div class="otk-tree-feedback">
           <div class="otk-tree-feedback-content">
-            <ContentSlot content={() => props.feedback?.()} />
+            <BranchContext value={null}>
+              <DirectionContext value={false}>
+                <ContentSlot content={() => props.feedback?.()} />
+              </DirectionContext>
+            </BranchContext>
           </div>
         </div>
       </Show>

@@ -1,0 +1,876 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { assert, assertEquals } from "@std/assert";
+import { FailurePresenter } from "../../packages/client/failures.ts";
+import { duration, humanDuration } from "../../packages/client/format.ts";
+import { runningWorkElapsed } from "../../packages/client/live-work.ts";
+import { productionSources, Source, sourceInventory } from "./analysis.ts";
+import { property, type t } from "./syntax.ts";
+import { rules } from "./styles.ts";
+
+type Rule =
+  | "clock"
+  | "icons"
+  | "ellipsis"
+  | "meta-tone"
+  | "masks"
+  | "native"
+  | "alignment"
+  | "disclosure"
+  | "duration"
+  | "meta-list"
+  | "failure-signal"
+  | "presentation"
+  | "settings-name";
+const owners: Record<Rule, string> = {
+  clock:
+    "Local date/time formatting belongs to Clock (including precise records)",
+  icons:
+    "Real icons only: use an icon component or StateShape, never text glyphs",
+  ellipsis: "Interface progress/truncation uses ASCII three dots, never U+2026",
+  "meta-tone":
+    "Metadata is plain ChromeMeta; error tone belongs to FailureSignal, icons or count badges",
+  masks:
+    "Structure over paint masks: end Tree guides at their junction/artwork cell",
+  native:
+    "Decision 54: use DisclosureToggle, Select/ListPicker and Popover, not browser-native widgets",
+  alignment:
+    "Structural alignment: use shared grid/subgrid tracks and intrinsic sizing, not compensating offsets/ratios",
+  disclosure:
+    "DisclosureToggle owns tracks, gap and padding; consumers supply only its gutter input",
+  duration:
+    "One duration format: use the client duration owner, never a local elapsed formatter",
+  "meta-list":
+    "One metadata join: use ChromeMeta's metaList, not separate flex-item separators",
+  "failure-signal":
+    "One failure signal: use FailureSignal, not a red chip outline",
+  presentation:
+    "FailurePresentation is produced by the client presenter, never reconstructed by a view or fixture",
+  "settings-name":
+    "One surface name: navigation says Settings / servers, matching Settings",
+};
+const containsStringType = (node: t.Node): boolean => {
+  if (node.type === "TSStringKeyword") return true;
+  return Object.values(node).some((value) =>
+    (Array.isArray(value) ? value : [value]).some((child) =>
+      child && typeof child === "object" && "type" in child &&
+      containsStringType(child as t.Node)
+    )
+  );
+};
+const elementName = (node: t.JSXOpeningElement) =>
+  node.name.type === "JSXIdentifier" ? node.name.name : "";
+
+/** Syntax-aware checks are exported so their reject/accept cases stay executable.
+ * Owner exceptions name real responsibilities, never individual violations. */
+export function conventionErrors(
+  rule: Rule,
+  path: string,
+  text: string,
+): string[] {
+  const errors: string[] = [];
+  const fail = (where: string) =>
+    errors.push(`${path}: ${where}: ${owners[rule]}`);
+  if (rule === "ellipsis" && /\u2026|\\u2026|\\u\{2026\}/iu.test(text)) {
+    fail("U+2026 in source");
+  }
+  if (path.endsWith(".css")) {
+    for (const { selector, declarations: d } of rules(text)) {
+      if (
+        rule === "ellipsis" &&
+        [...d.values()].some((value) => value.includes("\u2026"))
+      ) fail(selector);
+      if (
+        rule === "icons" &&
+        /icon|glyph|toggle|close|marker|disclosure/.test(selector) &&
+        /^['"][^'"\s]+['"]$/.test(d.get("content") ?? "")
+      ) fail(selector);
+      if (
+        rule === "meta-tone" &&
+        /meta|reply-start|record-group-(?:count|time|failures)|record-summary|elapsed/
+          .test(
+            selector,
+          ) &&
+        ((d.has("color") &&
+          !["var(--otk-fg-3)", "inherit"].includes(d.get("color")!)) ||
+          d.has("font-weight") &&
+            !["400", "inherit", "normal"].includes(d.get("font-weight")!))
+      ) fail(selector);
+      if (
+        rule === "masks" &&
+        /tree-(?:toggle|junction|icon-art)|disclosure/.test(selector) &&
+        ["fill", "background", "background-color"].some((key) =>
+          d.has(key) && !["none", "transparent"].includes(d.get(key)!)
+        )
+      ) fail(selector);
+      if (
+        rule === "alignment" &&
+        /connection-status.*has-failure/.test(selector) &&
+        [...d].some(([key, value]) =>
+          /gutter|inset|margin|padding/.test(key) && value !== "0" &&
+          value !== "0px"
+        )
+      ) fail(selector);
+      if (
+        rule === "alignment" && /send-failure/.test(selector) &&
+        (d.get("justify-self") === "stretch" ||
+          [...d].some(([key, value]) =>
+            /^(?:inline-size|width)$/.test(key) && value !== "fit-content" &&
+            value !== "auto"
+          ))
+      ) fail(selector);
+      if (
+        rule === "alignment" && /live-work-popover/.test(selector) &&
+        [...d].some(([key, value]) =>
+          /^(?:width|inline-size)$/.test(key) &&
+          /\b(?:vw|px)\b|\d+(?:vw|px)/.test(value)
+        )
+      ) fail(selector);
+      if (
+        rule === "alignment" && /failure-heading/.test(selector) &&
+        /\d+%/.test(d.get("max-inline-size") ?? "")
+      ) fail(selector);
+      if (
+        rule === "disclosure" &&
+        /failure-details|permission-scope/.test(selector) &&
+        [...d.keys()].some((key) =>
+          /^(?:grid-template-columns|column-gap|gap|padding(?:-.+)?)$/.test(key)
+        )
+      ) fail(selector);
+      if (
+        rule === "failure-signal" &&
+        /chip.*(?:has-error|is-error)/.test(selector) &&
+        [...d].some(([key, value]) =>
+          /border|outline|box-shadow/.test(key) &&
+          !["none", "0", "transparent"].includes(value)
+        )
+      ) fail(selector);
+    }
+    return errors;
+  }
+  const source = new Source(text, path);
+  const modulePath = (specifier: string) =>
+    specifier.startsWith(".")
+      ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
+        .slice(1)
+      : specifier;
+  const iconFunctions = new Set<t.Node>();
+  for (const node of source.all) {
+    const value =
+      node.type === "ObjectProperty" && property(node.key) === "icon"
+        ? node.value
+        : node.type === "JSXAttribute" && property(node.name) === "icon"
+        ? node.value
+        : undefined;
+    if (!value) continue;
+    const resolved = source.value(value);
+    if (
+      resolved?.type === "ArrowFunctionExpression" ||
+      resolved?.type === "FunctionExpression"
+    ) iconFunctions.add(resolved);
+    else if (resolved?.type === "Identifier") {
+      const binding = source.binding(resolved.name, resolved);
+      for (const declaration of source.all) {
+        if (
+          declaration.type === "FunctionDeclaration" && declaration.id &&
+          source.binding(declaration.id.name, declaration.id) === binding
+        ) iconFunctions.add(declaration);
+      }
+    }
+  }
+  const componentIcon = (input: t.Node): boolean => {
+    const value = source.value(input);
+    if (!value) return false;
+    const imported = source.imported(value);
+    if (imported) {
+      return [
+            "packages/ui/components/ChromeIcons.tsx",
+            "packages/ui/components/tools/ToolIcons.tsx",
+          ].includes(modulePath(imported.module)) &&
+          /Icon$/.test(imported.name) ||
+        imported.module === "@otk/ui" && /Icon$/.test(imported.name);
+    }
+    if (
+      value.type === "MemberExpression" ||
+      value.type === "OptionalMemberExpression"
+    ) return true; // Typed borrowed renderer/image input; its producer is checked independently.
+    if (value.type === "LogicalExpression") {
+      return componentIcon(value.left) && componentIcon(value.right);
+    }
+    if (value.type === "ConditionalExpression") {
+      return componentIcon(value.consequent) && componentIcon(value.alternate);
+    }
+    if (
+      value.type === "NullLiteral" ||
+      value.type === "Identifier" && value.name === "undefined"
+    ) return true;
+    const fn = (value.type === "ArrowFunctionExpression" ||
+        value.type === "FunctionExpression")
+      ? value
+      : value.type === "Identifier"
+      ? [...iconFunctions].find((node) =>
+        node.type === "FunctionDeclaration" && node.id &&
+        source.binding(node.id.name, node.id) ===
+          source.binding(value.name, value)
+      )
+      : undefined;
+    if (fn) {
+      return source.all.some((node) =>
+        source.function(node) === fn && node.type === "JSXOpeningElement" &&
+        source.live(node) &&
+        (elementName(node) === "svg" ||
+          [
+            "packages/ui/components/Icon.tsx",
+            "packages/ui/components/ChromeIcons.tsx",
+            "packages/ui/components/StateShape.tsx",
+          ].includes(modulePath(source.imported(node.name)?.module ?? "")))
+      ) ||
+        ("body" in fn && (fn.body as t.Node).type === "NullLiteral");
+    }
+    if (value.type === "Identifier") {
+      const binding = source.binding(value.name, value);
+      return !!binding && binding.scope.type !== "Program" &&
+        source.all.some((candidate) =>
+          candidate.type === "Identifier" &&
+          source.binding(candidate.name, candidate) === binding &&
+          candidate.typeAnnotation?.type === "TSTypeAnnotation" &&
+          candidate.typeAnnotation.typeAnnotation.type === "TSFunctionType"
+        );
+    }
+    return false;
+  };
+  const imageProperty = (node: t.TSPropertySignature): boolean => {
+    const owner = source.function(node);
+    if (
+      !owner || node.typeAnnotation?.typeAnnotation.type !== "TSStringKeyword"
+    ) return false;
+    let parameter: t.Node | undefined = source.parent.get(node);
+    while (
+      parameter && parameter !== owner && parameter.type !== "Identifier"
+    ) parameter = source.parent.get(parameter);
+    if (parameter?.type !== "Identifier") return false;
+    const binding = source.binding(parameter.name, parameter);
+    const references = source.all.filter((item): item is t.MemberExpression =>
+      item.type === "MemberExpression" && property(item.property) === "icon" &&
+      source.access(item.object)?.binding === binding
+    );
+    const images = references.filter((item) => {
+      const expression = source.parent.get(item),
+        attr = expression && source.parent.get(expression);
+      const element = attr && source.parent.get(attr);
+      return attr?.type === "JSXAttribute" && property(attr.name) === "src" &&
+        element?.type === "JSXOpeningElement" && elementName(element) === "img";
+    });
+    return images.length > 0 && references.every((item) => {
+      const expression = source.parent.get(item),
+        parent = expression && source.parent.get(expression);
+      return expression?.type !== "JSXExpressionContainer" ||
+        parent?.type === "JSXAttribute";
+    });
+  };
+  if (
+    rule === "settings-name" &&
+    source.all.some((node) =>
+      /Settings \/ sidecars/.test(staticText(source, node) ?? "")
+    )
+  ) {
+    fail("navigation label");
+  }
+  for (const node of source.all) {
+    if (
+      rule === "presentation" &&
+      !["packages/client/failures.ts", "packages/client/failure-features.ts"]
+        .includes(path) &&
+      node.type === "ObjectExpression" &&
+      (["heading", "reason", "tone"].every((key) =>
+        node.properties.some((p) =>
+          p.type === "ObjectProperty" && property(p.key) === key
+        )
+      ) ||
+        node.properties.some((p) =>
+            p.type === "SpreadElement" &&
+            /\.failure$/.test(source.name(p.argument) ?? "")
+          ) &&
+          node.properties.some((p) =>
+            p.type === "ObjectProperty" &&
+            ["heading", "reason", "tone", "target", "kind"].includes(
+              property(p.key) ?? "",
+            )
+          ))
+    ) {
+      fail(`hand-authored failure on line ${node.loc?.start.line}`);
+    }
+    if (
+      rule === "native" && node.type === "CallExpression" &&
+      source.name(node.callee)?.endsWith(".createElement") &&
+      ["details", "summary", "select"].includes(
+        source.string(node.arguments[0]) ?? "",
+      )
+    ) fail(`native widget on line ${node.loc?.start.line}`);
+    if (
+      rule === "ellipsis" &&
+      ((node.type === "StringLiteral" || node.type === "JSXText") &&
+          node.value.includes("\u2026") ||
+        node.type === "TemplateElement" &&
+          node.value.cooked?.includes("\u2026"))
+    ) fail(`line ${node.loc?.start.line}`);
+    if (rule === "clock" && path !== "packages/ui/components/Clock.tsx") {
+      if (
+        (node.type === "CallExpression" || node.type === "NewExpression") &&
+        node.callee.type === "MemberExpression"
+      ) {
+        const method = property(node.callee.property);
+        const options = node.arguments.map((arg) =>
+          text.slice(arg.start!, arg.end!)
+        ).join(" ");
+        // Numeric locale formatting is not a date formatter. Date options and
+        // Date-valued receivers distinguish it without exempting file paths.
+        const receiver = source.value(node.callee.object);
+        if (
+          ["toLocaleDateString", "toLocaleTimeString", "DateTimeFormat"]
+            .includes(method ?? "") ||
+          method === "toLocaleString" &&
+            (/year|month|day|hour|minute|second|timeZone/i.test(options) ||
+              receiver?.type === "NewExpression" &&
+                source.name(receiver.callee) === "Date" ||
+              receiver?.type === "Identifier" &&
+                source.all.some((candidate) =>
+                  candidate.type === "Identifier" &&
+                  candidate.name === receiver.name &&
+                  candidate.typeAnnotation &&
+                  source.binding(candidate.name, candidate) ===
+                    source.binding(receiver.name, receiver) &&
+                  /\bDate\b/.test(
+                    text.slice(
+                      candidate.typeAnnotation.start!,
+                      candidate.typeAnnotation.end!,
+                    ),
+                  )
+                ))
+        ) fail(`line ${node.loc?.start.line}`);
+      }
+    }
+    if (rule === "icons") {
+      const iconValue =
+        node.type === "ObjectProperty" && property(node.key) === "icon"
+          ? node.value
+          : node.type === "JSXAttribute" && property(node.name) === "icon"
+          ? node.value
+          : undefined;
+      if (iconValue && !componentIcon(iconValue)) {
+        fail(`unproven icon component on line ${node.loc?.start.line}`);
+      }
+      if (
+        node.type === "TSPropertySignature" && property(node.key) === "icon" &&
+        node.typeAnnotation && containsStringType(node.typeAnnotation) &&
+        !imageProperty(node)
+      ) fail(`icon type on line ${node.loc?.start.line}`);
+      if (
+        (node.type === "ObjectProperty" && property(node.key) === "icon" &&
+          source.string(node.value) !== undefined) ||
+        (node.type === "JSXAttribute" && property(node.name) === "icon" &&
+          source.string(node.value) !== undefined)
+      ) fail(`icon value on line ${node.loc?.start.line}`);
+      if (
+        (node.type === "StringLiteral" || node.type === "JSXText") &&
+        /^[\s\[\]✓•⌕◇↳↓☑◐×]+$/.test(node.value) &&
+        /[✓•⌕◇↳↓☑◐×]/.test(node.value)
+      ) fail(`glyph on line ${node.loc?.start.line}`);
+      if (
+        node.type === "JSXElement" &&
+        (elementName(node.openingElement) === "text" ||
+          node.openingElement.attributes.some((attr) =>
+              attr.type === "JSXAttribute" &&
+              property(attr.name) === "aria-hidden" &&
+              source.string(attr.value) === "true"
+            ) &&
+            node.children.some((child) =>
+              child.type === "JSXText" && /^[xv]$/i.test(child.value.trim())
+            ))
+      ) {
+        fail(`text artwork on line ${node.loc?.start.line}`);
+      }
+      const iconFunction = iconFunctions.has(node)
+        ? node as t.Function
+        : node.type === "FunctionDeclaration" &&
+            /Icon$/.test(node.id?.name ?? "")
+        ? node
+        : node.type === "VariableDeclarator" &&
+            node.id.type === "Identifier" && /Icon$/.test(node.id.name) &&
+            (node.init?.type === "ArrowFunctionExpression" ||
+              node.init?.type === "FunctionExpression")
+        ? node.init
+        : node.type === "ObjectProperty" && property(node.key) === "icon" &&
+            node.value.type === "ArrowFunctionExpression"
+        ? node.value
+        : undefined;
+      if (
+        iconFunction &&
+        (source.string(iconFunction.body) !== undefined ||
+          source.all.some((child) =>
+            source.function(child) === iconFunction &&
+            (child.type === "JSXText" && !!child.value.trim() ||
+              child.type === "ReturnStatement" &&
+                source.string(child.argument) !== undefined)
+          ))
+      ) {
+        fail(`text icon component on line ${iconFunction.loc?.start.line}`);
+      }
+    }
+    if (rule === "native" && node.type === "JSXOpeningElement") {
+      const name = elementName(node);
+      if (["details", "summary", "select"].includes(name)) {
+        fail(`<${name}> on line ${node.loc?.start.line}`);
+      }
+      if (
+        (name === "Dynamic" &&
+          ["details", "summary", "select"].includes(
+            source.string(source.attr(node, "component")) ?? "",
+          )) ||
+        (name === "input" &&
+          source.string(source.attr(node, "type")) === "checkbox" &&
+          path !== "packages/ui/components/Checkbox.tsx")
+      ) {
+        fail(`native widget on line ${node.loc?.start.line}`);
+      }
+      // Preview surfaces have their own hover/focus detail; title elsewhere is
+      // still the documented full-value/name affordance, not a second preview.
+      const previewOwner = source.all.some((item) =>
+        item.type === "TSPropertySignature" &&
+        property(item.key) === "preview" &&
+        source.function(item) === source.function(node)
+      );
+      const nativeTarget = node.attributes.some((attr) =>
+        attr.type === "JSXAttribute" && property(attr.name) === "popovertarget"
+      );
+      const title = node.attributes.find((attr) =>
+        attr.type === "JSXAttribute" && property(attr.name) === "title"
+      );
+      if (
+        name === "button" && previewOwner && nativeTarget &&
+        title?.type === "JSXAttribute"
+      ) {
+        const value = title.value?.type === "JSXExpressionContainer"
+          ? title.value.expression
+          : undefined;
+        const guarded = value?.type === "ConditionalExpression" &&
+          value.test.type === "MemberExpression" &&
+          property(value.test.property) === "preview" &&
+          source.access(value.test.object)?.binding ===
+            source.access((source.function(node) as t.Function).params[0])
+              ?.binding &&
+          value.consequent.type === "Identifier" &&
+          value.consequent.name === "undefined";
+        if (!guarded) {
+          fail(`native preview tooltip on line ${node.loc?.start.line}`);
+        }
+      }
+    }
+    if (
+      rule === "duration" && path !== "packages/client/format.ts" &&
+      ["FunctionDeclaration", "ArrowFunctionExpression", "FunctionExpression"]
+        .includes(node.type) &&
+      source.all.some((child) =>
+        child.start! > node.start! && child.end! < node.end! &&
+        child.type === "BinaryExpression" && child.operator === "/" &&
+        (() => {
+          const divisor = source.value(child.right);
+          return divisor?.type === "NumericLiteral" &&
+            [1000, 60000, 3600000].includes(divisor.value);
+        })()
+      ) && source.all.some((child) =>
+        child.start! > node.start! && child.end! < node.end! &&
+        (child.type === "TemplateElement" &&
+            /\b(?:s|sec|seconds|ms|min|h)\b/.test(child.value.raw) ||
+          child.type === "StringLiteral" &&
+            /^(?:s|sec|seconds|ms|min|h)$/.test(child.value.trim()))
+      )
+    ) {
+      fail(`local duration on line ${node.loc?.start.line}`);
+    }
+    if (
+      rule === "meta-list" && node.type === "JSXElement" &&
+      (source.name(node.openingElement.name) === "ChromeMeta" ||
+        source.string(source.attr(node.openingElement, "class"))?.includes(
+          "otk-chrome-meta",
+        )) &&
+      source.all.some((child) =>
+        child.start! > node.start! && child.end! < node.end! &&
+        (child.type === "JSXText" && child.value.trim() === "·" ||
+          child.type === "TemplateElement" && child.value.raw.includes("·") ||
+          child.type === "JSXExpressionContainer" && (() => {
+              const value = source.value(child.expression);
+              return source.string(value)?.trim() === "·" ||
+                value?.type === "TemplateLiteral" && value.quasis.some((q) =>
+                    q.value.raw.includes("·")
+                  );
+            })())
+      )
+    ) {
+      fail(`separator on line ${node.loc?.start.line}`);
+    }
+    if (
+      rule === "meta-list" && path !== "packages/client/format.ts" &&
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      property(node.callee.property) === "join" &&
+      staticText(source, node.arguments[0]) === " · "
+    ) {
+      fail(`local metadata join on line ${node.loc?.start.line}`);
+    }
+  }
+  if (
+    rule === "duration" && path.endsWith("/format.ts") &&
+    /export function humanDuration/.test(text) &&
+    /return `\$\{Math\.floor\(elapsed \/ 1000\)\} s`/.test(text)
+  ) fail("humanDuration formats seconds separately from duration");
+  return errors;
+}
+
+function staticText(source: Source, node: t.Node): string | undefined {
+  const value = source.value(node);
+  if (value?.type === "BinaryExpression" && value.operator === "+") {
+    const left = staticText(source, value.left),
+      right = staticText(source, value.right);
+    return left !== undefined && right !== undefined ? left + right : undefined;
+  }
+  return source.string(value);
+}
+
+/** Positive data flow into fixture consumers, not a token-presence obligation. */
+export function fixtureFeedbackErrors(text: string): string[] {
+  const source = new Source(text);
+  const owned = (input: t.Node, seen = new Set<t.Node>()): boolean => {
+    const value = source.value(input);
+    if (!value || seen.has(value)) return false;
+    seen.add(value);
+    if (value.type === "CallExpression") {
+      const imported = source.imported(value.callee);
+      return imported?.module === "@otk/client" &&
+        ["presentFailure", "errorFeedback", "attachmentFailure", "failureValue"]
+          .includes(imported.name);
+    }
+    if (value.type === "ObjectExpression") {
+      const spreads = value.properties.filter((p): p is t.SpreadElement =>
+        p.type === "SpreadElement"
+      );
+      return spreads.length > 0 && spreads.every((p) =>
+        owned(p.argument, new Set(seen))
+      ) &&
+        !value.properties.some((p) =>
+          p.type === "ObjectProperty" &&
+          ["failure", "kind", "text"].includes(property(p.key) ?? "")
+        );
+    }
+    return false;
+  };
+  return source.all.flatMap((node) => {
+    const value =
+      node.type === "JSXAttribute" && property(node.name) === "feedback"
+        ? node.value
+        : node.type === "ObjectProperty" && property(node.key) === "feedback"
+        ? node.value
+        : undefined;
+    return value && source.live(node) && !owned(value)
+      ? [
+        `line ${node.loc?.start.line}: rendered feedback must derive from the production presenter`,
+      ]
+      : [];
+  });
+}
+
+Deno.test("UI convention: style fixture feedback flows from production presenters into actual consumers", async () => {
+  for (const path of ["error-surfaces", "ui-conventions", "failure-layout"]) {
+    const text = await Deno.readTextFile(
+      new URL(
+        `../../packages/ui/tests/style-consumer/${path}.tsx`,
+        import.meta.url,
+      ),
+    );
+    assertEquals(fixtureFeedbackErrors(text), [], path);
+  }
+  const imported = 'import { presentFailure as present } from "@otk/client";';
+  assertEquals(
+    fixtureFeedbackErrors(
+      `${imported} const shown = present(facts); const view = <FeedbackStatus feedback={{...shown, action}} />;`,
+    ),
+    [],
+  );
+  for (
+    const body of [
+      "/* presentFailure(facts) */ const view = <FeedbackStatus feedback={madeUp} />;",
+      "if (false) present(facts); const view = <FeedbackStatus feedback={madeUp} />;",
+      "const shown = present(facts); const view = <FeedbackStatus feedback={{...shown, failure: madeUp}} />;",
+      "const shown = present(facts); const view = <FeedbackStatus feedback={unrelated} />;",
+      "const view = <FeedbackStatus feedback={presentFailure(facts)} />;",
+    ]
+  ) assert(fixtureFeedbackErrors(imported + body).length > 0, body);
+});
+
+for (const rule of Object.keys(owners) as Rule[]) {
+  Deno.test(`UI convention: ${owners[rule]}`, async () => {
+    const failures: string[] = [];
+    for (const [path, text] of await productionSources()) {
+      if (/^(?:packages\/(?:client|ui)\/|web\/src\/)/.test(path)) {
+        failures.push(...conventionErrors(rule, path, text));
+      }
+    }
+    if (rule === "presentation") {
+      for (const [path, text] of await sourceInventory({ tests: true })) {
+        if (path.startsWith("packages/ui/tests/") && path.endsWith(".tsx")) {
+          failures.push(...conventionErrors(rule, path, text));
+        }
+      }
+    }
+    assertEquals(failures, [], failures.join("\n"));
+    if (rule === "duration") {
+      for (const elapsed of [0, 1234, 65000]) {
+        assertEquals(
+          humanDuration(elapsed),
+          duration(elapsed),
+          owners.duration,
+        );
+        assertEquals(
+          runningWorkElapsed(elapsed),
+          duration(elapsed),
+          owners.duration,
+        );
+      }
+    }
+    if (rule === "meta-tone") {
+      const meta = rules(
+        await Deno.readTextFile(
+          new URL(
+            "../../packages/ui/components/ChromeMeta.css",
+            import.meta.url,
+          ),
+        ),
+      )
+        .find((rule) => rule.selector === ".otk-chrome-meta")!;
+      assertEquals(
+        meta.declarations.get("font-weight"),
+        "400",
+        "ChromeMeta owns the same weight inside and outside controls",
+      );
+      assertEquals(
+        meta.declarations.get("color"),
+        "var(--otk-fg-3)",
+        owners["meta-tone"],
+      );
+    }
+  });
+}
+
+Deno.test("UI convention: failure presenter drops current-session targets on every inline surface, notifications retain them", () => {
+  const target = {
+    sidecarId: "local",
+    sessionID: "current",
+    label: "Open session",
+  };
+  const presenter = new FailurePresenter({
+    target: () => ({ label: target.label, href: "/current" }),
+  });
+  const value = {
+    code: "test.failure",
+    retry: "none" as const,
+    diagnosticID: "test",
+    facts: { actionLabel: "Sending prompt", target, reason: "Refused" },
+  };
+  for (
+    const surface of ["record", "feedback", "session", "notification"] as const
+  ) {
+    const shown = presenter.describe(value, { surface, view: target }).failure!;
+    assertEquals(
+      shown.target,
+      surface === "notification"
+        ? { label: target.label, href: "/current" }
+        : { label: "" },
+      `FailurePresenter must drop self-links for ${surface}`,
+    );
+  }
+});
+
+Deno.test("UI convention: unknown outcomes have neutral tone derived by FailurePresenter, never the failure stripe", () => {
+  for (const outcome of ["unknown", "unavailable"] as const) {
+    const shown = new FailurePresenter().describe({
+      code: "test.pending",
+      retry: "none",
+      diagnosticID: "pending",
+      facts: { outcome, actionLabel: "Sending prompt" },
+    });
+    assertEquals(shown.kind, "pending");
+    assertEquals(
+      shown.failure?.tone,
+      "neutral",
+      "FailurePresenter owns tone from outcome, not the caller",
+    );
+  }
+});
+
+export function attachmentFixtureErrors(path: string, text: string): string[] {
+  const source = new Source(text, path);
+  const errors = source.all.filter((node): node is t.ObjectProperty => {
+    if (
+      node.type !== "ObjectProperty" || property(node.key) !== "error" ||
+      !source.live(node)
+    ) return false;
+    const parent = source.parent.get(node);
+    return parent?.type === "ObjectExpression" &&
+      parent.properties.some((p) =>
+        p.type === "ObjectProperty" &&
+        ["pending", "part"].includes(property(p.key) ?? "")
+      );
+  });
+  const valid = errors.filter((node) => {
+    const call = source.value(node.value);
+    if (call?.type !== "CallExpression") return false;
+    const imported = source.imported(call.callee);
+    if (
+      imported?.module !== "@otk/client" ||
+      imported.name !== "attachmentFailure"
+    ) return false;
+    if (path.includes("features/prompt/")) {
+      const object = source.parent.get(node),
+        patch = object && source.parent.get(object);
+      return patch?.type === "CallExpression" &&
+        source.name(patch.callee) === "patch" &&
+        source.name(call.arguments[0]) === "error" &&
+        source.name(call.arguments[1]) === "file.name";
+    }
+    const parent = source.parent.get(node);
+    const label = parent?.type === "ObjectExpression"
+      ? parent.properties.find((p) =>
+        p.type === "ObjectProperty" && property(p.key) === "label"
+      )
+      : undefined;
+    let consumer: t.Node | undefined = node;
+    while (consumer && consumer.type !== "JSXAttribute") {
+      consumer = source.parent.get(consumer);
+    }
+    const opening = consumer && source.parent.get(consumer);
+    return consumer?.type === "JSXAttribute" &&
+      property(consumer.name) === "chips" &&
+      opening?.type === "JSXOpeningElement" &&
+      source.imported(opening.name)?.module.endsWith("/prompt/Chips.tsx") ===
+        true &&
+      label?.type === "ObjectProperty" &&
+      source.string(label.value) !== undefined &&
+      source.string(label.value) === source.string(call.arguments[1]);
+  });
+  return valid.length === 1 && errors.length === 1 ? [] : [
+    `${path}: actual chip error must consume attachmentFailure(cause, original filename)`,
+  ];
+}
+
+Deno.test("UI convention: attachment fixtures and the app use the same file-target failure builder", async () => {
+  for (
+    const path of [
+      "packages/ui/features/prompt/attachments.tsx",
+      "packages/ui/tests/style-consumer/error-surfaces.tsx",
+    ]
+  ) {
+    const text = await Deno.readTextFile(
+      new URL(`../../${path}`, import.meta.url),
+    );
+    assertEquals(attachmentFixtureErrors(path, text), []);
+    for (
+      const changed of [
+        text.replace("error: attachmentFailure(", "error: unrelated("),
+        text.replace("import { attachmentFailure }", "import { unrelated }"),
+        text.replace("error, file.name", 'error, "wrong.txt"').replace(
+          '"unreadable-attachment.txt",\n                )',
+          '"wrong.txt",\n                )',
+        ),
+      ]
+    ) {
+      if (changed !== text) {
+        assert(attachmentFixtureErrors(path, changed).length > 0);
+      }
+    }
+  }
+});
+
+Deno.test("UI convention gates distinguish artwork, numeric locales and intrinsic layout from violations", () => {
+  const bad: [Rule, string, string][] = [
+    ["clock", "Fixture.tsx", "new Date(at).toLocaleString()"],
+    ["clock", "Fixture.tsx", "instant.toLocaleTimeString()"],
+    [
+      "icons",
+      "Fixture.tsx",
+      'interface Tool { icon: string | (() => Element) }; const row = { icon: "?" };',
+    ],
+    ["icons", "Fixture.tsx", '<span aria-hidden="true">✓</span>'],
+    ["ellipsis", "Fixture.tsx", 'const text = "Loading\\u2026";'],
+    [
+      "meta-tone",
+      "Fixture.css",
+      ".otk-record-group-failures { color: var(--danger) }",
+    ],
+    ["masks", "Fixture.css", ".otk-tree-toggle rect { fill: var(--otk-bg) }"],
+    ["native", "Fixture.tsx", "<details><summary>Details</summary></details>"],
+    ["native", "Fixture.tsx", "<select />"],
+    [
+      "native",
+      "Fixture.tsx",
+      'function Preview(props: {preview?: boolean}) { return <button popovertarget="p" title="Native tooltip" />; }',
+    ],
+    [
+      "alignment",
+      "Fixture.css",
+      ".otk-connection-status.has-failure { --failure-gutter: calc(var(--control-size) + var(--space-2)) }",
+    ],
+    ["alignment", "Fixture.css", ".otk-send-failure { inline-size: 80% }"],
+    [
+      "disclosure",
+      "Fixture.css",
+      ".otk-failure-details { grid-template-columns: 19px auto }",
+    ],
+    ["meta-list", "Fixture.tsx", "<ChromeMeta>·</ChromeMeta>"],
+  ];
+  for (const [rule, path, text] of bad) {
+    assert(conventionErrors(rule, path, text).length > 0, `${rule}: ${text}`);
+  }
+  assertEquals(
+    conventionErrors("clock", "Fixture.tsx", "bytes.toLocaleString()"),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "icons",
+      "Fixture.tsx",
+      'import { SearchIcon } from "@otk/ui"; const tool = { icon: SearchIcon }; const icon = <svg><path d="M1 1h8" /></svg>;',
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "icons",
+      "Fixture.tsx",
+      "function Avatar(props: { image?: string }) { return <img src={props.image} />; }",
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "icons",
+      "Fixture.tsx",
+      "function Avatar(props: { icon?: string }) { return <img src={props.icon} />; }",
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "alignment",
+      "Fixture.css",
+      ".otk-connection-status.has-failure { grid-template-columns: subgrid } .otk-send-failure { inline-size: fit-content; max-inline-size: 100% }",
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "alignment",
+      "Fixture.css",
+      ".otk-user-message { --user-column: 80% }",
+    ),
+    [],
+  );
+});

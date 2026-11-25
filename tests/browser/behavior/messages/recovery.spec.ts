@@ -56,7 +56,7 @@ for (const retry of [false, true]) {
         await page.locator(".otk-response-recovery button").click();
       }
       await expect(page.locator(".otk-response-recovery")).toHaveText(
-        "Refreshing response…",
+        "Refreshing response...",
       );
       await expect.poll(() => observation().then((o) => o.snapshots.length))
         .toBe(1);
@@ -104,7 +104,7 @@ for (const retry of [false, true]) {
       );
       expect((await observation()).points.length).toBe(firstReads);
       await expect(page.locator(".otk-response-recovery")).toHaveText(
-        "Refreshing response…",
+        "Refreshing response...",
       );
       await expect.poll(visibleSource).toBe(initial.snapshots[0]);
       await state.release(reply.gate);

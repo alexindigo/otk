@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Todo.css" with { type: "text" };
+import { TasksIcon } from "./ChromeIcons.tsx";
+import StateShape from "./StateShape.tsx";
 import type { ToolRegistry } from "../registries/renderers.ts";
 import { countLabel } from "./tools/count.ts";
 export function registerTodoTool(tools: ToolRegistry): void {
@@ -7,7 +9,7 @@ export function registerTodoTool(tools: ToolRegistry): void {
     "todo",
     (props) => <Todo items={props.call.items} />,
     (call) => ({
-      icon: "☑",
+      icon: TasksIcon,
       verb: "Update tasks",
       summary: `${
         call.items.filter((item) => item.status === "completed").length
@@ -23,12 +25,20 @@ export default function Todo(props: { items: OtkTodo[] }) {
       <For each={props.items} keyed={false}>
         {(item) => (
           <li data-todo-status={item().status}>
-            <span aria-hidden="true">
-              [{item().status === "completed"
-                ? "✓"
-                : item().status === "in_progress"
-                ? "•"
-                : " "}]
+            <span
+              class="otk-todo-state"
+              role="img"
+              aria-label={item().status.replaceAll("_", " ")}
+            >
+              <StateShape
+                kind={item().status === "completed"
+                  ? "check"
+                  : item().status === "in_progress"
+                  ? "half-disc"
+                  : item().status === "cancelled"
+                  ? "cross"
+                  : "circle"}
+              />
             </span>
             <span>{item().content}</span>
           </li>

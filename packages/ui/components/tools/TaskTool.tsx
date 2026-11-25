@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { DelegateIcon } from "../ChromeIcons.tsx";
 import "./TaskTool.css" with { type: "text" };
 import { Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import { derivedValue } from "@otk/protocol";
-import { duration } from "@otk/client";
+import { duration, metaList } from "@otk/client";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 import ToolOutput from "./ToolOutput.tsx";
@@ -13,7 +14,7 @@ export function registerTaskTool(tools: ToolRegistry): void {
     "task",
     (props) => <TaskTool call={props.call} onOpen={props.onOpenChild} />,
     (call) => ({
-      icon: "↳",
+      icon: DelegateIcon,
       verb: "Delegate",
       target: call.agent || "Unknown agent",
       entity: call.agent
@@ -35,16 +36,17 @@ export default function TaskTool(
     const value = derivedValue(result);
     if (!value) {
       return result?.state === "pending"
-        ? "Preparing progress\u2026"
+        ? "Preparing progress..."
         : "Progress unavailable";
     }
     if (props.call.status === "running" && value.current) {
-      return `↳ ${value.current.name} ${value.current.title ?? ""}`.trim();
+      return `${value.current.name} ${value.current.title ?? ""}`.trim();
     }
     const time = value.time;
-    return `${countLabel(value.toolCount!, "tool call")}${
-      time?.end !== undefined ? ` · ${duration(time.end - time.start)}` : ""
-    }`;
+    return metaList([
+      countLabel(value.toolCount!, "tool call"),
+      time?.end !== undefined && duration(time.end - time.start),
+    ]);
   };
   return (
     <>

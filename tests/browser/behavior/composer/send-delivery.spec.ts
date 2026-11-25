@@ -151,7 +151,9 @@ test(
     expect(performance.now() - start).toBeLessThan(1000);
     await expect(entry.locator(".otk-send-meta")).toContainText("Sending");
     await expect(entry.getByRole("img", { name: "Sending", exact: true }))
-      .toBeVisible();
+      .toHaveCount(0);
+    await expect(entry.locator(".otk-activity-indicator"))
+      .toHaveAttribute("aria-hidden", "true");
     const messageID = await entry.getAttribute("data-message");
     const receipt = page.locator(`[data-message="${messageID}"]`);
     await receipt.evaluate((element) => {
@@ -193,6 +195,13 @@ test(
     ).toBeLessThan(2);
     await expect(receipt).toHaveAttribute("data-send-state", "failed");
     await expect(receipt).toContainText("not been observed");
+    const failed = await receipt.locator(".otk-user-bubble").boundingBox();
+    expect(Math.abs(failed!.y - before!.y)).toBeLessThan(1);
+    await expect(receipt.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(receipt.locator("[aria-expanded]")).toHaveCount(1);
+    const failure = await receipt.locator(".otk-send-failure").boundingBox();
+    expect(Math.abs(failure!.x + failure!.width - failed!.x - failed!.width))
+      .toBeLessThan(1);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(
@@ -222,6 +231,8 @@ test(
     const after = await receipt.locator(".otk-user-bubble").boundingBox();
     expect(Math.abs(after!.width - before!.width)).toBeLessThan(1);
     expect(Math.abs(after!.height - before!.height)).toBeLessThan(1);
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
+    expect(Math.abs(after!.x - before!.x)).toBeLessThan(1);
     const afterDock = await page.locator(".otk-prompt").boundingBox();
     expect(afterDock).toEqual(dock);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {

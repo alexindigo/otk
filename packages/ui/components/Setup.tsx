@@ -20,7 +20,7 @@ export default function Setup(
       <Form
         title="Set up OTK"
         submitLabel="Set up OTK"
-        pendingLabel="Configuring server…"
+        pendingLabel="Configuring server..."
         onSubmit={(data) =>
           props.onSetup({
             type: String(data.get("type")),
@@ -31,12 +31,14 @@ export default function Setup(
         <label>
           Sign-in method<FormSelect
             name="type"
+            label="Sign-in method"
             value={type()}
-            onChange={(event) => setType(event.currentTarget.value)}
-          >
-            <option value="password">Password</option>
-            <option value="none">None</option>
-          </FormSelect>
+            onValue={setType}
+            options={[{ value: "password", label: "Password" }, {
+              value: "none",
+              label: "None",
+            }]}
+          />
         </label>
         <Show when={type() === "password"}>
           <label>

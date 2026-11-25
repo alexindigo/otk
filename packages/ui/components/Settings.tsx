@@ -14,7 +14,6 @@ import Form, { FormInput } from "./Form.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
-import ConnectionStatus from "./ConnectionStatus.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 export default function Settings(props: {
@@ -81,8 +80,7 @@ export default function Settings(props: {
                   </Show>
                 </header>
                 <p>{sidecar().baseUrl || "Serving server · relative /api/"}</p>
-                <ConnectionBadge sidecar={sidecar()} />
-                <ConnectionStatus connection={sidecar()} />
+                <ConnectionBadge sidecar={sidecar()} label={false} />
                 <Show when={sidecar().status === "login required"}>
                   <div class="otk-sidecar-auth">
                     <Login
@@ -139,7 +137,7 @@ export default function Settings(props: {
           <Form
             title="Add server"
             submitLabel="Add server"
-            pendingLabel="Checking server…"
+            pendingLabel="Checking server..."
             pending={props.discovery?.pending}
             editableWhilePending
             feedback={props.discovery ? null : undefined}

@@ -177,7 +177,7 @@ export default function KeysHelp(props: {
         class="otk-key-actions"
         pending={pending()}
         feedback={pending()
-          ? { kind: "pending", text: "Saving shortcuts…" }
+          ? { kind: "pending", text: "Saving shortcuts..." }
           : undefined}
         control={(control) => status = control}
         focusAction={() => {

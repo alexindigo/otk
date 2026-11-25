@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureValue } from "@otk/client";
+import { attachmentFailure } from "@otk/client";
 import { onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import {
@@ -143,11 +143,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
             } catch (error) {
               patch({
                 pending: false,
-                error: failureValue(error, {
-                  actionLabel: "Reading attachment",
-                  target: ctx.failureTarget?.() ??
-                    { sessionID: ctx.sessionID() },
-                }),
+                error: attachmentFailure(error, file.name),
               });
             }
           }

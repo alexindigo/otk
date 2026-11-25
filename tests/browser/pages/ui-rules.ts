@@ -85,17 +85,21 @@ export async function uiRuleFailures(
             });
           const icons = Array.from(
             root.querySelectorAll<HTMLElement>(
-              ".otk-icon-button,.otk-send-button,.otk-inbox-search,.otk-server-status,.otk-inactive-toggle,.otk-discovered-toggle,.otk-session-search",
+              ".otk-icon-button,.otk-send-button,.otk-inbox-search,.otk-server-status,.otk-inactive-toggle,.otk-discovered-toggle,.otk-session-search,.otk-disclosure-toggle",
             ),
           ).filter(visible)
             .filter((el) => el.querySelector("svg,.otk-connection-light"))
             .map((el) => {
-              const r = el.getBoundingClientRect(),
+              const r = (el.matches(".otk-disclosure-toggle")
+                  ? el.querySelector(".otk-disclosure-icon")!
+                  : el).getBoundingClientRect(),
                 i = el.querySelector("svg,.otk-connection-light")!
                   .getBoundingClientRect();
               return {
                 label: el.getAttribute("aria-label") ?? el.textContent,
-                gaps: el.matches(".otk-icon-button,.otk-send-button")
+                gaps: el.matches(
+                    ".otk-icon-button,.otk-send-button,.otk-disclosure-toggle",
+                  )
                   ? [
                     i.left - r.left,
                     r.right - i.right,

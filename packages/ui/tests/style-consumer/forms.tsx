@@ -10,6 +10,7 @@ import { RequestFailure } from "@otk/client";
 export default function Forms() {
   let settle: ReturnType<typeof Promise.withResolvers<void>> | undefined;
   const [calls, setCalls] = createSignal(0);
+  const [kind, setKind] = createSignal("alpha");
   styleTest.fieldFailure = (name) =>
     settle?.reject(
       new RequestFailure({
@@ -47,10 +48,16 @@ export default function Forms() {
         </label>
         <span id="notes-help">Notes stay with this action</span>
         <label>
-          Kind<FormSelect name="kind" value="alpha">
-            <option value="alpha">Alpha</option>
-            <option value="beta">Beta</option>
-          </FormSelect>
+          Kind<FormSelect
+            name="kind"
+            label="Kind"
+            value={kind()}
+            onValue={setKind}
+            options={[{ value: "alpha", label: "Alpha" }, {
+              value: "beta",
+              label: "Beta",
+            }]}
+          />
         </label>
       </Form>
     </section>

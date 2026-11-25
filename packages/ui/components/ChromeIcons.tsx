@@ -132,6 +132,38 @@ export const CloseIcon = () => (
     <path d="m6 6 12 12M18 6 6 18" />
   </Icon>
 );
+export const ToolIcon = () => (
+  <Icon>
+    <path d="m12 3 9 9-9 9-9-9Z" />
+  </Icon>
+);
+export const FetchIcon = () => (
+  <Icon>
+    <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4" />
+  </Icon>
+);
+export const QuestionIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4M12 17h.01" />
+  </Icon>
+);
+export const SkillIcon = () => (
+  <Icon>
+    <path d="m12 3 9 9-9 9-9-9ZM12 7v10M7 12h10" />
+  </Icon>
+);
+export const DelegateIcon = () => (
+  <Icon>
+    <path d="M5 3v8a4 4 0 0 0 4 4h11m-5-5 5 5-5 5" />
+  </Icon>
+);
+export const TasksIcon = () => (
+  <Icon>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="m7 12 3 3 7-7" />
+  </Icon>
+);
 export const RevertIcon = () => (
   <Icon>
     <path

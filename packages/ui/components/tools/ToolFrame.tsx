@@ -5,6 +5,7 @@ import type { Preferences, ToolCall } from "@otk/protocol";
 import { errorFeedback, toolFailure } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
 import ActivityIndicator from "../ActivityIndicator.tsx";
+import { ToolIcon } from "../ChromeIcons.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
 import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
@@ -63,6 +64,7 @@ export default function ToolFrame(props: {
         data-tool-status={props.call.status}
       >
         <TreeNode
+          toggleHeader
           label={props.presentation?.verb ?? props.call.tool}
           open={open()}
           onOpen={setExpanded}
@@ -81,16 +83,14 @@ export default function ToolFrame(props: {
               />
             )
             : undefined}
-          header={() => (
+          header={(_connected, toggleID) => (
             <header
               class={["otk-tool-state otk-control-row", {
                 "is-error": !!failure(),
               }]}
             >
               <TreeIcon>
-                {typeof props.presentation?.icon === "function"
-                  ? props.presentation.icon()
-                  : props.presentation?.icon}
+                {props.presentation?.icon() ?? <ToolIcon />}
               </TreeIcon>
               <Show when={props.presentation?.entity}>
                 {(entity) => (
@@ -105,8 +105,9 @@ export default function ToolFrame(props: {
                 )}
               </Show>
               <button
-                class="otk-tool-toggle otk-control-grow"
+                id={toggleID}
                 type="button"
+                class="otk-tool-toggle otk-tree-control otk-control-grow"
                 aria-expanded={open() ? "true" : "false"}
                 onClick={() => void expand()}
               >

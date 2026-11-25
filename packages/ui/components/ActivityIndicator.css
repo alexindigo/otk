@@ -21,6 +21,8 @@
 }
 .otk-activity-shape {
   display: none;
+  inline-size: 100%;
+  block-size: 100%;
 }
 @keyframes otk-activity-spin {
   to {
@@ -33,5 +35,4 @@
 :root[data-otk-reduced-colors] .otk-activity-shape {
   display: block;
   color: var(--otk-fg);
-  font: 600 var(--text-meta)/1 var(--font-ui);
 }

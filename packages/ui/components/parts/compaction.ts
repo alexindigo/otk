@@ -9,5 +9,5 @@ export function compactionLabel(
   const running = part.status === undefined
     ? promptPending
     : part.status === "running" || part.status === "queued";
-  return running ? "Compacting\u2026" : "Session compacted";
+  return running ? "Compacting..." : "Session compacted";
 }

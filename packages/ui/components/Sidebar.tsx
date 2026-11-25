@@ -13,7 +13,6 @@ import {
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
-import ConnectionStatus from "./ConnectionStatus.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { sessionLight } from "./status-light.ts";
@@ -76,9 +75,9 @@ export default function Sidebar(
           {(sidecar) => (
             <section class="otk-sidecar-group" data-sidecar={sidecar().id}>
               <h2>{sidecar().label}</h2>
-              <ConnectionBadge sidecar={sidecar()} />
-              <ConnectionStatus
-                connection={sidecar()}
+              <ConnectionBadge
+                sidecar={sidecar()}
+                label={false}
                 compact
                 onSettings={props.onSettings}
               />
@@ -216,7 +215,7 @@ export default function Sidebar(
         class="otk-settings-entry"
         onClick={() => void settings()}
       >
-        Settings / sidecars
+        Settings / servers
       </button>
     </aside>
   );

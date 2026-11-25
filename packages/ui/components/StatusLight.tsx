@@ -2,6 +2,7 @@
 import "./StatusLight.css" with { type: "text" };
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import { LIGHT_STATES, type LightState } from "./status-light.ts";
+import StateShape from "./StateShape.tsx";
 import {
   type AttentionLampScope,
   useAttentionPresentation,
@@ -48,9 +49,7 @@ export default function StatusLight(props: {
     >
       <span class="otk-lamp-glow" aria-hidden="true" />
       <span class="otk-lamp-body" aria-hidden="true" />
-      <span class="otk-lamp-shape" aria-hidden="true">
-        {LIGHT_STATES[state()].shape}
-      </span>
+      <StateShape class="otk-lamp-shape" kind={LIGHT_STATES[state()].shape} />
     </span>
   );
 }

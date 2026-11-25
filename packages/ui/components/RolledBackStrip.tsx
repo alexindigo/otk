@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RolledBackStrip.css" with { type: "text" };
+import Clock from "./Clock.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { RevertStrip, SessionRevert } from "@otk/client";
 import { countLabel } from "@otk/client";
@@ -65,7 +66,7 @@ export function RolledBackContent(
     >
       <Show when={props.state.error || feedback()}>
         <OperationFeedback
-          icon={<RevertIcon />}
+          icon={RevertIcon}
           feedback={errorFeedback(props.state.error || feedback())!}
         />
       </Show>
@@ -73,11 +74,11 @@ export function RolledBackContent(
         <ComposerNoticeRow
           class="otk-rollback-status"
           role="status"
-          icon={<RevertIcon />}
+          icon={RevertIcon}
         >
           {props.state.pending === "restore" || props.state.pending === "redo"
-            ? "Restoring…"
-            : "Rolling back…"}
+            ? "Restoring..."
+            : "Rolling back..."}
         </ComposerNoticeRow>
       </Show>
       <Show when={props.strip}>
@@ -85,7 +86,7 @@ export function RolledBackContent(
           <>
             <ComposerNoticeRow
               class="otk-rollback-disclosure"
-              icon={<RevertIcon />}
+              icon={RevertIcon}
               expanded={expanded()}
               onClick={() => setExpanded(!expanded())}
               trailing={
@@ -121,12 +122,7 @@ export function RolledBackContent(
                       >
                         {prompt().preview}
                       </span>
-                      <time datetime={new Date(prompt().time).toISOString()}>
-                        {new Date(prompt().time).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </time>
+                      <Clock at={prompt().time} />
                       <button
                         type="button"
                         class="otk-icon-button"

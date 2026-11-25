@@ -6,6 +6,7 @@ import ComposerNotice, {
 import OperationFeedback from "../../components/OperationFeedback.tsx";
 import FieldFeedback from "../../components/FieldFeedback.tsx";
 import PaneState from "../../components/PaneState.tsx";
+import { RevertIcon } from "../../components/ChromeIcons.tsx";
 import "./requests.css" with { type: "text" };
 
 export default function Requests() {
@@ -70,7 +71,7 @@ export default function Requests() {
               : { kind: "pending", text: "Sending prompt" }}
           />
           <ComposerNoticeRow
-            icon={<span aria-hidden="true">↶</span>}
+            icon={RevertIcon}
             trailing={
               <button
                 type="button"

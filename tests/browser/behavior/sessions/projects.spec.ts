@@ -214,7 +214,7 @@ test("sessions.project-scan-retires-disconnected-work-current-connection-add", {
     frames.held.filter((x) => x.request?.method === "projects.scan").length
   ).toBe(1);
   await expect(page.locator(".otk-template-paths")).toContainText(
-    "Scanning directories…",
+    "Scanning directories...",
   );
   holdWelcome = true;
   frames.close();
@@ -224,7 +224,7 @@ test("sessions.project-scan-retires-disconnected-work-current-connection-add", {
     0,
   );
   await expect(page.locator(".otk-template-paths")).not.toContainText(
-    "Scanning directories…",
+    "Scanning directories...",
   );
   holdWelcome = false;
   for (let i = 0; i < frames.held.length;) {

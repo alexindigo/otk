@@ -84,7 +84,7 @@ export default function Toasts(
         {(item) => (
           <Toast id={item().note.id} kind={item().note.kind}>
             <header class="otk-toast-header">
-              <div class="otk-toast-message">
+              <div class="otk-toast-message otk-disclosure-layout">
                 <Show
                   when={notificationFailure(item().note)}
                   fallback={
@@ -109,6 +109,7 @@ export default function Toasts(
                   {(failure) => (
                     <FailureContent
                       compact
+                      subgrid
                       signal={false}
                       failure={failure()}
                     />

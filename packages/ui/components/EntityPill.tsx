@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./EntityPill.css" with { type: "text" };
+import Clock from "./Clock.tsx";
 import { Show } from "solid-js";
 import { duration, type EntityFacts } from "@otk/client";
 import Popover from "./surface/Popover.tsx";
@@ -60,12 +61,7 @@ export default function EntityPill(props: {
                   <>
                     <dt>Completed</dt>
                     <dd>
-                      <time
-                        datetime={new Date(value().completed.value!)
-                          .toISOString()}
-                      >
-                        {new Date(value().completed.value!).toLocaleString()}
-                      </time>
+                      <Clock at={value().completed.value!} />
                     </dd>
                   </>
                 }

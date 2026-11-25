@@ -8,11 +8,11 @@ Deno.test("compaction renders its provider lifecycle independently of prompt pen
   const part = { kind: "compaction" as const, id: "compact" };
   assertEquals(
     compactionLabel({ ...part, status: "queued" }, false),
-    "Compacting\u2026",
+    "Compacting...",
   );
   assertEquals(
     compactionLabel({ ...part, status: "running" }, false),
-    "Compacting\u2026",
+    "Compacting...",
   );
   assertEquals(
     compactionLabel({ ...part, status: "completed" }, true),
@@ -22,7 +22,7 @@ Deno.test("compaction renders its provider lifecycle independently of prompt pen
     compactionLabel({ ...part, status: "failed" }, true),
     "Compaction failed",
   );
-  assertEquals(compactionLabel(part, true), "Compacting\u2026");
+  assertEquals(compactionLabel(part, true), "Compacting...");
   assertEquals(compactionLabel(part, false), "Session compacted");
 });
 

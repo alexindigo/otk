@@ -10,9 +10,8 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import type { Preferences } from "@otk/protocol";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
-import ChromeMeta from "./ChromeMeta.tsx";
-import { clockText } from "./Clock.tsx";
-import FailureSignal from "./FailureSignal.tsx";
+import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
+import { clockText, clockTitle } from "./Clock.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -51,6 +50,7 @@ export default function ActivityGroup(props: {
           fallback={props.breakouts?.()}
         >
           <TreeNode
+            toggleHeader
             label={props.group.failureTitle ||
               (props.group.silent
                 ? "Completion details"
@@ -59,7 +59,7 @@ export default function ActivityGroup(props: {
             open={open()}
             onOpen={setOpen}
             bodyVisible={open() || !!props.group.breakouts?.length}
-            header={() => (
+            header={(_connected, toggleID) => (
               <header class="otk-record-group-heading">
                 <TreeIcon />
                 <Show when={props.group.entity}>
@@ -72,8 +72,9 @@ export default function ActivityGroup(props: {
                   )}
                 </Show>
                 <button
+                  id={toggleID}
                   type="button"
-                  class="otk-tool-toggle otk-record-group-toggle"
+                  class="otk-tool-toggle otk-record-group-toggle otk-tree-control"
                   aria-expanded={open() ? "true" : "false"}
                   onClick={() => setOpen(!open())}
                 >
@@ -87,22 +88,14 @@ export default function ActivityGroup(props: {
                       </span>
                     }
                   >
-                    <Show
-                      when={props.group.title || !props.group.failureTitle}
-                    >
-                      <ChromeMeta class="otk-control-label">
-                        {props.group.silent
+                    <ChromeMeta class="otk-control-label">
+                      {metaList([
+                        props.group.silent
                           ? "Completion details"
-                          : props.group.title || "Details"}
-                      </ChromeMeta>
-                    </Show>
-                    <Show when={props.group.failureTitle}>
-                      <FailureSignal>
-                        <ChromeMeta class="otk-control-label otk-record-group-failures">
-                          {props.group.failureTitle}
-                        </ChromeMeta>
-                      </FailureSignal>
-                    </Show>
+                          : props.group.title,
+                        props.group.failureTitle,
+                      ]) || "Details"}
+                    </ChromeMeta>
                   </Show>
                   <Show when={props.group.detail}>
                     <span
@@ -123,7 +116,7 @@ export default function ActivityGroup(props: {
                         class="otk-record-group-time"
                         title={activityTimeRange(
                           time(),
-                          (value) => new Date(value).toLocaleString(),
+                          clockTitle,
                         )}
                       >
                         {activityTimeRange(time(), clockText)}

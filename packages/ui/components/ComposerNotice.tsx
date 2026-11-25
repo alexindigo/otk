@@ -10,7 +10,7 @@ export default function ComposerNotice(props: { children: Element }): Element {
 
 /** One primary notice row for facts, disclosures and failures. */
 export function ComposerNoticeRow(props: {
-  icon: Element;
+  icon?: () => Element;
   children: Element;
   trailing?: Element;
   class?: string;
@@ -50,7 +50,7 @@ export function ComposerNoticeRow(props: {
       {...native.attributes}
     >
       <Show when={props.icon}>
-        <span class="otk-composer-notice-icon">{props.icon}</span>
+        {(icon) => <span class="otk-composer-notice-icon">{icon()()}</span>}
       </Show>
       <div class="otk-composer-notice-content">{props.children}</div>
       {props.trailing}

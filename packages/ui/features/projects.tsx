@@ -61,7 +61,7 @@ function AddProject(props: DialogProps) {
       <Form
         title="Project directory"
         submitLabel="Create session"
-        pendingLabel="Creating project session…"
+        pendingLabel="Creating project session..."
         onSubmit={(data) =>
           picker.add({
             sidecarId: String(data.get("server")),
@@ -74,20 +74,12 @@ function AddProject(props: DialogProps) {
         <label>
           Server<FormSelect
             name="server"
+            label="Server"
             value={server()}
-            onChange={(e) => setServer(e.currentTarget.value)}
-          >
-            <For
-              each={shell.servers().filter((s) => s.status === "connected")}
-              keyed={(s) => s.id}
-            >
-              {(s) => (
-                <option value={s().id}>
-                  {s().label}
-                </option>
-              )}
-            </For>
-          </FormSelect>
+            onValue={setServer}
+            options={shell.servers().filter((s) => s.status === "connected")
+              .map((s) => ({ value: s.id, label: s.label }))}
+          />
         </label>
         <label>
           Path<FormInput
@@ -107,7 +99,7 @@ function AddProject(props: DialogProps) {
       >
         <strong>From path templates</strong>
         <Show when={picker.state.loading}>
-          <p class="otk-muted">Scanning directories…</p>
+          <p class="otk-muted">Scanning directories...</p>
         </Show>
         <Show when={picker.state.error}>
           <FeedbackStatus feedback={picker.state.error || undefined} />

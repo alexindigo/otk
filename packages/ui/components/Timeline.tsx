@@ -15,6 +15,8 @@ import MessageActions from "./MessageActions.tsx";
 import ListRow from "./ListRow.tsx";
 import { EmptyState } from "./View.tsx";
 import VirtualList from "./VirtualList.tsx";
+import Clock from "./Clock.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 
 function PromptRow(props: {
   prompt: TimelinePrompt;
@@ -40,12 +42,7 @@ function PromptRow(props: {
         activate={props.onReveal}
         trailing={
           <span class="otk-timeline-trailing">
-            <time
-              class="otk-timeline-clock"
-              datetime={new Date(props.prompt.time).toISOString()}
-            >
-              {new Date(props.prompt.time).toLocaleTimeString()}
-            </time>
+            <Clock class="otk-timeline-clock" at={props.prompt.time} />
             <MessageActions
               class="otk-timeline-actions"
               kind="prompt"
@@ -60,7 +57,7 @@ function PromptRow(props: {
         {props.target.text || "Prompt"}
         <Show when={props.prompt.queued}>
           {" "}
-          <span class="otk-timeline-queued">Queued</span>
+          <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
         </Show>
       </ListRow>
     </li>
@@ -121,7 +118,7 @@ export default function Timeline(props: {
         <Show when={!props.exhausted}>
           <Show
             when={!props.paging}
-            fallback={<p class="otk-muted" role="status">Loading prompts…</p>}
+            fallback={<p class="otk-muted" role="status">Loading prompts...</p>}
           >
             <button
               type="button"

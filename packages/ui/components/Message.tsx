@@ -470,22 +470,17 @@ export default function Message(
             }]}
           >
             <span class="otk-user-details">
-              <time
-                class="otk-created-time"
-                datetime={new Date(props.message.time.created).toISOString()}
-              >
-                {new Date(props.message.time.created).toLocaleString()}
-              </time>
+              <Clock class="otk-created-time" at={props.message.time.created} />
               <Show when={props.send?.phase === "pending"}>
                 <ChromeMeta class="otk-send-meta">
-                  <ActivityIndicator small label="Sending" />Sending
+                  <ActivityIndicator small decorative />Sending
                 </ChromeMeta>
               </Show>
               <Show
                 when={props.queued &&
                   (!props.send || props.send.phase === "committed")}
               >
-                <span class="otk-queued">Queued</span>
+                <ChromeMeta class="otk-queued">Queued</ChromeMeta>
               </Show>
             </span>
             <Show
@@ -504,6 +499,7 @@ export default function Message(
           <Show when={props.send?.phase === "failed"}>
             <FeedbackStatus
               class="otk-send-failure"
+              intrinsic
               feedback={props.send?.feedback}
             />
           </Show>

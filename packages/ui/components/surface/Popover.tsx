@@ -9,7 +9,8 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import { Portal } from "@solidjs/web";
+import { type ComponentProps, Portal } from "@solidjs/web";
+import { nativeAttributes } from "../native-attributes.ts";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 import { selection } from "../selection.ts";
@@ -41,6 +42,10 @@ export default function Popover(props: {
   trigger?: Element;
   /** Caller-owned style on the trigger, without selecting its internal wrapper. */
   triggerClass?: string;
+  triggerAttributes?: Pick<
+    ComponentProps<"button">,
+    "name" | "aria-describedby" | "aria-invalid"
+  >;
   title?: string;
   size?: "wide" | "content";
   density?: "menu";
@@ -57,6 +62,7 @@ export default function Popover(props: {
   onClose?(): void;
   children: Element;
 }): Element {
+  const triggerNative = nativeAttributes(() => props.triggerAttributes ?? {});
   const anchor = `--otk-popover-${
     createUniqueId().replace(/[^a-zA-Z0-9-]/g, "")
   }`;
@@ -221,6 +227,7 @@ export default function Popover(props: {
       <Show when={props.trigger !== undefined}>
         <button
           type="button"
+          {...triggerNative.attributes}
           {...selection({
             kind: "candidate",
             selected: false,
@@ -232,7 +239,9 @@ export default function Popover(props: {
           aria-busy={props.busy ? "true" : "false"}
           aria-description={props.description}
           title={props.preview ? undefined : triggerLabel()}
-          aria-describedby={props.preview ? anchor : undefined}
+          aria-describedby={props.preview
+            ? anchor
+            : props.triggerAttributes?.["aria-describedby"]}
           aria-expanded={open() ? "true" : "false"}
           popovertarget={anchor}
           onClick={(event) => {
@@ -261,9 +270,9 @@ export default function Popover(props: {
             "anchor-name": point() ? undefined : anchor,
             "--control-color": props.triggerColor,
           }}
-          ref={(el) => {
+          ref={[triggerNative.ref, (el) => {
             trigger = el;
-          }}
+          }]}
         >
           {props.trigger}
         </button>

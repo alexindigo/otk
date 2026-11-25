@@ -30,7 +30,7 @@ export async function nativeStates({
         .automaticReplying
     ).toBe(true);
     await expect(page.locator(".otk-auto-approving")).toHaveText(
-      "Auto-approving\u2026",
+      "Auto-approving...",
     );
     for (const theme of themes) {
       await paint(theme);

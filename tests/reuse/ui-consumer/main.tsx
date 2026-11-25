@@ -130,7 +130,11 @@ function Consumer(): Element {
     "external-probe",
     ExternalTool,
     (call) => ({
-      icon: "◇",
+      icon: () => (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 3 9 9-9 9-9-9Z" fill="none" stroke="currentColor" />
+        </svg>
+      ),
       verb: "Inspect",
       target: "external target",
       summary: call.summary,

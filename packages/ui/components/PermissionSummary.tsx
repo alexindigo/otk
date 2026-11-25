@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./PermissionSummary.css" with { type: "text" };
-import { For, Match, Show, Switch } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
+import DisclosureToggle from "./DisclosureToggle.tsx";
 import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
 
 const detailOf = <K extends PermissionDetail["kind"]>(
@@ -13,6 +14,7 @@ const detailOf = <K extends PermissionDetail["kind"]>(
 export default function PermissionSummary(
   props: { request: PermissionRequest; compact?: boolean },
 ) {
+  const [scope, setScope] = createSignal(false);
   if (props.compact) {
     const target = () => {
       const detail = props.request.detail;
@@ -65,14 +67,23 @@ export default function PermissionSummary(
           {(detail) => <p>{detail().summary}</p>}
         </Match>
       </Switch>
-      <details class="otk-permission-patterns">
-        <summary>Requested scope</summary>
-        <ul>
-          <For each={props.request.patterns} keyed={false}>
-            {(pattern) => <li class="otk-path">{pattern()}</li>}
-          </For>
-        </ul>
-      </details>
+      <div class="otk-permission-patterns">
+        <DisclosureToggle
+          class="otk-permission-scope"
+          label="Requested scope"
+          open={scope()}
+          onOpen={setScope}
+        >
+          <span class="otk-control-label">Requested scope</span>
+        </DisclosureToggle>
+        <Show when={scope()}>
+          <ul>
+            <For each={props.request.patterns} keyed={false}>
+              {(pattern) => <li class="otk-path">{pattern()}</li>}
+            </For>
+          </ul>
+        </Show>
+      </div>
     </div>
   );
 }
