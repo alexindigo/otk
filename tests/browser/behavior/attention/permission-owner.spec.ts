@@ -7,6 +7,7 @@ import {
   openBlockedSubagents,
   restorePermissionDock,
   subagent,
+  subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
 import { openWorkLogs } from "../../pages/transcript.ts";
@@ -93,7 +94,7 @@ for (
     const inventory = subagents(page);
     await openBlockedSubagents(page);
     const helper = subagent(page, child.id);
-    await expect(helper.locator(".otk-status-light")).toHaveAttribute(
+    await expect(subagentLamp(page, child.id)).toHaveAttribute(
       "data-state",
       "blocked",
     );
