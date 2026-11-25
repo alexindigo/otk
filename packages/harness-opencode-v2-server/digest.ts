@@ -1004,7 +1004,7 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         };
       },
       "opcv2.transcript": async (input, signal) => {
-        await this.#ensure(input.sessionID, signal);
+        await this.#ensure(input.sessionID, signal, false);
         return await this.transcript.facts(input, signal);
       },
       "opcv2.request.anchor": async (input, signal) => {
@@ -1090,7 +1090,9 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       this.#provenNative = native;
       this.#source =
         `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
-      return cached.raw;
+      return activity
+        ? { ...cached.raw, activity: native.facts([id])[0]?.activity }
+        : cached.raw;
     }
     const raw = await client.read(
       (api) => api.session.get({ sessionID: ids.decode(id) }, { signal }),
@@ -1161,7 +1163,6 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       }
     }
     if (this.#provenNative) {
-      const proven = { ...raw, activity: native.facts([id])[0]?.activity };
       if (this.#sessionProofs.size >= SCAN_ROWS) {
         this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
       }
@@ -1170,9 +1171,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       this.#sessionProofs.set(id, {
         native,
         version: native.dataVersion() === version ? version! : -1,
-        raw: proven,
+        raw,
       });
-      return proven;
+      return activity
+        ? { ...raw, activity: native.facts([id])[0]?.activity }
+        : raw;
     }
     return activity ? await withSessionActivity(client, raw, signal) : raw;
   }
