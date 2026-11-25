@@ -500,6 +500,12 @@ export class BrowserV2Native implements BrowserNative {
         result = await api.session.get({ sessionID });
       } else result = await api.session.get({ sessionID });
     } else if (
+      parts[0] === "session" && parts[2] === "summarize" && method === "POST"
+    ) {
+      // Another client's compaction. V2 keeps the applied model natively.
+      await api.session.compact({ sessionID });
+      result = true;
+    } else if (
       parts[0] === "session" &&
       ["message", "prompt_async"].includes(parts[2]) && method === "POST"
     ) {
