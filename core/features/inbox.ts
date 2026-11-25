@@ -734,12 +734,13 @@ export class InboxFeature implements FrameSource {
       signal?: AbortSignal,
     ) => Promise<void>,
     readonly discoveryProject?: (directory: string, active: boolean) => void,
+    entityClock?: EntityStates["clock"],
   ) {
     this.states = new EntityStates(
       this.supervision,
       index,
       (upserts, removals) => this.#entities(upserts, removals),
-      undefined,
+      entityClock,
       (id) => {
         const entry = this.index.getMetadata(id);
         if (!entry) return;

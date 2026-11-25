@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { createProgress, ProgressEstimate } from "../progress.ts";
 import type { ProgressFacts } from "@otk/protocol";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 const facts = (completed = 0, activeMs = 0): ProgressFacts => ({
   generation: "one",
   phase: "summaries",
@@ -100,20 +101,23 @@ Deno.test("progress gives bursty rates a range and resets on generation replacem
     "Indexing sessions: 22 found",
   );
 });
-Deno.test("progress coalesces burst publication and retires its clock when work is ready", async () => {
+Deno.test("progress coalesces burst publication and retires its clock when work is ready", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const owner = createProgress();
   let publications = 0;
   const release = owner.subscribe(() => publications++);
   try {
     for (let i = 0; i < 20; i++) owner.receive("scope", facts(i, i * 100));
     assertEquals(publications, 0);
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    clock.runNext();
     assertEquals(publications, 1);
     owner.reset("scope");
     owner.receive("scope", { ...facts(20, 2000), phase: "ready" });
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    clock.runNext();
     assertEquals(publications, 2);
     assertEquals(owner.display("scope", "Summaries").rate, undefined);
+    assertEquals(clock.pending, 0);
   } finally {
     release();
     owner.stop();

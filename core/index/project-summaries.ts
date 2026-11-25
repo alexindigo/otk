@@ -185,13 +185,19 @@ export class ProjectSummaries {
     readonly identity = new ProjectIdentity(),
     readonly hierarchy?: SessionHierarchy,
     states?: EntityStates,
+    clock?: EntityStates["clock"],
   ) {
     // Standalone summaries own a private, unpublished entity-state owner.
-    this.states = states ?? new EntityStates(supervision, {
-      getMetadata: (id) => this.#sessions.get(id)?.entry,
-      ancestors: () => [],
-      descendants: (id) => new Set([id]),
-    }, () => {});
+    this.states = states ?? new EntityStates(
+      supervision,
+      {
+        getMetadata: (id) => this.#sessions.get(id)?.entry,
+        ancestors: () => [],
+        descendants: (id) => new Set([id]),
+      },
+      () => {},
+      clock,
+    );
   }
   ensure(directory: string): void {
     this.#known.add(directory);

@@ -2,9 +2,12 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import type { ContentOp, Message } from "@otk/protocol";
 import { emptyContent, reduce } from "@otk/client";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 import { markdown, StreamBuffers } from "../mod.ts";
 
-Deno.test("a mid-coalescing checkpoint aligns both existing and new viewers with the next published suffix", async () => {
+Deno.test("a mid-coalescing checkpoint aligns both existing and new viewers with the next published suffix", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers();
   const message: Message = {
     id: "m",
@@ -38,7 +41,7 @@ Deno.test("a mid-coalescing checkpoint aligns both existing and new viewers with
     const base = buffers.snapshot("p")!.part.stream!.version;
     buffers.append("p", " three\n", emit);
     buffers.append("p", "\nLast.", emit);
-    await new Promise((resolve) => setTimeout(resolve, 75));
+    clock.runNext();
     const delta = events.findLast((event) => event.op === "part.blocks");
     assert(delta?.op === "part.blocks");
     assertEquals(delta.baseVersion, base);

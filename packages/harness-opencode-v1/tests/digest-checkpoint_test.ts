@@ -186,7 +186,7 @@ test("a rejected first digest commit leaves scan generation and baseline togethe
             updated: 2,
             revision: 1,
           },
-          { rows: 100, until: performance.now() + 8 },
+          { rows: 100, until: Infinity },
           new AbortController().signal,
         ),
       Error,

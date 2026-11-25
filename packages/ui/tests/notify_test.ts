@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { NotificationHub } from "@otk/client";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
-Deno.test("toast consumer keeps keyed active/error replacements past old transient deadlines and expires information at six seconds", async () => {
+Deno.test("toast consumer keeps keyed active/error replacements past old transient deadlines and expires information at six seconds", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const hub = new NotificationHub(
     () => ({ channels: ["toast"] }),
     async () => {},
@@ -38,7 +41,12 @@ Deno.test("toast consumer keeps keyed active/error replacements past old transie
       "transient",
       "slot",
     ]);
-    await new Promise((resolve) => setTimeout(resolve, 6100));
+    clock.advanceTo(5999);
+    assertEquals(
+      toast.model.state.items.some((item) => item.note.id === "transient"),
+      true,
+    );
+    clock.advanceTo(6000);
     assertEquals(
       toast.model.state.items.map((item) => [item.note.id, item.note.title]),
       [["input", "Active input"], ["slot", "Sticky replacement"]],
