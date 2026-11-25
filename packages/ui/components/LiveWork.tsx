@@ -40,6 +40,7 @@ export default function LiveWork(props: { shells: readonly RunningWork[] }) {
         triggerLabel={`Running work: ${runningWorkLabel(props.shells)}`}
         title="Running shells"
         size="content"
+        place="bounds-end"
         onOpen={() => {
           stop();
           setNow(Date.now());

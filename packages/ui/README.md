@@ -810,7 +810,10 @@ dismissal, `Menu` supplies a normal-flow item column and `Toast` supplies the
 card in the fixed notification stack. Overlay tokens and the
 content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
 legends are layout-neutral grouping, never cards.
-`panels.register({ id, title, icon, capability?,
+
+Regions declare `POPOVER_BOUNDS`: Popover clamps to the nearest region or the
+viewport gutter, and `place="bounds-end"` aligns it to the region's end above
+it. `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons are feature-owned render components; the host does not
 dispatch concrete view icons. `RightPanel` mounts available registrations with a

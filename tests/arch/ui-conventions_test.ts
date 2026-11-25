@@ -15,6 +15,41 @@ import {
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
 
+const popoverCSS = "packages/ui/components/surface/Popover.css";
+function popoverPlacementErrors(path: string, text: string): string[] {
+  if (!path.startsWith("packages/ui/") || !path.endsWith(".css")) return [];
+  return rules(text).flatMap(({ selector, declarations }) => {
+    for (const [name, value] of declarations) {
+      if (
+        path !== popoverCSS &&
+        (/^(?:anchor-name|anchor-scope|position-anchor)$/.test(name) ||
+          /\banchor(?:-size)?\(/.test(value))
+      ) return [`${path}: ${selector}`];
+      if (
+        path === popoverCSS && selector.includes(".otk-popover-bounds-end") &&
+        /\d(?:vw|vh)\b/.test(value)
+      ) return [`${path}: ${selector}`];
+    }
+    return [];
+  });
+}
+
+Deno.test("2.86: popover placement only in the Popover owner", async () => {
+  for (const [path, text] of await productionSources()) {
+    assertEquals(popoverPlacementErrors(path, text), []);
+  }
+  assert(
+    popoverPlacementErrors(
+      "packages/ui/components/Fixture.css",
+      ".region{anchor-scope:--test}",
+    ).length,
+  );
+  assert(
+    popoverPlacementErrors(popoverCSS, ".otk-popover-bounds-end{right:1vw}")
+      .length,
+  );
+});
+
 const headerFixture = () =>
   new Map([
     [
@@ -610,8 +645,10 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
       ),
     ),
   );
-  const row = css.find((rule) => rule.selector === ".otk-composer-activity")!
-    .declarations;
+  const row =
+    css.find((rule) =>
+      rule.selector === ".otk-composer-activity-line" && !rule.condition
+    )!.declarations;
   assertEquals(row.get("display"), "flex");
   assertEquals(row.get("align-items"), "center");
   assertEquals(row.get("justify-content"), "space-between");
@@ -628,7 +665,13 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
   assert(
     css.some((rule) =>
       rule.condition.includes("@container composer-activity") &&
-      rule.declarations.get("--live-link-display") === "none" &&
+      rule.declarations.get("--live-link-display") === "none"
+    ),
+  );
+  assert(
+    css.some((rule) =>
+      rule.condition.includes("@container composer-activity") &&
+      rule.selector === ".otk-composer-activity-line" &&
       rule.declarations.get("flex-wrap") === "wrap"
     ),
   );

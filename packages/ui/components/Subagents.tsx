@@ -118,6 +118,7 @@ export default function Subagents(
       {(publication) => (
         <Menu
           class="otk-subagents"
+          place="bounds-end"
           triggerClass="otk-subagents-trigger"
           label="Subagents"
           title="Subagents"
