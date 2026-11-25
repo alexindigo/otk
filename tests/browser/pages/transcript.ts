@@ -659,6 +659,12 @@ export async function openRecord(page: Page, selector: string) {
   );
 }
 
+/** Opening a header is not acquisition of its lazily windowed prose body. */
+export async function readRecordBody(page: Page, selector: string) {
+  await openRecord(page, selector);
+  await revealAcquired(page, selector + " .otk-tool-body > .otk-text");
+}
+
 /** A record owns its state control; tree labels do not own disclosure. */
 export function recordToggle(record: Locator) {
   return record.locator(".otk-tool-state > .otk-tool-toggle").first();
@@ -738,7 +744,7 @@ export async function expectCompactionSummary(
     return messageID;
   }, { timeout }).toBeTruthy();
   const record = `[data-message=${JSON.stringify(messageID)}] ${selector}`;
-  await openRecord(page, record);
+  await readRecordBody(page, record);
   await expect(page.locator(record)).toContainText(text, { timeout });
 }
 

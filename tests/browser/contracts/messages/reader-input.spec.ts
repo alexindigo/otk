@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
-import { expandTool, openRecord } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  openRecord,
+  readRecordBody,
+} from "../../pages/transcript.ts";
 
 for (const kind of ["tool", "record"]) {
   test(`messages.${kind}-disclosure-establishes-native-reader-intent`, {
@@ -44,3 +48,39 @@ for (const kind of ["tool", "record"]) {
     );
   });
 }
+
+test("messages.record-body-acquires-its-own-window-after-header-disclosure", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(`
+    <div class="otk-messages" aria-busy="false"
+      style="height:200px;overflow:auto">
+      <section data-message="body-owner" data-native-record="body-probe">
+        <header class="otk-tool-state">
+          <button class="otk-tool-toggle" aria-expanded="false">Record</button>
+        </header>
+        <div class="otk-tool-body" hidden>
+          <div style="height:400px">Native parameters</div>
+          <div class="otk-text" style="height:48px"></div>
+        </div>
+      </section>
+    </div>
+  `);
+  await page.locator(".otk-messages").evaluate((pane) => {
+    const body = pane.querySelector<HTMLElement>(".otk-tool-body")!;
+    const text = body.querySelector(".otk-text")!;
+    pane.querySelector("button")!.addEventListener("click", (event) => {
+      (event.currentTarget as HTMLElement).setAttribute(
+        "aria-expanded",
+        "true",
+      );
+      body.hidden = false;
+    });
+    new IntersectionObserver((entries) => {
+      text.textContent = entries[0].isIntersecting ? "Windowed summary" : "";
+    }, { root: pane }).observe(text);
+  });
+  await readRecordBody(page, '[data-native-record="body-probe"]');
+  await expect(page.locator(".otk-text")).toHaveText("Windowed summary");
+  await expect(page.locator(".otk-text")).toBeInViewport();
+});
