@@ -48,6 +48,8 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     };
     await expect(input).toHaveValue("");
     await blocked("Write a message");
+    await send.focus();
+    await expect(send).toBeFocused();
     const original = await send.elementHandle();
     const emptyBox = await send.boundingBox();
     await capture("empty");

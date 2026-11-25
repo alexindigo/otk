@@ -150,10 +150,11 @@ button:hover {
   background: var(--otk-hover);
   color: var(--otk-fg);
 }
-button:active:not(:disabled) {
+button:active:not(:disabled, [data-primary-action][aria-disabled=true]) {
   transform: scale(.98);
 }
-button:disabled {
+button:disabled,
+button[data-primary-action][aria-disabled=true] {
   opacity: .5;
   cursor: default;
 }
