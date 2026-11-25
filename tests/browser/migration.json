@@ -1812,8 +1812,8 @@
             ]
           },
           "lowerTierWitness": {
-            "file": "packages/client/tests/submission-intent_test.ts",
-            "testID": "a pending native submission does not swallow a later input command or admit another send"
+            "file": "packages/client/tests/composer-action_test.ts",
+            "testID": "enter sends once, rejects a second draft, and preserves explicit local commands"
           },
           "activeOwner": {
             "runner": "playwright",
