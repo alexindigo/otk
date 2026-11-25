@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import type { RequestEvent, RequestRef } from "@otk/protocol";
 import {
   OtkDb,
+  Prefs,
   prefsMigrations,
   Requests,
   requestsMigrations,
   StorageAvailability,
   StorageFailure,
 } from "@otk/store";
-import { RequestCoordinator, RpcRegistry } from "../../../core/mod.ts";
+import {
+  IndexStore,
+  prefsOptions,
+  RequestCoordinator,
+  RpcRegistry,
+  startCore,
+} from "../../../core/mod.ts";
 import { StorageRequests } from "../../../core/requests/storage.ts";
 import { test } from "../../support/resources.ts";
 import { stub } from "./rpc_test.ts";
@@ -215,5 +222,46 @@ test("a failed receipt refresh keeps its own retry and does not skip the rest of
   } finally {
     await requests.stop();
     f.db.close();
+  }
+});
+
+test("index replay failure cannot veto request storage recovery in the service", async () => {
+  const f = await setup();
+  const index = new IndexStore();
+  const settings = cfg();
+  settings.server.port = 0;
+  settings.auth.type = "none";
+  const service = await startCore({
+    cfg: settings,
+    backend: f.backend,
+    store: f.db,
+    prefs: new Prefs(f.db, prefsOptions),
+    rpc: f.registry,
+    staticRoot: f.root,
+    index,
+  });
+  try {
+    let replays = 0;
+    index.resetMetadata = () => {
+      replays++;
+      throw new Error("index observer failed");
+    };
+    f.blocked.add("pending");
+    const ref = await f.send(service.requests, "target", "pending");
+    await service.requests.idle();
+    const pages =
+      f.db.connection.prepare("PRAGMA page_count").get()!.page_count;
+    f.db.connection.exec(`PRAGMA max_page_count=${pages}`);
+    assertThrows(() => f.db.probe(), StorageFailure);
+    f.blocked.clear();
+    f.db.connection.exec("PRAGMA max_page_count=1073741823");
+    f.db.availability.probe();
+    await service.requests.idle();
+    assertEquals(replays, 1);
+    assertEquals(f.commits, ["pending"]);
+    assertEquals(f.events.at(-1)?.t, "request.result");
+    assertEquals(f.events.at(-1)?.ref.key, ref.key);
+  } finally {
+    await service.stop();
   }
 });
