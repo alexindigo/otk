@@ -109,15 +109,22 @@ for (
         return "/p";
       },
       tabs: () => ({
-        send: async <T>(_id: string, action: () => Promise<T>) => {
+        ensureTask: async () => {
           await Promise.resolve();
           fail("promotion");
-          return await action();
+          return {
+            id: "task",
+            name: "Session",
+            directory: "/p",
+            sessions: ["session"],
+            order: 0,
+          };
         },
       }),
       inbox: {
-        act: <T>(_directory: string, action: () => Promise<T>) => action(),
+        visit: () => Promise.resolve(),
       },
+      report: () => {},
       wrap: async <T>(action: () => Promise<T>) => {
         await Promise.resolve();
         fail("wrap");
@@ -143,17 +150,15 @@ for (
         retry?: () => void;
       };
       if (outcome.kind === "committed") draft = "";
+      const committed = fault === "none" || fault === "directory" ||
+        fault === "promotion";
       assertEquals(
         outcome.kind,
-        fault === "none"
-          ? "committed"
-          : fault === "native"
-          ? "failed"
-          : "refused",
+        committed ? "committed" : fault === "native" ? "failed" : "refused",
       );
       assertEquals(count, 1);
-      assertEquals(draft, fault === "none" ? "" : "Retained input");
-      if (fault === "none") assertEquals(outcome.messageID, "native-message");
+      assertEquals(draft, committed ? "" : "Retained input");
+      if (committed) assertEquals(outcome.messageID, "native-message");
       else assertEquals(outcome.reason, `${fault} refused`);
       if (fault === "native") assertEquals(typeof outcome.retry, "function");
     } finally {

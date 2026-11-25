@@ -370,8 +370,8 @@ function Consumer(): Element {
   const submit = createSessionSubmission({
     sessionID: "session",
     directory: () => Promise.resolve(""),
-    inbox: { act: (_dir, action) => action() },
-    tabs: () => ({ send: (_id, action) => action() }),
+    inbox: { visit: () => Promise.resolve() },
+    tabs: () => ({ ensureTask: () => Promise.withResolvers<never>().promise }),
     delivery: { send: deliverFixturePrompt },
   });
   const call = (): ExternalCall => ({

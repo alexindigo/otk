@@ -1011,7 +1011,8 @@ export function SecondaryFailures(
     delivery: { send: deliverFixturePrompt },
     directory: () => Promise.resolve("/project"),
     inbox,
-    tabs: () => ({ send: (_id, action) => action() }),
+    tabs: () => ({ ensureTask: () => Promise.withResolvers<never>().promise }),
+    report: (error) => setDiagnostic(errorMessage(error)),
   });
   return (
     <CommandProvider commands={commands}>

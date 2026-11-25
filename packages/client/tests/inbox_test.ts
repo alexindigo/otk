@@ -320,7 +320,7 @@ Deno.test("phantom rule 2: a single preview replaces idle previews but cannot re
 Deno.test("phantom rule 3: pin, double-click and sending promote to a title-named task through an injected port", async () => {
   for (const action of ["pin", "double-click", "send"]) {
     const inbox = snapshot(), s = entry("session title");
-    let promoted = 0, sent = 0;
+    let promoted = 0;
     const tabs = createTabs((session) => {
       const task: TaskRecord = {
         id: "solid",
@@ -336,12 +336,8 @@ Deno.test("phantom rule 3: pin, double-click and sending promote to a title-name
     const input = { directory: "/p", entries: [s], inbox };
     tabs.update(input);
     tabs.preview(s.id);
-    if (action === "send") {
-      await tabs.send(s.id, () => {
-        sent++;
-        return Promise.resolve();
-      });
-    } else await tabs.pin(s.id);
+    if (action === "send") await tabs.ensureTask(s.id);
+    else await tabs.pin(s.id);
     tabs.update(input);
     assertEquals(tabs.tabs().map((t) => [t.kind, t.title, t.sessions]), [[
       "task",
@@ -350,7 +346,6 @@ Deno.test("phantom rule 3: pin, double-click and sending promote to a title-name
     ]]);
     assertEquals(tabs.state.selected, { kind: "task", id: "solid" });
     assertEquals(promoted, 1);
-    assertEquals(sent, action === "send" ? 1 : 0);
   }
 });
 Deno.test("phantom rule 4: idle and seen stays selected until leaving; busy or unseen never disappears on leave", () => {

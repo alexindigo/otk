@@ -32,7 +32,10 @@ Deno.test("successful session actions and submissions retain their result when v
       },
       directory: () => Promise.resolve("/p"),
       inbox,
-      tabs: () => ({ send: (_id, action) => action() }),
+      report: console.error,
+      tabs: () => ({
+        ensureTask: () => Promise.withResolvers<never>().promise,
+      }),
     });
     assertEquals(
       await submit(() => {
@@ -48,6 +51,7 @@ Deno.test("successful session actions and submissions retain their result when v
       );
     }
     assertEquals(submitted, 1);
+    await Promise.resolve();
     assertEquals(calls, Array(4).fill("projects.visit"));
     assertEquals(logged.length, 4);
     assert(logged.every((args) => args.includes(failure)));

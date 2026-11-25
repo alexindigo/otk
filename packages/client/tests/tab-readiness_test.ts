@@ -52,7 +52,7 @@ function model(
   return createTabs(promote, undefined, sources);
 }
 
-Deno.test("tab readiness: created-session send promotes and reaches the action before any index insertion", async () => {
+Deno.test("tab readiness: explicit pin resolves new identity before any index insertion", async () => {
   const calls: string[] = [], current = input();
   const rpc: InboxRpc = {
     call(method) {
@@ -72,12 +72,8 @@ Deno.test("tab readiness: created-session send promotes and reaches the action b
     session: (sessionID) => rpc.call("session.get", { sessionID }),
   });
   tabs.update(current);
-  const result = await tabs.send("new", () => {
-    calls.push("session.prompt");
-    return Promise.resolve("sent");
-  });
-  assertEquals(result, "sent");
-  assertEquals(calls, ["session.get", "tasks.create", "session.prompt"]);
+  assertEquals(await tabs.pin("new"), task("new"));
+  assertEquals(calls, ["session.get", "tasks.create"]);
   assertEquals(current.entries, []);
   assertEquals(tabs.state.selected, { kind: "task", id: "task-new" });
   current.entries = [entry("new")];
@@ -105,10 +101,10 @@ Deno.test("tab readiness: preview and task selection read current sources before
   assertEquals(tabs.state.preview, "other");
 });
 
-Deno.test("tab readiness: concurrent pin and send share metadata resolution and cannot steal a newer preview", async () => {
+Deno.test("tab readiness: explicit pin and background persistence share resolution without stealing a newer preview", async () => {
   const current = input();
   current.entries = [entry("other")];
-  let resolve!: (value: Session) => void, lookups = 0, promotions = 0, sent = 0;
+  let resolve!: (value: Session) => void, lookups = 0, promotions = 0;
   const tabs = model((s) => {
     promotions++;
     return Promise.resolve(task(s.id));
@@ -121,17 +117,14 @@ Deno.test("tab readiness: concurrent pin and send share metadata resolution and 
   });
   tabs.update(current);
   const first = tabs.pin("new"),
-    second = tabs.send("new", () => {
-      sent++;
-      return Promise.resolve("sent");
-    });
+    second = tabs.ensureTask("new");
   await Promise.resolve();
   tabs.preview("other");
   assertEquals(lookups, 1);
   resolve(session("new"));
   await first;
-  assertEquals(await second, "sent");
-  assertEquals([promotions, sent], [1, 1]);
+  assertEquals(await second, task("new"));
+  assertEquals(promotions, 1);
   assertEquals(tabs.state.selected, { kind: "session", id: "other" });
 });
 
@@ -160,10 +153,10 @@ Deno.test("tab readiness: project changes during resolution cannot move selectio
   assertEquals(tabs.state.selected, { kind: "session", id: "q" });
 });
 
-Deno.test("tab readiness: invalid or failed metadata resolution prevents promotion and send without poisoning a later action", async () => {
+Deno.test("tab readiness: failed or invalid metadata does not poison a later promotion", async () => {
   for (const invalid of ["id", "directory", "failure"]) {
     const current = input();
-    let bad = true, promoted = 0, sent = 0;
+    let bad = true, promoted = 0;
     const tabs = model((s) => {
       promoted++;
       return Promise.resolve(task(s.id));
@@ -181,19 +174,15 @@ Deno.test("tab readiness: invalid or failed metadata resolution prevents promoti
       },
     });
     tabs.update(current);
-    const send = () =>
-      tabs.send("new", () => {
-        sent++;
-        return Promise.resolve("sent");
-      });
+    const persist = () => tabs.ensureTask("new");
     await assertRejects(
-      send,
+      persist,
       Error,
       invalid === "failure" ? "offline" : "Unknown project session",
     );
-    assertEquals([promoted, sent], [0, 0]);
+    assertEquals(promoted, 0);
     bad = false;
-    assertEquals(await send(), "sent");
-    assertEquals([promoted, sent], [1, 1]);
+    assertEquals(await persist(), task("new"));
+    assertEquals(promoted, 1);
   }
 });
