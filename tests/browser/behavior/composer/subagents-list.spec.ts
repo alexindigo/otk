@@ -93,9 +93,14 @@ test(
       "datetime",
       /^\d{4}-/,
     );
-    await expect(time(3)).toHaveText(/^3m 56s$/);
-    await expect(time(3).locator("time")).toHaveAttribute("datetime", /^PT/);
-    await expect(time(2)).toHaveText("Time unknown");
+    await expect(time(3)).toHaveText(/^2m ago$/);
+    await expect(time(3).locator("time")).toHaveAttribute(
+      "datetime",
+      /^\d{4}-/,
+    );
+    await expect(time(2)).toHaveAttribute("aria-label", "Waiting for you");
+    await expect(time(2)).toHaveText(/^2m(?: \d+(?:\.\d)?s)?$/);
+    await expect(time(2).locator("time")).toHaveAttribute("datetime", /^PT2M/);
     const facts: unknown[] = [];
     for (
       const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
@@ -116,6 +121,10 @@ test(
           )!;
           const time = row.querySelector(".otk-subagent-time")!
             .getBoundingClientRect();
+          const content = row.querySelector(".otk-subagent-time > *")!;
+          const glyphs = document.createRange();
+          glyphs.selectNodeContents(content);
+          const textRight = glyphs.getBoundingClientRect().right;
           const cell = row.querySelector(".otk-subagent-stop")!;
           const stop = cell.querySelector("button");
           const svg = stop?.querySelector("svg")?.getBoundingClientRect();
@@ -130,6 +139,7 @@ test(
             : undefined;
           return {
             timeRight: time.right,
+            textRight,
             stopLeft: cell.getBoundingClientRect().left,
             gaps,
             title: title.getAttribute("title"),
@@ -140,6 +150,11 @@ test(
       for (const [index, pos] of positions.entries()) {
         const context = `${label}/${rowsInOrder[index]}`;
         expect.soft(Math.abs(pos.timeRight - positions[0].timeRight), context)
+          .toBeLessThanOrEqual(.5);
+        expect.soft(
+          Math.abs(pos.textRight - positions[0].textRight),
+          `${context}: drawn time text`,
+        )
           .toBeLessThanOrEqual(.5);
         expect.soft(Math.abs(pos.stopLeft - positions[0].stopLeft), context)
           .toBeLessThanOrEqual(.5);

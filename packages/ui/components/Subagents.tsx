@@ -202,7 +202,12 @@ export default function Subagents(
                               </SelectionContent>
                             </ActionButton>
                           </div>
-                          <ChromeMeta class="otk-subagent-time">
+                          <ChromeMeta
+                            class="otk-subagent-time"
+                            aria-label={group().kind === "needsYou"
+                              ? "Waiting for you"
+                              : undefined}
+                          >
                             <Show
                               when={clock()}
                               fallback={
@@ -213,11 +218,13 @@ export default function Subagents(
                                 />
                               }
                             >
-                              {(value) => <TimeText time={value().time} />}
+                              {(value) => (
+                                <TimeText
+                                  time={value().time}
+                                  suffix={value().ago ? "ago" : undefined}
+                                />
+                              )}
                             </Show>
-                            <span class="otk-subagent-ago" aria-hidden="true">
-                              {clock()?.ago ? " ago" : ""}
-                            </span>
                           </ChromeMeta>
                           <div class="otk-subagent-stop">
                             <Show when={group().kind === "running"}>

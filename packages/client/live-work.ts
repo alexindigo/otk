@@ -100,18 +100,34 @@ export function helperCountsLabel(
   return form === "spoken" ? items.join(", ") : metaList(items);
 }
 
-/** Execution elapsed takes precedence over an age from the terminal. */
+/** One clock per published disposition; an earlier run cannot date a wait. */
 export function helperClock(
   entity: EntityState | undefined,
   now: number,
 ): { time: TimeText; ago: boolean } | undefined {
-  const run = entity?.evidence?.run, terminal = entity?.terminal;
-  if (run) {
-    return { time: elapsed((run.endedAt ?? now) - run.startedAt), ago: false };
+  const evidence = entity?.evidence;
+  switch (evidence?.helper) {
+    case "running": {
+      const run = evidence.run;
+      if (run) {
+        return {
+          time: elapsed((run.endedAt ?? now) - run.startedAt),
+          ago: false,
+        };
+      }
+      break;
+    }
+    case "needsYou":
+      if (evidence.waitingSince !== undefined) {
+        return { time: elapsed(now - evidence.waitingSince), ago: false };
+      }
+      break;
+    case "notReturned":
+      if (entity?.terminal !== undefined) {
+        const time = age(entity.terminal, now);
+        return { time, ago: !time.word };
+      }
   }
-  if (terminal === undefined) return;
-  const time = age(terminal, now);
-  return { time, ago: !time.word };
 }
 
 export type ComposerLinkState = "none" | "idle" | "running";

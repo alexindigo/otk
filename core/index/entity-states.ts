@@ -943,6 +943,9 @@ export class EntityStates {
     const evidence: SessionEvidence = {
       awaitingDelivery,
       ...(helper ? { helper } : {}),
+      ...(helper === "needsYou"
+        ? { waitingSince: before?.evidence?.waitingSince ?? Date.now() }
+        : {}),
       ...(startedAt === undefined ? {} : {
         run: {
           startedAt,
