@@ -97,11 +97,12 @@ No process-name cleanup or product test endpoint exists.
 
 Run roots include guest/version/shard/run UUID; worker identities include
 `workerIndex`, and test directories include stable test identity/attempt UUIDs.
-Native/sidecar explicit ports use one run-owned lease namespace. Preferences are
-restored key-by-key through existing RPCs and joined broadcasts; owned tasks,
-sessions and auto-approval policies are retired normally. Native directories
-remain until worker disposal. Script queues must settle; unexpected or unused
-scripts fail cleanup and poison that worker lease instead of being discarded.
+The kernel allocates fixture ports when their listeners bind; stable origins
+keep their listening sockets across process restarts. Preferences are restored
+key-by-key through existing RPCs and joined broadcasts; owned tasks, sessions
+and auto-approval policies are retired normally. Native directories remain until
+worker disposal. Script queues must settle; unexpected or unused scripts fail
+cleanup and poison that worker lease instead of being discarded.
 
 Reports, timing lines, bounded provider/native/browser observations and
 first-failure trace/video/screenshots live under `.test-state/runs/<run>/`.

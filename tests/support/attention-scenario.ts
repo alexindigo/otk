@@ -386,7 +386,7 @@ async function nativeAttention(profile: Profile) {
           else if (frame.params.action === "fail" && frame.params.sessionID) {
             const session = browserSessionID(frame.params.sessionID);
             await c.rpc("permission.activity", { sessionID: session });
-            const db = new OtkDb(join(f.oc.root, `otk-${server.port}`), [
+            const db = new OtkDb(server.statePath, [
               permissionMigrations,
             ], { busyms: 5000 });
             try {

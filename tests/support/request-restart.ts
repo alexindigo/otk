@@ -6,7 +6,7 @@ import type { RequestEvent, RequestRef, TaskRecord } from "@otk/protocol";
 import { nativeBehavior as nativeFixture } from "./native-testing.ts";
 import { preparedBinary } from "./prepared-binaries.ts";
 import { serve } from "./http.ts";
-import { freePort, waitFor } from "./opencode.ts";
+import { otkEndpoint } from "./bound-endpoint.ts";
 import { ownedProcess } from "./process.ts";
 import { resources, tempDir } from "./resources.ts";
 import { WsClient } from "./ws-client.ts";
@@ -48,9 +48,7 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
     },
   );
   resources().defer("lost native response proxy", () => proxy.shutdown());
-  const port = freePort(),
-    url = `http://127.0.0.1:${port}`,
-    state = join(root, "state");
+  const state = join(root, "state");
   const config = join(root, "otk.toml");
   const discovery = join(root, "discovery");
   if (f.oc.kind === "opencode-v2-server") {
@@ -67,7 +65,7 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
   }
   await Deno.writeTextFile(
     config,
-    `[server]\nport=${port}\n[auth]\ntype="none"\n[state]\npath=${
+    `[server]\nport=0\n[auth]\ntype="none"\n[state]\npath=${
       JSON.stringify(state)
     }\n[harness]\ntype="${f.oc.kind}"\nurl="http://127.0.0.1:${proxy.addr.port}"\ndb=${
       JSON.stringify(f.oc.db)
@@ -120,7 +118,7 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
     let log = "";
     process.child.stdout!.on("data", (chunk) => log += chunk.toString());
     process.child.stderr!.on("data", (chunk) => log += chunk.toString());
-    await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
+    const url = (await otkEndpoint(process.child)).origin;
     const client = new WsClient(url);
     client.lease({ directory: f.oc.directory, crumbs: [], rows: [] });
     await client.connect();

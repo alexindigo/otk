@@ -85,7 +85,6 @@ try {
     env: {
       DENO_JOBS: jobs,
       OTK_TEST_TREE: tree,
-      OTK_TEST_PORTS_ROOT: join(root, "ports"),
       OTK_TEST_BINARY: build.binary,
       OTK_TEST_DIGEST_CONSUMER_BINARY: build.digestConsumer.path,
     },

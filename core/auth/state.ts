@@ -6,7 +6,10 @@ import { hashPassword, LocalAuth } from "./local.ts";
 export class AuthState {
   local: LocalAuth | null;
   #settingUp = false;
-  constructor(readonly cfg: ServiceConfig) {
+  constructor(
+    readonly cfg: ServiceConfig,
+    private readonly port = cfg.server.port,
+  ) {
     if (!["", "none", "password", "totp"].includes(cfg.auth.type)) {
       throw new Error("Invalid auth.type");
     }
@@ -21,7 +24,7 @@ export class AuthState {
     return this.cfg.auth.type === "";
   }
   get cookieName(): string {
-    return this.cfg.auth.cookiename || `otk_${this.cfg.server.port}`;
+    return this.cfg.auth.cookiename || `otk_${this.port}`;
   }
   async setup(
     input: { type: string; username?: string; password?: string },

@@ -280,7 +280,7 @@ Deno.test({
       });
       // Inspect the plugin's stored identity through a read-only test connection.
       // A WS crumb would itself acquire transcript demand and invalidate this case.
-      const stored = new DatabaseSync(`${native.root}/otk-${app.port}/otk.db`, {
+      const stored = new DatabaseSync(`${app.statePath}/otk.db`, {
         readOnly: true,
       });
       resources().defer(
@@ -459,7 +459,7 @@ Deno.test({
         target = await native.createSession();
       await turn(fake, native, target, "Before OTK");
       const app = await SidecarTest.start(native),
-        file = `${native.root}/otk-${app.port}/otk.db`;
+        file = `${app.statePath}/otk.db`;
       resources().defer("V2 request revert sidecar", () => app.stop());
       const settle = async (title: string) => {
         const form = await native.api.session.form.create({

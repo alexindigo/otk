@@ -6,7 +6,7 @@ import { InboxFeature } from "../../core/features/inbox.ts";
 import type { DigestPressure } from "../../core/digest/protocol.ts";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, waitFor } from "../support/opencode.ts";
+import { waitFor } from "../support/opencode.ts";
 import {
   nativePrompt,
   selectedNative,
@@ -55,7 +55,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
   resources().defer("viewer proxy", () => proxy.shutdown());
   const settings = cfg();
   settings.auth.type = "none";
-  settings.server.port = freePort();
+  settings.server.port = 0;
   settings.state.path = join(oc.root, "viewer-state");
   settings.harness.url = `http://127.0.0.1:${proxy.addr.port}`;
   settings.harness.type = oc.kind;
@@ -67,7 +67,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
     section() {},
     pressure: (value) => pressure.push(value),
   });
-  const url = `http://127.0.0.1:${settings.server.port}`;
+  const url = `http://127.0.0.1:${app.server.addr.port}`;
   const client = new WsClient(url);
   let next: WsClient | undefined;
   const busy = fake.queueHeld({ chunks: ["Still working with no browser"] });

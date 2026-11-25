@@ -13,6 +13,7 @@ export class FreezeProxy {
   #waiters: (() => void)[] = [];
   #admission: Promise<void>;
   #cancelAdmission!: () => void;
+  #target?: number;
   readonly port: number;
   /** Owned sockets, including clients waiting for upstream admission. */
   get connections(): number {
@@ -20,10 +21,11 @@ export class FreezeProxy {
   }
   #stop: () => Promise<void>;
   constructor(
-    readonly target: number,
-    options: { port?: number; ready?: Promise<void> } = {},
+    target?: number,
+    options: { ready?: Promise<void> } = {},
   ) {
     const scope = resources();
+    this.#target = target;
     this.#admission = options.ready
       ? Promise.race([
         options.ready,
@@ -32,13 +34,18 @@ export class FreezeProxy {
       : Promise.resolve();
     this.#listener = Deno.listen({
       hostname: "127.0.0.1",
-      port: options.port ?? 0,
+      port: 0,
     });
     this.port = (this.#listener.addr as Deno.NetAddr).port;
     this.#accept = this.#run().catch((error) => {
       this.#failures.push(error);
     });
     this.#stop = scope.defer("freeze proxy", () => this.#shutdown());
+  }
+  /** Replace a process generation, never the public socket. */
+  retarget(target?: number): void {
+    this.disconnect();
+    this.#target = target;
   }
   freeze(): void {
     this.#frozen = true;
@@ -83,10 +90,11 @@ export class FreezeProxy {
       // A managed native generation may bind TCP before it can serve HTTP.
       // Keep incoming bytes owned here until its readiness settles.
       await this.#admission;
-      if (this.#stopping || closing) return;
+      const target = this.#target;
+      if (this.#stopping || closing || target === undefined) return;
       outgoing = await Deno.connect({
         hostname: "127.0.0.1",
-        port: this.target,
+        port: target,
       });
       this.#connections.add(outgoing);
       if (this.#stopping || closing) return;

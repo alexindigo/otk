@@ -6,7 +6,7 @@ import { OtkDb } from "@otk/store";
 import { cfg } from "./config.ts";
 import { beta2Migrations } from "./beta1-state.ts";
 import { browserProvider } from "./browser-native.ts";
-import { freePort, waitFor } from "./opencode.ts";
+import { waitFor } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
 import { SCALE } from "./session-scale.ts";
 import { createScale, scaleDiscovery } from "./scale-native.ts";
@@ -66,7 +66,7 @@ export async function populationScaleScenario(profile: Profile) {
   resources().defer("population native observation", () => proxy.shutdown());
   const config = cfg();
   config.auth.type = "none";
-  config.server.port = freePort();
+  config.server.port = 0;
   config.state.path = join(root, "state");
   config.harness.url = profile === "contract-scale-paint"
     ? `http://127.0.0.1:${proxy.addr.port}`
@@ -190,7 +190,7 @@ export async function populationScaleScenario(profile: Profile) {
   };
   const watches = observeCatalogWatches(app.backend);
   resources().defer("population watch observation", () => watches.restore());
-  const client = new WsClient(`http://127.0.0.1:${config.server.port}`);
+  const client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
   await client.connect();
   resources().defer("population client", () => client.close());
   await waitFor(
@@ -229,12 +229,12 @@ export async function populationScaleScenario(profile: Profile) {
   const gates = new Map<string, () => void>();
   const info = {
     root,
-    url: `http://127.0.0.1:${config.server.port}`,
+    url: `http://127.0.0.1:${app.server.addr.port}`,
     nativeUrl: native.url,
     binary: nativeBinary,
     version: nativeVersion,
     pids: [Deno.pid],
-    ports: [config.server.port, native.port, fake.port, proxy.addr.port],
+    ports: [app.server.addr.port, native.port, fake.port, proxy.addr.port],
   };
   const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
   if (record) await Deno.writeTextFile(record, JSON.stringify(info));

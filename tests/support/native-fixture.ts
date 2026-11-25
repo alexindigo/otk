@@ -85,11 +85,14 @@ export async function nativeFixture(
       fake,
       oc,
       servers,
-      async sidecar(overrides: Parameters<typeof SidecarTest.start>[1] = {}) {
+      async sidecar(
+        overrides: Parameters<typeof SidecarTest.start>[1] = {},
+        options?: Parameters<typeof SidecarTest.start>[2],
+      ) {
         const endpoint = oc instanceof BrowserV2Native && overrides.harness?.url
           ? await oc.endpoint(overrides.harness.url)
           : oc;
-        const sidecar = await SidecarTest.start(endpoint, overrides);
+        const sidecar = await SidecarTest.start(endpoint, overrides, options);
         servers.push(sidecar);
         return sidecar;
       },

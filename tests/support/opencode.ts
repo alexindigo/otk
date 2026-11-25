@@ -2,7 +2,7 @@
 import type { ChildProcess } from "node:child_process";
 import { join } from "@std/path";
 import type { FakeLlm } from "./fake-llm.ts";
-import { acquire, bounded, resources, tempDir } from "./resources.ts";
+import { acquire, tempDir } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
 import { FreezeProxy } from "./freeze-proxy.ts";
 import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
@@ -10,7 +10,7 @@ import { nativeBinary } from "./native.ts";
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
 import { isSessionID } from "@otk/protocol";
 import { nativeListeningURL } from "./native-announcement.ts";
-class NativePortCollision extends Error {}
+import { announcedEndpoint } from "./bound-endpoint.ts";
 function sessionFixture<T extends { id: string }>(
   raw: T,
 ): T & { nativeID: string } {
@@ -23,41 +23,6 @@ function sessionFixture<T extends { id: string }>(
       : {}),
     nativeID: raw.id,
   };
-}
-export function freePort(): number {
-  const root = Deno.env.get("OTK_TEST_PORTS_ROOT");
-  if (root) Deno.mkdirSync(root, { recursive: true });
-  for (let attempt = 0; attempt < 64; attempt++) {
-    const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-    const port = (listener.addr as Deno.NetAddr).port;
-    try {
-      if (root) {
-        const record = join(root, `${port}.json`);
-        const owner = crypto.randomUUID();
-        try {
-          Deno.writeTextFileSync(
-            record,
-            JSON.stringify({ owner, pid: Deno.pid, port }),
-            { createNew: true },
-          );
-        } catch (error) {
-          if (error instanceof Deno.errors.AlreadyExists) continue;
-          throw error;
-        }
-        resources().defer(`port lease ${port}`, async () => {
-          const current = JSON.parse(await Deno.readTextFile(record));
-          if (current.owner !== owner) {
-            throw new Error("Port lease ownership changed");
-          }
-          await Deno.remove(record);
-        });
-      }
-      return port;
-    } finally {
-      listener.close();
-    }
-  }
-  throw new Error("Run port allocator exhausted its admission attempts");
 }
 export async function waitFor<T>(
   read: () => T | Promise<T>,
@@ -95,6 +60,7 @@ export class OpencodeTest {
   process!: ChildProcess;
   log = "";
   #env: Record<string, string> = {};
+  #proxy!: FreezeProxy;
   #logPath = "";
   #record(chunk: Uint8Array): void {
     const text = new TextDecoder().decode(chunk);
@@ -232,10 +198,9 @@ export class OpencodeTest {
           },
         }),
       );
-      // In-process listeners can bind atomically. Only the external native needs
-      // a numeric candidate with pre-admission collision recovery.
-      test.port = 0;
-      test.nativePort = await freePort();
+      test.#proxy = new FreezeProxy();
+      test.port = test.#proxy.port;
+      test.url = `http://127.0.0.1:${test.port}`;
       test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
       test.#env = env;
       await test.#start();
@@ -367,35 +332,12 @@ export class OpencodeTest {
     await this.#start();
   }
   async #start(): Promise<void> {
-    for (let attempt = 0;; attempt++) {
-      try {
-        await this.#generation();
-        return;
-      } catch (error) {
-        if (!(error instanceof NativePortCollision) || attempt >= 2) {
-          throw error;
-        }
-        this.#record(new TextEncoder().encode(
-          `Native pre-admission port collision; retired generation and reallocating ${this.nativePort}\n`,
-        ));
-        this.nativePort = freePort();
-      }
-    }
-  }
-  async #generation(): Promise<void> {
-    const ready = Promise.withResolvers<void>();
-    const endpoint = new FreezeProxy(this.nativePort, {
-      port: this.port,
-      ready: ready.promise,
-    });
-    this.port = endpoint.port;
-    this.url = `http://127.0.0.1:${this.port}`;
     const owner = ownedProcess(nativeBinary, [
       "serve",
       "--hostname",
       "127.0.0.1",
       "--port",
-      String(this.nativePort),
+      "0",
     ], {
       cwd: this.directory,
       env: this.#env,
@@ -403,58 +345,22 @@ export class OpencodeTest {
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.process = owner.child;
-    this.#stop = resources().defer("native generation", async () => {
-      try {
-        await endpoint.stop();
-      } finally {
-        await owner.stop();
-      }
-    });
-    const announced = Promise.withResolvers<void>();
-    let nativeAnnounced = false;
-    let output = "";
-    this.process.stdout!.on("data", (chunk) => {
-      this.#record(chunk);
-      output = (output + new TextDecoder().decode(chunk)).slice(-4096);
-      if (
-        nativeListeningURL(output, this.kind) === this.nativeURL
-      ) {
-        nativeAnnounced = true;
-        announced.resolve();
-      }
-    });
-    this.process.stderr!.on("data", (chunk) => {
-      this.#record(chunk);
-    });
-    this.process.once("error", (error) => announced.reject(error));
-    this.process.once("exit", (code, signal) => {
-      announced.reject(
-        new Error(`Native exited before readiness: ${code}/${signal}`),
-      );
-    });
+    this.#stop = owner.stop;
+    this.process.stdout!.on("data", (chunk) => this.#record(chunk));
+    this.process.stderr!.on("data", (chunk) => this.#record(chunk));
     try {
       // Stock native can accept and lose requests before this announcement.
-      await bounded("native listener announcement", announced.promise, 60_000);
+      const endpoint = await announcedEndpoint(
+        this.process,
+        "stdout",
+        (line) => nativeListeningURL(line, this.kind),
+      );
+      this.nativePort = Number(endpoint.port);
       await this.#ready();
-      ready.resolve();
+      this.#proxy.retarget(this.nativePort);
     } catch (error) {
-      let collision = false;
       const errors: unknown[] = [error];
       try {
-        // Never probe an unrelated server with HTTP or accept it as our native.
-        // Only a failed process before its own announcement can be reallocated.
-        if (!nativeAnnounced && this.process.exitCode !== null) {
-          try {
-            const probe = Deno.listen({
-              hostname: "127.0.0.1",
-              port: this.nativePort,
-            });
-            probe.close();
-          } catch (bind) {
-            if (!(bind instanceof Deno.errors.AddrInUse)) throw bind;
-            collision = true;
-          }
-        }
         const listeners = await new Deno.Command("ss", {
           args: ["-ltnp"],
           signal: AbortSignal.timeout(5000),
@@ -467,8 +373,6 @@ export class OpencodeTest {
               nativePort: this.nativePort,
               port: this.port,
               pid: this.process.pid,
-              nativeAnnounced,
-              collision,
               error: String(error),
               listenersExit: listeners.code,
               listeners: new TextDecoder().decode(listeners.stdout),
@@ -487,12 +391,6 @@ export class OpencodeTest {
         throw new AggregateError(
           errors,
           "Native startup and evidence capture failed",
-        );
-      }
-      if (collision) {
-        throw new NativePortCollision(
-          `Native port ${this.nativePort} occupied before admission\n${this.log}`,
-          { cause: error },
         );
       }
       throw new Error(`${error}\n${this.log}`, { cause: error });
@@ -535,6 +433,7 @@ export class OpencodeTest {
     }
   }
   async stop(): Promise<void> {
+    this.#proxy.retarget();
     await this.#stop();
   }
 }

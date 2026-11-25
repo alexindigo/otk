@@ -622,7 +622,7 @@ export async function themeScenario() {
             } else if (frame.params.action === "fail") {
               await nc.rpc("permission.activity", { sessionID: automatic.id });
               const db = new OtkDb(
-                join(native.oc.root, `otk-${sidecar.port}`),
+                sidecar.statePath,
                 [permissionMigrations],
                 { busyms: 5000 },
               );
