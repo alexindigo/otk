@@ -350,6 +350,14 @@ export async function collections456(input: Inputs) {
     );
     for (const theme of themes) {
       await test.step(theme.id, async () => {
+        // Reload preserves draft choices. Give each theme a fresh session so
+        // its configured defaults cannot inherit the previous theme's edits.
+        const composer = await state.native<{ id: string }>(
+          "/session",
+          "POST",
+          { title: `Composer theme ${theme.id}` },
+        );
+        await nativePage(composer.id);
         // Every theme starts in the same full-label lane. Responsive pressure
         // later in this iteration must not leak into the next theme's baseline.
         await state.product("layout.patch", {
@@ -847,7 +855,7 @@ export async function collections456(input: Inputs) {
           image,
           shot,
         });
-        await nativePage(native.emptyID);
+        await nativePage(composer.id);
         await prompt.fill("");
         await prompt.press("!");
         await page.keyboard.insertText("printf shell-source");
@@ -856,12 +864,13 @@ export async function collections456(input: Inputs) {
         await prompt.press("Escape");
         await expect(prompt).toHaveAccessibleName("Prompt");
         await prompt.fill("");
-        // Reset choices through native session remount, retaining the same stack.
-        await nativePage(native.emptyID, true);
-        await expect(variant).toHaveAttribute(
-          "aria-label",
-          "Variant: High, agent default",
-        );
+        // A same-tab reload keeps the explicitly selected variant, even
+        // when its value is identical to the agent default.
+        await nativePage(composer.id, true);
+        await expect(variant).toHaveAttribute("aria-label", "Variant: High");
+        await expect(variant).not.toHaveClass(/is-applied/);
+        await expect(page.locator(".otk-agent-picker > button"))
+          .toHaveAttribute("aria-label", "Agent: Reviewer");
         for (
           const [agent, label, choice] of [["plan", "Plan", "Low"], [
             "build",
@@ -907,8 +916,6 @@ export async function collections456(input: Inputs) {
           }),
         ).toBe(true);
         await shot(`composer-restored-${theme.id}-1280`);
-        await nativePage(native.emptyID);
-        await nativePage(native.emptyID, true);
       });
     }
   });
