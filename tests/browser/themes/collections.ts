@@ -1678,22 +1678,37 @@ export async function collections456(input: Inputs) {
             );
           }
           if (name === "reading") {
+            const bubble = ".otk-user-bubble";
+            const prose = "[data-message=reading] .otk-text p";
+            const code = "[data-message=reading] .otk-code";
+            // The transcript and its nested blocks have zero overscan. Compare
+            // inline geometry after acquiring each row, not at one scrollTop.
+            const bounds = async (selector: string) => {
+              await reveal(page, selector);
+              return await page.locator(selector).evaluate((el) => {
+                const { left, right, width } = el.getBoundingClientRect();
+                return { left, right, width };
+              });
+            };
             for (const width of [1280, 1600, 2000]) {
               await page.setViewportSize({ width, height: 1100 });
-              await frames(page);
+              const bubbleBox = await bounds(bubble);
+              const proseBox = await bounds(prose);
+              const typography = await page.locator(prose).evaluate((el) => {
+                const p = getComputedStyle(el);
+                return {
+                  font: p.fontFamily,
+                  prose: [p.fontSize, p.lineHeight],
+                };
+              });
+              const codeBox = await bounds(code);
               const g = await page.evaluate(() => {
                 const el = (s: string) => document.querySelector(s)!,
                   rect = (s: string) => el(s).getBoundingClientRect(),
                   lane = rect(".otk-message-flow"),
                   scroll = rect(".otk-messages"),
-                  bubble = rect(".otk-user-bubble"),
                   composer = rect(".otk-composer"),
-                  prose = rect("[data-message=reading] .otk-text p"),
-                  code = rect("[data-message=reading] .otk-code"),
-                  s = getComputedStyle(el(".otk-messages")),
-                  p = getComputedStyle(
-                    el("[data-message=reading] .otk-text p"),
-                  );
+                  s = getComputedStyle(el(".otk-messages"));
                 return {
                   lane: [lane.left, lane.right, lane.width],
                   expected: Math.min(
@@ -1705,14 +1720,6 @@ export async function collections456(input: Inputs) {
                     lane.left + lane.right - scroll.left - scroll.right,
                   ),
                   composer: [composer.left, composer.right],
-                  bubble: bubble.width <= lane.width * .8 + .5 &&
-                    Math.abs(bubble.right - lane.right) < .5,
-                  aligned: [
-                    Math.abs(prose.width - code.width),
-                    Math.abs(prose.left - code.left),
-                  ],
-                  font: p.fontFamily,
-                  prose: [p.fontSize, p.lineHeight],
                   border: getComputedStyle(el(".otk-composer")).borderTopWidth,
                   radius: getComputedStyle(el(".otk-composer")).borderRadius,
                 };
@@ -1725,9 +1732,13 @@ export async function collections456(input: Inputs) {
               expect(Math.abs(g.lane[1] - g.composer[1])).toBeLessThanOrEqual(
                 .5,
               );
-              expect(g.bubble).toBe(true);
-              for (const d of g.aligned) expect(d).toBeLessThanOrEqual(.5);
-              expect(g.font).toContain("IBM Plex Sans");
+              expect(bubbleBox.width).toBeLessThanOrEqual(g.lane[2] * .8 + .5);
+              expect(Math.abs(bubbleBox.right - g.lane[1])).toBeLessThan(.5);
+              expect(Math.abs(proseBox.width - codeBox.width))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(proseBox.left - codeBox.left))
+                .toBeLessThanOrEqual(.5);
+              expect(typography.font).toContain("IBM Plex Sans");
               expect(
                 await page.locator(".otk-message-footer").first().evaluate((
                   el,
@@ -1737,7 +1748,7 @@ export async function collections456(input: Inputs) {
                 .toMatch(
                   /Enter to send|Shift\+Enter for newline|1 \/ 2 \/ 3|j\/k select/,
                 );
-              expect(g.prose).toEqual(["14px", "24px"]);
+              expect(typography.prose).toEqual(["14px", "24px"]);
               expect([g.border, g.radius]).toEqual(["1px", "20px"]);
               await expect(page.locator(".otk-role-label")).toHaveCount(0);
               await shot(`reading-${theme.id}-${width}`);
