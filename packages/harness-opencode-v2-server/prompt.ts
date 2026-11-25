@@ -10,6 +10,7 @@ import {
   type PromptCapability,
   type PromptInput,
   type PromptPart,
+  type PromptReceipt,
   uploadSize,
 } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
@@ -257,7 +258,7 @@ export class V2Prompt implements PromptCapability {
   async prompt(
     input: PromptInput,
     operation?: OperationContext,
-  ): Promise<void> {
+  ): Promise<PromptReceipt> {
     const native = ids.decode(input.sessionID),
       client = this.client();
     const work = client.sequence(native, async () => {
@@ -307,22 +308,27 @@ export class V2Prompt implements PromptCapability {
         });
       }
       const origin = operation?.key.origin;
-      const id = this.submitted && origin ? submissionID() : undefined;
-      if (id && origin) await this.submitted!(input.sessionID, id, origin);
+      const id = submissionID();
+      if (this.submitted && origin) {
+        await this.submitted(input.sessionID, id, origin);
+      }
       await client.effect(
         (api) =>
           api.session.prompt({
             sessionID: native,
-            ...(id ? { id } : {}),
+            id,
             ...prepared,
           }),
         operation,
       );
+      // The native prompt endpoint durably enqueues this identity. Delivery into
+      // its conversation is a later event, not an RPC completion fact.
+      return { messageID: id, state: "queued" as const };
     }, operation);
     const tail = work.then(() => {}, () => {});
     this.#tails.set(native, tail);
     try {
-      await work;
+      return await work;
     } finally {
       if (this.#tails.get(native) === tail) this.#tails.delete(native);
     }

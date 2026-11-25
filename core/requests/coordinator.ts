@@ -402,11 +402,13 @@ export class RequestCoordinator {
     }
     const ref = requestRef(control.ref, this.options.bootstrap);
     let admission: { ready: Promise<void>; release(): void } | undefined;
+    let failureScope: { sessionID?: string; directory?: string } | undefined;
     try {
       const prepared = this.options.registry.prepare(
         control.method,
         control.params,
       );
+      failureScope = prepared.scope;
       if (!prepared.execution) {
         throw new ExecutionFailure({ code: "request.policy", retry: "none" });
       }
@@ -514,7 +516,7 @@ export class RequestCoordinator {
       recipient.send({
         t: "request.rejected",
         ref,
-        error: this.#failure(cause, control.method, undefined, ref.origin),
+        error: this.#failure(cause, control.method, failureScope, ref.origin),
       });
     } finally {
       admission?.release();

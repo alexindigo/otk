@@ -209,7 +209,7 @@ test.describe("native selected values", () => {
       const trigger = page.locator(".otk-variant-picker > button");
       await expect(trigger).toHaveAttribute(
         "aria-label",
-        "Variant: High (agent default)",
+        "Variant: High, agent default",
       );
       await expect(trigger).toHaveClass(/is-applied/);
       const applied = await trigger.evaluate((el) =>

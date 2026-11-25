@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { tempDir, test } from "../../../tests/support/resources.ts";
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { OperationFailure } from "@otk/protocol";
 import { join, toFileUrl } from "@std/path";
 import { HarnessError } from "@otk/harness";
@@ -200,7 +200,7 @@ test("required attachment mapping preserves every source, order, directory and r
     },
   ];
   try {
-    await prompt(client, directory, () => {}).prompt({
+    const receipt = await prompt(client, directory, () => {}).prompt({
       sessionID: "opcv1-session",
       mode: "normal",
       parts,
@@ -239,7 +239,8 @@ test("required attachment mapping preserves every source, order, directory and r
         },
       },
     ];
-    assertEquals(writes, [{ parts: mapped }]);
+    assert(receipt?.messageID);
+    assertEquals(writes, [{ messageID: receipt.messageID, parts: mapped }]);
     await commands(client, directory, (_id, _operation, _path, options) => {
       writes.push(options?.body);
     }).command({

@@ -150,3 +150,11 @@
 .otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-children {
   direction: ltr;
 }
+.otk-tree-feedback {
+  display: grid;
+  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
+}
+.otk-tree-feedback-content {
+  grid-column: 2;
+  min-inline-size: 0;
+}

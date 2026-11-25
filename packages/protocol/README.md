@@ -60,7 +60,10 @@ native-kind union. Its optional `Activity` supplies title, detail, generic tone,
 row/boundary layout, outgoing direction, disclosure category, parameters,
 rendered blocks, child reference and a safe icon hint. Native state keys and
 labels belong to the producer; active/terminal facts are nullable and unknown
-never means success. Activity has no visibility/hidden policy.
+never means success. `completion.placement: "footer"` declares normal completion
+owned by a reply footer, independently of native kind or title. Original facts
+remain available for inspection; Activity has no general visibility/hidden
+policy.
 
 Messages, parts and tool calls optionally retain `NativeSource`: bounded
 preview, original byte size, explicit truncation and optional exact text
@@ -131,6 +134,13 @@ token. Adapters contribute neutral `SupervisionEvidence` identities and
 inventory freshness; only the core supervision owner interprets them. Legacy
 lifecycle status is not a lamp input. `sessions.seen` requires the captured
 displayed terminal, so delayed acknowledgement cannot consume a newer finish.
+
+`SupervisionEvidence.delivered` carries a proven parent receipt and exact
+covered terminal. The supervision owner's explicit `unseen` fact includes this
+shared acknowledgement without manufacturing a user view. Work/input priority
+and finish/outcome history remain independent. Consumers treat missing `unseen`
+on older injected projections as false, never reconstruct it from finish/seen
+maps.
 
 An additive `summaries` map and `summaryRevision` baseline field publish scalar
 `ProjectSummary` facts. The additive `inbox.summaries` message carries keyed

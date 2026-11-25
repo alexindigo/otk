@@ -37,6 +37,7 @@ interface Facts {
   title: string;
   terminal?: number;
   outcome?: TerminalOutcome;
+  unseen?: boolean;
 }
 const facts = (entry?: IndexEntry): Facts | undefined =>
   !entry || entry.deleted || entry.archived ? undefined : {
@@ -179,7 +180,8 @@ export class NotificationTriggers {
     state.rev = change.revision;
     for (const entry of change.changes) {
       const current = facts(entry.after);
-      if (current && entry.completedAt && entry.completedOutcome) {
+      if (current) current.unseen = entry.completedUnseen;
+      if (current && entry.completedAt) {
         current.terminal = entry.completedAt;
         current.outcome = entry.completedOutcome;
       }
@@ -292,12 +294,21 @@ export class NotificationTriggers {
     const finished = completedAt !== undefined && completedAt > 0 &&
       (completedAt > (priorFinish?.terminal ?? 0) ||
         completedAt === priorFinish?.terminal && outcome !== undefined &&
-          outcome !== priorFinish.outcome);
+          outcome !== priorFinish.outcome ||
+        entry.unseen === true && old.unseen === false);
     if (completedAt && (baseline || entry.status === "idle")) {
       state.finishes.set(
         session,
         latestTerminal(priorFinish, { terminal: completedAt, outcome }),
       );
+    }
+    const acknowledged = !!entry.terminal && entry.unseen === false;
+    if (acknowledged) {
+      const note = this.#outcomes.get(id);
+      if (note) {
+        this.#outcomes.delete(id);
+        this.retract(note.id);
+      }
     }
     if (
       baseline ||
@@ -347,8 +358,9 @@ export class NotificationTriggers {
     // outcome, not independent notification producers. This also enriches a
     // terminal-only note when its facts arrive later.
     let failure: Note | undefined;
-    const failed = entry.error && (entry.errorIdentity !== old.errorIdentity ||
-      finished && outcome === "failed");
+    const failed = !acknowledged && entry.error &&
+      (entry.errorIdentity !== old.errorIdentity ||
+        finished && outcome === "failed");
     if (failed) {
       const failures =
         (entry.observations?.length ? entry.observations : [undefined])
@@ -382,7 +394,8 @@ export class NotificationTriggers {
     }
     if (failure) publishOutcome({ ...failure, id: `${id}/outcome/failed` });
     else if (
-      finished && entry.status === "idle" && !entry.permissions &&
+      !acknowledged && finished && entry.status === "idle" &&
+      !entry.permissions &&
       !entry.questions
     ) {
       // A terminal arriving after its facts must not replace those facts with

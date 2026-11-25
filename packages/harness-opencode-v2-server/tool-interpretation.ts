@@ -52,7 +52,7 @@ const fields = {
     "id",
     "name",
   ],
-  metadata: ["title", "description", "sessionID", "sessionId"],
+  metadata: ["title", "description", "sessionID", "sessionId", "status"],
 } as const;
 export function toolScalarSQL(data: string): string {
   const project = (kind: keyof typeof fields) =>

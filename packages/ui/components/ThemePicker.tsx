@@ -9,6 +9,7 @@ import type { ThemeEngine } from "../theme/engine.ts";
 import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
 import { FormSelect } from "./Form.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 /** Preview is locally owned; committed state and saves are supplied by the host. */
 export default function ThemePicker(props: {
   theme: ThemeEngine;
@@ -143,13 +144,20 @@ export default function ThemePicker(props: {
             )}
           >
             <option value={props.systemLightTheme} hidden>
-              Unavailable ({props.systemLightTheme}); uses default light
+              Unavailable
             </option>
           </Show>
           <For each={lightThemes} keyed={(theme) => theme.id}>
             {(theme) => <option value={theme().id}>{theme().label}</option>}
           </For>
         </FormSelect>
+        <Show
+          when={!lightThemes.some((theme) =>
+            theme.id === props.systemLightTheme
+          )}
+        >
+          <ChromeMeta>{props.systemLightTheme}; uses default light</ChromeMeta>
+        </Show>
       </label>
       <footer class="otk-theme-actions">
         <button type="button" onClick={() => void close()}>Cancel</button>

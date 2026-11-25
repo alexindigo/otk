@@ -13,6 +13,23 @@ import { Transcript } from "../transcript.ts";
 import { subagentBody } from "../tool-results.ts";
 
 const sid = "opcv2-ses_fixture";
+Deno.test("successful idle supplies neutral footer completion without hiding failures", () => {
+  for (const outcome of ["succeeded", "failed", "interrupted"] as const) {
+    const message = mapMessage(
+      { id: `idle-${outcome}`, type: "idle", outcome, time: { created: 10 } },
+      sid,
+      { order: 1 },
+    );
+    assert(message);
+    const part = message.parts[0];
+    assert(part.kind === "external");
+    assertEquals(
+      part.activity?.completion,
+      outcome === "succeeded" ? { placement: "footer" } : undefined,
+    );
+    assert(part.source);
+  }
+});
 const policy: MessagePolicy = {
   prefetchms: 1000,
   prefetchbytes: 100000,

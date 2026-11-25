@@ -458,6 +458,9 @@ export function mapMessage(
       parts: [activityPart(raw, {
         kindLabel: "Execution",
         summary: { kind: "execution", noun: "run", plural: "runs" },
+        ...(raw.outcome === "succeeded"
+          ? { completion: { placement: "footer" as const } }
+          : {}),
         title: `Execution ${raw.outcome}`,
         detail: raw.error ? errorText(raw.error) : undefined,
         layout: "row",

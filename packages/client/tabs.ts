@@ -21,6 +21,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 import { type OperationAttention, rollupStatus } from "./inbox.ts";
+import { runningDescendants } from "./live-work.ts";
 export interface FamilyCrumb extends TaskCrumb {
   status: InboxStatus;
 }
@@ -428,11 +429,10 @@ export function createTabs(
         ...crumb,
         status: familyState(crumb.id),
       })).filter((crumb) => !crumb.helper || crumb.status !== "none");
-      cachedWorking = cachedFamily.filter((crumb) =>
-        crumb.helper && crumb.status === "working"
-      ).toSorted((a, b) =>
-        (byID.get(a.id)?.timeCreated ?? 0) -
-        (byID.get(b.id)?.timeCreated ?? 0)
+      cachedWorking = runningDescendants(
+        current,
+        [...byID.values()],
+        input.connected !== false,
       );
       const indexed = new Map(result.map((crumb) => [crumb.id, crumb]));
       const path = current
@@ -454,6 +454,10 @@ export function createTabs(
         ...cachedPath,
         ...cachedFamily.filter((crumb) =>
           crumb.status !== "none" && !path.includes(crumb.id)
+        ),
+        ...cachedWorking.filter((crumb) =>
+          !path.includes(crumb.id) &&
+          !cachedFamily.some((member) => member.id === crumb.id)
         ),
       ];
     },

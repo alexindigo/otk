@@ -334,7 +334,7 @@ test(
       "held",
     );
     await page.locator("textarea[name=prompt]").fill(
-      "Stay above the new response",
+      "My send follows the new response",
     );
     await page.locator("textarea[name=prompt]").press("Enter");
     await expect(page.locator(`[data-session="${session.id}"]`))
@@ -349,12 +349,14 @@ test(
     ).toBe(true);
     await expect(page.locator(`[data-session="${session.id}"]`))
       .toHaveAttribute("data-status", "idle");
-    const after = await viewport.evaluate((el) => ({
-      top: el.scrollTop,
-      gap: el.scrollHeight - el.clientHeight - el.scrollTop,
-    }));
-    expect(Math.abs(before - after.top)).toBeLessThan(2);
-    expect(after.gap).toBeGreaterThan(100);
+    // Own-send intentionally transfers reader authority to latest (WP14).
+    await expect.poll(() => viewport.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(before);
+    await expect.poll(() =>
+      viewport.evaluate((el) =>
+        el.scrollHeight - el.clientHeight - el.scrollTop
+      )
+    ).toBeLessThan(2);
     await viewport.hover();
     await page.mouse.wheel(0, 100000);
     await expect.poll(() =>

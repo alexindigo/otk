@@ -300,7 +300,12 @@ Deno.test("supervision's paired outcome reaches finish notifications before inde
         {
           op: "supervision",
           sessionID: "root",
-          value: { state: "finishedUnseen", terminal: 20, outcome: "failed" },
+          value: {
+            state: "finishedUnseen",
+            terminal: 20,
+            unseen: true,
+            outcome: "failed",
+          },
         },
         { op: "finish", sessionID: "root", time: 20 },
       ],

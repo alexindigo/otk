@@ -1,5 +1,12 @@
 # @otk/client
 
+`SessionActions` owns source-free, session-bound submission receipts. Native
+acceptance carries a message identity; only the canonical transcript can admit
+it, and only the viewport can report its presentation. The ten-second
+observation deadline is not a mutation timeout: recovery reloads canonical
+messages and never resends input. Own sends switch the existing viewport to
+follow; canonical append revisions expose new messages even near the tail.
+
 `entityFacts(identity, sources)` projects explicit session, turn and tool
 scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
 markers and never borrow session/helper clocks. Session-now status borrows live
@@ -9,6 +16,12 @@ adapter inventory items whose identities remain in that inventory. Transcript
 paging is not an input. `createLiveWork` owns capability checks and joined stop
 admission across presentation lifetimes; elapsed labels describe running time,
 not working time.
+
+The helper inventory follows native ancestry and fresh positive work keys,
+independently of task/checkout boundaries and attention priority. Blocked
+helpers remain in the count with their own attention lamps. Cross-project
+routing keeps work facts for these demanded descendants while unrelated pending
+identities remain request-only.
 
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
@@ -172,6 +185,12 @@ preparation that starts during Sending cannot admit a prompt, shell or native
 command effect after the earlier send settles. A later explicit activation can
 send the retained draft. Both lifetimes stay framework-free, with native input
 and focus owned by the UI adapter.
+
+Submission readiness rechecks use the intent owner's `require()` boundary.
+Readiness loss and captured-send admission refusal publish classified feedback
+with action, target, reason and recovery instead of resolving as an unsent
+success. An explicitly handled input command remains distinct from refused
+dispatch.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
@@ -433,6 +452,13 @@ Standalone consumers without summaries retain the metadata projection contract.
 The server's supervision projection governs lamps independently of population
 readiness. Missing supervision is `none`, rendered grey as "No known activity".
 There is no raw-status fallback. Unknown population counts remain null.
+
+Unread names/counts borrow supervision's explicit `unseen`, not raw finish and
+seen clocks. Outcome notifications carry that same eligibility through the
+attention projection, including equal-terminal acknowledgement changes. A
+delivered helper result retracts its outcome notification and mandatory family
+crumb, while a selected helper retains its path and the parent's result record
+remains history. Entity/Activity lamps already borrow the same supervision.
 
 The inbox owns accepted metadata synchronously and publishes a binding clock,
 matching the keyed index: projection observers and commands never wait for a
@@ -777,16 +803,22 @@ chronological prompt identities, creation clocks, shared queued flags and
 borrowed source parts. It retains no content or paging state; consumers present
 parts through their own registry and page through the original session owner.
 
-The canonical projection's `records` value owns append-stable Activity spans,
-identical-fact folds, reveal ancestry and presentation revisions. An eligible
-singleton starts as a span; an already admitted individual row never becomes one
-after settling. Explicit failures break out in source order. Native plugins
+The canonical projection's `records` value owns one stable background interval
+between conversation messages, identical-fact folds, reveal ancestry and
+presentation revisions. The first background record mints its frame even while
+queued. Settlement changes child presentation, never the root partition.
+Pending, active, blocked, unknown and failed records break out inside that frame
+in source order, then rejoin its compact children when settled. Native plugins
 supply opaque summary kinds and singular/plural nouns; headings never classify
-records. Records without producer-owned summary facts stay individually visible.
-The existing transcript interaction owner retains all disclosure choices and
-opens reveal ancestors. Measurements use presentation revisions separately from
-logical row identity, so a topology or streamed-content revision cannot borrow
-an old extent, including when an unmounted row was previously empty.
+records. Records without producer-owned summary facts remain visible breakouts.
+Producer-declared footer completions retain their original source and reveal
+paths. A success-only interval is silent until explicitly disclosed through the
+preceding reply footer or revealed; mixed intervals include those completion
+facts in their summary and original chronology. The existing transcript
+interaction owner retains all disclosure choices and opens reveal ancestors.
+Measurements use presentation revisions separately from logical row identity, so
+a topology or streamed-content revision cannot borrow an old extent, including
+when an unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
@@ -1180,11 +1212,23 @@ unarchive a checkout.
 
 `projectTree` supplies the branch representation shared by `projectHierarchy`
 and the sidebar. Server, repository and canonical-root identity prove each edge;
-missing or cyclic parents remain visible roots. Required descendants borrow the
-existing project status, independently of persisted collapse choices.
-`projectCollapse(project, collapsed)` sends one keyed `layout.project` intent to
-the serving layout owner. `treePaths` supplies virtual session-row continuation
-flags from the complete projected preorder, never mounted DOM neighbours.
+missing or cyclic parents remain visible roots. Disclosure is independent of
+project status, which remains with the existing rollup owner. `projectHierarchy`
+also assigns row level and artwork before section filtering; worktrees keep
+their own checkout basename and never receive project avatars, including when
+their root is absent. Native repository names remain project-only.
+`projectBranchPresentation` hides all descendants and the archive when
+collapsed, regardless of attention, from one topology/disclosure snapshot.
+`createProjectDisclosure` retains immediate local choices by kind, server and
+directory. Per-key saves are ordered, old outcomes cannot overwrite newer
+intent, and the affected branch retains a refusal and explicit retry. Archive
+and Inactive borrow the same owner without adding persistence; Discovered and
+project choices retain their existing preference stores. A matching
+authoritative value retires the successful local overlay; independent future
+preference changes remain live. `projectCollapse(project, collapsed)` sends one
+keyed `layout.project` intent to the serving layout owner. `treePaths` supplies
+virtual session-row continuation flags from the complete projected preorder,
+never mounted DOM neighbours.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

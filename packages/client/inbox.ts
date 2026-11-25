@@ -37,8 +37,7 @@ export function unread(
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): boolean {
   if (session.deleted) return false;
-  const sessionID = session.id;
-  return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
+  return inbox.supervision?.[session.id]?.unseen === true;
 }
 export function inboxStatus(
   entry: IndexMetadata & OperationAttention,
@@ -104,6 +103,9 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   availability?: ProjectSummary["availability"];
   archived?: boolean;
   depth?: number;
+  level?: "project" | "worktree";
+  artwork?: "avatar" | "none";
+  displayName?: string;
   parentLabel?: string;
   /** A repo can be shown as context while its own independent policy is Inactive. */
   inactivePolicy?: boolean;
@@ -141,35 +143,76 @@ export function projectDirectory(
   }
   return leaves.size === 1 ? [...leaves][0] : directory;
 }
+type HierarchyRow<T> = T & {
+  level: "project" | "worktree";
+  artwork: "avatar" | "none";
+  displayName: string;
+};
+// Projection rows are immutable owner snapshots. Presentation must retain their
+// identity on digest-only publications, without retaining retired source rows.
+const hierarchyRows = new WeakMap<
+  InboxProject,
+  { key: string; row: InboxProject }
+>();
 /** Hierarchy is presentation only: directory/task identities are never rewritten. */
 export function projectHierarchy<
-  T extends InboxProject & { sidecarId?: string },
->(rows: readonly T[]): T[] {
-  const result: T[] = [];
+  T extends InboxProject & {
+    sidecarId?: string;
+    summary?: Pick<ProjectSummary, "presentation">;
+  },
+>(
+  rows: readonly T[],
+): HierarchyRow<T>[] {
+  const result: HierarchyRow<T>[] = [];
   const walk = (
     node: ReturnType<typeof projectTree<T>>[number],
     depth = 0,
     parent?: T,
   ) => {
     const row = node.project;
-    result.push(
-      row.inactive &&
-        node.children.some((child) =>
-          ["active", "archived"].includes(projectGroup(child.project))
-        )
-        ? {
-          ...row,
-          group: "active",
-          section: "live",
-          inactive: false,
-          inactivePolicy: true,
-        }
-        : parent &&
-            (row.depth !== depth ||
-              row.parentLabel !== projectName(parent.directory))
-        ? { ...row, depth, parentLabel: projectName(parent.directory) }
-        : row,
-    );
+    const worktree = !!row.topology &&
+      row.topology.canonicalRoot !== row.directory;
+    const presentation = {
+      level: worktree ? "worktree" as const : "project" as const,
+      artwork: worktree ? "none" as const : "avatar" as const,
+      displayName: (!worktree && row.summary?.presentation?.name) ||
+        projectName(row.directory),
+    };
+    const lifted = row.inactive &&
+      node.children.some((child) =>
+        ["active", "archived"].includes(projectGroup(child.project))
+      );
+    const parentLabel = parent
+      ? projectName(parent.directory)
+      : row.parentLabel;
+    const key = JSON.stringify([
+      presentation,
+      lifted,
+      parent ? depth : row.depth,
+      parentLabel,
+    ]);
+    let cached = hierarchyRows.get(row);
+    if (!cached || cached.key !== key) {
+      const value = {
+        ...(lifted
+          ? {
+            ...row,
+            group: "active" as const,
+            section: "live" as const,
+            inactive: false,
+            inactivePolicy: true,
+          }
+          : parent &&
+              (row.depth !== depth ||
+                row.parentLabel !== projectName(parent.directory))
+          ? { ...row, depth, parentLabel: projectName(parent.directory) }
+          : row),
+        ...presentation,
+      };
+      cached = { key, row: value };
+      hierarchyRows.set(row, cached);
+    }
+    result.push(cached.row as HierarchyRow<T>);
     for (const child of node.children) walk(child, depth + 1, row);
   };
   for (const root of projectTree(rows)) walk(root);

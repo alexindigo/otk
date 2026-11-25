@@ -13,6 +13,8 @@ export { DigestScheduler } from "./digest-scheduler.ts";
 export { ReadAdmission } from "./read-admission.ts";
 export { NativeReadiness } from "./native-readiness.ts";
 export { cachedStatements } from "./sqlite-statements.ts";
+export { DeliveryBackfill } from "./delivery-backfill.ts";
+export { DeliveryIndex } from "./delivery-index.ts";
 /** Harness-neutral lifecycle, session contracts and optional capabilities. */
 export * from "./types.ts";
 export { CapabilityRegistry, requireCapability } from "./registry.ts";

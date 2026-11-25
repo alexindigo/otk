@@ -52,6 +52,8 @@ import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
 import { millis, record, reported, text, tokens } from "./map.ts";
 import { toolProgress } from "./tool-interpretation.ts";
+import { DeliveryIndex, deliveryReadCodec } from "@otk/harness";
+import { scanDeliveries } from "./delivery.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -107,6 +109,7 @@ export interface V2DigestReadiness {
   ): void;
 }
 export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
+  "supervision.deliveries": deliveryReadCodec,
   "supervision.terminals": arrayReadCodec(),
   ...transcriptReadCodecs,
   ...catalogReadCodecs,
@@ -201,6 +204,34 @@ export class OpencodeV2DigestSink implements DigestSink {
         ...history.readers(),
       }),
       ...this.#transcripts.readers,
+      "supervision.deliveries": async (input, signal) => {
+        await this.#prepare(signal);
+        this.#check(signal);
+        const native = this.#native;
+        if (!native) return { updates: [], reset: true };
+        const parent = native.db.prepare(
+          "SELECT time_updated FROM session_v2 WHERE id=?",
+        ).get(ids.decode(input.parentID));
+        if (!parent) return { updates: [], reset: true };
+        const index = new DeliveryIndex(
+          storage.sql,
+          "opcv2_delivery",
+          (run) => storage.transaction(run),
+          policy.publishrows,
+        );
+        return index.step(
+          input,
+          native.identity,
+          Number(parent.time_updated),
+          (cursor) =>
+            scanDeliveries(
+              native.db,
+              input.parentID,
+              cursor,
+              policy.publishrows,
+            ),
+        );
+      },
       "supervision.terminals": async ({ after }, signal) => {
         // One source/project proof refresh per inventory pass, at its first
         // page. Continuation pages reuse that generation's proof (registration
@@ -827,6 +858,14 @@ export class OpencodeV2DigestSink implements DigestSink {
     revision: number,
     metadata?: SessionMetadata,
   ): Promise<void> {
+    if (connection === this.#connection) {
+      new DeliveryIndex(
+        this.storage.sql,
+        "opcv2_delivery",
+        (run) => this.storage.transaction(run),
+        this.policy.publishrows,
+      ).retire(id);
+    }
     return this.#transcripts.deleted(connection, id, revision, metadata);
   }
   deleteIntent(

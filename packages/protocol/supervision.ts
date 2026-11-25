@@ -18,6 +18,13 @@ export interface TerminalEvidence {
   /** Outcome belongs only to this exact terminal watermark; absent means unknown. */
   outcome?: TerminalOutcome;
 }
+/** Parent-owned positive receipt, correlated by the plugin to this exact run.
+ * This is not a human-view event and never covers a later child terminal. */
+export interface DeliveredEvidence {
+  parentID: string;
+  receipt: string;
+  terminal: number;
+}
 /** Merge terminal facts as a pair. A newer unknown end never inherits old success. */
 export function latestTerminal(
   ...values: readonly (TerminalEvidence | undefined)[]
@@ -38,6 +45,7 @@ export function latestTerminal(
   return result;
 }
 export interface SupervisionEvidence extends TerminalEvidence {
+  delivered?: DeliveredEvidence;
   work?: EvidenceInventory;
   inputs?: EvidenceInventory;
   permissions?: EvidenceInventory;
@@ -47,4 +55,6 @@ export interface SupervisionEvidence extends TerminalEvidence {
 export interface Supervision extends TerminalEvidence {
   state: "needsYou" | "working" | "finishedUnseen" | "none";
   terminal: number;
+  /** Independent of the winning activity state. Missing on older peers is false. */
+  unseen?: boolean;
 }

@@ -7,7 +7,27 @@ export interface ProjectBranch<T> {
   key: string;
   project: T;
   children: ProjectBranch<T>[];
-  required: boolean;
+}
+
+/** Disclosure alone controls descendants; status belongs to the rollup owner. */
+export function projectBranchPresentation<T>(
+  node: ProjectBranch<T>,
+  open: boolean,
+  archiveCount: number,
+): {
+  children: ProjectBranch<T>[];
+  archiveVisible: boolean;
+  hasChildren: boolean;
+  bodyVisible: boolean;
+} {
+  const children = open ? node.children : [];
+  const archiveVisible = open && archiveCount > 0;
+  return {
+    children,
+    archiveVisible,
+    hasChildren: node.children.length > 0 || archiveCount > 0,
+    bodyVisible: children.length > 0 || archiveVisible,
+  };
 }
 
 /** Topology alone owns nesting. Missing/cyclic parents remain visible roots. */
@@ -20,7 +40,6 @@ export function projectTree<
     key: projectTreeKey(project),
     project,
     children: [] as ProjectBranch<T>[],
-    required: project.status !== "none",
   }]));
   const parentKey = (project: T) => {
     const directory = project.topology?.parentDirectory ??
@@ -48,10 +67,5 @@ export function projectTree<
     if (!parent || key) roots.push(node);
     else parent.children.push(node);
   }
-  const required = (node: ProjectBranch<T>): boolean => {
-    const children = node.children.map(required);
-    return node.required = node.required || children.some(Boolean);
-  };
-  roots.forEach(required);
   return roots;
 }

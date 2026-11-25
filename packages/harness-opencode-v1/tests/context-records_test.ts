@@ -61,6 +61,23 @@ Deno.test("V1 content establishes prompt identity; synthetic-only and empty head
     assert(isRealPrompt(mapMessage(info, [{ ...text(true), type }])));
   }
 });
+Deno.test("V1 helper results supply neutral interval nouns and retain their child action", () => {
+  const part = mapPart({
+    ...text(true),
+    text:
+      '<task id="child" state="completed">\n<task_result>\nDone\n</task_result>\n</task>',
+  });
+  assert(part.kind === "external");
+  assertEquals(part.activity?.summary, {
+    kind: "subagent",
+    noun: "helper finished",
+    plural: "helpers finished",
+  });
+  assertEquals(part.activity?.child, {
+    sessionID: "opcv1-child",
+    label: "Open task",
+  });
+});
 Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown identity visibly with source", () => {
   for (
     const type of [

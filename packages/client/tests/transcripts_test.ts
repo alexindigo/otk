@@ -132,6 +132,57 @@ const policy = {
   concurrency: 4,
 };
 
+for (const boundary of ["baseline", "projection"]) {
+  Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      await f.reply();
+      await f.reply();
+      const transcript = f.owner.get(target("a"))!;
+      const message = {
+        ...f.messages("a")[79],
+        id: "new",
+        time: { created: 80 },
+      };
+      const reason = `deliberate ${boundary} failure`;
+      if (boundary === "baseline") {
+        Object.defineProperty(message, "parts", {
+          get() {
+            throw new Error(reason);
+          },
+        });
+      } else {
+        transcript.projection.apply = () => {
+          throw new Error(reason);
+        };
+      }
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event: { op: "message.upsert", message },
+        clock: { epoch: "fixture", seq: 1 },
+      }, true);
+      assertEquals(transcript.state.continuity, "missing");
+      assertEquals(
+        transcript.deliveryDiagnostics?.get("a").last?.reason,
+        reason,
+      );
+      assertEquals(
+        transcript.deliveryDiagnostics?.get("a").last?.state,
+        "projection-error",
+      );
+      assertEquals(transcript.deliveryDiagnostics?.get("a").accepted?.seq, 0);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
 Deno.test("failed reconnect inventory retains authority and local dismissal", async () => {
   const f = fixture(policy);
   f.connection.supports = (capability) => capability === "questions";

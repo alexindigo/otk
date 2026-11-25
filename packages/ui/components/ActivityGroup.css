@@ -22,3 +22,13 @@
   gap: var(--space-2);
   min-width: 0;
 }
+.otk-record-summary {
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+  font-weight: normal;
+}
+.otk-record-completion {
+  --tree-height: var(--line-meta);
+  display: inline-grid;
+  align-items: center;
+}

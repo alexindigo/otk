@@ -215,6 +215,15 @@ durable observation indexes, bounded page merge, revert and deletion lifetime.
 Their native source is loaded only through the plugin's opaque source reference.
 Native shutdown is continuity loss, never an invented idle success.
 
+`delivery.ts` recognizes only materialized synthetic subagent reports and
+completed foreground calls whose result metadata is completed. Background
+launches, enqueue and job removal do not qualify. Native parent/child identity,
+terminal history and invocation clocks fence correlation; a synthetic with
+multiple possible child runs stays unacknowledged. Bounded message/part keysets
+project scalars for the worker's private delivery index, including split and
+legacy-inline calls. Source/revision-fenced cursors resume after restart; cached
+replay does not scan parent history. No receipt body is retained.
+
 Recognized subagent envelopes are removed only by exact metadata-derived
 prefix/suffix matching; malformed source remains inspectable. Foreground
 delegation renders Markdown blocks, while shell output remains literal. Optional
@@ -251,6 +260,10 @@ credential filter before publication or storage, never raw response/config
 bodies. Drafts remain owned by the composer when submit rejects. Unknown
 outcomes retain their existing reconciliation semantics, without a fabricated
 retry action.
+
+Successful native idle records declare neutral footer completion placement.
+Failed and interrupted outcomes do not. The canonical client interval retains
+their source and inspection paths without decoding native outcome words.
 
 The retained failure supplies a neutral record reference, so FP1 presents its
 facts only at that record and projects other feedback as a short reference.

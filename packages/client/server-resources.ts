@@ -647,8 +647,16 @@ export function createServerResources(o: {
             const outcome = supervision?.terminal === time
               ? supervision.outcome
               : undefined;
-            if (changes.admitted) owner.admitFinished(session, time, outcome);
-            else owner.finished(session, time, changes.baseline, outcome);
+            const unseen = supervision?.unseen === true;
+            if (changes.admitted) {
+              owner.admitFinished(session, time, outcome, unseen);
+            } else {owner.finished(
+                session,
+                time,
+                changes.baseline,
+                outcome,
+                unseen,
+              );}
           }
         }
       });
@@ -687,6 +695,15 @@ export function createServerResources(o: {
     }
     const context = new Map(base.entries.map((entry) => [entry.id, entry]));
     const dependencies = new Set(context.keys());
+    const descendants = new Set(dependencies);
+    for (const id of descendants) {
+      for (const child of o.index.children(p.sidecarId, id)) {
+        if (!descendants.has(child)) {
+          descendants.add(child);
+          dependencies.add(child);
+        }
+      }
+    }
     const acquire = () => {
       for (const id of dependencies) {
         const entry = owner.entry(id);
@@ -792,7 +809,10 @@ export function createServerResources(o: {
           if (
             cache.server === id &&
             o.index.changes(id)!.metadata.some((key) =>
-              cache.dependencies.has(key)
+              cache.dependencies.has(key) ||
+              cache.dependencies.has(
+                o.index.getMetadata(id, key)?.parentID ?? "",
+              )
             )
           ) {
             invalidateTabContext(cache);
