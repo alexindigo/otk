@@ -89,11 +89,11 @@ function fixture() {
       },
       actions: {
         abort: () => Promise.resolve(),
-        revert: () => {
+        revert: (_target, id) => {
           events.push("stage");
           return refused
             ? Promise.reject(new Error("refused"))
-            : Promise.resolve({ ...base, revert: record() });
+            : Promise.resolve({ ...base, revert: record(id) });
         },
         restore: () => {
           events.push("restore");
@@ -112,6 +112,7 @@ function fixture() {
     drafts,
     events,
     saved,
+    copies,
     create,
     publish,
     refused: () => {
@@ -185,6 +186,33 @@ Deno.test("a changed identity preview needs confirmation again and Cancel sends 
   assertEquals(owner.state.phase, "idle");
   assertEquals(f.drafts.current("local/a").input, "Prior unsent draft");
   owner.dispose();
+});
+
+Deno.test("deleting a copy does not suppress preservation for a different locally staged boundary", async () => {
+  const f = fixture(), owner = f.create();
+  f.publish(record());
+  f.saved.resolve();
+  await settle();
+  assertEquals(owner.state.phase, "saved");
+  f.copies.branches = [];
+  f.session.update(() => {});
+  assertEquals(owner.state.copyRemoved, true);
+  f.session.update((state) => {
+    state.content.messages = [prompt("new")];
+  });
+  try {
+    await owner.revertTo("new");
+    const confirming = owner.confirm();
+    await settle();
+    f.publish(record("new"));
+    await confirming;
+    await settle();
+    assertEquals(f.events, ["capture", "stage", "capture"]);
+    assertEquals(owner.state.copyRemoved, undefined);
+    assertEquals(f.copies.branches[0].boundary, "new");
+  } finally {
+    owner.dispose();
+  }
 });
 
 Deno.test("a failed earlier-branch save never clears the refilled composer", async () => {

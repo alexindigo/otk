@@ -170,6 +170,17 @@ export function createSessionRevert(options: {
       return false;
     }
   };
+  const setStage = (
+    state: SessionRevertState,
+    target: Selection,
+    record: RevertInfo,
+  ) => {
+    if (state.record?.boundaryID !== record.boundaryID) {
+      state.dismissed = dismissed(target, record.boundaryID);
+      state.copyRemoved = undefined;
+    }
+    state.record = record;
+  };
   const reset = () => {
     update((state) => {
       state.pending = undefined;
@@ -310,13 +321,11 @@ export function createSessionRevert(options: {
     closedStage = false;
     if (flow().record?.boundaryID !== record.boundaryID) {
       update((state) => {
-        state.record = record;
+        setStage(state, target, record);
         state.phase = "staged";
         state.confirmation = undefined;
         state.error = undefined;
         state.failure = undefined;
-        state.dismissed = dismissed(target, record.boundaryID);
-        state.copyRemoved = undefined;
         state.messages = options.session.state.content.messages.filter((m) =>
           record.messageIDs.includes(m.id)
         );
@@ -475,8 +484,7 @@ export function createSessionRevert(options: {
       if (!active()) return;
       if (result.revert) {
         update((state) => {
-          state.record = result.revert;
-          state.dismissed = dismissed(captured, result.revert!.boundaryID);
+          setStage(state, captured, result.revert!);
         });
       }
       // RPC completion admits the mutation. The selected transcript remains
