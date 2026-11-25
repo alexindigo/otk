@@ -268,11 +268,15 @@ export class Transcript {
     string,
     { session: string; event: V2Event; controller: AbortController }
   >();
+  #retireShellLookup(key: string): void {
+    const work = this.#shellLookups.get(key);
+    this.#shellLookups.delete(key);
+    work?.controller.abort();
+  }
   #releaseShellLookups(id?: string): void {
     for (const [key, work] of this.#shellLookups) {
       if (id !== undefined && work.session !== id) continue;
-      this.#shellLookups.delete(key);
-      work.controller.abort();
+      this.#retireShellLookup(key);
     }
   }
   #projected = new Map<
@@ -2596,6 +2600,7 @@ export class Transcript {
   ): void {
     const shell = record(event.data.shell),
       previous = this.#shells.get(String(shell.id));
+    this.#retireShellLookup(`${id}/${shell.id}`);
     if (event.type.endsWith("ended")) {
       previous?.controller.abort();
       this.#shells.delete(String(shell.id));
