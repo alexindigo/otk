@@ -124,6 +124,8 @@ export type PromptPart =
   & { mention?: { start: number; end: number; text: string } };
 export interface PromptInput {
   sessionID: string;
+  /** Caller-captured native identity correlates pending and committed input. */
+  messageID?: string;
   parts: PromptPart[];
   mode: "normal" | "shell";
   agent?: string;

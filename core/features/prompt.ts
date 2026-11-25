@@ -34,11 +34,17 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       }
       const input: PromptInput = {
         sessionID: sessionID(p)!,
+        messageID: text(p, "messageID", true),
         parts,
         mode: "normal",
         agent: text(p, "agent", true),
         variant: text(p, "variant", true),
       };
+      if (
+        input.messageID && !/^msg_[a-zA-Z0-9]{20,40}$/.test(input.messageID)
+      ) {
+        throw new HarnessError("params", "Invalid prompt message identity");
+      }
       if (p.model !== undefined) {
         const model = object(p.model);
         input.model = {

@@ -152,14 +152,21 @@ export function errorFeedback(
   context?: FailureFacts,
 ): Feedback | undefined {
   if (!value) return;
+  if (typeof value !== "string" && (value.kind !== "error" || value.failure)) {
+    return value;
+  }
+  const text = typeof value === "string" ? value : value.text;
+  const described = shipped.describe({
+    code: "action.validation",
+    retry: "new-intent",
+    diagnosticID: typeof value === "string"
+      ? "validation"
+      : value.diagnosticID ?? "validation",
+    facts: { ...context, reason: text },
+  });
   return typeof value === "string"
-    ? shipped.describe({
-      code: "action.validation",
-      retry: "new-intent",
-      diagnosticID: "validation",
-      facts: { ...context, reason: value },
-    })
-    : value;
+    ? described
+    : { ...value, failure: described.failure };
 }
 /** Error-only ports carry the original structured failure, not its rendered text. */
 export function feedbackError(value: Feedback): RequestFailure {
@@ -267,7 +274,11 @@ export function notificationFailure(
   const detail = note.detail as
     | { kind?: string; value?: FailurePresentation }
     | undefined;
-  return detail?.kind === "failure" ? detail.value : undefined;
+  if (detail?.kind === "failure") return detail.value;
+  if (note.kind !== "error") return;
+  const failure = errorFeedback(note.body || GENERIC_FAILURE_REASON)!.failure!;
+  // A notification title is already an outcome heading, not an action verb.
+  return { ...failure, heading: note.title, action: note.title };
 }
 export function sessionFailure(
   observation: import("@otk/protocol").ErrorObservation | undefined,
@@ -300,6 +311,31 @@ export function presentFailure(
   placement?: FailurePlacement,
 ): Feedback {
   return shipped.present(failure, placement);
+}
+
+/** A retained native execution record owns these facts once per logical reply.
+ * Keep a legacy assistant error only when no such record is available. Tool or
+ * command failures do not spend this session-execution fallback. */
+export function replyErrorFeedback(
+  message: import("@otk/protocol").Message,
+  failures: readonly PublicFailure[],
+  target?: FailureTarget,
+): Feedback | undefined {
+  if (message.role !== "assistant" || message.interrupted || !message.error) {
+    return;
+  }
+  if (
+    failures.some((failure) =>
+      (failure.code === "native.execution" ||
+        failure.code === "session.failure") &&
+      failure.facts?.record &&
+      failure.facts.target?.sessionID === message.sessionID
+    )
+  ) return;
+  return errorFeedback(message.error.message, {
+    actionLabel: "Running session",
+    target,
+  });
 }
 /**
  * A session view's composer-origin pointer: its own composer feedback, or the

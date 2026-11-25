@@ -13,7 +13,7 @@ export default function MessageDelivery(
   const receipt = () => {
     revision();
     const value = props.owner?.state.receipts.find((r) =>
-      r.phase !== "admitted" || r.feedback
+      !r.entry && (r.phase !== "admitted" || r.feedback)
     );
     return value ? { ...value } : undefined;
   };

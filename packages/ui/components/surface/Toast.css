@@ -6,7 +6,7 @@
   border-left: 3px solid var(--otk-success);
 }
 .otk-toast[data-kind=error] > .otk-surface {
-  border-left-color: var(--otk-status-error);
+  border-left-color: var(--danger);
 }
 .otk-toast:is([data-kind=permission], [data-kind=question]) > .otk-surface {
   border-left-color: var(--otk-attention);

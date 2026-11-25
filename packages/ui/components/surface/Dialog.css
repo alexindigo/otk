@@ -41,6 +41,3 @@
 .otk-dialog[data-size=editor] .otk-surface-body {
   flex: 1;
 }
-.otk-dialog [role=alert] {
-  color: var(--danger);
-}

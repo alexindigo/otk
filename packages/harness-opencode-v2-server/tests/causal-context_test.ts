@@ -120,6 +120,33 @@ function fixture(
   return { value, updates, entered, gate, facts, start, event, raw };
 }
 
+Deno.test("V2 API event ordering advances its scalar frontier instead of walking acquired contexts", async () => {
+  const f = fixture();
+  f.facts.source = "api:frontier";
+  try {
+    await f.value.page(sessionID);
+    for (let i = 0; i < 60; i++) {
+      await f.value.event({
+        id: `evt_frontier_${i}`,
+        type: "session.synthetic",
+        created: 1,
+        data: { sessionID: "ses_fixture", text: `Record ${i}` },
+      });
+    }
+    const rows = f.updates.flatMap((op) =>
+      op.op === "message.upsert" && op.message.id.startsWith("msg_frontier_")
+        ? [op.message]
+        : []
+    );
+    assertEquals(
+      rows.map((row) => row.sourceOrder),
+      Array.from({ length: 60 }, (_, i) => 917 + i),
+    );
+  } finally {
+    await f.value.stop();
+  }
+});
+
 Deno.test("V2 causal context: native parent survives scalar fallback in page, live and sealed replay", async () => {
   const f = fixture({ latest: "msg_fallback", unfinished: true });
   f.raw.metadata = { parentID: "msg_native_parent" };

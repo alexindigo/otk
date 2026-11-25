@@ -66,6 +66,7 @@ export default function Shell(
     theme: ThemeEngine;
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
+    promptBlocks?(text: string): import("@otk/protocol").Block[];
   },
 ): import("solid-js").Element {
   const {
@@ -82,7 +83,11 @@ export default function Shell(
     listInteraction,
     interact,
     confirmCommand,
-  } = createShellState({ api: props.api, policy: props.policy });
+  } = createShellState({
+    api: props.api,
+    policy: props.policy,
+    promptBlocks: props.promptBlocks,
+  });
   const {
     sidecars,
     inbox,

@@ -130,6 +130,7 @@ export async function start(
       diagnostic: (error) => diagnostic("warn", "session digest", error),
     });
     leaseTurnDetail(index, digest, diagnostic, signal);
+    let dispatchReportAt = 0;
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
@@ -143,6 +144,17 @@ export async function start(
       (error) => diagnostic("warn", "opencode V2", error),
       fetch,
       digest,
+      (pressure) => {
+        diagnostics?.dispatch?.(pressure);
+        diagnostics?.section(
+          `native:dispatch:${pressure.activeType ?? "idle"}`,
+          pressure.handlerMs,
+        );
+        if (Date.now() - dispatchReportAt >= 10_000) {
+          dispatchReportAt = Date.now();
+          diagnostic("info", "native dispatch", pressure);
+        }
+      },
     );
     return await startApplication(
       cfg,

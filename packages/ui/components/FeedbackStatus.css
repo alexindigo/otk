@@ -11,7 +11,7 @@
   visibility: hidden;
 }
 .otk-feedback-status.is-error {
-  color: var(--danger);
+  color: var(--otk-fg);
 }
 .otk-feedback-text {
   margin: 0;
@@ -20,6 +20,11 @@
   text-overflow: ellipsis;
 }
 .otk-feedback-status.has-failure .otk-feedback-text {
+  flex: 1;
+  white-space: normal;
+  overflow: visible;
+}
+.otk-feedback-status.has-failure.is-single-line .otk-feedback-text {
   white-space: normal;
   overflow: visible;
 }

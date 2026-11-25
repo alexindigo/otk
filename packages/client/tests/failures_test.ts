@@ -2,9 +2,30 @@
 import { assertEquals } from "@std/assert";
 import {
   createFailurePresenter,
+  errorFeedback,
   FailurePresenter,
+  notificationFailure,
   RequestFailure,
 } from "../mod.ts";
+
+Deno.test("failure headings do not append another outcome to producer outcome titles", () => {
+  const presenter = new FailurePresenter();
+  for (
+    const actionLabel of [
+      "failed",
+      "Execution failed",
+      "Install dependencies failed",
+    ]
+  ) {
+    const shown = presenter.describe({
+      code: "invented",
+      retry: "none",
+      diagnosticID: "outcome",
+      facts: { actionLabel, reason: "The request was refused" },
+    });
+    assertEquals(shown.failure?.heading, actionLabel);
+  }
+});
 
 Deno.test("failure presenter derives the complete contract and optional enrichment", () => {
   const presenter = new FailurePresenter();
@@ -29,6 +50,41 @@ Deno.test("failure presenter derives the complete contract and optional enrichme
     presenter.present({ ...failure, code: "credentials" }).failure?.reason,
     "Check your username and password",
   );
+});
+
+Deno.test("text-only error feedback gains shared failure facts without losing its action or identity", () => {
+  let invoked = 0;
+  const original = {
+    kind: "error" as const,
+    text: "The server refused the request",
+    identity: "captured-operation",
+    diagnosticID: "captured-diagnostic",
+    action: { label: "Retry response", run: () => invoked++ },
+  };
+  const shown = errorFeedback(original, {
+    actionLabel: "Loading response",
+    target: { label: "Selected session" },
+  })!;
+  assertEquals(shown.failure?.reason, original.text);
+  assertEquals(shown.failure?.heading, "Loading response failed");
+  assertEquals(shown.failure?.target.label, "Selected session");
+  assertEquals(shown.failure?.value.diagnosticID, "captured-diagnostic");
+  assertEquals(shown.identity, original.identity);
+  shown.action?.run();
+  assertEquals(invoked, 1);
+  assertEquals(errorFeedback(shown), shown);
+});
+
+Deno.test("legacy error notification titles remain outcome headings rather than failing twice", () => {
+  const shown = notificationFailure({
+    id: "legacy-error",
+    kind: "error",
+    title: "Sending prompt failed",
+    body: "The provider quota has been reached",
+    actions: [],
+  });
+  assertEquals(shown?.heading, "Sending prompt failed");
+  assertEquals(shown?.reason, "The provider quota has been reached");
 });
 
 Deno.test("FP1 unsupported capability is one informational notice, not a failed action", () => {

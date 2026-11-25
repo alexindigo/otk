@@ -106,14 +106,18 @@ resyncs before readiness. Snapshot acquisition returns a fenced commit; abort
 joins acquisition and event work before closing. Execution facts survive
 decodable frames whose unrelated fields drift. The SDK event queue is unused.
 
-The byte reader owns one outstanding next-chunk read while ordered dispatch is
-backpressured, allowing real HTTP EOF/read failure to retire that generation. It
-does not drain more chunks or parse events concurrently; bootstrap event/byte
-admission is unchanged. Body cancellation joins the owned read before releasing
-its lock. Execution-failure facts and anchor reads borrow that generation's
-signal as well as transcript lifetime, so teardown cannot wait on a read whose
-cancellation was dropped. Ordinary source failures still retain their diagnostic
-and failure record; cancellation does not become a new failure.
+The parser feeds one ordered dispatcher under the existing replay operation/byte
+budgets, so backlog is counted rather than hidden in transport buffering. One
+parser frame and one next-chunk read can wait outside that queue. Native order,
+including each session's ephemeral settlements and durable watermarks, is kept.
+Body cancellation joins both the owned read and dispatcher before releasing its
+lock. Dispatch diagnostics report received/handled counts, queued bytes/events,
+oldest age, native creation-to-handling lag, active type and handler time; the
+application's existing diagnostic sink records these every ten seconds.
+Execution-failure facts and anchor reads borrow that generation's signal as well
+as transcript lifetime, so teardown cannot wait on a read whose cancellation was
+dropped. Ordinary source failures still retain their diagnostic and failure
+record; cancellation does not become a new failure.
 
 The adapter composes scalar connection/index facts with qualified catalog
 capabilities. The worker's `core/digest/providers.ts` selects native codecs,
@@ -125,6 +129,19 @@ unknown. Startup publishes grouped population facts, never an idle session/body
 catalog. Keyed hydration follows helper ancestry, independently of transcript
 subscriptions. Active executions and loaded-location pending inventories keep
 lamps live.
+
+Permission/form events update only their own pending identity and ancestor
+attention deltas, never re-read every location or active family. Pending counts
+and running shells have keyed indexes; the shared metadata index's topology
+observations keep attention coherent when another producer learns a parent.
+Metadata, project and topology-inventory refreshes coalesce by key outside event
+dispatch. Obsolete reads cannot publish over a newer request or deletion; an
+inventory cannot retire/stale requests delivered during its acquisition. Native
+metadata events use scalar session facts and observed activity clocks rather
+than scanning message bodies for recency. Missing shell identities use one
+demand-owned, cancellable lookup outside dispatch, releasing each bounded page.
+Refresh failures retire the stream generation for canonical resync, and refresh
+queue pressure accompanies the dispatch diagnostics.
 
 After requested work drains, the shared scheduler can discover scalar sessions
 in Active projects through bounded newest-first SQL keysets or native API
@@ -227,9 +244,10 @@ repairs the checkpoint and its native forward suffix in bounded pages, through
 the same classifier; stream upserts alone never certify that interval. In-place
 content replacements reacquire their native identity. Unknown/unmapped changes
 request canonical repair, and stream handler/decoding failures reconnect and
-resync instead of logging a dropped fact. These checks borrow the credited worker
-read channel, acquire no unviewed histories and stop/join with the transcript
-subscription. Only scalar coverage is retained, never a second body cache.
+resync instead of logging a dropped fact. These checks borrow the credited
+worker read channel, acquire no unviewed histories and stop/join with the
+transcript subscription. Only scalar coverage is retained, never a second body
+cache.
 
 `delivery.ts` recognizes only materialized synthetic subagent reports and
 completed foreground calls whose result metadata is completed. Background

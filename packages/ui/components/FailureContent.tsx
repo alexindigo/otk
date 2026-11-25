@@ -1,57 +1,161 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { FailurePresentation } from "@otk/client";
-import { Show } from "solid-js";
+import type { FailurePresentation, Feedback } from "@otk/client";
+import { createSignal, Show } from "solid-js";
+import { TreeNode } from "./Tree.tsx";
+import Clock from "./Clock.tsx";
+import FailureSignal from "./FailureSignal.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import "./FailureContent.css" with { type: "text" };
 
-/** Every failure surface renders the owner's value, including its target link. */
-export default function FailureContent(
-  props: {
-    failure: FailurePresentation;
-    onReveal?(messageID: string): void;
-    inline?: boolean;
-  },
-) {
+/** One presentation of failure facts. Containers choose density, never wording. */
+export default function FailureContent(props: {
+  failure: FailurePresentation;
+  action?: Feedback["action"];
+  onReveal?(messageID: string): void;
+  compact?: boolean;
+  time?: number;
+  /** The surrounding row already supplies the action and target heading. */
+  placement?: "record";
+  /** A containing surface may own the failure signal on its outer edge. */
+  signal?: boolean;
+  /** Compatibility with single-line feedback tracks. */
+  inline?: boolean;
+}) {
+  const compact = () => props.compact || props.inline;
+  const [open, setOpen] = createSignal(false);
+  const reason = () => (
+    <div class="otk-failure-body">
+      <p class="otk-failure-reason">{props.failure.reason}</p>
+      <Show when={props.failure.recovery}>
+        {(recovery) => <p class="otk-failure-recovery">{recovery()}</p>}
+      </Show>
+    </div>
+  );
+  const diagnostic = () => (
+    <div class="otk-failure-diagnostic">
+      <Show
+        when={props.failure.value.diagnosticID !== "validation"}
+        fallback={<span>No diagnostic ID supplied</span>}
+      >
+        <span>Diagnostic ID</span>
+        <code
+          class="otk-control-label"
+          title={props.failure.value.diagnosticID}
+        >
+          {props.failure.value.diagnosticID}
+        </code>
+      </Show>
+    </div>
+  );
   return (
-    <span class={["otk-failure-content", { "is-inline": props.inline }]}>
+    <FailureSignal
+      as="div"
+      enabled={props.signal !== false && !props.failure.reference}
+      informational={props.failure.tone === "info"}
+      class={[
+        "otk-failure-content",
+        compact() ? "is-compact" : "",
+        props.failure.reference ? "is-reference" : "",
+      ].filter(Boolean).join(" ")}
+    >
       <Show
         when={props.failure.reference}
         fallback={
           <>
-            <Show when={props.failure.tone !== "info"}>
-              <span>
-                {props.failure.heading} for{" "}
-                <Show
-                  when={props.failure.target.href}
-                  fallback={<span>{props.failure.target.label}</span>}
-                >
-                  <a href={props.failure.target.href}>
-                    {props.failure.target.label}
-                  </a>
-                </Show>.
-              </span>
+            <Show when={props.placement !== "record"}>
+              <div class="otk-failure-heading">
+                <Show when={props.placement !== "record"}>
+                  <strong
+                    class="otk-control-label"
+                    title={props.failure.heading}
+                  >
+                    {props.failure.heading}
+                  </strong>
+                  <Show when={props.failure.target.label}>
+                    <Show
+                      when={props.failure.target.href}
+                      fallback={
+                        <span
+                          class="otk-failure-target otk-control-label"
+                          title={props.failure.target.label}
+                        >
+                          {props.failure.target.label}
+                        </span>
+                      }
+                    >
+                      <a
+                        class="otk-failure-target otk-control-label"
+                        href={props.failure.target.href}
+                        title={props.failure.target.label}
+                      >
+                        {props.failure.target.label}
+                      </a>
+                    </Show>
+                  </Show>
+                </Show>
+                <Show when={props.time !== undefined}>
+                  <Clock
+                    at={props.time!}
+                    class="otk-failure-time otk-control-label"
+                  />
+                </Show>
+              </div>
             </Show>
-            <span>{props.failure.reason}</span>
-            <Show when={props.failure.recovery}>
-              {(recovery) => (
-                <span class="otk-failure-recovery">{recovery()}</span>
-              )}
-            </Show>
+            <div class="otk-failure-main-reason">{reason()}</div>
             <Show when={props.failure.count > 1}>
-              <span>
+              <span class="otk-failure-count">
                 {props.failure.count} identical{" "}
                 {props.failure.tone === "info" ? "notices" : "failures"}
               </span>
             </Show>
-            <Show when={props.failure.generic}>
-              <span class="otk-failure-details">
-                Details: diagnostic ID {props.failure.value.diagnosticID}
-              </span>
-            </Show>
+            <div class="otk-failure-controls">
+              <Show when={props.action}>
+                {(action) => (
+                  <button
+                    class="otk-failure-action"
+                    type="button"
+                    onClick={() => action().run()}
+                  >
+                    {action().label}
+                  </button>
+                )}
+              </Show>
+              <TreeNode
+                class="otk-failure-details"
+                label="Failure details"
+                open={open()}
+                onOpen={setOpen}
+                header={() => (
+                  <button
+                    type="button"
+                    class="otk-failure-detail-toggle"
+                    aria-expanded={open() ? "true" : "false"}
+                    onClick={() => setOpen(!open())}
+                  >
+                    Details
+                  </button>
+                )}
+                body={() => (
+                  <ScrollRegion axis="y" class="otk-failure-detail-body">
+                    <div class="otk-failure-disclosed-reason">{reason()}</div>
+                    <Show
+                      when={props.placement === "record" &&
+                        props.time !== undefined}
+                    >
+                      <Clock at={props.time!} class="otk-failure-time" />
+                    </Show>
+                    {diagnostic()}
+                  </ScrollRegion>
+                )}
+              />
+            </div>
           </>
         }
       >
         {(reference) => (
           <a
+            class="otk-control-label"
+            title={reference().label}
             href={props.failure.target.href}
             onClick={(event) => {
               if (!props.onReveal) return;
@@ -63,6 +167,6 @@ export default function FailureContent(
           </a>
         )}
       </Show>
-    </span>
+    </FailureSignal>
   );
 }

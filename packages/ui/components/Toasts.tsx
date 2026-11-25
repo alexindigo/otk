@@ -65,10 +65,10 @@ export default function Toasts(
       fit();
     };
     globalThis.addEventListener("resize", resize);
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
       globalThis.removeEventListener("resize", resize);
-    });
+    };
   });
   return (
     <section
@@ -90,14 +90,14 @@ export default function Toasts(
                   fallback={
                     <>
                       <strong
-                        class="otk-control-label"
+                        class="otk-toast-title otk-control-label"
                         title={item().note.title}
                       >
                         {item().note.title}
                       </strong>
                       <Show when={item().note.body}>
                         <span
-                          class="otk-control-label"
+                          class="otk-toast-body otk-control-label"
                           title={item().note.body}
                         >
                           {item().note.body}
@@ -106,7 +106,13 @@ export default function Toasts(
                     </>
                   }
                 >
-                  {(failure) => <FailureContent failure={failure()} />}
+                  {(failure) => (
+                    <FailureContent
+                      compact
+                      signal={false}
+                      failure={failure()}
+                    />
+                  )}
                 </Show>
               </div>
               <button

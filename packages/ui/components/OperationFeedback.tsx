@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Feedback } from "@otk/client";
+import { errorFeedback, type Feedback } from "@otk/client";
 import { type Element, Show } from "solid-js";
 import { ComposerNoticeRow } from "./ComposerNotice.tsx";
-import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
 import FailureContent from "./FailureContent.tsx";
@@ -16,28 +16,30 @@ export default function OperationFeedback(
     onReveal?(messageID: string): void;
   },
 ): Element {
+  const feedback = () => errorFeedback(props.feedback)!;
   return (
     <ComposerNoticeRow
       focusable
       control={props.control}
       icon={props.icon ??
-        (props.feedback.kind === "error" ? <CloseIcon /> : <ActivityIcon />)}
+        (feedback().failure ? null : <ActivityIcon />)}
       {...feedbackState({
         feedback: props.feedback,
         class: "otk-operation-feedback",
       })}
       trailing={
-        <Show when={props.feedback.action}>
+        <Show when={!feedback().failure && props.feedback.action}>
           <button type="button" onClick={() => props.feedback.action?.run()}>
             {props.feedback.action?.label}
           </button>
         </Show>
       }
     >
-      {props.feedback.failure
+      {feedback().failure
         ? (
           <FailureContent
-            failure={props.feedback.failure}
+            failure={feedback().failure!}
+            action={feedback().action}
             onReveal={props.onReveal}
           />
         )

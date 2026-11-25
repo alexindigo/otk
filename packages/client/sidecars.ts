@@ -14,7 +14,7 @@ import {
   discoveryFailure,
   type DiscoveryState,
 } from "./discovery.ts";
-import { FeedbackFailure } from "./failures.ts";
+import { type Feedback, FeedbackFailure } from "./failures.ts";
 import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { browserStorage } from "./browser-storage.ts";
@@ -34,6 +34,8 @@ export interface SidecarState extends SidecarSpec {
   status: ConnectionState;
   harness: HarnessState;
   error?: string;
+  /** Retain the owner's facts instead of reparsing the compatibility text. */
+  feedback?: Feedback;
   authType?: string;
   capabilities: CapabilityName[];
   /** Changes on each welcomed transport connection, including reconnects. */
@@ -141,7 +143,11 @@ export function createSidecars(
           key: "connecting",
           label: "Connecting",
           elapsedMs: 0,
-          result: { ...failure.feedback, kind: "error" },
+          result: {
+            ...failure.feedback,
+            kind: "error",
+            feedback: failure.feedback,
+          },
         }],
       };
     });
@@ -164,7 +170,7 @@ export function createSidecars(
             if (item) item.defaults = value;
           });
         },
-        status(status, error, authType) {
+        status(status, error, authType, feedback) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) {
@@ -175,6 +181,7 @@ export function createSidecars(
               // Capabilities describe the backend, not transport liveness. Keep
               // feature owners (and their unsent input) mounted while reconnecting.
               item.error = error;
+              item.feedback = feedback;
               if (authType !== undefined) item.authType = authType;
             }
           });

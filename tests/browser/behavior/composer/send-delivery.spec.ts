@@ -124,13 +124,13 @@ test(
 );
 
 test(
-  "composer.accepted-send-retains-correlated-receipt-until-canonical-admission",
+  "composer.pending-send-commits-in-place-with-bounded-failure-and-retry",
   {
     tag: ["@composer", "@messages"],
   },
   async ({ state, page }, info) => {
     const session = await state.native<{ id: string }>("/session", "POST", {
-      title: "Delivery receipt",
+      title: "Pending prompt delivery",
     });
     const frames = await wire(page);
     await openSession(state, page, session.id);
@@ -141,14 +141,24 @@ test(
       request?.method === "session.messages"
     );
     await state.queue(["The accepted response is retained."]);
-    await prompt(page).fill("The accepted prompt must be accounted for.");
+    await prompt(page).fill(
+      "Show this prompt **right away**, then commit the same message.",
+    );
+    const start = performance.now();
     await page.locator(".otk-prompt button[type=submit]").click();
-    await expect(prompt(page)).toHaveValue("");
-    const receipt = page.getByRole("status", { name: "Message delivery" });
-    await expect(receipt).toContainText(/Sent, waiting|Queued while/);
-    await expect(receipt).toHaveAttribute("data-delivery-message", /.+/);
-    await expect(receipt).toBeInViewport();
-    const messageID = await receipt.getAttribute("data-delivery-message");
+    const entry = page.locator('[data-send-state="pending"]');
+    await expect(entry).toContainText("Show this prompt right away");
+    expect(performance.now() - start).toBeLessThan(1000);
+    await expect(entry.locator(".otk-send-meta")).toContainText("Sending");
+    await expect(entry.getByRole("img", { name: "Sending", exact: true }))
+      .toBeVisible();
+    const messageID = await entry.getAttribute("data-message");
+    const receipt = page.locator(`[data-message="${messageID}"]`);
+    await receipt.evaluate((element) => {
+      (window as unknown as { pendingEntry: Element }).pendingEntry = element;
+    });
+    const before = await receipt.locator(".otk-user-bubble").boundingBox();
+    const dock = await page.locator(".otk-prompt").boundingBox();
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(
@@ -156,17 +166,19 @@ test(
         theme,
       );
       await page.screenshot({
-        path: info.outputPath(`wp14-receipt-${theme}.png`),
+        path: info.outputPath(`pend-pending-${theme}.png`),
         fullPage: true,
         animations: "disabled",
       });
     }
     await expect(page.getByRole("button", {
-      name: "Reload this session's latest messages",
+      name: "Retry",
+      exact: true,
     })).toBeInViewport({ timeout: 20_000 });
     const pane = page.getByRole("region", { name: "Transcript", exact: true });
     const action = page.getByRole("button", {
-      name: "Reload this session's latest messages",
+      name: "Retry",
+      exact: true,
     });
     const bounds = await pane.boundingBox(),
       button = await action.boundingBox();
@@ -179,19 +191,51 @@ test(
         element.scrollWidth - element.clientWidth
       ),
     ).toBeLessThan(2);
+    await expect(receipt).toHaveAttribute("data-send-state", "failed");
     await expect(receipt).toContainText("not been observed");
-    await page.screenshot({
-      path: info.outputPath("wp14-delivery-unavailable.png"),
-      fullPage: true,
-      animations: "disabled",
-    });
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.screenshot({
+        path: info.outputPath(`pend-failed-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
     expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
       .toHaveLength(1);
     await action.click();
+    await expect(receipt).toHaveAttribute("data-send-state", "pending");
     frames.release();
     await reply(state, page, session.id, "The accepted response is retained.");
     await expect(page.locator(`[data-message="${messageID}"]`)).toHaveCount(1);
-    await expect(receipt).toHaveCount(0);
+    await expect(receipt).toHaveAttribute("data-send-state", "committed");
+    expect(
+      await receipt.evaluate((element) =>
+        element ===
+          (window as unknown as { pendingEntry: Element }).pendingEntry
+      ),
+    ).toBe(true);
+    const after = await receipt.locator(".otk-user-bubble").boundingBox();
+    expect(Math.abs(after!.width - before!.width)).toBeLessThan(1);
+    expect(Math.abs(after!.height - before!.height)).toBeLessThan(1);
+    const afterDock = await page.locator(".otk-prompt").boundingBox();
+    expect(afterDock).toEqual(dock);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await page.screenshot({
+        path: info.outputPath(`pend-committed-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
     expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
       .toHaveLength(1);
   },

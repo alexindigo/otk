@@ -5,13 +5,43 @@ import {
   type ConnectionInput,
 } from "./connection-light.ts";
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 
 export default function ConnectionStatus(
-  props: { connection: ConnectionInput },
+  props: {
+    connection: ConnectionInput;
+    compact?: boolean;
+    onSettings?(): void;
+  },
 ) {
   return (
     <Show when={connectionFeedback(props.connection)}>
-      {(feedback) => <FeedbackStatus feedback={feedback()} />}
+      {(feedback) => (
+        <Show
+          when={feedback().failure}
+          fallback={
+            <ChromeMeta class="otk-connection-status" role="status">
+              {feedback().text}
+            </ChromeMeta>
+          }
+        >
+          <FeedbackStatus
+            class="otk-connection-status"
+            compact={props.compact}
+            feedback={{
+              ...feedback(),
+              ...(feedback().failure && props.onSettings
+                ? {
+                  action: {
+                    label: "Server settings",
+                    run: () => props.onSettings?.(),
+                  },
+                }
+                : {}),
+            }}
+          />
+        </Show>
+      )}
     </Show>
   );
 }

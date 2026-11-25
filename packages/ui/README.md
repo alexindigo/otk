@@ -1,5 +1,11 @@
 # @otk/ui
 
+Local sends use ordinary Message, not a receipt bubble. Its transcript-owned
+`send` input supplies pending/committed/failed state. Pending metadata borrows
+ChromeMeta and the shared ActivityIndicator; failures borrow FeedbackStatus and
+its owner-provided Retry. The user metadata track retains the shared control
+height through commitment, and native-only actions are absent before commitment.
+
 All Copy actions borrow `clipboard.ts`: native clipboard writes on secure pages,
 then a selection-preserving textarea/execCommand fallback, including plain HTTP.
 If both refuse, the owner rejects with FP1 action, target, reason and
@@ -137,6 +143,30 @@ it never cancels an operation or stores a second pending map.
 FailureContent renders recovery only when the action/cause owner supplies it. An
 absent next step has no empty row or replacement advice; all inline and toast
 consumers borrow that same optional-recovery presentation.
+
+FailureContent owns the neutral reason and recovery text, available action and
+initially collapsed TreeNode Details disclosure. Its record placement borrows
+the surrounding row's action/target heading rather than repeating it. Standalone
+feedback retains its heading. All content and action text share the same inset;
+the TreeNode junction occupies its own track. Error colour belongs to the shared
+FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
+its surface edge. Compact callers and containers at or below 320px show the
+heading and controls, with complete reasons inside Details. The shared
+ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
+with full-value titles. FeedbackStatus normalizes text-only errors through the
+client presenter too. ConnectionStatus owns the single connection state line;
+ConnectionBadge supplies only the lamp and server label. Quiet connection copy
+borrows ChromeMeta. The sidebar gives it the server label's grid track below the
+connection control, never a separate left edge.
+
+Failure records contribute their public failure through the part registry. The
+reply's legacy assistant error is a fallback only when its retained execution
+record is absent, so a quota reason is rendered once without prose matching.
+Producer-supplied known outcomeTime values render through the shared Clock
+(ChromeMeta, local hour and minute, full date/zone on hover). The reply footer
+owns its outcome instant; a failure block omits that same instant. Unknown or
+absent clocks stay absent. Record observation time is not a substitute. This
+does not compute run timing or change footer timing evidence.
 
 FailureContent also renders FP1's short retained-record reference without
 repeating the full facts. The session composer injects the existing transcript
@@ -326,38 +356,39 @@ Hover/focus detail, click pinning, anchoring and dismissal belong to Popover,
 not the pill. Available session/model facts retain their scope; a session click
 uses the same guarded navigation as the existing Open task action.
 
-Reply footers show outcome instants independently of working-duration availability. A native
-`outcomeTime` is shown in local time for success, failure and interruption; an
-unknown instant states that no native time was recorded and retains its reason.
-Reply footers also show model-call count, charged turn tokens and backend-reported
-cost after working time. Footers and opened detail bind the adapter's whole-turn
-result. Work-log headers pass their own contributed part clocks to the same
-timing owner for a busy-union-minus-waits result, never the turn total. Missing
-segment evidence leaves the plain Work log label. Busy clocks belong to each
-group; wait clocks come from the complete reply, including nonwork/hidden parts.
-The cached layout rechecks dependent durations when a wait witness changes,
-preserving unchanged groups and never turning absent busy evidence into zero.
-There is no loaded-page turn timing fallback; missing turn evidence says Time
-unknown, with the adapter's explanation on hover. The shared Popover's
-hover/focus preview reveals an ordered per-call table: existing tool labels or
-answered, full prompt Context, five token categories, reported cost and time.
-New input is the uncached part; a footnote explains New input + Cache read +
-Cache write = Context. The Total row sums calls' Context and retains category
-tokens and catalog-priced costs; unknown category prices show token counts only.
-Category pricing is provided by the framework-free reply usage owner, never
-reconstructed in the view. Display's persisted Show cost toggle defaults on;
-turning it off hides all footer/detail and context-meter cost figures while
-retaining tokens. Popover's generic wide size accommodates comparison tables; it
-continues to own native anchoring, available-side viewport bounds, dismissal and
-keyboard focus return. Hover/focus previews have no native title tooltip; their
-accessible trigger label and linked detail description are supplied by that same
-owner. Click-only controls retain their name tooltips. ShellPorts exposes the
-same framework-free usage owner to registered panel adapters. The Sessions
-adapter reads keyed index digests for the selected project's sessions; rows
-present total.cost as quiet trailing metadata using the shared cost formatter,
-including known zero. Show cost also hides these amounts and their accessible
-labels. Footers, rows and meter never sum transcript pages; unavailable metadata
-stays unknown while content remains usable.
+Reply footers show outcome instants independently of working-duration
+availability. A native `outcomeTime` is shown in local time for success, failure
+and interruption; an unknown instant states that no native time was recorded and
+retains its reason. Reply footers also show model-call count, charged turn
+tokens and backend-reported cost after working time. Footers and opened detail
+bind the adapter's whole-turn result. Work-log headers pass their own
+contributed part clocks to the same timing owner for a busy-union-minus-waits
+result, never the turn total. Missing segment evidence leaves the plain Work log
+label. Busy clocks belong to each group; wait clocks come from the complete
+reply, including nonwork/hidden parts. The cached layout rechecks dependent
+durations when a wait witness changes, preserving unchanged groups and never
+turning absent busy evidence into zero. There is no loaded-page turn timing
+fallback; missing turn evidence says Time unknown, with the adapter's
+explanation on hover. The shared Popover's hover/focus preview reveals an
+ordered per-call table: existing tool labels or answered, full prompt Context,
+five token categories, reported cost and time. New input is the uncached part; a
+footnote explains New input + Cache read + Cache write = Context. The Total row
+sums calls' Context and retains category tokens and catalog-priced costs;
+unknown category prices show token counts only. Category pricing is provided by
+the framework-free reply usage owner, never reconstructed in the view. Display's
+persisted Show cost toggle defaults on; turning it off hides all footer/detail
+and context-meter cost figures while retaining tokens. Popover's generic wide
+size accommodates comparison tables; it continues to own native anchoring,
+available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
+previews have no native title tooltip; their accessible trigger label and linked
+detail description are supplied by that same owner. Click-only controls retain
+their name tooltips. ShellPorts exposes the same framework-free usage owner to
+registered panel adapters. The Sessions adapter reads keyed index digests for
+the selected project's sessions; rows present total.cost as quiet trailing
+metadata using the shared cost formatter, including known zero. Show cost also
+hides these amounts and their accessible labels. Footers, rows and meter never
+sum transcript pages; unavailable metadata stays unknown while content remains
+usable.
 
 `TurnUsage` receives a cheap nullable turn summary and injected
 detail/open/close ports. Its preview keeps one Model calls scroll/focus region
@@ -600,39 +631,41 @@ changes that track. RecordList owns record spacing and supplies topology to the
 shared Tree; views borrow canonical span identities and retained disclosure
 state rather than regrouping mounted neighbours. Background intervals share one
 outer conversation gap and compact internal record rhythm, including actionable
-breakouts. Their folded line is plain muted meta text with producer-owned
-counts, no Activity prefix or time range. Successful completion-only intervals
-borrow a footer junction instead of adding a status row; direct reveal opens the
-same retained interval. Read-only helper transcripts mount those same attention
-owners; only prompt submission is unavailable. With no active takeover, helpers
-mount no empty composer. That same owner provides composer availability to
-takeover headers, so draft-kept copy appears only when the open session offers a
-composer. Permission docks and notifications share RequestAge presentation and
-the client's requestIdle formatter/resumption threshold, using the asking
-session's activity clock rather than request age. Permission and question
-surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
-a common blocked-light header. Consumer-supplied session location names the
-project/task; question tabs/options use shared underline/pointer primitives.
-Static keyboard hints are in titles, Keys and the palette, not the surface.
-Question step/collapse changes focus a visible option or review action; leaving
-an own-answer field focuses Answer. Arrival does not focus an answer action.
-Takeover layout sections are programmatic-only landmarks, not Tab stops. The
-prompt restores its own input when a takeover releases focus to the document,
-while preserving focus the reader moved elsewhere. Shared focus paint admits
-semantic controls and explicitly marked visible content (message/date reveals),
-never layout wrappers or programmatic-only targets, including browser-focusable
-scroll containers. Actual keyboard controls retain visible focus. The composer's
-rounded border owns focus-within rather than a second textarea rectangle;
-own-answer input focuses its visible row. ComposerTakeovers delegates field
-paint through `--prompt-input-outline`; without that enclosing box, a standalone
-Prompt retains its own field focus outline. Permission takeovers and
-notification toasts share one PermissionSummary: exact tool, command/working
-directory, edit file paths/counts or generic target and requested patterns.
-Notification enrichment carries the neutral request alongside its originating
-action through the hub's opaque detail port. A permission-owned adapter supplies
-injected toast content; the generic hub and toast host know no permission
-schema. Permission and question owners preserve dirty state through reconnects.
-The legacy `Docks` API remains independently reusable for existing consumers.
+breakouts. Their folded line is plain muted meta text with producer-owned counts
+and client-owned failure wording, no Activity prefix or time range.
+Footer-borrowed successful completions never add a title count. Successful
+completion-only intervals borrow a footer junction instead of adding a status
+row; direct reveal opens the same retained interval. Read-only helper
+transcripts mount those same attention owners; only prompt submission is
+unavailable. With no active takeover, helpers mount no empty composer. That same
+owner provides composer availability to takeover headers, so draft-kept copy
+appears only when the open session offers a composer. Permission docks and
+notifications share RequestAge presentation and the client's requestIdle
+formatter/resumption threshold, using the asking session's activity clock rather
+than request age. Permission and question surfaces replace the composer with a
+raised, bordered, 20px-radius Takeover and a common blocked-light header.
+Consumer-supplied session location names the project/task; question tabs/options
+use shared underline/pointer primitives. Static keyboard hints are in titles,
+Keys and the palette, not the surface. Question step/collapse changes focus a
+visible option or review action; leaving an own-answer field focuses Answer.
+Arrival does not focus an answer action. Takeover layout sections are
+programmatic-only landmarks, not Tab stops. The prompt restores its own input
+when a takeover releases focus to the document, while preserving focus the
+reader moved elsewhere. Shared focus paint admits semantic controls and
+explicitly marked visible content (message/date reveals), never layout wrappers
+or programmatic-only targets, including browser-focusable scroll containers.
+Actual keyboard controls retain visible focus. The composer's rounded border
+owns focus-within rather than a second textarea rectangle; own-answer input
+focuses its visible row. ComposerTakeovers delegates field paint through
+`--prompt-input-outline`; without that enclosing box, a standalone Prompt
+retains its own field focus outline. Permission takeovers and notification
+toasts share one PermissionSummary: exact tool, command/working directory, edit
+file paths/counts or generic target and requested patterns. Notification
+enrichment carries the neutral request alongside its originating action through
+the hub's opaque detail port. A permission-owned adapter supplies injected toast
+content; the generic hub and toast host know no permission schema. Permission
+and question owners preserve dirty state through reconnects. The legacy `Docks`
+API remains independently reusable for existing consumers.
 
 Context part renderers receive their original canonical message clock through
 `recordTime`. The fallback shows it, including milliseconds and the local zone,

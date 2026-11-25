@@ -82,6 +82,8 @@ interface Baseline {
   controller: AbortController;
   prompt?: LatestPrompt;
   contexts: Map<string, MessageContext>;
+  /** Monotone API presentation frontier; events never scan acquired history. */
+  order?: number;
   source?: string;
   presentation?: import("@otk/protocol").ContentSession;
   notices?: import("@otk/protocol").PublicFailure[];
@@ -255,6 +257,17 @@ export class Transcript {
   #anchors = new Map<string, string[]>();
   #client?: V2Client;
   #shells = new Map<string, LiveShell>();
+  #shellLookups = new Map<
+    string,
+    { session: string; event: V2Event; controller: AbortController }
+  >();
+  #releaseShellLookups(id?: string): void {
+    for (const [key, work] of this.#shellLookups) {
+      if (id !== undefined && work.session !== id) continue;
+      this.#shellLookups.delete(key);
+      work.controller.abort();
+    }
+  }
   #projected = new Map<
     string,
     { shells: Map<string, string> }
@@ -750,7 +763,7 @@ export class Transcript {
       replyTo,
       ...(nativeParent ? { nativeParent } : {}),
     };
-    if (nativeParent) baseline?.contexts.set(messageID, result);
+    if (nativeParent) this.#context(baseline, messageID, result);
     return result;
   }
   #causalEvent(id: string, event: ContentOp): ContentOp {
@@ -839,6 +852,15 @@ export class Transcript {
       MESSAGE_PAGE_SIZE,
     ]);
   }
+  #context(
+    baseline: Baseline | undefined,
+    id: string,
+    context: MessageContext,
+  ): void {
+    if (!baseline) return;
+    baseline.contexts.set(id, context);
+    baseline.order = Math.max(baseline.order ?? 0, context.order);
+  }
   #acceptFacts(baseline: Baseline, facts: TranscriptFacts): void {
     if (baseline.source && baseline.source !== facts.source) {
       this.invalidate(ids.encode(baseline.raw.id));
@@ -868,7 +890,7 @@ export class Transcript {
       const accepted = nativeParent
         ? { ...context, replyTo: nativeParent, nativeParent }
         : context;
-      baseline.contexts.set(id, accepted);
+      this.#context(baseline, id, accepted);
       if (live && accepted.replyTo && (!live.context.replyTo || nativeParent)) {
         live.context = {
           ...live.context,
@@ -935,6 +957,7 @@ export class Transcript {
     }
   }
   release(id?: string, retainLive = false): void {
+    this.#releaseShellLookups(id);
     this.#releaseHistory(id);
     this.colors?.release(id);
     this.#cancelBackfills(id);
@@ -980,6 +1003,7 @@ export class Transcript {
     if (id) this.options.digest?.release(`v2-prefetch:${id}`);
   }
   invalidate(id?: string, retain = false): void {
+    this.#releaseShellLookups(id);
     this.#releaseHistory(id);
     this.#cancelBackfills(id);
     this.changed(id);
@@ -1028,6 +1052,7 @@ export class Transcript {
     }
   }
   disconnect(): void {
+    this.#releaseShellLookups();
     this.#releaseHistory();
     // Undelivered events are missed by contract; watermarks are per connection.
     // Unresolved observations keep their probed (or clock) position.
@@ -1832,7 +1857,7 @@ export class Transcript {
         turn.summary = summaries[turnID];
       }
       signal.throwIfAborted();
-      if (!snapshot && !token) this.#seedHistory(id, nativeItems.at(-1)?.id);
+      if (!snapshot && !token) this.#seedHistory(id, page.items.at(-1)?.id);
       this.#next(id, owner, page.next);
       return result;
     } finally {
@@ -2320,8 +2345,7 @@ export class Transcript {
     const baseline = this.#baselines.get(id);
     // API pages order by native clocks; their live counters are page-local.
     const order = baseline?.source?.startsWith("api")
-      ? Math.max(0, ...[...baseline.contexts.values()].map((c) => c.order)) +
-        0.5
+      ? (baseline.order ?? 0) + 0.5
       : positionOrder(position);
     this.#publish(id, {
       op: "message.upsert",
@@ -2335,6 +2359,122 @@ export class Transcript {
     this.#watermarks.delete(id);
     await this.requests.remove(id);
     this.release(id);
+  }
+  #emitShell(
+    id: string,
+    nativeID: string,
+    event: V2Event,
+    context: MessageContext,
+    found?: Extract<NativeMessage, { type: "shell" }>,
+  ): void {
+    const shell = record(event.data.shell),
+      previous = this.#shells.get(String(shell.id));
+    if (event.type.endsWith("ended")) {
+      previous?.controller.abort();
+      this.#shells.delete(String(shell.id));
+    }
+    let raw = found ?? {
+      id: nativeID,
+      type: "shell",
+      shellID: shell.id,
+      command: shell.command,
+      status: shell.status,
+      metadata: previous?.raw.metadata ??
+        (record(shell.metadata).background === true
+          ? { ...event.metadata, background: true }
+          : event.metadata),
+      time: {
+        created:
+          (previous?.raw.time.created ?? millis(record(shell.time).started)) ||
+          event.created || Date.now(),
+        ...(event.type.endsWith("ended")
+          ? { completed: event.created ?? Date.now() }
+          : {}),
+      },
+      ...(event.data.output ? { output: event.data.output } : {}),
+      exit: shell.exit,
+    } as Extract<NativeMessage, { type: "shell" }>;
+    if (
+      found && event.type.endsWith("ended") &&
+      found.time.completed === undefined
+    ) {
+      raw = {
+        ...found,
+        status: shell.status as typeof found.status,
+        time: { ...found.time, completed: event.created ?? Date.now() },
+        ...(event.data.output
+          ? { output: event.data.output as typeof found.output }
+          : {}),
+        ...(typeof shell.exit === "number" ? { exit: shell.exit } : {}),
+      };
+    }
+    const message = this.#map(raw, id, context);
+    if (message) this.#publish(id, { op: "message.upsert", message });
+    this.changed(id);
+  }
+  #findShell(id: string, shellID: string, event: V2Event): void {
+    const key = `${id}/${shellID}`, previous = this.#shellLookups.get(key);
+    if (previous) {
+      previous.event = event;
+      return;
+    }
+    const controller = new AbortController(),
+      work = { session: id, event, controller };
+    this.#shellLookups.set(key, work);
+    const signal = AbortSignal.any([
+      controller.signal,
+      this.#lifetime.signal,
+      this.reader.client().signal,
+    ]);
+    void this.#own(
+      (async () => {
+        let cursor: string | undefined;
+        do {
+          const page = await this.reader.page(
+            id,
+            SCAN_ROWS,
+            cursor,
+            signal,
+            "shell",
+          );
+          signal.throwIfAborted();
+          const raw = page.items.find((
+            m,
+          ): m is Extract<NativeMessage, { type: "shell" }> =>
+            m.type === "shell" && m.shellID === shellID
+          );
+          if (raw) {
+            const facts = await this.#facts({
+              sessionID: id,
+              messages: [raw.id],
+            }, signal);
+            signal.throwIfAborted();
+            const context = facts.contexts[raw.id];
+            if (!context) {
+              this.#repairHistory(id);
+              return;
+            }
+            this.#emitShell(id, raw.id, work.event, context, raw);
+            return;
+          }
+          cursor = page.next;
+          // A shell lookup releases every bounded page and yields between chunks.
+          if (cursor) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          }
+        } while (cursor);
+        this.#repairHistory(id);
+      })().catch((error) => {
+        if (!signal.aborted) {
+          this.options.diagnostic(error);
+          this.#repairHistory(id);
+        }
+      }).finally(() => {
+        if (this.#shellLookups.get(key) === work) {
+          this.#shellLookups.delete(key);
+        }
+      }),
+    );
   }
   async event(event: V2Event): Promise<void> {
     try {
@@ -2495,14 +2635,11 @@ export class Transcript {
       if (existing && !admitted) return existing;
       const context = {
         order: baseline?.source?.startsWith("api")
-          ? Math.max(
-            0,
-            ...[...baseline.contexts.values()].map((c) => c.order),
-          ) + 1
+          ? (baseline.order ?? 0) + 1
           : event.durable?.seq ?? ++this.#revisions,
         replyTo: baseline?.prompt?.id,
       };
-      baseline?.contexts.set(messageID, context);
+      this.#context(baseline, messageID, context);
       return context;
     };
     if (
@@ -2556,63 +2693,13 @@ export class Transcript {
         this.#repairHistory(id);
         return;
       }
-      let nativeID = this.#projected.get(id)?.shells.get(shell.id) ??
+      const nativeID = this.#projected.get(id)?.shells.get(shell.id) ??
         (event.type.endsWith("started") ? sourceID : undefined);
-      let raw: Extract<NativeMessage, { type: "shell" }> | undefined;
       if (!nativeID) {
-        let cursor: string | undefined;
-        do {
-          const page = await this.reader.page(
-            id,
-            SCAN_ROWS,
-            cursor,
-            this.#lifetime.signal,
-            "shell",
-          );
-          raw = page.items.find((
-            m,
-          ): m is Extract<NativeMessage, { type: "shell" }> =>
-            m.type === "shell" && m.shellID === shell.id
-          );
-          if (raw) {
-            nativeID = raw.id;
-            break;
-          }
-          cursor = page.next;
-        } while (cursor);
-      }
-      if (!nativeID) {
-        this.#repairHistory(id);
+        this.#findShell(id, shell.id, event);
         return;
       }
-      const previous = this.#shells.get(shell.id);
-      if (event.type.endsWith("ended")) {
-        previous?.controller.abort();
-        this.#shells.delete(shell.id);
-      }
-      raw ??= {
-        id: nativeID,
-        type: "shell",
-        shellID: shell.id,
-        command: shell.command,
-        status: shell.status,
-        metadata: previous?.raw.metadata ??
-          (record(shell.metadata).background === true
-            ? { ...event.metadata, background: true }
-            : event.metadata),
-        time: {
-          created: previous?.raw.time.created ??
-            millis(record(shell.time).started) ?? event.created ?? Date.now(),
-          ...(event.type.endsWith("ended")
-            ? { completed: event.created ?? Date.now() }
-            : {}),
-        },
-        ...(d.output ? { output: d.output } : {}),
-        exit: shell.exit,
-      } as Extract<NativeMessage, { type: "shell" }>;
-      const message = this.#map(raw, id, contextFor(nativeID));
-      if (message) this.#publish(id, { op: "message.upsert", message });
-      this.changed(id);
+      this.#emitShell(id, nativeID, event, contextFor(nativeID));
       return;
     }
     if (event.type.startsWith("session.compaction.") && sourceID) {
@@ -2824,10 +2911,7 @@ export class Transcript {
             messageID,
             existing?.context ?? baseline?.contexts.get(messageID) ?? {
               order: baseline?.source?.startsWith("api")
-                ? Math.max(
-                  0,
-                  ...[...baseline.contexts.values()].map((c) => c.order),
-                ) + 1
+                ? (baseline.order ?? 0) + 1
                 : event.durable?.seq ?? ++this.#revisions,
             },
             text(d.parentID) ??
@@ -2839,7 +2923,7 @@ export class Transcript {
           ),
           terminal: undefined,
         };
-      baseline?.contexts.set(messageID, context);
+      this.#context(baseline, messageID, context);
       this.#live.set(messageID, { session: id, raw, context });
       this.buffers.beginReply(id, messageID);
       this.#publish(id, {

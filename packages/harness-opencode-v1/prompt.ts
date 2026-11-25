@@ -31,7 +31,7 @@ export function prompt(
       const dir = await directory.resolve(input.sessionID);
       const parts = await mapPromptParts(input.parts, dir, operation, policy);
       const origin = operation?.key.origin;
-      const messageID = submissionID();
+      const messageID = input.messageID ?? submissionID();
       if (submitted && origin) submitted(input.sessionID, messageID, origin);
       await client.request(
         `/session/${

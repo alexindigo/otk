@@ -3,7 +3,7 @@ import "./SessionError.css" with { type: "text" };
 import { createMemo, Show } from "solid-js";
 import { sessionErrorObservation, type SessionErrorState } from "@otk/protocol";
 import { placeFailure, sessionFailure } from "@otk/client";
-import FailureContent from "./FailureContent.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 
 export default function SessionError(
   props: {
@@ -43,20 +43,7 @@ export default function SessionError(
         role={feedback()?.kind === "error" ? "alert" : "status"}
         data-error-revision={props.state?.revision}
       >
-        <p
-          class={["otk-session-error-message", {
-            "otk-error": feedback()?.kind === "error",
-          }]}
-        >
-          {feedback()?.failure
-            ? (
-              <FailureContent
-                failure={feedback()!.failure!}
-                onReveal={props.onReveal}
-              />
-            )
-            : feedback()?.text}
-        </p>
+        <FeedbackStatus feedback={feedback()} onReveal={props.onReveal} />
       </section>
     </Show>
   );

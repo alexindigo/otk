@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ComposerNotice.css" with { type: "text" };
-import type { Element } from "solid-js";
+import { type Element, Show } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 /** Shared joined notice frame; content and actions belong to its consumer. */
@@ -49,8 +49,10 @@ export function ComposerNoticeRow(props: {
         : "false"}
       {...native.attributes}
     >
-      <span class="otk-composer-notice-icon">{props.icon}</span>
-      <span class="otk-composer-notice-content">{props.children}</span>
+      <Show when={props.icon}>
+        <span class="otk-composer-notice-icon">{props.icon}</span>
+      </Show>
+      <div class="otk-composer-notice-content">{props.children}</div>
       {props.trailing}
     </Control>
   );

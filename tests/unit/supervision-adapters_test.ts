@@ -121,7 +121,10 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
       1,
     );
     assertEquals(
-      lamp(),
+      await waitFor(
+        () => Promise.resolve(lamp()),
+        (value) => value === "finishedUnseen",
+      ),
       "finishedUnseen",
       "a scoped terminal is evidence even when its start was not observed",
     );
@@ -138,7 +141,13 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
       new AbortController().signal,
       1,
     );
-    assertEquals(lamp(), "working");
+    assertEquals(
+      await waitFor(
+        () => Promise.resolve(lamp()),
+        (value) => value === "working",
+      ),
+      "working",
+    );
     native.time.idle = 200;
     native.outcome = "failed";
     await adapter.stream.ports.event(
@@ -155,7 +164,10 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
       1,
     );
     assertEquals(
-      lamp(),
+      await waitFor(
+        () => Promise.resolve(lamp()),
+        (value) => value === "finishedUnseen",
+      ),
       "finishedUnseen",
       "a matching terminal cannot remain working during native cleanup",
     );
@@ -177,7 +189,11 @@ test("V2 stale work stops counting, metadata cannot revive clocks, and shutdown 
       new AbortController().signal,
       1,
     );
-    assertEquals(lamp(), "none", "shutdown loses continuity, not a terminal");
+    assertEquals(
+      await waitFor(() => Promise.resolve(lamp()), (value) => value === "none"),
+      "none",
+      "shutdown loses continuity, not a terminal",
+    );
     assertEquals(index.getMetadata(id)?.activity?.terminal, 200);
     adapter.stream.ports.disconnected(1);
     assertEquals(index.getMetadata(id)?.activity?.work?.fresh, false);

@@ -33,7 +33,7 @@ export default function TurnUsage(props: {
     if (!value) {
       return props.summary?.state === "unavailable"
         ? "Usage unavailable"
-        : "Digesting\u2026";
+        : "Digesting...";
     }
     const tokens = reportedTokens(value.tokens);
     return `${countLabel(value.calls, "model call")} · ${

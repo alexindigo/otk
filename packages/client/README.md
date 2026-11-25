@@ -1,8 +1,19 @@
 # @otk/client
 
-`SessionActions` owns source-free, session-bound submission receipts. Native
-acceptance carries a message identity; only the canonical transcript can admit
-it, and only the viewport can report its presentation. The ten-second
+`createTranscriptProjection` owns local sends and native messages in the same
+entry collection. Normal Send captures its request identity and native message
+ID together before preparation, publishes the ordinary user message immediately,
+then commits that entry on native identity evidence, including evidence
+preceding acknowledgement. Pending and failed entries survive reconnect and OTK
+process replacement in the open browser; no prompt payload is persisted in
+server request receipts. Cooling releases committed local bindings, while
+unresolved input stays owned by its entry. The ten-second observation bound
+starts at Send. Timeout Retry only reacquires existing source; definitive
+refusal offers an explicit send retry.
+
+`SessionActions` also owns source-free, session-bound submission receipts.
+Native acceptance carries a message identity; only the canonical transcript can
+admit it, and only the viewport can report its presentation. The ten-second
 observation deadline is not a mutation timeout: recovery reloads canonical
 messages and never resends input. Own sends switch the existing viewport to
 follow; canonical append revisions expose new messages even near the tail.
@@ -800,9 +811,9 @@ records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
 that shared classification to queue admission and UI presentation. Part-owned
 record settlement updates the same queue; no component owns a second queue.
 Mixed replies retain assistant metadata independently of final source position.
-That metadata includes producer-owned `outcomeTime`; message presentation carries
-it independently of digest working time, including when a failed call has no
-streamed interval. Saved presentation preserves the same native instant.
+That metadata includes producer-owned `outcomeTime`; message presentation
+carries it independently of digest working time, including when a failed call
+has no streamed interval. Saved presentation preserves the same native instant.
 Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay
@@ -823,21 +834,22 @@ The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
 presentation revisions. The first background record mints its frame even while
 queued. Settlement changes child presentation, never the root partition. Folded
-frames show the producer-authored failure count in error tone and only their
-chronological breakouts. They never partition successful stretches into
-additional disclosure rows; all children remain in the one frame's details.
-Pending, active, blocked, unknown and failed records break out inside that frame
-in source order, then rejoin its compact children when settled. Native plugins
-supply opaque summary kinds and singular/plural nouns; headings never classify
-records. Records without producer-owned summary facts remain visible breakouts.
-Producer-declared footer completions retain their original source and reveal
-paths. A success-only interval is silent until explicitly disclosed through the
-preceding reply footer or revealed; mixed intervals include those completion
-facts in their summary and original chronology. The existing transcript
-interaction owner retains all disclosure choices and opens reveal ancestors.
-Measurements use presentation revisions separately from logical row identity, so
-a topology or streamed-content revision cannot borrow an old extent, including
-when an unmounted row was previously empty.
+frames show a client-worded failure count and only their chronological
+breakouts. They never partition successful stretches into additional disclosure
+rows; all children remain in the one frame's details. Pending, active, blocked,
+unknown and failed records break out inside that frame in source order, then
+rejoin its compact children when settled. Native plugins supply opaque summary
+kinds and singular/plural nouns; headings never classify records. Records
+without producer-owned summary facts remain visible breakouts. Producer-declared
+footer completions retain their original source and reveal paths. A success-only
+interval is silent until explicitly disclosed through the preceding reply footer
+or revealed; mixed intervals retain those completion facts in their original
+chronology, but not their summary. Failure counts do not borrow producer nouns
+and include failures without summary facts. The existing transcript interaction
+owner retains all disclosure choices and opens reveal ancestors. Measurements
+use presentation revisions separately from logical row identity, so a topology
+or streamed-content revision cannot borrow an old extent, including when an
+unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later

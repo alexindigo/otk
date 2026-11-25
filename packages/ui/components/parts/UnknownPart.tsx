@@ -19,7 +19,11 @@ import {
   unknownPartSource,
 } from "./unknown-part.ts";
 import NativeSource from "./NativeSource.tsx";
-import { presentFailure } from "@otk/client";
+import {
+  errorFeedback,
+  GENERIC_FAILURE_REASON,
+  presentFailure,
+} from "@otk/client";
 import FailureContent from "../FailureContent.tsx";
 import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
@@ -30,7 +34,14 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   const identity = useContentIdentity();
   const failure = () => {
     const value = unknownPartFailure(props.part, identity);
-    return value ? presentFailure(value, "record").failure : undefined;
+    return value
+      ? presentFailure(value, "record").failure
+      : activity()?.tone === "error"
+      ? errorFeedback(activity()?.detail || GENERIC_FAILURE_REASON, {
+        actionLabel: activity()?.title,
+        target: identity,
+      })?.failure
+      : undefined;
   };
   const activity = () =>
     props.part.kind === "external" ? props.part.activity : undefined;
@@ -56,7 +67,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       reference());
   const label = () => {
     const title = activity()?.title ?? `Unsupported part: ${name()}`;
-    return failure() ? `${title}: ${failure()!.reason}` : title;
+    return title;
   };
   // A state already presented by the heading or a parameter is not repeated.
   const state = () => {
@@ -78,7 +89,9 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       <span class="otk-tool-verb otk-control-label" title={label()}>
         {label()}
       </span>
-      <Show when={activity()?.detail}>
+      <Show
+        when={activity()?.detail && activity()?.detail !== failure()?.reason}
+      >
         <span
           class="otk-tool-brief otk-control-label otk-control-grow"
           title={activity()?.detail}
@@ -105,9 +118,13 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             outgoing={activity()?.direction === "outgoing" ? true : undefined}
             open={expanded()}
             onOpen={details() ? setExpanded : undefined}
-            feedback={failure()?.recovery
+            feedback={failure()
               ? () => (
-                <span class="otk-native-recovery">{failure()!.recovery}</span>
+                <FailureContent
+                  placement="record"
+                  failure={failure()!}
+                  time={props.failureTime}
+                />
               )
               : undefined}
             header={() => (
@@ -265,14 +282,14 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     >
       {(value) => (
         <section
-          class="otk-native-record otk-error"
+          class="otk-native-record"
           data-native-record={name()}
           role={value().value.facts?.outcome === "unknown" ||
               value().value.facts?.outcome === "unavailable"
             ? "status"
             : "alert"}
         >
-          <FailureContent failure={value()} />
+          <FailureContent failure={value()} time={props.failureTime} />
         </section>
       )}
     </Show>

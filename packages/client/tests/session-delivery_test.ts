@@ -7,6 +7,8 @@ import {
 import { createTranscriptProjection } from "../transcript-projection.ts";
 import type { TranscriptOwner } from "../transcript.ts";
 import type { PromptReceipt, UserMessage } from "@otk/protocol";
+import { RequestFailure } from "../failures.ts";
+import { pendingMessage } from "../pending-send.ts";
 
 function fixture() {
   const projection = createTranscriptProjection();
@@ -15,6 +17,10 @@ function fixture() {
   let serial = 0, reads = 0, pins = 0;
   const transcript = {
     projection,
+    send(value: import("../pending-send.ts").PendingSend) {
+      projection.send(value);
+      for (const listener of listeners) listener();
+    },
     state: { clock: { epoch: "content", seq: 2 } },
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -52,6 +58,7 @@ function fixture() {
   });
   return {
     owner,
+    projection,
     message(id: string) {
       const message: UserMessage = {
         id,
@@ -152,5 +159,135 @@ Deno.test("rejected native send leaves failure and draft settlement to the reque
   assertEquals(f.owner.state.receipts, []);
   assertEquals(f.counts().reads, 0);
   assertEquals(f.owner.state.follow, 1);
+  f.owner.stop();
+});
+
+Deno.test("pending input is visible before acknowledgement and commits by identity before result", async () => {
+  const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
+  const entry = {
+    intent: { clientID: "tab", key: "send-key", window: "window" },
+    message: pendingMessage("msg_local", "opcv2-root", [{
+      kind: "text",
+      text: "Sent now",
+    }]),
+    phase: "pending" as const,
+  };
+  const sending = f.owner.send(() => acknowledgement.promise, entry);
+  let duplicates = 0;
+  await f.owner.send(() => {
+    duplicates++;
+    return Promise.resolve(null);
+  }, entry);
+  assertEquals(duplicates, 0);
+  assertEquals(f.projection.state.replyIDs, ["send-key"]);
+  assertEquals(f.projection.entry("msg_local")?.send?.phase, "pending");
+  assertEquals(f.owner.state.receipts[0].phase, "submitted");
+  f.projection.replace([]); // reconnect/server restart replacement
+  assertEquals(f.projection.state.replyIDs, ["send-key"]);
+  f.message("msg_local");
+  f.owner.presented(["msg_local"]);
+  assertEquals(
+    f.projection.entry("msg_local")?.send?.phase,
+    "committed",
+  );
+  acknowledgement.resolve({ messageID: "msg_local", state: "accepted" });
+  await sending;
+  await f.owner.send(() => {
+    duplicates++;
+    return Promise.resolve(null);
+  }, entry);
+  assertEquals(duplicates, 0);
+  assertEquals(f.projection.state.replyIDs, ["send-key"]);
+  assertEquals(f.owner.state.receipts, []);
+  f.owner.stop();
+});
+
+Deno.test("unacknowledged send has bounded visible failure; Retry observes without another mutation", async () => {
+  const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
+  let sends = 0;
+  const sending = f.owner.send(() => {
+    sends++;
+    return acknowledgement.promise;
+  }, {
+    intent: { clientID: "tab", key: "send-key", window: "window" },
+    message: pendingMessage("msg_timeout", "opcv2-root", [{
+      kind: "text",
+      text: "Keep me",
+    }]),
+    phase: "pending",
+  });
+  f.expire();
+  const entry = f.projection.entry("msg_timeout")!.send!;
+  assertEquals(entry.phase, "failed");
+  assert(entry.feedback?.failure?.reason.includes("ten seconds"));
+  entry.feedback?.action?.run();
+  assertEquals(
+    f.projection.entry("msg_timeout")?.send?.phase,
+    "pending",
+  );
+  assertEquals(sends, 1);
+  f.message("msg_timeout");
+  acknowledgement.resolve({ messageID: "msg_timeout", state: "queued" });
+  await sending;
+  f.owner.stop();
+});
+
+Deno.test("a local pending body cannot satisfy native admission or suppress read-only recovery", async () => {
+  const f = fixture();
+  await f.owner.send(
+    () => Promise.resolve({ messageID: "msg_pending", state: "accepted" }),
+    {
+      intent: { clientID: "tab", key: "send-key", window: "window" },
+      message: pendingMessage("msg_pending", "opcv2-root", [{
+        kind: "text",
+        text: "Native source still missing",
+      }]),
+      phase: "pending",
+    },
+  );
+  assertEquals(f.counts().reads, 1);
+  assertEquals(f.owner.state.receipts[0].phase, "accepted");
+  f.message("different-native-identity");
+  assertEquals(f.projection.committed("msg_pending"), false);
+  f.expire();
+  assertEquals(f.projection.entry("msg_pending")?.send?.phase, "failed");
+  f.owner.stop();
+});
+
+Deno.test("definite failure retains the prompt and Retry action in that same entry", async () => {
+  const f = fixture();
+  let retries = 0;
+  await assertRejects(() =>
+    f.owner.send(() =>
+      Promise.reject(
+        new RequestFailure({
+          code: "native.refused",
+          retry: "new-intent",
+          diagnosticID: "refused",
+          facts: {
+            reason: "The selected model is unavailable.",
+            origin: "composer",
+            record: { messageID: "native-failure" },
+          },
+        }),
+      ), {
+      intent: { clientID: "tab", key: "send-key", window: "window" },
+      message: pendingMessage("msg_failure", "opcv2-root", [{
+        kind: "text",
+        text: "Retained",
+      }]),
+      phase: "pending",
+      retry: () => {
+        retries++;
+      },
+    })
+  );
+  const entry = f.projection.entry("msg_failure")!.send!;
+  assertEquals(entry.phase, "failed");
+  assert(entry.feedback?.failure?.reason.includes("selected model"));
+  assertEquals(entry.feedback?.failure?.reference, undefined);
+  entry.feedback?.action?.run();
+  assertEquals(retries, 1);
+  assertEquals(f.projection.state.replyIDs, ["send-key"]);
   f.owner.stop();
 });

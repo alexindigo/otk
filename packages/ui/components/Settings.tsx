@@ -6,6 +6,7 @@ import { For, Show } from "solid-js";
 import {
   type DiscoveryState,
   duration,
+  errorFeedback,
   LOCAL_SIDECAR,
   type SidecarState,
 } from "@otk/client";
@@ -13,6 +14,8 @@ import Form, { FormInput } from "./Form.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
+import ConnectionStatus from "./ConnectionStatus.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 export default function Settings(props: {
   sidecars: SidecarState[];
@@ -79,9 +82,7 @@ export default function Settings(props: {
                 </header>
                 <p>{sidecar().baseUrl || "Serving server · relative /api/"}</p>
                 <ConnectionBadge sidecar={sidecar()} />
-                <Show when={sidecar().error}>
-                  <p class="otk-error" role="alert">{sidecar().error}</p>
-                </Show>
+                <ConnectionStatus connection={sidecar()} />
                 <Show when={sidecar().status === "login required"}>
                   <div class="otk-sidecar-auth">
                     <Login
@@ -184,16 +185,18 @@ export default function Settings(props: {
                       <strong>{step().label}</strong>{" "}
                       <span>{duration(step().elapsedMs)}</span>
                       <Show when={step().result}>
-                        <p
-                          class={step().result?.kind === "error"
-                            ? "otk-error"
-                            : undefined}
-                          role={step().result?.kind === "error"
-                            ? "alert"
-                            : undefined}
+                        <Show
+                          when={step().result?.kind === "error"}
+                          fallback={<p>{step().result?.text}</p>}
                         >
-                          {step().result?.text}
-                        </p>
+                          <FeedbackStatus
+                            feedback={step().result?.feedback ??
+                              errorFeedback(step().result?.text, {
+                                actionLabel: step().label,
+                                target: { label: props.discovery?.target },
+                              })}
+                          />
+                        </Show>
                       </Show>
                     </li>
                   )}

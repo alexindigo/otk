@@ -3,12 +3,16 @@ import { isAssistantTerminal } from "@otk/protocol";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
+import { errorFeedback, replyErrorFeedback } from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import Clock from "./Clock.tsx";
+import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -51,6 +55,7 @@ function PartView(
     pending?: boolean;
     sourceID?: string;
     recordTime?: number;
+    failureTime?: number;
   },
 ) {
   const { parts } = useUiRegistries();
@@ -76,10 +81,11 @@ function PartView(
 }
 /** A stable keyed component boundary preserves source nodes during part updates. */
 function PartsView(
-  props: Omit<PartProps, "part" | "recordTime"> & {
+  props: Omit<PartProps, "part" | "recordTime" | "failureTime"> & {
     parts: Part[];
     sourceID?(part: Part): string;
     recordTime?(part: Part): number | undefined;
+    failureTime?(part: Part): number | undefined;
     tree?: boolean;
   },
 ) {
@@ -105,6 +111,7 @@ function PartsView(
             pending={props.pending}
             sourceID={props.sourceID?.(part())}
             recordTime={props.recordTime?.(part())}
+            failureTime={props.failureTime?.(part())}
           />
         </TreeItem>
       )}
@@ -142,11 +149,7 @@ function ReplyStart(props: {
           onOpen={props.onOpen}
         />
       </div>
-      <ChromeMeta>
-        <time datetime={date().toISOString()} title={date().toLocaleString()}>
-          {date().toLocaleTimeString()}
-        </time>
-      </ChromeMeta>
+      <Clock at={date().getTime()} />
     </header>
   );
 }
@@ -157,9 +160,13 @@ export default function Message(
     ownerID?: string;
     message: OtkMessage;
     sourceTime?(messageID: string): number | undefined;
+    sourceOutcomeTime?(
+      messageID: string,
+    ): import("@otk/protocol").OutcomeTime | undefined;
     segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
+    send?: import("@otk/client").TranscriptReply["send"];
     recovery?: "recovering" | "unavailable";
     onRetryRecovery?(): void;
     metadata?: import("@otk/protocol").AssistantMessage | null;
@@ -191,13 +198,22 @@ export default function Message(
   const { parts } = useUiRegistries();
   const layout = createMessageLayout();
   const sourceID = (part: Part) => layout.source(part.id) ?? props.message.id;
-  const recordTime = (part: Part) =>
-    props.message.role === "context"
+  const recordTime = (part: Part) => {
+    const record = parts.presentation(part, props.prefs).failure?.facts?.record;
+    if (record) {
+      return props.sourceTime?.(record.messageID) ??
+        (props.message.role === "context" &&
+            props.message.id === record.messageID
+          ? props.message.time.created
+          : undefined);
+    }
+    return props.message.role === "context"
       ? props.sourceTime?.(sourceID(part)) ??
         (sourceID(part) === props.message.id
           ? props.message.time.created
           : undefined)
       : undefined;
+  };
   const framing = createMemo(() =>
     layout.update(
       props.ownerID ?? props.message.id,
@@ -220,6 +236,18 @@ export default function Message(
     )
   );
   const frames = () => framing().frames;
+  const failureTime = (part: Part) => {
+    const id =
+      parts.presentation(part, props.prefs).failure?.facts?.record?.messageID ??
+        sourceID(part);
+    const time = props.sourceOutcomeTime?.(id) ??
+      (id === props.message.id && props.message.role !== "user"
+        ? props.message.outcomeTime
+        : undefined);
+    return time?.state === "known" && time.at !== outcomeClock()?.at
+      ? time.at
+      : undefined;
+  };
   const userBubble = () => framing().userBubble;
   const prompt = () => framing().prompt;
   const identity = () => ({
@@ -269,7 +297,7 @@ export default function Message(
       : undefined,
     lastID: props.lastID ?? props.message.id,
     completed: isAssistantTerminal(props.message),
-    queued: props.queued,
+    queued: props.queued || !!props.send && props.send.phase !== "committed",
   });
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
@@ -293,9 +321,16 @@ export default function Message(
     return time?.state === "unknown" ? time.reason : undefined;
   };
   const error = () =>
-    props.message.role === "assistant" && !props.message.interrupted
-      ? props.message.error?.message
-      : undefined;
+    replyErrorFeedback(
+      props.message,
+      frames().flatMap((frame) =>
+        frame.groups.flatMap((group) => group.parts).flatMap((part) => {
+          const failure = parts.presentation(part, props.prefs).failure;
+          return failure ? [failure] : [];
+        })
+      ),
+      identity(),
+    );
   return (
     <ContentIdentityProvider value={identity()}>
       <article
@@ -318,6 +353,8 @@ export default function Message(
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
+        data-send-state={props.send?.phase}
+        data-send-key={props.send?.intent.key}
         tabindex="-1"
       >
         <For each={frames()} keyed={(frame) => frame.id}>
@@ -375,6 +412,7 @@ export default function Message(
                           pending={props.pending}
                           sourceID={sourceID}
                           recordTime={recordTime}
+                          failureTime={failureTime}
                         />
                       </>
                     }
@@ -397,6 +435,7 @@ export default function Message(
                           pending={props.pending}
                           sourceID={sourceID}
                           recordTime={recordTime}
+                          failureTime={failureTime}
                         />
                       )}
                     />
@@ -410,21 +449,19 @@ export default function Message(
           )}
         </For>
         <Show when={props.recovery}>
-          <p role="status" class="otk-response-recovery">
-            {props.recovery === "unavailable"
-              ? "Response refresh unavailable."
-              : "Refreshing response…"}
-            <Show
-              when={props.recovery === "unavailable" && props.onRetryRecovery}
-            >
-              <button
-                type="button"
-                onClick={() => props.onRetryRecovery?.()}
-              >
-                Retry response
-              </button>
-            </Show>
-          </p>
+          <FeedbackStatus
+            feedback={props.recovery === "unavailable"
+              ? {
+                ...errorFeedback("Response refresh unavailable.", {
+                  actionLabel: "Refreshing response",
+                  target: identity(),
+                })!,
+                action: props.onRetryRecovery
+                  ? { label: "Retry response", run: props.onRetryRecovery }
+                  : undefined,
+              }
+              : { kind: "pending", text: "Refreshing response..." }}
+          />
         </Show>
         <Show when={prompt()}>
           <footer
@@ -439,11 +476,22 @@ export default function Message(
               >
                 {new Date(props.message.time.created).toLocaleString()}
               </time>
-              <Show when={props.queued}>
+              <Show when={props.send?.phase === "pending"}>
+                <ChromeMeta class="otk-send-meta">
+                  <ActivityIndicator small label="Sending" />Sending
+                </ChromeMeta>
+              </Show>
+              <Show
+                when={props.queued &&
+                  (!props.send || props.send.phase === "committed")}
+              >
                 <span class="otk-queued">Queued</span>
               </Show>
             </span>
-            <Show when={!props.readOnly}>
+            <Show
+              when={!props.readOnly &&
+                (!props.send || props.send.phase === "committed")}
+            >
               <MessageActions
                 kind="prompt"
                 revealed={revealed()}
@@ -453,6 +501,12 @@ export default function Message(
               />
             </Show>
           </footer>
+          <Show when={props.send?.phase === "failed"}>
+            <FeedbackStatus
+              class="otk-send-failure"
+              feedback={props.send?.feedback}
+            />
+          </Show>
         </Show>
         <Show when={assistant()}>
           {(message) => (
@@ -480,22 +534,12 @@ export default function Message(
                         {(time) => (
                           <>
                             <Show when={outcomeClock()}>
-                              {(outcome) => {
-                                const date = () => new Date(outcome().at);
-                                return (
-                                  <time
-                                    datetime={date().toISOString()}
-                                    title={date().toLocaleString()}
-                                  >
-                                    {date().toLocaleString()}
-                                  </time>
-                                );
-                              }}
+                              {(outcome) => <Clock at={outcome().at} />}
                             </Show>
                             <Show when={outcomeUnknown()}>
                               {(reason) => (
                                 <span class="otk-turn-time" title={reason()}>
-                                  Time unknown - not recorded
+                                  No time recorded
                                 </span>
                               )}
                             </Show>
@@ -552,7 +596,9 @@ export default function Message(
           )}
         </Show>
         <Show when={error()}>
-          <p class="otk-error" role="alert">{error()}</p>
+          <FeedbackStatus
+            feedback={error()}
+          />
         </Show>
       </article>
     </ContentIdentityProvider>

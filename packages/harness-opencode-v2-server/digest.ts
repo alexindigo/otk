@@ -1008,7 +1008,30 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         return this.transcript.sequence(input.sessionID, input.messageID);
       },
       "opcv2.transcript.head": async (input, signal) => {
-        await this.#ensure(input.sessionID, signal, false);
+        const connection = this.#connection;
+        const { client, native } = await this.source.prepare(signal);
+        this.source.check(signal);
+        if (connection !== this.#connection) {
+          throw new Error("V2 transcript source changed");
+        }
+        const cached = this.#sessionProofs.get(input.sessionID);
+        const row = native && cached?.native === native
+          ? native.db.prepare(
+            "SELECT directory,project_id FROM session_v2 WHERE id=?",
+          ).get(ids.decode(input.sessionID))
+          : undefined;
+        if (
+          row && cached && native &&
+          row.directory === cached.raw.location.directory &&
+          row.project_id === cached.raw.projectID
+        ) {
+          // Message writes change data_version, not session/source identity.
+          // The frequent completeness witness needs only these keyed scalars.
+          this.#client = client;
+          this.#provenNative = native;
+          this.#source =
+            `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
+        } else await this.#ensure(input.sessionID, signal, false);
         return this.transcript.head(input.sessionID, input.cutoff);
       },
       "opcv2.message.prefetch": async (input, signal) => {
@@ -1135,12 +1158,16 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     }
     if (this.#provenNative) {
       const proven = { ...raw, activity: native.facts([id])[0]?.activity };
-      if (native.dataVersion() === version) {
-        if (this.#sessionProofs.size >= SCAN_ROWS) {
-          this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
-        }
-        this.#sessionProofs.set(id, { native, version: version!, raw: proven });
+      if (this.#sessionProofs.size >= SCAN_ROWS) {
+        this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
       }
+      // Header/body reads still require the exact data-version proof above;
+      // head checks can independently revalidate the saved identity by key.
+      this.#sessionProofs.set(id, {
+        native,
+        version: native.dataVersion() === version ? version! : -1,
+        raw: proven,
+      });
       return proven;
     }
     return activity ? await withSessionActivity(client, raw, signal) : raw;

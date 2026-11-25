@@ -52,7 +52,11 @@ export interface ShellState {
 }
 /** Browser capabilities and split reactive effects bind the framework-free owners. */
 export function createShellState(
-  o: { api: URL; policy?: import("@otk/protocol").ClientRequestPolicy },
+  o: {
+    api: URL;
+    policy?: import("@otk/protocol").ClientRequestPolicy;
+    promptBlocks?(text: string): import("@otk/protocol").Block[];
+  },
 ): ShellState {
   const index = createIndex();
   const storage = browserStorage();
@@ -104,6 +108,7 @@ export function createShellState(
     attachments: (parts, origin) => actions.attachments(parts, origin),
   });
   const actions = createSessionActions({
+    promptBlocks: o.promptBlocks,
     resources,
     session,
     current,

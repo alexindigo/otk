@@ -77,7 +77,11 @@ export default function Sidebar(
             <section class="otk-sidecar-group" data-sidecar={sidecar().id}>
               <h2>{sidecar().label}</h2>
               <ConnectionBadge sidecar={sidecar()} />
-              <ConnectionStatus connection={sidecar()} />
+              <ConnectionStatus
+                connection={sidecar()}
+                compact
+                onSettings={props.onSettings}
+              />
               <Show
                 when={sidecar().status === "login required" ||
                   sidecar().status === "setup required"}

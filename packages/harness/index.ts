@@ -20,6 +20,18 @@ function immutable<T extends object>(value: T): T {
 
 /** One authoritative metadata index, shared by the harness and its consumer. */
 export class SessionIndex {
+  #topologyListeners = new Set<(id: string, parentID?: string) => void>();
+  observeTopology(
+    listener: (id: string, parentID?: string) => void,
+  ): () => void {
+    this.#topologyListeners.add(listener);
+    return () => {
+      this.#topologyListeners.delete(listener);
+    };
+  }
+  #topology(id: string, parentID?: string): void {
+    for (const listener of this.#topologyListeners) listener(id, parentID);
+  }
   #digestListeners = new Set<(id: string) => void>();
   observeDigest(listener: (id: string) => void): () => void {
     this.#digestListeners.add(listener);
@@ -124,6 +136,14 @@ export class SessionIndex {
       this.#edge(entry.id, entry.parentID);
     }
     this.resetPublished([...this.#entries.values()], previous);
+    for (const [id, entry] of this.#entries) {
+      if (!previous.has(id) || previous.get(id)?.parentID !== entry.parentID) {
+        this.#topology(id, entry.parentID);
+      }
+    }
+    for (const id of previous.keys()) {
+      if (!this.#entries.has(id)) this.#topology(id);
+    }
   }
   protected resetPublished(
     _entries: IndexEntry[],
@@ -161,6 +181,9 @@ export class SessionIndex {
     this.#entries.set(entry.id, copy);
     this.#edge(entry.id, entry.parentID);
     this.published(copy, previous);
+    if (!previous || previous.parentID !== copy.parentID) {
+      this.#topology(entry.id, copy.parentID);
+    }
   }
   applyDigest(delta: DigestIndexDelta): boolean {
     const entry = this.#entries.get(delta.id);
@@ -210,5 +233,6 @@ export class SessionIndex {
     this.#edge(id, this.#entries.get(id)?.parentID, true);
     this.#entries.delete(id);
     this.removed(id);
+    this.#topology(id);
   }
 }

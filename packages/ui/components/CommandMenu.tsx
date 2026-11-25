@@ -190,6 +190,7 @@ export default function CommandMenu(props: {
         <Show when={error() && !props.onError}>
           <FeedbackStatus
             id={errorId}
+            compact
             feedback={errorFeedback(error()!.value)}
           />
         </Show>

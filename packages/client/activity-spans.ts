@@ -19,7 +19,7 @@ export interface ActivityGroup {
   interval?: boolean;
   silent?: boolean;
   breakouts?: string[];
-  /** Producer-authored failure counts, separate from normal meta copy. */
+  /** Client-owned failure wording, separate from producer summary nouns. */
   failureTitle?: string;
 }
 export interface RecordProjection {
@@ -58,16 +58,22 @@ function summary(
   replies: Readonly<Record<string, TranscriptReply>>,
   failures = false,
 ): string {
+  if (failures) {
+    const count = ids.filter((id) => {
+      const reply = replies[id], part = reply.message.parts[0];
+      return activity(reply)?.tone === "error" ||
+        part.kind === "external" && !!part.failure;
+    }).length;
+    return count ? `${count} failed` : "";
+  }
   const counts = new Map<
     string,
     { noun: string; plural: string; count: number }
   >();
   for (const id of ids) {
     const reply = replies[id], value = activity(reply);
-    const part = reply.message.parts[0];
-    const failed = value?.tone === "error" ||
-      part.kind === "external" && !!part.failure;
-    const fact = (failures ? failed : foldable(reply)) && value?.summary;
+    const fact = foldable(reply) && value?.completion?.placement !== "footer" &&
+      value?.summary;
     if (!fact) continue;
     const count = counts.get(fact.kind) ?? { ...fact, count: 0 };
     count.count++;
