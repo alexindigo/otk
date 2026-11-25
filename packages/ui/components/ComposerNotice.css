@@ -29,3 +29,12 @@
   inline-size: var(--control-size);
   block-size: var(--control-size);
 }
+.otk-composer-refusal {
+  display: grid;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--otk-bg);
+  color: var(--otk-fg);
+}
