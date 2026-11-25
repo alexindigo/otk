@@ -54,10 +54,16 @@ export interface StorageStatus {
   /** A failure may have interrupted observation; recovery cannot certify that interval. */
   gap: number;
 }
+export interface StorageConnection {
+  failure(): StorageFailure | undefined;
+  failed(failure: StorageFailure): void;
+  recovered(): void;
+  close(): void;
+}
 /** One owner per process. Worker connections report their owner across the bridge. */
 export class StorageAvailability {
-  #failures = new Map<string, StorageFailure>();
-  #probes = new Map<string, () => void>();
+  #failures = new Map<string | symbol, StorageFailure>();
+  #probes = new Map<symbol, () => void>();
   #listeners = new Set<(status: StorageStatus) => void>();
   #gap = 0;
   status(): StorageStatus {
@@ -92,12 +98,15 @@ export class StorageAvailability {
     }
   }
   failed(failure: StorageFailure): void {
-    const previous = this.#failures.get(failure.database);
+    this.#failed(failure.database, failure);
+  }
+  #failed(source: string | symbol, failure: StorageFailure): void {
+    const previous = this.#failures.get(source);
     if (
       previous && (previous.problem === "full" || failure.problem !== "full")
     ) return;
     if (!this.#failures.size) this.#gap++;
-    this.#failures.set(failure.database, failure);
+    this.#failures.set(source, failure);
     this.#publish();
   }
   remote(database: string, status: StorageStatus): void {
@@ -110,29 +119,44 @@ export class StorageAvailability {
           undefined,
         ),
       );
-    } else this.recovered(database);
+    } else this.#recovered(database);
   }
-  recovered(database: string): void {
-    if (this.#failures.delete(database)) this.#publish();
+  #recovered(source: string | symbol): void {
+    if (this.#failures.delete(source)) this.#publish();
   }
   failure(database: string): StorageFailure | undefined {
     return this.#failures.get(database);
   }
-  register(database: string, probe: () => void): () => void {
-    this.#probes.set(database, probe);
-    return () => {
-      this.#probes.delete(database);
-      this.recovered(database);
+  register(database: string, probe: () => void): StorageConnection {
+    const source = Symbol(database);
+    this.#probes.set(source, probe);
+    // An open/setup failure had no live connection to probe. A successful
+    // replacement now owns proving a commit, without clearing the gap yet.
+    const startup = this.#failures.get(database);
+    if (startup) {
+      this.#failures.set(source, startup);
+      this.#failures.delete(database);
+    }
+    return {
+      failure: () => this.#failures.get(source),
+      failed: (failure) => {
+        if (this.#probes.has(source)) this.#failed(source, failure);
+      },
+      recovered: () => this.#recovered(source),
+      close: () => {
+        this.#probes.delete(source);
+        this.#recovered(source);
+      },
     };
   }
   /** At most one tiny synchronous transaction per failed connection per tick. */
   probe(): void {
-    for (const database of [...this.#failures.keys()]) {
-      const probe = this.#probes.get(database);
+    for (const source of [...this.#failures.keys()]) {
+      const probe = typeof source === "symbol" && this.#probes.get(source);
       if (!probe) continue;
       try {
         probe();
-        this.recovered(database);
+        this.#recovered(source);
       } catch (error) {
         if (!storageProblem(error)) {
           console.error("Storage recovery probe failed", error);
