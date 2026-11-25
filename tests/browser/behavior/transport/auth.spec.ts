@@ -16,7 +16,9 @@ test(
       "Sign-in method: Password",
     );
     await expect(page.locator("input[name=type]")).toHaveValue("password");
-    await expect(page.locator(".otk-app [disabled]")).toHaveCount(0);
+    // The sign-in form must be interactive even while D71 history arrows are
+    // disabled on the fresh tab behind it.
+    await expect(page.locator(".otk-auth-view [disabled]")).toHaveCount(0);
     await page.locator("input[name=username]").fill("geometry-user");
     await page.locator("input[name=password]").fill("geometry-password");
     await page.locator(".otk-auth-view button[type=submit]").click();
