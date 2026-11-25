@@ -48,6 +48,8 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     };
     await expect(input).toHaveValue("");
     await blocked("Write a message");
+    await send.focus();
+    await expect(send).toBeFocused();
     const original = await send.elementHandle();
     const emptyBox = await send.boundingBox();
     await capture("empty");
@@ -94,14 +96,31 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     );
     await input.fill("Start a running turn");
     await send.click();
-    await expect(send).toHaveAttribute("aria-description", "Sending");
+    const stop = page.getByRole("button", { name: "Stop", exact: true });
+    await expect(stop).toBeEnabled();
+    await expect(stop).toBeFocused();
+    expect(await stop.boundingBox()).toEqual(emptyBox);
+    const gaps = await stop.evaluate((node) => {
+      const button = node.getBoundingClientRect();
+      const icon = node.querySelector("rect")!.getBoundingClientRect();
+      return [
+        icon.left - button.left,
+        button.right - icon.right,
+        icon.top - button.top,
+        button.bottom - icon.bottom,
+      ];
+    });
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(1);
+    await expect(page.getByLabel("Message destination")).toBeInViewport();
+    await capture("stop");
     const prompts = () =>
       frames.sent.filter(({ frame }) => frame.method === "session.prompt");
     // Preparation precedes the wire; extra RPCs are measured after the original.
     await expect.poll(() => prompts().length).toBe(1);
-    await blocked("Sending");
+    await input.press("Enter");
+    expect(prompts()).toHaveLength(1);
     frames.release();
-    await expect(send).not.toHaveAttribute("aria-description", "Sending");
+    await expect(stop).toBeEnabled();
     // Enter while sending is consumed; the sent draft clears.
     await expect(input).toHaveValue("");
     await expect(page.locator(`[data-session="${target.id}"]`)).toHaveAttribute(

@@ -132,7 +132,8 @@ export interface TranscriptProjection {
   readonly state: TranscriptProjectionState;
   send(value: PendingSend): void;
   /** Retire a local entry refused before native dispatch; committed source wins. */
-  cancelSend(messageID: string): void;
+  cancelSend(messageID: string, withdrawn?: boolean): void;
+  started(messageID: string): boolean;
   entry(messageID: string): TranscriptReply | undefined;
   committed(messageID: string): boolean;
   releaseCommittedSends(): void;
@@ -619,6 +620,12 @@ export function createTranscriptProjection(): TranscriptProjection {
       return !!read(messageID) &&
         (!sends.has(messageID) || sends.get(messageID)?.phase === "committed");
     },
+    started(messageID: string) {
+      if (answers.has(messageID)) return true;
+      const position = userOrder.indexOf(messageID);
+      return position >= 0 &&
+        userOrder.slice(position + 1).some((id) => answers.has(id));
+    },
     releaseCommittedSends() {
       for (const [id, send] of sends) {
         if (send.phase !== "committed") continue;
@@ -626,9 +633,9 @@ export function createTranscriptProjection(): TranscriptProjection {
         localParts.delete(id);
       }
     },
-    cancelSend(messageID: string) {
+    cancelSend(messageID: string, withdrawn = false) {
       const send = sends.get(messageID);
-      if (!send || send.phase === "committed") return;
+      if (!withdrawn && (!send || send.phase === "committed")) return;
       remove(messageID);
       sends.delete(messageID);
       localParts.delete(messageID);

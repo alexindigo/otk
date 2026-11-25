@@ -18,7 +18,7 @@ export type { PromptCompletion, PromptSource } from "@otk/client";
 export interface PromptProps {
   value: Draft;
   connected: boolean;
-  busy?: boolean;
+  activity(): import("@otk/client").SessionActivity;
   suspended?: boolean;
   context?: {
     agent?: string;
@@ -33,7 +33,7 @@ export interface PromptProps {
     selection: PromptChoices,
     capture?: DraftSendCapture,
   ): Promise<void>;
-  onAbort(): Promise<void>;
+  onStop(): Promise<void>;
 }
 /** An input port keeps native selection/focus owned by the prompt component. */
 export interface PromptContext extends SessionPorts {

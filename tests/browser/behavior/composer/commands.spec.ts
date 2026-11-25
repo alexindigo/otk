@@ -149,7 +149,12 @@ for (const origin of ["keyboard", "button"] as const) {
     const input = prompt(page), send = composerSend(page);
     const first = `First captured ${origin} prompt`;
     const newer = `Newer ${origin} shell draft`;
-    await state.queue(["First captured effect finished."]);
+    const running = await state.queue(
+      ["First captured effect finished."],
+      "held",
+    );
+    let release: Promise<unknown> | undefined;
+    const releaseReply = () => release ??= state.release(running.gate);
     frames.hold((frame, request) =>
       frame.t === "request.result" && request?.method === "session.prompt" &&
       request.params?.sessionID === target.id &&
@@ -162,8 +167,15 @@ for (const origin of ["keyboard", "button"] as const) {
       if (origin === "keyboard") await input.press("Enter");
       else await send.click();
       await expect.poll(() => frames.held.length).toBeGreaterThan(0);
-      await expectPrimaryBlocked(send, "Sending");
+      await expect(send).toHaveAccessibleName("Stop");
+      await expect(send).toBeEnabled();
       await expect(input).toHaveValue("");
+      // Native execution can start before the browser receives the receipt.
+      await expect.poll(async () =>
+        (await messages(state, target.id)).some(({ info }) =>
+          info.role === "assistant"
+        )
+      ).toBe(true);
       await info.attach("held-send-before-input-command", {
         body: JSON.stringify({ origin, held: frames.held, sent: frames.sent }),
         contentType: "application/json",
@@ -176,9 +188,12 @@ for (const origin of ["keyboard", "button"] as const) {
       await input.press("Enter");
       await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
       await expect(input).toHaveValue("");
-      await expectPrimaryBlocked(send, "Sending");
+      await expect(send).toHaveAccessibleName("Stop");
+      await expect(send).toBeEnabled();
 
       await input.fill(newer);
+      await expect(send).toHaveAccessibleName("Send");
+      await expectPrimaryBlocked(send, "Sending");
       await input.press("Enter");
       await expect(input).toHaveValue(newer);
       await expect(send).toHaveAttribute("aria-description", "Sending");
@@ -195,6 +210,7 @@ for (const origin of ["keyboard", "button"] as const) {
         );
       expect(effects()).toHaveLength(1);
       frames.release();
+      await releaseReply();
       await expect(send).toBeEnabled();
       await reply(state, page, target.id, "First captured effect finished.");
       await expect(input).toHaveValue(newer);
@@ -222,6 +238,7 @@ for (const origin of ["keyboard", "button"] as const) {
       );
     } finally {
       frames.release();
+      await releaseReply();
       await original?.dispose();
     }
   });
@@ -255,11 +272,14 @@ test.describe("long command", () => {
       );
       await expect(page.locator(".otk-operation-feedback[role=status]"))
         .toContainText("Running command");
+      await expect(composerSend(page)).toHaveAccessibleName("Stop");
+      await expect(composerSend(page)).toBeEnabled();
       await prompt(page).fill("keep the next draft");
       await expect(prompt(page)).toBeEditable();
       await expect(page.locator(".otk-composer-dock [role=alert]"))
         .toHaveCount(0);
-      // The running command holds the one send intent; Send says so.
+      // A new draft returns the control to Send without settling the command RPC.
+      await expect(composerSend(page)).toHaveAccessibleName("Send");
       await expectPrimaryBlocked(composerSend(page), "Sending");
       await state.release(held.gate);
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(

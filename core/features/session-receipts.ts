@@ -155,7 +155,10 @@ export const sentPromptReceipt = mappedReceipt<
     if (row.completed !== true) throw new TypeError("Invalid prompt receipt");
     if (row.submission === undefined) return { completed: true };
     const submission = object(row.submission);
-    if (submission.state !== "accepted" && submission.state !== "queued") {
+    if (
+      submission.state !== "accepted" && submission.state !== "queued" &&
+      submission.state !== "started"
+    ) {
       throw new TypeError("Invalid prompt admission state");
     }
     return {
@@ -176,7 +179,10 @@ export function submissionReceipt(kind: "shell-settled" | "command-settled") {
     if (row.state === "unconfirmed") {
       return { state: "unconfirmed", reason: text(row, "reason")! };
     }
-    if (row.state !== "accepted" && row.state !== "queued") {
+    if (
+      row.state !== "accepted" && row.state !== "queued" &&
+      row.state !== "started"
+    ) {
       throw new TypeError("Invalid submission receipt state");
     }
     return { messageID: text(row, "messageID")!, state: row.state };

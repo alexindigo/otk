@@ -346,6 +346,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.shell",
     "session.command",
     "session.abort",
+    "session.withdraw",
     "session.get",
     "session.children",
     "sessions.list",
@@ -423,7 +424,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     }
     assertEquals(counts, {
       read: 32, // Retained archive pages and terminal inventory are separate reads.
-      native: 22, // Terminal creation and close each have a native mutation policy.
+      native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
       local: 11,
       "prepared-local": 6,
       lease: 2,

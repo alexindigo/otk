@@ -54,7 +54,7 @@ export function shell(
         },
       );
       if (operation && launched) await launched.settled;
-      return { messageID, state: "accepted" };
+      return { messageID, state: "started" };
     },
   };
 }

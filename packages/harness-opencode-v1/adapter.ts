@@ -630,9 +630,12 @@ export class OpencodeV1Adapter implements Harness {
           cfg.attachments,
           (sessionID, messageID, origin) => {
             this.#retention.observe(sessionID, `submission:${messageID}`, {
-              origin,
+              ...(origin ? { origin } : {}),
             }, Date.now());
           },
+          this.#messages,
+          (id, messageID) =>
+            !!this.#retention.get(id, `submission:${messageID}`),
         );
         return {
           ...capability,

@@ -56,7 +56,7 @@ import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
 import type { SessionContextTarget } from "../features/session-context.ts";
 import DeletedSession from "../components/DeletedSession.tsx";
-import { deletedFacts, sessionEvidence } from "@otk/client";
+import { deletedFacts, sessionEvidence, sessionRunning } from "@otk/client";
 import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
 import { AttentionProvider } from "../registries/attention.tsx";
@@ -803,7 +803,7 @@ export default function Shell(
                               branchHistory={branchHistory}
                               strip={revert.strip(session.state.content)}
                               busy={!!session.state.selection &&
-                                !!sessionEvidence(
+                                sessionRunning(
                                   resources.inbox(
                                     session.state.selection.sidecarId,
                                   ).entities,
@@ -811,7 +811,7 @@ export default function Shell(
                                     "session",
                                     session.state.selection.sessionID,
                                   ),
-                                )?.work}
+                                )}
                               retryState={session.state.selection
                                 ? sessionEvidence(
                                   resources.inbox(
@@ -889,7 +889,8 @@ export default function Shell(
                                 actions.prompt(parts, selection, capture).then(
                                   requireCommittedSend,
                                 )}
-                              onAbort={actions.abort}
+                              activity={() => actions.activity()}
+                              onStop={() => actions.stop()}
                             />
                           </SessionProvider>
                         </Show>

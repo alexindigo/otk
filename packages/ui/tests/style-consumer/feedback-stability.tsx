@@ -148,7 +148,8 @@ function StandaloneScene() {
             settled = Promise.withResolvers<void>();
             return settled.promise;
           }}
-          onAbort={() =>
+          activity={() => ({ running: true, unstarted: 0 })}
+          onStop={() =>
             Promise.resolve()}
         />
       </SessionProvider>
