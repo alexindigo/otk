@@ -140,8 +140,11 @@ export class ProjectIdentity {
     const put = (r: IdentityRecord) => {
       const k = key(r);
       const before = records.get(k);
-      // Git evidence alone revises a recorded checkout's kind and presence.
-      if (before?.repository !== undefined) {
+      // Git evidence describes the leaf, not the native scope that reports it.
+      if (
+        before?.leafDirectory === r.leafDirectory &&
+        before.repository !== undefined
+      ) {
         r = {
           ...r,
           repository: before.repository,

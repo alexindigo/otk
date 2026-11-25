@@ -72,6 +72,35 @@ Deno.test("already lost affiliation is recovered from retained Git registration 
   assertEquals(owner.records()[0].repository, "/repo");
 });
 
+Deno.test("a stable native scope does not carry Git evidence to a different checkout leaf", () => {
+  const owner = new ProjectIdentity();
+  const observed = selfClaim("/scope", "native-id");
+  const [fact] = observed.identities!;
+  owner.learn([{
+    ...observed,
+    identities: [{
+      ...fact,
+      recordedRoot: "/old",
+      repository: { checkout: "/old", ...gone("worktree-metadata", "/git") },
+    }],
+  }]);
+  assertEquals(owner.archived("/old"), true);
+  owner.learn([{
+    ...observed,
+    identities: [{
+      ...fact,
+      canonicalRoot: "/new",
+      recordedRoot: "/new",
+      inventory: [{ directory: "/new", kind: "checkout" }],
+    }],
+  }]);
+  assertEquals(owner.records()[0].repository, undefined);
+  assertEquals(owner.topology("/new")?.canonicalRoot, "/new");
+  assertEquals(owner.availability("/new"), "present");
+  assertEquals(owner.memberships("/new")[0].kind, "checkout");
+  assertEquals(owner.archived("/new"), false);
+});
+
 Deno.test("stored affiliation outranks naming, and naming applies only as a last resort", () => {
   const owner = new ProjectIdentity();
   const claimed: ProjectSeed = {
