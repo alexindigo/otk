@@ -20,10 +20,21 @@ type NativeForm = Awaited<
   ReturnType<OpenCodeClient["form"]["list"]>
 >["data"][number];
 type Location = { directory: string; workspaceID?: string };
+type Unlocated = { kind: "permission"; raw: NativePermission } | {
+  kind: "form";
+  raw: NativeForm;
+};
+export type PendingRoute = {
+  id: string;
+  kind: Unlocated["kind"];
+  sessionID: string;
+  directory: string;
+};
 /** One canonical pending-request owner; routing location stays private to this adapter.
  * Every request it admits, from a live event or an inventory, is reported. */
 export class V2Pending {
   #settled = new Set<string>();
+  #unlocated = new Map<string, Unlocated>();
   #permissions = new Map<
     string,
     {
@@ -58,6 +69,7 @@ export class V2Pending {
       requestID: string,
       request: Record<string, unknown>,
     ) => void = () => {},
+    readonly routed: (route: PendingRoute, removed?: true) => void = () => {},
   ) {
     this.permissions = {
       listPermissions: async (id, signal) => {
@@ -84,7 +96,9 @@ export class V2Pending {
       },
       replyPermission: async (input, operation) => {
         const pending = this.#permissions.get(input.requestID);
-        if (!pending) return; // Retirement owns dispatch, including late callers.
+        if (!pending) {
+          return this.#requireSettlement("permission", input.requestID);
+        }
         // The caller may display a root, but the request's asking identity is authoritative.
         const asking = pending.request.sessionID;
         // In native V2, feedback converts a decline into a model correction.
@@ -155,7 +169,7 @@ export class V2Pending {
       },
       answerQuestion: async (id, answers, operation) => {
         const pending = this.#forms.get(id);
-        if (!pending?.question) return;
+        if (!pending?.question) return this.#requireSettlement("form", id);
         if (answers === undefined) {
           return await this.forms.cancel(id, undefined, operation);
         }
@@ -179,23 +193,82 @@ export class V2Pending {
     };
   }
   /** Publish from retained authority when a session's recipient route changes. */
-  publishOwner(sessionID: string): void {
+  publishOwners(
+    owners: ReadonlySet<string>,
+    locate: (id: string) => Location | undefined,
+  ): void {
     for (const { request } of this.#permissions.values()) {
-      if (request.sessionID === sessionID) {
-        this.changed(sessionID, { op: "permission.upsert", request });
+      if (owners.has(request.sessionID)) {
+        this.changed(request.sessionID, { op: "permission.upsert", request });
       }
     }
     for (const { request, question } of this.#forms.values()) {
       if (
         request.owner.kind === "session" &&
-        request.owner.sessionID === sessionID
+        owners.has(request.owner.sessionID)
       ) {
+        const sessionID = request.owner.sessionID;
         this.changed(sessionID, { op: "form.upsert", request });
         if (question) {
           this.changed(sessionID, { op: "question.upsert", request: question });
         }
       }
     }
+    for (const input of this.#unlocated.values()) {
+      const owner = ids.encode(input.raw.sessionID);
+      const location = owners.has(owner) ? locate(owner) : undefined;
+      if (location) this.#acceptLive(location, input);
+    }
+  }
+  *unlocatedOwners(): IterableIterator<string> {
+    for (const { raw } of this.#unlocated.values()) yield raw.sessionID;
+  }
+  *routes(): IterableIterator<PendingRoute> {
+    for (const [id, { request, location }] of this.#permissions) {
+      yield {
+        kind: "permission",
+        id,
+        sessionID: ids.decode(request.sessionID),
+        directory: location.directory,
+      };
+    }
+    for (const [id, { native, location }] of this.#forms) {
+      yield {
+        kind: "form",
+        id,
+        sessionID: native,
+        directory: location.directory,
+      };
+    }
+  }
+  #acceptLive(location: Location | undefined, input: Unlocated): void {
+    const { kind, raw } = input;
+    const key = `${kind}:${raw.id}`;
+    const previous = kind === "permission"
+      ? this.#permissions.get(raw.id)
+      : this.#forms.get(raw.id);
+    if (
+      !location && previous &&
+      ("native" in previous
+          ? previous.native
+          : ids.decode(previous.request.sessionID)) === raw.sessionID
+    ) {
+      location = previous.location;
+    }
+    if (!location) {
+      if (raw.sessionID !== "global") this.#unlocated.set(key, input);
+      return;
+    }
+    this.#unlocated.delete(key);
+    if (kind === "permission") this.#permission(location, input.raw);
+    else this.#form(location, input.raw);
+    this.routed({
+      id: raw.id,
+      kind,
+      sessionID: raw.sessionID,
+      directory: location.directory,
+    });
+    if (kind === "form") this.#notify();
   }
   async #shellDetail(
     pending: {
@@ -245,7 +318,7 @@ export class V2Pending {
     operation?: import("@otk/protocol").OperationContext,
   ): Promise<void> {
     const pending = this.#forms.get(id);
-    if (!pending) return; // Already converged by a successful inventory or settlement event.
+    if (!pending) return this.#requireSettlement("form", id);
     const target = { sessionID: pending.native, formID: id };
     const options = pending.native === "global"
       ? {
@@ -283,16 +356,28 @@ export class V2Pending {
     }
     this.settle("form", id, pending.native);
   }
+  #requireSettlement(kind: "permission" | "form", id: string): void {
+    if (this.settled(kind, id)) return;
+    const reason =
+      "The pending request is not currently available. No reply was sent.";
+    throw new OperationFailure(
+      "unavailable",
+      "pending-input.unavailable",
+      new Error(reason),
+      { reason },
+    );
+  }
   /** Explicit native settlement does not depend on the availability of another inventory. */
-  settle(kind: "permission" | "form", id: string, native: string): void {
+  settle(kind: "permission" | "form", id: string, native?: string): void {
+    const key = `${kind}:${id}`;
     const existing = kind === "permission"
       ? this.#permissions.get(id)?.request.sessionID
       : this.#forms.get(id)?.native;
-    if (
-      existing &&
-      (kind === "permission" ? ids.decode(existing) : existing) !== native
-    ) return;
-    this.#settled.add(`${kind}:${id}`);
+    const owner = this.#unlocated.get(key)?.raw.sessionID ??
+      (existing && kind === "permission" ? ids.decode(existing) : existing);
+    if (native && owner && owner !== native) return;
+    this.#settled.add(key);
+    this.#unlocated.delete(key);
     this.#remove(kind, id);
   }
   /** Loaded-directory absence retires routing ownership, not native settlement.
@@ -325,6 +410,12 @@ export class V2Pending {
       const pending = this.#permissions.get(id);
       if (!pending) return;
       this.#permissions.delete(id);
+      this.routed({
+        id,
+        kind,
+        sessionID: ids.decode(pending.request.sessionID),
+        directory: pending.location.directory,
+      }, true);
       this.changed(pending.request.sessionID, {
         op: "permission.remove",
         requestID: id,
@@ -335,6 +426,12 @@ export class V2Pending {
     const pending = this.#forms.get(id);
     if (!pending) return;
     this.#forms.delete(id);
+    this.routed({
+      id,
+      kind,
+      sessionID: pending.native,
+      directory: pending.location.directory,
+    }, true);
     if (pending.request.owner.kind === "session") {
       this.changed(pending.request.owner.sessionID, {
         op: "form.remove",
@@ -355,6 +452,9 @@ export class V2Pending {
     return this.#settled.has(`${kind}:${id}`);
   }
   retireSession(native: string): void {
+    for (const { kind, raw } of this.#unlocated.values()) {
+      if (raw.sessionID === native) this.settle(kind, raw.id, native);
+    }
     for (const [id, pending] of this.#permissions) {
       if (ids.decode(pending.request.sessionID) === native) {
         this.settle("permission", id, native);
@@ -391,7 +491,7 @@ export class V2Pending {
     }
   }
   /** Events and full inventories converge before any attention count is exposed. */
-  acceptPermission(location: Location, value: unknown): boolean {
+  acceptPermission(location: Location | undefined, value: unknown): boolean {
     const raw = record(value);
     if (
       typeof raw.id !== "string" || this.settled("permission", raw.id) ||
@@ -399,11 +499,21 @@ export class V2Pending {
       typeof raw.action !== "string" || !Array.isArray(raw.resources) ||
       !raw.resources.every((resource) => typeof resource === "string")
     ) return false;
-    this.#permission(location, raw as NativePermission);
+    this.#acceptLive(location, {
+      kind: "permission",
+      raw: raw as NativePermission,
+    });
     return true;
   }
   #permission(location: Location, raw: NativePermission): void {
     if (this.settled("permission", raw.id)) return;
+    const waiting = this.#unlocated.get(`permission:${raw.id}`);
+    if (
+      waiting?.kind === "permission" && waiting.raw.sessionID === raw.sessionID
+    ) {
+      this.#unlocated.delete(`permission:${raw.id}`);
+      raw = waiting.raw;
+    }
     const files = mapFileDiffs(raw.metadata?.files).map((file) => ({
       ...file,
       ...(file.path ? { path: resolve(location.directory, file.path) } : {}),
@@ -475,7 +585,7 @@ export class V2Pending {
     }
     this.#notify();
   }
-  acceptForm(location: Location, value: unknown): boolean {
+  acceptForm(location: Location | undefined, value: unknown): boolean {
     const raw = record(value);
     if (
       typeof raw.id !== "string" || this.settled("form", raw.id) ||
@@ -486,12 +596,16 @@ export class V2Pending {
         typeof record(value).type === "string"
       )
     ) return false;
-    this.#form(location, raw as NativeForm);
-    this.#notify();
+    this.#acceptLive(location, { kind: "form", raw: raw as NativeForm });
     return true;
   }
   #form(location: Location, raw: NativeForm): void {
     if (this.settled("form", raw.id)) return;
+    const waiting = this.#unlocated.get(`form:${raw.id}`);
+    if (waiting?.kind === "form" && waiting.raw.sessionID === raw.sessionID) {
+      this.#unlocated.delete(`form:${raw.id}`);
+      raw = waiting.raw;
+    }
     const fields = raw.fields.map((field) =>
       field.type === "number" || field.type === "integer"
         ? {
@@ -575,6 +689,7 @@ export class V2Pending {
     }
   }
   clear(): void {
+    this.#unlocated.clear();
     this.#permissions.clear();
     this.#forms.clear();
     this.#settled.clear();

@@ -10,13 +10,16 @@ async function fixture() {
   const root = await tempDir("dispatch-lag-"), settings = cfg();
   const index = new SessionIndex(), calls: string[] = [], events: string[] = [];
   const permissionPublications: { id: string; ancestors: string[] }[] = [];
+  const questionPublications: typeof permissionPublications = [];
   const native = {
     id: "ses_dispatch",
     title: "Initial",
     projectID: "project",
+    parentID: undefined as string | undefined,
     location: { directory: "/repo" },
     time: { created: 1, updated: 1 },
   };
+  const sessions = new Map([[native.id, native]]);
   let hold: Promise<void> | undefined;
   let inventoryHold: Promise<void> | undefined;
   const locations: { directory: string }[] = [];
@@ -39,9 +42,10 @@ async function fixture() {
       if (path === "/api/form" || path === "/api/shell") {
         return Response.json({ data: [] });
       }
-      if (path === "/api/session/ses_dispatch") {
-        await hold;
-        return Response.json({ data: native });
+      const session = sessions.get(path.slice("/api/session/".length));
+      if (session && path.startsWith("/api/session/")) {
+        if (session === native) await hold;
+        return Response.json({ data: session });
       }
       if (path === "/api/session/ses_dispatch/message") {
         return Response.json({ data: [], cursor: {} });
@@ -96,6 +100,9 @@ async function fixture() {
       if (op.op === "permission.upsert") {
         permissionPublications.push({ id, ancestors: index.ancestors(id) });
       }
+      if (op.op === "question.upsert") {
+        questionPublications.push({ id, ancestors: index.ancestors(id) });
+      }
     },
     invalidate() {},
     bootstrapComplete() {},
@@ -135,6 +142,8 @@ async function fixture() {
     calls,
     events,
     permissionPublications,
+    questionPublications,
+    sessions,
     native,
     diagnostics,
     send,
@@ -419,6 +428,161 @@ test("V2 pending permission waits for its native owner's routing topology", asyn
     ]);
   } finally {
     release.resolve();
+    await f.close();
+  }
+});
+
+function askBoth(f: Awaited<ReturnType<typeof fixture>>, directory?: string) {
+  const location = directory ? { directory } : undefined;
+  const sessionID = f.native.id;
+  f.send({
+    type: "permission.asked",
+    location,
+    data: { sessionID, id: "per_route", action: "read", resources: ["file"] },
+  });
+  f.send({
+    type: "form.created",
+    location,
+    data: {
+      form: {
+        sessionID,
+        id: "frm_route",
+        title: "Confirm",
+        metadata: { kind: "question" },
+        fields: [{ key: "q0", type: "string" }],
+      },
+    },
+  });
+}
+
+test("V2 retains both kinds of request until keyed hydration supplies the unindexed owner's location", async () => {
+  const f = await fixture();
+  const release = Promise.withResolvers<void>();
+  try {
+    const child = f.index.getMetadata("opcv2-ses_dispatch")!;
+    const root = { ...child, id: "opcv2-ses_root" };
+    f.index.upsertMetadata(root);
+    f.index.remove(child.id);
+    f.native.parentID = "ses_root";
+    f.hold(release.promise);
+    askBoth(f);
+    await until(() => f.events.includes("form.created"));
+    assertEquals(f.permissionPublications, []);
+    assertEquals(f.questionPublications, []);
+    release.resolve();
+    await until(() => !!f.index.getMetadata(child.id));
+    assertEquals(f.permissionPublications, [{
+      id: child.id,
+      ancestors: [root.id],
+    }]);
+    assertEquals(f.questionPublications, f.permissionPublications);
+    assertEquals(f.index.getMetadata(root.id)?.attention.childPermissions, 1);
+    assertEquals(f.index.getMetadata(root.id)?.attention.childQuestions, 1);
+    assertEquals(
+      (await f.adapter.pending.permissions.listPermissions(root.id)).map((r) =>
+        r.id
+      ),
+      ["per_route"],
+    );
+    assertEquals(
+      (await f.adapter.pending.questions.listQuestions(root.id)).map((r) =>
+        r.id
+      ),
+      ["frm_route"],
+    );
+    assertEquals(
+      f.calls.filter((p) =>
+        p === "/api/permission/request" || p === "/api/form"
+      ),
+      [],
+    );
+  } finally {
+    release.resolve();
+    await f.close();
+  }
+});
+
+test("V2 pending-owner hydration walks through an indexed parent to a missing grandparent", async () => {
+  const f = await fixture();
+  try {
+    const child = f.index.getMetadata("opcv2-ses_dispatch")!;
+    const parent = {
+      ...child,
+      id: "opcv2-ses_parent",
+      parentID: "opcv2-ses_root",
+    };
+    f.index.upsertMetadata(parent);
+    f.index.remove(child.id);
+    f.native.parentID = "ses_parent";
+    f.sessions.set("ses_root", {
+      ...f.native,
+      id: "ses_root",
+      parentID: undefined,
+    });
+    askBoth(f, child.directory);
+    await until(() => !!f.index.getMetadata(parent.parentID));
+    assertEquals(f.calls.includes("/api/session/ses_parent"), false);
+    assertEquals(
+      f.index.getMetadata(parent.parentID)?.attention.childPermissions,
+      1,
+    );
+    assertEquals(
+      f.index.getMetadata(parent.parentID)?.attention.childQuestions,
+      1,
+    );
+    assertEquals(f.permissionPublications.at(-1), {
+      id: child.id,
+      ancestors: [parent.id, parent.parentID],
+    });
+    assertEquals(
+      f.questionPublications.at(-1),
+      f.permissionPublications.at(-1),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("V2 replays both descendant requests to the new recipient after an ancestor moves", async () => {
+  const f = await fixture();
+  try {
+    const child = f.index.getMetadata("opcv2-ses_dispatch")!;
+    const oldRoot = { ...child, id: "opcv2-ses_old" };
+    const newRoot = { ...child, id: "opcv2-ses_new" };
+    const parent = { ...child, id: "opcv2-ses_parent", parentID: oldRoot.id };
+    f.index.upsertMetadata(oldRoot);
+    f.index.upsertMetadata(newRoot);
+    f.index.upsertMetadata(parent);
+    f.index.upsertMetadata({ ...child, parentID: parent.id });
+    askBoth(f, child.directory);
+    await until(() => f.questionPublications.length === 1);
+    assertEquals(f.permissionPublications.at(-1), {
+      id: child.id,
+      ancestors: [parent.id, oldRoot.id],
+    });
+    f.index.upsertMetadata({
+      ...f.index.getMetadata(parent.id)!,
+      parentID: newRoot.id,
+    });
+    assertEquals(f.permissionPublications.at(-1), {
+      id: child.id,
+      ancestors: [parent.id, newRoot.id],
+    });
+    assertEquals(
+      f.questionPublications.at(-1),
+      f.permissionPublications.at(-1),
+    );
+    assertEquals(f.index.getMetadata(oldRoot.id)?.attention.childQuestions, 0);
+    assertEquals(f.index.getMetadata(newRoot.id)?.attention.childQuestions, 1);
+    assertEquals(
+      await f.adapter.pending.permissions.listPermissions(oldRoot.id),
+      [],
+    );
+    assertEquals(
+      await f.adapter.pending.questions.listQuestions(oldRoot.id),
+      [],
+    );
+  } finally {
     await f.close();
   }
 });
