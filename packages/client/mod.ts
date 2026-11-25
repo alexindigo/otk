@@ -2,7 +2,7 @@
 export { createReload, type Reload, type ReloadOwner } from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
-export * from "./project-disclosure.ts";
+export * from "./tree-disclosure.ts";
 export * from "./project-placement.ts";
 export {
   type EntityFact,

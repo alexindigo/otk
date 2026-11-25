@@ -16,6 +16,7 @@ import {
   createSessionSubmission,
   createTabs,
   createTaskActions,
+  createTreeDisclosure,
   elapsed,
   exactCount,
   type MergedEntry,
@@ -1116,6 +1117,7 @@ export function SecondaryFailures(
 export default function SharedControls(
   props: { onTheme(id: string): void },
 ): Element {
+  const tree = createTreeDisclosure(solidState);
   const registry = createPreferences(),
     commands = new CommandHub(),
     ui = createUiRegistries();
@@ -1316,6 +1318,7 @@ export default function SharedControls(
         </div>
         <div style={{ display: "flex", height: "220px" }}>
           <ProjectInbox
+            disclosure={tree}
             projects={[]}
             duplicateName={() => false}
             servers={[]}

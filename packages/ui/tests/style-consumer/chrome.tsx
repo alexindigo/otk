@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
-import { createTabs } from "@otk/client";
+import { createTabs, createTreeDisclosure } from "@otk/client";
+import { solidState } from "../../state/binding.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import ProjectTabs from "../../components/ProjectTabs.tsx";
 import ProjectInbox from "../../components/ProjectInbox.tsx";
@@ -9,6 +10,7 @@ const tabs = createTabs(() =>
   Promise.reject(new Error("No promotion expected"))
 );
 export default function Scene() {
+  const tree = createTreeDisclosure(solidState);
   const [reserve, setReserve] = createSignal(false),
     [collapsed, setCollapsed] = createSignal(false);
   styleTest.reserve = setReserve;
@@ -16,6 +18,7 @@ export default function Scene() {
   return (
     <div class="style-chrome">
       <ProjectInbox
+        disclosure={tree}
         projects={[]}
         duplicateName={() => false}
         servers={[{

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
-import { age } from "@otk/client";
+import { age, createTreeDisclosure } from "@otk/client";
+import { solidState } from "../../state/binding.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import ProjectInbox, {
   type ProjectRow,
@@ -58,6 +59,7 @@ const checkout = (name: string, extra: Partial<ProjectRow> = {}) =>
     ...extra,
   });
 export default function SidebarRows() {
+  const tree = createTreeDisclosure(solidState);
   const params = new URL(location.href).searchParams;
   const [prefs, setPrefs] = createSignal({
     ...DEFAULT_PREFS,
@@ -74,6 +76,7 @@ export default function SidebarRows() {
   return (
     <div class="sidebar-row-scene">
       <ProjectInbox
+        disclosure={tree}
         projects={[
           root,
           checkout("atmosphera.branch"),

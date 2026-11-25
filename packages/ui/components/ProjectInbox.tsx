@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  createProjectDisclosure,
   errorFeedback,
   type FailureValue,
   failureValue,
   type ProjectBranch,
   projectBranchPresentation,
-  type ProjectDisclosure,
   projectGroup,
   projectTree,
+  type TreeDisclosure,
+  type TreeDisclosures,
 } from "@otk/client";
 import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
 import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
@@ -56,7 +56,6 @@ import ChromeMeta, {
   SectionHeader,
 } from "./ChromeMeta.tsx";
 import TimeText from "./TimeText.tsx";
-import { solidState } from "../state/binding.ts";
 import { orderInteraction } from "./order-interaction.ts";
 import { connectionFeedback } from "./connection-light.ts";
 export interface ProjectRow extends ProjectProjectionRow {
@@ -64,6 +63,7 @@ export interface ProjectRow extends ProjectProjectionRow {
   label: string;
 }
 export default function ProjectInbox(props: {
+  disclosure: TreeDisclosures;
   projects: ProjectRow[];
   duplicateName(name: string): boolean;
   servers: SidecarState[];
@@ -83,11 +83,11 @@ export default function ProjectInbox(props: {
   /** The connection's entity states; standalone consumers present rows'. */
   entities?(server: string): EntityStateStore;
 }): import("solid-js").Element {
-  const disclosure = createProjectDisclosure(solidState);
+  const disclosure = props.disclosure;
   const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
   const inactiveDisclosure = disclosure.bind(
     "inactive",
-    { directory: "" },
+    { id: "" },
     () => false,
   );
   const inactiveOpen = inactiveDisclosure.open;
@@ -132,7 +132,7 @@ export default function ProjectInbox(props: {
       setError(failureValue(error, { actionLabel: "Saving project layout" })),
   });
   const width = resize.width;
-  function DisclosureFeedback(item: { disclosure: ProjectDisclosure }) {
+  function DisclosureFeedback(item: { disclosure: TreeDisclosure }) {
     const feedback = createMemo(() => {
       const cause = item.disclosure.error();
       if (!cause) return undefined;
@@ -250,7 +250,7 @@ export default function ProjectInbox(props: {
       archive() && node().project.directory === repository(node().project);
     const intent = disclosure.bind(
       "project",
-      node().project,
+      { sidecarId: node().project.sidecarId, id: node().project.directory },
       () => !layout().projectCollapsed?.[node().key],
       props.onProjectCollapse
         ? (value) => props.onProjectCollapse!(node().project, !value)
@@ -335,7 +335,7 @@ export default function ProjectInbox(props: {
   function Archive(section: { repo: ProjectRow }) {
     const intent = disclosure.bind("archive", {
       sidecarId: section.repo.sidecarId,
-      directory: repository(section.repo),
+      id: repository(section.repo),
     }, () => false);
     const expanded = intent.open;
     const setExpanded = (value: boolean) => {
@@ -415,7 +415,7 @@ export default function ProjectInbox(props: {
   }
   const discoveredDisclosure = disclosure.bind(
     "discovered",
-    { directory: "" },
+    { id: "" },
     () => !layout().discoveredCollapsed,
     (value) => props.onLayout({ discoveredCollapsed: !value }),
   );
