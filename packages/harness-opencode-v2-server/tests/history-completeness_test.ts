@@ -385,6 +385,37 @@ Deno.test("history rechecks a recovered anchor edited before a newer head appear
   }
 });
 
+Deno.test("a covered inbox cancellation still retires the queued projection", async () => {
+  const x = fixture();
+  const queued = {
+    type: "session.inbox.enqueued",
+    created: 2,
+    durable: { aggregateID: "ses_history", seq: 2 },
+    data: {
+      sessionID: "ses_history",
+      inboxID: "msg_queued",
+      item: { type: "prompt", text: "queued" },
+    },
+  };
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    await x.transcript.event(queued);
+    assertEquals(x.projection.state.messageIDs, ["before", "msg_queued"]);
+    x.rows.push(reply("new-head", 4));
+    useHead(x, () => ({ id: "new-head", seq: 4, updated: 4 }));
+    await x.transcript.check(sessionID);
+    await x.transcript.event({
+      type: "session.inbox.cancelled",
+      durable: { aggregateID: "ses_history", seq: 3 },
+      data: { sessionID: "ses_history", inboxID: "msg_queued" },
+    });
+    await x.transcript.event(queued);
+    assertEquals(x.projection.state.messageIDs, ["before", "new-head"]);
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("history checkpoints cannot erase an event-owned running compaction summary", async () => {
   const x = fixture();
   x.rows.push({

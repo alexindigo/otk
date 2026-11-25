@@ -2725,11 +2725,24 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
-    const covered = this.#history.get(id)?.coveredSeq;
+    const coveredSeq = this.#history.get(id)?.coveredSeq;
+    const covered = coveredSeq !== undefined &&
+      event.durable?.aggregateID === sid && event.durable.seq <= coveredSeq &&
+      knownSessionEvent(event.type);
     if (
-      covered !== undefined && event.durable?.aggregateID === sid &&
-      event.durable.seq <= covered && knownSessionEvent(event.type)
+      !covered && event.durable?.aggregateID === sid &&
+      Number.isSafeInteger(event.durable.seq)
+    ) await this.#advance(id, event.durable.seq);
+    // Inbox cancellation retires a synthetic row, not a durable message body.
+    if (
+      event.type === "session.inbox.cancelled" && typeof d.inboxID === "string"
     ) {
+      this.#queued.get(id)?.delete(d.inboxID);
+      this.#publish(id, { op: "message.remove", messageID: d.inboxID });
+      this.changed(id);
+      return;
+    }
+    if (covered) {
       // A canonical native checkpoint already contains this durable fact.
       // Delayed stream starts must not regress a repaired terminal record.
       // A body checkpoint does not carry the native revert commit's cause.
@@ -2738,10 +2751,6 @@ export class Transcript {
       }
       return;
     }
-    if (
-      event.durable && event.durable.aggregateID === sid &&
-      Number.isSafeInteger(event.durable.seq)
-    ) await this.#advance(id, event.durable.seq);
     if (/^(permission\.|form\.)/.test(event.type)) {
       // Already-delivered native facts are retained even without a viewer. This
       // never reads unviewed bodies or performs a population inventory scan.
@@ -2881,14 +2890,6 @@ export class Transcript {
       this.#context(baseline, messageID, context);
       return context;
     };
-    if (
-      event.type === "session.inbox.cancelled" && typeof d.inboxID === "string"
-    ) {
-      this.#queued.get(id)?.delete(d.inboxID);
-      this.#publish(id, { op: "message.remove", messageID: d.inboxID });
-      this.changed(id);
-      return;
-    }
     if (
       event.type === "session.inbox.enqueued" && typeof d.inboxID === "string"
     ) {
