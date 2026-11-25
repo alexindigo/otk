@@ -19,8 +19,22 @@ import {
 import {
   deliveredTerminal,
   failedHelperNeedsAck,
+  type SessionInputs,
   type SessionSupervision,
 } from "./supervision.ts";
+
+const PERMISSION_GRACE_MS = 500;
+
+interface EntityClock {
+  now(): number;
+  set(run: () => void, delay: number): unknown;
+  clear(timer: unknown): void;
+}
+const systemClock: EntityClock = {
+  now: () => performance.now(),
+  set: (run, delay) => setTimeout(run, delay),
+  clear: (timer) => clearTimeout(timer as number),
+};
 
 /** Session family facts the owner borrows; it never scans the catalog. */
 export interface EntityFamily {
@@ -88,6 +102,10 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
  * Session state is SessionSupervision's verdict; every indicator derives from
  * the published EntityState, never from a second interpretation. */
 export class EntityStates {
+  #permissions = new Map<
+    string,
+    { due: Map<string, number>; timer?: unknown }
+  >();
   #states = new Map<string, EntityState>();
   /** Own counts of each live session, for its ancestors' descendant evidence. */
   #own = new Map<string, EntityCounts>();
@@ -131,6 +149,8 @@ export class EntityStates {
       upserts: readonly EntityState[],
       removals: readonly string[],
     ) => void,
+    readonly clock: EntityClock = systemClock,
+    readonly onPermissionDeadline?: (id: string) => void,
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
@@ -141,6 +161,9 @@ export class EntityStates {
   }
   /** A new user generation starts without transitions from the previous one. */
   reset(): void {
+    for (const lifetime of this.#permissions.values()) {
+      this.clock.clear(lifetime.timer);
+    }
     this.#states.clear();
     this.#own.clear();
     this.#parents.clear();
@@ -166,6 +189,58 @@ export class EntityStates {
     this.#operations.clear();
     this.#checkoutOperations.clear();
   }
+  close(): void {
+    for (const lifetime of this.#permissions.values()) {
+      this.clock.clear(lifetime.timer);
+    }
+    this.#permissions.clear();
+  }
+
+  #permissionKeys(
+    entry: IndexMetadata,
+    count: number,
+    refresh: () => void,
+  ): string[] {
+    const previous = this.#permissions.get(entry.id);
+    if (previous?.timer !== undefined) this.clock.clear(previous.timer);
+    if (entry.deleted) {
+      this.#permissions.delete(entry.id);
+      return [];
+    }
+    const input = entry.activity?.permissions;
+    if (!input?.fresh) {
+      // Native source loss is not settlement. A fresh snapshot reconciles IDs.
+      if (previous) previous.timer = undefined;
+      return [];
+    }
+    if (!input.keys.length) {
+      this.#permissions.delete(entry.id);
+      return [];
+    }
+    const now = this.clock.now();
+    const due = new Map(
+      input.keys.map((
+        id,
+      ) => [id, previous?.due.get(id) ?? now + PERMISSION_GRACE_MS]),
+    );
+    const active: string[] = [];
+    let next = Infinity;
+    if (count > 0) {
+      for (const [id, at] of due) {
+        if (at <= now) active.push(id);
+        else next = Math.min(next, at);
+      }
+    }
+    const lifetime: { due: Map<string, number>; timer?: unknown } = { due };
+    this.#permissions.set(entry.id, lifetime);
+    if (Number.isFinite(next)) {
+      lifetime.timer = this.clock.set(() => {
+        if (this.#permissions.get(entry.id) === lifetime) refresh();
+      }, next - now);
+    }
+    return active.slice(0, count);
+  }
+
   /** A received operation owned by a project directory (e.g. a creation
    * before its session exists) colours that checkout and its projects. */
   checkoutOperation(directory: string, value?: "working" | "blocked"): void {
@@ -307,10 +382,17 @@ export class EntityStates {
     acknowledged: number,
     retainedTerminal = 0,
   ): Supervision {
+    const native = this.supervision.inputs(entry);
+    const permissions = this.#permissionKeys(entry, native.permissions, () => {
+      if (this.onPermissionDeadline) this.onPermissionDeadline(entry.id);
+      else this.session(entry, acknowledged, retainedTerminal);
+    });
+    const inputs = { ...native, permissions: permissions.length };
     const verdict = this.supervision.session(
       entry,
       acknowledged,
       retainedTerminal,
+      inputs,
     );
     const upserts: EntityState[] = [], removals: string[] = [];
     const contribution = this.#contribution(entry.id);
@@ -332,7 +414,15 @@ export class EntityStates {
       const state = rollupStatus(this.supervision.status(verdict), operation);
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
-      const value = this.#session(entry, verdict, state, counts, operation);
+      const value = this.#session(
+        entry,
+        verdict,
+        state,
+        counts,
+        inputs,
+        permissions,
+        operation,
+      );
       if (value.cause === "permission") {
         this.#graced.set(
           entry.id,
@@ -683,6 +773,8 @@ export class EntityStates {
     };
   }
   #retire(id: string, removals: string[]): void {
+    this.clock.clear(this.#permissions.get(id)?.timer);
+    this.#permissions.delete(id);
     this.#own.delete(id);
     this.#parents.delete(id);
     this.#graced.delete(id);
@@ -694,6 +786,7 @@ export class EntityStates {
       this.#refresh(parent, upserts);
     }
   }
+
   #taskHelpers(members: ReadonlySet<string>): TaskHelpers {
     const groups: Record<HelperDisposition, EntityState[]> = {
       running: [],
@@ -798,9 +891,10 @@ export class EntityStates {
     verdict: Supervision,
     state: ProjectStatus,
     counts: EntityCounts,
+    inputs: SessionInputs,
+    permissionIDs: readonly string[],
     operation?: "working" | "blocked",
   ): EntityState {
-    const inputs = this.supervision.inputs(entry);
     const activity = entry.activity;
     const cause: BlockedCause | undefined = state !== "blocked"
       ? undefined
@@ -863,9 +957,7 @@ export class EntityStates {
       questions: inputs.questions,
       descendants: this.#descendants(entry.id),
       requests: {
-        permissions: inputs.permissions > 0
-          ? (activity?.permissions?.keys ?? []).map((id) => ({ id }))
-          : [],
+        permissions: permissionIDs.map((id) => ({ id })),
         questions: inputs.questions > 0
           ? (activity?.inputs?.keys ?? []).map((id) => ({ id }))
           : [],

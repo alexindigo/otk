@@ -47,7 +47,19 @@ Deno.test("archive is independent of inactive policy; only live attention escape
           },
         },
       };
-      const rows = createProjectProjection({ entry: () => undefined });
+      inbox.entities = {
+        "project:/tree": presentedEntity(
+          "project",
+          "/tree",
+          status,
+          status === "finished",
+        ),
+      };
+      const store = createEntityStateStore({ read: () => inbox.entities });
+      const rows = createProjectProjection({
+        entry: () => undefined,
+        entities: () => store,
+      });
       rows.inbox(inbox);
       for (
         const row of [rows.row("/tree", 0)!, inboxProjects([], inbox, 0)[0]]
@@ -121,7 +133,19 @@ Deno.test("INV-A records have identical section and annotation in both projectio
           },
         };
       }
-      const projection = createProjectProjection({ entry: () => undefined });
+      inbox.entities = Object.fromEntries(
+        Object.keys(inbox.summaries ?? {}).map((
+          id,
+        ) => [
+          entityKey("project", id),
+          presentedEntity("project", id, status, status === "finished"),
+        ]),
+      );
+      const store = createEntityStateStore({ read: () => inbox.entities });
+      const projection = createProjectProjection({
+        entry: () => undefined,
+        entities: () => store,
+      });
       projection.inbox(inbox);
       const other = inboxProjects([], inbox, 2);
       for (const row of other) {
@@ -182,7 +206,7 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
       };
       // Decision 62: which members count is the server owner's rule
       // (tests/unit/core/entity-states_test.ts); rows show its project state.
-      const entities: Record<string, EntityState> = {};
+      const entities: Record<string, EntityState> = inbox.entities = {};
       const store = createEntityStateStore({ read: () => entities });
       const rows = createProjectProjection({
         entry: (id) => id === parent.id ? parent : child,
@@ -239,11 +263,14 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
   }
 });
 
-Deno.test("project rows consume server summaries without any session entries", () => {
+Deno.test("project rows consume entity state and inventory summaries without any session entries", () => {
   const inbox = createInbox({
     call: () => Promise.reject(new Error("No reads expected")),
   });
-  const rows = createProjectProjection({ entry: () => undefined });
+  const rows = createProjectProjection({
+    entry: () => undefined,
+    entities: () => inbox.entities,
+  });
   inbox.observeChanges((changes) => rows.inbox(inbox.state.inbox, changes));
   const summary: ProjectSummary = {
     directory: "/other",
@@ -265,6 +292,9 @@ Deno.test("project rows consume server summaries without any session entries", (
       finishes: {},
       pathTemplates: [],
       summaries: { "/other": summary },
+      entities: {
+        "project:/other": presentedEntity("project", "/other", "working"),
+      },
     },
   });
   assertEquals(rows.row("/other", 0)?.status, "working");
@@ -276,6 +306,21 @@ Deno.test("project rows consume server summaries without any session entries", (
     from: 0,
     revision: 1,
     summaries: [{ ...summary, status: "finished", unseenCount: 1 }],
+  });
+  assertEquals(
+    rows.row("/other", 0)?.status,
+    "working",
+    "summary cannot change the lamp",
+  );
+  inbox.receive({
+    t: "inbox.patch",
+    generation: "g",
+    from: 0,
+    revision: 1,
+    ops: [{
+      op: "entity.upsert",
+      value: presentedEntity("project", "/other", "finished", true),
+    }],
   });
   assertEquals(rows.row("/other", 0)?.status, "finished");
   assertEquals(rows.row("/other", 0)?.unread, true);

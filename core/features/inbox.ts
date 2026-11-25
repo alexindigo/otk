@@ -13,7 +13,6 @@ import {
   type ProjectRecord,
   type ProjectSummary,
   type ServerFrame,
-  type Supervision,
   taskEntityID,
   type TaskRecord,
   type ViewLease,
@@ -78,7 +77,6 @@ interface OperationTarget {
 }
 interface InboxMaps {
   entities: Map<string, EntityState>;
-  supervision: Map<string, Supervision>;
   summaries: Map<string, ProjectSummary>;
   projects: Map<string, ProjectRecord>;
   tasks: Map<string, TaskRecord>;
@@ -297,14 +295,14 @@ export class InboxFeature implements FrameSource {
     type Facts = {
       seen?: number;
       finish?: number;
-      supervision?: Supervision;
+
       entity?: EntityState;
     };
     let delivered: Map<string, Facts> | undefined;
     const facts = (id: string): Facts => ({
       seen: this.#seen.get(this.user)?.get(id),
       finish: this.#finishes.get(id),
-      supervision: this.#supervision.get(id),
+
       entity: this.states.get(entityKey("session", id)),
     });
     // Facts follow lease admission. Each pass compares only the sessions it
@@ -326,16 +324,6 @@ export class InboxFeature implements FrameSource {
         }
         if (current.finish !== undefined && current.finish !== before?.finish) {
           ops.push({ op: "finish", sessionID: id, time: current.finish });
-        }
-        if (
-          JSON.stringify(current.supervision) !==
-            JSON.stringify(before?.supervision)
-        ) {
-          ops.push({
-            op: "supervision",
-            sessionID: id,
-            value: current.supervision ?? null,
-          });
         }
         if (JSON.stringify(current.entity) !== JSON.stringify(before?.entity)) {
           ops.push(
@@ -401,7 +389,7 @@ export class InboxFeature implements FrameSource {
       delivered = new Map([...entries()].map((id) => [id, {
         seen: inbox.seen[id],
         finish: inbox.finishes[id],
-        supervision: inbox.supervision?.[id],
+
         entity: inbox.entities?.[entityKey("session", id)],
       }]));
       return {
@@ -613,7 +601,6 @@ export class InboxFeature implements FrameSource {
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
   #finishes = new Map<string, number>();
-  #supervision = new Map<string, Supervision>();
   readonly supervision = new SessionSupervision();
   #terminalSource?: Pick<TerminalTracking, "counts" | "listen" | "owners">;
   #dependencyOwners = new Set<string>();
@@ -657,7 +644,8 @@ export class InboxFeature implements FrameSource {
             return;
           }
           for (const id of ids) {
-            this.#supervise(id);
+            const entry = this.index.getMetadata(id);
+            if (entry) this.#observe(entry, entry);
             this.summaries.mark(id);
           }
           if (this.#dependencyOwners.size) {
@@ -728,27 +716,6 @@ export class InboxFeature implements FrameSource {
       );
     }
   }
-  #supervise(id: string): void {
-    const entry = this.index.getMetadata(id);
-    const value = entry &&
-      this.states.session(
-        entry,
-        this.#seen.get(this.user)?.get(id) ?? 0,
-        this.#finishes.get(id),
-      );
-    if (!entry) this.states.remove(id);
-    if (JSON.stringify(value) === JSON.stringify(this.#supervision.get(id))) {
-      return;
-    }
-    if (value) this.#supervision.set(id, value);
-    else this.#supervision.delete(id);
-    this.#capture("supervision", id);
-    this.#queue(`supervision:${id}`, {
-      op: "supervision",
-      sessionID: id,
-      value: value ?? null,
-    }, { sessionID: id });
-  }
   #assemblies = new Set<InboxAssembly>();
   #user = "";
   readonly states: EntityStates;
@@ -772,6 +739,13 @@ export class InboxFeature implements FrameSource {
       this.supervision,
       index,
       (upserts, removals) => this.#entities(upserts, removals),
+      undefined,
+      (id) => {
+        const entry = this.index.getMetadata(id);
+        if (!entry) return;
+        this.#observe(entry);
+        this.summaries.mark(id);
+      },
     );
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
@@ -841,15 +815,11 @@ export class InboxFeature implements FrameSource {
         }
       }),
       index.observeRemoval((id) => {
-        this.#supervise(id);
         this.summaries.remove(id);
         this.#taskRoots();
       }),
       index.observeAuthority((value) => {
         this.summaries.authority(value);
-        for (const entry of this.index.snapshotEntries()) {
-          this.#supervise(entry.id);
-        }
       }),
       index.observeSeeds((values) => {
         for (const entry of this.summaries.seed(values)) this.#observe(entry);
@@ -899,7 +869,6 @@ export class InboxFeature implements FrameSource {
       stores.finishes.listen(({ session, time, terminal }) => {
         if (terminal === undefined) return;
         this.#finishes.set(session, time);
-        this.#supervise(session);
         this.summaries.mark(session);
         this.#capture("finishes", session);
         this.#queue(`finish:${session}`, {
@@ -915,7 +884,6 @@ export class InboxFeature implements FrameSource {
         marks.set(session, time);
         this.#seen.set(user, marks);
         if (user === this.user) {
-          this.#supervise(session);
           this.summaries.mark(session);
           this.#capture("seen", session);
           this.#queue(`seen:${session}`, {
@@ -980,9 +948,6 @@ export class InboxFeature implements FrameSource {
     this.summaries.permissions(permissions);
     const changed = () => {
       this.summaries.refresh();
-      for (const entry of this.index.snapshotEntries()) {
-        this.#supervise(entry.id);
-      }
     };
     changed();
     this.#stops.push(listen(changed));
@@ -1009,7 +974,6 @@ export class InboxFeature implements FrameSource {
     const changed = (target: OperationTarget) => {
       this.#operationInput(target);
       if (target.kind === "session") {
-        this.#supervise(target.id);
         this.summaries.mark(target.id);
       } else this.summaries.touch(target.id);
     };
@@ -1047,7 +1011,6 @@ export class InboxFeature implements FrameSource {
       this.#operationInput(target);
     }
     this.summaries?.refresh();
-    for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
     this.#taskRoots();
   }
   get(view?: ViewLease, leased?: ReadonlySet<string>): InboxSnapshot {
@@ -1088,11 +1051,6 @@ export class InboxFeature implements FrameSource {
           })
           : this.#finishes,
       ),
-      supervision: Object.fromEntries(
-        leased
-          ? [...this.#supervision].filter(([id]) => leased.has(id))
-          : this.#supervision,
-      ),
       // Sessions follow the lease; aggregates are per-user scalars for all views.
       entities: Object.fromEntries(
         leased
@@ -1130,7 +1088,7 @@ export class InboxFeature implements FrameSource {
       this.#assemblies.add(assembly);
       const maps: InboxMaps = {
         entities: new Map(),
-        supervision: new Map(),
+
         summaries: new Map(),
         projects: new Map(),
         tasks: new Map(),
@@ -1160,7 +1118,7 @@ export class InboxFeature implements FrameSource {
         await copy(source.tasks, maps.tasks);
         await copy(source.seen, maps.seen);
         await copy(source.finishes, maps.finishes);
-        await copy(source.supervision, maps.supervision);
+
         await copy(source.entities, maps.entities);
         await copy(source.summaries, maps.summaries);
         this.#flush();
@@ -1172,7 +1130,6 @@ export class InboxFeature implements FrameSource {
             | ProjectRecord
             | TaskRecord
             | ProjectSummary
-            | Supervision
             | EntityState
             | number
           >;
@@ -1189,7 +1146,7 @@ export class InboxFeature implements FrameSource {
           ),
           seen: Object.fromEntries(maps.seen),
           finishes: Object.fromEntries(maps.finishes),
-          supervision: Object.fromEntries(maps.supervision),
+
           entities: Object.fromEntries(maps.entities),
           pathTemplates: [...this.#templates],
           discovered: [...this.#discovered],
@@ -1212,7 +1169,7 @@ export class InboxFeature implements FrameSource {
   #maps(): InboxMaps {
     return {
       entities: this.states.values(),
-      supervision: this.#supervision,
+
       summaries: this.summaries.values,
       projects: this.#projects,
       tasks: this.#tasks,
@@ -1243,6 +1200,7 @@ export class InboxFeature implements FrameSource {
   close(): void {
     this.#closed = true;
     this.#dependencyAbort.abort();
+    this.states.close();
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
     this.#publications.clear();
@@ -1311,9 +1269,13 @@ export class InboxFeature implements FrameSource {
       !entry.deleted && terminal &&
       terminal > (this.#finishes.get(entry.id) ?? 0)
     ) s.finishes.observe(entry.id, terminal, tx);
-    this.#supervise(entry.id);
-    const state = this.#supervision.get(entry.id)?.state;
-    const active = state === "working" || state === "needsYou";
+    this.states.session(
+      entry,
+      this.#seen.get(this.user)?.get(entry.id) ?? 0,
+      this.#finishes.get(entry.id),
+    );
+    const state = this.states.get(entityKey("session", entry.id))?.state;
+    const active = state === "working" || state === "blocked";
     const unseen = [...new Set([...this.#seen.keys(), this.user])].some((
       user,
     ) => this.#unseen(entry.id, user));

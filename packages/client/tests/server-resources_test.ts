@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionEntity } from "./supervision-fixture.ts";
 import {
   assert,
   assertEquals,
@@ -484,7 +485,6 @@ function metadata(): InboxSnapshot {
     }],
     seen: { session: 1 },
     finishes: { session: 2 },
-    supervision: { session: { state: "needsYou", terminal: 2 } },
     entities: {
       [entityKey("project", "/p")]: presentedEntity("project", "/p", "blocked"),
     },
@@ -989,7 +989,6 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
       tasks: [],
       seen: {},
       finishes: { a: 2 },
-      supervision: { a: { state: "finishedUnseen", terminal: 2 } },
       entities: {
         [entityKey("project", a.directory)]: presentedEntity(
           "project",
@@ -1015,9 +1014,8 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     from: 0,
     revision: 3,
     ops: [{ op: "seen", sessionID: "a", time: 3 }, {
-      op: "supervision",
-      sessionID: "a",
-      value: { state: "none", terminal: 2 },
+      op: "entity.upsert",
+      value: sessionEntity("a", { state: "none", terminal: 2 }),
     }, projectEntity(a.directory, "none")],
   });
   assertEquals(
@@ -1044,9 +1042,8 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     from: 3,
     revision: 5,
     ops: [{
-      op: "supervision",
-      sessionID: "a",
-      value: { state: "working", terminal: 2 },
+      op: "entity.upsert",
+      value: sessionEntity("a", { state: "working", terminal: 2 }),
     }, projectEntity("/moved", "working")],
   });
   const currentMoved = f.resources.projects(100);
@@ -1096,13 +1093,11 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     title: "New",
   }, { owner: "task" });
   void operation.result.catch(() => {});
-  // Decision 62, plan 3.3: an operation the server has not received does not
-  // colour the project; received ones arrive as entity states.
+  // An operation not yet received remains in its request owner, not in any lamp.
   assertEquals(f.resources.projectRow(p, 100)?.status, "none");
   assertEquals(
-    f.resources.metadataEntries().find((e) => e.id === "session")
-      ?.operationStatus,
-    "working",
+    f.resources.inbox("local").entities.get("session:session"),
+    undefined,
   );
   f.receive("local", {
     t: "inbox.patch",
@@ -1115,14 +1110,8 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     }],
   });
   assertEquals(
-    f.resources.metadataEntries().find((e) => e.id === "session")
-      ?.operationStatus,
+    f.resources.inbox("local").entities.get("session:other"),
     undefined,
-  );
-  assertEquals(
-    f.resources.metadataEntries().find((e) => e.id === "other")
-      ?.operationStatus,
-    "working",
   );
   rpc.receive({
     t: "request.result",
@@ -1148,9 +1137,8 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     from: 1,
     revision: 3,
     ops: [{
-      op: "supervision",
-      sessionID: "session",
-      value: { state: "needsYou", terminal: 0 },
+      op: "entity.upsert",
+      value: sessionEntity("session", { state: "needsYou", terminal: 0 }),
     }, projectEntity("/p", "blocked")],
   });
   assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
@@ -1164,9 +1152,8 @@ Deno.test("keyed project attention follows operation lifetimes, task membership,
     from: 3,
     revision: 5,
     ops: [{
-      op: "supervision",
-      sessionID: "session",
-      value: { state: "none", terminal: 0 },
+      op: "entity.upsert",
+      value: sessionEntity("session", { state: "none", terminal: 0 }),
     }, projectEntity("/p", "none")],
   });
   assertEquals(f.resources.projectRow(p, 100)?.status, "none");
@@ -1305,7 +1292,7 @@ Deno.test("server resources project per-server attention and labelled projects f
   });
   assertEquals(
     f.resources.entries().map((e) => [e.sidecarId, e.attention.permissions]),
-    [["local", 0], ["remote", 1]],
+    [["local", 1], ["remote", 1]],
   );
   f.receive("local", {
     t: "inbox.patch",
@@ -1313,9 +1300,8 @@ Deno.test("server resources project per-server attention and labelled projects f
     from: 0,
     revision: 2,
     ops: [{
-      op: "supervision",
-      sessionID: "session",
-      value: { state: "working", terminal: 2 },
+      op: "entity.upsert",
+      value: sessionEntity("session", { state: "working", terminal: 2 }),
     }, projectEntity("/p", "working")],
   });
   assertEquals(
@@ -1405,7 +1391,7 @@ Deno.test("server resource tabs cache semantic snapshots while commands and sync
   f.resources.stop();
 });
 
-Deno.test("shared projected deltas preserve manual sibling notes and fence rejected index gaps", async () => {
+Deno.test("shared projected deltas preserve manual sibling notes and fence rejected index gaps", () => {
   const f = fixture(), notes: string[] = [], changes: string[][] = [];
   const trigger = new NotificationTriggers(
     (note) => notes.push(note.kind),
@@ -1438,6 +1424,12 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
     t: "approvals",
     approvals: { enabled: ["auto"], revision: 0 },
   });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "manual",
+    revision: 0,
+    inbox: { ...metadata(), entities: {} },
+  });
   notes.length = changes.length = 0;
   f.receive("local", {
     t: "index.patch",
@@ -1463,10 +1455,23 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
       },
     ],
   });
-  assertEquals(
-    f.resources.projected("local", "root")!.attention.childPermissions,
-    1,
-  );
+  assertEquals(notes, []);
+  const manualState = sessionEntity("manual", {
+    state: "needsYou",
+    terminal: 0,
+  });
+  manualState.evidence!.permissions = 1;
+  manualState.evidence!.requests = {
+    permissions: [{ id: "permission/manual" }],
+    questions: [],
+  };
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "manual",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "entity.upsert", value: manualState }],
+  });
   assertEquals(notes, ["permission"]);
   const count = changes.length;
   f.receive("local", {
@@ -1479,26 +1484,13 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
     count,
     "a rejected gap cannot reach the projection or notifications",
   );
-  f.store.update((state) => {
-    state.list[0].harness = "reconnecting";
-  });
   assertEquals(
-    f.resources.projected("local", "root")!.attention.childPermissions,
-    2,
-  );
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  assertEquals(notes, ["permission", "permission"]);
-  f.store.update((state) => {
-    state.list[0].harness = "connected";
-  });
-  assertEquals(
-    f.resources.projected("local", "root")!.attention.childPermissions,
+    f.resources.projected("local", "manual")?.attention.permissions,
     1,
   );
   assertEquals(
-    notes,
-    ["permission", "permission"],
-    "restoring auto coverage does not clear manual sibling attention",
+    f.resources.projected("local", "auto")?.attention.permissions,
+    0,
   );
   stop();
   f.resources.stop();

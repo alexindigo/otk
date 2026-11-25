@@ -59,15 +59,8 @@ export function registerPermissionTakeover(
       ),
   });
 }
-function waitingPermissions(session: SessionPorts) {
-  return session.approvals
-    ? session.approvals.attention(session.connected?.() ?? false).permissions(
-      session.permissions(),
-    )
-    : session.permissions();
-}
 function visiblePermissions(session: SessionPorts) {
-  return waitingPermissions(session).filter((request) =>
+  return session.permissions().filter((request) =>
     session.permissionVisible?.(request) ?? true
   );
 }

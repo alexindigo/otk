@@ -26,7 +26,5 @@ export function sessionLight(
   entry: IndexEntry,
   entities: EntityStateStore = absent,
 ): LightState {
-  return lamp(entities, entityKey("session", entry.id), {
-    now: performance.now(),
-  });
+  return lamp(entities, entityKey("session", entry.id));
 }

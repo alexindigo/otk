@@ -7,6 +7,7 @@ import {
   lamp,
   liveWork as entityLiveWork,
   loadHistory,
+  permissionVisible,
   type Selection,
   type ServerResources,
   type SessionActions,
@@ -15,7 +16,6 @@ import {
   belongsToSession,
   derivedValue,
   entityKey,
-  type PermissionRequest,
   type Preferences,
 } from "@otk/protocol";
 import type { SessionPorts } from "../registries/session.tsx";
@@ -29,7 +29,6 @@ export function sessionPorts(o: {
   guard: { mark(owner: string, dirty: boolean, input?: string): void };
   prefs(): Preferences;
   tabs?(): ClientTabs | undefined;
-  permissionVisible?(sidecar: string, request: PermissionRequest): boolean;
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
@@ -108,8 +107,7 @@ export function sessionPorts(o: {
           title: resources.entry(target.sidecarId, id)?.title,
         }),
       }),
-    status: (id) =>
-      lamp(entities(), entityKey("session", id), { now: performance.now() }),
+    status: (id) => lamp(entities(), entityKey("session", id)),
     location: (id) => actions.location(target, id),
     liveWork,
     delivery: actions.delivery(target),
@@ -125,9 +123,8 @@ export function sessionPorts(o: {
         true,
       );
     },
-    permissionVisible: o.permissionVisible
-      ? (request) => o.permissionVisible!(target.sidecarId, request)
-      : undefined,
+    permissionVisible: (request) =>
+      permissionVisible(entities(), request.sessionID, request.id),
     questions: () => {
       void session.state.content;
       return connection.attention.questions(

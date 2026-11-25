@@ -21,7 +21,7 @@ export default function Failures() {
     },
     entry: () => undefined,
     observeEntries: () => () => {},
-    attention: () => {
+    entities: () => {
       throw new Error("No native attention is acquired by this scene");
     },
   });

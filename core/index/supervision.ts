@@ -52,6 +52,7 @@ export class SessionSupervision {
     entry: IndexMetadata,
     acknowledged: number,
     retainedTerminal = 0,
+    inputs = this.inputs(entry),
   ): Supervision {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
@@ -80,7 +81,6 @@ export class SessionSupervision {
         ...(outcome ? { outcome } : {}),
       };
     }
-    const inputs = this.inputs(entry);
     const needsInput = inputs.questions > 0 || inputs.permissions > 0;
     // A failed top-level run needs acknowledgement, not a successful-finish
     // lamp (2.72). Delivered-helper treatment remains the isolated C1 rule.

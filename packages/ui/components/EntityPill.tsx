@@ -42,7 +42,6 @@ export default function EntityPill(props: {
     lamp(
       props.facts.session.entities ?? absent,
       entityKey("session", props.facts.session.id ?? ""),
-      { now: performance.now() },
     );
   return (
     <Popover
@@ -109,7 +108,6 @@ export default function EntityPill(props: {
                   state={lamp(
                     props.facts.session.entities ?? absent,
                     entityKey("session", props.facts.session.id ?? ""),
-                    { now: performance.now() },
                   )}
                   small
                 />

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { entitySnapshot, sessionEntity } from "./supervision-fixture.ts";
 import { assertEquals } from "@std/assert";
 import { NotificationTriggers } from "@otk/client";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
@@ -37,14 +38,13 @@ function fixture(finishes: Record<string, number> = {}) {
         // A finish clock is not success evidence; borrow the paired supervision outcome.
         ops: [
           {
-            op: "supervision",
-            sessionID: id,
-            value: {
+            op: "entity.upsert",
+            value: sessionEntity(id, {
               state: "finishedUnseen",
               unseen: true,
               terminal: time,
               outcome: "succeeded",
-            },
+            }),
           },
           { op: "finish", sessionID: id, time },
         ],
@@ -136,20 +136,22 @@ Deno.test("a replacement view baseline remains silent even with a newer historic
         tasks: [],
         seen: {},
         finishes: { root: 10, historical: 5 },
-        supervision: {
-          root: {
-            state: "finishedUnseen",
-            terminal: 10,
-            unseen: true,
-            outcome: "succeeded",
+        entities: entitySnapshot({
+          supervision: {
+            root: {
+              state: "finishedUnseen",
+              terminal: 10,
+              unseen: true,
+              outcome: "succeeded",
+            },
+            historical: {
+              state: "finishedUnseen",
+              unseen: true,
+              terminal: 5,
+              outcome: "succeeded",
+            },
           },
-          historical: {
-            state: "finishedUnseen",
-            unseen: true,
-            terminal: 5,
-            outcome: "succeeded",
-          },
-        },
+        }),
         pathTemplates: [],
       },
     });

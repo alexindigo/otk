@@ -53,7 +53,6 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
                 entities(),
                 session?.workEntityKey?.() ??
                   entityKey("session", session?.sessionID() ?? ""),
-                { now: performance.now() },
               )}
             />
             <ChromeMeta class="otk-control-label">

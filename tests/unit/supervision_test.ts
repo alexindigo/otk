@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { SessionSupervision } from "../../core/index/supervision.ts";
 import type { IndexMetadata, SupervisionEvidence } from "@otk/protocol";
-import { inboxProjects, inboxStatus } from "@otk/client";
+import { createEntityStateStore, inboxProjects, lamp } from "@otk/client";
 import { ProjectSummaries } from "../../core/index/project-summaries.ts";
 
 function entry(
@@ -99,20 +99,29 @@ Deno.test("scalar indexing cannot erase a project lamp and children retain unsee
     finishes: {},
     pathTemplates: [],
     summaries: { "/fixture": summary },
+    entities: Object.fromEntries(summaries.states.values()),
   }, 0);
   assertEquals(rows[0]?.status, "finished");
 });
 Deno.test("client consumers never reconstruct activity from metadata or completion bookkeeping", () => {
   const row = entry({ work: { keys: ["run"], fresh: true } });
-  const inbox = { seen: {}, finishes: { [row.id]: 100 } };
-  assertEquals(inboxStatus(row, inbox), "none");
-  assertEquals(
-    inboxStatus(row, {
-      ...inbox,
-      supervision: { [row.id]: { state: "finishedUnseen", terminal: 100 } },
-    }),
-    "finished",
-  );
+  const inbox = { finishes: { [row.id]: 100 } };
+  const key = `session:${row.id}`;
+  let values = {};
+  const replica = createEntityStateStore({ read: () => values });
+  assertEquals(lamp(replica, key), "none");
+  values = {
+    [key]: {
+      kind: "session",
+      id: row.id,
+      state: "finished",
+      previous: "none",
+      counts: { blocked: 0, working: 0, finished: 1, unseen: 1 },
+    },
+  };
+  assertEquals(inbox.finishes[row.id], 100);
+  assertEquals(lamp(replica, key), "finished");
+  replica.stop();
 });
 Deno.test("unacknowledged helper failure owns needs-you lamps and the project rollup", () => {
   let seen = 0;

@@ -48,6 +48,27 @@ const base: IndexMetadata = {
 const keys = (...values: string[]) => ({ keys: values, fresh: true });
 
 function owner() {
+  let now = 0;
+  const timers = new Map<() => void, number>();
+  const clock = {
+    now: () => now,
+    set: (callback: () => void, delay: number) => {
+      timers.set(callback, now + delay);
+      return callback;
+    },
+    clear: (timer: unknown) => {
+      timers.delete(timer as () => void);
+    },
+  };
+  const mature = () => {
+    now += 500;
+    for (const [callback, due] of timers) {
+      if (due <= now) {
+        timers.delete(callback);
+        callback();
+      }
+    }
+  };
   const entries = new Map<string, IndexMetadata>();
   const published: { upserts: EntityState[]; removals: string[] }[] = [];
   const family = {
@@ -77,13 +98,14 @@ function owner() {
     family,
     (upserts, removals) =>
       published.push({ upserts: [...upserts], removals: [...removals] }),
+    clock,
   );
   const put = (entry: IndexMetadata, seen = 0) => {
     entries.set(entry.id, entry);
     return states.session(entry, seen);
   };
   const get = (id: string) => states.get(entityKey("session", id));
-  return { entries, published, states, supervision, put, get };
+  return { entries, published, states, supervision, put, get, mature };
 }
 
 test("D66: parent delivery and native run clocks survive human seen independently", () => {
@@ -172,6 +194,8 @@ test("each supervision verdict maps to one session lamp state and cause", () => 
     activity: { work: keys("run"), permissions: keys("per_1") },
     attention: { ...base.attention, permissions: 1 },
   });
+  assertEquals(o.get("s")?.state, "working");
+  o.mature();
   assertEquals(o.get("s")?.state, "blocked");
   assertEquals(o.get("s")?.cause, "permission");
   assertEquals(o.get("s")?.previous, "working");
@@ -366,6 +390,7 @@ test("live work belongs to the entity owner, including blocked helpers, title ch
     activity: { work: keys("native"), permissions: keys("permission") },
   };
   o.put(helper);
+  o.mature();
   assertEquals(o.get("root")?.state, "none");
   assertEquals(
     o.get("root")?.evidence?.liveWork?.map((
@@ -395,6 +420,7 @@ test("a task keeps the same identity and permission grace across checkout bounda
     activity: { permissions: keys("per_helper") },
   };
   o.put(child);
+  o.mature();
   const get = () => o.states.get(entityKey("task", "task/review"));
   assertEquals(get()?.state, "blocked");
   assertEquals(get()?.cause, "permission");
@@ -559,6 +585,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
       );
     }
     index.upsert({ ...child, activity: { permissions: keys("per_child") } });
+    await new Promise((done) => setTimeout(done, 525));
     await settle();
     assertEquals(get()?.state, "blocked");
     assertEquals(
@@ -693,10 +720,11 @@ test("a fresh location form blocks its checkout and project with cause form", ()
   assertEquals(state("project", "/repo")?.state, "working");
 });
 
-test("an aggregate blocked only by permissions shares their grace cause", () => {
+test("an aggregate blocked only by permissions shares their grace cause", async () => {
   const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
   const asking = row("a", "/repo", { permissions: keys("per_1") });
   owner.entry({ ...asking, attention: { ...base.attention, permissions: 1 } });
+  await new Promise((done) => setTimeout(done, 525));
   assertEquals(state("project", "/repo")?.cause, "permission");
   assertEquals(state("global", "global")?.cause, "permission");
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_1" }]);
@@ -705,6 +733,8 @@ test("an aggregate blocked only by permissions shares their grace cause", () => 
     ...row("a", "/repo", { permissions: keys("per_2") }),
     attention: { ...base.attention, permissions: 1 },
   });
+  assertEquals(state("project", "/repo")?.requests, undefined);
+  await new Promise((done) => setTimeout(done, 525));
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_2" }]);
   assertEquals(state("checkout", "/repo")?.requests, [{ id: "per_2" }]);
   owner.entry(row("b", "/repo", { inputs: keys("que_1") }));

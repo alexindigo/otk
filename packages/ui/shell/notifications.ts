@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  type ApprovalModel,
-  type AttentionGrace,
   commandFailureFacts,
   type CommandHub,
+  type EntityStateStore,
   type EntryChanges,
   failureNote,
   type Note,
@@ -13,6 +12,7 @@ import {
   NotificationTriggers,
   oldestPermission,
   permissionNoteDetail,
+  permissionVisible,
   requestIdle,
   type Selection,
   type SidecarConnection,
@@ -41,8 +41,7 @@ export function applicationNotifications(input: {
     sidecar: string,
     listener: (changes: EntryChanges) => void,
   ): () => void;
-  attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
-  grace?: AttentionGrace;
+  entities(sidecar: string): EntityStateStore;
 }) {
   const context = () => {
     const selected = input.selection();
@@ -180,9 +179,14 @@ export function applicationNotifications(input: {
       ).then((requests) => {
         if (candidates.get(incoming.id) !== incoming) return;
         const request = oldestPermission(
-          input.attention(ref.sidecar).permissions(requests).filter((request) =>
-            !incoming.dismissalKey ||
-            incoming.dismissalKey === `permission/${request.id}`
+          requests.filter((request) =>
+            permissionVisible(
+              input.entities(ref.sidecar),
+              request.sessionID,
+              request.id,
+            ) &&
+            (!incoming.dismissalKey ||
+              incoming.dismissalKey === `permission/${request.id}`)
           ),
           ref.session,
           (id) => input.entry(ref.sidecar, id),
@@ -229,7 +233,6 @@ export function applicationNotifications(input: {
     undefined,
     undefined,
     undefined,
-    input.grace,
   );
   const update = () => {
     os.refresh();

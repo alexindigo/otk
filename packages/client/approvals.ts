@@ -10,7 +10,6 @@ import {
 } from "@otk/protocol";
 import type { InboxRpc } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { approvalAttention } from "./approval-attention.ts";
 
 export interface ApprovalState {
   ready: boolean;
@@ -27,7 +26,6 @@ export interface ApprovalModel {
   receive(frame: ServerFrame): void;
   owner(sessionID: string): string | undefined;
   canEnable(sessionID: string): boolean;
-  attention(linked: boolean): ReturnType<typeof approvalAttention>;
   activityFor(sessionID: string): ApprovalState["activity"];
   setAuto(sessionID: string, enabled: boolean): Promise<void>;
   selectActivity(sessionID: string): Promise<void>;
@@ -84,12 +82,6 @@ export function createApprovals(
       return autoApproveOwner(id, model.state.snapshot.enabled, lookup);
     },
     canEnable: (id) => canAutoApprove(lookup(id)),
-    attention: (linked) =>
-      approvalAttention(
-        model.state.snapshot.enabled,
-        lookup,
-        linked && model.state.ready,
-      ),
     activityFor(id) {
       const current = model.state.activity;
       return current.sessionID === id

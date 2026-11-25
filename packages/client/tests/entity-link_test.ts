@@ -60,7 +60,7 @@ Deno.test("link loss stales every entity consumer, and reconnect waits for accep
       },
     });
     const store = resources.inbox("local").entities;
-    const state = () => lamp(store, "session:s", { now: 0 });
+    const state = () => lamp(store, "session:s");
     assertEquals(state(), "working");
     servers.update((s) => s.list[0].status = "reconnecting");
     assertEquals(state(), "none");

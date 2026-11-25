@@ -14,36 +14,6 @@ import {
 } from "../entity-state.ts";
 import { createInbox } from "../inbox.ts";
 
-function clock() {
-  let now = 0, sequence = 0;
-  const timers = new Map<number, { due: number; callback(): void }>();
-  return {
-    now: () => now,
-    set(callback: () => void, ms: number) {
-      const id = ++sequence;
-      timers.set(id, { due: now + ms, callback });
-      return id;
-    },
-    clear(id: unknown) {
-      timers.delete(id as number);
-    },
-    get pending() {
-      return timers.size;
-    },
-    tick(ms: number) {
-      const end = now + ms;
-      while (true) {
-        const next = [...timers].filter(([, t]) => t.due <= end)
-          .sort((a, b) => a[1].due - b[1].due)[0];
-        if (!next) break;
-        now = next[1].due;
-        timers.delete(next[0]);
-        next[1].callback();
-      }
-      now = end;
-    },
-  };
-}
 const counts = { blocked: 0, working: 0, finished: 0, unseen: 0 };
 const session = (
   state: EntityState["state"],
@@ -67,7 +37,7 @@ const session = (
   },
   ...extra,
 });
-const S = entityKey("session", "s"), P = entityKey("project", "/p");
+const S = entityKey("session", "s");
 
 Deno.test("session execution excludes shell-only activity and stale evidence", async () => {
   const { sessionRunning } = await import("../entity-state.ts") as Record<
@@ -152,13 +122,9 @@ Deno.test("session row observations borrow work and retry evidence independently
 });
 
 function fixture() {
-  const time = clock();
   const values: Record<string, EntityState> = {};
-  const arrivals = new Map<string, number>();
   const store = createEntityStateStore({
     read: () => values,
-    clock: time,
-    arrival: (id) => arrivals.get(id),
   });
   const transitions: EntityTransition[] = [];
   store.subscribe((t) => transitions.push(t));
@@ -173,58 +139,8 @@ function fixture() {
     delete values[key];
     store.observe([key], "live");
   };
-  return { time, values, arrivals, store, transitions, put, remove };
+  return { values, store, transitions, put, remove };
 }
-
-Deno.test("one request deadline serves every surface and aggregate, with or without motion", () => {
-  const f = fixture();
-  f.put(session("working"));
-  f.arrivals.set("p", 0);
-  f.put(session("blocked", { cause: "permission" }, ["p"]));
-  f.put({
-    kind: "project",
-    id: "/p",
-    state: "blocked",
-    cause: "permission",
-    previous: "working",
-    counts: { ...counts, blocked: 1 },
-    requests: [{ id: "p" }],
-  });
-  for (const reducedMotion of [true, false]) {
-    for (const surface of ["lamp", "composer"] as const) {
-      const options = { now: 499, reducedMotion, surface };
-      assertEquals(lamp(f.store, S, options), "working");
-      assertEquals(lamp(f.store, P, options), "working");
-    }
-  }
-  const revision = f.store.revision;
-  f.time.tick(500);
-  assertEquals(f.store.revision > revision, true, "the deadline re-renders");
-  assertEquals(lamp(f.store, S, { now: 500 }), "blocked");
-  assertEquals(lamp(f.store, P, { now: 500, reducedMotion: false }), "blocked");
-  assertEquals(f.time.pending, 0);
-  f.store.stop();
-});
-
-Deno.test("an equal-count replacement starts its own grace while a survivor keeps its deadline", () => {
-  const f = fixture();
-  f.arrivals.set("survives", 0).set("short", 0);
-  f.put(session("blocked", { cause: "permission" }, ["survives", "short"]));
-  f.time.tick(300);
-  f.arrivals.set("replacement", 300);
-  f.put(
-    session("blocked", { cause: "permission" }, ["survives", "replacement"]),
-  );
-  assertEquals(lamp(f.store, S, { now: 499 }), "working");
-  f.time.tick(200);
-  assertEquals(lamp(f.store, S, { now: 500 }), "blocked");
-  // Without the survivor, the replacement alone is graced until 800.
-  f.put(session("blocked", { cause: "permission" }, ["replacement"]));
-  assertEquals(lamp(f.store, S, { now: 799 }), "working");
-  f.time.tick(300);
-  assertEquals(lamp(f.store, S, { now: 800 }), "blocked");
-  f.store.stop();
-});
 
 Deno.test("questions, forms, operations and failed helpers are immediate", () => {
   const f = fixture();
@@ -232,29 +148,20 @@ Deno.test("questions, forms, operations and failed helpers are immediate", () =>
     const cause of ["question", "form", "operation", "failedHelper"] as const
   ) {
     f.put(session("blocked", { cause }, ["p"]));
-    assertEquals(lamp(f.store, S, { now: 0 }), "blocked", cause);
+    assertEquals(lamp(f.store, S), "blocked", cause);
   }
-  f.store.stop();
-});
-
-Deno.test("an unknown arrival is timed from the client receipt of the blocked state", () => {
-  const f = fixture();
-  f.time.tick(100);
-  f.put(session("blocked", { cause: "permission" }, ["unknown"]));
-  assertEquals(lamp(f.store, S, { now: 599 }), "working");
-  assertEquals(lamp(f.store, S, { now: 600 }), "blocked");
   f.store.stop();
 });
 
 Deno.test("absent and stale entities read as none (D6)", () => {
   const f = fixture();
-  assertEquals(lamp(f.store, S, { now: 0 }), "none");
+  assertEquals(lamp(f.store, S), "none");
   f.put(session("working"));
   f.store.stale(true);
-  assertEquals(lamp(f.store, S, { now: 0 }), "none");
+  assertEquals(lamp(f.store, S), "none");
   assertEquals(liveWork(f.store, S), undefined);
   f.store.stale(false);
-  assertEquals(lamp(f.store, S, { now: 0 }), "working");
+  assertEquals(lamp(f.store, S), "working");
   f.store.stop();
 });
 
@@ -316,7 +223,6 @@ Deno.test("the inbox replica feeds the store: baselines are historical, admitted
     undefined,
     undefined,
     undefined,
-    (id) => id === "p" ? 0 : undefined,
   );
   const transitions: EntityTransition[] = [];
   model.entities.subscribe((t) => transitions.push(t));
@@ -361,6 +267,6 @@ Deno.test("the inbox replica feeds the store: baselines are historical, admitted
     ],
   );
   assertEquals(model.entities.get(S)?.state, "finished");
-  assertEquals(model.entities.arrival("p"), 0);
+
   model.stop();
 });

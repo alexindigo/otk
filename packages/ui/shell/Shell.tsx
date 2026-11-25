@@ -59,10 +59,8 @@ import DeletedSession from "../components/DeletedSession.tsx";
 import { deletedFacts, sessionEvidence, sessionRunning } from "@otk/client";
 import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
-import { AttentionProvider } from "../registries/attention.tsx";
 import { insertChip } from "../components/prompt/model.ts";
 import { createTerminalConnectionOwner } from "../terminal/connections.ts";
-import { attentionPresentation } from "../state/attention-grace.ts";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -99,7 +97,6 @@ export default function Shell(
     inbox,
     approvals,
     entry,
-    attention,
     entries,
     tabs: tabsFor,
   } = resources;
@@ -117,10 +114,6 @@ export default function Shell(
     set: (value) => resources.setPreference("models.recent", value),
     fail: (cause) => navigation.fail(cause),
   });
-  const attentionPaint = attentionPresentation(
-    resources,
-    () => toggles.state.prefs.animationsOff,
-  );
   const settings = () => navigation.state.settings;
   const error = () => navigation.state.error;
   const project = () => navigation.state.project;
@@ -155,9 +148,8 @@ export default function Shell(
     transcript: () => !branchHistory.state.opened,
     connection: (id) => sidecars.connection(id),
     entry,
-    attention,
+    entities: resources.entities,
     observeEntries: resources.observeEntries,
-    grace: attentionPaint.grace,
   });
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
@@ -473,7 +465,7 @@ export default function Shell(
     }));
   }
   return (
-    <AttentionProvider ports={attentionPaint}>
+    <>
       <CommandProvider
         commands={commands}
         keyboard={keyboard}
@@ -789,7 +781,6 @@ export default function Shell(
                               session,
                               guard,
                               prefs: () => toggles.state.prefs,
-                              permissionVisible: attentionPaint.permission,
                               tabs: () => {
                                 const owner = project();
                                 return owner ? tabsFor(owner) : undefined;
@@ -968,6 +959,6 @@ export default function Shell(
           </div>
         </ShellProvider>
       </CommandProvider>
-    </AttentionProvider>
+    </>
   );
 }

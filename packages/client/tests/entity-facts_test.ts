@@ -80,9 +80,7 @@ Deno.test("historical reply facts borrow the current entity replica across recon
     },
   };
   const state = () =>
-    lamp(entityFacts(identity, source).session.entities!, "session:s", {
-      now: 0,
-    });
+    lamp(entityFacts(identity, source).session.entities!, "session:s");
   assertEquals(state(), "none");
   status = "working";
   assertEquals(state(), "working");
