@@ -169,7 +169,10 @@ test("transport.server-discovery-outcomes-and-cancel", {
     await expect(url).toBeEditable();
     await url.fill(endpoints.allowed); // the captured held request stays owned separately
     await expect(steps).toContainText("Connecting");
-    await expect(steps.locator("li span")).not.toHaveText("0.0s");
+    // TimeText (D65) owns nested parts; observe the one elapsed-time value.
+    const elapsed = steps.locator("li > .otk-time");
+    await expect(elapsed).toBeVisible();
+    await expect(elapsed).not.toHaveText("0.0s");
     await capture("running");
     await settings.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(steps).toContainText("was cancelled");
