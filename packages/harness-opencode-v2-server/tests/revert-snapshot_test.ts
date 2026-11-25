@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { Transcript } from "../transcript.ts";
 import { factsFrom, scalarMessage } from "../transcript-reads.ts";
 import type { V2Client } from "../client.ts";
-import type { MessagePolicy } from "@otk/protocol";
+import type { Message, MessagePolicy } from "@otk/protocol";
 import type { NativeMessage, NativeSession } from "../messages.ts";
 
 function fixture(revert?: NativeSession["revert"]) {
@@ -96,6 +96,33 @@ Deno.test("V2 scoped archive reads only requested bodies and validates without b
       validate: true,
     });
     assertEquals(changed.revisions!.p > page.revisions!.p, true);
+  } finally {
+    await t.stop();
+  }
+});
+
+Deno.test("V2 scoped archive resolves retained display IDs without a native body read", async () => {
+  const { t, id, reads } = fixture();
+  const retained: Message = {
+    id: "request:failure:fixture",
+    sessionID: id,
+    role: "context",
+    time: { created: 2 },
+    parts: [],
+  };
+  try {
+    await t.requests.put({
+      id: "failure:fixture",
+      sessionID: id,
+      outcome: retained,
+      position: { after: 1, rank: 1, basis: "stream" },
+    });
+    const page = await t.snapshot(id, undefined, undefined, {
+      messageIDs: ["p", retained.id],
+    });
+    assertEquals(page.items.map((m) => m.id), ["p", retained.id]);
+    assertEquals(page.items[1].sourceOrder, 1.5);
+    assertEquals(reads, ["p"]);
   } finally {
     await t.stop();
   }

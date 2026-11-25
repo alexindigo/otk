@@ -60,6 +60,7 @@ import {
 } from "./native-source.ts";
 import {
   positionOrder,
+  requestKey,
   type RequestPosition,
   type RequestRetention,
   V2RequestRetention,
@@ -1409,29 +1410,39 @@ export class Transcript {
       revisions = this.replay.revisions(id, scope.messageIDs);
     const items: Message[] = [];
     if (!scope.validate) {
-      const facts = await this.#facts({
-        sessionID: id,
-        messages: scope.messageIDs,
-      }, signal);
+      const retained = new Map<string, Message>();
+      const nativeIDs: string[] = [];
       for (const messageID of scope.messageIDs) {
         signal.throwIfAborted();
-        const retained = await this.requests.get(id, messageID);
-        if (retained?.outcome) {
-          const order = retained.position && positionOrder(retained.position);
-          items.push({
-            ...retained.outcome,
+        const entry = await this.requests.get(id, requestKey(messageID));
+        if (entry?.outcome) {
+          const order = entry.position && positionOrder(entry.position);
+          retained.set(messageID, {
+            ...entry.outcome,
+            id: messageID,
             ...(order === undefined ? {} : { sourceOrder: order }),
           });
+        } else nativeIDs.push(messageID);
+      }
+      signal.throwIfAborted();
+      const facts = nativeIDs.length
+        ? await this.#facts({ sessionID: id, messages: nativeIDs }, signal)
+        : undefined;
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const outcome = retained.get(messageID);
+        if (outcome) {
+          items.push(outcome);
           continue;
         }
-        const raw = await this.reader.get(id, messageID, signal),
-          context = facts.contexts[messageID];
-        if (!context) {
+        const context = facts?.contexts[messageID];
+        if (!facts || !context) {
           throw new HarnessError(
             "capture-stale",
             "Message metadata changed during archive capture",
           );
         }
+        const raw = await this.reader.get(id, messageID, signal);
         const mapped = raw.type === "idle" && raw.outcome === "failed"
           ? (await this.#executionFailureValue(
             id,
@@ -1673,7 +1684,7 @@ export class Transcript {
           clockRows = await Promise.all(unanchored.pending.map(async (key) => {
             const value = await this.requests.get(
               id,
-              key.replace(/^request:/, ""),
+              requestKey(key),
             );
             if (!value?.outcome) {
               throw new HarnessError(
@@ -2196,7 +2207,7 @@ export class Transcript {
     message: Message,
     signal: AbortSignal = this.#lifetime.signal,
   ): Promise<void> {
-    const key = message.id.replace(/^request:/, "");
+    const key = requestKey(message.id);
     const previous = await this.requests.get(message.sessionID, key);
     signal.throwIfAborted();
     await this.#observe(
