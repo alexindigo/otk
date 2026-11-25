@@ -6,24 +6,36 @@
 .otk-trail-measure {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 0;
   min-inline-size: 0;
 }
 .otk-trail-link {
   inline-size: 100%;
 }
-.otk-trail-session {
-  --selection-padding: 0 var(--chrome-inset) 0 0;
+/* The same box is measured, linked and edited. Its inset also gives the
+   shared focus ring room and spaces either side of each separator. */
+.otk-session-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   min-inline-size: 0;
+  block-size: var(--control-size);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-control);
   color: var(--otk-fg-3);
-  padding: 0;
-  height: var(--control-size);
-  flex: 1 1 auto;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.otk-session-crumb.is-current {
+  color: var(--otk-fg);
+  font-weight: 500;
 }
 .otk-trail-separator {
   display: flex;
   align-items: center;
   flex: none;
+  color: var(--otk-fg-3);
 }
 .otk-trail-separator > svg {
   inline-size: var(--icon-compact);
@@ -37,7 +49,10 @@
 }
 .otk-trail-title {
   min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  text-underline-offset: 0.2em;
 }
 .otk-trail-first,
 .otk-trail-ellipsis {
@@ -56,7 +71,9 @@
 .otk-trail-tail > span {
   flex: none;
 }
-.otk-trail-session[data-crumb-kind="ancestor"] .otk-trail-title {
+a.otk-session-crumb:is(:hover, :focus-visible) {
+  color: var(--otk-fg);
+}
+a.otk-session-crumb:is(:hover, :focus-visible) .otk-trail-title {
   text-decoration: underline;
-  text-underline-offset: 0.15em;
 }

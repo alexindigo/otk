@@ -2,8 +2,10 @@
 import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
-import { Requests } from "@otk/store";
-import { nativeEffect } from "../requests/policies.ts";
+import {
+  assertUncontestedRecovery,
+  nativeEffect,
+} from "../requests/policies.ts";
 import { boundaryIntent, boundaryReceipt } from "./session-receipts.ts";
 import type { ContentSession, RequestReceipts } from "@otk/protocol";
 import type { RpcExecutionPolicy } from "../requests/types.ts";
@@ -30,11 +32,8 @@ function execution<P extends { sessionID: string }>(
         : boundaryReceipt.validate(receipt),
     recover: async (ctx, record, operation) => {
       const complete = record.receipt_kind === boundaryReceipt.kind;
-      if (
-        complete ||
-        record.receipt_kind === boundaryIntent.kind &&
-          !new Requests(ctx.store).superseded(record)
-      ) {
+      if (complete || record.receipt_kind === boundaryIntent.kind) {
+        if (!complete) assertUncontestedRecovery(ctx, record);
         const expected = (complete ? boundaryReceipt : boundaryIntent).restore(
           record,
         );
@@ -42,19 +41,19 @@ function execution<P extends { sessionID: string }>(
           expected.sessionID,
           operation.signal,
         );
+        if (!complete) assertUncontestedRecovery(ctx, record);
         if (
           !complete && expected.mode === "restore" &&
           expected.after !== undefined &&
           !current.revert && ctx.harness.capabilities.restore?.settle
         ) {
-          return {
-            state: "complete",
-            result: await ctx.harness.capabilities.restore.settle(
-              expected.sessionID,
-              expected.after,
-              operation,
-            ),
-          };
+          const result = await ctx.harness.capabilities.restore.settle(
+            expected.sessionID,
+            expected.after,
+            operation,
+          );
+          assertUncontestedRecovery(ctx, record);
+          return { state: "complete", result };
         }
         if (
           complete ||

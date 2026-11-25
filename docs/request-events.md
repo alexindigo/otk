@@ -30,11 +30,14 @@ native effect cannot overtake an earlier one. Features explicitly declare
 `ordering: "target"` when conflicting metadata needs its own lifetime permission
 (the feature's resource, or its method/session target), so an older pending
 enable cannot overwrite a later disable and membership intents for the same task
-retain their order. A resource identity alone does not imply serialization:
-closing a task remains independent of held membership validation, which must
-revalidate ownership before writing. Independent metadata does not borrow either
-permission. Interrupts retain their explicit priority bypass. Neither yielding
-nor re-queuing resends a handler or weakens its intent duplicate fence, atomic
+retain their order. Ordered local intents keep their place while a failed write
+awaits storage recovery, and restart rebuilds that order from durable admission
+before accepting replacement input. Neither wait keeps an executing turn. A
+resource identity alone does not imply serialization: closing a task remains
+independent of held membership validation, which must revalidate ownership
+before writing. Independent metadata does not borrow either permission.
+Interrupts retain their explicit priority bypass. Neither yielding nor
+re-queuing resends a handler or weakens its intent duplicate fence, atomic
 metadata receipt, dispatch fence or cancellation cleanup.
 
 Registrations distinguish strictly local metadata from `prepared-local` metadata
@@ -63,7 +66,10 @@ OTK and stock opencode do not share a transaction. An unconfirmed native effect
 can remain **Checking whether this finished** until identity-specific evidence
 establishes an outcome. Generic idle activity, elapsed time, a matching title or
 the disappearance of an approval is not evidence that this particular action
-succeeded or failed. There is no repeat-effect Retry action for this state.
+succeeded or failed. There is no repeat-effect Retry action for this state. When
+a newer durable intent makes mutable evidence ambiguous, the older unconfirmed
+change closes with an unknown outcome, not success or a retry. An
+already-confirmed receipt stays authoritative.
 
 Prompt submission completes when the native async endpoint confirms it was sent;
 the agent's subsequent reply has its own lifecycle. Shell, command and

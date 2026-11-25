@@ -64,6 +64,8 @@
   --item-inset: calc(12 * var(--otk-unit));
   --panel-inset: calc(20 * var(--otk-unit));
   --pill-inset: var(--item-inset);
+  --pill-block-inset: var(--space-1);
+  --pill-work-inset: var(--space-2);
   /* Prototype chrome geometry, shared by the bars that reserve its corners. */
   --rail-width: calc(48 * var(--otk-unit));
   --chrome-header-height: calc(52 * var(--otk-unit));
@@ -200,9 +202,7 @@ p {
 .otk-chip {
   display: inline-flex;
   background: var(--otk-hover);
-  padding: calc(4 * var(--otk-unit)) calc(8 * var(--otk-unit));
   margin-right: calc(8 * var(--otk-unit));
-  border-radius: var(--radius-pill);
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -285,16 +285,19 @@ small {
   flex-basis: 0;
 }
 .otk-pill {
-  height: var(--row-compact);
+  min-block-size: var(--row-compact);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: calc(8 * var(--otk-unit));
-  padding: 0 var(--pill-inset);
-  border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-size: var(--text-ui);
   line-height: 1;
+}
+/* Shared pill paint box: padding stays inside every interaction state. */
+:is(.otk-pill, .otk-chip, .otk-pill-surface) {
+  padding: var(--pill-block-inset) var(--pill-inset);
+  border-radius: var(--radius-pill);
 }
 .otk-icon-button {
   width: var(--control-size);

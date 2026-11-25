@@ -11,7 +11,7 @@ import type { ActionControl, Feedback } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
-import type { selection } from "./selection.ts";
+import type { location, selection } from "./selection.ts";
 
 /** Availability and execution are one input; callers cannot replace the handler. */
 export default function ActionButton(props: {
@@ -23,6 +23,7 @@ export default function ActionButton(props: {
   href?: string;
   ref?(element: HTMLElement): void;
   selection?: ReturnType<typeof selection>;
+  location?: ReturnType<typeof location>;
   attributes?: {
     [attribute: `data-${string}`]: string | number | undefined;
   };
@@ -75,7 +76,8 @@ export default function ActionButton(props: {
   const native = nativeAttributes(() => ({
     ...props.attributes,
     ...props.selection,
-    class: props.selection?.class ?? props.class,
+    ...props.location,
+    class: props.location?.class ?? props.selection?.class ?? props.class,
     onClick: activate,
   }));
   const Control = dynamic(() => props.href === undefined ? "button" : "a");

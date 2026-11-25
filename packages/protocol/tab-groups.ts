@@ -94,24 +94,30 @@ export function projectTabGroups(
   const byID = new Map(sessions.map((entry) => [entry.id, entry]));
   const scopedDirectory = (directory: string | undefined) =>
     scopes.has(directory) ? options.directory ?? directory : directory;
+  const rootFor = (id: string) => hierarchy.get(id)?.rootID;
+  const taskByID = new Map(tasks.map((task) => [task.id, task]));
+  const owners = new Map<string, TabGroup>();
+  const taskOfRoot = (root: string) => {
+    if (byID.has(root)) {
+      return taskByID.get(taskHierarchy.get(root)?.taskID ?? "");
+    }
+    const reserved = owners.get(root);
+    if (reserved?.kind === "task") return taskByID.get(reserved.id);
+  };
   const projectFor = (id: string) => {
-    const node = hierarchy.get(id);
-    // D8 changes membership, not native ancestry. When tasks follow their
-    // parent, a descendant's effective project is its task/human root's.
-    const inherited = options.followParent
-      ? node?.taskDirectory ??
-        (node?.rootID
-          ? hierarchy.get(node.rootID)?.projectDirectory
-          : undefined)
+    // A checkout is a view of the partition. When following parents, its
+    // inherited scope comes from the same human root that owns the subtree.
+    const root = options.followParent ? rootFor(id) : undefined;
+    const inherited = root
+      ? taskOfRoot(root)?.directory ?? hierarchy.get(root)?.projectDirectory
       : undefined;
-    return scopedDirectory(inherited) ?? node?.projectDirectory ??
+    return scopedDirectory(inherited) ?? hierarchy.get(id)?.projectDirectory ??
       scopedDirectory(byID.get(id)?.directory);
   };
   const local = (id: string) =>
     options.directory === undefined ||
     scopes.has(byID.get(id)?.directory) ||
     projectFor(id) === options.directory;
-  const taskByID = new Map(tasks.map((task) => [task.id, task]));
   const groups = new Map<string, TabGroup>();
   const group = (kind: TabGroup["kind"], id: string): TabGroup => {
     const key = `${kind}/${id}`;
@@ -128,7 +134,6 @@ export function projectTabGroups(
     return value;
   };
   // Keep empty tasks and explicit identities whose metadata has not arrived.
-  const owners = new Map<string, TabGroup>();
   for (const task of tasks) {
     const known = task.sessions.flatMap((id) =>
       byID.has(id) ? [byID.get(id)!] : []
@@ -185,12 +190,10 @@ export function projectTabGroups(
       path.push(id);
       const parent = localParent(id);
       if (!parent) {
-        const rootID = hierarchy.get(id)?.rootID ??
+        const rootID = rootFor(id) ??
           (!byID.get(id)?.parentID ? id : undefined);
         if (rootID && byID.has(rootID) && !byID.get(rootID)!.parentID) {
-          const rootTask = taskByID.get(
-            taskHierarchy.get(rootID)?.taskID ?? "",
-          );
+          const rootTask = taskOfRoot(rootID);
           owner = rootTask &&
               groups.has(`task/${rootTask.id}`)
             ? group("task", rootTask.id)

@@ -168,7 +168,6 @@ export default function Scene() {
       />
       <Subagents
         entities={tabs.entities()}
-        taskKey={tabs.trail().task}
         helpers={(() => {
           void tabs.state.revision;
           const store = tabs.entities(), key = tabs.trail().task;
@@ -176,6 +175,7 @@ export default function Scene() {
         })()}
         current={session()?.id ?? ""}
         title={(id) => id}
+        agent={() => undefined}
         openAction={(id) =>
           commands.control("list.open-helper", undefined, {
             target: { label: id },

@@ -17,7 +17,12 @@ function stateErrors(source: string): string[] {
     "aria-pressed",
     "data-selected",
   ]);
-  const classes = new Set(["is-selected", "is-highlighted", "otk-selected"]);
+  const classes = new Set([
+    "is-selected",
+    "is-highlighted",
+    "otk-selected",
+    "is-current",
+  ]);
   for (const node of parsed.all) {
     if (
       (node.type === "JSXAttribute" || node.type === "ObjectProperty") &&
@@ -112,6 +117,7 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
       "<button data-selected={chosen}>",
       '<button class="is-selected">',
       '<button class="is-highlighted">',
+      '<span class="is-current" />',
       '<button class={["row", {"is-selected": chosen}]}>',
       '<button class={["row", {"otk-selected": chosen}]}>',
       'element.setAttribute("aria-selected", "true")',
@@ -123,6 +129,7 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
     stateErrors('<button {...selection({selected, kind: "current"})} />'),
     [],
   );
+  assertEquals(stateErrors("<span {...location({current})} />"), []);
   for (
     const invalid of [
       "[aria-selected=true] { background: red; }",

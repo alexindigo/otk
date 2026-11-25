@@ -33,6 +33,8 @@ export interface PointAnchor {
   focus(): void;
 }
 
+export const POPOVER_BOUNDS = "otk-popover-bounds";
+
 /** Native top-layer dismissal and anchoring belong here, never to content. */
 export default function Popover(props: {
   label: string;
@@ -50,6 +52,7 @@ export default function Popover(props: {
   >;
   title?: string;
   size?: "wide" | "content" | "fit";
+  place?: "bounds-end";
   density?: "menu";
   class?: string;
   dismissOnAction?: boolean;
@@ -307,6 +310,7 @@ export default function Popover(props: {
               "otk-popover-wide": props.size === "wide",
               "otk-popover-content": props.size === "content",
               "otk-popover-fit": props.size === "fit",
+              "otk-popover-bounds-end": props.place === "bounds-end",
               "otk-popover-point": !!point() && !point()!.width &&
                 !point()!.height,
             }]}

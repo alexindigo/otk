@@ -329,8 +329,10 @@ export class Requests {
     integer(limit, 1);
     return this.db.connection.prepare(
       `SELECT ${columns.join(",")} FROM request_receipts WHERE ${active}${
-        after ? " AND (principal,client_id,intent_key)>(?,?,?)" : ""
-      } ORDER BY principal,client_id,intent_key LIMIT ?`,
+        after
+          ? ` AND rowid>(SELECT rowid FROM request_receipts WHERE ${predicate})`
+          : ""
+      } ORDER BY rowid LIMIT ?`,
     ).all(...(after ? keys(after) : []), limit) as unknown as RequestRecord[];
   }
   sweep(now: number, limit: number): number {

@@ -24,3 +24,38 @@ Deno.test("failed history remains visible and retryable without a native resend"
   assertEquals(writes, 3);
   assertEquals(errors.snapshot("s").observations, []);
 });
+
+Deno.test("session deletion drains running history and discards failed or late jobs", async () => {
+  const published: number[] = [];
+  const errors = new SessionErrors((_id, state) =>
+    published.push(state.observations.length)
+  );
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const records = new Set<string>();
+  let retries = 0;
+  await assertRejects(() =>
+    errors.retainHistory("s", "failed", () => {
+      if (!retries++) throw new Error("disk full");
+      records.add("failed");
+    })
+  );
+  const write = errors.retainHistory("s", "running", async () => {
+    entered.resolve();
+    await release.promise;
+    records.add("running");
+  });
+  await entered.promise;
+  const removed = Promise.resolve(errors.remove("s")).then(() =>
+    records.clear()
+  );
+  await errors.retainHistory("s", "late", () => {
+    records.add("late");
+  });
+  release.resolve();
+  await Promise.all([write, removed]);
+  await errors.retryHistory();
+  assertEquals([...records], []);
+  assertEquals(retries, 1);
+  assertEquals(published, [1, 0]);
+});

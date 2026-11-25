@@ -810,7 +810,10 @@ dismissal, `Menu` supplies a normal-flow item column and `Toast` supplies the
 card in the fixed notification stack. Overlay tokens and the
 content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
 legends are layout-neutral grouping, never cards.
-`panels.register({ id, title, icon, capability?,
+
+Regions declare `POPOVER_BOUNDS`: Popover clamps to the nearest region or the
+viewport gutter, and `place="bounds-end"` aligns it to the region's end above
+it. `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons are feature-owned render components; the host does not
 dispatch concrete view icons. `RightPanel` mounts available registrations with a
@@ -913,13 +916,16 @@ and retirement cancel it, including late readiness. SessionView registers
 `transcript.latest` once for the button, palette and `/latest`. The control is
 an absolute overlay inside a relative transcript wrapper, centred at its bottom
 edge with one `--jump-bottom-inset`. Composer/takeover content stays outside
-that wrapper, so the control never covers it. Hidden or shown, it reserves no
-layout space and never changes transcript/composer geometry. It appears only
-more than one viewport from the bottom; temporary coverage of transcript text is
-permitted there. Only the visible button accepts pointer input; the lane passes
-it through. The existing icon button borrows menu/popover background, border,
-foreground and shadow tokens, so its raised surface separates the arrow from
-underlying text without introducing paint tokens or changing its geometry.
+that wrapper, so the control never covers it. The live transcript's block rhythm
+supplies its only tail gap; there is no additional scrollport inset after a
+reply. Delivery feedback joins that flow only while a receipt needs a visible
+status. Hidden or shown, the jump control reserves no layout space and never
+changes transcript/composer geometry. It appears only more than one viewport
+from the bottom; temporary coverage of transcript text is permitted there. Only
+the visible button accepts pointer input; the lane passes it through. The
+existing icon button borrows menu/popover background, border, foreground and
+shadow tokens, so its raised surface separates the arrow from underlying text
+without introducing paint tokens or changing its geometry.
 
 The same viewport intent owner admits return-anchor acquisition through
 `restore(ready, apply)`. Later latest/reveal/input or retirement aborts its

@@ -2106,14 +2106,14 @@ export class OpencodeV1Adapter implements Harness {
       );
     } else this.#questions.remove(id);
   }
-  #disposeSession(id: string): void {
+  #disposeSession(id: string): Promise<void> {
     const sink = this.#sink;
     this.#liveWork.delete(id);
     this.#terminals.delete(id);
     this.#terminalCandidates.delete(id);
     this.#idle.delete(id);
     this.#abortCommands(id);
-    this.#errors.remove(id);
+    const history = this.#errors.remove(id);
     for (const [key, pending] of this.#permissions) {
       if (pending.request.sessionID !== id) continue;
       this.#permissions.delete(key);
@@ -2149,6 +2149,7 @@ export class OpencodeV1Adapter implements Harness {
     this.buffers.removeSession(id);
     this.#selectionIntents.release(ids.decode(id));
     this.#transcript.release(id);
+    return history;
   }
   /** Read the shared metadata identity for an accepted native authority fact. */
   #metadata(id: string): IndexEntry | undefined {
@@ -2160,7 +2161,7 @@ export class OpencodeV1Adapter implements Harness {
   /** End native ownership while retaining the authoritative metadata identity. */
   retireSession(id: string): void {
     this.#retired.add(id);
-    this.#disposeSession(id);
+    void this.#disposeSession(id);
     const entry = this.#index.getMetadata(id);
     if (entry) {
       entry.status = "idle";
@@ -2471,7 +2472,7 @@ export class OpencodeV1Adapter implements Harness {
       if (typeof id !== "string" || !id) {
         throw new Error("Malformed session.deleted: session id missing");
       }
-      this.#disposeSession(ids.encode(id));
+      await this.#disposeSession(ids.encode(id));
       this.#retention.remove(ids.encode(id));
       if (this.digest?.projects) {
         const seeds = await this.digest.projects(

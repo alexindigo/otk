@@ -81,10 +81,11 @@ acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
 Permission-not-found/already-settled tags and definite permission HTTP 404s
-retire the same pending identity as settled elsewhere. Later callers do not
-dispatch retired or unknown identities. Settlement barriers last for the pending
-owner's lifetime; stale inventories and events cannot resurrect them after a
-fixed number of newer settlements.
+retire the same pending identity as settled elsewhere. A later reply is a no-op
+only for a confirmed settlement. If no route is available and settlement is
+unproven, the reply fails without dispatch. Settlement barriers last for the
+pending owner's lifetime; stale inventories and events cannot resurrect them
+after a fixed number of newer settlements.
 
 Each successful kind/location inventory owns only its own absence facts. Failed
 inventories retain known unresolved identities and payloads for still-loaded
@@ -133,15 +134,18 @@ lamps live.
 Permission/form events update only their own pending identity and ancestor
 attention deltas, never re-read every location or active family. Pending counts
 and running shells have keyed indexes; the shared metadata index's topology
-observations keep attention coherent when another producer learns a parent.
-Metadata, project and topology-inventory refreshes coalesce by key outside event
-dispatch. Obsolete reads cannot publish over a newer request or deletion; an
-inventory cannot retire/stale requests delivered during its acquisition. Native
-metadata events use scalar session facts and observed activity clocks rather
-than scanning message bodies for recency. Missing shell identities use one
-demand-owned, cancellable lookup outside dispatch, releasing each bounded page.
-Refresh failures retire the stream generation for canonical resync, and refresh
-queue pressure accompanies the dispatch diagnostics.
+observations keep attention and live request delivery coherent for descendants
+when another producer learns or moves an ancestor. Requests without a location
+wait in V2Pending until keyed metadata or inventory supplies it. This path does
+not depend on request-history writes succeeding. Metadata, project and
+topology-inventory refreshes coalesce by key outside event dispatch. Obsolete
+reads cannot publish over a newer request or deletion; an inventory cannot
+retire/stale requests delivered during its acquisition. Native metadata events
+use scalar session facts and observed activity clocks rather than scanning
+message bodies for recency. Missing shell identities use one demand-owned,
+cancellable lookup outside dispatch, releasing each bounded page. Refresh
+failures retire the stream generation for canonical resync, and refresh queue
+pressure accompanies the dispatch diagnostics.
 
 After requested work drains, the shared scheduler can discover scalar sessions
 in Active projects through bounded newest-first SQL keysets or native API

@@ -102,8 +102,8 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
             metadata
           ),
         );
-        requests.storageRecovered();
       },
+      () => requests.storageRecovered(),
     ),
   ];
   let bootstrap: BootstrapRequests | undefined;

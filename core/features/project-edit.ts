@@ -6,10 +6,10 @@ import {
   type ProjectPatch,
   sha256,
 } from "@otk/protocol";
-import { Requests } from "@otk/store";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, text } from "../ws/params.ts";
 import {
+  assertUncontestedRecovery,
   metadataReceipt,
   nativeEffect,
   nativeExecution,
@@ -73,23 +73,29 @@ export function registerProjectEdit(rpc: RpcRegistry, harness: Harness): void {
           edited.restore(record);
           return { state: "complete", result: null };
         }
-        if (
-          record.receipt_kind === intent.kind &&
-          !new Requests(ctx.store).superseded(record)
-        ) {
+        if (record.receipt_kind === intent.kind) {
+          // Older versions could settle a successful readback with the intent
+          // witness still attached. The durable terminal state is authoritative.
+          if (record.state === "succeeded") {
+            return { state: "complete", result: null };
+          }
+          assertUncontestedRecovery(ctx, record);
           const expected = intent.restore(record);
           const current = await capability.read(
             expected.directory,
             execution.signal,
           );
-          if (
-            current.projectID === expected.projectID &&
+          const matches = current.projectID === expected.projectID &&
             (await Promise.all(
               Object.entries(expected.hashes).map(async ([field, hash]) =>
                 await sha256(current.values[field as ProjectEditField]) === hash
               ),
-            )).every(Boolean)
-          ) return { state: "complete", result: null };
+            )).every(Boolean);
+          assertUncontestedRecovery(ctx, record);
+          if (matches) {
+            await execution.checkpoint(edited.kind, edited.encode(expected));
+            return { state: "complete", result: null };
+          }
         }
         return {
           state: "pending",

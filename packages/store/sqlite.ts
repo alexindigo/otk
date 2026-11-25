@@ -5,6 +5,7 @@ import { transaction } from "./transaction.ts";
 import {
   processStorage,
   type StorageAvailability,
+  type StorageConnection,
   StorageFailure,
   storageProblem,
 } from "./availability.ts";
@@ -62,9 +63,8 @@ export class SqliteDb {
   readonly connection: DatabaseSync;
   readonly observerError: (error: unknown) => void;
   readonly availability: StorageAvailability;
-  readonly #path: string;
   readonly #probeWrite: () => void;
-  #unregister?: () => void;
+  readonly #storage: StorageConnection;
   constructor(
     statePath: string,
     filename: string,
@@ -81,7 +81,7 @@ export class SqliteDb {
     validateMigrations(migrations);
     this.observerError = options.observerError ??
       ((error) => console.error("Store observer failed after commit", error));
-    const path = this.#path = join(statePath, filename);
+    const path = join(statePath, filename);
     this.availability = options.availability ?? processStorage;
     const owner = this.availability;
     const guard = <T>(operation: string, run: () => T): T => {
@@ -93,7 +93,8 @@ export class SqliteDb {
         const error = cause instanceof StorageFailure
           ? cause
           : new StorageFailure(problem, path, operation, cause);
-        owner.failed(error);
+        if (this.#storage) this.#storage.failed(error);
+        else owner.failed(error);
         throw error;
       }
     };
@@ -175,8 +176,8 @@ export class SqliteDb {
             "INSERT OR REPLACE INTO otk_storage_probe VALUES(1, randomblob(4096))",
           );
         });
-      this.#unregister = owner.register(path, this.#probeWrite);
       logSettings(db, options.diagnostic);
+      this.#storage = owner.register(path, this.#probeWrite);
     } catch (error) {
       try {
         db.close();
@@ -191,20 +192,20 @@ export class SqliteDb {
     }
   }
   transaction<T>(run: () => T): T {
-    const failure = this.availability.failure(this.#path);
+    const failure = this.#storage.failure();
     if (failure) throw failure;
     return transaction(this.connection, run);
   }
   /** An explicit replacement owner must prove a commit, not merely reopen. */
   probe(): void {
     this.#probeWrite();
-    this.availability.recovered(this.#path);
+    this.#storage.recovered();
   }
   close(): void {
     try {
       this.connection.close();
     } finally {
-      this.#unregister?.();
+      this.#storage.close();
     }
   }
 }

@@ -9,6 +9,10 @@ const boundaries = [
     "otk-app",
     "otk-popover-trigger",
     "otk-chrome-icon",
+    "otk-session-crumb",
+    "otk-crumb-title",
+    "otk-trail-session",
+    "otk-trail-title",
   ]],
   ["components/ProjectInbox.css", [
     "otk-status-light",
