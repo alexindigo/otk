@@ -13,6 +13,7 @@ import { layoutRequestMetadata } from "./preferences/layout.ts";
 import { catalogRequestMetadata } from "./catalogs.ts";
 import { projectEditRequestMetadata } from "./project-edit.ts";
 import { terminalRequestMetadata } from "./terminals.ts";
+import { localFileRequestMetadata } from "./local-files.ts";
 /** Shipped composition; the registry itself imports no features. */
 export function createRequestMetadata(): RequestMetadataRegistry {
   const registry = new RequestMetadataRegistry();
@@ -31,6 +32,7 @@ export function createRequestMetadata(): RequestMetadataRegistry {
       catalogRequestMetadata,
       projectEditRequestMetadata,
       terminalRequestMetadata,
+      localFileRequestMetadata,
     ]
   ) {
     for (const [method, metadata] of Object.entries(feature)) {

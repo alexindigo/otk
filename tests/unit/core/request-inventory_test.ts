@@ -324,6 +324,10 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     signal: new AbortController().signal,
   });
   registerTerminals(rpc, terminals);
+  Core.registerLocalFiles(
+    rpc,
+    new Core.LocalFiles({ home: terminalRoot, deny: [] }),
+  );
   const rows = [
     "tasks.create",
     "tasks.rename",
@@ -399,6 +403,8 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "terminal.list",
     "terminal.create",
     "terminal.close",
+    "file.stat",
+    "file.preview",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -423,7 +429,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 32, // Retained archive pages and terminal inventory are separate reads.
+      read: 34,
       native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
       local: 11,
       "prepared-local": 6,
