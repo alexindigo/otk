@@ -24,7 +24,11 @@ test.describe("project catalog", () => {
       finished = root + "/projects/finished-discovery";
     await page.goto(state.url);
     // Session-bearing index-origin projects now belong to Active, not Discovered.
-    await expect(page.locator(".otk-discovered-toggle")).toContainText("(1)");
+    await expect(page.locator(".otk-discovered-toggle")).toHaveAccessibleName(
+      "Discovered projects, 1",
+    );
+    await expect(page.locator(".otk-discovered-toggle .otk-chrome-meta"))
+      .toHaveText("1");
     await expect(row(root + "/projects/linked")).toHaveCount(0);
     await expect(
       row(empty).getByRole("img", { name: "No known activity", exact: true }),
@@ -37,8 +41,12 @@ test.describe("project catalog", () => {
     );
     await expect(row(empty)).toHaveAttribute("data-group", "discovered");
     expect(
-      await page.locator(".otk-inbox-scroll > *").evaluateAll((es) =>
-        es.map((e) => e.className).filter((s) => s.includes("toggle"))
+      await page.locator(
+        ".otk-inbox-scroll .otk-discovered-toggle, .otk-inbox-scroll .otk-inactive-toggle",
+      ).evaluateAll((es) =>
+        es.flatMap((e) =>
+          Array.from(e.classList).filter((s) => s.endsWith("-toggle"))
+        )
       ),
     ).toEqual(["otk-discovered-toggle", "otk-inactive-toggle"]);
     await openSession(state, page, "tstv1-atmosphera");

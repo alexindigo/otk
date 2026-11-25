@@ -52,6 +52,7 @@ import { ProjectAvatar } from "./ProjectChip.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 import ChromeMeta, { SectionHeader } from "./ChromeMeta.tsx";
 import { solidState } from "../state/binding.ts";
+import { orderInteraction } from "./order-interaction.ts";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -63,6 +64,7 @@ export default function ProjectInbox(props: {
   selected?: ProjectSelection;
   prefs: Preferences;
   ready: boolean;
+  holdOrder?(): () => void;
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
@@ -73,6 +75,7 @@ export default function ProjectInbox(props: {
   ): Promise<void>;
 }): import("solid-js").Element {
   const disclosure = createProjectDisclosure(solidState);
+  const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
   const inactiveDisclosure = disclosure.bind(
     "inactive",
     { directory: "" },
@@ -410,7 +413,7 @@ export default function ProjectInbox(props: {
     async (value: boolean) => {
       await discoveredDisclosure.set(value);
     },
-    { arguments: { type: "local" } },
+    { arguments: { type: "boolean" } },
   );
   function Row(
     row: { project: ProjectRow; connected?: boolean },
@@ -582,13 +585,17 @@ export default function ProjectInbox(props: {
       </div>
     );
   }
+  const rootContext = contextTarget(() => ({
+    kind: "projects",
+    area: true,
+    data: undefined,
+  }));
   return (
     <SidebarRail
-      ref={contextTarget(() => ({
-        kind: "projects",
-        area: true,
-        data: undefined,
-      }))}
+      ref={(element) => {
+        rootContext(element);
+        orderInput(element);
+      }}
       class="otk-project-inbox"
       label="Projects"
       side="left"

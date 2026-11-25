@@ -97,3 +97,80 @@ Deno.test("historical failure backfill and acknowledgement replay stay silent; a
     f.resources.stop();
   }
 });
+
+Deno.test("live native terminal advances independently of a lagging or replaced inbox view", () => {
+  const f = shellFixture(), notes: Note[] = [];
+  const trigger = new NotificationTriggers(
+    (note) => notes.push(note),
+    () => {},
+  );
+  f.resources.observeEntries(
+    "local",
+    (change) => trigger.entriesChanged("local", change),
+  );
+  const entry = { ...shellEntry("root"), activity: { terminal: 0 } };
+  f.resources.receive("local", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [entry],
+  });
+  f.resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "lagging",
+    revision: 0,
+    inbox: {
+      projects: [],
+      tasks: [],
+      pathTemplates: [],
+      seen: {},
+      finishes: {},
+      supervision: { root: { state: "none", terminal: 0, unseen: false } },
+    },
+  });
+  try {
+    f.resources.receive("local", {
+      t: "index.patch",
+      from: 0,
+      rev: 1,
+      ops: [{
+        op: "upsert",
+        entry: {
+          ...entry,
+          activity: {
+            terminal: 100,
+            terminalOrigin: "live",
+            outcome: "succeeded",
+          },
+        },
+      }],
+    });
+    assertEquals(notes.map((note) => note.title), ["Session done"]);
+    // View replacement may seed the same known terminal instead of delivering
+    // the earlier view's live inbox patch. It must not erase or redeliver it.
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "lagging",
+      revision: 2,
+      inbox: {
+        projects: [],
+        tasks: [],
+        pathTemplates: [],
+        seen: {},
+        finishes: { root: 100 },
+        supervision: {
+          root: {
+            state: "finishedUnseen",
+            terminal: 100,
+            unseen: true,
+            terminalOrigin: "live",
+            outcome: "succeeded",
+          },
+        },
+      },
+    });
+    assertEquals(notes.length, 1);
+  } finally {
+    trigger.stop();
+    f.resources.stop();
+  }
+});

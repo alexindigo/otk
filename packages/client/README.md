@@ -11,6 +11,11 @@ unresolved input stays owned by its entry. The ten-second observation bound
 starts at Send. Timeout Retry only reacquires existing source; definitive
 refusal offers an explicit send retry.
 
+The delivery callback marks the native dispatch boundary. A refusal before that
+boundary retires only the unsubmitted local entry, retaining the draft and its
+preparation owner's feedback. Native identity evidence still wins over late
+refusal; dispatched failures retain their original entry and Retry action.
+
 `SessionActions` also owns source-free, session-bound submission receipts.
 Native acceptance carries a message identity; only the canonical transcript can
 admit it, and only the viewport can report its presentation. The ten-second
@@ -168,6 +173,16 @@ keyed patches. Unchanged project/task objects retain identity; revision gaps
 coalesce complete-baseline recovery and stale baselines cannot replace newer
 accepted state. Action receipts settle operations; only this stream owns current
 task membership.
+
+Presentation order uses `createStableOrder`: saved positions seed task/project
+order, otherwise immutable creation or source discovery order seeds the list.
+Existing identities never move on activity, state, title or refresh. New rows
+append; only changed saved positions reorder existing positioned slots. The tabs
+model owns the strip and Sessions task-group permutation. Sidebar rows borrow
+the same contract within their repository topology. Counted holds retain
+departing pointer/focus and portalled-origin targets until every borrower
+releases them; arrivals append without displacing those targets. Lamps stay
+live.
 
 Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
 preserves originating sidecar IDs and valid partial histories when another
@@ -391,7 +406,9 @@ Native Source previews have one transcript-owned per-reference resource.
 does not read. Structural ownership follows the current path when an opaque
 reference moves. Accepted changes invalidate the matching structural owner
 without decoding plugin references; open demand refreshes automatically and
-coalesces pending replacements. Obsolete results cannot publish. Unchanged
+coalesces pending replacements. Producer-owned exact-source revisions
+distinguish equal replays from raw-only changes; sources without a revision
+retain conservative invalidation. Obsolete results cannot publish. Unchanged
 remounts and themes reuse both successful and failed outcomes; Retry explicitly
 refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.
@@ -936,9 +953,8 @@ framework or item count folding threshold. The UI retains stable frames and
 supplies measured widths.
 
 Breadcrumbs use the one-line shrinking contract, with independent More controls
-for omitted identities. Task strips render the client-owned urgency/recency
-order directly in a horizontal scroll lane, without overflow fitting or
-wrapping.
+for omitted identities. Task strips render the client-owned stable saved order
+directly in a horizontal scroll lane, without overflow fitting or wrapping.
 
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
 confirmation policy. Release reads the invocation-current draft through
@@ -1220,10 +1236,9 @@ Navigation instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished
 but unseen, working, none. Never use display order to choose the most urgent
 session, or urgency to paint a rollup. Project and task lights consume
 supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs sort by attention urgency, not their
-aggregate lamp colour, then newest family `timeUpdated`, with identity as a
-stable tie-break. Stored task order remains available for future pinning; it
-does not drive the strip. Discovery retains its recency/name order.
+attention until acknowledged. Task tabs use saved task order, and phantoms use
+immutable creation order. Discovery retains source inventory order when it has
+no saved position or native creation clock. Activity never orders these lists.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
@@ -1367,6 +1382,11 @@ The same project owner supplies stable `projectMetadata` and keyed
 `path`, `family` and `crumbs` share one keyed family/adjacency derivation.
 `path()` holds the open session and known ancestor links; `family()` carries
 explicit task members and mandatory descendants with each session's own state.
+
+Crumb clicks forward only the explicit session identity to guarded navigation.
+The accepted route reconciles its actual owning tab; the previously selected
+task never assigns membership or overrides a crumb's target.
+
 `crumbs()` renders the path followed by off-path working, blocked and
 finished-unseen members. Settlement and acknowledgement retire only the off-path
 member, never open identity. `working()` borrows that family's working helpers

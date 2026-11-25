@@ -259,7 +259,8 @@ test("menus.project-dots-shared-projection-owned-failure-and-readiness", {
           .getBoundingClientRect(),
         r = el.getBoundingClientRect();
       return r.top >= action.bottom && r.bottom <= row.bottom &&
-        r.left >= action.left && r.right <= row.right;
+        Math.abs(r.left - row.left) <= .5 &&
+        Math.abs(r.right - row.right) <= .5;
     })
   ).toBe(true);
   await page.locator("#disconnect-project").evaluate((el) =>

@@ -30,7 +30,11 @@ test.describe("inactive supervision", () => {
         await row.locator(".otk-menu-items button").click();
         await expect(row).toHaveCount(0);
       }
-      await expect(page.locator(".otk-inactive-toggle")).toContainText("(3)");
+      await expect(page.locator(".otk-inactive-toggle")).toHaveAccessibleName(
+        "Inactive, 3",
+      );
+      await expect(page.locator(".otk-inactive-toggle .otk-chrome-meta"))
+        .toHaveText("3");
       await activity(state, "tstv1-otk", "hold");
       await activity(state, "tstv1-atmosphera", "thaw");
       await activity(state, "tstv1-globnotes", "hold");
@@ -148,7 +152,7 @@ test.describe("filtered and unmounted supervision", () => {
       await visibleOnScreen(
         page.locator(`${project} .otk-status-light[data-state=blocked]`),
       );
-      await page.locator(`${project} .otk-project-open`).click();
+      await page.locator(`${project} .otk-project-attention`).click();
       // Decision 7: blocked attention outranks the remembered working session.
       await expect(page).toHaveURL(/tstv1-background-blocked$/);
       for (

@@ -87,6 +87,22 @@ Deno.test("activity spans summarize mixed records and preserve every reveal path
   assertEquals(value.owners.r6, "activity:r1");
 });
 
+Deno.test("empty and mixed context records retain shape and count failures across all parts", () => {
+  const empty = { ...record("r1"), parts: [] };
+  const failure = record("r2", { tone: "error" });
+  const mixed = {
+    ...failure,
+    parts: [
+      { kind: "text" as const, id: "text", synthetic: true, blocks: [] },
+      ...failure.parts,
+    ],
+  };
+  const value = group([empty, mixed]);
+  assertEquals(value.groups["activity:r1"].members, ["r1", "r2"]);
+  assertEquals(value.groups["activity:r1"].breakouts, ["r1", "r2"]);
+  assertEquals(value.groups["activity:r1"].failureTitle, "1 failed");
+});
+
 Deno.test("unsafe records break out inside one interval; conversation separates intervals", () => {
   for (
     const activity of [

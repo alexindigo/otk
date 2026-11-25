@@ -46,7 +46,14 @@ test(
     const server = page.locator("[data-settings-sidecar]").filter({
       hasText: "Remote notification host",
     });
-    await expect(server).toContainText("connected");
+    await expect(
+      server.getByRole("img", {
+        name:
+          "Connected. Remote notification host: connected; agent service connected",
+        exact: true,
+      }),
+    )
+      .toBeVisible();
     const sidecar = (await server.getAttribute("data-settings-sidecar"))!;
     await closeSettings(page);
     await page.getByRole("button", { name: "Collapse projects", exact: true })

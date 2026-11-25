@@ -84,7 +84,8 @@ test(
     await painted(other, "system", "#f4eee3");
     await openTheme(page);
     await page.locator("button[name=systemLightTheme]").click();
-    await page.getByRole("option", { name: "Stone", exact: true }).click();
+    await page.getByRole("option", { name: "OTK Light, Stone", exact: true })
+      .click();
     for (const p of [page, other]) await painted(p, "system", "#f5f3ef");
     expect((await state.product("prefs.get", {})).systemLightTheme).toBe(
       "otk-light-stone",
@@ -134,7 +135,7 @@ test(
       page.getByRole("dialog", { name: "Theme", exact: true }).getByRole(
         "alert",
       ),
-    ).toContainText("failed for");
+    ).toHaveAccessibleName(/Saving failed for This server:/);
     await expect(page.getByRole("button", { name: "Save theme", exact: true }))
       .toBeEnabled();
     await expect(page.locator('.otk-toast[data-kind="error"]')).toHaveCount(0);

@@ -531,6 +531,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       }],
       ["prompt", {
         sessionID: "tstv1-s",
+        messageID: undefined,
         parts,
         mode: "normal",
         model,

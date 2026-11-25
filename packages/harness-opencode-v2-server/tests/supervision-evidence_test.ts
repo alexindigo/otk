@@ -10,17 +10,21 @@ Deno.test("V2 terminal clocks require a qualified outcome or a completed shell",
   assertEquals(terminalFacts(100, "failed"), {
     terminal: 100,
     outcome: "failed",
+    terminalOrigin: "historical",
   });
   assertEquals(terminalFacts(100, "succeeded", 200), {
     terminal: 200,
     outcome: undefined,
+    terminalOrigin: "historical",
   });
   assertEquals(terminalFacts(100, "failed", 100), {
     terminal: 100,
     outcome: "failed",
+    terminalOrigin: "historical",
   });
   assertEquals(terminalFacts(100, "interrupted"), {
     terminal: 100,
     outcome: "interrupted",
+    terminalOrigin: "historical",
   });
 });

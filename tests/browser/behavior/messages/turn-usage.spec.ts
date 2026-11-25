@@ -131,9 +131,9 @@ test("messages.priced-native-multistep-usage-display-persistence", {
       .toBeLessThanOrEqual(.005);
     expect(values[i][9]).toBe(
       `${
-        ((detail.calls[i].timing?.state === "known"
+        Number(((detail.calls[i].timing?.state === "known"
           ? detail.calls[i].timing.workingMs
-          : NaN) / 1000).toFixed(1)
+          : NaN) / 1000).toFixed(1))
       }s`,
     );
   }

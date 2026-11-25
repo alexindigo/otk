@@ -44,6 +44,7 @@ import {
 import { contextTarget } from "./context-target.ts";
 import { sessionState } from "./selection.ts";
 import { digestLabel, digestProgress } from "@otk/client";
+import { orderInteraction } from "./order-interaction.ts";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
@@ -54,6 +55,7 @@ export default function ProjectSessions(props: {
   metadata?(id: string): MergedMetadata | undefined;
   entry?(id: string): IndexEntry | undefined;
   interaction?: ListInteraction;
+  holdOrder?(): () => void;
   project?: ProjectSelection;
   ready?: boolean;
   loading?: boolean;
@@ -69,6 +71,7 @@ export default function ProjectSessions(props: {
   onCreate(project: ProjectSelection): void | Promise<unknown>;
 }): import("solid-js").Element {
   const [query, setQuery] = createSignal(props.interaction?.query ?? "");
+  const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
   const [error, setError] = createSignal<FailureValue>("");
   let visibleKeys: readonly string[] = [];
   onCleanup(() => props.onRows?.([], query()));
@@ -190,6 +193,7 @@ export default function ProjectSessions(props: {
   );
   return (
     <nav
+      ref={orderInput}
       class="otk-project-sessions"
       aria-label="Project sessions"
       data-session-project={props.project?.directory}

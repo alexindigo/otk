@@ -21,6 +21,10 @@ function fixture() {
       projection.send(value);
       for (const listener of listeners) listener();
     },
+    cancelSend(messageID: string) {
+      projection.cancelSend(messageID);
+      for (const listener of listeners) listener();
+    },
     state: { clock: { epoch: "content", seq: 2 } },
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -165,7 +169,7 @@ Deno.test("rejected native send leaves failure and draft settlement to the reque
 Deno.test("pending input is visible before acknowledgement and commits by identity before result", async () => {
   const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
   const entry = {
-    intent: { clientID: "tab", key: "send-key", window: "window" },
+    intent: { clientID: "tab", key: "send-key" },
     message: pendingMessage("msg_local", "opcv2-root", [{
       kind: "text",
       text: "Sent now",
@@ -202,6 +206,38 @@ Deno.test("pending input is visible before acknowledgement and commits by identi
   f.owner.stop();
 });
 
+Deno.test("refused submission preparation retires only its unsubmitted entry, leaving the failure with its preparation owner", async () => {
+  const f = fixture();
+  const entry = {
+    intent: { clientID: "tab", key: "preparation" },
+    message: pendingMessage("msg_preparation", "opcv2-root", [{
+      kind: "text",
+      text: "Retained draft",
+    }]),
+    phase: "pending" as const,
+  };
+  await assertRejects(
+    () =>
+      f.owner.send(() =>
+        Promise.reject(
+          new RequestFailure({
+            code: "archive.storage",
+            retry: "new-intent",
+            diagnosticID: "preservation",
+            facts: {
+              actionLabel: "Saving an earlier branch",
+              reason: "Storage is full",
+            },
+          }),
+        ), entry),
+    RequestFailure,
+  );
+  assertEquals(f.projection.entry(entry.message.id), undefined);
+  assertEquals(f.owner.state.receipts, []);
+  assertEquals(f.counts().timers, 0);
+  f.owner.stop();
+});
+
 Deno.test("unacknowledged send has bounded visible failure; Retry observes without another mutation", async () => {
   const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
   let sends = 0;
@@ -209,7 +245,7 @@ Deno.test("unacknowledged send has bounded visible failure; Retry observes witho
     sends++;
     return acknowledgement.promise;
   }, {
-    intent: { clientID: "tab", key: "send-key", window: "window" },
+    intent: { clientID: "tab", key: "send-key" },
     message: pendingMessage("msg_timeout", "opcv2-root", [{
       kind: "text",
       text: "Keep me",
@@ -243,7 +279,7 @@ Deno.test("a local pending body cannot satisfy native admission or suppress read
   await f.owner.send(
     () => Promise.resolve({ messageID: "msg_pending", state: "accepted" }),
     {
-      intent: { clientID: "tab", key: "send-key", window: "window" },
+      intent: { clientID: "tab", key: "send-key" },
       message: pendingMessage("msg_pending", "opcv2-root", [{
         kind: "text",
         text: "Native source still missing",
@@ -264,8 +300,9 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
   const f = fixture();
   let retries = 0;
   await assertRejects(() =>
-    f.owner.send(() =>
-      Promise.reject(
+    f.owner.send((dispatch) => {
+      dispatch();
+      return Promise.reject(
         new RequestFailure({
           code: "native.refused",
           retry: "new-intent",
@@ -276,8 +313,9 @@ Deno.test("definite failure retains the prompt and Retry action in that same ent
             record: { messageID: "native-failure" },
           },
         }),
-      ), {
-      intent: { clientID: "tab", key: "send-key", window: "window" },
+      );
+    }, {
+      intent: { clientID: "tab", key: "send-key" },
       message: pendingMessage("msg_failure", "opcv2-root", [{
         kind: "text",
         text: "Retained",

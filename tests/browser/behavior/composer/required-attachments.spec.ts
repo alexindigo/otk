@@ -69,7 +69,8 @@ for (const mode of ["prompt", "command"] as const) {
           await expect(failure)
             .toContainText(/Cannot read attachment "?selected\.txt"?/);
           await expect(failure)
-            .toContainText("Required attachments");
+            .not.toContainText("Required attachments");
+          await expect(failure.locator(".otk-failure-target")).toHaveCount(0);
           expect(await readDraft()).toEqual(original);
           expect((await state.observe<{ requests: unknown[] }>()).requests)
             .toHaveLength(0);

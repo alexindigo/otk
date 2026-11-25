@@ -65,6 +65,10 @@ export async function inboxBrowserFixture(
     terminal: entry.status === "idle" && previous?.activity?.work?.keys.length
       ? Date.now()
       : previous?.activity?.terminal,
+    terminalOrigin:
+      entry.status === "idle" && previous?.activity?.work?.keys.length
+        ? "live"
+        : previous?.activity?.terminalOrigin,
     work: {
       keys: entry.status === "idle" ? [] : [`fixture-run:${entry.id}`],
       fresh: true,

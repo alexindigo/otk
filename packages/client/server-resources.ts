@@ -56,6 +56,7 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
+import { createStableOrder } from "./stable-order.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -93,6 +94,8 @@ export interface ServerResources {
   frecencyCatalog(id: string, directory: string): FrecencyCatalogLease;
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
+  holdTaskOrder(project: ProjectSelection): () => void;
+  holdProjectOrder(): () => void;
   taskActions(project: ProjectSelection): TaskActions;
   entry(sidecarId: string, sessionID: string): IndexEntry | undefined;
   server(id: string): SidecarState | undefined;
@@ -175,6 +178,11 @@ export function createServerResources(o: {
   ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
+  const projectOrderClock = factory({ revision: 0 });
+  const projectOrder = createStableOrder<{
+    id: string;
+    row: ProjectProjectionRow & { sidecarId: string; label: string };
+  }>(() => projectOrderClock.update((s) => s.revision++));
   const lifetimeClock = factory({ revision: 0 });
   const requestSubscriptions = new Map<string, () => void>();
   const requests = (id: string) => {
@@ -406,6 +414,7 @@ export function createServerResources(o: {
           id: entry.id,
           directory: entry.directory,
           title: entry.title,
+          timeCreated: entry.timeCreated,
           parentID: entry.parentID,
           retained: !!entry.deleted,
           hierarchy: entry.hierarchy,
@@ -955,6 +964,12 @@ export function createServerResources(o: {
     approvals,
     forms: (id) => requests(id).forms(),
     tabs,
+    holdTaskOrder(p) {
+      const model = tabs(p);
+      model.update(tabInput(p));
+      return model.holdOrder();
+    },
+    holdProjectOrder: () => projectOrder.hold(),
     entry,
     server,
     connected,
@@ -1051,7 +1066,10 @@ export function createServerResources(o: {
         key = JSON.stringify([p.sidecarId, p.directory]);
       let tree = trees.get(key);
       if (!tree) trees.set(key, tree = createSessionTree());
-      return tree.rows(
+      const model = tabs(p);
+      model.update(tabInput(p));
+      const taskOrder = model.tabs().map((tab) => tab.id);
+      return model.orderRows(tree.rows(
         [...new Map(
           lists.flatMap((list) =>
             listOwner(p.sidecarId).structures(list, listContext(p))
@@ -1063,7 +1081,8 @@ export function createServerResources(o: {
         projectOwner(p.sidecarId).scopes(
           projectOwner(p.sidecarId).resolve(p.directory),
         ),
-      );
+        taskOrder,
+      ));
     },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
@@ -1072,6 +1091,7 @@ export function createServerResources(o: {
       return (names.get(name) ?? 0) > 1;
     },
     projects: (now, ageing) => {
+      void projectOrderClock.state.revision;
       const rows = sidecars.state.list.flatMap((s) => {
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
@@ -1082,17 +1102,19 @@ export function createServerResources(o: {
             labelledRows.set(row, labelled);
           }
           return labelled;
-        }).sort((a, b) => a.order - b.order);
-      }).sort((a, b) => {
-        const rank = { tracked: 0, index: 1, template: 2 };
-        if (a.source === "tracked" && b.source === "tracked") return 0;
-        return rank[a.source ?? "tracked"] - rank[b.source ?? "tracked"] ||
-          a.order - b.order ||
-          projectName(a.directory).localeCompare(projectName(b.directory)) ||
-          a.directory.localeCompare(b.directory) ||
-          a.label.localeCompare(b.label);
+        });
       });
-      return projectHierarchy(rows);
+      return projectHierarchy(
+        projectOrder.order(
+          rows.map((row) => ({
+            id: JSON.stringify([row.sidecarId, row.directory]),
+            row,
+          })),
+          (row) => ({
+            position: row.row.source === "tracked" ? row.row.order : undefined,
+          }),
+        ).map((item) => item.row),
+      );
     },
     tabSnapshot(p) {
       const input = tabInput(p);
@@ -1192,6 +1214,7 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      projectOrder.stop();
       for (const release of requestSubscriptions.values()) release();
       requestSubscriptions.clear();
       if (stopped) return;

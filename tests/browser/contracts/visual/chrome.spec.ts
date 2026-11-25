@@ -146,7 +146,9 @@ test(
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
     await expect.poll(() =>
-      row.locator("time").evaluate((el) => getComputedStyle(el).opacity)
+      row.locator(".otk-project-visit").evaluate((el) =>
+        getComputedStyle(el).opacity
+      )
     ).toBe("0");
     expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
       before,
@@ -189,7 +191,7 @@ test(
         ? page.locator(":popover-open")
         : page.locator("dialog[open]");
       await expect(surface).toBeVisible();
-      await expect(surface.locator(".otk-surface")).toHaveCount(1);
+      await expect(surface.locator(":scope > .otk-surface")).toHaveCount(1);
       await page.keyboard.press("Escape");
       await expect(surface).toHaveCount(0);
       await expect(trigger).toBeFocused();

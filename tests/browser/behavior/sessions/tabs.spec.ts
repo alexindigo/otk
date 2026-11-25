@@ -104,7 +104,7 @@ test.describe("task tabs", () => {
         });
         await expect(page.locator(".otk-tab-open").first()).toHaveAttribute(
           "data-tab",
-          exec.id,
+          ids[0],
         );
       }
       expect(

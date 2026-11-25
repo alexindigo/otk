@@ -184,12 +184,21 @@ export class NotificationTriggers {
     state.rev = change.revision;
     for (const entry of change.changes) {
       const current = facts(entry.after);
-      if (current) current.unseen = entry.completedUnseen;
-      if (current && entry.completedAt) {
+      // Native terminal evidence can precede its view-scoped inbox publication.
+      // An acknowledgement of an older terminal cannot acknowledge this run.
+      const nativeLive = !!entry.before && current?.terminalOrigin === "live" &&
+        (current.terminal ?? 0) > (entry.before.activity?.terminal ?? 0);
+      if (
+        current && entry.completedAt &&
+        entry.completedAt >= (current.terminal ?? 0)
+      ) {
         current.terminal = entry.completedAt;
         current.outcome = entry.completedOutcome;
         current.terminalOrigin = entry.completionOrigin;
         current.terminalFailure = entry.completedFailure;
+      }
+      if (current && entry.completedAt === current.terminal) {
+        current.unseen = entry.completedUnseen;
       }
       if (entry.after && !current && entry.completedAt) {
         state.finishes.set(entry.id, {
@@ -204,7 +213,9 @@ export class NotificationTriggers {
         entry.id,
         current,
         baseline,
-        entry.completedAt || (baseline ? current?.terminal : undefined),
+        nativeLive
+          ? current?.terminal
+          : entry.completedAt || (baseline ? current?.terminal : undefined),
       );
     }
     // Install current routing/settlement facts before grace publication can
@@ -350,7 +361,8 @@ export class NotificationTriggers {
         notificationFailure(previous)?.value.diagnosticID;
       const cause = notificationFailure(note)?.value.diagnosticID;
       const distinct = !historical &&
-        (beforeCause && cause && beforeCause !== cause ||
+        (beforeCause && cause && beforeCause !== cause &&
+            (!!old.observations?.length || !!old.terminalFailure) ||
           priorFinish?.terminal !== undefined && completedAt !== undefined &&
             completedAt > priorFinish.terminal);
       if (

@@ -34,6 +34,36 @@ Deno.test("send immediately owns one pending entry then commits that same identi
   assertEquals(p.state.messagesByID.msg_send.sourceOrder, 0);
 });
 
+Deno.test("agent decoration cannot commit local input or suppress definite refusal", () => {
+  for (const phase of ["pending", "failed"] as const) {
+    const p = createTranscriptProjection();
+    p.send({ intent, message: { ...message(), agent: "build" }, phase });
+    p.apply({ op: "agent.colors", colors: { build: "#123456" } });
+    assertEquals(p.committed("msg_send"), false);
+    assertEquals(p.entry("msg_send")?.send?.phase, phase);
+    assertEquals(
+      p.state.messagesByID.msg_send.role === "user" &&
+        p.state.messagesByID.msg_send.agentColor,
+      "#123456",
+    );
+    p.send({ intent, message: message(), phase: "failed" });
+    assertEquals(p.entry("msg_send")?.send?.phase, "failed");
+  }
+});
+
+Deno.test("pre-dispatch refusal removes only a local send, never native identity evidence", () => {
+  const p = createTranscriptProjection();
+  p.send({ intent, message: message(), phase: "pending" });
+  p.cancelSend("msg_send");
+  assertEquals(p.state.replyIDs, []);
+  assertEquals(p.entry("msg_send"), undefined);
+  p.send({ intent, message: message(), phase: "pending" });
+  p.apply({ op: "message.upsert", message: message() });
+  p.cancelSend("msg_send");
+  assertEquals(p.entry("msg_send")?.send?.phase, "committed");
+  assertEquals(p.committed("msg_send"), true);
+});
+
 Deno.test("failure and explicit Retry update the same transcript entry", () => {
   const p = createTranscriptProjection();
   const entry = { intent, message: message(), phase: "pending" as const };

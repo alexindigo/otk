@@ -63,9 +63,12 @@ export function sessionTree<T extends SessionStructure>(
   directory: string,
   query = "",
   directories: readonly string[] = [directory],
+  taskOrder?: readonly string[],
 ): SessionTreeGroup<T>[] {
   const scopes = new Set(directories);
-  const sessions = entries.filter((e) => scopes.has(e.directory));
+  const sessions = entries.filter((e) => scopes.has(e.directory)).sort((a, b) =>
+    (a.timeCreated ?? 0) - (b.timeCreated ?? 0)
+  );
   const byID = new Map(sessions.map((e) => [e.id, e]));
   const nodes = entries.every((entry) => entry.hierarchy)
     ? undefined
@@ -76,7 +79,11 @@ export function sessionTree<T extends SessionStructure>(
   const ordered = tasks.filter((t) =>
     scopes.has(t.directory) || inherited.has(t.id)
   )
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) =>
+      taskOrder
+        ? taskOrder.indexOf(a.id) - taskOrder.indexOf(b.id)
+        : a.order - b.order
+    );
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
   const taskByID = new Map(ordered.map((t) => [t.id, t]));
   const groupFor = (entry: T): string => {
@@ -156,16 +163,26 @@ export function createSessionTree(): {
     directory: string,
     query?: string,
     directories?: readonly string[],
+    taskOrder?: readonly string[],
   ): SessionListRow[];
 } {
   let previousEntries: readonly SessionStructure[] | undefined;
   let previousTasks: readonly TaskRecord[] | undefined;
   let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
   let previousScopes = "";
+  let previousOrder = "";
   return {
-    rows(entries, tasks, directory, query = "", directories = [directory]) {
+    rows(
+      entries,
+      tasks,
+      directory,
+      query = "",
+      directories = [directory],
+      taskOrder,
+    ) {
       const scopes = JSON.stringify(directories);
       const needle = query.trim().toLocaleLowerCase();
+      const order = JSON.stringify(taskOrder);
       const sameEntries = entries === previousEntries ||
         (!!previousEntries && entries.length === previousEntries.length &&
           entries.every((entry, i) => {
@@ -189,14 +206,23 @@ export function createSessionTree(): {
           }));
       if (
         sameEntries && sameTasks && directory === previousDirectory &&
-        needle === previousQuery && scopes === previousScopes
+        needle === previousQuery && scopes === previousScopes &&
+        order === previousOrder
       ) return result;
       previousEntries = entries;
       previousTasks = tasks;
       previousDirectory = directory;
       previousQuery = needle;
       previousScopes = scopes;
-      const groups = sessionTree(entries, tasks, directory, query, directories);
+      previousOrder = order;
+      const groups = sessionTree(
+        entries,
+        tasks,
+        directory,
+        query,
+        directories,
+        taskOrder,
+      );
       const size = groups.reduce((sum, group) => sum + group.rows.length, 0);
       let position = 0;
       result = groups.flatMap(

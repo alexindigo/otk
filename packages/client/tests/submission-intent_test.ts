@@ -44,7 +44,8 @@ for (
     assertEquals(sends, 0);
     assertEquals(intent.state.pending, false);
     assertEquals(shown?.action, "Sending prompt");
-    assertEquals(shown?.target.label, "Captured session");
+    assertEquals(shown?.value.facts?.target?.label, "Captured session");
+    assertEquals(shown?.target, { label: "" });
     assertEquals(shown?.reason, "Reconnect to send");
     assertEquals(shown?.recovery, "Reconnect, then send the retained draft");
   });

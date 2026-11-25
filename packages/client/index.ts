@@ -449,7 +449,7 @@ export function projectGroups(
   ) => ({
     directory,
     entries: entries.sort((a, b) =>
-      b.timeUpdated - a.timeUpdated || a.id.localeCompare(b.id)
+      a.timeCreated - b.timeCreated || a.id.localeCompare(b.id)
     ),
   }));
 }

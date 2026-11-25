@@ -460,10 +460,8 @@ test("revert.pending-error-owned-feedback-retry", {
   // FP1 retains the producer's public reason instead of per-code fixed copy.
   await expect(failure).toContainText(result.error.facts!.reason!);
   await expect(failure).toContainText("HTTP 409");
-  await expect(
-    failure.getByRole("link", { name: "Rollback feedback", exact: true }),
-  )
-    .toHaveAttribute("href", `#/local/${s.id}`);
+  await expect(failure.locator(".otk-failure-target")).toHaveCount(0);
+  expect(result.error.facts?.target).toMatchObject({ sessionID: s.id });
   await expect(page.locator(".otk-rollback-status")).toHaveCount(0);
   await expect(page.locator("[data-role=user]")).toHaveCount(1);
   await action(state, "thaw");

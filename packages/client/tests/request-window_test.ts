@@ -1,7 +1,59 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
 import type { RequestControl } from "@otk/protocol";
-import { RequestFailure, RequestTracker } from "@otk/client";
+import { IntentGroup, RequestFailure, RequestTracker } from "@otk/client";
+
+Deno.test("prepared request identities carry no window and sibling steps use dispatch authority", () => {
+  const sent: RequestControl[] = [];
+  const tracker = new RequestTracker({ send: (frame) => sent.push(frame) });
+  tracker.connect({ id: "old-window", expiresAt: Date.now() + 100000 }, 8);
+  const group = new IntentGroup(tracker.intent());
+  const first = group.options("promote"), second = group.options("send");
+  assertEquals("window" in group.identity, false);
+  assertEquals("window" in first.intent!, false);
+  const promoted = tracker.capture("tasks.create", {}, first);
+  tracker.disconnect();
+  tracker.connect({ id: "fresh-window", expiresAt: Date.now() + 100000 }, 8);
+  const send = tracker.capture("session.prompt", {}, second);
+  assertEquals(send.state.ref.window, "fresh-window");
+  assertEquals(tracker.matches(second.intent!, send.state.ref), true);
+  assertEquals(
+    tracker.matches(second.intent!, {
+      ...send.state.ref,
+      window: "old-window",
+    }),
+    false,
+  );
+  assertEquals(tracker.capture("tasks.create", {}, first), promoted);
+  assertEquals(promoted.state.ref.window, "old-window");
+  assertEquals(
+    sent.filter((frame) => frame.t === "request").map((frame) =>
+      frame.ref.window
+    ),
+    ["old-window", "fresh-window"],
+  );
+  tracker.stop();
+});
+
+Deno.test("a caller-supplied retired window cannot override current welcome for new work", () => {
+  const sent: RequestControl[] = [];
+  const tracker = new RequestTracker({ send: (frame) => sent.push(frame) });
+  tracker.connect({ id: "fresh-window", expiresAt: Date.now() + 100000 }, 8);
+  const captured = {
+    clientID: tracker.clientID,
+    key: "prepared",
+    window: "retired-window",
+  };
+  const operation = tracker.capture("session.prompt", {}, { intent: captured });
+  assertEquals(operation.state.ref.window, "fresh-window");
+  assertEquals(
+    sent.filter((frame) => frame.t === "request").map((frame) =>
+      frame.ref.window
+    ),
+    ["fresh-window"],
+  );
+  tracker.stop();
+});
 
 Deno.test("fresh server authority is not invalidated by the client's wall clock", () => {
   const sent: RequestControl[] = [];

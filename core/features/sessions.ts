@@ -194,11 +194,14 @@ export function register(
     );
     signal.throwIfAborted();
     const result: SessionListPage = {
-      items: value.items.map(({ id, directory, parentID, title }) => ({
+      items: value.items.map((
+        { id, directory, parentID, title, timeCreated },
+      ) => ({
         id,
         directory,
         parentID,
         title,
+        timeCreated,
         ...(hierarchy
           ? {
             hierarchy: hierarchy.node(

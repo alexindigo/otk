@@ -70,10 +70,12 @@ async function errorConsumer(
   const record = observation.failure?.facts?.record;
   if (record) {
     // The session indicator points to the one full retained presentation.
-    await expect(page.locator(".otk-session-error-message")).toHaveText(
-      "See the session error",
-    );
-    await page.locator(".otk-session-error-message a").click();
+    const reference = page.locator(".otk-session-error").getByRole("button", {
+      name: "See the session error",
+      exact: true,
+    });
+    await expect(reference).toBeVisible();
+    await reference.click();
     const full = page.locator('[data-native-record$="/request-failure"]')
       .filter({
         hasText: observation.failure!.facts!.reason!,
@@ -81,14 +83,13 @@ async function errorConsumer(
     await expect(full).toHaveCount(1);
     await expect(full).toContainText(observation.failure!.facts!.reason!);
   } else {
-    await expect(page.locator(".otk-session-error-message")).toContainText(
+    await expect(page.locator(".otk-session-error")).toContainText(
       observation.failure?.facts?.reason ?? observation.message,
     );
   }
-  await expect(page.locator(".otk-session-error-message a")).toHaveAttribute(
-    "href",
-    `#/local/${id}`,
-  );
+  // The current session is not an inline navigation target. Exact identities
+  // remain checked against the authoritative snapshot and observation above.
+  await expect(page.locator(".otk-session-error a")).toHaveCount(0);
   return snapshot;
 }
 async function reload(

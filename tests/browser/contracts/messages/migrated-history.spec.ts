@@ -31,10 +31,10 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   await expect(unknown.locator(".otk-tool-verb")).toHaveText("custom");
   await expect(unknown.locator(".otk-tool-brief")).toHaveCount(0);
   const time = page.locator(".otk-turn-time").first();
-  await expect(time).toHaveText("Time unknown");
+  await expect(time).toHaveText("No time recorded");
   await expect(time).toHaveAttribute(
     "title",
-    "The real end time was lost when opencode migrated this session.",
+    "No native completion, error or part timestamp was recorded.",
   );
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
   await expect(page.locator(".otk-work-fold").first()).toContainText(
@@ -42,10 +42,10 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   );
   await expect(page.locator('[data-message="known-call-0"] .otk-turn-time'))
     .toHaveText(
-      "Worked for 1.0s",
+      "Worked for 1s",
     );
   await expect(page.locator('[data-message="missing-end-call"] .otk-turn-time'))
-    .toHaveText("Time unknown");
+    .toHaveText("No time recorded");
   await expect(page.locator('[data-message="missing-end-call"]')).toContainText(
     "interrupted",
   );

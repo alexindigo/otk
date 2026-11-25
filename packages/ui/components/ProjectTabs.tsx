@@ -61,6 +61,7 @@ import OverflowRow from "./OverflowRow.tsx";
 import { breadcrumbRows } from "./list-presentation.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
+import { orderInteraction } from "./order-interaction.ts";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -84,12 +85,17 @@ export default function ProjectTabs(props: {
   /** Reserve space for consumer chrome without inspecting its class or state. */
   reserveTrailing?: boolean;
   ready: boolean;
+  /** Guarded navigation; its accepted route reconciles the session's owning tab. */
   onOpen(id: string): boolean;
   onEmpty(): boolean;
   onCreateSession(task?: TaskRecord): Promise<void>;
   actions: TaskActions;
 }): import("solid-js").Element {
   const { commands } = useCommandPorts();
+  const orderInput = orderInteraction(
+    () => props.model.holdOrder(),
+    () => props.model,
+  );
   const [error, setError] = createSignal<FailureValue>("");
   const crumbFeedbackID = createUniqueId();
   const tasks = () => props.model.tasks();
@@ -353,15 +359,9 @@ export default function ProjectTabs(props: {
       ? props.session.title
       : entry(id)?.title ?? "Session unavailable";
   const openCrumb = ownedAction("task.session.open", (id: string) => {
-    if (crumbs().some((crumb) => crumb.id === id && crumb.external)) {
-      props.onOpen(id);
-      return;
-    }
-    const task = active();
-    if (props.onOpen(id)) {
-      if (task) props.model.select({ kind: "task", id: task.id }, id);
-      else props.model.preview(id);
-    }
+    // The accepted route owns selection. Path ancestors and working descendants
+    // can belong to another task; the currently active task is not their owner.
+    props.onOpen(id);
   }, { arguments: { type: "string" } });
   const meter = createMemo(() => summaryMeter(props.entry, props.catalog));
   const cost = () => sessionSummary(props.entry)?.cost ?? undefined;
@@ -374,6 +374,7 @@ export default function ProjectTabs(props: {
     );
   return (
     <section
+      ref={orderInput}
       class="otk-project-tabs"
       aria-label="Project tabs"
       data-reserve-trailing={props.reserveTrailing ? "true" : undefined}

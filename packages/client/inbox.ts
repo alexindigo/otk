@@ -299,10 +299,6 @@ export function inboxProjects(
   );
   const known = new Set(tracked.map((p) => p.directory));
   const indexed = new Map<string, IndexMetadata[]>();
-  const latest = (sessions: readonly IndexMetadata[]) =>
-    sessions.reduce((time, entry) => Math.max(time, entry.timeUpdated), 0);
-  const byName = (a: string, b: string) =>
-    projectName(a).localeCompare(projectName(b)) || a.localeCompare(b);
   for (const entry of entries) {
     if (known.has(entry.directory)) continue;
     const sessions = indexed.get(entry.directory) ?? [];
@@ -318,17 +314,13 @@ export function inboxProjects(
       indexed.set(summary.directory, []);
     }
   }
-  const activity = (directory: string, sessions: readonly IndexMetadata[]) =>
-    inbox.summaries?.[directory]?.lastActivity ?? latest(sessions);
-  const discovered = [...indexed].sort(([a, aa], [b, bb]) =>
-    activity(b, bb) - activity(a, aa) || byName(a, b)
-  ).map(([directory, sessions]): InboxProject => {
+  const discovered = [...indexed].map(([directory, sessions]): InboxProject => {
     known.add(directory);
     return {
       directory,
       source: "index",
       group: "active",
-      order: -activity(directory, sessions),
+      order: 0,
       added: false,
       inactive: false,
       lastVisit: 0,
@@ -342,7 +334,7 @@ export function inboxProjects(
   const templates = [
     ...new Set((inbox.discovered ?? []).map((d) => resolve(d))),
   ].filter((p) => !known.has(p))
-    .sort(byName).map((directory): InboxProject => ({
+    .map((directory): InboxProject => ({
       directory,
       source: "template",
       group: "discovered",

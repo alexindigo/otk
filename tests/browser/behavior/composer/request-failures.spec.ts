@@ -39,11 +39,19 @@ test.describe("pre-message rejection", () => {
     await expect(notice).toHaveText("Not sent - see the error above");
     await expect(notice).not.toContainText("opencode.config.ts");
     await expect(notice).not.toContainText("HTTP 400");
+    await expect(editor).toHaveValue("Keep this unsent draft intact");
     await notice.getByRole("button", { name: "Not sent - see the error above" })
       .click();
     await expect(failure.locator("xpath=ancestor::article")).toBeFocused();
     await expect(editor).toHaveValue("Keep this unsent draft intact");
-    await expect(page.locator('[data-role="user"]')).toHaveCount(0);
+    // 2.39: rejected input remains one failed local transcript entry, not a
+    // native prompt. Refusal must retain both its input and the editable draft.
+    const local = page.locator('[data-role="user"][data-send-state="failed"]');
+    await expect(local).toHaveCount(1);
+    await expect(local).toContainText("Keep this unsent draft intact");
+    expect((await state.native<{ info: { role: string } }[]>(
+      `/session/${session.id}/message`,
+    )).filter((message) => message.info.role === "user")).toHaveLength(0);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(

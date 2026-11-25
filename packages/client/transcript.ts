@@ -5,7 +5,6 @@ import {
   compareTranscriptVersion,
   type ContentClock,
   ContentDeliveryDiagnostics,
-  type IntentIdentity,
   type LatestPrompt,
   type LoadCoverage,
   MESSAGE_PAGE_SIZE,
@@ -121,6 +120,7 @@ export type ToolCompletionSource = (
 ) => () => void;
 export interface TranscriptOwner {
   send?(value: import("./pending-send.ts").PendingSend): void;
+  cancelSend?(messageID: string): void;
   readonly deliveryDiagnostics?: ContentDeliveryDiagnostics;
   progress?(): ProgressDisplay;
   state: TranscriptState;
@@ -189,7 +189,7 @@ export function createTranscript(
   let readFacts: import("@otk/protocol").ProgressFacts | undefined;
   let readLabel = "Loading messages";
   let boundaryRead: {
-    intent: IntentIdentity;
+    intent: import("./requests.ts").ClientIntent;
     epoch: number;
     before?: string;
     revision: number;
@@ -367,8 +367,9 @@ export function createTranscript(
       : undefined;
     // Native source can change even when its neutral presentation is equal.
     // Structural location, not decoding an opaque ref, identifies this owner.
-    if (op.op === "message.upsert") sources.changed(op.message.id);
-    else if (
+    if (op.op === "message.upsert") {
+      sources.changed(op.message.id, undefined, op.message);
+    } else if (
       "messageID" in op && op.messageID !== undefined &&
       ["part.upsert", "part.remove", "part.blocks", "message.clock"].includes(
         op.op,
@@ -381,6 +382,7 @@ export function createTranscript(
           : "partID" in op
           ? op.partID
           : undefined,
+        op.op === "part.upsert" ? op.part : undefined,
       );
     }
     const recordBefore = projection.state.records;
@@ -1019,6 +1021,10 @@ export function createTranscript(
       projection.send(value);
       setState(() => {});
     },
+    cancelSend(messageID) {
+      projection.cancelSend(messageID);
+      setState(() => {});
+    },
     interaction,
     snapshotPage: (before, cancellation) => {
       const signal = cancellation
@@ -1281,9 +1287,10 @@ export function createTranscript(
         const pending = boundaryRead;
         if (
           !pending || frame.epoch !== pending.epoch ||
-          frame.request.key !== pending.intent.key ||
-          frame.request.clientID !== pending.intent.clientID ||
-          frame.request.window !== pending.intent.window ||
+          !connection(sidecarId).rpc.requests.matches(
+            pending.intent,
+            frame.request,
+          ) ||
           frame.data.kind !== "message-page"
         ) return;
         if (frame.data.page && !pending.streamed) {
