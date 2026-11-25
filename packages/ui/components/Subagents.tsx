@@ -45,7 +45,6 @@ import "./Subagents.css" with { type: "text" };
 export default function Subagents(
   props: {
     helpers?: TaskHelpers;
-    taskKey?: string;
     current: string;
     entities?: EntityStateStore;
     title(id: string): string;
@@ -142,14 +141,12 @@ export default function Subagents(
           trigger={
             <LiveCount
               entities={entities()}
-              lampKey={props.taskKey}
+              lampKey={publication().ids.map((id) => entityKey("session", id))}
               label={helperCountsLabel(publication().counts)}
               compact={grouped().map((group) => ({
                 id: group.kind,
                 count: group.count,
-                lampKey: group.ids[0]
-                  ? entityKey("session", group.ids[0])
-                  : undefined,
+                lampKey: group.ids.map((id) => entityKey("session", id)),
               }))}
             />
           }

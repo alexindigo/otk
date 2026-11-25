@@ -168,7 +168,6 @@ export default function Scene() {
       />
       <Subagents
         entities={tabs.entities()}
-        taskKey={tabs.trail().task}
         helpers={(() => {
           void tabs.state.revision;
           const store = tabs.entities(), key = tabs.trail().task;
