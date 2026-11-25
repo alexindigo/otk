@@ -209,6 +209,21 @@ Deno.test("UI convention: informational connection actions keep the shared feedb
   assert(source.includes("subgrid={props.subgrid && !!feedback().failure}"));
 });
 
+Deno.test("UI convention: transcript rhythm supplies the tail gap without a second inset", async () => {
+  const css = rules(
+    await Deno.readTextFile("packages/ui/components/SessionView.css"),
+  );
+  assertEquals(
+    css.find((rule) => rule.selector === ".otk-message-flow")?.declarations
+      .get("--message-gap"),
+    "var(--space-6)",
+  );
+  const padding = css.filter((rule) => rule.selector === ".otk-messages")
+    .flatMap((rule) => [...rule.declarations.keys()])
+    .filter((name) => /^padding(?:-block(?:-end)?|-bottom)?$/.test(name));
+  assertEquals(padding, []);
+});
+
 Deno.test("UI convention: every composer notice occupies the shared flow track", async () => {
   const violations = (css: string) =>
     rules(css).filter((rule) =>

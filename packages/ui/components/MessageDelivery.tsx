@@ -4,9 +4,9 @@ import type { SessionDelivery } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./MessageDelivery.css" with { type: "text" };
 
-/** A fixed-extent transcript-tail slot; submission state never resizes the dock. */
+/** In-flow feedback only while a receipt lacks its transcript entry. */
 export default function MessageDelivery(
-  props: { owner?: SessionDelivery },
+  props: { owner?: SessionDelivery; class?: string },
 ): Element {
   const [revision, setRevision] = createSignal(0);
   onSettled(() => props.owner?.subscribe(() => setRevision((n) => n + 1)));
@@ -18,36 +18,35 @@ export default function MessageDelivery(
     return value ? { ...value } : undefined;
   };
   return (
-    <div class="otk-message-delivery-slot">
-      <Show when={receipt()}>
-        {(value) => (
-          <div
-            role="status"
-            aria-label="Message delivery"
-            data-delivery-message={value().messageID}
-          >
-            <FeedbackStatus
-              singleLine
-              feedback={value().feedback
-                ? {
-                  ...value().feedback!,
-                  action: {
-                    label: "Reload this session's latest messages",
-                    run: () => void props.owner?.reload(),
-                  },
-                }
-                : {
-                  kind: "pending",
-                  text: value().phase === "submitted"
-                    ? "Sending prompt..."
-                    : value().phase === "queued"
-                    ? "Queued while the session is busy"
-                    : "Sent, waiting for opencode",
-                }}
-            />
-          </div>
-        )}
-      </Show>
-    </div>
+    <Show when={receipt()}>
+      {(value) => (
+        <div
+          class={["otk-message-delivery-slot", props.class]}
+          role="status"
+          aria-label="Message delivery"
+          data-delivery-message={value().messageID}
+        >
+          <FeedbackStatus
+            singleLine
+            feedback={value().feedback
+              ? {
+                ...value().feedback!,
+                action: {
+                  label: "Reload this session's latest messages",
+                  run: () => void props.owner?.reload(),
+                },
+              }
+              : {
+                kind: "pending",
+                text: value().phase === "submitted"
+                  ? "Sending prompt..."
+                  : value().phase === "queued"
+                  ? "Queued while the session is busy"
+                  : "Sent, waiting for opencode",
+              }}
+          />
+        </div>
+      )}
+    </Show>
   );
 }

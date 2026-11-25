@@ -10,10 +10,13 @@
 .otk-messages {
   flex: 1;
   min-height: 0;
-  padding: var(--space-6) var(--lane-gutter);
+  padding-block-start: var(--space-6);
+  padding-inline: var(--lane-gutter);
   overflow-anchor: none;
 }
 .otk-message-flow {
+  /* One conversation gap after a block, including at the transcript tail. */
+  --message-gap: var(--space-6);
   display: flow-root;
   max-width: var(--lane-width);
   margin-inline: auto;
@@ -45,6 +48,7 @@
 }
 .otk-messages.is-empty {
   display: grid;
+  padding-block-end: var(--space-6);
 }
 .otk-messages.is-empty .otk-message-flow {
   grid-area: 1 / 1;
@@ -61,4 +65,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+.otk-message-flow .otk-transcript-delivery {
+  margin-block-end: var(--message-gap);
 }

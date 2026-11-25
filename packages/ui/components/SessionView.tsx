@@ -1102,7 +1102,10 @@ export default function SessionView(props: {
                             );
                           }}
                         </Show>
-                        <MessageDelivery owner={sessionPorts?.delivery} />
+                        <MessageDelivery
+                          owner={sessionPorts?.delivery}
+                          class="otk-transcript-delivery"
+                        />
                       </div>
                     </ScrollRegion>
                     <JumpToLatest
