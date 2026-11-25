@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
-import { openSession } from "../../fixtures/wire.ts";
 import { messages, prompt } from "../../pages/composer.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
-import type { TestState } from "../../fixtures/test-state.ts";
+import {
+  cleanup,
+  observe,
+  open,
+  tabs,
+  text,
+  viewport,
+} from "../../pages/terminal.ts";
 import type { Page } from "@playwright/test";
 
-const viewport = (page: Page) =>
-  page.locator('.otk-terminal .otk-tabs-panel[data-active="true"] canvas');
-const tabs = (page: Page) =>
-  page.getByRole("tablist", { name: "Terminals", exact: true }).getByRole(
-    "tab",
-  );
-const text = (page: Page) =>
-  viewport(page).getAttribute("aria-label").then((value) => value ?? "");
 // Read the renderer, including offscreen scrollback, through its native wheel
 // and accessibility ports. No private renderer state or clipboard is consulted.
 async function screenAndScrollback(page: Page): Promise<string> {
@@ -50,52 +48,6 @@ async function command(page: Page, value: string) {
   await viewport(page).click({ position: { x: 8, y: 8 } });
   await page.keyboard.type(value);
   await page.keyboard.press("Enter");
-}
-async function open(state: TestState, page: Page, title: string) {
-  const session = await state.native<{ id: string }>("/session", "POST", {
-    title,
-  });
-  await openSession(state, page, session.id);
-  await page.getByRole("button", { name: "Open terminal", exact: true })
-    .click();
-  await expect(tabs(page)).toHaveCount(1);
-  await expect(viewport(page)).toBeVisible();
-  await expect.poll(() => text(page)).not.toBe("Terminal output");
-  return session.id;
-}
-async function cleanup(state: TestState, sessionID: string) {
-  const list = await state.product("terminal.list", {
-    sessionID,
-  });
-  for (const { id } of list) {
-    await state.product("terminal.close", { sessionID, terminalID: id });
-  }
-}
-function observe(page: Page) {
-  const data = {
-    sockets: 0,
-    attaches: 0,
-    detaches: 0,
-    input: [] as string[],
-    restores: [] as string[],
-  };
-  page.on("websocket", (socket) => {
-    if (new URL(socket.url()).pathname !== "/api/terminal") return;
-    data.sockets++;
-    socket.on("framereceived", ({ payload }) => {
-      if (typeof payload === "string") {
-        const message = JSON.parse(payload);
-        if (message.t === "snapshot") data.restores.push(message.restore);
-      }
-    });
-    socket.on("framesent", ({ payload }) => {
-      if (typeof payload === "string") {
-        if (JSON.parse(payload).t === "attach") data.attaches++;
-        if (JSON.parse(payload).t === "detach") data.detaches++;
-      } else data.input.push(payload.subarray(4).toString("utf8"));
-    });
-  });
-  return data;
 }
 
 test("terminal.repeated-lag-shows-disconnected-and-explicit-reconnect", {

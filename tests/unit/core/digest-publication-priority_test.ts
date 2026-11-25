@@ -239,6 +239,10 @@ test("fresh catalog replacement preserves tombstones during keyed retained hydra
 for (const background of [false, true]) {
   test(`explicit cached replay follows background=${background}; deletion donates only to its ordered predecessor`, async () => {
     const root = await tempDir("digest-donation-");
+    // A fresh catalog also starts native reconciliation. Hold message reads on
+    // restart so exact publication counts measure replay, not a second source
+    // witness for the same turns. Health and catalog reads still run normally.
+    let messageReads = Promise.resolve();
     const entries = ["a", "b"].map((id) => ({
       id: `ses_${id}`,
       projectID: "p",
@@ -248,10 +252,11 @@ for (const background of [false, true]) {
     }));
     const native = Deno.serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
-      (request) => {
+      async (request) => {
         const path = new URL(request.url).pathname;
         if (path === "/global/health") return Response.json({ healthy: true });
         if (path === "/experimental/session") return Response.json(entries);
+        await messageReads;
         const id = path.split("/")[2];
         return Response.json(Array.from({ length: 100 }, (_, i) => ({
           info: {
@@ -306,6 +311,8 @@ for (const background of [false, true]) {
     } finally {
       await first.stop();
     }
+    const refresh = Promise.withResolvers<void>();
+    messageReads = refresh.promise;
     const seen: string[] = [];
     let closed = false;
     let pressure:
@@ -379,6 +386,7 @@ for (const background of [false, true]) {
         (n) => n === 100,
       );
     } finally {
+      refresh.resolve();
       await restarted.stop();
     }
   });
