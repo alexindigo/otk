@@ -131,6 +131,16 @@ function fixture(retryms = 1000) {
   transcript.subscriptions(sessionID, 1);
   return { rows, projection, transcript, reads, gets, failure, diagnostics };
 }
+
+function useHead(
+  x: ReturnType<typeof fixture>,
+  head: () => { id: string; seq: number; updated: number },
+) {
+  x.transcript.options.digest = {
+    read: () => Promise.resolve(head()),
+    release() {},
+  } as unknown as NonNullable<typeof x.transcript.options.digest>;
+}
 Deno.test("native head is a keyed scalar witness and respects a staged boundary", () => {
   const db = new DatabaseSync(":memory:");
   try {
@@ -302,6 +312,105 @@ Deno.test("completed fine recovery cannot hide a later changed native-head witne
         "Changed after the recovered checkpoint",
       ),
     );
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("history revisits an omitted forward row when fine recovery releases it at the same native head", async () => {
+  const x = fixture(),
+    entered = Promise.withResolvers<void>(),
+    gate = Promise.withResolvers<void>();
+  const get = x.transcript.reader.get.bind(x.transcript.reader);
+  x.transcript.reader.get = async (session, message, signal) => {
+    if (message === "omitted" && x.transcript.recovery.owns(session, message)) {
+      entered.resolve();
+      await gate.promise;
+      signal?.throwIfAborted();
+    }
+    return await get(session, message, signal);
+  };
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.rows.push(reply("omitted", 2), reply("new-head", 3));
+    useHead(x, () => ({ id: "new-head", seq: 3, updated: 3 }));
+    x.transcript.recovery.touch(sessionID, "omitted", "text");
+    await entered.promise;
+    await x.transcript.check(sessionID);
+    assertEquals(x.projection.state.messageIDs, ["before", "new-head"]);
+    // Relinquishing the point checkpoint does not prove the full body was
+    // published (e.g. the missing part was individually restored).
+    x.transcript.recovery.part("omitted", "text", sessionID);
+    gate.resolve();
+    await x.transcript.check(sessionID);
+    assertEquals(x.projection.state.messageIDs, [
+      "before",
+      "omitted",
+      "new-head",
+    ]);
+  } finally {
+    gate.resolve();
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("history rechecks a recovered anchor edited before a newer head appears", async () => {
+  const x = fixture();
+  x.rows[0] = reply("anchor", 1);
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    useHead(x, () => ({
+      id: x.rows.at(-1)!.id,
+      seq: x.rows.length,
+      updated: x.rows.length,
+    }));
+    x.transcript.recovery.touch(sessionID, "anchor", "text");
+    x.transcript.recovery.terminal(sessionID, "anchor");
+    while (x.transcript.recovery.snapshot(sessionID).length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await x.transcript.check(sessionID);
+    x.rows[0] = {
+      ...reply("anchor", 1),
+      content: [{ type: "text", text: "Edited before append" }],
+    } as NativeMessage;
+    x.rows.push(reply("new-head", 2));
+    await x.transcript.check(sessionID);
+    assertEquals(x.projection.state.messageIDs, ["anchor", "new-head"]);
+    assert(
+      JSON.stringify(x.projection.messages()).includes("Edited before append"),
+    );
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
+Deno.test("a covered inbox cancellation still retires the queued projection", async () => {
+  const x = fixture();
+  const queued = {
+    type: "session.inbox.enqueued",
+    created: 2,
+    durable: { aggregateID: "ses_history", seq: 2 },
+    data: {
+      sessionID: "ses_history",
+      inboxID: "msg_queued",
+      item: { type: "prompt", text: "queued" },
+    },
+  };
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    await x.transcript.event(queued);
+    assertEquals(x.projection.state.messageIDs, ["before", "msg_queued"]);
+    x.rows.push(reply("new-head", 4));
+    useHead(x, () => ({ id: "new-head", seq: 4, updated: 4 }));
+    await x.transcript.check(sessionID);
+    await x.transcript.event({
+      type: "session.inbox.cancelled",
+      durable: { aggregateID: "ses_history", seq: 3 },
+      data: { sessionID: "ses_history", inboxID: "msg_queued" },
+    });
+    await x.transcript.event(queued);
+    assertEquals(x.projection.state.messageIDs, ["before", "new-head"]);
   } finally {
     await x.transcript.stop();
   }
