@@ -58,6 +58,20 @@ test(
     await expect(page.getByRole("form", { name: "Composer", exact: true }))
       .toHaveAttribute("aria-busy", "false");
     const pane = page.getByRole("region", { name: "Transcript", exact: true });
+    const tailGap = async () => {
+      const footer = pane.locator("[data-role=assistant] footer").last();
+      const header = page.getByLabel("Message destination", { exact: true });
+      const spacing = await cssLength(pane, "--space-6");
+      await expect(footer).toBeVisible();
+      await expect.poll(async () => {
+        const [from, to] = await Promise.all([
+          footer.boundingBox(),
+          header.boundingBox(),
+        ]);
+        return Math.abs(to!.y - (from!.y + from!.height) - spacing);
+      }, { message: "Reply footer to composer header is one block gap" })
+        .toBeLessThanOrEqual(1);
+    };
     const jump = page.locator(".otk-jump-slot").getByRole("button", {
       name: "Jump to latest",
       exact: true,
@@ -81,6 +95,7 @@ test(
       await expect(jump).toBeVisible();
     };
     await bottom();
+    await tailGap();
     const layout = () =>
       page.evaluate(() => ({
         transcript: document.querySelector(".otk-messages")!
@@ -195,6 +210,7 @@ test(
     await expect(pane.getByText("FOLLOW WITNESS", { exact: true }))
       .toBeVisible();
     await bottom();
+    await tailGap();
     await up();
     // Native reverse/forward Tab travel reaches the visible named control.
     await jump.focus();
@@ -289,6 +305,10 @@ test(
     });
     await jump.click();
     await bottom();
+    await state.product("prefs.set", { key: "textSize", value: "125" });
+    await expect(page.locator("html")).toHaveCSS("--otk-scale", "1.25");
+    await bottom();
+    await tailGap();
   },
 );
 
