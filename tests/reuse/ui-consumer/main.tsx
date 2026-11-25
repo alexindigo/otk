@@ -250,7 +250,19 @@ function ActionToasts(): Element {
       >
         Allow session view
       </button>
-      <Toasts model={toast.model} onMore={() => {}} />
+      <Toasts
+        model={toast.model}
+        onMore={() => {}}
+        detail={new URL(location.href).searchParams.has("tall")
+          ? (note) => (
+            <div>
+              <For each={Array.from({ length: 14 }, (_, i) => i + 1)}>
+                {(line) => <p>{`Detail ${line} for ${note.id}`}</p>}
+              </For>
+            </div>
+          )
+          : undefined}
+      />
     </CommandProvider>
   );
 }
