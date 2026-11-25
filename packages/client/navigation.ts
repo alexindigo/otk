@@ -40,6 +40,8 @@ export interface Navigation {
     entry?: Pick<NavigationEntry, "page">,
   ): boolean;
   go(delta: -1 | 1): boolean;
+  /** Resolves after route acceptance or after returning from a declined guard. */
+  traverse(delta: -1 | 1): Promise<boolean>;
   current(): NavigationEntry | undefined;
   describe(hash: string, label: { title: string; project: string }): void;
   history(): NavigationHistory;
@@ -94,6 +96,11 @@ export function createNavigation(
     restoring = false,
     floor = 0;
   let queued: Parameters<Navigation["open"]> | undefined;
+  let traversal: {
+    position: number;
+    settle(accepted: boolean): void;
+    fail(error: unknown): void;
+  } | undefined;
   const storageKey = () => `otk.navigation.v1:${owner}`;
   const state = (index: number, page?: true) => ({
     ...history.state,
@@ -155,6 +162,7 @@ export function createNavigation(
     if (
       target?.position === at && hash === current
     ) {
+      if (restoring) traversal?.settle(false);
       restoring = false;
       if (queued !== undefined) {
         const next = queued;
@@ -190,17 +198,50 @@ export function createNavigation(
     entries.set(at, entry);
     options.apply(hash, entry);
     publish();
+    if (traversal?.position === at) traversal.settle(true);
+    else {traversal?.fail(
+        new Error("The browser moved to a different history entry."),
+      );}
   };
+  const canGo = (delta: -1 | 1) =>
+    !stopped && !restoring && !traversal &&
+    !!snapshot()[delta === -1 ? "back" : "forward"];
   return {
     open,
     go(delta) {
-      if (
-        stopped || restoring || !snapshot()[delta === -1 ? "back" : "forward"]
-      ) {
-        return false;
-      }
+      if (!canGo(delta)) return false;
       history.go(delta);
       return true;
+    },
+    traverse(delta) {
+      if (!canGo(delta)) return Promise.resolve(false);
+      return new Promise((resolve, reject) => {
+        const finish = () => {
+          clearTimeout(deadline);
+          traversal = undefined;
+        };
+        const deadline = setTimeout(() => {
+          traversal?.fail(
+            new Error("The browser did not complete the history move."),
+          );
+        }, 10_000);
+        traversal = {
+          position: at + delta,
+          settle(accepted) {
+            finish();
+            resolve(accepted);
+          },
+          fail(error) {
+            finish();
+            reject(error);
+          },
+        };
+        try {
+          history.go(delta);
+        } catch (error) {
+          traversal?.fail(error);
+        }
+      });
     },
     current: () => entries.get(at),
     describe(hash, label) {
@@ -258,6 +299,7 @@ export function createNavigation(
     },
     stop(): void {
       stopped = true;
+      traversal?.settle(false);
       queued = undefined;
       unlisten?.();
       listeners.clear();

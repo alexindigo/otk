@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-history {
+  display: flex;
+  flex-direction: var(--history-axis, row);
+  align-items: center;
+  gap: var(--chrome-gap);
+}
+.otk-history > button:disabled:hover {
+  background: transparent;
+  color: var(--otk-fg-3);
+}

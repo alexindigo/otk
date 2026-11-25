@@ -248,6 +248,55 @@ test("project and visible-row acquisition scopes inbox marks, policies and retai
   }
 });
 
+test("history-only view demand admits metadata without admitting ancestry or turn bodies", async () => {
+  const app = await coreBackendFixture(await fixture());
+  const client = new WsClient(app.url);
+  try {
+    const parent = app.app.index.get("tstv1-core")!;
+    const neighbor = {
+      ...parent,
+      id: "tstv1-history-neighbor",
+      parentID: parent.id,
+    };
+    app.app.index.upsertMetadata(neighbor);
+    await client.connect();
+    await client.wait((frame) => frame.t === "index.snapshot");
+    client.send({
+      t: "view",
+      epoch: 1,
+      crumbs: [],
+      rows: [],
+      historyNeighbors: [neighbor.id],
+    });
+    const patch = await client.wait((frame) =>
+      frame.t === "index.patch" && frame.epoch === 1
+    );
+    assert(patch.t === "index.patch");
+    assertEquals(
+      patch.ops.map((op) => op.op === "upsert" ? op.entry.id : op.id),
+      [neighbor.id],
+    );
+    const admitted = patch.ops[0];
+    assert(admitted.op === "upsert");
+    assertEquals(admitted.entry.digest.turns, {});
+    client.send({
+      t: "view",
+      epoch: 2,
+      crumbs: [],
+      rows: [],
+      historyNeighbors: [],
+    });
+    const eviction = await client.wait((frame) =>
+      frame.t === "index.patch" && frame.epoch === 2
+    );
+    assert(eviction.t === "index.patch");
+    assertEquals(eviction.ops, [{ op: "evict", id: neighbor.id }]);
+  } finally {
+    await client.close();
+    await app.app.stop();
+  }
+});
+
 test("@load @transport view leases exclude unrelated sessions and fence replacements", async () => {
   const app = await coreBackendFixture(await fixture());
   const client = new WsClient(app.url);

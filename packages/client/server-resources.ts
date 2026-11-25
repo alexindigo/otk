@@ -74,6 +74,7 @@ export interface ServerResources {
     rows: readonly string[],
     query?: string,
   ): void;
+  historyNeighbors(neighbors: readonly Selection[]): void;
   projectSession(
     project: ProjectSelection,
     preferred?: string,
@@ -318,6 +319,7 @@ export function createServerResources(o: {
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
   let selected: Selection | undefined, crumbs: string[] = [];
+  let historyNeighbors: readonly Selection[] = [];
   let rowDemand:
     | { project: ProjectSelection; rows: string[]; query: string }
     | undefined;
@@ -434,6 +436,10 @@ export function createServerResources(o: {
           : undefined,
         crumbs: active ? crumbs : [],
         rows: rows?.rows ?? [],
+        historyNeighbors: historyNeighbors.length
+          ? historyNeighbors.filter((target) => target.sidecarId === sidecar.id)
+            .map((target) => target.sessionID)
+          : undefined,
         query: rows?.query,
         tasksFollowParent,
       });
@@ -902,6 +908,13 @@ export function createServerResources(o: {
           sessions: visible.sessions,
         });
       }
+    },
+    historyNeighbors(neighbors) {
+      if (JSON.stringify(neighbors) === JSON.stringify(historyNeighbors)) {
+        return;
+      }
+      historyNeighbors = neighbors;
+      sendView();
     },
     visibleRows(project, rows, query = "") {
       const next = {

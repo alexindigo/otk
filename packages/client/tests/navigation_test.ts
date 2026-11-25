@@ -97,6 +97,28 @@ Deno.test("declined traversal restores the accepted entry without changing recor
   assertEquals(nav.history(), before);
 });
 
+Deno.test("an action settles only after accepted traversal or completed guard restoration", async () => {
+  const f = fixture(), nav = f.start();
+  nav.open("#b");
+  let acknowledged: boolean | undefined;
+  const pending = nav.traverse(-1).then((accepted) => acknowledged = accepted);
+  await Promise.resolve();
+  assertEquals(acknowledged, undefined);
+  f.accept(false);
+  f.move(-1);
+  assertEquals(f.calls, [-1, 1]);
+  await Promise.resolve();
+  assertEquals(acknowledged, undefined);
+  f.move(1);
+  assertEquals(await pending, false);
+  assertEquals(nav.history().at, 1);
+  f.accept(true);
+  const accepted = nav.traverse(-1);
+  f.move(-1);
+  assertEquals(await accepted, true);
+  assertEquals(nav.history().at, 0);
+});
+
 Deno.test("reload keeps both labelled neighbors and never labels an off-screen entry", () => {
   const f = fixture(), nav = f.start();
   let notifications = 0;

@@ -17,7 +17,14 @@ import {
   Show,
 } from "solid-js";
 import { DEFAULT_PREFS } from "@otk/protocol";
-import { CommandHub, LOCAL_SIDECAR, shellTitle } from "@otk/client";
+import {
+  CommandHub,
+  FeedbackFailure,
+  historyTarget,
+  LOCAL_SIDECAR,
+  projectName,
+  shellTitle,
+} from "@otk/client";
 import { registerPreferenceCommands } from "@otk/client";
 import {
   registerSessionCommands,
@@ -46,6 +53,7 @@ import VisualSettings from "../components/VisualSettings.tsx";
 import TranscriptSettings from "../components/TranscriptSettings.tsx";
 import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
+import HistoryButtons from "../components/HistoryButtons.tsx";
 import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
 import ProjectLocation from "../features/project-chip.tsx";
@@ -118,6 +126,29 @@ export default function Shell(
   const error = () => navigation.state.error;
   const project = () => navigation.state.project;
   const { fail, navigate, openProject } = navigation;
+  const target = (direction: "back" | "forward") =>
+    historyTarget(
+      navigation.state.history,
+      direction,
+      ({ sidecarId, sessionID }) => {
+        const entry = resources.connected(sidecarId) &&
+          resources.entry(sidecarId, sessionID);
+        if (!entry) return;
+        return {
+          title: entry.title,
+          project: projectName(
+            resources.projectDirectory?.(
+              sidecarId,
+              entry.directory,
+              entry.projectID,
+            ) ?? entry.directory,
+          ),
+          deleted: !!entry.deleted,
+        };
+      },
+    );
+  const backTarget = createMemo(() => target("back"));
+  const forwardTarget = createMemo(() => target("forward"));
   const [dialog, setDialog] = createSignal("");
   const [now, setNow] = createSignal(Date.now());
   let root!: HTMLDivElement;
@@ -246,6 +277,41 @@ export default function Shell(
     () => toggles.state.prefs.keymap,
     (value) => keyboard.keymap.setKeymap(value ?? {}),
   );
+  onCleanup(
+    commands.register({
+      id: "history.back",
+      title: "Go back",
+      category: "Navigation",
+      availability: () =>
+        backTarget().enabled
+          ? { available: true }
+          : { available: false, reason: backTarget().label },
+      run: () => navigation.traverse("back"),
+    }),
+  );
+  onCleanup(
+    commands.register({
+      id: "history.forward",
+      title: "Go forward",
+      category: "Navigation",
+      availability: () =>
+        forwardTarget().enabled
+          ? { available: true }
+          : { available: false, reason: forwardTarget().label },
+      run: () => navigation.traverse("forward"),
+    }),
+  );
+  const historyControl = (direction: "back" | "forward") =>
+    commands.control(`history.${direction}`, undefined, {
+      target: { label: "Session history" },
+      // This command resolves true only after navigation applies the browser's
+      // matching entry. CommandHub rejects false before consulting this port.
+      shown: () => true,
+      unshown: "History navigation was declined.",
+      recovery: "Try moving through history again.",
+    });
+  const historyBack = historyControl("back"),
+    historyForward = historyControl("forward");
   onCleanup(
     commands.register({
       id: "settings.open",
@@ -585,6 +651,21 @@ export default function Shell(
               </button>
             </Show>
             <ProjectInbox
+              history={
+                <HistoryButtons
+                  back={backTarget()}
+                  forward={forwardTarget()}
+                  backAction={historyBack}
+                  forwardAction={historyForward}
+                  onFeedback={(outcome) => {
+                    if (outcome.kind === "failed") {
+                      fail(
+                        new FeedbackFailure(outcome.feedback),
+                      );
+                    }
+                  }}
+                />
+              }
               holdOrder={resources.holdProjectOrder}
               projects={projects()}
               duplicateName={resources.duplicateProjectName}

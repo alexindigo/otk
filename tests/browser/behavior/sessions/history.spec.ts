@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import type { TestState } from "../../fixtures/test-state.ts";
+import { wire } from "../../fixtures/wire.ts";
 
 type Session = { id: string; directory: string };
 async function sessions(state: TestState) {
@@ -69,5 +70,204 @@ test(
     await selected(page, a);
     await page.goForward();
     await selected(page, b);
+  },
+);
+
+function toolbar(page: Page) {
+  const nav = page.getByRole("navigation", { name: "Session history" });
+  return {
+    back: nav.getByRole("button").nth(0),
+    forward: nav.getByRole("button").nth(1),
+  };
+}
+
+const inProject = (session: Session, title: string) =>
+  `${title} in ${session.directory.split("/").at(-1)}`;
+const earlier = "No earlier session in this tab",
+  later = "No later session in this tab";
+async function targets(page: Page, backLabel: string, forwardLabel: string) {
+  const { back, forward } = toolbar(page);
+  for (
+    const [control, label] of [[back, backLabel], [
+      forward,
+      forwardLabel,
+    ]] as const
+  ) {
+    await expect(control).toHaveAccessibleName(label);
+    await expect(control).toHaveAttribute("title", label);
+    if (label === earlier || label === later) {
+      await expect(control).toBeDisabled();
+    } else await expect(control).toBeEnabled();
+  }
+}
+
+test(
+  "sessions.history-buttons-cross-project",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const { a, b } = await sessions(state);
+    await page.goto(`${state.url}/#/local/${a.id}`);
+    await selected(page, a);
+    await openProject(page, b);
+    await targets(page, `Back to ${inProject(a, "First session")}`, later);
+    await state.native(`/session/${a.id}`, "PATCH", {
+      title: "Renamed off screen",
+    });
+    await targets(page, `Back to ${inProject(a, "Renamed off screen")}`, later);
+    await toolbar(page).back.click();
+    await selected(page, a);
+    await targets(
+      page,
+      earlier,
+      `Forward to ${inProject(b, "Second session")}`,
+    );
+    await toolbar(page).forward.click();
+    await selected(page, b);
+  },
+);
+
+test(
+  "sessions.history-browser-and-button-agree",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const connection = await wire(page);
+    const { a, b } = await sessions(state);
+    const c = await state.native<Session>("/session", "POST", {
+      title: "Third session",
+    });
+    const aLabel = inProject(a, "First session"),
+      bLabel = inProject(b, "Second session"),
+      cLabel = inProject(c, "Third session");
+    await page.goto(`${state.url}/#/local/${a.id}`);
+    await selected(page, a);
+    await openProject(page, b);
+    await page.goto(`${state.url}/#/local/${c.id}`);
+    await selected(page, c);
+    await targets(page, `Back to ${bLabel}`, later);
+    await page.goBack();
+    await selected(page, b);
+    await targets(page, `Back to ${aLabel}`, `Forward to ${cLabel}`);
+    const currentView = () =>
+      connection.sent.filter(({ frame }) => frame.t === "view").at(-1)?.frame;
+    await expect.poll(() => currentView()?.historyNeighbors).toEqual([
+      a.id,
+      c.id,
+    ]);
+    expect(currentView()?.selected).toBe(b.id);
+    expect(currentView()?.crumbs).not.toContain(a.id);
+    expect(currentView()?.crumbs).not.toContain(c.id);
+    await toolbar(page).back.click();
+    await selected(page, a);
+    await targets(page, earlier, `Forward to ${bLabel}`);
+    await expect.poll(() => currentView()?.historyNeighbors).toEqual([b.id]);
+    await page.goForward();
+    await selected(page, b);
+    await targets(page, `Back to ${aLabel}`, `Forward to ${cLabel}`);
+    await toolbar(page).forward.click();
+    await selected(page, c);
+    await targets(page, `Back to ${bLabel}`, later);
+  },
+);
+
+test("sessions.history-guard", tags, async ({ isolatedState: state, page }) => {
+  const { a, b } = await sessions(state);
+  await page.goto(`${state.url}/#/local/${a.id}`);
+  await selected(page, a);
+  await openProject(page, b);
+  await page.getByRole("button", { name: "Edit prompt", exact: true }).click();
+  const editor = page.locator("textarea[name=editor]");
+  await editor.fill("Keep this unsaved editor text");
+  // The modal deliberately makes the real toolbar inert; dispatch activation
+  // straight to its button to exercise the same binding with the editor live.
+  const back = page.locator(".otk-history button").first();
+  const declined = page.waitForEvent("dialog").then(async (dialog) => {
+    expect(dialog.message()).toContain("Discard unsaved editor");
+    await dialog.dismiss();
+  });
+  await back.dispatchEvent("click");
+  await declined;
+  await selected(page, b);
+  await expect(editor).toHaveValue("Keep this unsaved editor text");
+  await expect(page.locator(".otk-history button").last()).toBeDisabled();
+  const accepted = page.waitForEvent("dialog").then((dialog) =>
+    dialog.accept()
+  );
+  await back.dispatchEvent("click");
+  await accepted;
+  await selected(page, a);
+  await expect(editor).toHaveCount(0);
+  await expect(toolbar(page).forward).toBeEnabled();
+});
+
+test(
+  "sessions.history-deleted-target",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const { a, b } = await sessions(state);
+    await state.product("tasks.create", {
+      directory: a.directory,
+      name: "Retain history target",
+      sessions: [a.id],
+    });
+    await page.goto(`${state.url}/#/local/${a.id}`);
+    await selected(page, a);
+    await openProject(page, b);
+    await state.native(`/session/${a.id}`, "DELETE");
+    await targets(
+      page,
+      `Back to ${inProject(a, "First session")} (deleted)`,
+      later,
+    );
+    await toolbar(page).back.click();
+    await expect(page).toHaveURL(new RegExp(`#\\/local/${a.id}$`));
+    await expect(page.locator(".otk-deleted-session")).toContainText(
+      "First session",
+    );
+  },
+);
+
+test(
+  "sessions.history-tabs-independent",
+  tags,
+  async ({ isolatedState: state, page, context }) => {
+    const { a, b } = await sessions(state);
+    await page.goto(`${state.url}/#/local/${a.id}`);
+    await selected(page, a);
+    await openProject(page, b);
+    const other = await context.newPage();
+    await other.goto(`${state.url}/#/local/${b.id}`);
+    await selected(other, b);
+    await targets(other, earlier, later);
+    await openProject(other, a);
+    await targets(other, `Back to ${inProject(b, "Second session")}`, later);
+    await targets(page, `Back to ${inProject(a, "First session")}`, later);
+    await selected(page, b);
+  },
+);
+
+test(
+  "sessions.history-collapsed-rail",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const { a, b } = await sessions(state);
+    await page.goto(`${state.url}/#/local/${a.id}`);
+    await selected(page, a);
+    await openProject(page, b);
+    await page.getByRole("button", { name: "Collapse projects" }).click();
+    const rail = page.getByRole("complementary", { name: "Projects" });
+    await expect(rail).toHaveAttribute("data-collapsed", "true");
+    await expect(
+      rail.getByRole("navigation", { name: "Session history" }).getByRole(
+        "button",
+      ).filter({ visible: true }),
+    ).toHaveCount(2);
+    await targets(page, `Back to ${inProject(a, "First session")}`, later);
+    await toolbar(page).back.click();
+    await selected(page, a);
+    await targets(
+      page,
+      earlier,
+      `Forward to ${inProject(b, "Second session")}`,
+    );
   },
 );

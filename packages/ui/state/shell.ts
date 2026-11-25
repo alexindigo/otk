@@ -23,6 +23,7 @@ import {
   type InputGuard,
   type ListInteraction,
   type ProjectSelection,
+  route,
   type ServerResources,
   type SessionActions,
   sessionKey,
@@ -275,6 +276,13 @@ export function createShellState(
     confirm: (message) => globalThis.confirm(message),
   });
   const transcriptScopes = createTranscriptScopes({ resources, session });
+  createEffect(() => {
+    const { back, forward } = navigation.state.history;
+    return [back, forward].flatMap((entry) => {
+      const selection = entry && entry !== "unrecorded" && route(entry.hash);
+      return selection ? [selection] : [];
+    });
+  }, resources.historyNeighbors);
   createEffect(
     () => session.state.selection,
     (target) => branchHistory.select(target),

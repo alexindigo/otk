@@ -45,6 +45,7 @@ export class IndexView {
         if (
           entry.directory !== directory && !this.#ids.has(entry.id) &&
           entry.id !== scope.selected &&
+          !scope.historyNeighbors?.includes(entry.id) &&
           !scope.crumbs.includes(entry.id) && !scope.rows.includes(entry.id)
         ) return;
         if (delta && !this.#ids.has(entry.id)) return;
@@ -92,6 +93,8 @@ export class IndexView {
     for (const id of [...ids]) {
       for (const parent of this.index.ancestors(id)) ids.add(parent);
     }
+    // Asking for a label neither opens the session nor expands its family.
+    for (const id of view.historyNeighbors ?? []) ids.add(id);
     return ids;
   }
   #entry(id: string): IndexEntry | undefined {

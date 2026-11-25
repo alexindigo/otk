@@ -103,6 +103,7 @@ export interface ShellNavigation {
   navigate(selection: Selection): boolean;
   back(): boolean;
   forward(): boolean;
+  traverse(direction: "back" | "forward"): Promise<boolean>;
   openProject(project: ProjectSelection): void;
   openAttention(project: ProjectSelection): void;
   /** False when the guarded navigation refused the transition. */
@@ -534,6 +535,7 @@ export function createShellNavigation(o: {
     navigate,
     back: () => navigation.go(-1),
     forward: () => navigation.go(1),
+    traverse: (direction) => navigation.traverse(direction === "back" ? -1 : 1),
     createIn,
     fail,
     clearError,

@@ -7,7 +7,7 @@ import {
   Show,
 } from "solid-js";
 import { dynamic } from "@solidjs/web";
-import type { ActionControl, Feedback } from "@otk/client";
+import type { ActionControl, ActionOutcome, Feedback } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -31,6 +31,8 @@ export default function ActionButton(props: {
   busy?: boolean;
   children: Element;
   onShown?(): void;
+  /** Compact surfaces can place feedback in their existing feedback region. */
+  onFeedback?(outcome: Exclude<ActionOutcome, { kind: "shown" }>): void;
 }): Element {
   const [pending, setPending] = createSignal(false);
   const [feedback, setFeedback] = createSignal<Feedback>();
@@ -51,7 +53,8 @@ export default function ActionButton(props: {
   };
   const busy = () => pending() || !!props.busy;
   const disabled = () => busy() || !availability().available;
-  const described = () => !!unavailable() || busy() || !!feedback();
+  const described = () =>
+    !props.onFeedback && (!!unavailable() || busy() || !!feedback());
   const activate = (event: MouseEvent) => {
     if (props.href !== undefined) {
       if (disabled()) {
@@ -70,6 +73,7 @@ export default function ActionButton(props: {
     setFeedback(undefined);
     void props.action.run().then((result) => {
       if (result.kind === "shown") props.onShown?.();
+      else if (props.onFeedback) props.onFeedback(result);
       else setFeedback(result.feedback);
     }).finally(() => setPending(false));
   };
