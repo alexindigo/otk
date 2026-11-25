@@ -5,6 +5,7 @@ import {
   type EntityCounts,
   entityKey,
   type EntityState,
+  type HelperDisposition,
   type IndexMetadata,
   projectPlacement,
   type ProjectStatus,
@@ -13,6 +14,7 @@ import {
   type SessionEvidence,
   type Supervision,
   taskEntityID,
+  type TaskHelpers,
 } from "@otk/protocol";
 import {
   deliveredTerminal,
@@ -315,6 +317,7 @@ export class EntityStates {
     const parent = this.#parents.get(entry.id);
     const moved = parent !== entry.parentID;
     const admitted = !this.#own.has(entry.id);
+    const previous = this.#states.get(entityKey("session", entry.id));
     const tasks = new Set<string>(), checkouts = new Set<string>();
     if (moved) {
       if (parent) this.#chain(parent, upserts);
@@ -354,6 +357,18 @@ export class EntityStates {
         );
       }
     }
+    const current = this.#states.get(entityKey("session", entry.id));
+    const task = this.#taskOf.get(entry.id);
+    if (
+      task && (
+        previous?.evidence?.helper !== current?.evidence?.helper ||
+        current?.evidence?.helper && (
+            previous?.evidence?.run?.startedAt !==
+              current.evidence.run?.startedAt ||
+            previous?.terminal !== current.terminal
+          )
+      )
+    ) tasks.add(task);
     this.#contribute(entry.id, contribution, tasks, checkouts, upserts);
     this.#refreshTasks(tasks, checkouts, upserts, removals);
     if (upserts.length || removals.length) this.publish(upserts, removals);
@@ -463,6 +478,7 @@ export class EntityStates {
           this.#taskTallies.get(id)!,
           0,
         );
+        value.helpers = this.#taskHelpers(this.#members.get(id)!);
         if (this.#set(value)) upserts.push(value);
       }
     }
@@ -678,6 +694,39 @@ export class EntityStates {
       this.#refresh(parent, upserts);
     }
   }
+  #taskHelpers(members: ReadonlySet<string>): TaskHelpers {
+    const groups: Record<HelperDisposition, EntityState[]> = {
+      running: [],
+      needsYou: [],
+      notReturned: [],
+    };
+    for (const id of members) {
+      const state = this.#states.get(entityKey("session", id));
+      const helper = state?.evidence?.helper;
+      if (helper) groups[helper].push(state);
+    }
+    const active = (a: EntityState, b: EntityState) =>
+      (a.evidence?.run?.startedAt ?? Infinity) -
+        (b.evidence?.run?.startedAt ?? Infinity) ||
+      (this.family.getMetadata(a.id)?.timeCreated ?? Infinity) -
+        (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
+      a.id.localeCompare(b.id);
+    const { running, needsYou, notReturned } = groups;
+    return {
+      counts: {
+        running: running.length,
+        needsYou: needsYou.length,
+        notReturned: notReturned.length,
+      },
+      ids: [
+        ...running.sort(active),
+        ...needsYou.sort(active),
+        ...notReturned.sort((a, b) =>
+          (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
+        ),
+      ].map((value) => value.id),
+    };
+  }
   #chain(id: string, upserts: EntityState[]): void {
     this.#refresh(id, upserts);
     this.#ancestors(id, upserts);
@@ -786,9 +835,20 @@ export class EntityStates {
       ? undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
+    const awaitingDelivery = !!entry.parentID &&
+      verdict.terminal > deliveredTerminal(entry);
+    const helper = !entry.parentID
+      ? undefined
+      : state === "working"
+      ? "running"
+      : state === "blocked" && cause !== "failedHelper"
+      ? "needsYou"
+      : awaitingDelivery
+      ? "notReturned"
+      : undefined;
     const evidence: SessionEvidence = {
-      awaitingDelivery: !!entry.parentID &&
-        verdict.terminal > deliveredTerminal(entry),
+      awaitingDelivery,
+      ...(helper ? { helper } : {}),
       ...(startedAt === undefined ? {} : {
         run: {
           startedAt,

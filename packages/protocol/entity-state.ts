@@ -29,9 +29,15 @@ export interface EntityRequestEvidence {
   id: string;
   arrivedAt?: number;
 }
+export type HelperDisposition = "running" | "needsYou" | "notReturned";
+export interface TaskHelpers {
+  counts: Record<HelperDisposition, number>;
+  ids: string[];
+}
 export interface SessionEvidence {
   /** D66: a proven helper terminal not covered by its parent's result receipt. */
   awaitingDelivery?: boolean;
+  helper?: HelperDisposition;
   /** Positive native execution clock, retained across its terminal transition. */
   run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
@@ -69,6 +75,8 @@ export interface EntityState {
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
   evidence?: SessionEvidence;
+  /** D66/D58: ordered helpers belonging to this task. */
+  helpers?: TaskHelpers;
   /** Aggregates blocked only by permissions: those requests' identities, so
    * the client derives the same per-request grace as for each member. */
   requests?: readonly EntityRequestEvidence[];

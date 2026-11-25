@@ -883,3 +883,63 @@ test("D70: moving a parent moves its entire subtree, and unlinking retires the o
   assertEquals(o.get("d")?.state, "working");
   assertEquals(get("session/d")?.counts.working, 1);
 });
+test("D66/D58: one task publishes its ordered non-root dispositions", () => {
+  const o = owner();
+  o.put(base);
+  const put = (
+    n: number,
+    activity: IndexMetadata["activity"],
+    parentID = "s",
+  ) =>
+    o.put({
+      ...base,
+      id: `helper-${n}`,
+      parentID,
+      directory: n === 1 ? "/other" : base.directory,
+      timeCreated: n,
+      activity,
+    });
+  const running = (startedAt: number) => ({
+    work: {
+      ...keys("run"),
+      items: [{
+        id: "run",
+        kind: "execution" as const,
+        label: "Execution",
+        title: "Run",
+        startedAt,
+      }],
+    },
+  });
+  put(0, running(10));
+  put(1, running(20));
+  put(2, { ...running(30), inputs: keys("q") });
+  put(3, running(15));
+  put(3, { terminal: 50 });
+  put(4, { terminal: 60 });
+  put(5, {
+    terminal: 70,
+    outcome: "failed",
+    delivered: { parentID: "s", receipt: "result", terminal: 70 },
+  });
+  put(6, { terminal: 80, outcome: "failed" }, "helper-0");
+  const task = () => o.states.get(entityKey("task", "session/s"));
+  assertEquals(task()?.helpers, {
+    counts: { running: 2, needsYou: 1, notReturned: 3 },
+    ids: [
+      "helper-0",
+      "helper-1",
+      "helper-2",
+      "helper-6",
+      "helper-4",
+      "helper-3",
+    ],
+  });
+  assertEquals(o.get("s")?.evidence?.helper, undefined);
+  assertEquals(o.get("helper-2")?.evidence?.helper, "needsYou");
+  assertEquals(o.get("helper-5")?.state, "blocked");
+  assertEquals(o.get("helper-5")?.evidence?.helper, undefined);
+  assertEquals(o.get("helper-6")?.evidence?.helper, "notReturned");
+  put(1, running(5));
+  assertEquals(task()?.helpers?.ids.slice(0, 2), ["helper-1", "helper-0"]);
+});
