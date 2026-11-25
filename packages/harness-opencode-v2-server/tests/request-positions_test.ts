@@ -49,6 +49,7 @@ function fixture(latest: () => number | undefined) {
   const requests = new V2RequestRetention(),
     probes: (string | undefined)[] = [];
   const cutoffs = new Map<string, number>();
+  const content: unknown[] = [];
   const transcript = new Transcript({
     requests,
     client: () => {
@@ -59,7 +60,9 @@ function fixture(latest: () => number | undefined) {
       probes.push(messageID);
       return Promise.resolve(messageID ? cutoffs.get(messageID) : latest());
     },
-    content() {},
+    content(id, event) {
+      if (event.op.startsWith("session.revert")) content.push({ id, event });
+    },
     diagnostic() {},
     invalidated() {},
   });
@@ -82,8 +85,53 @@ function fixture(latest: () => number | undefined) {
   };
   const position = async (id: string) =>
     (await requests.get(sid, id))?.position;
-  return { transcript, requests, probes, cutoffs, durable, settle, position };
+  return {
+    transcript,
+    requests,
+    probes,
+    cutoffs,
+    durable,
+    settle,
+    position,
+    content,
+  };
 }
+
+Deno.test("V2 publishes only the native committed target and retains its fact without a viewer", async () => {
+  const f = fixture(() => undefined);
+  try {
+    f.transcript.subscriptions(sid, 1);
+    await f.transcript.event({
+      ...f.durable(61, "session.revert.staged"),
+      data: { sessionID: native, revert: { messageID: "msg_cleared" } },
+    });
+    await f.transcript.event(f.durable(62, "session.revert.cleared"));
+    assertEquals(f.content, []);
+    await f.transcript.event({
+      ...f.durable(63, "session.revert.committed"),
+      data: { sessionID: native, to: "msg_exact" },
+    });
+    assertEquals(f.content, [{
+      id: sid,
+      event: {
+        op: "session.revert.committed",
+        boundaryID: "msg_exact",
+        at: 1063,
+      },
+    }]);
+    f.transcript.subscriptions(sid, 0);
+    await f.transcript.event(f.durable(64, "session.revert.cleared"));
+    const latest = Reflect.get(f.transcript, "revertCommit")?.latest(sid);
+    assertEquals(latest, { boundaryID: "msg_exact", at: 1063 });
+    await f.transcript.deleted(sid);
+    assertEquals(
+      Reflect.get(f.transcript, "revertCommit")?.latest(sid),
+      undefined,
+    );
+  } finally {
+    await f.transcript.stop();
+  }
+});
 
 Deno.test("V2 unviewed settlement over existing history is anchored by a keyed probe, then proven by the next durable event", async () => {
   // Twenty native messages exist before OTK connects; no event was delivered.

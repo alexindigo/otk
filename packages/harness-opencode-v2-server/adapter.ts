@@ -324,6 +324,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
       : {};
     const capabilities: Capabilities = {
+      revertCommit: this.transcript.revertCommit,
       projectEdit: projectEditor(
         () => this.stream.client,
         () => this.catalogs?.catalogs.invalidateAll(["project"]),

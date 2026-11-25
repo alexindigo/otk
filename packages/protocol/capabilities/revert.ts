@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentSession } from "../content.ts";
+import type { ContentSession, RevertCommit } from "../content.ts";
 import type { OperationContext } from "../requests.ts";
 export interface RevertCapability {
   revert(
@@ -14,6 +14,11 @@ export interface RevertCapabilities {
   revert: RevertCapability;
   /** Independent advertisement for explicit file rollback. */
   revertCode: RevertCapability;
+  /** Only harnesses with native commit-specific evidence advertise this. */
+  revertCommit: RevertCommitCapability;
+}
+export interface RevertCommitCapability {
+  latest(sessionID: string): RevertCommit | undefined;
 }
 export const legacyRevertCapabilities: readonly (keyof RevertCapabilities)[] = [
   "revert",
