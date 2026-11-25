@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, type Page, type WebSocketRoute } from "@playwright/test";
 import type { TestState } from "./test-state.ts";
+import { observeTranscript } from "./transcript-publication.ts";
 
 export interface Frame {
   t: string;
@@ -75,6 +76,7 @@ export async function wire(
   };
 }
 export async function openSession(state: TestState, page: Page, id: string) {
+  await observeTranscript(page.context());
   await state.product("layout.patch", {
     rightCollapsed: false,
     rightView: "sessions",

@@ -21,6 +21,10 @@ import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
 import { relativeTime } from "./format.ts";
+import {
+  type ProjectPlacement,
+  projectPlacement,
+} from "./project-placement.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
 export type InboxStatus = ProjectStatus;
 export interface OperationAttention {
@@ -72,6 +76,18 @@ export function rollup(
   const states = entries.map((entry) => inboxStatus(entry, inbox));
   return rollupStatus(...states);
 }
+/** The disclosure remains the attention surface even when its rows are folded. */
+export function archiveAttention(
+  rows: readonly { status: ProjectStatus; unseenCount?: number | null }[],
+): { status: ProjectStatus; count: number; unseenCount: number | null } {
+  return {
+    status: rollupStatus(...rows.map((row) => row.status)),
+    count: rows.length,
+    unseenCount: rows.some((row) => row.unseenCount == null)
+      ? null
+      : rows.reduce((sum, row) => sum + row.unseenCount!, 0),
+  };
+}
 export function visitTime(lastVisit: number, now: number): string {
   return relativeTime(lastVisit, now);
 }
@@ -82,7 +98,7 @@ export function ageing(
 ): number {
   return thresholds.filter((threshold) => now - lastVisit >= threshold).length;
 }
-export interface InboxProject extends ProjectRecord {
+export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   topology?: ProjectTopology;
   availability?: ProjectSummary["availability"];
   archived?: boolean;
@@ -95,6 +111,7 @@ export interface InboxProject extends ProjectRecord {
   source?: "tracked" | "index" | "template";
   status: InboxStatus;
   unread: boolean;
+  unseenCount?: number | null;
   visitText: string;
   ageing: number;
 }
@@ -158,7 +175,13 @@ export function projectHierarchy<
         leaves.some((leaf) =>
           ["active", "archived"].includes(projectGroup(leaf))
         )
-        ? { ...row, group: "active", inactive: false, inactivePolicy: true }
+        ? {
+          ...row,
+          group: "active",
+          section: "live",
+          inactive: false,
+          inactivePolicy: true,
+        }
         : row,
     );
     emitted.add(row);
@@ -177,9 +200,10 @@ export function projectHierarchy<
 }
 /** Source provenance never decides presentation groups. */
 export function projectGroup(
-  project: Pick<InboxProject, "group" | "source" | "inactive">,
+  project: Pick<InboxProject, "group" | "source" | "inactive" | "section">,
 ): "active" | "discovered" | "inactive" | "archived" {
-  return project.group ??
+  return (project.section === "live" ? "active" : project.section) ??
+    project.group ??
     (project.inactive
       ? "inactive"
       : project.source === "template"
@@ -315,15 +339,23 @@ export function inboxProjects(
     [...tracked, ...discovered, ...templates].map((row) => {
       const summary = inbox.summaries?.[row.directory];
       const archived = summary?.archived === true;
+      const placement = projectPlacement({
+        lifecycle: summary,
+        status: row.status,
+        inactive: row.inactive,
+        hasSessions: row.group !== "discovered",
+      });
       return {
         ...row,
-        ...(archived
-          ? {
-            group: row.status === "none"
-              ? "archived" as const
-              : "active" as const,
-          }
-          : {}),
+        ...placement,
+        group: placement.section === "live"
+          ? "active" as const
+          : placement.section,
+        unseenCount: summary
+          ? summary.unseenCount
+          : entries.filter((entry) =>
+            entry.directory === row.directory && unread(entry, inbox)
+          ).length,
         archived,
         topology: summary?.topology,
         availability: summary?.availability,

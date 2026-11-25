@@ -849,17 +849,20 @@ in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
 Tracked rows precede the persisted, initially expanded Discovered disclosure and
 Inactive section. Each repository's live children precede its initially
 collapsed Archived disclosure. Archive membership comes from the client
-projection, not manual Inactive policy; mandatory activity stays live in both
-column and rail. Collapsed discovery retains working/blocked/unseen-finished
-rows; the rail retains the same discovery-section geometry and mandatory
-indicators. Template-only rows reserve the same marker track without a lamp (a
-name initial identifies them in the rail). Discovered row context offers the
-shared captured New session action, while tracked rows retain their
-active/inactive action. Add project creates an initial session rather than
-tracking an empty directory alone. Width (200–360px, 248 default) and collapsed
-states follow the serving server's `shellLayout` preference. Controls pass
-independent `Partial<ShellLayout>` field intents through `onLayout`; the shell
-sends `layout.patch`, whose core owner merges against persisted state before
+projection, not manual Inactive policy; working/blocked activity stays live in
+both column and rail. Finished-unseen archived rows contribute their lamp and
+unseen count to the Archived header, including in the rail. Removal wording in
+the row, accessible name and tooltip comes from the same client placement
+annotation. Collapsed discovery retains working/blocked/unseen-finished rows;
+the rail retains the same discovery-section geometry and mandatory indicators.
+Template-only rows reserve the same marker track without a lamp (a name initial
+identifies them in the rail). Discovered row context offers the shared captured
+New session action, while tracked rows retain their active/inactive action. Add
+project creates an initial session rather than tracking an empty directory
+alone. Width (200–360px, 248 default) and collapsed states follow the serving
+server's `shellLayout` preference. Controls pass independent
+`Partial<ShellLayout>` field intents through `onLayout`; the shell sends
+`layout.patch`, whose core owner merges against persisted state before
 validation/save/broadcast. No control constructs a whole-layout replacement from
 props. `ProjectTabs` consumes the public client tabs model,
 server/project-scoped task actions and injected guarded navigation. It renders

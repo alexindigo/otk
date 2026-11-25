@@ -6,7 +6,7 @@ import type { InboxSnapshot, ProjectSummary } from "@otk/protocol";
 import type { MergedMetadata } from "../index.ts";
 import { shellEntry } from "./shell-fixture.ts";
 
-Deno.test("archive is independent of inactive policy and mandatory removed checkouts stay live", () => {
+Deno.test("archive is independent of inactive policy; only live attention escapes it", () => {
   for (const inactive of [false, true]) {
     for (const status of ["working", "blocked", "finished", "none"] as const) {
       const inbox: InboxSnapshot = {
@@ -47,8 +47,93 @@ Deno.test("archive is independent of inactive policy and mandatory removed check
         const row of [rows.row("/tree", 0)!, inboxProjects([], inbox, 0)[0]]
       ) {
         assertEquals("archived" in row && row.archived, true);
-        assertEquals(row.group, status === "none" ? "archived" : "active");
+        assertEquals(
+          row.group,
+          status === "working" || status === "blocked" ? "active" : "archived",
+        );
+        assertEquals(
+          row.section,
+          status === "working" || status === "blocked" ? "live" : "archived",
+        );
+        assertEquals(row.annotation, "removed");
         assertEquals(row.inactive, inactive && status === "none");
+      }
+    }
+  }
+});
+
+Deno.test("INV-A records have identical section and annotation in both projections", () => {
+  const root = "/home/user/Projects/atmosphera";
+  const repoID = "c427c4a79e5b39bebe7cdd8db416e53f7fef36f7";
+  const records = [["configqml", 2], ["edge-scroll", 2], ["hot-corners", 1], [
+    "locker",
+    3,
+  ]] as const;
+  for (const inactive of [false, true]) {
+    for (const status of ["finished", "working", "blocked", "none"] as const) {
+      const inbox: InboxSnapshot = {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+        summaries: {},
+      };
+      for (const [name, count] of records) {
+        const directory = root + "." + name;
+        inbox.projects.push({
+          directory,
+          inactive,
+          added: true,
+          lastVisit: 1,
+          order: 0,
+        });
+        inbox.summaries![directory] = {
+          directory,
+          status,
+          hasSessions: true,
+          sessionCount: count,
+          unseenCount: status === "none" ? 0 : count,
+          lastActivity: 1,
+          authority: "current",
+          availability: "removed",
+          archived: true,
+          memberships: [{
+            source: "opencode-v2:/home/user/.local/share/opencode/opencode.db",
+            repoID,
+            directory,
+            leafDirectory: directory,
+            kind: "worktree",
+            inventory: "current",
+            availability: "removed",
+          }],
+          topology: {
+            repoID,
+            canonicalRoot: root,
+            leafDirectory: directory,
+            parentDirectory: root,
+          },
+        };
+      }
+      const projection = createProjectProjection({ entry: () => undefined });
+      projection.inbox(inbox);
+      const other = inboxProjects([], inbox, 2);
+      for (const row of other) {
+        const keyed = projection.row(row.directory, 2)!;
+        assertEquals(
+          row.group,
+          status === "working" || status === "blocked" ? "active" : "archived",
+        );
+        assertEquals([keyed.section, keyed.annotation, keyed.group], [
+          row.section,
+          row.annotation,
+          row.group,
+        ]);
+        assertEquals(
+          row.section,
+          status === "working" || status === "blocked" ? "live" : "archived",
+        );
+        assertEquals(row.annotation, "removed");
       }
     }
   }
@@ -315,5 +400,6 @@ Deno.test("known idle authority renders without session metadata or known popula
   assertEquals(rows.row("/idle", 0)?.status, "none");
   assertEquals(rows.row("/idle", 0)?.sessionCount, null);
   assertEquals(rows.row("/idle", 0)?.unread, false);
+  assertEquals(rows.row("/idle", 0)?.unseenCount, null);
   assertEquals(rows.row("/idle", 0)?.source, "index");
 });
