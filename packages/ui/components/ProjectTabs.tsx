@@ -223,6 +223,14 @@ export default function ProjectTabs(props: {
     },
     context: {
       kind: "session",
+      arguments: {
+        type: "object",
+        properties: {
+          sidecarId: { type: "string" },
+          sessionID: { type: "string" },
+          directory: { type: "string" },
+        },
+      },
       items: (target: SessionContextTarget & { taskID?: string }) =>
         tasks().filter((task) =>
           task.directory === target.directory &&
