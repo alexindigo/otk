@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { entitySnapshot, inboxStatus, unread } from "./supervision-fixture.ts";
 import { assertEquals } from "@std/assert";
 import {
   createEntityStateStore,
   createTabs,
   entityFacts,
-  inboxStatus,
   lamp,
   NotificationTriggers,
-  unread,
 } from "@otk/client";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
@@ -54,7 +53,6 @@ Deno.test("delivered helper shares unseen across rollup, name, family, navigatio
       entityFacts({ sessionID: "helper" }, { session: () => ({}), entities })
         .session.entities!,
       "session:helper",
-      { now: 0 },
     ),
     "none",
   );
@@ -119,9 +117,15 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
       from: revision,
       revision: revision += 2,
       ops: [{
-        op: "supervision",
-        sessionID: "helper",
-        value: owner.session(helper, 0),
+        op: "entity.upsert",
+        value: {
+          ...entitySnapshot({
+            supervision: { helper: owner.session(helper, 0) },
+          }, [helper])["session:helper"],
+          terminal: 100,
+          outcome: "succeeded",
+          terminalOrigin: "live",
+        },
       }, { op: "finish", sessionID: "helper", time: 100 }],
     });
   publish();

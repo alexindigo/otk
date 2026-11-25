@@ -6,9 +6,9 @@ import {
   inboxProjects,
   inboxStatus,
   rollup,
-  unread,
 } from "./supervision-fixture.ts";
 import { age } from "../format.ts";
+import { unread } from "../inbox.ts";
 import { DEFAULT_PREFS, isPreference } from "@otk/protocol";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 function entry(id: string, status: IndexEntry["status"] = "idle"): IndexEntry {
@@ -143,21 +143,31 @@ Deno.test("tracked and discovered projects and task tabs share attention-first a
   assertEquals(tabs.tabs()[0].status, "working");
   tabs.stop();
 });
-Deno.test("live-session unread borrows supervision independently of work and legacy marks", () => {
+Deno.test("live-session unread borrows the entity replica independently of work and legacy marks", () => {
   const inbox = snapshot();
   const session = entry("s");
+  const park = (unseen: boolean) =>
+    inbox.entities = {
+      "session:s": {
+        kind: "session",
+        id: "s",
+        state: "working",
+        previous: "none",
+        counts: { blocked: 0, working: 1, finished: 0, unseen: Number(unseen) },
+      },
+    };
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 10;
   assertEquals(unread(session, inbox), false);
-  inbox.supervision = { s: { state: "working", terminal: 10, unseen: true } };
+  park(true);
   assert(unread(session, inbox));
   inbox.seen.s = 10;
   assert(unread(session, inbox));
-  inbox.supervision.s = { state: "working", terminal: 10, unseen: false };
+  park(false);
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 11;
   assertEquals(unread(session, inbox), false);
-  inbox.supervision.s = { state: "working", terminal: 11, unseen: true };
+  park(true);
   assert(unread(session, inbox));
   assertEquals(
     unread({ ...session, deleted: { at: 12, how: "provider" } }, inbox),

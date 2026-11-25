@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { inboxStatus } from "./supervision-fixture.ts";
 import * as client from "@otk/client";
 import { fixtureSnapshot } from "./supervision-fixture.ts";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
@@ -132,8 +133,7 @@ export function shellFixture(
           hierarchy,
           scopes: (directory) => summaries[directory]?.scopes ?? [directory],
           entries: (directory) => index.partition(id, directory),
-          status: (sessionID) =>
-            client.inboxStatus(index.get(id, sessionID)!, inbox),
+          status: (sessionID) => inboxStatus(index.get(id, sessionID)!, inbox),
         });
         const core = {
           identities: (ids: readonly string[]) =>

@@ -556,10 +556,21 @@ for (const changedID of ["tstv1-child", "tstv1-bridge"]) {
       projection.viewChanged?.();
       await tick();
       assertEquals(
+        consumer.state.inbox.tasks.map((task) => task.id),
+        [task.id],
+        "a checkout still lists its task without following the parent",
+      );
+      view.directory = "/empty";
+      view.rows = [];
+      projection.viewChanged?.();
+      await tick();
+      assertEquals(
         consumer.state.inbox.tasks,
         [],
         "changed views retire their old task projection",
       );
+      view.directory = child.directory;
+      view.rows = [child.id];
       view.tasksFollowParent = true;
       projection.viewChanged?.();
       await tick();

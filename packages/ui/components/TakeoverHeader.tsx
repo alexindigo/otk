@@ -32,7 +32,6 @@ export default function TakeoverHeader(
         state={lamp(
           props.entities ?? session?.entities?.() ?? absent,
           props.entityKey ?? entityKey("session", session?.sessionID() ?? ""),
-          { surface: "composer", now: performance.now() },
         )}
       />
       <h2 title={props.detail}>{props.title}</h2>

@@ -98,6 +98,7 @@ test("core records real status edges at the single index owner and clears persis
       attention: { ...idle.attention, permissions: 1 },
       activity: { permissions: { keys: ["permission"], fresh: true } },
     });
+    await new Promise((done) => setTimeout(done, 525));
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     index.upsert(idle);
     stores.projects.inactive("alice", "/p", true);

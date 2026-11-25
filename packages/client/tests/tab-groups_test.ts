@@ -70,6 +70,7 @@ Deno.test("tab groups row 1: sibling helpers share one human group and quiet vie
     for (const id of ["R", "A", "B"]) {
       tabs.preview(id);
       assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
       assertEquals(
         tabs.crumbs().filter((crumb) => !crumb.external).map((crumb) =>
           crumb.id
@@ -85,6 +86,7 @@ Deno.test("tab groups row 1: sibling helpers share one human group and quiet vie
     }
     tabs.preview("C");
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
     tabs.select({ kind: "session", id: "R" });
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
@@ -129,6 +131,7 @@ Deno.test("2.67 helper-only saved groups render no task tab", () => {
     ]]);
     assertEquals(tabs.tasks(), []);
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(tabs.state.sessionID, "H");
   } finally {
     tabs.stop();
@@ -147,6 +150,7 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
     rows[1].title = "Updated A";
     update();
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
       R: ["R", "A", "B", "C"],
     });
@@ -158,12 +162,14 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
     meta.tasks = [task("T", ["A"])];
     update();
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
       R: ["R", "A", "B", "C"],
     });
     meta.tasks = [];
     update();
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
       R: ["R", "A", "B", "C"],
     });
@@ -185,8 +191,8 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
         });
         tabs.preview("L");
         assertEquals(tabs.state.selected, {
-          kind: followParent ? "task" : "session",
-          id: followParent ? "foreign" : "P",
+          kind: "task",
+          id: "foreign",
         });
         assertEquals(
           tabs.crumbs().map((crumb) => [crumb.id, !!crumb.external]),
@@ -264,16 +270,13 @@ Deno.test("current inbox membership wins over independently arriving stale wire 
     meta.tasks = [];
     update();
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(tabs.tabs().map((tab) => tab.id).toSorted(), ["R"]);
     assertEquals(
       tabs.crumbs().filter((crumb) => crumb.kind === "member").map((crumb) =>
         crumb.id
       ),
       ["R", "A"],
-    );
-    assertEquals(
-      tabs.family().filter((c) => c.kind === "helper").map((c) => c.id),
-      ["A", "C"],
     );
   } finally {
     tabs.stop();
@@ -303,6 +306,7 @@ for (
       update();
       tabs.preview("A");
       assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
       const phantom = tabs.tabs().find((tab) => tab.id === "R")!;
       assertEquals(
         phantom.status,
@@ -320,6 +324,7 @@ for (
       meta.supervision = {};
       update();
       assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
       tabs.preview("R");
       assertEquals(tabs.tabs().map((tab) => tab.id), ["R"]);
       assertEquals(tabs.belongsToTab("R", "A"), true);

@@ -160,7 +160,7 @@ export default function ErrorSurfaces() {
     connection: () => {
       throw new Error("No connection acquired");
     },
-    attention: () => {
+    entities: () => {
       throw new Error("No native attention acquired");
     },
   });

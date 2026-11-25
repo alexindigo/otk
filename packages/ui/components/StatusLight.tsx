@@ -7,11 +7,6 @@ import {
   type LightState,
 } from "./status-light.ts";
 import StateShape from "./StateShape.tsx";
-import {
-  type AttentionLampScope,
-  useAttentionPresentation,
-} from "../registries/attention.tsx";
-
 const BLINK_DURATION_MS = 250;
 
 /** Inputs only: event identity changes blink once; initial mounting is silent. */
@@ -21,13 +16,8 @@ export default function StatusLight(props: {
   label?: string;
   dependencies?: number;
   event?: string | number;
-  attention?: AttentionLampScope;
 }): import("solid-js").Element {
-  const presentation = useAttentionPresentation();
-  const state = () =>
-    props.attention && presentation
-      ? presentation.light(props.attention, props.state)
-      : props.state;
+  const state = () => props.state;
   const [blink, setBlink] = createSignal(false);
   const description = () =>
     props.label ?? lightDescription(state(), props.dependencies);

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { entitySnapshot, sessionEntity } from "./supervision-fixture.ts";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { notificationFailure, NotificationTriggers } from "@otk/client";
 import type { Note } from "../notifications.ts";
@@ -40,7 +41,7 @@ Deno.test("historical failure backfill and acknowledgement replay stay silent; a
       from: revision,
       revision: revision += 2,
       ...(admitted ? { admitted: true as const } : {}),
-      ops: [{ op: "supervision", sessionID: "root", value }, {
+      ops: [{ op: "entity.upsert", value: sessionEntity("root", value) }, {
         op: "finish",
         sessionID: "root",
         time: value.terminal,
@@ -150,9 +151,8 @@ for (const outcome of ["succeeded", "failed"] as const) {
         from: 0,
         revision: 2,
         ops: [{ op: "finish", sessionID: "root", time: 10 }, {
-          op: "supervision",
-          sessionID: "root",
-          value: value("historical"),
+          op: "entity.upsert",
+          value: sessionEntity("root", value("historical")),
         }],
       });
       assertEquals(notes, []);
@@ -161,7 +161,10 @@ for (const outcome of ["succeeded", "failed"] as const) {
         generation: "late-event",
         from: 2,
         revision: 3,
-        ops: [{ op: "supervision", sessionID: "root", value: value("live") }],
+        ops: [{
+          op: "entity.upsert",
+          value: sessionEntity("root", value("live")),
+        }],
       });
       assertEquals(notes.map((note) => note.kind), [
         outcome === "failed" ? "error" : "done",
@@ -178,9 +181,8 @@ for (const outcome of ["succeeded", "failed"] as const) {
         from: 3,
         revision: 4,
         ops: [{
-          op: "supervision",
-          sessionID: "root",
-          value: value("historical"),
+          op: "entity.upsert",
+          value: sessionEntity("root", value("historical")),
         }],
       });
       assertEquals(notes.length, 1);
@@ -216,7 +218,9 @@ Deno.test("live native terminal advances independently of a lagging or replaced 
       pathTemplates: [],
       seen: {},
       finishes: {},
-      supervision: { root: { state: "none", terminal: 0, unseen: false } },
+      entities: entitySnapshot({
+        supervision: { root: { state: "none", terminal: 0, unseen: false } },
+      }),
     },
   });
   try {
@@ -249,15 +253,17 @@ Deno.test("live native terminal advances independently of a lagging or replaced 
         pathTemplates: [],
         seen: {},
         finishes: { root: 100 },
-        supervision: {
-          root: {
-            state: "finishedUnseen",
-            terminal: 100,
-            unseen: true,
-            terminalOrigin: "live",
-            outcome: "succeeded",
+        entities: entitySnapshot({
+          supervision: {
+            root: {
+              state: "finishedUnseen",
+              terminal: 100,
+              unseen: true,
+              terminalOrigin: "live",
+              outcome: "succeeded",
+            },
           },
-        },
+        }),
       },
     });
     assertEquals(notes.length, 1);

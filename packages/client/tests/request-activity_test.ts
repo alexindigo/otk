@@ -107,7 +107,7 @@ Deno.test("request activity keeps the phantom visible, leaves projects to receiv
     retentionUntil: 2,
     replayed: false,
   });
-  const taskID = taskEntityID(entry.id, false, "/one", "session");
+  const taskID = taskEntityID("session", entry.id);
   resources.receive("local", {
     t: "inbox.patch",
     generation: "fixture",

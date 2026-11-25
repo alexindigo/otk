@@ -506,7 +506,6 @@ export default function ProjectTabs(props: {
                           state={lamp(
                             props.model.entities(),
                             props.model.tabEntityKey(tab()),
-                            { now: performance.now() },
                           )}
                         />
                       }

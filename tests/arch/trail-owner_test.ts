@@ -110,7 +110,7 @@ Deno.test("trail ownership guard rejects parallel builders and accepts borrowed 
     ),
   );
 });
-Deno.test("D67 D66 D3: task-breadcrumbs alone builds ancestry and the subagent set", async () => {
+Deno.test("D67 ancestry and D66 subagents have separate owners", async () => {
   const violations: string[] = [];
   for await (const path of sources("packages")) {
     if (parallelTrail(path, await Deno.readTextFile(path))) {
@@ -132,7 +132,7 @@ Deno.test("D67 D66 D3: task-breadcrumbs alone builds ancestry and the subagent s
   const subagents = await Deno.readTextFile(
     "packages/ui/components/Subagents.tsx",
   );
-  assert(subagents.includes("props.model.helpers"));
+  assert(subagents.includes("taskHelpers("));
   const composer = await Deno.readTextFile(
     "packages/ui/components/ComposerTakeovers.tsx",
   );

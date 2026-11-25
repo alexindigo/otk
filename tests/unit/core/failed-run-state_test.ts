@@ -70,7 +70,7 @@ test("an unseen failed top-level run blocks every rollup until seen (2.72)", asy
   try {
     index.reset([entry]);
     const failed = await snapshot();
-    assertEquals(failed.supervision[entry.id].state, "needsYou");
+    assertEquals(failed.supervision, undefined);
     assertEquals(failed.summaries["/p"].status, "blocked");
     for (const key of keys) {
       assertEquals(failed.entities[key].state, "blocked", key);

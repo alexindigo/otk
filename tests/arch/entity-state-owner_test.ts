@@ -320,23 +320,16 @@ function violations(path: string, text: string): string[] {
 // WP3.1 records existing violations. Each migration removes its entries. WP3.11
 // removes this mechanism and requires an empty result, not an expanding allowlist.
 const PENDING: string[] = [
-  "packages/client/approval-attention.ts: raw-attention",
-  "packages/client/inbox.ts: rollup-owner",
-  "packages/client/inbox.ts: state-producer",
-  "packages/client/live-work.ts: raw-attention",
+  "packages/client/entry-observations.ts: raw-attention",
   "packages/client/notification-triggers.ts: raw-attention",
   "packages/client/project-projection.ts: raw-attention",
   "packages/client/reduce.ts: raw-attention",
-  "packages/client/request-attention.ts: rollup-owner",
-  "packages/client/request-attention.ts: state-producer",
-  "packages/client/server-resources.ts: raw-attention",
   "packages/client/transcript.ts: raw-attention",
   "packages/ui/components/ProjectInbox.tsx: lamp-input",
   "packages/ui/components/ProjectInbox.tsx: raw-attention",
   "packages/ui/components/SessionView.tsx: raw-attention",
   "packages/ui/features/timeline.tsx: raw-attention",
   "packages/ui/shell/Shell.tsx: raw-attention",
-  "packages/ui/shell/notifications.ts: raw-attention",
 ];
 
 Deno.test("entity state ownership ratchets every existing independent computation", async () => {
@@ -528,4 +521,13 @@ Deno.test("entity state timing rejects attention clocks and visit-age paint", ()
     ),
     [],
   );
+});
+
+Deno.test("removed lamp computations cannot re-enter production", async () => {
+  for (const [path, text] of await productionSources()) {
+    assert(
+      !/\b(?:visibleLampStatus|taskEntityProjection|runningWork)\b/.test(text),
+      path,
+    );
+  }
 });

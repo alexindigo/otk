@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
-import { runningWork } from "@otk/client";
-import { OperationFailure, type SessionMetadata } from "@otk/protocol";
+import { EntityStates } from "../../core/index/entity-states.ts";
+import { SessionSupervision } from "../../core/index/supervision.ts";
+import {
+  entityKey,
+  OperationFailure,
+  type SessionMetadata,
+} from "@otk/protocol";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
@@ -20,25 +25,14 @@ Deno.test({
       const target = await native.createSession("Shell owner"),
         other = await native.createSession("Unrelated shell");
       const settings = cfg(), entries = new Map<string, SessionMetadata>();
+      const states = new EntityStates(new SessionSupervision(), {
+        getMetadata: (id) => entries.get(id),
+        ancestors: () => [],
+        descendants: (id) => new Set([id]),
+      }, () => {});
       const inventory = () =>
-        runningWork({
-          tabs: { working: () => [] },
-          inbox: {
-            tasks: [],
-            projects: [],
-            pathTemplates: [],
-            seen: {},
-            finishes: {},
-          },
-          sessionID: target.id,
-          connected: true,
-          entry: (id) => {
-            const entry = entries.get(id);
-            return entry
-              ? { ...entry, digest: { state: "ready", revision: 0, turns: {} } }
-              : undefined;
-          },
-        });
+        (states.get(entityKey("session", target.id))?.evidence?.liveWork ?? [])
+          .filter((value) => value.kind === "shell");
       let boots = 0;
       const adapter = new OpencodeV2ServerAdapter({
         serviceFile: native.serviceFile,
@@ -57,6 +51,7 @@ Deno.test({
         },
         indexUpsert(entry) {
           entries.set(entry.id, entry);
+          states.session(entry, 0);
         },
       });
       const running = adapter.capabilities.shell!.shell({
@@ -88,7 +83,7 @@ Deno.test({
         })).data.find((shell) => shell.metadata.sessionID === target.nativeID)!;
         assertEquals(
           inventory().map((item) => [item.id, item.title, item.startedAt]),
-          [[`shell/${owned.id}`, owned.command, owned.time.started]],
+          [[owned.id, owned.command, owned.time.started]],
         );
         const before = boots;
         native.proxy.disconnect();

@@ -9,9 +9,6 @@ import {
   NotificationTriggers,
   presentedOnScreen,
 } from "@otk/client";
-import { ATTENTION_GRACE_MS } from "../attention-grace.ts";
-const grace = () =>
-  new Promise((resolve) => setTimeout(resolve, ATTENTION_GRACE_MS));
 const entry = (id = "a", change: Partial<IndexEntry> = {}): IndexEntry => ({
   id,
   directory: "/project",
@@ -526,7 +523,7 @@ Deno.test("delivery failure falls back at the channel consumer and release/focus
   assertEquals(received, ["toast", "badge", "-toast", "-badge"]);
   hub.stop();
 });
-Deno.test("root notification resolution retains other pending family attention instead of clearing the badge", async () => {
+Deno.test("root notification resolution retains other pending family attention instead of clearing the badge", () => {
   const emitted: Note[] = [], removed: string[] = [];
   const triggers = new NotificationTriggers(
     (n) => emitted.push(n),
@@ -543,7 +540,6 @@ Deno.test("root notification resolution retains other pending family attention i
       }),
     }],
   });
-  await grace();
   triggers.receive("s", {
     t: "index.patch",
     rev: 3,

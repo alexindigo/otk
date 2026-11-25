@@ -12,7 +12,6 @@ Deno.test("independent plain consumer borrows keyed attention deltas without a n
   const owner = createAttentionProjection({
     entry: (id) => index.get("external", id),
     ids: () => index.ids("external"),
-    children: (id) => index.children("external", id),
     completions: true,
   });
   const trigger = new NotificationTriggers(

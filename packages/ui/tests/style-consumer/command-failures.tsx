@@ -52,7 +52,7 @@ export default function CommandFailures() {
     connection: () => {
       throw new Error("No connection expected");
     },
-    attention: () => {
+    entities: () => {
       throw new Error("No attention expected");
     },
   });

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  archiveAttention,
   createProjectDisclosure,
   errorFeedback,
   type FailureValue,
@@ -11,14 +10,8 @@ import {
   projectGroup,
   projectTree,
 } from "@otk/client";
-import { entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
-import {
-  createEntityStateStore,
-  type EntityStateStore,
-  label as stateLabel,
-  lamp,
-  presentedEntity,
-} from "@otk/client";
+import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
+import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
@@ -353,7 +346,18 @@ export default function ProjectInbox(props: {
       unknown()
         ? "Checkouts with unknown repository"
         : `Archived checkouts in ${projectName(repository(section.repo))}`;
-    const attention = () => archiveAttention(projects());
+    const archive = () => props.entities?.(section.repo.sidecarId);
+    const key = () => entityKey("archive", archiveEntityID(section.repo));
+    const attention = () => {
+      const store = archive();
+      return {
+        count: projects().length,
+        status: store ? lamp(store, key()) : "none" as const,
+        unseenCount: store && !store.isStale
+          ? store.get(key())?.counts.unseen ?? 0
+          : null,
+      };
+    };
     const description = () =>
       `${label()}, ${attention().count}, ${
         attention().unseenCount === null
@@ -441,17 +445,7 @@ export default function ProjectInbox(props: {
       project().displayName || projectName(project().directory);
     const duplicate = () => props.duplicateName(name());
     const key = () => entityKey("project", project().directory);
-    const presented = createEntityStateStore({
-      read: () => ({
-        [key()]: presentedEntity(
-          "project",
-          project().directory,
-          project().status,
-          project().unread,
-        ),
-      }),
-    });
-    const entities = () => props.entities?.(project().sidecarId) ?? presented;
+    const entities = () => props.entities?.(project().sidecarId);
     const lampLabel = () => stateLabel(project().status);
     return (
       <div
@@ -499,7 +493,7 @@ export default function ProjectInbox(props: {
                     : openAttention(project()))}
               >
                 <StatusLight
-                  state={lamp(entities(), key(), { now: performance.now() })}
+                  state={entities() ? lamp(entities()!, key()) : "none"}
                   dependencies={project().dependencies}
                 />
               </button>

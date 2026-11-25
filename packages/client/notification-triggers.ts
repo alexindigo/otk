@@ -8,7 +8,6 @@ import type {
 } from "@otk/protocol";
 import { latestTerminal } from "@otk/protocol";
 import { sessionTitle } from "./session-title.ts";
-import type { AttentionGrace } from "./attention-grace.ts";
 import {
   failureNote,
   notificationFailure,
@@ -22,7 +21,7 @@ import {
   type IndexChanges,
   sessionKey,
 } from "./index.ts";
-import type { EntryChanges } from "./approval-attention.ts";
+import type { EntryChanges } from "./entry-observations.ts";
 import type { Note } from "./notifications.ts";
 type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
 interface Facts {
@@ -80,43 +79,34 @@ export class NotificationTriggers {
     presented?: { request: string; note: Note };
   }>();
   #delivered = new Map<string, Set<string>>();
-  #releaseGrace?: () => void;
   #outcomes = new Map<string, Note>();
   #flush(): void {
     for (const [id, held] of this.#held) {
-      const server = held.note.sessionRef!.sidecar;
       const delivered = this.#delivered.get(id) ?? new Set<string>();
-      const eligible = held.requests.filter((request) =>
-        this.grace!.eligible(server, request)
-      );
-      const fresh = eligible.find((request) => !delivered.has(request));
+      const eligible = held.requests;
+      const fresh = eligible.filter((request) => !delivered.has(request));
       if (
-        !fresh && held.presented && eligible.includes(held.presented.request)
-      ) {
-        continue;
+        !fresh.length && held.presented &&
+        eligible.includes(held.presented.request)
+      ) continue;
+      const requests = fresh.length ? fresh : eligible.slice(0, 1);
+      if (!requests.length && held.presented) {
+        held.presented = undefined;
+        this.retract(id);
       }
-      const request = fresh ?? eligible[0];
-      if (!request) {
-        if (held.presented) {
-          held.presented = undefined;
-          this.retract(id);
-        }
-        continue;
+      for (const request of requests) {
+        const previous = held.presented?.note;
+        const note = { ...held.note, dismissalKey: `permission/${request}` };
+        const repeated = delivered.has(request);
+        delivered.add(request);
+        this.#delivered.set(id, delivered);
+        held.presented = { request, note };
+        this.emit(note, repeated ? previous ?? note : undefined);
       }
-      const previous = held.presented?.note;
-      const note = {
-        ...held.note,
-        dismissalKey: `permission/${request}`,
-      };
-      const repeated = delivered.has(request);
-      delivered.add(request);
-      this.#delivered.set(id, delivered);
-      held.presented = { request, note };
-      this.emit(note, repeated ? previous ?? note : undefined);
     }
   }
   #input(note: Note, requests: readonly string[]): void {
-    if (note.kind !== "permission" || !this.grace) {
+    if (note.kind !== "permission" || !requests.length) {
       this.#held.delete(note.id);
       this.emit(note);
       return;
@@ -142,13 +132,8 @@ export class NotificationTriggers {
       (_sidecar, entries) => entries,
     readonly read?: (sidecar: string) => readonly IndexEntry[],
     readonly changes?: (sidecar: string) => IndexChanges | undefined,
-    readonly grace?: AttentionGrace,
-  ) {
-    this.#releaseGrace = grace?.subscribe(() => this.#flush());
-  }
+  ) {}
   stop(): void {
-    this.#releaseGrace?.();
-    this.#releaseGrace = undefined;
     for (const sidecar of [...this.#connections.keys()]) this.reset(sidecar);
   }
   reset(sidecar: string): void {
@@ -222,14 +207,8 @@ export class NotificationTriggers {
           : entry.completedAt || (baseline ? current?.terminal : undefined),
       );
     }
-    // Install current routing/settlement facts before grace publication can
-    // synchronously release a notification through an injected state factory.
-    for (const entry of change.changes) {
-      if (entry.after) {
-        this.grace?.observe(sidecar, entry.id, entry.after.activity);
-      }
-    }
   }
+
   // Standalone frame consumers borrow the ordinary canonical reducer as before.
   // Shipped consumers use entriesChanged and never call this compatibility path.
   receive(sidecar: string, frame: IndexFrame): boolean {
@@ -277,9 +256,6 @@ export class NotificationTriggers {
       );
     }
     for (const id of pending) this.#compare(sidecar, id, undefined, false);
-    for (const entry of rows) {
-      this.grace?.observe(sidecar, entry.id, entry.activity);
-    }
     this.#connections.get(sidecar)!.rev = rev;
   }
   #compare(

@@ -26,7 +26,7 @@ Deno.test("tab and ancestry lamps borrow separate task and own-session entities,
       childQuestions: 9,
     },
   };
-  const taskID = taskEntityID("task", false, "/p");
+  const taskID = taskEntityID("task", "task");
   const value = (
     kind: "session" | "task",
     id: string,

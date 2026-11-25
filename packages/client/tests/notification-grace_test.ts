@@ -1,21 +1,44 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
-import { createAttentionGrace } from "../attention-grace.ts";
+import { EntityStates } from "../../../core/index/entity-states.ts";
+import { SessionSupervision } from "../../../core/index/supervision.ts";
 import { NotificationTriggers } from "../notification-triggers.ts";
 function fixture() {
   let now = 0, seq = 0, revision = 0;
+  let current: IndexEntry;
   const timers = new Map<number, { due: number; run(): void }>();
-  const grace = createAttentionGrace({
-    clock: {
-      now: () => now,
-      set(run, ms) {
-        timers.set(++seq, { due: now + ms, run });
-        return seq;
+  const states = new EntityStates(new SessionSupervision(), {
+    getMetadata: () => current,
+    ancestors: () => [],
+    descendants: (id) => new Set([id]),
+  }, (upserts) => {
+    const evidence = upserts.find((v) => v.kind === "session")?.evidence;
+    if (!evidence) return;
+    const keys = evidence.requests?.permissions.map((r) => r.id) ?? [];
+    const entry: IndexEntry = {
+      ...current,
+      attention: {
+        ...current.attention,
+        permissions: keys.length,
+        questions: evidence.questions,
       },
-      clear(id) {
-        timers.delete(id as number);
-      },
+      activity: { ...current.activity, permissions: { keys, fresh: true } },
+    };
+    trigger.receive(
+      "a",
+      revision
+        ? { t: "index.patch", rev: ++revision, ops: [{ op: "upsert", entry }] }
+        : { t: "index.snapshot", rev: ++revision, entries: [entry] },
+    );
+  }, {
+    now: () => now,
+    set(run, ms) {
+      timers.set(++seq, { due: now + ms, run });
+      return seq;
+    },
+    clear(id) {
+      timers.delete(id as number);
     },
   });
   const notes: string[] = [], requests: (string | undefined)[] = [];
@@ -33,11 +56,10 @@ function fixture() {
       undefined,
       undefined,
       undefined,
-      grace,
     ],
   );
   const send = (keys: string[], questions = 0) => {
-    const entry: IndexEntry = {
+    current = {
       id: "s",
       title: "Session",
       directory: "/p",
@@ -53,14 +75,15 @@ function fixture() {
         childPermissions: 0,
         childQuestions: 0,
       },
-      activity: { permissions: { keys, fresh: true } },
+      activity: {
+        permissions: { keys, fresh: true },
+        inputs: {
+          keys: Array.from({ length: questions }, (_, n) => `q-${n}`),
+          fresh: true,
+        },
+      },
     };
-    trigger.receive(
-      "a",
-      revision
-        ? { t: "index.patch", rev: ++revision, ops: [{ op: "upsert", entry }] }
-        : { t: "index.snapshot", rev: ++revision, entries: [entry] },
-    );
+    states.session(current, 0);
   };
   const tick = (ms: number) => {
     const end = now + ms;
@@ -79,7 +102,6 @@ function fixture() {
   };
   send([]);
   return {
-    grace,
     notes,
     requests,
     quiet,
@@ -88,7 +110,7 @@ function fixture() {
     tick,
     stop: () => {
       trigger.reset("a");
-      grace.stop();
+      states.close();
     },
   };
 }
@@ -107,7 +129,7 @@ Deno.test("WP5 auto-approved permission produces no notification", () => {
 Deno.test("WP5 held permission borrows arrival deadline and notifies once", () => {
   const f = fixture();
   try {
-    f.grace.permission("a", "s", "p");
+    f.send(["p"]);
     f.tick(300);
     f.send(["p"]);
     f.tick(199);
@@ -162,16 +184,13 @@ Deno.test("WP5 settlement restores remaining eligible request facts without anot
   try {
     f.send(["p", "q"]);
     f.tick(500);
-    f.grace.observe("a", "unrelated", {
-      inputs: { keys: ["question"], fresh: true },
-    });
     assertEquals(f.requests, ["permission/p", "permission/q"]);
     // Content settlement may arrive before the index count changes. The note
     // must no longer offer an action for q while the already-alerted p remains.
-    f.grace.settled("a", "q");
+    f.send(["p"]);
     assertEquals(f.requests, ["permission/p", "permission/q", "permission/p"]);
     assertEquals(f.quiet, [false, false, true]);
-    f.grace.settled("a", "p");
+    f.send([]);
     assertEquals(f.removed, ["a/s"]);
   } finally {
     f.stop();

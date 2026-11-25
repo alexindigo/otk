@@ -6,7 +6,11 @@ import {
   type ProjectSummary,
   type TaskRecord,
 } from "@otk/protocol";
-import { emphasis, type EntityStateStore } from "./entity-state.ts";
+import {
+  emphasis,
+  entityState,
+  type EntityStateStore,
+} from "./entity-state.ts";
 import { createSessionTree } from "./session-tree.ts";
 import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
@@ -404,17 +408,13 @@ export function createProjectProjection(o: {
       const summary = p.summary;
       const summaryReady = summary !== undefined;
       // Decision 62: the project entity is the row's state; absent or stale
-      // state is grey (D6). Standalone projections read the owner's summary.
+      // state is grey (D6).
       const store = o.entities?.(), key = entityKey("project", directory);
-      const status: InboxStatus = store
-        ? store.isStale ? "none" : store.get(key)?.state ?? "none"
-        : summary?.status ?? "none";
-      const dependencies = store
-        ? store.isStale ? undefined : store.get(key)?.dependencies
-        : summary?.dependencies;
-      const unread = store
-        ? emphasis(store, key)
-        : (summary?.unseenCount ?? 0) > 0;
+      const status = store ? entityState(store, key) : "none";
+      const dependencies = store && !store.isStale
+        ? store.get(key)?.dependencies
+        : undefined;
+      const unread = store ? emphasis(store, key) : false;
       const record = p.record;
       const archived = summary?.archived === true;
       const inactive = !!record?.inactive && status === "none";
@@ -462,9 +462,9 @@ export function createProjectProjection(o: {
           status,
           dependencies,
           unread,
-          unseenCount: store
+          unseenCount: store && !store.isStale
             ? store.get(key)?.counts.unseen ?? 0
-            : summary?.unseenCount ?? null,
+            : null,
           visit,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,

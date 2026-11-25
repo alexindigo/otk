@@ -4,8 +4,7 @@ import {
   createEntityStateStore,
   type EntityStateStore,
 } from "./entity-state.ts";
-import { entityKey, rollupStatus } from "@otk/protocol";
-export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
 import type {
   InboxBaseline,
   InboxOp,
@@ -38,77 +37,11 @@ export interface OperationAttention {
 /** Retained finish marks are unread only while their session is live. */
 export function unread(
   session: Pick<IndexMetadata, "id" | "deleted">,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
+  inbox: Pick<InboxSnapshot, "entities">,
 ): boolean {
   if (session.deleted) return false;
-  return inbox.supervision?.[session.id]?.unseen === true;
-}
-export function inboxStatus(
-  entry: IndexMetadata & OperationAttention,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
-): InboxStatus {
-  return rollupStatus(...sessionAttentionStates(entry, inbox));
-}
-/** Unranked evidence and operation facts; display and urgency choose separately. */
-export function sessionAttentionStates(
-  entry: IndexMetadata & OperationAttention,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
-): readonly (InboxStatus | undefined)[] {
-  // Tombstones retain historical metadata, never authority for live attention.
-  if (entry.deleted) return ["none"];
-  return [
-    entry.operationStatus,
-    supervisionStatus(entry.id, inbox),
-  ];
-}
-/** Live supervision does not require a concurrently leased index entry. */
-export function supervisionStatus(
-  id: string,
-  inbox: Pick<InboxSnapshot, "supervision">,
-): InboxStatus {
-  const state = inbox.supervision?.[id]?.state;
-  return state === "needsYou"
-    ? "blocked"
-    : state === "finishedUnseen"
-    ? "finished"
-    : state ?? "none";
-}
-export function rollup(
-  entries: readonly (IndexMetadata & OperationAttention)[],
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
-): InboxStatus {
-  const states = entries.map((entry) => aggregateStatus(entry, inbox));
-  return rollupStatus(...states);
-}
-/** The disclosure remains the attention surface even when its rows are folded. */
-export function archiveAttention(
-  rows: readonly { status: ProjectStatus; unseenCount?: number | null }[],
-): { status: ProjectStatus; count: number; unseenCount: number | null } {
-  return {
-    status: rollupStatus(...rows.map((row) => row.status)),
-    count: rows.length,
-    unseenCount: rows.some((row) => row.unseenCount == null)
-      ? null
-      : rows.reduce((sum, row) => sum + row.unseenCount!, 0),
-  };
-}
-/** Dependencies affect aggregates and mandatory visibility, never the session's own lamp. */
-export function dependencyCount(
-  entry: Pick<IndexMetadata, "id" | "deleted">,
-  inbox: Pick<InboxSnapshot, "supervision">,
-): number {
-  return entry.deleted
-    ? 0
-    : inbox.supervision?.[entry.id]?.dependencies?.running ?? 0;
-}
-export function aggregateStatus(
-  entry: IndexMetadata & OperationAttention,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
-): InboxStatus {
-  return rollupStatus(
-    inboxStatus(entry, inbox),
-    dependencyCount(entry, inbox) ? "dependencies" : "none",
-  );
+  return (inbox.entities?.[entityKey("session", session.id)]?.counts.unseen ??
+    0) > 0;
 }
 export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   dependencies?: number;
@@ -129,7 +62,6 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   unread: boolean;
   unseenCount?: number | null;
   visit?: TimeText;
-  visitText?: string;
   /** Unused: names are not tinted by visit age (S4). Optional only so
    * standalone fixtures that still name it keep type-checking. */
   ageing?: number;
@@ -269,21 +201,12 @@ export function inboxProjects(
     inbox.summaries?.[directory]?.hasSessions ??
       ((inbox.summaries?.[directory]?.sessionCount ?? 0) > 0 ||
         sessions.some((entry) => !entry.deleted));
-  const statusFor = (
-    directory: string,
-    sessions: readonly (IndexMetadata & OperationAttention)[],
-  ) => {
-    const summary = inbox.summaries?.[directory];
-    return summary
-      ? rollupStatus(
-        summary.status ?? "none",
-        ...sessions.map((entry) => entry.operationStatus),
-      )
-      : rollup(sessions, inbox);
-  };
+  const stateFor = (directory: string) =>
+    inbox.entities?.[entityKey("project", directory)];
+  const statusFor = (directory: string) => stateFor(directory)?.state ?? "none";
   const tracked = [...records.values()].filter((project) =>
     project.inactive || inbox.discovered?.includes(project.directory) ||
-    (inbox.summaries?.[project.directory]?.dependencies ?? 0) > 0 ||
+    (stateFor(project.directory)?.dependencies ?? 0) > 0 ||
     hasSessions(
       project.directory,
       entries.filter((entry) => entry.directory === project.directory),
@@ -293,7 +216,7 @@ export function inboxProjects(
       const sessions = entries.filter((entry) =>
         entry.directory === project.directory
       );
-      const status = statusFor(project.directory, sessions);
+      const status = statusFor(project.directory);
       const inactive = project.inactive && status === "none";
       const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
@@ -306,8 +229,7 @@ export function inboxProjects(
           : "discovered" as const,
         inactive,
         status,
-        unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
-          sessions.some((s) => unread(s, inbox)),
+        unread: (stateFor(project.directory)?.counts.unseen ?? 0) > 0,
         visit: age(project.lastVisit, clock, inactive ? "inactive" : "now"),
       };
     },
@@ -323,14 +245,14 @@ export function inboxProjects(
   for (const summary of Object.values(inbox.summaries ?? {})) {
     if (
       !known.has(summary.directory) &&
-      (summary.hasSessions || summary.dependencies) &&
+      (summary.hasSessions || stateFor(summary.directory)?.dependencies) &&
       !indexed.has(summary.directory) &&
       resolve(summary.directory) === summary.directory
     ) {
       indexed.set(summary.directory, []);
     }
   }
-  const discovered = [...indexed].map(([directory, sessions]): InboxProject => {
+  const discovered = [...indexed.keys()].map((directory): InboxProject => {
     known.add(directory);
     return {
       directory,
@@ -340,9 +262,8 @@ export function inboxProjects(
       added: false,
       inactive: false,
       lastVisit: 0,
-      status: statusFor(directory, sessions),
-      unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
-        sessions.some((s) => unread(s, inbox)),
+      status: statusFor(directory),
+      unread: (stateFor(directory)?.counts.unseen ?? 0) > 0,
     };
   });
   const templates = [
@@ -366,22 +287,18 @@ export function inboxProjects(
       const placement = projectPlacement({
         lifecycle: summary,
         status: row.status,
-        dependencies: summary?.dependencies,
+        dependencies: stateFor(row.directory)?.dependencies,
         inactive: row.inactive,
         hasSessions: row.group !== "discovered",
       });
       return {
         ...row,
         ...placement,
-        dependencies: summary?.dependencies,
+        dependencies: stateFor(row.directory)?.dependencies,
         group: placement.section === "live"
           ? "active" as const
           : placement.section,
-        unseenCount: summary
-          ? summary.unseenCount
-          : entries.filter((entry) =>
-            entry.directory === row.directory && unread(entry, inbox)
-          ).length,
+        unseenCount: stateFor(row.directory)?.counts.unseen ?? null,
         archived,
         topology: summary?.topology,
         availability: summary?.availability,
@@ -441,8 +358,6 @@ export function createInbox(
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
   currentEpoch?: () => number,
-  /** Client arrival of a request identity (the request-lifetime owner). */
-  arrival?: (id: string) => number | undefined,
   /** The connection's reactive state, for stale entity presentation (D6). */
   connected?: () => boolean,
 ): InboxModel {
@@ -462,7 +377,6 @@ export function createInbox(
   const entityStates = createEntityStateStore({
     read: () => current.inbox.entities,
     factory,
-    arrival,
     connected,
   });
   const state: InboxState = {
@@ -788,7 +702,9 @@ export function createInbox(
     async openSession(
       sessionID: string,
       directory: string,
-      terminal = current.inbox.supervision?.[sessionID]?.terminal ?? 0,
+      terminal =
+        current.inbox.entities?.[entityKey("session", sessionID)]?.terminal ??
+          0,
     ): Promise<void> {
       await rpc.call("projects.visit", { directory });
       await rpc.call("sessions.seen", { sessionID, terminal });

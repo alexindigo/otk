@@ -46,7 +46,7 @@ Deno.test("UI convention: breadcrumb trails use one compact overflow row", async
   const subagents = await Deno.readTextFile(
     "packages/ui/components/Subagents.tsx",
   );
-  assert(subagents.includes("props.model.helpers"));
+  assert(subagents.includes("taskHelpers("));
   assert(subagents.includes("<TimeText"));
   assert(subagents.includes("<Menu"));
 });

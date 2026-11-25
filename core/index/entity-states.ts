@@ -5,6 +5,7 @@ import {
   type EntityCounts,
   entityKey,
   type EntityState,
+  type HelperDisposition,
   type IndexMetadata,
   projectPlacement,
   type ProjectStatus,
@@ -12,12 +13,28 @@ import {
   rollupStatus,
   type SessionEvidence,
   type Supervision,
+  taskEntityID,
+  type TaskHelpers,
 } from "@otk/protocol";
 import {
   deliveredTerminal,
   failedHelperNeedsAck,
+  type SessionInputs,
   type SessionSupervision,
 } from "./supervision.ts";
+
+const PERMISSION_GRACE_MS = 500;
+
+interface EntityClock {
+  now(): number;
+  set(run: () => void, delay: number): unknown;
+  clear(timer: unknown): void;
+}
+const systemClock: EntityClock = {
+  now: () => performance.now(),
+  set: (run, delay) => setTimeout(run, delay),
+  clear: (timer) => clearTimeout(timer as number),
+};
 
 /** Session family facts the owner borrows; it never scans the catalog. */
 export interface EntityFamily {
@@ -44,6 +61,10 @@ interface Tally {
   dependencies: number;
   graced: number;
   requests: Map<string, number>;
+}
+interface Listing {
+  tasks: Map<string, number>;
+  sum: Tally;
 }
 /** One session's share of its aggregates. */
 interface Contribution {
@@ -81,6 +102,10 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
  * Session state is SessionSupervision's verdict; every indicator derives from
  * the published EntityState, never from a second interpretation. */
 export class EntityStates {
+  #permissions = new Map<
+    string,
+    { due: Map<string, number>; timer?: unknown }
+  >();
   #states = new Map<string, EntityState>();
   /** Own counts of each live session, for its ancestors' descendant evidence. */
   #own = new Map<string, EntityCounts>();
@@ -91,7 +116,11 @@ export class EntityStates {
   /** Placement facts from ProjectSummaries: session checkout, checkout forms
    * and the checkouts of each project. Aggregates update by delta (D57). */
   #checkoutOf = new Map<string, string>();
-  #tallies = new Map<string, Tally>();
+  #listed = new Map<string, Listing>();
+  #projectListings = new Map<string, Listing>();
+  #archiveListings = new Map<string, Listing>();
+  #viewsOf = new Map<string, Set<Listing>>();
+  #listingRevision = 0;
   #forms = new Map<string, number>();
   #checkoutDependencies = new Map<string, number>();
   #leaves = new Map<string, readonly string[]>();
@@ -102,10 +131,11 @@ export class EntityStates {
   >();
   #archiveOf = new Map<string, string>();
   #archiveLeaves = new Map<string, Set<string>>();
-  /** D8 task projections borrow the shared identity partition. State changes
-   * touch only the groups containing that session. */
-  #tasks = new Map<string, Set<string>>();
-  #tasksOf = new Map<string, Set<string>>();
+  /** D69/D70: one partition over native ancestry, independent of all views. */
+  #roots: ReadonlyMap<string, string> = new Map();
+  #taskOf = new Map<string, string>();
+  #members = new Map<string, Set<string>>();
+  #checkoutsOf = new Map<string, Set<string>>();
   #taskTallies = new Map<string, Tally>();
   #global = tally();
   /** S22: received OTK operations by target session. */
@@ -119,6 +149,8 @@ export class EntityStates {
       upserts: readonly EntityState[],
       removals: readonly string[],
     ) => void,
+    readonly clock: EntityClock = systemClock,
+    readonly onPermissionDeadline?: (id: string) => void,
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
@@ -129,12 +161,19 @@ export class EntityStates {
   }
   /** A new user generation starts without transitions from the previous one. */
   reset(): void {
+    for (const lifetime of this.#permissions.values()) {
+      this.clock.clear(lifetime.timer);
+    }
     this.#states.clear();
     this.#own.clear();
     this.#parents.clear();
     this.#graced.clear();
-    this.#checkoutOf.clear();
-    this.#tallies.clear();
+    // ProjectSummaries retains structural placements across user generations.
+    this.#listed.clear();
+    this.#projectListings.clear();
+    this.#archiveListings.clear();
+    this.#viewsOf.clear();
+    this.#listingRevision++;
     this.#forms.clear();
     this.#checkoutDependencies.clear();
     this.#leaves.clear();
@@ -142,20 +181,72 @@ export class EntityStates {
     this.#placement.clear();
     this.#archiveOf.clear();
     this.#archiveLeaves.clear();
-    this.#tasks.clear();
-    this.#tasksOf.clear();
+    this.#taskOf.clear();
+    this.#members.clear();
+    this.#checkoutsOf.clear();
     this.#taskTallies.clear();
     this.#global = tally();
     this.#operations.clear();
     this.#checkoutOperations.clear();
   }
+  close(): void {
+    for (const lifetime of this.#permissions.values()) {
+      this.clock.clear(lifetime.timer);
+    }
+    this.#permissions.clear();
+  }
+
+  #permissionKeys(
+    entry: IndexMetadata,
+    count: number,
+    refresh: () => void,
+  ): string[] {
+    const previous = this.#permissions.get(entry.id);
+    if (previous?.timer !== undefined) this.clock.clear(previous.timer);
+    if (entry.deleted) {
+      this.#permissions.delete(entry.id);
+      return [];
+    }
+    const input = entry.activity?.permissions;
+    if (!input?.fresh) {
+      // Native source loss is not settlement. A fresh snapshot reconciles IDs.
+      if (previous) previous.timer = undefined;
+      return [];
+    }
+    if (!input.keys.length) {
+      this.#permissions.delete(entry.id);
+      return [];
+    }
+    const now = this.clock.now();
+    const due = new Map(
+      input.keys.map((
+        id,
+      ) => [id, previous?.due.get(id) ?? now + PERMISSION_GRACE_MS]),
+    );
+    const active: string[] = [];
+    let next = Infinity;
+    if (count > 0) {
+      for (const [id, at] of due) {
+        if (at <= now) active.push(id);
+        else next = Math.min(next, at);
+      }
+    }
+    const lifetime: { due: Map<string, number>; timer?: unknown } = { due };
+    this.#permissions.set(entry.id, lifetime);
+    if (Number.isFinite(next)) {
+      lifetime.timer = this.clock.set(() => {
+        if (this.#permissions.get(entry.id) === lifetime) refresh();
+      }, next - now);
+    }
+    return active.slice(0, count);
+  }
+
   /** A received operation owned by a project directory (e.g. a creation
    * before its session exists) colours that checkout and its projects. */
   checkoutOperation(directory: string, value?: "working" | "blocked"): void {
     if (value) this.#checkoutOperations.set(directory, value);
     else this.#checkoutOperations.delete(directory);
     const upserts: EntityState[] = [];
-    this.#tally(directory);
     this.#checkout(directory, upserts);
     if (upserts.length) this.publish(upserts, []);
   }
@@ -164,54 +255,46 @@ export class EntityStates {
     if (value) this.#operations.set(id, value);
     else this.#operations.delete(id);
   }
-  /** Structural membership changes only. No session-state publication scans
-   * the catalog or rebuilds the task partition. */
-  membership(groups: ReadonlyMap<string, readonly string[]>): void {
+  /** Root record edits affect just those roots' trees. */
+  roots(next: ReadonlyMap<string, string>): void {
+    const before = this.#roots;
+    this.#roots = new Map(next);
     const upserts: EntityState[] = [], removals: string[] = [];
-    for (const [id, members] of this.#tasks) {
-      if (groups.has(id)) continue;
-      for (const member of members) this.#tasksOf.get(member)?.delete(id);
-      this.#tasks.delete(id);
-      this.#taskTallies.delete(id);
-      const key = entityKey("task", id);
-      if (this.#states.delete(key)) removals.push(key);
-    }
-    for (const [id, members] of groups) {
-      const previous = this.#tasks.get(id) ?? new Set<string>();
-      const next = new Set(members);
-      const sum = this.#taskTallies.get(id) ?? tally();
-      for (const member of previous) {
-        if (next.has(member)) continue;
-        add(sum, this.#contribution(member), -1);
-        this.#tasksOf.get(member)?.delete(id);
+    const dirty = new Set<string>(), checkouts = new Set<string>();
+    for (const root of new Set([...before.keys(), ...next.keys()])) {
+      if (before.get(root) === next.get(root)) continue;
+      for (const id of this.family.descendants(root)) {
+        this.#assign(id, this.#contribution(id), dirty, checkouts);
       }
-      for (const member of next) {
-        if (previous.has(member)) continue;
-        add(sum, this.#contribution(member), 1);
-        const owners = this.#tasksOf.get(member) ?? new Set<string>();
-        owners.add(id);
-        this.#tasksOf.set(member, owners);
-      }
-      this.#tasks.set(id, next);
-      this.#taskTallies.set(id, sum);
-      const value = this.#aggregate("task", id, sum, 0);
-      if (this.#set(value)) upserts.push(value);
     }
+    this.#refreshTasks(dirty, checkouts, upserts, removals);
     if (upserts.length || removals.length) this.publish(upserts, removals);
+  }
+
+  taskOf(id: string): string | undefined {
+    return this.#taskOf.get(id);
+  }
+
+  listed(checkout: string): Iterable<string> {
+    return this.#listed.get(checkout)?.tasks.keys() ?? [];
+  }
+
+  get listingRevision(): number {
+    return this.#listingRevision;
   }
   /** S18: the checkout a session belongs to, as placed by ProjectSummaries. */
   member(id: string, checkout?: string): void {
     const before = this.#checkoutOf.get(id);
     if (before === checkout) return;
     const upserts: EntityState[] = [];
-    const value = this.#contribution(id);
+    const task = this.#taskOf.get(id);
     if (before) {
-      add(this.#tally(before), value, -1);
+      if (task) this.#list(before, task, -1);
       this.#checkout(before, upserts);
     }
     if (checkout) {
       this.#checkoutOf.set(id, checkout);
-      add(this.#tally(checkout), value, 1);
+      if (task) this.#list(checkout, task, 1);
       this.#checkout(checkout, upserts);
     } else this.#checkoutOf.delete(id);
     if (upserts.length) this.publish(upserts, []);
@@ -223,21 +306,27 @@ export class EntityStates {
     if (dependencies) this.#checkoutDependencies.set(directory, dependencies);
     else this.#checkoutDependencies.delete(directory);
     const upserts: EntityState[] = [];
-    this.#tally(directory);
     this.#checkout(directory, upserts);
     if (upserts.length) this.publish(upserts, []);
     return this.#states.get(entityKey("checkout", directory))!;
   }
   /** A project's state over its checkouts (or itself when it has none). */
   project(directory: string, checkouts: readonly string[]): EntityState {
-    for (const leaf of this.#leaves.get(directory) ?? []) {
+    const previous = this.#leaves.get(directory) ?? [];
+    const next = [...new Set(checkouts.length ? checkouts : [directory])];
+    const listing = this.#listing(this.#projectListings, directory);
+    for (const leaf of previous) {
+      if (next.includes(leaf)) continue;
       this.#projectsOf.get(leaf)?.delete(directory);
+      for (const task of this.listed(leaf)) this.#include(listing, task, -1);
     }
-    this.#leaves.set(directory, [...checkouts]);
-    for (const leaf of checkouts) {
-      const projects = this.#projectsOf.get(leaf) ?? new Set();
+    this.#leaves.set(directory, next);
+    for (const leaf of next) {
+      if (previous.includes(leaf)) continue;
+      const projects = this.#projectsOf.get(leaf) ?? new Set<string>();
       projects.add(directory);
       this.#projectsOf.set(leaf, projects);
+      for (const task of this.listed(leaf)) this.#include(listing, task, 1);
     }
     const upserts: EntityState[] = [];
     this.#project(directory, upserts);
@@ -274,6 +363,13 @@ export class EntityStates {
     for (const leaf of this.#leaves.get(directory) ?? []) {
       this.#projectsOf.get(leaf)?.delete(directory);
     }
+    const listing = this.#projectListings.get(directory);
+    if (listing) {
+      for (const id of listing.tasks.keys()) {
+        this.#viewsOf.get(id)?.delete(listing);
+      }
+      this.#projectListings.delete(directory);
+    }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
     this.#checkoutDependencies.delete(directory);
@@ -286,15 +382,25 @@ export class EntityStates {
     acknowledged: number,
     retainedTerminal = 0,
   ): Supervision {
+    const native = this.supervision.inputs(entry);
+    const permissions = this.#permissionKeys(entry, native.permissions, () => {
+      if (this.onPermissionDeadline) this.onPermissionDeadline(entry.id);
+      else this.session(entry, acknowledged, retainedTerminal);
+    });
+    const inputs = { ...native, permissions: permissions.length };
     const verdict = this.supervision.session(
       entry,
       acknowledged,
       retainedTerminal,
+      inputs,
     );
     const upserts: EntityState[] = [], removals: string[] = [];
     const contribution = this.#contribution(entry.id);
     const parent = this.#parents.get(entry.id);
     const moved = parent !== entry.parentID;
+    const admitted = !this.#own.has(entry.id);
+    const previous = this.#states.get(entityKey("session", entry.id));
+    const tasks = new Set<string>(), checkouts = new Set<string>();
     if (moved) {
       if (parent) this.#chain(parent, upserts);
       if (entry.parentID) this.#parents.set(entry.id, entry.parentID);
@@ -308,7 +414,15 @@ export class EntityStates {
       const state = rollupStatus(this.supervision.status(verdict), operation);
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
-      const value = this.#session(entry, verdict, state, counts, operation);
+      const value = this.#session(
+        entry,
+        verdict,
+        state,
+        counts,
+        inputs,
+        permissions,
+        operation,
+      );
       if (value.cause === "permission") {
         this.#graced.set(
           entry.id,
@@ -321,7 +435,32 @@ export class EntityStates {
       // change. Refresh only this family's ancestors, not the catalog.
       this.#ancestors(entry.id, upserts);
     }
-    this.#contribute(entry.id, contribution, upserts);
+    if (admitted || moved || entry.deleted) {
+      for (
+        const id of new Set([entry.id, ...this.family.descendants(entry.id)])
+      ) {
+        this.#assign(
+          id,
+          id === entry.id ? contribution : this.#contribution(id),
+          tasks,
+          checkouts,
+        );
+      }
+    }
+    const current = this.#states.get(entityKey("session", entry.id));
+    const task = this.#taskOf.get(entry.id);
+    if (
+      task && (
+        previous?.evidence?.helper !== current?.evidence?.helper ||
+        current?.evidence?.helper && (
+            previous?.evidence?.run?.startedAt !==
+              current.evidence.run?.startedAt ||
+            previous?.terminal !== current.terminal
+          )
+      )
+    ) tasks.add(task);
+    this.#contribute(entry.id, contribution, tasks, checkouts, upserts);
+    this.#refreshTasks(tasks, checkouts, upserts, removals);
     if (upserts.length || removals.length) this.publish(upserts, removals);
     return verdict;
   }
@@ -332,7 +471,18 @@ export class EntityStates {
     const parent = this.#parents.get(id);
     this.#retire(id, removals);
     if (parent) this.#chain(parent, upserts);
-    this.#contribute(id, contribution, upserts);
+    const tasks = new Set<string>(), checkouts = new Set<string>();
+    for (const member of new Set([id, ...this.family.descendants(id)])) {
+      this.#assign(
+        member,
+        member === id ? contribution : this.#contribution(member),
+        tasks,
+        checkouts,
+      );
+    }
+    this.#contribute(id, contribution, tasks, checkouts, upserts);
+    this.#checkoutOf.delete(id);
+    this.#refreshTasks(tasks, checkouts, upserts, removals);
     if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   #contribution(id: string): Contribution {
@@ -345,43 +495,155 @@ export class EntityStates {
       requests: this.#graced.get(id) ?? [],
     };
   }
-  /** Apply one session's changed contribution to its checkout, the projects
-   * holding that checkout and the global entity; nothing else is visited. */
+  /** Move the existing contribution before applying any change in its value. */
+  #assign(
+    id: string,
+    contribution: Contribution,
+    tasks: Set<string>,
+    checkouts: Set<string>,
+  ): void {
+    const before = this.#taskOf.get(id);
+    let next: string | undefined;
+    if (this.#own.has(id)) {
+      const root = this.family.ancestors(id).findLast((key) => {
+        const entry = this.family.getMetadata(key);
+        return !!entry && !entry.deleted;
+      }) ?? id;
+      next = this.#roots.get(root) ?? taskEntityID("session", root);
+    }
+    if (before === next) return;
+    const checkout = this.#checkoutOf.get(id);
+    if (before) {
+      this.#delta(before, contribution, -1, tasks, checkouts);
+      this.#members.get(before)!.delete(id);
+      if (checkout) this.#list(checkout, before, -1);
+    }
+    if (next) {
+      this.#taskOf.set(id, next);
+      const members = this.#members.get(next) ?? new Set<string>();
+      members.add(id);
+      this.#members.set(next, members);
+      this.#delta(next, contribution, 1, tasks, checkouts);
+      if (checkout) this.#list(checkout, next, 1);
+    } else this.#taskOf.delete(id);
+    if (checkout) checkouts.add(checkout);
+  }
+
+  #delta(
+    task: string,
+    value: Contribution,
+    sign: 1 | -1,
+    tasks: Set<string>,
+    checkouts: Set<string>,
+  ): void {
+    const sum = this.#taskTallies.get(task) ?? tally();
+    this.#taskTallies.set(task, sum);
+    add(sum, value, sign);
+    for (const listing of this.#viewsOf.get(task) ?? []) {
+      add(listing.sum, value, sign);
+    }
+    for (const checkout of this.#checkoutsOf.get(task) ?? []) {
+      checkouts.add(checkout);
+    }
+    tasks.add(task);
+  }
+
+  #refreshTasks(
+    tasks: Set<string>,
+    checkouts: Set<string>,
+    upserts: EntityState[],
+    removals: string[],
+  ): void {
+    for (const id of tasks) {
+      if (!this.#members.get(id)?.size) {
+        this.#members.delete(id);
+        // Archive placement follows checkout paint below, so its listing may
+        // still need the old task's zero tally during reconciliation.
+        const key = entityKey("task", id);
+        if (this.#states.delete(key)) removals.push(key);
+      } else {
+        const value = this.#aggregate(
+          "task",
+          id,
+          this.#taskTallies.get(id)!,
+          0,
+        );
+        value.helpers = this.#taskHelpers(this.#members.get(id)!);
+        if (this.#set(value)) upserts.push(value);
+      }
+    }
+    for (const checkout of checkouts) this.#checkout(checkout, upserts);
+    for (const id of tasks) {
+      if (this.#members.has(id)) continue;
+      this.#taskTallies.delete(id);
+      this.#checkoutsOf.delete(id);
+      this.#viewsOf.delete(id);
+    }
+  }
+
+  /** Global is still a flat set of sessions. Other views borrow their tasks. */
   #contribute(
     id: string,
     before: Contribution,
+    tasks: Set<string>,
+    checkouts: Set<string>,
     upserts: EntityState[],
   ): void {
     const after = this.#contribution(id);
     if (JSON.stringify(before) === JSON.stringify(after)) return;
-    for (const task of this.#tasksOf.get(id) ?? []) {
-      const sum = this.#taskTallies.get(task)!;
-      add(sum, before, -1);
-      add(sum, after, 1);
-      const value = this.#aggregate("task", task, sum, 0);
-      if (this.#set(value)) upserts.push(value);
-    }
-    const checkout = this.#checkoutOf.get(id);
-    if (checkout) {
-      add(this.#tally(checkout), before, -1);
-      add(this.#tally(checkout), after, 1);
-      this.#checkout(checkout, upserts);
+    const task = this.#taskOf.get(id);
+    if (task) {
+      this.#delta(task, before, -1, tasks, checkouts);
+      this.#delta(task, after, 1, tasks, checkouts);
     }
     add(this.#global, before, -1);
     add(this.#global, after, 1);
     const value = this.#aggregate("global", "global", this.#global, 0);
     if (this.#set(value)) upserts.push(value);
   }
-  #tally(directory: string): Tally {
-    let value = this.#tallies.get(directory);
-    if (!value) this.#tallies.set(directory, value = tally());
+  #listing(values: Map<string, Listing>, id: string): Listing {
+    let value = values.get(id);
+    if (!value) values.set(id, value = { tasks: new Map(), sum: tally() });
     return value;
+  }
+
+  /** Update a union by reference count, folding a task exactly once. */
+  #include(listing: Listing, task: string, sign: 1 | -1): boolean {
+    const before = listing.tasks.get(task) ?? 0, count = before + sign;
+    if (count) listing.tasks.set(task, count);
+    else listing.tasks.delete(task);
+    if (!!before === !!count) return false;
+    add(listing.sum, this.#taskTallies.get(task)!, sign);
+    if (count) {
+      const views = this.#viewsOf.get(task) ?? new Set<Listing>();
+      views.add(listing);
+      this.#viewsOf.set(task, views);
+    } else this.#viewsOf.get(task)?.delete(listing);
+    return true;
+  }
+
+  #list(checkout: string, task: string, sign: 1 | -1): void {
+    if (!this.#include(this.#listing(this.#listed, checkout), task, sign)) {
+      return;
+    }
+    this.#listingRevision++;
+    const leaves = this.#checkoutsOf.get(task) ?? new Set<string>();
+    if (sign === 1) leaves.add(checkout);
+    else leaves.delete(checkout);
+    this.#checkoutsOf.set(task, leaves);
+    for (const project of this.#projectsOf.get(checkout) ?? []) {
+      this.#include(this.#listing(this.#projectListings, project), task, sign);
+    }
+    const archive = this.#archiveOf.get(checkout);
+    if (archive) {
+      this.#include(this.#listing(this.#archiveListings, archive), task, sign);
+    }
   }
   #checkout(directory: string, upserts: EntityState[]): void {
     const value = this.#aggregate(
       "checkout",
       directory,
-      this.#tally(directory),
+      this.#listing(this.#listed, directory).sum,
       this.#forms.get(directory) ?? 0,
       this.#checkoutOperations.get(directory),
       this.#checkoutDependencies.get(directory) ?? 0,
@@ -393,13 +655,10 @@ export class EntityStates {
     }
   }
   #project(directory: string, upserts: EntityState[]): void {
-    const sum = tally();
     let forms = 0;
     let dependencies = 0;
     const operations: ("working" | "blocked")[] = [];
     for (const leaf of this.#leaves.get(directory) ?? [directory]) {
-      const value = this.#tallies.get(leaf);
-      if (value) add(sum, value, 1);
       forms += this.#forms.get(leaf) ?? 0;
       dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       const operation = this.#checkoutOperations.get(leaf);
@@ -409,7 +668,7 @@ export class EntityStates {
     const value = this.#aggregate(
       "project",
       directory,
-      sum,
+      this.#listing(this.#projectListings, directory).sum,
       forms,
       operation === "none" ? undefined : operation as "working" | "blocked",
       dependencies,
@@ -433,10 +692,18 @@ export class EntityStates {
       ? archiveEntityID(facts)
       : undefined;
     if (before && before !== next) {
+      const listing = this.#listing(this.#archiveListings, before);
+      for (const task of this.listed(directory)) {
+        this.#include(listing, task, -1);
+      }
       this.#archiveLeaves.get(before)?.delete(directory);
       this.#archiveOf.delete(directory);
     }
-    if (next) {
+    if (next && next !== before) {
+      const listing = this.#listing(this.#archiveListings, next);
+      for (const task of this.listed(directory)) {
+        this.#include(listing, task, 1);
+      }
       const leaves = this.#archiveLeaves.get(next) ?? new Set<string>();
       leaves.add(directory);
       this.#archiveLeaves.set(next, leaves);
@@ -444,18 +711,16 @@ export class EntityStates {
     }
     for (const id of new Set([before, next])) {
       if (!id) continue;
-      const sum = tally();
       let forms = 0;
       let dependencies = 0;
       for (const leaf of this.#archiveLeaves.get(id) ?? []) {
-        add(sum, this.#tally(leaf), 1);
         forms += this.#forms.get(leaf) ?? 0;
         dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       }
       const value = this.#aggregate(
         "archive",
         id,
-        sum,
+        this.#listing(this.#archiveListings, id).sum,
         forms,
         undefined,
         dependencies,
@@ -508,6 +773,8 @@ export class EntityStates {
     };
   }
   #retire(id: string, removals: string[]): void {
+    this.clock.clear(this.#permissions.get(id)?.timer);
+    this.#permissions.delete(id);
     this.#own.delete(id);
     this.#parents.delete(id);
     this.#graced.delete(id);
@@ -518,6 +785,40 @@ export class EntityStates {
     for (const parent of this.family.ancestors(id)) {
       this.#refresh(parent, upserts);
     }
+  }
+
+  #taskHelpers(members: ReadonlySet<string>): TaskHelpers {
+    const groups: Record<HelperDisposition, EntityState[]> = {
+      running: [],
+      needsYou: [],
+      notReturned: [],
+    };
+    for (const id of members) {
+      const state = this.#states.get(entityKey("session", id));
+      const helper = state?.evidence?.helper;
+      if (helper) groups[helper].push(state);
+    }
+    const active = (a: EntityState, b: EntityState) =>
+      (a.evidence?.run?.startedAt ?? Infinity) -
+        (b.evidence?.run?.startedAt ?? Infinity) ||
+      (this.family.getMetadata(a.id)?.timeCreated ?? Infinity) -
+        (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
+      a.id.localeCompare(b.id);
+    const { running, needsYou, notReturned } = groups;
+    return {
+      counts: {
+        running: running.length,
+        needsYou: needsYou.length,
+        notReturned: notReturned.length,
+      },
+      ids: [
+        ...running.sort(active),
+        ...needsYou.sort(active),
+        ...notReturned.sort((a, b) =>
+          (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
+        ),
+      ].map((value) => value.id),
+    };
   }
   #chain(id: string, upserts: EntityState[]): void {
     this.#refresh(id, upserts);
@@ -590,9 +891,10 @@ export class EntityStates {
     verdict: Supervision,
     state: ProjectStatus,
     counts: EntityCounts,
+    inputs: SessionInputs,
+    permissionIDs: readonly string[],
     operation?: "working" | "blocked",
   ): EntityState {
-    const inputs = this.supervision.inputs(entry);
     const activity = entry.activity;
     const cause: BlockedCause | undefined = state !== "blocked"
       ? undefined
@@ -627,9 +929,20 @@ export class EntityStates {
       ? undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
+    const awaitingDelivery = !!entry.parentID &&
+      verdict.terminal > deliveredTerminal(entry);
+    const helper = !entry.parentID
+      ? undefined
+      : state === "working"
+      ? "running"
+      : state === "blocked" && cause !== "failedHelper"
+      ? "needsYou"
+      : awaitingDelivery
+      ? "notReturned"
+      : undefined;
     const evidence: SessionEvidence = {
-      awaitingDelivery: !!entry.parentID &&
-        verdict.terminal > deliveredTerminal(entry),
+      awaitingDelivery,
+      ...(helper ? { helper } : {}),
       ...(startedAt === undefined ? {} : {
         run: {
           startedAt,
@@ -644,9 +957,7 @@ export class EntityStates {
       questions: inputs.questions,
       descendants: this.#descendants(entry.id),
       requests: {
-        permissions: inputs.permissions > 0
-          ? (activity?.permissions?.keys ?? []).map((id) => ({ id }))
-          : [],
+        permissions: permissionIDs.map((id) => ({ id })),
         questions: inputs.questions > 0
           ? (activity?.inputs?.keys ?? []).map((id) => ({ id }))
           : [],

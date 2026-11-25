@@ -23,7 +23,6 @@ import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import {
   buildTrail,
-  type TaskCrumb,
   type TrailCrumb,
   type TrailModel,
 } from "./task-breadcrumbs.ts";
@@ -32,7 +31,6 @@ import {
   resolveTabHierarchy,
   type TabGroups,
 } from "./tab-groups.ts";
-export type FamilyCrumb = TrailCrumb;
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -98,9 +96,6 @@ export interface ClientTabs {
   /** Open-session identity and known ancestor links, independent of activity. */
   path(): TrailCrumb[];
   /** Compatibility view of the trail's off-path working/blocked helpers. */
-  family(): FamilyCrumb[];
-  /** Positive native descendant work from the trail owner's entity inputs. */
-  working(): TaskCrumb[];
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
   /** The same session membership used by this tab's supervision lamp. */
@@ -162,7 +157,7 @@ export function createTabs(
   const groupKey = (id: string, kind: "task" | "session") =>
     entityKey(
       "task",
-      taskEntityID(id, input.followParent, input.directory, kind),
+      taskEntityID(kind, id),
     );
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");
@@ -184,9 +179,6 @@ export function createTabs(
   let cachedTrail: TrailModel = {
       crumbs: [],
       path: [],
-      helpers: [],
-      working: [],
-      status: "none",
     },
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
@@ -210,8 +202,8 @@ export function createTabs(
     const roots = new Set(entries.map((entry) => nodes.get(entry.id)?.rootID));
     tasks = input.inbox.tasks.filter((t) =>
       belongs(t.directory) ||
-      input.followParent &&
-        (inherited.has(t.id) || t.sessions.some((id) => roots.has(id)))
+      t.sessions.some((id) => roots.has(id)) ||
+      input.followParent && inherited.has(t.id)
     );
     byID = new Map(context.map((e) => [e.id, e]));
     taskByID = new Map(tasks.map((t) => [t.id, t]));
@@ -276,9 +268,7 @@ export function createTabs(
         )!.roots,
       ],
       preview: false,
-      status: lamp(entities(), groupKey(task.id, "task"), {
-        now: performance.now(),
-      }),
+      status: lamp(entities(), groupKey(task.id, "task")),
       dependencies: entities().isStale
         ? undefined
         : entities().get(groupKey(task.id, "task"))?.dependencies,
@@ -287,9 +277,7 @@ export function createTabs(
       if (owner.kind !== "session") continue;
       const entry = byID.get(owner.id);
       if (!entry) continue;
-      const status = lamp(entities(), groupKey(owner.id, "session"), {
-        now: performance.now(),
-      });
+      const status = lamp(entities(), groupKey(owner.id, "session"));
       if (
         status !== "none" || owner.members.some((id) => mandatory.has(id)) ||
         store.state.preview === entry.id ||
@@ -442,14 +430,6 @@ export function createTabs(
     path() {
       this.crumbs();
       return cachedTrail.path;
-    },
-    family() {
-      this.crumbs();
-      return cachedTrail.helpers;
-    },
-    working() {
-      this.crumbs();
-      return cachedTrail.working;
     },
     sessionFor,
     update(next: TabInput): void {

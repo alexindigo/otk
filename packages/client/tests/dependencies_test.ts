@@ -8,13 +8,10 @@ import {
   taskEntityID,
 } from "@otk/protocol";
 import {
-  aggregateStatus,
   createEntityStateStore,
   createTabs,
-  dependencyCount,
+  entityState,
   inboxProjects,
-  inboxStatus,
-  rollup,
 } from "../mod.ts";
 import { createProjectProjection } from "../project-projection.ts";
 
@@ -56,41 +53,8 @@ function snapshot(): InboxSnapshot {
     seen: {},
     finishes: {},
     pathTemplates: [],
-    supervision: {
-      "tstv1-owner": {
-        state: "none",
-        terminal: 0,
-        dependencies: { running: 2 },
-      },
-      "tstv1-other": {
-        state: "none",
-        terminal: 0,
-        dependencies: { running: 1 },
-      },
-    },
   };
 }
-Deno.test("dependencies affect aggregate priority but never own-session lamps or finish marks", () => {
-  const a = entry(), inbox = snapshot();
-  assertEquals(inboxStatus(a, inbox), "none");
-  assertEquals(aggregateStatus(a, inbox), "dependencies");
-  assertEquals(dependencyCount(a, inbox), 2);
-  assertEquals(rollup([a], inbox), "dependencies");
-  for (
-    const [state, expected] of [["working", "working"], [
-      "finishedUnseen",
-      "finished",
-    ], ["needsYou", "blocked"]] as const
-  ) {
-    inbox.supervision![a.id].state = state;
-    assertEquals(rollup([a], inbox), expected);
-  }
-  assertEquals(
-    rollup([{ ...a, deleted: { at: 3, how: "provider" } }], inbox),
-    "none",
-  );
-  assertEquals(inbox.finishes, {});
-});
 Deno.test("task ownership counts only its own sessions; dependency-only phantoms retire at zero", () => {
   const inbox = snapshot(), entries = [entry(), entry("tstv1-other")];
   inbox.tasks = [{
@@ -103,17 +67,22 @@ Deno.test("task ownership counts only its own sessions; dependency-only phantoms
   const tabs = createTabs(() => Promise.resolve(inbox.tasks[0]));
   const session = (id: string) => entityKey("session", id);
   const tab = (id: string, kind: "task" | "session") =>
-    entityKey("task", taskEntityID(id, false, "/p", kind));
+    entityKey("task", taskEntityID(kind, id));
   inbox.entities = {
     [session(entries[0].id)]: entity("session", entries[0].id, 2),
     [session(entries[1].id)]: entity("session", entries[1].id, 1),
-    [tab("task", "task")]: entity("task", taskEntityID("task", false, "/p"), 2),
+    [tab("task", "task")]: entity("task", taskEntityID("task", "task"), 2),
     [tab(entries[1].id, "session")]: entity(
       "task",
-      taskEntityID(entries[1].id, false, "/p", "session"),
+      taskEntityID("session", entries[1].id),
       1,
     ),
   };
+  const store = createEntityStateStore({ read: () => inbox.entities });
+  assertEquals(entityState(store, session(entries[0].id)), "none");
+  assertEquals(store.get(session(entries[0].id))?.dependencies, 2);
+  assertEquals(inbox.finishes, {});
+  store.stop();
   tabs.update({ directory: "/p", entries, inbox });
   assertEquals(
     tabs.tabs().map((tab) => [tab.id, tab.status, tab.dependencies]),
@@ -154,7 +123,7 @@ Deno.test("count-only entity changes invalidate the keyed project row without a 
   assertNotStrictEquals(projection.row("/p", 0), before);
   assertEquals(projection.row("/p", 0)?.dependencies, 3);
   assertEquals(projection.row("/p", 0)?.status, "dependencies");
-  assertEquals(inboxStatus(a, inbox), "none");
+  assertEquals(entityState(entities, entityKey("session", a.id)), "none");
   entities.stop();
 });
 Deno.test("orphan-only project summaries lift Inactive without fabricating population, then return to policy", () => {
@@ -178,6 +147,8 @@ Deno.test("orphan-only project summaries lift Inactive without fabricating popul
       dependencies: 1,
     },
   };
+  const key = entityKey("project", "/orphan");
+  inbox.entities = { [key]: entity("project", "/orphan", 1) };
   const row = inboxProjects([], inbox, 10)[0];
   assertEquals([row.status, row.group, row.inactive, row.dependencies], [
     "dependencies",
@@ -186,7 +157,11 @@ Deno.test("orphan-only project summaries lift Inactive without fabricating popul
     1,
   ]);
   const untracked = { ...inbox, projects: [] };
-  const projection = createProjectProjection({ entry: () => undefined });
+  const store = createEntityStateStore({ read: () => inbox.entities });
+  const projection = createProjectProjection({
+    entry: () => undefined,
+    entities: () => store,
+  });
   projection.inbox(untracked);
   assertEquals(projection.directories(), ["/orphan"]);
   assertEquals(projection.row("/orphan", 10)?.dependencies, 1);
@@ -195,6 +170,7 @@ Deno.test("orphan-only project summaries lift Inactive without fabricating popul
     status: "none",
     dependencies: 0,
   };
+  inbox.entities[key] = entity("project", "/orphan", 0);
   const stopped = inboxProjects([], inbox, 10)[0];
   assertEquals([stopped.status, stopped.group, stopped.inactive], [
     "none",
@@ -203,4 +179,5 @@ Deno.test("orphan-only project summaries lift Inactive without fabricating popul
   ]);
   projection.inbox({ ...inbox, projects: [] });
   assertEquals(projection.directories(), []);
+  store.stop();
 });

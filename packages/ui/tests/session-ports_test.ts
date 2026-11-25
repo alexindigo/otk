@@ -247,7 +247,7 @@ Deno.test("session ports capture target once while capability and resource gette
     });
     assertEquals(ports.entry("unleased"), undefined);
     assertEquals(
-      lamp(historicalCard.session.entities!, "session:unleased", { now: 0 }),
+      lamp(historicalCard.session.entities!, "session:unleased"),
       activity,
     );
     assertEquals(facts().reply?.working.value, 2000);

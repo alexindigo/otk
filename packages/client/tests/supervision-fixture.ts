@@ -17,9 +17,17 @@ import * as inbox from "../inbox.ts";
 import { createTabs as tabs, type TabInput } from "../tabs.ts";
 import { taskBreadcrumbs as crumbs } from "../task-breadcrumbs.ts";
 export * from "../inbox.ts";
+export const unread = (entry: IndexMetadata, value: InboxSnapshot) =>
+  inbox.unread(entry, projected([entry], value));
 export type * from "../tabs.ts";
 export type * from "../task-breadcrumbs.ts";
 
+const displayed = (s?: Supervision) =>
+  s?.state === "needsYou"
+    ? "blocked"
+    : s?.state === "finishedUnseen"
+    ? "finished"
+    : s?.state ?? "none";
 /** Fake-server entity publication for legacy scenario knobs, not a client fallback. */
 export function entitySnapshot(
   value: Pick<InboxSnapshot, "supervision">,
@@ -33,13 +41,17 @@ export function entitySnapshot(
         const activity = entry?.activity?.work;
         const state = entry?.deleted
           ? "none"
-          : entry?.operationStatus ?? inbox.supervisionStatus(id, value);
+          : entry?.operationStatus ?? displayed(value.supervision?.[id]);
         return [entityKey("session", id), {
           kind: "session",
           id,
           state,
           previous: state,
+          terminal: verdict.terminal,
+          outcome: verdict.outcome,
+          terminalOrigin: verdict.terminalOrigin,
           evidence: {
+            failure: verdict.terminalFailure,
             awaitingDelivery: verdict.state === "finishedUnseen",
             work: activity
               ? activity.fresh && activity.keys.length > 0
@@ -59,6 +71,9 @@ export function entitySnapshot(
     ),
   );
 }
+
+export const sessionEntity = (id: string, value: Supervision): EntityState =>
+  entitySnapshot({ supervision: { [id]: value } })[entityKey("session", id)];
 
 export function projected(
   entries: readonly (IndexMetadata & inbox.OperationAttention)[],
@@ -95,20 +110,52 @@ export function projected(
     },
   };
 }
-export const inboxStatus: typeof inbox.inboxStatus = (entry, value) =>
-  inbox.inboxStatus(entry, projected([entry], value));
-export const rollup: typeof inbox.rollup = (entries, value) =>
-  inbox.rollup(entries, projected(entries, value));
+export const inboxStatus = (
+  entry: IndexMetadata & inbox.OperationAttention,
+  value: Pick<InboxSnapshot, "seen" | "finishes" | "supervision" | "entities">,
+) =>
+  projected([entry], value).entities[entityKey("session", entry.id)]?.state ??
+    "none";
+export const rollup = (
+  entries: readonly (IndexMetadata & inbox.OperationAttention)[],
+  value: Pick<InboxSnapshot, "seen" | "finishes" | "supervision" | "entities">,
+) => rollupStatus(...entries.map((entry) => inboxStatus(entry, value)));
 export const inboxProjects: typeof inbox.inboxProjects = (
   entries,
   value,
   ...args
-) =>
-  inbox.inboxProjects(
-    entries,
-    { ...value, ...projected(entries, value) },
-    ...args,
-  );
+) => {
+  const replica = projected(entries, value);
+  const directories = new Set([
+    ...entries.map((entry) => entry.directory),
+    ...Object.keys(value.summaries ?? {}),
+  ]);
+  for (const directory of directories) {
+    const key = entityKey("project", directory);
+    if (replica.entities[key]) continue;
+    const members = entries.filter((entry) => entry.directory === directory)
+      .map((entry) => replica.entities[entityKey("session", entry.id)]).filter(
+        Boolean,
+      );
+    const summary = value.summaries?.[directory];
+    const state = summary?.status ??
+      rollupStatus(...members.map((member) => member.state));
+    replica.entities[key] = {
+      kind: "project",
+      id: directory,
+      state,
+      previous: state,
+      counts: {
+        blocked: members.reduce((n, v) => n + v.counts.blocked, 0),
+        working: members.reduce((n, v) => n + v.counts.working, 0),
+        finished: members.reduce((n, v) => n + v.counts.finished, 0),
+        unseen: summary?.unseenCount ??
+          members.reduce((n, v) => n + v.counts.unseen, 0),
+      },
+    };
+  }
+  return inbox.inboxProjects(entries, { ...value, ...replica }, ...args);
+};
 export const createTabs: typeof tabs = (...args) => {
   const model = tabs(...args);
   return {
@@ -151,12 +198,7 @@ export function fixtureSnapshot(
   ) {
     const partition = projectTabGroups(entries, value.tasks, input);
     for (const group of partition.groups) {
-      const id = taskEntityID(
-        group.id,
-        input.followParent,
-        input.directory,
-        group.kind,
-      );
+      const id = taskEntityID(group.kind, group.id);
       const members = group.members.map((id) =>
         projection.entities[entityKey("session", id)]
       ).filter(Boolean);

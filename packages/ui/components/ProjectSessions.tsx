@@ -431,7 +431,6 @@ export default function ProjectSessions(props: {
                               state={lamp(
                                 entities(),
                                 entityKey("session", row().session.id),
-                                { now: performance.now() },
                               )}
                               event={row().session.timeUpdated}
                             />
