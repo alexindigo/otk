@@ -978,15 +978,17 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     if (generation !== this.#generation) return;
-    this.#errors.remove(id);
+    const history = this.#errors.remove(id);
+    const native = ids.decode(id);
+    this.#refresh?.forget(`session:${native}`);
+    this.#metadataRefresh.delete(native);
+    this.pending.retireSession(native);
+    await history;
     await this.transcript.deleted(id);
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
     this.#lists.invalidate();
-    for (const [key, pending] of this.#pending) {
-      if (pending.sessionID === ids.decode(id)) this.#setPending(key);
-    }
     if (this.digest) {
       await this.digest.deleted(generation, id, Date.now(), metadata);
     } else {
@@ -1403,9 +1405,6 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
     }
     if (changedID && event.type === "session.deleted") {
-      this.#refresh?.forget(`session:${event.data.sessionID}`);
-      this.#metadataRefresh.delete(event.data.sessionID as string);
-      this.pending.retireSession(event.data.sessionID as string);
       const previous = this.#index.getMetadata(changedID);
       await this.#deleted(
         changedID,
@@ -1630,7 +1629,6 @@ export class OpencodeV2ServerAdapter implements Harness {
     const sid = event.data.sessionID as string;
     const previousRun = this.#running.get(sid);
     const executionFailure = value.failure;
-    this.#errors.register(ids.encode(sid));
     const previous = this.#index.getMetadata(ids.encode(sid));
     const raw = await client.read(
       (api) => api.session.get({ sessionID: sid }, { signal }),
@@ -1638,6 +1636,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     );
     signal.throwIfAborted();
     if (!current() || generation !== this.#generation) return;
+    this.#errors.register(ids.encode(sid));
     // Buffered events and metadata clocks are not process ownership. Read the
     // same native owner used at bootstrap, so a delayed edge cannot revive a
     // dead run or retire a newer run. Keep its resync identity until I/O settles.

@@ -22,6 +22,7 @@ export class SessionErrors {
   #removed = new Set<string>();
   #revision = 0;
   #requestID = 0;
+  #historyDrains = new Map<string, Promise<void>>();
   #history = new Map<
     string,
     {
@@ -37,6 +38,7 @@ export class SessionErrors {
     key: string,
     run: () => void | Promise<void>,
   ): Promise<void> {
+    if (!this.accepts(sessionID)) return;
     const identity = JSON.stringify([sessionID, key]);
     const job = this.#history.get(identity) ?? { sessionID, run };
     this.#history.set(identity, job);
@@ -52,7 +54,11 @@ export class SessionErrors {
     },
   ): Promise<void> {
     if (job.running) return job.running;
-    return job.running = Promise.resolve().then(job.run).then(() => {
+    const owns = () => this.#history.get(identity) === job;
+    return job.running = Promise.resolve().then(() => {
+      if (owns()) return job.run();
+    }).then(() => {
+      if (!owns()) return;
       this.#history.delete(identity);
       if (job.failed) {
         this.#update(
@@ -63,8 +69,10 @@ export class SessionErrors {
         );
       }
     }).catch((error) => {
-      job.failed = true;
-      this.#update(job.sessionID, this.snapshot(job.sessionID).observations);
+      if (owns()) {
+        job.failed = true;
+        this.#update(job.sessionID, this.snapshot(job.sessionID).observations);
+      }
       throw error;
     }).finally(() => {
       job.running = undefined;
@@ -245,11 +253,28 @@ export class SessionErrors {
       );
     }
   }
-  remove(sessionID: string): void {
+  /** Fence new jobs immediately, then join any write before durable removal. */
+  remove(sessionID: string): Promise<void> {
+    this.#removed.add(sessionID);
     this.#closeRequests(sessionID);
+    const writes: Promise<void>[] = [];
+    for (const [identity, job] of this.#history) {
+      if (job.sessionID !== sessionID) continue;
+      this.#history.delete(identity);
+      if (job.running) writes.push(job.running);
+    }
     if (this.#states.has(sessionID)) this.#update(sessionID, []);
     this.#states.delete(sessionID);
-    this.#removed.add(sessionID);
+    const previous = this.#historyDrains.get(sessionID);
+    if (!writes.length) return previous ?? Promise.resolve();
+    if (previous) writes.push(previous);
+    const drain = Promise.allSettled(writes).then(() => {
+      if (this.#historyDrains.get(sessionID) === drain) {
+        this.#historyDrains.delete(sessionID);
+      }
+    });
+    this.#historyDrains.set(sessionID, drain);
+    return drain;
   }
   reset(): void {
     this.#requests.clear();
