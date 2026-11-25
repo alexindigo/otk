@@ -1,0 +1,46 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-card);
+  background: var(--otk-bg-side);
+  box-sizing: border-box;
+}
+.otk-terminal-dialog-host {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.otk-terminal-heading {
+  margin: 0;
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
+  font-weight: 600;
+  flex: none;
+}
+.otk-terminal-mount {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: clip;
+}
+.otk-terminal-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.otk-terminal-connection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

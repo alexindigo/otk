@@ -115,7 +115,14 @@ export function registerBrowserContextCommands(
       category: "Browser",
       arguments: { type: "object", properties: { text: { type: "string" } } },
       context: { kind },
-      run: (_ctx, target: TextTarget) => copy(target),
+      run: (_ctx, target: TextTarget) =>
+        copyText(target.text, {
+          actionLabel: copyTitle,
+          target: kind === "link" ? "Link address" : "Image address",
+          recovery: kind === "link"
+            ? "Hold Shift and right-click the link, then choose Copy link address in the browser's link menu."
+            : "Choose Open image, then use the browser's image menu (Shift+right-click) to copy the image address.",
+        }),
     }));
   }
   return () => releases.forEach((release) => release());

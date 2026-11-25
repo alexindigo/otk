@@ -71,7 +71,7 @@ with a failing-ID baseline so only new failures block. `test:commit` takes
 `--workers=N` for the browser tier, `--tiers a,b` to keep only the named tiers
 and `--keep-going` to run every tier and fail at the end. PRs to `master` run
 the full house: every `test:full` tier on both versions, through
-`.github/workflows/pr-checks.yml` once milestone CI lands.
+`.github/workflows/pr-checks.yml`.
 
 ## First attempts and quarantine
 
@@ -124,8 +124,9 @@ There are 19 test jobs across opencode 1.19.3 and 2.2.6, followed by
 branch's `scripts/ci/provision.sh VERSION` installs the pinned Node, Deno,
 native binary, provider cache and Chromium, verifies native/denort hashes, and
 activates the user systemd bus. Deno, npm, browser, native and provider caches
-are keyed by their versions or source hashes. Temporary files stay in
-`.test-state/tmp`.
+are keyed by their versions or source hashes. Temporary fixtures stay in
+`$RUNNER_TEMP/otk-tmp`, outside the Git checkout. The 2.2.6 integration job also
+provisions 1.19.3 for the native migration test.
 
 `full-house` proves every expected job, tier and browser shard ran exactly as
 planned, and every receipt names the same source tree. A missing receipt or

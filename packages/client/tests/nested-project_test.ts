@@ -5,6 +5,55 @@ import { createTabs } from "./supervision-fixture.ts";
 import type { MergedMetadata } from "../index.ts";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 
+for (
+  const status of [
+    "none",
+    "finished",
+    "working",
+    "blocked",
+    "dependencies",
+  ] as const
+) {
+  for (const dependencies of [0, 1]) {
+    Deno.test(`removed checkout visibility preserves ${status} with ${dependencies} running dependencies`, () => {
+      const owner = createProjectProjection({ entry: () => undefined });
+      owner.inbox({
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+        summaries: {
+          "/tree": {
+            directory: "/tree",
+            hasSessions: true,
+            status,
+            dependencies,
+            sessionCount: 1,
+            unseenCount: 0,
+            lastActivity: 2,
+            authority: "current",
+            availability: "removed",
+            archived: true, // Ride publishes archive placement from checkout inventory.
+            topology: {
+              repoID: "repo",
+              canonicalRoot: "/repo",
+              leafDirectory: "/tree",
+              parentDirectory: "/repo",
+            },
+          },
+        },
+      });
+      const active = dependencies > 0 || status === "dependencies" ||
+        status === "working" || status === "blocked";
+      assertEquals(
+        owner.row("/tree", 3)?.group,
+        active ? "active" : "archived",
+      );
+    });
+  }
+}
+
 Deno.test("one project owner routes nested members, persisted tasks and promotion through the authoritative leaf", async () => {
   const entry: MergedMetadata = {
     id: "tstv1-nested",

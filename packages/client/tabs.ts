@@ -38,6 +38,7 @@ export type TabSelection = { kind: "task"; id: string } | {
   id: string;
 };
 export interface InboxTab {
+  dependencies?: number;
   kind: "task" | "phantom";
   id: string;
   title: string;
@@ -278,6 +279,9 @@ export function createTabs(
       status: lamp(entities(), groupKey(task.id, "task"), {
         now: performance.now(),
       }),
+      dependencies: entities().isStale
+        ? undefined
+        : entities().get(groupKey(task.id, "task"))?.dependencies,
     }));
     for (const owner of groups.groups) {
       if (owner.kind !== "session") continue;
@@ -299,6 +303,9 @@ export function createTabs(
           sessions: [entry.id],
           preview: store.state.preview === entry.id,
           status,
+          dependencies: entities().isStale
+            ? undefined
+            : entities().get(groupKey(owner.id, "session"))?.dependencies,
         });
       }
     }

@@ -152,7 +152,6 @@ jobs:
               tiers: "prepare,themes",
             }
     env:
-      TMPDIR: ${{ github.workspace }}/.test-state/tmp
       DENO_DIR: ${{ github.workspace }}/.test-state/deno
       PLAYWRIGHT_BROWSERS_PATH: /opt/otk-test/ms-playwright
       OTK_TEST_VERSION: ${{ matrix.version }}
@@ -170,7 +169,9 @@ jobs:
           persist-credentials: false
       - name: Create cache and temporary directories
         run: |
-          mkdir -p "$TMPDIR" "$DENO_DIR" ".test-state/ci/$CI_JOB_ID"
+          # Keep temporary fixtures outside Git discovery in the checkout.
+          mkdir -p "$RUNNER_TEMP/otk-tmp" "$DENO_DIR" ".test-state/ci/$CI_JOB_ID" .test-state/do
+          printf 'TMPDIR=%s\n' "$RUNNER_TEMP/otk-tmp" >> "$GITHUB_ENV"
           sudo install -d -o "$(id -un)" -g "$(id -gn)" /opt/otk-test /opt/otk-test/opencode /opt/otk-test/provider-cache /opt/otk-test/ms-playwright
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
@@ -200,7 +201,12 @@ jobs:
           key: provider-${{ matrix.version }}-${{ hashFiles('tests/support/prepare-provider-cache.ts') }}
       - name: Provision toolchain
         id: provision
-        run: bash scripts/ci/provision.sh "$OTK_TEST_VERSION"
+        run: |
+          # The V2 migration fixture starts stock V1 and uses its provider cache.
+          if [[ $CI_JOB_ID == integration-2.2.6 ]]; then
+            GITHUB_ENV= GITHUB_PATH= bash scripts/ci/provision.sh 1.19.3
+          fi
+          bash scripts/ci/provision.sh "$OTK_TEST_VERSION"
       - name: Run full-house slice
         id: suite
         run: |
@@ -237,6 +243,7 @@ jobs:
           path: |
             .test-state/runs/
             .test-state/ci/
+            .test-state/do/
             !**/*.png
             !**/*.jpg
             !**/*.jpeg
@@ -258,13 +265,13 @@ jobs:
     needs: checks
     if: always()
     timeout-minutes: 10
-    env:
-      TMPDIR: ${{ github.workspace }}/.test-state/tmp
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - run: mkdir -p "$TMPDIR" receipts master-record
+      - run: |
+          mkdir -p "$RUNNER_TEMP/otk-tmp" receipts master-record
+          printf 'TMPDIR=%s\n' "$RUNNER_TEMP/otk-tmp" >> "$GITHUB_ENV"
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: 2.9.6

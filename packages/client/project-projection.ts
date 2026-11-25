@@ -115,6 +115,7 @@ export function createProjectProjection(o: {
         !!(p.members.size || p.tasks.length || p.record?.inactive ||
           p.discovered ||
           p.summary?.hasSessions || p.summary?.locationForms ||
+          p.summary?.dependencies ||
           (p.summary?.sessionCount ?? 0) > 0 ||
           p.summary && p.summary.hasSessions === undefined);
       if (!present && !p.tasks.length) {
@@ -408,6 +409,9 @@ export function createProjectProjection(o: {
       const status: InboxStatus = store
         ? store.isStale ? "none" : store.get(key)?.state ?? "none"
         : summary?.status ?? "none";
+      const dependencies = store
+        ? store.isStale ? undefined : store.get(key)?.dependencies
+        : summary?.dependencies;
       const unread = store
         ? emphasis(store, key)
         : (summary?.unseenCount ?? 0) > 0;
@@ -421,6 +425,7 @@ export function createProjectProjection(o: {
       const placement = projectPlacement({
         lifecycle: summary,
         status,
+        dependencies,
         inactive: !!record?.inactive,
         hasSessions,
       });
@@ -434,7 +439,7 @@ export function createProjectProjection(o: {
         !p.row || p.row.visit?.text !== visit?.text ||
         p.row.visit?.iso !== visit?.iso ||
         p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
-        p.row.unread !== unread
+        p.row.unread !== unread || p.row.dependencies !== dependencies
       ) {
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
@@ -455,6 +460,7 @@ export function createProjectProjection(o: {
           inactive,
           archived,
           status,
+          dependencies,
           unread,
           unseenCount: store
             ? store.get(key)?.counts.unseen ?? 0

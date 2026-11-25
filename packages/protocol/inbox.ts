@@ -50,6 +50,7 @@ export const ROLLUP_PRIORITY = [
   "blocked",
   "working",
   "finished",
+  "dependencies",
   "none",
 ] as const;
 export type ProjectStatus = typeof ROLLUP_PRIORITY[number];
@@ -65,6 +66,7 @@ export const URGENCY_PRIORITY = [
   "blocked",
   "finished",
   "working",
+  "dependencies",
   "none",
 ] as const satisfies readonly ProjectStatus[];
 /** Choose the most urgent attention state, not the aggregate lamp colour. */
@@ -92,6 +94,8 @@ export interface ProjectSummaryFacts {
     import("./catalogs/project.ts").CatalogProject,
     "id" | "name" | "color"
   >;
+  /** Running PTYs in this checkout, including those with a deleted owner. */
+  dependencies?: number;
   /** Pending location-owned forms; not fabricated sessions or session counts. */
   locationForms?: number;
   directory: string;

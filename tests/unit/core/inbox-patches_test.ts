@@ -18,6 +18,116 @@ import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
 import { entityKey, type EntityState } from "@otk/protocol";
+import type { TerminalChange } from "../../../core/terminals/tracking.ts";
+
+Deno.test("terminal dependency facts reach the scoped entity owner without changing Inactive policy", async () => {
+  const db = new OtkDb(":memory:", [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  stores.projects.add("local", "/p");
+  stores.projects.inactive("local", "/p", true);
+  const index = new IndexStore(), id = "tstv1-terminal-owner";
+  index.upsertMetadata({
+    id,
+    directory: "/p",
+    projectID: "p",
+    title: "Terminal owner",
+    archived: false,
+    status: "idle",
+    timeCreated: 1,
+    timeUpdated: 1,
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  });
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "local",
+    () => Promise.resolve([]),
+  );
+  let listener: (change: TerminalChange) => void = () => {};
+  const source = {
+    counts: {
+      sessions: new Map<string, number>(),
+      checkouts: new Map<string, number>(),
+    },
+    owners: (directory: string) =>
+      directory === "/p" ? [...source.counts.sessions.keys()] : [],
+    listen(changed: typeof listener) {
+      listener = changed;
+      return () => {
+        listener = () => {};
+      };
+    },
+  };
+  feature.terminalDependencies(source);
+  const view = { epoch: 1, directory: "/p", crumbs: [], rows: [] };
+  const leased = new Set([id]);
+  const projection = feature.open(() => view, "dependency-view", () => leased);
+  const frames: ServerFrame[] = [];
+  projection.listen((frame) => frames.push(frame));
+  const publish = async (running: number) => {
+    source.counts = {
+      sessions: new Map(running ? [[id, running]] : []),
+      checkouts: new Map(running ? [["/p", running]] : []),
+    };
+    listener({
+      ...source.counts,
+      changedSessions: [id],
+      changedCheckouts: ["/p"],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  try {
+    await projection.snapshot!();
+    await publish(2);
+    assertEquals(feature.keys(view), [id]);
+    assertEquals(feature.keys({ ...view, directory: "/away" }), []);
+    assertEquals(index.hierarchy.node(id)?.mandatory, true);
+    const session = feature.states.get(entityKey("session", id));
+    assertEquals([session?.state, session?.dependencies], ["none", 2]);
+    assertEquals(feature.summaries.values.get("/p")?.status, "dependencies");
+    assertEquals(
+      feature.states.get(entityKey("project", "/p"))?.dependencies,
+      2,
+    );
+    assertEquals(
+      frames.some((frame) =>
+        frame.t === "inbox.patch" &&
+        frame.ops.some((op) =>
+          op.op === "entity.upsert" && op.value.id === id &&
+          op.value.dependencies === 2
+        )
+      ),
+      true,
+    );
+    await publish(0);
+    assertEquals(feature.keys(view), []);
+    assertEquals(index.hierarchy.node(id)?.mandatory, false);
+    assertEquals(feature.summaries.values.get("/p")?.status, "none");
+    assertEquals(stores.projects.find("local", "/p")?.inactive, true);
+  } finally {
+    await feature.stopDependencies();
+    projection.close?.();
+    feature.close();
+    db.close();
+  }
+});
 
 Deno.test("existing inbox baseline carries body-free entity states alongside legacy projections", () => {
   const rpc = new Rpc(() => {}), consumer = createInbox(rpc);

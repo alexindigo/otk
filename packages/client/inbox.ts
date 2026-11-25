@@ -77,7 +77,7 @@ export function rollup(
   entries: readonly (IndexMetadata & OperationAttention)[],
   inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
 ): InboxStatus {
-  const states = entries.map((entry) => inboxStatus(entry, inbox));
+  const states = entries.map((entry) => aggregateStatus(entry, inbox));
   return rollupStatus(...states);
 }
 /** The disclosure remains the attention surface even when its rows are folded. */
@@ -92,7 +92,26 @@ export function archiveAttention(
       : rows.reduce((sum, row) => sum + row.unseenCount!, 0),
   };
 }
+/** Dependencies affect aggregates and mandatory visibility, never the session's own lamp. */
+export function dependencyCount(
+  entry: Pick<IndexMetadata, "id" | "deleted">,
+  inbox: Pick<InboxSnapshot, "supervision">,
+): number {
+  return entry.deleted
+    ? 0
+    : inbox.supervision?.[entry.id]?.dependencies?.running ?? 0;
+}
+export function aggregateStatus(
+  entry: IndexMetadata & OperationAttention,
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision">,
+): InboxStatus {
+  return rollupStatus(
+    inboxStatus(entry, inbox),
+    dependencyCount(entry, inbox) ? "dependencies" : "none",
+  );
+}
 export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
+  dependencies?: number;
   topology?: ProjectTopology;
   availability?: ProjectSummary["availability"];
   archived?: boolean;
@@ -264,6 +283,7 @@ export function inboxProjects(
   };
   const tracked = [...records.values()].filter((project) =>
     project.inactive || inbox.discovered?.includes(project.directory) ||
+    (inbox.summaries?.[project.directory]?.dependencies ?? 0) > 0 ||
     hasSessions(
       project.directory,
       entries.filter((entry) => entry.directory === project.directory),
@@ -281,7 +301,7 @@ export function inboxProjects(
         source: "tracked" as const,
         group: inactive
           ? "inactive" as const
-          : hasSessions(project.directory, sessions)
+          : hasSessions(project.directory, sessions) || status !== "none"
           ? "active" as const
           : "discovered" as const,
         inactive,
@@ -302,7 +322,8 @@ export function inboxProjects(
   }
   for (const summary of Object.values(inbox.summaries ?? {})) {
     if (
-      !known.has(summary.directory) && summary.hasSessions &&
+      !known.has(summary.directory) &&
+      (summary.hasSessions || summary.dependencies) &&
       !indexed.has(summary.directory) &&
       resolve(summary.directory) === summary.directory
     ) {
@@ -345,12 +366,14 @@ export function inboxProjects(
       const placement = projectPlacement({
         lifecycle: summary,
         status: row.status,
+        dependencies: summary?.dependencies,
         inactive: row.inactive,
         hasSessions: row.group !== "discovered",
       });
       return {
         ...row,
         ...placement,
+        dependencies: summary?.dependencies,
         group: placement.section === "live"
           ? "active" as const
           : placement.section,

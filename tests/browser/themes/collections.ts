@@ -380,7 +380,7 @@ export async function collections456(input: Inputs) {
           page.locator(".otk-send-button"),
           "Write a message",
         );
-        await footer(page, 7);
+        await footer(page, 8);
         await shot(`composer-empty-${theme.id}-1280`);
         for (let n = 1; n <= 14; n++) {
           if (n > 1) await page.keyboard.press("Shift+Enter");
@@ -527,7 +527,7 @@ export async function collections456(input: Inputs) {
               getComputedStyle(el.closest("button")!).color
           ),
         ).toBe(true);
-        await footer(page, 7);
+        await footer(page, 8);
         await shot(`composer-chosen-${theme.id}-1280`);
         await page.locator(".otk-agent-picker > button").click();
         await page.locator(
@@ -733,7 +733,7 @@ export async function collections456(input: Inputs) {
               el.scrollWidth > el.clientWidth
             ),
           ).toBe(truncated);
-          await footer(page, 7);
+          await footer(page, 8);
           await shot(`composer-responsive-${theme.id}-${width}`);
         }
         for (const width of [1280, 1060]) {
@@ -770,12 +770,13 @@ export async function collections456(input: Inputs) {
                 )
               ),
             ).toBe(false);
-            expect((await footer(page, 7)).order).toEqual([
+            expect((await footer(page, 8)).order).toEqual([
               "Auto-approve",
               "Agent",
               "Model",
               "Variant",
               "Attach files",
+              "Open terminal",
               "Edit prompt",
               "Send",
             ]);

@@ -14,7 +14,12 @@ import type { V2Client } from "../client.ts";
 import { opencodeV2SessionID as ids } from "../ids.ts";
 import { createTranscriptProjection, emptyContent, reduce } from "@otk/client";
 import type { ContentOp, MessagePolicy } from "@otk/protocol";
-import { mergePromptSelection, usageHeader, UsageLedger } from "@otk/protocol";
+import {
+  mergePromptSelection,
+  OperationFailure,
+  usageHeader,
+  UsageLedger,
+} from "@otk/protocol";
 const id = ids.encode("ses_fixture");
 const policy: MessagePolicy = {
   prefetchms: 1000,
@@ -1151,6 +1156,100 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
       JSON.stringify(projection.messages()).includes("new attempt"),
       JSON.stringify(projection.messages()),
     );
+  } finally {
+    gate.resolve();
+    await t.stop();
+  }
+});
+
+Deno.test("V2 rename during revert preview cannot cache an obsolete presentation", async () => {
+  const gate = Promise.withResolvers<void>(),
+    entered = Promise.withResolvers<void>();
+  const rows = Array.from(
+    { length: 15 },
+    (_, i) => user(`msg_${String(i).padStart(2, "0")}`),
+  );
+  const raw = {
+    id: "ses_fixture",
+    title: "Draft",
+    projectID: "p",
+    location: { directory: "/project" },
+    time: { created: 1, updated: 30 },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    revert: { messageID: "msg_14", files: [] },
+  };
+  let paused = false;
+  const api = {
+    session: {
+      get: () => Promise.resolve(raw),
+      inbox: {
+        list: () =>
+          Promise.reject(
+            new OperationFailure(
+              "unavailable",
+              "native.unavailable",
+              undefined,
+              { status: 404 },
+            ),
+          ),
+      },
+    },
+    message: {
+      list: async (input: { limit: number; cursor?: string }) => {
+        if (input.limit === 200 && !paused) {
+          paused = true;
+          entered.resolve();
+          await gate.promise;
+        }
+        const before = input.cursor
+          ? JSON.parse(
+            atob(input.cursor.replaceAll("-", "+").replaceAll("_", "/")),
+          ).id
+          : undefined;
+        const data = rows.filter((row) => !before || row.id < before)
+          .reverse().slice(0, input.limit);
+        return {
+          data,
+          cursor: data.length === input.limit
+            ? { next: btoa(JSON.stringify({ id: data.at(-1)!.id })) }
+            : {},
+        };
+      },
+    },
+  };
+  const client = {
+    service: { version: "2.2.6" },
+    read: <T>(run: (api: unknown) => Promise<T>) => run(api),
+    signal: new AbortController().signal,
+  } as unknown as V2Client;
+  const t = new Transcript({
+    client: () => client,
+    policy: { ...policy, prefetchbytes: 0 },
+    facts: (input) =>
+      Promise.resolve(
+        factsFrom(
+          rows.map((row, i) => scalarMessage(row, i + 1)),
+          input.messages,
+          input.cutoff,
+        ),
+      ),
+    content() {},
+    invalidated() {},
+    diagnostic() {},
+  });
+  try {
+    const reading = t.page(id);
+    await entered.promise;
+    t.observe({ ...raw, title: "Final" });
+    gate.resolve();
+    const first = await reading;
+    assertEquals(first.session.title, "Final");
+    assertEquals(first.session.notices?.[0].facts?.target?.label, "Final");
+    assert(first.older);
+    const older = await t.page(id, first.older);
+    assertEquals(older.session.title, "Final");
+    assertEquals(older.session.notices?.[0].facts?.target?.label, "Final");
   } finally {
     gate.resolve();
     await t.stop();

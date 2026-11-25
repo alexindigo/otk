@@ -15,9 +15,27 @@
 .otk-composer-dock .otk-composer {
   position: relative;
   --prompt-input-outline: none;
+}
+.otk-composer-dock .otk-composer,
+.otk-composer-surface {
   width: 100%;
   max-width: var(--lane-width);
   margin-inline: auto;
+  box-sizing: border-box;
+}
+.otk-composer-surface {
+  height: calc(100dvh * 2 / 3);
+  flex: 0 1 calc(100dvh * 2 / 3);
+  min-height: 0;
+  display: flex;
+  margin-bottom: var(--space-2);
+}
+.otk-composer-surface[hidden] {
+  display: none;
+}
+.otk-composer-dock .otk-composer {
+  --prompt-input-outline: none;
+  flex: 0 0 auto;
   min-height: 0;
   background: var(--otk-bg-elevated);
   border: var(--composer-frame-stroke) solid var(--otk-border);
