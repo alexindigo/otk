@@ -28,6 +28,22 @@ export const PlusIcon = () => (
     <path d="M5 12h14M12 5v14" />
   </Icon>
 );
+export const TerminalIcon = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="m7 9 3 3-3 3M13 15h4" />
+  </Icon>
+);
+export const ExpandIcon = () => (
+  <Icon>
+    <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6" />
+  </Icon>
+);
+export const CollapseIcon = () => (
+  <Icon>
+    <path d="M3 9h6V3m6 0v6h6M9 21v-6H3m18 0h-6v6M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6" />
+  </Icon>
+);
 export const SearchIcon = (props: { class?: string } = {}) => (
   <Icon class={props.class}>
     <circle cx="11" cy="11" r="7" />

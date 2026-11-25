@@ -8,6 +8,7 @@ import {
   type Receipt,
   versions,
 } from "./ci-complete.ts";
+import { outcome } from "./report.ts";
 
 function fixture(scale = true) {
   const plans: Plan[] = versions.map((version) => ({
@@ -51,7 +52,7 @@ function fixture(scale = true) {
         rows: [{
           project: `oc-${job.version}`,
           stableID: job.id,
-          category: "first-pass",
+          ...outcome(["passed"]),
         }],
       }],
     };
@@ -121,13 +122,38 @@ Deno.test("CI flaky and not-run IDs fail; master labels never waive failures", (
   receipts[0].outcomes[0].rows = [{
     project: "oc-1.19.3",
     stableID: "flaky",
-    category: "flaky",
-  }, { project: "oc-1.19.3", stableID: "absent", category: "not-run" }];
+    ...outcome(["failed", "passed"]),
+  }, { project: "oc-1.19.3", stableID: "absent", ...outcome([]) }];
   const result = aggregate(plans, receipts, ["oc-1.19.3:flaky"]);
   assertEquals(result.exit, 1);
   assertEquals(result.ids, ["oc-1.19.3:absent", "oc-1.19.3:flaky"]);
   assertStringIncludes(result.summary, "new in this PR");
   assertStringIncludes(result.summary, "also failing on master");
+});
+Deno.test("CI uses the reported verdict even with active quarantine metadata", () => {
+  const { plans, receipts } = fixture();
+  const report = receipts[0].outcomes[0];
+  const row = (stableID: string, statuses: string[]) => ({
+    project: "oc-1.19.3",
+    stableID,
+    ...outcome(statuses, true),
+  });
+  report.rows = [row("passing", ["passed"])];
+  const passing = aggregate(plans, receipts);
+  assertEquals(passing.ids, []);
+  assertEquals(passing.exit, 0);
+  report.rows.push(
+    row("failed", ["failed"]),
+    row("flaky", ["failed", "passed"]),
+    row("not-run", []),
+  );
+  const failing = aggregate(plans, receipts);
+  assertEquals(failing.ids, [
+    "oc-1.19.3:failed",
+    "oc-1.19.3:flaky",
+    "oc-1.19.3:not-run",
+  ]);
+  assertEquals(failing.exit, 1);
 });
 Deno.test("CI missing plan, failed jobs, incomplete lanes and unexpected skips fail", () => {
   const { plans, receipts } = fixture();
@@ -149,7 +175,7 @@ Deno.test("CI reports the observed terminal-menu failure without a master waiver
   const stableID = "menus.native-area-picker-approval-and-activity-consumers";
   const id = `oc-1.19.3:${stableID}`;
   receipt.outcomes = [{
-    rows: [{ project: "oc-1.19.3", stableID, category: "failed" }],
+    rows: [{ project: "oc-1.19.3", stableID, ...outcome(["failed"]) }],
   }];
   receipt.exit = receipt.lanes[0].exit = 1;
   receipt.lanes[0].results.find((tier) => tier.id === "browser")!.exit = 1;

@@ -68,6 +68,10 @@ import {
 } from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
+import { TerminalHost } from "./core/terminals/host.ts";
+import { TerminalMux } from "./core/terminals/mux.ts";
+import { terminalDataDirectory } from "./core/terminals/env.ts";
+import { registerTerminals } from "./core/features/terminals.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export async function startApplication(
@@ -85,9 +89,13 @@ export async function startApplication(
     diagnostic?: DiagnosticSink;
     signal?: AbortSignal;
     sources?: readonly FrameSource[];
+    environment?: Readonly<Record<string, string>>;
   } = {},
 ): Promise<CoreServer> {
   const diagnostic = options.diagnostic ?? diagnosticsLog(cfg.log.level);
+  const environment = Object.freeze({
+    ...options.environment ?? Deno.env.toObject(),
+  });
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     frecencyMigrations,
@@ -103,6 +111,9 @@ export async function startApplication(
     pluginStorageMigrations,
   ], { ...cfg.storage, diagnostic: (message) => diagnostic("info", message) });
   const sources: FrameSource[] = [...options.sources ?? []];
+  let terminals: TerminalHost | undefined;
+  let terminalSockets: TerminalMux | undefined;
+  let coreOwnsResources = false;
   try {
     options.signal?.throwIfAborted();
     await options.upgrade?.(store);
@@ -228,8 +239,23 @@ export async function startApplication(
       );
     }
     registerRevert(rpc, backend);
-    // startCore owns its own failure cleanup; only a started core is wired.
-    return startCore({
+    terminals = await TerminalHost.start({
+      statePath: cfg.state.path,
+      dataDir: () => terminalDataDirectory(environment),
+      environment,
+      signal: options.signal ?? new AbortController().signal,
+      publishRows: cfg.digest.publishrows,
+    });
+    registerTerminals(rpc, terminals);
+    inbox.terminalDependencies(terminals.tracking);
+    terminalSockets = new TerminalMux(
+      terminals,
+      async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    );
+    // startCore assumes ownership of sources/storage, including failed startup.
+    coreOwnsResources = true;
+    const core = await startCore({
       cfg,
       backend,
       store,
@@ -242,31 +268,67 @@ export async function startApplication(
       diagnostic: options.diagnostic,
       signal: options.signal,
       requested: options.requested,
-    }).then((core) => {
-      const principal = () => cfg.auth.username.toLowerCase() || "local";
-      inbox.operationAttention(
-        (target) => core.requests.operation(principal(), target),
-        () => core.requests.operationTargets(principal()),
-        (changed) =>
-          core.requests.listenOperations((owner, target) => {
-            if (owner === principal()) changed(target);
-          }),
-      );
-      return core;
+      terminals: terminalSockets,
     });
+    const principal = () => cfg.auth.username.toLowerCase() || "local";
+    inbox.operationAttention(
+      (target) => core.requests.operation(principal(), target),
+      () => core.requests.operationTargets(principal()),
+      (changed) =>
+        core.requests.listenOperations((owner, target) => {
+          if (owner === principal()) changed(target);
+        }),
+    );
+    let stopping: Promise<void> | undefined;
+    return {
+      ...core,
+      stop: () =>
+        stopping ??= (async () => {
+          const failures: unknown[] = [];
+          for (
+            const release of [
+              () => terminalSockets!.stop(),
+              () => terminals!.tracking.stop(),
+              () => inbox.stopDependencies(),
+              () => core.stop(),
+              () => terminals!.stop(),
+            ]
+          ) {
+            try {
+              await release();
+            } catch (cause) {
+              failures.push(cause);
+            }
+          }
+          if (failures.length) {
+            throw new AggregateError(failures, "Application cleanup failed");
+          }
+        })(),
+    };
   } catch (error) {
     const failures: unknown[] = [error];
-    for (const source of sources.reverse()) {
+    for (
+      const release of [() => terminalSockets?.stop(), () => terminals?.stop()]
+    ) {
       try {
-        source.close?.();
+        await release();
       } catch (failure) {
         failures.push(failure);
       }
     }
-    try {
-      store.close();
-    } catch (failure) {
-      failures.push(failure);
+    if (!coreOwnsResources) {
+      for (const source of sources.reverse()) {
+        try {
+          source.close?.();
+        } catch (failure) {
+          failures.push(failure);
+        }
+      }
+      try {
+        store.close();
+      } catch (failure) {
+        failures.push(failure);
+      }
     }
     if (failures.length > 1) {
       throw new AggregateError(failures, "Application composition failed", {

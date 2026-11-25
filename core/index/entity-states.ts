@@ -41,23 +41,31 @@ function own(state: ProjectStatus, unseen: boolean): EntityCounts {
  * aggregate shares its members' per-request grace (addendum 1). */
 interface Tally {
   counts: EntityCounts;
+  dependencies: number;
   graced: number;
   requests: Map<string, number>;
 }
 /** One session's share of its aggregates. */
 interface Contribution {
   counts: EntityCounts;
+  dependencies: number;
   graced: number;
   requests: readonly string[];
 }
 function tally(): Tally {
-  return { counts: own("none", false), graced: 0, requests: new Map() };
+  return {
+    counts: own("none", false),
+    dependencies: 0,
+    graced: 0,
+    requests: new Map(),
+  };
 }
 function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
   target.counts.blocked += sign * value.counts.blocked;
   target.counts.working += sign * value.counts.working;
   target.counts.finished += sign * value.counts.finished;
   target.counts.unseen += sign * value.counts.unseen;
+  target.dependencies += sign * value.dependencies;
   target.graced += sign * value.graced;
   const requests = value.requests instanceof Map
     ? [...value.requests]
@@ -85,6 +93,7 @@ export class EntityStates {
   #checkoutOf = new Map<string, string>();
   #tallies = new Map<string, Tally>();
   #forms = new Map<string, number>();
+  #checkoutDependencies = new Map<string, number>();
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
   #placement = new Map<
@@ -127,6 +136,7 @@ export class EntityStates {
     this.#checkoutOf.clear();
     this.#tallies.clear();
     this.#forms.clear();
+    this.#checkoutDependencies.clear();
     this.#leaves.clear();
     this.#projectsOf.clear();
     this.#placement.clear();
@@ -207,9 +217,11 @@ export class EntityStates {
     if (upserts.length) this.publish(upserts, []);
   }
   /** S21: a checkout's state with its fresh location forms. */
-  checkout(directory: string, forms: number): EntityState {
+  checkout(directory: string, forms: number, dependencies = 0): EntityState {
     if (forms) this.#forms.set(directory, forms);
     else this.#forms.delete(directory);
+    if (dependencies) this.#checkoutDependencies.set(directory, dependencies);
+    else this.#checkoutDependencies.delete(directory);
     const upserts: EntityState[] = [];
     this.#tally(directory);
     this.#checkout(directory, upserts);
@@ -264,6 +276,7 @@ export class EntityStates {
     }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
+    this.#checkoutDependencies.delete(directory);
     if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** Interpret one session, publish its state and its ancestors' descendant
@@ -326,6 +339,8 @@ export class EntityStates {
     const counts = this.#own.get(id);
     return {
       counts: counts ? { ...counts } : own("none", false),
+      dependencies: this.#states.get(entityKey("session", id))?.dependencies ??
+        0,
       graced: this.#graced.has(id) ? 1 : 0,
       requests: this.#graced.get(id) ?? [],
     };
@@ -369,6 +384,7 @@ export class EntityStates {
       this.#tally(directory),
       this.#forms.get(directory) ?? 0,
       this.#checkoutOperations.get(directory),
+      this.#checkoutDependencies.get(directory) ?? 0,
     );
     if (this.#set(value)) upserts.push(value);
     this.#placeArchive(directory, upserts);
@@ -379,11 +395,13 @@ export class EntityStates {
   #project(directory: string, upserts: EntityState[]): void {
     const sum = tally();
     let forms = 0;
+    let dependencies = 0;
     const operations: ("working" | "blocked")[] = [];
     for (const leaf of this.#leaves.get(directory) ?? [directory]) {
       const value = this.#tallies.get(leaf);
       if (value) add(sum, value, 1);
       forms += this.#forms.get(leaf) ?? 0;
+      dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       const operation = this.#checkoutOperations.get(leaf);
       if (operation) operations.push(operation);
     }
@@ -394,6 +412,7 @@ export class EntityStates {
       sum,
       forms,
       operation === "none" ? undefined : operation as "working" | "blocked",
+      dependencies,
     );
     if (this.#set(value)) upserts.push(value);
   }
@@ -402,12 +421,12 @@ export class EntityStates {
   #placeArchive(directory: string, upserts: EntityState[]): void {
     const facts = this.#placement.get(directory),
       before = this.#archiveOf.get(directory);
-    const status = this.#states.get(entityKey("checkout", directory))?.state ??
-      "none";
+    const state = this.#states.get(entityKey("checkout", directory));
     const next = facts &&
         projectPlacement({
             lifecycle: facts,
-            status,
+            status: state?.state ?? "none",
+            dependencies: state?.dependencies,
             inactive: false,
             hasSessions: false,
           }).section === "archived"
@@ -427,11 +446,20 @@ export class EntityStates {
       if (!id) continue;
       const sum = tally();
       let forms = 0;
+      let dependencies = 0;
       for (const leaf of this.#archiveLeaves.get(id) ?? []) {
         add(sum, this.#tally(leaf), 1);
         forms += this.#forms.get(leaf) ?? 0;
+        dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       }
-      const value = this.#aggregate("archive", id, sum, forms);
+      const value = this.#aggregate(
+        "archive",
+        id,
+        sum,
+        forms,
+        undefined,
+        dependencies,
+      );
       if (this.#set(value)) upserts.push(value);
     }
   }
@@ -442,6 +470,7 @@ export class EntityStates {
     members: Tally,
     forms: number,
     operation?: "working" | "blocked",
+    dependencies = members.dependencies,
   ): EntityState {
     const { counts } = members;
     const state = rollupStatus(
@@ -449,6 +478,7 @@ export class EntityStates {
       operation,
       counts.working ? "working" : undefined,
       counts.finished ? "finished" : undefined,
+      dependencies ? "dependencies" : undefined,
     );
     const cause: BlockedCause | undefined = state !== "blocked"
       ? undefined
@@ -469,6 +499,7 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts: { ...counts },
+      ...(dependencies ? { dependencies } : {}),
       ...(cause === "permission"
         ? {
           requests: [...members.requests.keys()].sort().map((id) => ({ id })),
@@ -656,6 +687,9 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts,
+      ...(verdict.dependencies
+        ? { dependencies: verdict.dependencies.running }
+        : {}),
       ...(verdict.terminal ? { terminal: verdict.terminal } : {}),
       ...(verdict.outcome ? { outcome: verdict.outcome } : {}),
       ...(verdict.terminalOrigin

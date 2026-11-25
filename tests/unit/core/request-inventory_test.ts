@@ -48,6 +48,8 @@ import { registerDigests } from "../../../core/features/digests.ts";
 import { registerProjectEdit } from "../../../core/features/project-edit.ts";
 import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
+import { registerTerminals } from "../../../core/features/terminals.ts";
+import { TerminalHost } from "../../../core/terminals/host.ts";
 
 function navigation(inbox: InboxFeature): NavigationDefault {
   return new NavigationDefault({
@@ -314,6 +316,14 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       registerProjectEdit,
     ]
   ) register(rpc, harness);
+  const terminalRoot = await fixture();
+  const terminals = await TerminalHost.start({
+    statePath: terminalRoot,
+    dataDir: terminalRoot,
+    environment: {},
+    signal: new AbortController().signal,
+  });
+  registerTerminals(rpc, terminals);
   const rows = [
     "tasks.create",
     "tasks.rename",
@@ -386,6 +396,9 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "sessions.seen",
     "sessions.finishes",
     "digests.scope",
+    "terminal.list",
+    "terminal.create",
+    "terminal.close",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -410,13 +423,14 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 31, // Retained archive pages have an independent cancellable read.
-      native: 21,
+      read: 32, // Retained archive pages and terminal inventory are separate reads.
+      native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
       local: 11,
       "prepared-local": 6,
       lease: 2,
     });
   } finally {
+    await terminals.stop();
     approvals.close();
     f.inbox.close();
     f.db.close();

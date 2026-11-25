@@ -54,6 +54,8 @@
 .otk-transcript-viewport {
   position: relative;
   isolation: isolate;
+  /* The scrollport's padding can exceed a fully-shrunk transcript track. */
+  overflow: clip;
   display: flex;
   flex-direction: column;
   flex: 1;

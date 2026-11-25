@@ -45,7 +45,11 @@ function fixture() {
     tabs.update({ directory: "/p", entries, inbox });
     return ids();
   };
-  const set = (id: string, status: ProjectStatus, time: number) => {
+  const set = (
+    id: string,
+    status: Exclude<ProjectStatus, "dependencies">,
+    time: number,
+  ) => {
     inbox.supervision![id] = {
       state: status === "blocked"
         ? "needsYou"

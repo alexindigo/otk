@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
-import { LIGHT_STATES, sessionLight } from "../components/status-light.ts";
 import { createEntityStateStore } from "@otk/client";
+import {
+  LIGHT_STATES,
+  lightDescription,
+  sessionLight,
+} from "../components/status-light.ts";
+Deno.test("shared dependency descriptions show the projected count without replacing higher states", () => {
+  assertEquals(lightDescription("dependencies", 1), "Running in terminal (1)");
+  assertEquals(lightDescription("dependencies", 3), "Running in terminal (3)");
+  assertEquals(lightDescription("working", 3), "Working");
+  assertEquals(lightDescription("none", 0), "No known activity");
+});
 Deno.test("session lights render entity states and default to No known activity", () => {
   const entry: IndexEntry = {
     id: "session",
@@ -73,6 +83,21 @@ Deno.test("session lights render entity states and default to No known activity"
     "cross",
     "half-disc",
     "check",
+    "diamond",
     "circle",
   ]);
+  const entities = createEntityStateStore({
+    read: () => ({
+      [`session:${entry.id}`]: {
+        kind: "session",
+        id: entry.id,
+        state: "none",
+        previous: "none",
+        dependencies: 2,
+        counts: { blocked: 0, working: 0, finished: 0, unseen: 0 },
+      },
+    }),
+  });
+  assertEquals(sessionLight(entry, entities), "none");
+  entities.stop();
 });

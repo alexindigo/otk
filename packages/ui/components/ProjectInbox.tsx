@@ -500,6 +500,7 @@ export default function ProjectInbox(props: {
               >
                 <StatusLight
                   state={lamp(entities(), key(), { now: performance.now() })}
+                  dependencies={project().dependencies}
                 />
               </button>
             </TreeIcon>

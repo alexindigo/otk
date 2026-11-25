@@ -38,6 +38,10 @@ export interface SessionInputs {
 export class SessionSupervision {
   #fresh = true;
   #permissions?: (id: string) => number;
+  #dependencies: (id: string) => number = () => 0;
+  dependencies(lookup: (id: string) => number): void {
+    this.#dependencies = lookup;
+  }
   freshness(fresh: boolean): void {
     this.#fresh = fresh;
   }
@@ -89,12 +93,14 @@ export class SessionSupervision {
       : unseen
       ? "finishedUnseen"
       : "none";
+    const running = this.#dependencies(entry.id);
     return {
       state,
       terminal,
       unseen,
       ...detail,
       ...(outcome ? { outcome } : {}),
+      ...(running ? { dependencies: { running } } : {}),
     };
   }
   inputs(entry: IndexMetadata): SessionInputs {

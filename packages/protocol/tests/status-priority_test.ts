@@ -9,8 +9,20 @@ import {
 } from "../inbox.ts";
 
 Deno.test("lamp display and user-attention urgency differ only for working versus finished", () => {
-  assertEquals(ROLLUP_PRIORITY, ["blocked", "working", "finished", "none"]);
-  assertEquals(URGENCY_PRIORITY, ["blocked", "finished", "working", "none"]);
+  assertEquals(ROLLUP_PRIORITY, [
+    "blocked",
+    "working",
+    "finished",
+    "dependencies",
+    "none",
+  ]);
+  assertEquals(URGENCY_PRIORITY, [
+    "blocked",
+    "finished",
+    "working",
+    "dependencies",
+    "none",
+  ]);
   for (const a of ROLLUP_PRIORITY) {
     for (const b of ROLLUP_PRIORITY) {
       const states: ProjectStatus[] = [a, b];

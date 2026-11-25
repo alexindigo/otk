@@ -20,6 +20,12 @@ export {
   runningWorkLabel,
 } from "./live-work.ts";
 export {
+  releaseTerminalBoxes,
+  TerminalBox,
+  terminalBoxFor,
+  type TerminalBoxMode,
+} from "./terminal-boxes.ts";
+export {
   createNativeSources,
   type NativeSourceOwner,
   type NativeSources,
@@ -178,3 +184,4 @@ export {
   projectTreeKey,
 } from "./project-tree.ts";
 export { treePaths } from "./tree-paths.ts";
+export * from "./terminals.ts";

@@ -20,7 +20,7 @@ export type Receipt = {
   skipped?: boolean;
   lanes: Lane[];
   outcomes: {
-    rows: { project: string; stableID: string; category: string }[];
+    rows: { project: string; stableID: string; exit: number }[];
   }[];
 };
 export type Job = {
@@ -165,7 +165,7 @@ export function aggregate(
       ) errors.push(`Missing browser outcomes: ${job.id}`);
       for (const report of receipt.outcomes) {
         for (const row of report.rows) {
-          if (row.category !== "first-pass") {
+          if (row.exit !== 0) {
             failing.add(`${row.project}:${row.stableID}`);
           }
         }

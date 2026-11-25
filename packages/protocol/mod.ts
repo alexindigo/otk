@@ -47,3 +47,4 @@ export * from "./forms.ts";
 export * from "./identity.ts";
 export * from "./hash.ts";
 export * from "./project-edit.ts";
+export * from "./terminals.ts";

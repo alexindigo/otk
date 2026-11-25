@@ -63,6 +63,8 @@ export interface EntityState {
   cause?: BlockedCause;
   previous: ProjectStatus;
   counts: EntityCounts;
+  /** Running PTYs; separate from the session's own native activity. */
+  dependencies?: number;
   terminal?: number;
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
@@ -80,6 +82,7 @@ export function entityRequiresVisibility(
   value: EntityState | undefined,
 ): boolean {
   return !!value && (value.state !== "none" ||
+    (value.dependencies ?? 0) > 0 ||
     value.evidence?.awaitingDelivery === true);
 }
 

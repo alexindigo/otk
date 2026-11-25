@@ -5,11 +5,11 @@ import {
   failureValue,
 } from "./failure-features.ts";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
+import { entityKey, entityRequiresVisibility } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
 import type { ForkNotes } from "./fork-notes.ts";
 import { sessionKey } from "./index.ts";
-import { inboxStatus } from "./inbox.ts";
 import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
 import {
   projectHash,
@@ -423,8 +423,10 @@ export function createShellNavigation(o: {
     const entry = entries.find((entry) => entry.id === target.sessionID);
     if (!entry) return false;
     const inbox = resources.inbox(target.sidecarId).state.inbox;
+    const states = resources.entities(target.sidecarId);
     if (
-      disposition === "kept" && inboxStatus(entry, inbox) !== "none" &&
+      disposition === "kept" && !states.isStale &&
+      entityRequiresVisibility(states.get(entityKey("session", entry.id))) &&
       !o.confirm(
         `Close "${entry.title}"? Its task will stay visible while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )

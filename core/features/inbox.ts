@@ -61,6 +61,10 @@ import {
 import { createdReceipt } from "./session-receipts.ts";
 import type { ContentSession } from "@otk/protocol";
 import type { RpcContext } from "../ws/registry.ts";
+import type {
+  TerminalChange,
+  TerminalTracking,
+} from "../terminals/tracking.ts";
 export interface InboxStores {
   projects: Projects;
   tasks: Tasks;
@@ -204,8 +208,13 @@ export class InboxFeature implements FrameSource {
   }
   #views = new Map<string, () => InboxBaseline>();
   retained(): readonly string[] {
-    return [...this.#finishes].filter(([id]) => this.#unseen(id, this.user))
-      .map(([id]) => id);
+    return [
+      ...new Set([
+        ...[...this.#finishes].filter(([id]) => this.#unseen(id, this.user))
+          .map(([id]) => id),
+        ...this.#terminalSource?.counts.sessions.keys() ?? [],
+      ]),
+    ];
   }
   #unseen(id: string, user: string): boolean {
     const entry = this.index.getMetadata(id);
@@ -254,6 +263,13 @@ export class InboxFeature implements FrameSource {
     }
     for (const task of this.#projectTasks(directory, view.tasksFollowParent)) {
       for (const id of task.sessions) ids.add(id);
+    }
+    for (
+      const scope of this.summaries.values.get(directory)?.scopes ?? [directory]
+    ) {
+      for (const id of this.#terminalSource?.owners(scope) ?? []) {
+        if (!this.index.getMetadata(id)?.deleted) ids.add(id);
+      }
     }
     for (
       const entry
@@ -594,12 +610,94 @@ export class InboxFeature implements FrameSource {
   #finishes = new Map<string, number>();
   #supervision = new Map<string, Supervision>();
   readonly supervision = new SessionSupervision();
+  #terminalSource?: Pick<TerminalTracking, "counts" | "listen" | "owners">;
+  #dependencyOwners = new Set<string>();
+  #dependencyTask?: Promise<void>;
+  #dependencyAbort = new AbortController();
+  terminalDependencies(
+    source: Pick<TerminalTracking, "counts" | "listen" | "owners">,
+  ): void {
+    this.#terminalSource = source;
+    this.supervision.dependencies((id) => source.counts.sessions.get(id) ?? 0);
+    const changed = (change: TerminalChange) => {
+      if (this.#closed || this.#dependencyAbort.signal.aborted) return;
+      if (change.changedCheckouts.length) {
+        this.summaries.terminalDependencies(change.checkouts);
+      }
+      for (const id of change.changedSessions) this.#dependencyOwners.add(id);
+      if (this.#dependencyTask) return;
+      this.#dependencyTask = Promise.resolve().then(async () => {
+        const signal = this.#dependencyAbort.signal;
+        while (
+          this.#dependencyOwners.size && !this.#closed && !signal.aborted
+        ) {
+          const ids = [...this.#dependencyOwners].slice(
+            0,
+            this.snapshotRows ?? 128,
+          );
+          for (const id of ids) this.#dependencyOwners.delete(id);
+          const missing = ids.filter((id) =>
+            !this.index.getMetadata(id) && source.counts.sessions.has(id)
+          );
+          if (missing.length) {
+            try {
+              await this.hydrate?.(missing, signal);
+            } catch (cause) {
+              if (!signal.aborted) {
+                console.error("Terminal owner hydration failed", cause);
+              }
+            }
+          }
+          if (this.#closed || signal.aborted) {
+            return;
+          }
+          for (const id of ids) {
+            this.#supervise(id);
+            this.summaries.mark(id);
+          }
+          if (this.#dependencyOwners.size) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          }
+        }
+      }).catch((cause) => {
+        if (!this.#dependencyAbort.signal.aborted) {
+          console.error("Terminal owner hydration failed", cause);
+        }
+      }).finally(() => {
+        this.#dependencyTask = undefined;
+        if (
+          this.#dependencyOwners.size && !this.#closed &&
+          !this.#dependencyAbort.signal.aborted
+        ) {
+          changed({
+            ...source.counts,
+            changedSessions: [],
+            changedCheckouts: [],
+          });
+        }
+      });
+    };
+    this.#stops.push(source.listen(changed));
+    changed({
+      ...source.counts,
+      changedSessions: [...source.counts.sessions.keys()],
+      changedCheckouts: [...source.counts.checkouts.keys()],
+    });
+  }
+  async stopDependencies(): Promise<void> {
+    this.#dependencyAbort.abort();
+    this.#dependencyOwners.clear();
+    await this.#dependencyTask;
+  }
   /** Borrow the same per-user evidence projection as lamps and mandatory tabs. */
   navigationStatus(id: string): import("@otk/protocol").ProjectStatus {
     this.#identity();
-    return this.supervision.status(
-      this.#supervision.get(id) ?? { state: "none", terminal: 0 },
-    );
+    const value = this.states.get(entityKey("session", id));
+    return value && value.state !== "none"
+      ? value.state
+      : value?.dependencies
+      ? "dependencies"
+      : "none";
   }
   /** Session entities follow the view lease like the facts they replace. */
   #entities(
@@ -706,7 +804,7 @@ export class InboxFeature implements FrameSource {
       this.summaries.identity,
       () => [...this.#tasks.values()],
       (id) =>
-        (this.states.get(entityKey("session", id))?.state ?? "none") !== "none",
+        entityRequiresVisibility(this.states.get(entityKey("session", id))),
     );
     for (const project of this.#projects.values()) {
       this.summaries.ensure(project.directory);
@@ -861,9 +959,11 @@ export class InboxFeature implements FrameSource {
     directory: string,
     summary = this.summaries?.values.get(directory),
   ): void {
-    const active = !!(summary?.hasSessions || summary?.locationForms) &&
+    const active = !!(summary?.hasSessions || summary?.locationForms ||
+      summary?.dependencies) &&
       (!this.#projects.get(directory)?.inactive ||
         summary.status === "working" || summary.status === "blocked" ||
+        summary.status === "dependencies" ||
         (summary.unseenCount ?? 0) > 0);
     this.discoveryProject?.(directory, active);
   }
@@ -1133,6 +1233,7 @@ export class InboxFeature implements FrameSource {
   }
   close(): void {
     this.#closed = true;
+    this.#dependencyAbort.abort();
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
     this.#publications.clear();
