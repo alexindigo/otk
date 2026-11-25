@@ -11,7 +11,7 @@ import type { SessionDelivery } from "./session-delivery.ts";
 import type { PendingSend } from "./pending-send.ts";
 import type { SendOutcome } from "./send-outcome.ts";
 import type { DraftSendCapture } from "./drafts.ts";
-import { reportDiagnostic } from "./diagnostics.ts";
+import { reportDiagnostic, sendDiagnostic } from "./diagnostics.ts";
 
 /** Every session submission, independent of its mode-specific transport. */
 export interface SessionSubmission {
@@ -56,11 +56,13 @@ export function createSessionSubmission({
     dispatch: () => void,
     messageID: string,
     origin: RequestOrigin,
+    activation?: string,
   ): Promise<SubmissionReceipt | null> => {
     const intent = group?.();
     const promotion = intent?.options("promote", sessionID);
     const send = { ...intent?.options("send", sessionID), origin };
     const visit = intent?.options("visit", sessionID);
+    const trace = { activation, messageID, request: send.intent?.key };
     // Resolve project identity for bookkeeping only. Native admission already
     // has its captured session identity, including when the index is cold.
     let project: Promise<string | undefined> | undefined;
@@ -82,8 +84,13 @@ export function createSessionSubmission({
     const result = await action(send, () => {
       beforeDispatch?.();
       dispatch();
+      sendDiagnostic("dispatch", trace);
       promote();
     }, messageID);
+    sendDiagnostic("receipt", {
+      ...trace,
+      state: result?.state ?? "unconfirmed",
+    });
     promote();
     void bookkeep().then((path) => {
       if (path !== undefined) return inbox.visit(path, visit);
@@ -95,7 +102,8 @@ export function createSessionSubmission({
     let settle: ReturnType<DraftSendCapture["take"]>;
     return delivery.send(
       (dispatch) => {
-        const run = () => admit(action, dispatch, messageID, origin);
+        const run = () =>
+          admit(action, dispatch, messageID, origin, capture?.activation);
         return wrap ? wrap(run, capture) : run();
       },
       entry,
