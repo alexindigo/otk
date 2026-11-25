@@ -291,6 +291,9 @@ export class NotificationTriggers {
     const outcome = completedAt === entry.terminal ? entry.outcome : undefined;
     const priorFinish = state.finishes.get(session);
     const historical = entry.terminalOrigin === "historical";
+    const sameLiveTerminal = !historical && completedAt !== undefined &&
+      completedAt === priorFinish?.terminal &&
+      priorFinish?.terminalOrigin === "live";
     const finished = !historical && completedAt !== undefined &&
       completedAt > 0 &&
       (completedAt > (priorFinish?.terminal ?? 0) ||
@@ -352,7 +355,7 @@ export class NotificationTriggers {
       const beforeCause = previous &&
         notificationFailure(previous)?.value.diagnosticID;
       const cause = notificationFailure(note)?.value.diagnosticID;
-      const distinct = !historical &&
+      const distinct = !historical && !sameLiveTerminal &&
         (beforeCause && cause && beforeCause !== cause &&
             (!!old.observations?.length || !!old.terminalFailure) ||
           priorFinish?.terminal !== undefined && completedAt !== undefined &&
@@ -429,8 +432,15 @@ export class NotificationTriggers {
         );
       }
     }
-    if (failure) publishOutcome({ ...failure, id: `${id}/outcome/failed` });
-    else if (
+    if (failure) {
+      const retained = this.#outcomes.get(id);
+      // Preserve the receipt for a live terminal upgrade. The hub replaces
+      // it quietly only if still current; an independent failure has its ID.
+      publishOutcome({
+        ...failure,
+        id: sameLiveTerminal && retained ? retained.id : `${id}/outcome/failed`,
+      });
+    } else if (
       !acknowledged && finished && outcome !== "failed" &&
       entry.status === "idle" &&
       !entry.permissions &&
@@ -440,8 +450,8 @@ export class NotificationTriggers {
       // generic copy when its terminal outcome is still unknown.
       const retained = this.#outcomes.get(id);
       if (
-        !(retained?.id === `${id}/outcome/failed` &&
-          outcome === undefined)
+        !(retained?.kind === "error" && outcome === undefined &&
+          (priorFinish?.terminal === undefined || sameLiveTerminal))
       ) {
         publishOutcome({
           // Failures always use structured action/target/cause/recovery above.

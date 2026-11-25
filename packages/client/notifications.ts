@@ -82,7 +82,7 @@ export class NotificationHub {
   publish(input: Note): Note {
     return this.#publish(input, true);
   }
-  #publish(input: Note, fresh: boolean): Note {
+  #publish(input: Note, fresh: boolean, dismissed?: ReadonlySet<string>): Note {
     this.retract(input.id);
     const note: Note = Object.freeze({
       ...input,
@@ -103,9 +103,10 @@ export class NotificationHub {
       note,
       deliveries: new Map(),
       dismissed: new Set(
-        input.dismissalKey
-          ? this.#dismissed.get(input.id)?.get(input.dismissalKey)
-          : [],
+        dismissed ??
+          (input.dismissalKey
+            ? this.#dismissed.get(input.id)?.get(input.dismissalKey)
+            : []),
       ),
     };
     this.#notes.set(note.id, active);
@@ -113,7 +114,16 @@ export class NotificationHub {
     return note;
   }
   replace(previous: Note, input: Note): Note | undefined {
-    return this.current(previous) ? this.#publish(input, false) : undefined;
+    const active = this.#notes.get(previous.id);
+    return active?.note === previous
+      ? this.#publish(
+        input,
+        false,
+        previous.id === input.id && previous.dismissalKey === input.dismissalKey
+          ? active.dismissed
+          : undefined,
+      )
+      : undefined;
   }
   retract(id: string): void {
     const active = this.#notes.get(id);

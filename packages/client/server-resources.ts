@@ -511,7 +511,7 @@ export function createServerResources(o: {
           time,
           true,
           supervision?.terminal === time ? supervision.outcome : undefined,
-          supervision?.unseen === true,
+          supervision?.terminal === time ? supervision.unseen : undefined,
           supervision,
         );
       }
@@ -601,7 +601,9 @@ export function createServerResources(o: {
             const outcome = supervision?.terminal === time
               ? supervision.outcome
               : undefined;
-            const unseen = supervision?.unseen === true;
+            const unseen = supervision?.terminal === time
+              ? supervision.unseen
+              : undefined;
             if (changes.admitted) {
               owner.admitFinished(session, time, outcome, unseen, supervision);
             } else {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID } from "@otk/protocol";
+import { latestTerminal, randomID } from "@otk/protocol";
 import type {
   EntityState,
   IndexEntry,
@@ -64,7 +64,6 @@ export function createAttentionProjection(o: {
       observedLive: boolean;
     }
   >();
-  const completed = new Map<string, TerminalEvidence & { unseen?: boolean }>();
   const listeners = new Set<(changes: EntryChanges) => void>();
   const clock = (o.factory ?? createState)({
     keys: {} as Record<string, number>,
@@ -129,11 +128,11 @@ export function createAttentionProjection(o: {
                   before.status !== "idle" && after.status === "idle")
             )
             ? {
-              completedAt: completed.get(id)?.terminal ?? 0,
-              completedOutcome: completed.get(id)?.outcome,
-              completedUnseen: completed.get(id)?.unseen,
-              completionOrigin: completed.get(id)?.terminalOrigin,
-              completedFailure: completed.get(id)?.terminalFailure,
+              completedAt: finishClocks.get(id)?.terminal ?? 0,
+              completedOutcome: finishClocks.get(id)?.outcome,
+              completedUnseen: finishClocks.get(id)?.unseen,
+              completionOrigin: finishClocks.get(id)?.terminalOrigin,
+              completedFailure: finishClocks.get(id)?.terminalFailure,
             }
             : {}),
         });
@@ -163,36 +162,29 @@ export function createAttentionProjection(o: {
     admitted = false,
   ) => {
     const previous = finishClocks.get(id);
-    if (
-      stopped || previous !== undefined &&
-        (time < (previous.terminal ?? 0) ||
-          time === previous.terminal &&
-            (!outcome || outcome === previous.outcome) &&
-            unseen === previous.unseen &&
-            JSON.stringify(evidence?.terminalFailure) ===
-              JSON.stringify(previous.terminalFailure) &&
-            (evidence?.terminalOrigin !== "live" || previous.observedLive ||
-              previous.seeded))
-    ) return;
+    if (stopped || time < (previous?.terminal ?? 0)) return;
     const same = previous?.terminal === time;
-    const replay = baseline || admitted ||
-      evidence?.terminalOrigin === "historical" ||
-      same && (previous.observedLive || previous.seeded);
+    const paired = evidence?.terminal === time ? evidence : undefined;
+    const seeded = baseline || admitted || same && previous.seeded;
+    // Once observed, provenance and acknowledgement belong to this terminal,
+    // not to the later frame that supplies its outcome or failure details.
+    const observedLive = same && previous.observedLive ||
+      !seeded && paired?.terminalOrigin !== "historical" &&
+        (!same || paired?.terminalOrigin === "live");
     const value = {
+      ...latestTerminal(previous, {
+        terminal: time,
+        outcome,
+        terminalFailure: paired?.terminalFailure,
+      }),
       terminal: time,
-      ...(outcome ? { outcome } : {}),
-      unseen,
-      terminalOrigin: replay ? "historical" as const : "live" as const,
-      ...(evidence?.terminalFailure
-        ? { terminalFailure: evidence.terminalFailure }
-        : {}),
+      unseen: same && previous.unseen === false ? false : unseen,
+      terminalOrigin: observedLive ? "live" as const : "historical" as const,
+      seeded,
+      observedLive,
     };
-    finishClocks.set(id, {
-      ...value,
-      seeded: baseline || admitted || same && previous.seeded,
-      observedLive: !replay || same && previous.observedLive,
-    });
-    completed.set(id, value);
+    if (JSON.stringify(previous) === JSON.stringify(value)) return;
+    finishClocks.set(id, value);
     update([id], false, true);
   };
   return {
@@ -215,7 +207,6 @@ export function createAttentionProjection(o: {
     reset() {
       initialized = false;
       finishClocks.clear();
-      completed.clear();
       generation = randomID();
       revision = 0;
     },
@@ -223,7 +214,6 @@ export function createAttentionProjection(o: {
       stopped = true;
       values.clear();
       finishClocks.clear();
-      completed.clear();
       listeners.clear();
       clock.update((state) => {
         state.keys = {};
