@@ -20,6 +20,9 @@
   color: var(--secondary);
   padding: var(--space-1) var(--space-2);
   background: var(--otk-bg-code);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .otk-diff-split-row {
   display: grid;

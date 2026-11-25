@@ -9,6 +9,17 @@
 .otk-message-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--message-action-gap, var(--space-1));
   color: var(--otk-fg-3);
+}
+.otk-message-actions .is-done {
+  color: var(--otk-action-text);
+}
+.otk-copy-confirmation {
+  position: absolute;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+  pointer-events: none;
 }

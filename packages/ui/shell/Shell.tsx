@@ -33,6 +33,7 @@ import {
 import { registerAttentionCommands } from "./commands/attention.ts";
 import { registerApprovalCommands } from "./commands/approvals.ts";
 import { registerSessionActionCommands } from "./commands/session-actions.ts";
+import { registerCodeBlockCommands } from "../features/code-blocks.tsx";
 import { applicationNotifications } from "./notifications.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
@@ -442,6 +443,7 @@ export default function Shell(
     pin: navigation.pin,
     close: navigation.close,
   }));
+  onCleanup(registerCodeBlockCommands(commands));
   onCleanup(commands.register({
     id: "session.title.copy",
     title: "Copy session title",

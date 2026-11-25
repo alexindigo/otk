@@ -643,7 +643,7 @@ export function shellOutput(
   return page.locator(shellRun(state, status)).locator(
     v2(state)
       ? ".otk-tool-body > .otk-text"
-      : ".otk-tool-body > .otk-tool-output",
+      : ".otk-tool-body > .otk-code-block .otk-tool-output",
   );
 }
 

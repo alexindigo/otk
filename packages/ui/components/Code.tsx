@@ -20,8 +20,6 @@ import {
 } from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
 import CodeGroup from "./CodeGroup.tsx";
-import { contextTarget } from "./context-target.ts";
-import { useContentIdentity } from "../features/transcript-context.tsx";
 interface SourcePiece {
   key: number;
   start: number;
@@ -145,7 +143,6 @@ export default function Code(
     revealFence?: boolean;
   },
 ): import("solid-js").Element {
-  const identity = useContentIdentity();
   const block = highlightBlock(
     untrack(() => (props.lang || "text").toLowerCase()),
     untrack(() => props.text),
@@ -443,10 +440,6 @@ export default function Code(
   return (
     <div
       class="otk-code"
-      ref={contextTarget(() => ({
-        kind: "code",
-        data: { ...identity, text: props.text },
-      }))}
       data-language={props.lang || "text"}
       data-numbered={props.lineNumbers ? "true" : "false"}
       data-reveal-fence={props.revealFence ? "true" : undefined}

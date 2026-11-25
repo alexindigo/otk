@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-code {
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
@@ -9,12 +8,9 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 .otk-code pre {
-  margin: var(--space-2) 0;
+  margin: 0;
   white-space: pre;
   padding: var(--space-3);
-  border-radius: var(--radius-card);
-  background: var(--otk-bg-code);
-  border: 1px solid var(--otk-border-code);
   font: inherit;
   line-height: var(--line-ui);
 }
@@ -23,7 +19,6 @@
 }
 .otk-code .otk-code-numbers {
   color: var(--secondary);
-  border-right: 0;
   text-align: right;
   user-select: none;
 }

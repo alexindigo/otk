@@ -4,7 +4,7 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
-import HighlightedCode from "./Code.tsx";
+import CodeBlock from "./CodeBlock.tsx";
 import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
@@ -139,11 +139,14 @@ function Code(
   },
 ) {
   return (
-    <HighlightedCode
-      text={props.block.text}
-      lang={props.block.lang}
-      streaming={props.streaming}
-      revealFence={props.conceal === false}
+    <CodeBlock
+      source={{
+        kind: "fence",
+        text: props.block.text,
+        lang: props.block.lang,
+        streaming: props.streaming,
+      }}
+      reveal={props.conceal === false}
     />
   );
 }
