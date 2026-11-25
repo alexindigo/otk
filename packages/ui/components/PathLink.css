@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-path-link {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--otk-fg-3);
+  text-decoration-thickness: calc(1.5 * var(--otk-unit));
+  text-underline-offset: calc(3 * var(--otk-unit));
+  border-radius: var(--radius-inline-code);
+}
+.otk-path-link:hover {
+  text-decoration-style: solid;
+  text-decoration-color: var(--otk-action-text);
+}

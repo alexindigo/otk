@@ -16,6 +16,7 @@ import {
   registerEditTool,
   registerFetchTool,
   registerFilePart,
+  registerFilePreviewDialog,
   registerFormTakeover,
   registerGenericTool,
   registerGlobalForms,
@@ -76,6 +77,7 @@ export function applicationUi(): UiRegistries {
   registerToolPart(ui.parts);
   registerFilePart(ui.parts);
   registerImageDialog(ui.dialogs);
+  registerFilePreviewDialog(ui.dialogs);
   registerAgentPart(ui.parts);
   registerCompactionPart(ui.parts);
   registerUnknownPart(ui.parts);

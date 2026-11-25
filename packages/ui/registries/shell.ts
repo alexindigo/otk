@@ -14,6 +14,7 @@ export interface DialogDefinition {
   commandId?: string;
   dismiss?(input: unknown, close: () => void): void;
   component(props: DialogProps): Element;
+  actions?(props: DialogProps): Element;
 }
 export class DialogRegistry {
   #items = new Map<string, DialogDefinition>();
@@ -25,6 +26,7 @@ export class DialogRegistry {
       commandId?: string;
       dismiss?(input: T, close: () => void): void;
       component(props: DialogProps<T>): Element;
+      actions?(props: DialogProps<T>): Element;
     },
   ): void {
     if (this.#items.has(definition.id)) {

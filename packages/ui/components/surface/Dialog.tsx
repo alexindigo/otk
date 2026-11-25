@@ -9,6 +9,7 @@ export default function Dialog(props: {
   title: string;
   size?: "form" | "standard" | "editor";
   onClose(): void;
+  actions?: Element;
   children: Element;
 }): Element {
   const ports = useCommandPorts();
@@ -51,9 +52,10 @@ export default function Dialog(props: {
       <Surface
         layout="dialog"
         fullHeight={props.size === "editor"}
+        actions={props.actions}
         title={
           <>
-            <h2>{props.title}</h2>
+            <h2 class="otk-control-label">{props.title}</h2>
             <button
               type="button"
               onClick={() => void close()}
