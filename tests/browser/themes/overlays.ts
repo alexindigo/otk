@@ -947,7 +947,10 @@ export async function lights(
           expect(lamp.color).toBe(lamp.token);
           expect(lamp.token).toMatch(/^#[\da-f]{6}$/i);
           expect(lamp.body).toBe(reduced ? "none" : "block");
-          expect(lamp.shape).toBe(reduced ? "block" : "none");
+          // The terminal dependency diamond identifies the state in both modes.
+          expect(lamp.shape).toBe(
+            reduced || lamp.state === "dependencies" ? "block" : "none",
+          );
           if (!reduced) {
             expect(lamp.border).toBe("0px");
             expect(lamp.rim).toContain("0px 0px 0px 1px");
