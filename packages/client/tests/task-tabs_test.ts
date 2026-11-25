@@ -244,10 +244,10 @@ Deno.test("pending operation lamp paint cannot change saved task order", () => {
   // Received operations are part of the server's task state, never a browser
   // overlay on completion bookkeeping (D62).
   meta.entities = Object.fromEntries(["finished", "newer"].map((id) => [
-    `task:${JSON.stringify(["task", id, "/p", false])}`,
+    `task:task/${id}`,
     {
       kind: "task" as const,
-      id: JSON.stringify(["task", id, "/p", false]),
+      id: `task/${id}`,
       state: "working" as const,
       previous: "none" as const,
       counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
@@ -368,7 +368,7 @@ Deno.test("D66 phantom crumbs isolate the native root within a multi-root task",
   assertEquals(tabs.crumbs().map((c) => [c.id, c.depth]), [
     ["b", 0],
   ]);
-  assertEquals(tabs.family().map((c) => c.id), ["child", "nested"]);
+  assertEquals(tabs.trail().task, "task:task/task");
   tabs.stop();
   child.attention.questions = 0;
   nested.status = "idle";

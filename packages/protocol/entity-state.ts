@@ -29,9 +29,17 @@ export interface EntityRequestEvidence {
   id: string;
   arrivedAt?: number;
 }
+export type HelperDisposition = "running" | "needsYou" | "notReturned";
+export interface TaskHelpers {
+  counts: Record<HelperDisposition, number>;
+  ids: string[];
+}
 export interface SessionEvidence {
   /** D66: a proven helper terminal not covered by its parent's result receipt. */
   awaitingDelivery?: boolean;
+  helper?: HelperDisposition;
+  /** Wall-clock time when the entity owner first observed this needs-you interval. */
+  waitingSince?: number;
   /** Positive native execution clock, retained across its terminal transition. */
   run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
@@ -69,6 +77,8 @@ export interface EntityState {
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
   evidence?: SessionEvidence;
+  /** D66/D58: ordered helpers belonging to this task. */
+  helpers?: TaskHelpers;
   /** Aggregates blocked only by permissions: those requests' identities, so
    * the client derives the same per-request grace as for each member. */
   requests?: readonly EntityRequestEvidence[];
@@ -86,28 +96,6 @@ export function entityRequiresVisibility(
     value.evidence?.awaitingDelivery === true);
 }
 
-/** Task membership is a view projection (D8), not a different state rule. */
-export const taskEntityID = (
-  id: string,
-  followParent = false,
-  directory = "",
-  kind: "task" | "session" = "task",
-): string => JSON.stringify([kind, id, directory, followParent]);
-
-/** Decode only the projection identity, never state or membership. */
-export function taskEntityProjection(id: string): {
-  directory: string;
-  followParent: boolean;
-} | undefined {
-  try {
-    const value: unknown = JSON.parse(id);
-    if (
-      Array.isArray(value) && value.length === 4 &&
-      (value[0] === "task" || value[0] === "session") &&
-      typeof value[1] === "string" && typeof value[2] === "string" &&
-      typeof value[3] === "boolean"
-    ) {
-      return { directory: value[2], followParent: value[3] };
-    }
-  } catch { /* Not a task projection identity. */ }
-}
+/** D69/D70: a task's identity is independent of checkout and view. */
+export const taskEntityID = (kind: "task" | "session", id: string): string =>
+  `${kind}/${id}`;

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  derivedValue,
-  type InboxSnapshot,
-  type IndexEntry,
-  type Message,
-} from "@otk/protocol";
-import type { ClientTabs } from "./tabs.ts";
 import { createState } from "./state.ts";
+import type {
+  EntityState,
+  HelperDisposition,
+  TaskHelpers,
+} from "@otk/protocol";
+import { age, elapsed, metaList, type TimeText } from "./format.ts";
 
 export interface RunningWork {
   id: string;
@@ -53,54 +52,6 @@ export function createLiveWork(input: {
   };
 }
 
-/** Borrow the shared family and native scalar inventory, never transcript pages. */
-export function runningWork(input: {
-  tabs: Pick<ClientTabs, "working">;
-  inbox: InboxSnapshot;
-  sessionID: string;
-  entry(id: string): IndexEntry | undefined;
-  /** Compatibility input, deliberately not consulted for live inventory. */
-  messages?: readonly Message[];
-  connected: boolean;
-}): RunningWork[] {
-  if (!input.connected) return [];
-  const items: RunningWork[] = [];
-  for (const crumb of input.tabs.working()) {
-    const entry = input.entry(crumb.id);
-    if (!entry) continue;
-    const work = entry.activity?.work;
-    items.push({
-      id: `helper/${entry.id}`,
-      kind: "helper",
-      label: derivedValue(entry.digest.last)?.agent ?? "Helper",
-      title: entry.title,
-      sessionID: entry.id,
-      startedAt: work?.fresh
-        ? work.items?.find((item) =>
-          item.kind === "execution" && work.keys.includes(item.id)
-        )?.startedAt
-        : undefined,
-    });
-  }
-  const current = input.entry(input.sessionID);
-  const work = current?.activity?.work;
-  if (!work?.fresh) return items;
-  const seen = new Set<string>();
-  for (const item of work.items ?? []) {
-    if (
-      item.kind !== "shell" || !work.keys.includes(item.id) || seen.has(item.id)
-    ) continue;
-    seen.add(item.id);
-    items.push({
-      ...item,
-      id: `shell/${item.id}`,
-      kind: "shell",
-      sessionID: input.sessionID,
-    });
-  }
-  return items;
-}
-
 export function runningWorkLabel(items: readonly RunningWork[]): string {
   return (["helper", "shell"] as const).flatMap((kind) => {
     const count = items.filter((item) => item.kind === kind).length;
@@ -109,4 +60,83 @@ export function runningWorkLabel(items: readonly RunningWork[]): string {
   }).join(", ");
 }
 
-/** Compact elapsed clock for live-work rows; the view supplies the live clock. */
+/** Display order and vocabulary shared by every form of the same counts. */
+export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
+  kind: HelperDisposition;
+  title: string;
+  count: number;
+  phrase: string;
+}[] {
+  return ([
+    {
+      kind: "running",
+      title: "Running",
+      count: counts.running,
+      phrase: "running",
+    },
+    {
+      kind: "needsYou",
+      title: "Needs you",
+      count: counts.needsYou,
+      phrase: counts.needsYou === 1 ? "needs you" : "need you",
+    },
+    {
+      kind: "notReturned",
+      title: "Not returned",
+      count: counts.notReturned,
+      phrase: "not returned",
+    },
+  ] as const).filter(({ count }) => count > 0);
+}
+
+/** One vocabulary for the pill and its accessible name, from published counts. */
+export function helperCountsLabel(
+  counts: TaskHelpers["counts"],
+  form: "visible" | "spoken" = "visible",
+): string {
+  const items = helperCountParts(counts).map(({ count, phrase }) =>
+    `${count} ${phrase}`
+  );
+  return form === "spoken" ? items.join(", ") : metaList(items);
+}
+
+/** One clock per published disposition; an earlier run cannot date a wait. */
+export function helperClock(
+  entity: EntityState | undefined,
+  now: number,
+): { time: TimeText; ago: boolean } | undefined {
+  const evidence = entity?.evidence;
+  switch (evidence?.helper) {
+    case "running": {
+      const run = evidence.run;
+      if (run) {
+        return {
+          time: elapsed((run.endedAt ?? now) - run.startedAt),
+          ago: false,
+        };
+      }
+      break;
+    }
+    case "needsYou":
+      if (evidence.waitingSince !== undefined) {
+        return { time: elapsed(now - evidence.waitingSince), ago: false };
+      }
+      break;
+    case "notReturned":
+      if (entity?.terminal !== undefined) {
+        const time = age(entity.terminal, now);
+        return { time, ago: !time.word };
+      }
+  }
+}
+
+export type ComposerLinkState = "none" | "idle" | "running";
+
+/** 2.78/D69/D65: the link reads the same task and shell inputs as the pills. */
+export function composerLinkState(
+  task: Pick<EntityState, "counts" | "helpers"> | undefined,
+  shells: number,
+): ComposerLinkState {
+  if (!task?.helpers?.ids.length && !shells) return "none";
+  return shells || (task?.counts.working ?? 0) > 0 ? "running" : "idle";
+}

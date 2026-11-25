@@ -49,6 +49,10 @@
 .otk-popover-content {
   width: fit-content;
 }
+.otk-popover-fit {
+  width: max-content;
+  max-width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
+}
 .otk-popover-anchor {
   position: fixed;
   pointer-events: none;

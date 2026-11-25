@@ -1,27 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   BlockedCause,
-  EntityRequestEvidence,
   EntityState,
+  HelperDisposition,
   ProjectStatus,
   SessionEvidence,
+  TaskHelpers,
 } from "@otk/protocol";
-import { rollupStatus } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
-/** WP5: a permission is painted only after it has been pending this long. */
-export const ATTENTION_GRACE_MS = 500;
-/** The one grace rule: a request becomes visible at its client arrival plus
- * the grace. Every grace owner derives its deadline here. */
-export function graceDeadline(arrivedAt: number): number {
-  return arrivedAt + ATTENTION_GRACE_MS;
-}
-
-export interface EntityClock {
-  now(): number;
-  set(callback: () => void, ms: number): unknown;
-  clear(timer: unknown): void;
-}
 export interface EntityTransition {
   key: string;
   from: ProjectStatus;
@@ -36,8 +24,7 @@ export interface LampOptions {
   now: number;
 }
 /** Presentation view of the inbox's entity replica (decision 62). The inbox
- * owns the revision-fenced states; this adds only client receipt times,
- * transitions, staleness and one grace timer. It never derives a state. */
+ * owns the revision-fenced states; this adds only transitions and staleness. */
 export interface EntityStateStore {
   /** The inbox accepted these keys ("all" for a baseline). */
   observe(
@@ -47,13 +34,8 @@ export interface EntityStateStore {
   /** Connection lost: every selector reads "none" until fresh state (D6). */
   stale(value: boolean): void;
   get(key: string): EntityState | undefined;
-  /** Client receipt time of the entity's current state. */
-  since(key: string): number | undefined;
-  /** Client arrival time of a request, from the request-lifetime owner. */
-  arrival(id: string): number | undefined;
   readonly isStale: boolean;
-  /** Reactive dependency: changes on every accepted change and at each grace
-   * deadline. */
+  /** Reactive dependency: changes on every accepted change. */
   readonly revision: number;
   subscribe(listener: (transition: EntityTransition) => void): () => void;
   /** Evidence and stale changes, including changes with no lamp transition. */
@@ -65,50 +47,17 @@ export interface EntityStateStore {
 
 export function createEntityStateStore(o: {
   read: () => Readonly<Record<string, EntityState>> | undefined;
-  clock?: EntityClock;
   factory?: StateFactory;
-  arrival?: (id: string) => number | undefined;
   /** The connection's reactive state; a lost link makes every state stale. */
   connected?: () => boolean;
 }): EntityStateStore {
-  const clock = o.clock ?? {
-    now: () => performance.now(),
-    set: (callback: () => void, ms: number) => setTimeout(callback, ms),
-    clear: (timer: unknown) => clearTimeout(timer as number),
-  };
   const store = (o.factory ?? createState)({ revision: 0 });
-  /** Last observed state and its receipt time per key: transition memory. */
-  const known = new Map<string, { state: ProjectStatus; since: number }>();
+  const known = new Map<string, ProjectStatus>();
   const listeners = new Set<(transition: EntityTransition) => void>();
   const observers = new Set<(keys: readonly string[] | "all") => void>();
-  let stale = false, stopped = false, timer: unknown;
-  const arrival = (id: string) => o.arrival?.(id);
+  let stale = false, stopped = false;
   const read = (k: string) => o.read()?.[k];
   const bump = () => store.update((s) => s.revision++);
-  // One timer for the earliest pending grace; a lamp re-reads at its deadline.
-  const schedule = () => {
-    clock.clear(timer);
-    timer = undefined;
-    if (stopped) return;
-    const now = clock.now();
-    let next = Infinity;
-    for (const [k, value] of Object.entries(o.read() ?? {})) {
-      if (value.state !== "blocked" || value.cause !== "permission") continue;
-      const entered = known.get(k)?.since ?? now;
-      const requests = permissionRequests(value);
-      for (
-        const due of requests.length
-          ? requests.map((r) => graceDeadline(arrival(r.id) ?? entered))
-          : [graceDeadline(entered)]
-      ) if (due > now) next = Math.min(next, due);
-    }
-    if (next === Infinity) return;
-    timer = clock.set(() => {
-      if (stopped) return;
-      bump();
-      schedule();
-    }, next - now);
-  };
   return {
     observe(keys, origin) {
       if (stopped) return;
@@ -120,29 +69,28 @@ export function createEntityStateStore(o: {
         const value = read(k), before = known.get(k);
         if (!value) {
           known.delete(k);
-          if (before && before.state !== "none") {
+          if (before && before !== "none") {
             transitions.push({
               key: k,
-              from: before.state,
+              from: before,
               to: "none",
               origin,
             });
           }
           continue;
         }
-        if (before?.state === value.state) continue;
-        known.set(k, { state: value.state, since: clock.now() });
-        if ((before?.state ?? "none") === value.state) continue;
+        if (before === value.state) continue;
+        known.set(k, value.state);
+        if ((before ?? "none") === value.state) continue;
         transitions.push({
           key: k,
-          from: before?.state ?? "none",
+          from: before ?? "none",
           to: value.state,
           ...(value.cause ? { cause: value.cause } : {}),
           origin,
         });
       }
       bump();
-      schedule();
       for (const observer of observers) observer(keys);
       for (const transition of transitions) {
         for (const listener of listeners) listener(transition);
@@ -158,8 +106,6 @@ export function createEntityStateStore(o: {
       void store.state.revision;
       return read(k);
     },
-    since: (k) => known.get(k)?.since,
-    arrival,
     get isStale() {
       void store.state.revision;
       return stale || o.connected?.() === false;
@@ -181,7 +127,6 @@ export function createEntityStateStore(o: {
     },
     stop() {
       stopped = true;
-      clock.clear(timer);
       listeners.clear();
       observers.clear();
     },
@@ -210,51 +155,36 @@ export function presentedEntity(
   };
 }
 
-/** The permission identities an entity's grace is measured against. */
-function permissionRequests(
-  value: EntityState,
-): readonly EntityRequestEvidence[] {
-  return value.kind === "session"
-    ? value.evidence?.requests?.permissions ?? []
-    : value.requests ?? [];
-}
+/** Lamp and aggregate state are the same published verdict. */
+export const lamp = entityState;
 
-/** The lamp state of an entity. Absent or stale state is grey (D6). A state
- * blocked only by permissions keeps its previous state until one of those
- * requests has been pending for the grace (WP5, addendum 1): each request is
- * timed from its own client arrival, so a replacement starts a new grace.
- * Questions, forms, operations and failed helpers are immediate. */
-export function lamp(
+export function permissionVisible(
   store: EntityStateStore,
-  k: string,
-  options: LampOptions,
-): ProjectStatus {
-  const value = store.get(k);
-  if (!value || store.isStale) return "none";
-  if (value.state !== "blocked" || value.cause !== "permission") {
-    return value.state;
-  }
-  const entered = store.since(k) ?? options.now;
-  const requests = permissionRequests(value);
-  const ready = requests.length
-    ? requests.some((request) =>
-      options.now >= graceDeadline(store.arrival(request.id) ?? entered)
-    )
-    : options.now >= graceDeadline(entered);
-  return ready ? "blocked" : value.previous;
+  sessionID: string,
+  id: string,
+): boolean {
+  return sessionEvidence(store, entityKey("session", sessionID))?.requests
+    ?.permissions.some((request) => request.id === id) ?? false;
 }
 
-/** One label dictionary, keyed by state; the cause refines nothing yet. */
-export function entityState(store: EntityStateStore, k: string): ProjectStatus {
-  return store.isStale ? "none" : store.get(k)?.state ?? "none";
+export function entityState(
+  store: EntityStateStore | undefined,
+  k: string | undefined,
+): ProjectStatus {
+  return !store || !k || store.isStale ? "none" : store.get(k)?.state ?? "none";
 }
 
-/** Presentation only: summarize the lamps in the D66 disclosure. This is not
- * the task's state, which includes members outside the disclosure. */
-export function visibleLampStatus(
-  states: readonly ProjectStatus[],
-): ProjectStatus {
-  return rollupStatus(...states);
+export function taskHelpers(
+  store: EntityStateStore,
+  key?: string,
+): TaskHelpers | undefined {
+  return store.isStale || !key ? undefined : store.get(key)?.helpers;
+}
+export function helperDisposition(
+  store: EntityStateStore,
+  key: string,
+): HelperDisposition | undefined {
+  return sessionEvidence(store, key)?.helper;
 }
 
 /** Own-session evidence only. Descendant counts retain their explicit scope. */

@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { randomID } from "@otk/protocol";
-import {
-  autoApproveOwner,
-  type IndexEntry,
-  type IndexMetadata,
-  type PermissionRequest,
-  sessionAncestors,
-  type SessionLookup,
-  type TerminalEvidence,
-  type TerminalOutcome,
+import type {
+  EntityState,
+  IndexEntry,
+  TerminalEvidence,
+  TerminalOutcome,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
@@ -30,7 +26,6 @@ export interface EntryChanges {
 }
 export interface AttentionProjection {
   get(id: string): IndexEntry | undefined;
-  configure(enabled: readonly string[], linked: boolean): void;
   update(ids: readonly string[], baseline?: boolean): void;
   finished(
     id: string,
@@ -56,7 +51,7 @@ export interface AttentionProjection {
 export function createAttentionProjection(o: {
   entry(id: string): IndexEntry | undefined;
   ids(): readonly string[];
-  children(id: string): readonly string[];
+  entity?(id: string): EntityState | undefined;
   completions?: boolean;
   factory?: StateFactory;
 }): AttentionProjection {
@@ -70,30 +65,12 @@ export function createAttentionProjection(o: {
     }
   >();
   const completed = new Map<string, TerminalEvidence & { unseen?: boolean }>();
-  const covered = new Set<string>();
-  const boundaries = new Map<string, { count: number; ancestors: string[] }>();
-  const subtracted = new Map<string, number>();
   const listeners = new Set<(changes: EntryChanges) => void>();
   const clock = (o.factory ?? createState)({
     keys: {} as Record<string, number>,
   });
-  let enabled = new Set<string>(),
-    linked = false,
-    initialized = false,
-    stopped = false;
+  let initialized = false, stopped = false;
   let generation = randomID(), revision = 0;
-  let waitingCache = new Map<string, string | undefined>();
-  const waiting = (id: string) => {
-    if (!linked) return true;
-    return !autoApproveOwner(id, [...enabled], o.entry, waitingCache);
-  };
-  const subtree = (id: string, ids: Set<string>) => {
-    const pending = new Set([id]);
-    for (const current of pending) {
-      ids.add(current);
-      for (const child of o.children(current)) pending.add(child);
-    }
-  };
   const facts = (entry?: IndexEntry) =>
     entry && JSON.stringify([
       entry.title,
@@ -108,74 +85,35 @@ export function createAttentionProjection(o: {
   const update = (
     ids: readonly string[],
     baseline = false,
-    forceSubtree = false,
     completion = false,
   ) => {
     if (stopped) return;
-    waitingCache = new Map();
     const touched = new Set(ids), rebuild = baseline || !initialized;
     if (rebuild) {
       for (const id of values.keys()) touched.add(id);
       for (const id of o.ids()) touched.add(id);
-      boundaries.clear();
-      subtracted.clear();
-      covered.clear();
-    } else {
-      for (const id of ids) {
-        if (
-          forceSubtree || values.get(id)?.parentID !== o.entry(id)?.parentID ||
-          !!values.get(id) !== !!o.entry(id)
-        ) subtree(id, touched);
-      }
-    }
-    const affected = new Set(touched);
-    for (const id of touched) {
-      const old = boundaries.get(id);
-      if (old) {
-        for (const ancestor of old.ancestors) {
-          subtracted.set(ancestor, (subtracted.get(ancestor) ?? 0) - old.count);
-          affected.add(ancestor);
-        }
-      }
-      boundaries.delete(id);
-      if (o.entry(id) && !waiting(id)) covered.add(id);
-      else covered.delete(id);
-    }
-    for (const id of touched) {
-      const raw = o.entry(id);
-      if (!raw || !covered.has(id) || raw.parentID && !waiting(raw.parentID)) {
-        continue;
-      }
-      const contribution = {
-        count: raw.attention.permissions + raw.attention.childPermissions,
-        ancestors: sessionAncestors(id, o.entry),
-      };
-      boundaries.set(id, contribution);
-      for (const ancestor of contribution.ancestors) {
-        subtracted.set(
-          ancestor,
-          (subtracted.get(ancestor) ?? 0) + contribution.count,
-        );
-        affected.add(ancestor);
-      }
     }
     const changes: EntryChange[] = [];
-    for (const id of affected) {
-      const before = values.get(id), raw = o.entry(id);
-      const count = subtracted.get(id) ?? 0;
-      if (!count) subtracted.delete(id);
-      const after = raw && (covered.has(id) || count
+    for (const id of touched) {
+      const before = values.get(id),
+        raw = o.entry(id),
+        evidence = o.entity?.(id)?.evidence;
+      const permissions = evidence?.requests?.permissions.map(({ id }) => id) ??
+        [];
+      const after = raw && o.entity
         ? {
           ...raw,
           attention: {
             ...raw.attention,
-            permissions: covered.has(id) ? 0 : raw.attention.permissions,
-            childPermissions: covered.has(id)
-              ? 0
-              : Math.max(0, raw.attention.childPermissions - count),
+            permissions: permissions.length,
+            questions: evidence?.questions ?? 0,
+          },
+          activity: {
+            ...raw.activity,
+            permissions: { keys: permissions, fresh: !!evidence },
           },
         }
-        : raw);
+        : raw;
       if (after) values.set(id, after);
       else values.delete(id);
       if (
@@ -186,7 +124,10 @@ export function createAttentionProjection(o: {
           id,
           before,
           after,
-          ...(o.completions
+          ...(o.completions && (
+              completion || !!after && (!before ||
+                  before.status !== "idle" && after.status === "idle")
+            )
             ? {
               completedAt: completed.get(id)?.terminal ?? 0,
               completedOutcome: completed.get(id)?.outcome,
@@ -252,25 +193,12 @@ export function createAttentionProjection(o: {
       observedLive: !replay || same && previous.observedLive,
     });
     completed.set(id, value);
-    update([id], false, false, true);
+    update([id], false, true);
   };
   return {
     get(id) {
       void clock.state.keys[id];
       return values.get(id);
-    },
-    configure(next, live) {
-      if (stopped) return;
-      const incoming = new Set(next);
-      const dirty = [...new Set([...enabled, ...incoming])].filter((id) =>
-        enabled.has(id) !== incoming.has(id)
-      );
-      const linkChanged = linked !== live;
-      enabled = incoming;
-      linked = live;
-      if (!initialized || !dirty.length && !linkChanged) return;
-      if (linkChanged) update(o.ids());
-      else update(dirty, false, true);
     },
     update,
     finished,
@@ -296,64 +224,9 @@ export function createAttentionProjection(o: {
       values.clear();
       finishClocks.clear();
       completed.clear();
-      covered.clear();
-      boundaries.clear();
-      subtracted.clear();
       listeners.clear();
-      waitingCache.clear();
       clock.update((state) => {
         state.keys = {};
-      });
-    },
-  };
-}
-
-/** One definition of waiting for the user, shared by requests and index consumers.
- * Native pending metadata is retained unchanged for reconnect and policy changes. */
-export interface ApprovalAttention {
-  waiting(sessionID: string): boolean;
-  permissions(requests: readonly PermissionRequest[]): PermissionRequest[];
-  entries<T extends IndexMetadata>(entries: readonly T[]): T[];
-}
-export function approvalAttention(
-  enabled: readonly string[],
-  lookup: SessionLookup,
-  linked: boolean,
-): ApprovalAttention {
-  const waiting = (id: string) =>
-    !linked || !autoApproveOwner(id, enabled, lookup);
-  return {
-    waiting,
-    permissions: (requests: readonly PermissionRequest[]) =>
-      requests.filter((r) => waiting(r.sessionID)),
-    entries<T extends IndexMetadata>(entries: readonly T[]): T[] {
-      if (!linked || !enabled.length) return [...entries];
-      // Subtract each covered subtree once, even when an uncovered ancestor has
-      // both manual and automatic helper branches. Native roll-ups may include
-      // descendants outside the visible index window.
-      const boundaries = entries.filter((e) =>
-        !waiting(e.id) && (!e.parentID || waiting(e.parentID))
-      );
-      return entries.map((entry) => {
-        const covered = !waiting(entry.id);
-        const childCovered = covered
-          ? entry.attention.childPermissions
-          : boundaries.reduce((sum, subtree) =>
-            sessionAncestors(subtree.id, lookup).includes(entry.id)
-              ? sum + subtree.attention.permissions +
-                subtree.attention.childPermissions
-              : sum, 0);
-        return {
-          ...entry,
-          attention: {
-            ...entry.attention,
-            permissions: covered ? 0 : entry.attention.permissions,
-            childPermissions: Math.max(
-              0,
-              entry.attention.childPermissions - childCovered,
-            ),
-          },
-        };
       });
     },
   };

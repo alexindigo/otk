@@ -4,7 +4,6 @@ import { createSignal, For, onCleanup, Show } from "solid-js";
 import {
   createEntityStateStore,
   elapsed,
-  lamp,
   type RunningWork,
   runningWorkLabel,
   unknownTime,
@@ -14,7 +13,7 @@ import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
-import StatusLight from "./StatusLight.tsx";
+import LiveCount from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import Popover from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
@@ -22,21 +21,23 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 const absent = createEntityStateStore({ read: () => undefined });
 
 /** Shell work only. D67's sub-session inventory has one separate Menu view. */
-export default function LiveWork(props: { items: readonly RunningWork[] }) {
+export default function LiveWork(props: { shells: readonly RunningWork[] }) {
   const session = useOptionalSessionPorts();
   const entities = () => session?.entities?.() ?? absent;
-  const shells = () => props.items.filter((item) => item.kind === "shell");
+  const lampKey = () =>
+    session?.workEntityKey?.() ??
+      entityKey("session", session?.sessionID() ?? "");
   const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
   const stop = () => clearInterval(timer);
   onCleanup(stop);
   return (
-    <Show when={shells().length}>
+    <Show when={props.shells.length}>
       <Popover
         class="otk-live-work"
         triggerClass="otk-live-work-trigger"
         label="Running shells"
-        triggerLabel={`Running work: ${runningWorkLabel(shells())}`}
+        triggerLabel={`Running work: ${runningWorkLabel(props.shells)}`}
         title="Running shells"
         size="content"
         onOpen={() => {
@@ -46,20 +47,12 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
         }}
         onClose={stop}
         trigger={
-          <>
-            <StatusLight
-              small
-              state={lamp(
-                entities(),
-                session?.workEntityKey?.() ??
-                  entityKey("session", session?.sessionID() ?? ""),
-                { now: performance.now() },
-              )}
-            />
-            <ChromeMeta class="otk-control-label">
-              {runningWorkLabel(shells())}
-            </ChromeMeta>
-          </>
+          <LiveCount
+            entities={entities()}
+            lampKey={lampKey()}
+            label={runningWorkLabel(props.shells)}
+            compact={[{ id: "shells", count: props.shells.length }]}
+          />
         }
       >
         <ScrollRegion
@@ -67,7 +60,7 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
           role="list"
           aria-label="Running shells"
         >
-          <For each={shells()} keyed={(item) => item.id}>
+          <For each={props.shells} keyed={(item) => item.id}>
             {(item) => (
               <div
                 class="otk-live-work-item"

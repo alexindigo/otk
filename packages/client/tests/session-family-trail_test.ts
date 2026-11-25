@@ -65,17 +65,11 @@ for (const grouped of [true, false]) {
       "open",
     ]);
     assertEquals(tabs.path().map((c) => c.id), ["root", "open"]);
-    assertEquals(
-      tabs.family().filter((c) => c.status !== "none").map((
-        c,
-      ) => [c.id, c.status]),
-      [["blocked", "blocked"], ["unseen", "finished"], ["working", "working"]],
-    );
     inbox.supervision!.unseen = { state: "none", terminal: 2 };
     inbox.supervision!.blocked = { state: "none", terminal: 0 };
     update();
     assertEquals(tabs.crumbs().map((c) => c.id), ["root", "open"]);
-    assertEquals(tabs.family().map((c) => c.id), ["working"]);
+    assertEquals(tabs.trail().path.map((c) => c.id), ["root", "open"]);
     tabs.stop();
   });
 }

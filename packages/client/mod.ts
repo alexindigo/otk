@@ -4,7 +4,6 @@ export * from "./project-editor.ts";
 export * from "./record-folds.ts";
 export * from "./project-disclosure.ts";
 export * from "./project-placement.ts";
-export { supervisionStatus } from "./inbox.ts";
 export {
   type EntityFact,
   type EntityFacts,
@@ -13,10 +12,14 @@ export {
   type EntityIdentity,
 } from "./entity-facts.ts";
 export {
+  type ComposerLinkState,
+  composerLinkState,
   createLiveWork,
+  helperClock,
+  helperCountParts,
+  helperCountsLabel,
   type LiveWorkOwner,
   type RunningWork,
-  runningWork,
   runningWorkLabel,
 } from "./live-work.ts";
 export {
@@ -55,7 +58,7 @@ export * from "./index.ts";
 export * from "./session.ts";
 export * from "./session-delivery.ts";
 export * from "./send-outcome.ts";
-export { archiveAttention, projectGroup } from "./inbox.ts";
+export { projectGroup } from "./inbox.ts";
 export {
   createTranscript,
   type TranscriptOwner,
@@ -76,8 +79,7 @@ export * from "./messages.ts";
 export * from "./timeline.ts";
 export * from "./permissions.ts";
 export * from "./approvals.ts";
-export * from "./approval-attention.ts";
-export * from "./attention-grace.ts";
+export * from "./entry-observations.ts";
 export * from "./entity-state.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
@@ -170,7 +172,6 @@ export * from "./session-summary.ts";
 export * from "./window.ts";
 export * from "./list-scopes.ts";
 export * from "./requests.ts";
-export * from "./request-attention.ts";
 export * from "./failures.ts";
 export * from "./failure-features.ts";
 export * from "./http-requests.ts";

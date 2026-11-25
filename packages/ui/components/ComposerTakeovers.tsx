@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { composerLinkState } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -8,6 +9,7 @@ import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
+import LiveLink from "./LiveLink.tsx";
 import Subagents from "./Subagents.tsx";
 import { sessionSelectionControl } from "./session-open.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -25,9 +27,18 @@ export default function ComposerTakeovers(
   const { takeovers, composerDocks } = useUiRegistries(),
     session = useSessionPorts();
   const { commands } = useCommandPorts();
-  const work = createMemo(() => session.runningWork?.() ?? []);
+  const shells = createMemo(() =>
+    (session.workItems?.() ?? []).filter((item) => item.kind === "shell")
+  );
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";
+  const trail = () => session.trail?.();
+  const entities = () => session.entities?.();
+  const task = createMemo(() => {
+    const store = entities(), key = trail()?.task;
+    return key && !store?.isStale ? store?.get(key) : undefined;
+  });
+  const link = createMemo(() => composerLinkState(task(), shells().length));
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -43,8 +54,7 @@ export default function ComposerTakeovers(
   return (
     <ComposerProvider available={hasComposer}>
       <Show
-        when={hasComposer() || active() || work().length ||
-          session.trail?.()?.helpers.length}
+        when={hasComposer() || active() || link() !== "none"}
       >
         <div
           class="otk-composer-dock"
@@ -72,22 +82,22 @@ export default function ComposerTakeovers(
                   {target().session}
                 </ChromeMeta>
               </span>
+              <LiveLink state={link()} />
               <span class="otk-composer-live-slot">
-                <Show when={session.trail?.()}>
-                  {(trail) => (
-                    <Subagents
-                      model={trail()}
-                      owner={session.liveWork}
-                      title={title}
-                      openAction={(id) =>
-                        sessionSelectionControl(commands, {
-                          sidecarId: session.failureTarget?.().sidecarId ?? "",
-                          sessionID: id,
-                        }, title(id))}
-                    />
-                  )}
-                </Show>
-                <LiveWork items={work()} />
+                <Subagents
+                  helpers={task()?.helpers}
+                  taskKey={trail()?.task}
+                  current={session.sessionID()}
+                  entities={entities()}
+                  owner={session.liveWork}
+                  title={title}
+                  openAction={(id) =>
+                    sessionSelectionControl(commands, {
+                      sidecarId: session.failureTarget?.().sidecarId ?? "",
+                      sessionID: id,
+                    }, title(id))}
+                />
+                <LiveWork shells={shells()} />
               </span>
             </div>
           </div>

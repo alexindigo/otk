@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { createProjectProjection } from "../project-projection.ts";
+import { createEntityStateStore } from "../entity-state.ts";
 import { createTabs } from "./supervision-fixture.ts";
 import type { MergedMetadata } from "../index.ts";
-import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
+import { entityKey, type InboxSnapshot, type TaskRecord } from "@otk/protocol";
 
 for (
   const status of [
@@ -16,7 +17,23 @@ for (
 ) {
   for (const dependencies of [0, 1]) {
     Deno.test(`removed checkout visibility preserves ${status} with ${dependencies} running dependencies`, () => {
-      const owner = createProjectProjection({ entry: () => undefined });
+      const key = entityKey("project", "/tree");
+      const store = createEntityStateStore({
+        read: () => ({
+          [key]: {
+            kind: "project",
+            id: "/tree",
+            state: status,
+            previous: "none",
+            counts: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+            dependencies,
+          },
+        }),
+      });
+      const owner = createProjectProjection({
+        entry: () => undefined,
+        entities: () => store,
+      });
       owner.inbox({
         projects: [],
         tasks: [],
@@ -27,8 +44,7 @@ for (
           "/tree": {
             directory: "/tree",
             hasSessions: true,
-            status,
-            dependencies,
+            status: "none",
             sessionCount: 1,
             unseenCount: 0,
             lastActivity: 2,
@@ -50,6 +66,8 @@ for (
         owner.row("/tree", 3)?.group,
         active ? "active" : "archived",
       );
+      assertEquals(owner.row("/tree", 3)?.dependencies, dependencies);
+      store.stop();
     });
   }
 }

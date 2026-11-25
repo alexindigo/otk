@@ -7,12 +7,7 @@ import {
   RequestTracker,
   Rpc,
 } from "../mod.ts";
-import {
-  createRequestMetadata,
-  type IndexMetadata,
-  type PublicFailure,
-} from "@otk/protocol";
-import { requestAttention } from "../request-attention.ts";
+import type { IndexMetadata, PublicFailure } from "@otk/protocol";
 
 function failure(id: string, sessionID = "tstv1-first"): PublicFailure {
   return {
@@ -119,14 +114,6 @@ Deno.test("tracker failures carry action and routing through both transports, wi
         }).failure?.target.href,
         "#/remote/tstv1-first",
       );
-      const attention = requestAttention(
-        tracker.operations(),
-        createRequestMetadata(),
-        [session],
-        [],
-      );
-      assertEquals(attention.sessions.size, 0);
-      assertEquals(attention.projectStates.size, 0);
       assertEquals(op.state.phase, "failed");
     }
   } finally {

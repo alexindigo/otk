@@ -13,9 +13,11 @@ import {
   badge,
   focusNotifications,
   hideNotifications,
+  instrumentNotificationAudio,
   instrumentNotifications,
   notes,
   toast,
+  tones,
 } from "../../pages/notifications.ts";
 import type { TestState } from "../../fixtures/test-state.ts";
 
@@ -102,6 +104,8 @@ test(
     });
     await cdp.detach();
     await openSession(state, page, a.id);
+    expect(await page.evaluate(() => "notificationAudioEvidence" in globalThis))
+      .toBe(false);
     await focusNotifications(page);
     await settings(page);
     await page.locator('input[name="notify.os"]').click();
@@ -165,22 +169,23 @@ test(
   async ({ isolatedState: state, page }) => {
     const a = await seed(state, "Open A"),
       b = await seed(state, "Sound background");
-    await instrumentNotifications(page);
+    await instrumentNotificationAudio(page);
     await openSession(state, page, a.id);
     await focusNotifications(page);
-    expect(await notes(page, "contexts.length")).toBe(0);
+    expect(await tones(page, "contexts.length")).toBe(0);
     await settings(page);
     await page.locator('input[name="notify.sound"]').click();
     await expect(page.locator('input[name="notify.sound"]')).toBeChecked();
     await closeSettings(page);
     await expect.poll(() =>
-      notes(page, "contexts.length===1&&contexts[0].context.state==='running'")
+      tones(page, "contexts.length===1&&contexts[0].context.state==='running'")
     ).toBe(true);
+    await expect.poll(() => tones(page, "contexts[0].captureReady")).toBe(true);
     await finish(state, b.id);
     await expect.poll(() =>
-      notes(page, "audio.length===2&&audio.every(n=>n.peaks.length>0)")
+      tones(page, "audio.length===2&&audio.every(n=>n.peaks.length>0)")
     ).toBe(true);
-    expect(await notes(page, "audio.map(n=>n.frequency)")).toEqual([660, 880]);
+    expect(await tones(page, "audio.map(n=>n.frequency)")).toEqual([660, 880]);
     await tool(state, "bash", {
       command: "echo audio-input",
       description: "Audio input",
@@ -191,15 +196,15 @@ test(
       parts: [{ kind: "text", text: "Input tone probe" }],
     });
     await expect.poll(() =>
-      notes(page, "audio.length===5&&audio.every(n=>n.peaks.length>0)")
+      tones(page, "audio.length===5&&audio.every(n=>n.peaks.length>0)")
     ).toBe(true);
-    expect(await notes(page, "audio.slice(2).map(n=>n.frequency)")).toEqual([
+    expect(await tones(page, "audio.slice(2).map(n=>n.frequency)")).toEqual([
       880,
       660,
       880,
     ]);
     expect(
-      await notes(
+      await tones(
         page,
         "contexts.every(n=>n.gesture)&&audio.every(n=>n.state==='running'&&n.peaks.some(hz=>Math.abs(hz-n.frequency)<30))",
       ),

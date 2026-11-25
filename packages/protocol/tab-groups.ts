@@ -191,7 +191,7 @@ export function projectTabGroups(
           const rootTask = taskByID.get(
             taskHierarchy.get(rootID)?.taskID ?? "",
           );
-          owner = (options.followParent || local(rootID)) && rootTask &&
+          owner = rootTask &&
               groups.has(`task/${rootTask.id}`)
             ? group("task", rootTask.id)
             : group("session", rootID);

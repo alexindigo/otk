@@ -10,11 +10,10 @@ import type {
 } from "@otk/protocol";
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
 import {
-  type ApprovalAttention,
   type AttentionProjection,
   createAttentionProjection,
   type EntryChanges,
-} from "./approval-attention.ts";
+} from "./entry-observations.ts";
 import type { SidecarConnection } from "./connection.ts";
 import type {
   ClientIndex,
@@ -38,7 +37,6 @@ import { createState, type StateFactory } from "./state.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
-import { requestAttention } from "./request-attention.ts";
 import { createSessionTree, type SessionListRow } from "./session-tree.ts";
 import {
   createCatalogCodecs,
@@ -104,11 +102,6 @@ export interface ServerResources {
   declares(id: string, capability: CapabilityName): boolean;
   anyAdvertised(capability: CapabilityName): boolean;
   connectionKey(id: string): number | undefined;
-  attention(id: string): ApprovalAttention;
-  /** Borrow the existing operation projection; presentation must not delay it. */
-  operationAttention?(
-    id: string,
-  ): Pick<ReturnType<typeof requestAttention>, "sessions" | "projectStates">;
   projected(id: string, sessionID: string): IndexEntry | undefined;
   projectedProject(id: string, directory: string): readonly IndexEntry[];
   observeEntries(
@@ -302,7 +295,6 @@ export function createServerResources(o: {
     string,
     ReturnType<typeof createProjectProjection>
   >();
-  const operationCache = new Map<string, ReturnType<typeof requestAttention>>();
   const projectReleases = new Map<string, (() => void)[]>();
   const names = new Map<string, number>();
   const nameClock = factory({ keys: {} as Record<string, number> });
@@ -322,8 +314,6 @@ export function createServerResources(o: {
     { sidecarId: string; label: string } & ProjectProjectionRow
   >();
   const tabModels = new Map<string, ClientTabs>();
-  const requestObservers = new Map<string, () => void>();
-  const requestClock = factory({ keys: {} as Record<string, number> });
   const observers = new Set<FrameObserver>();
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
@@ -486,13 +476,26 @@ export function createServerResources(o: {
     }
     return model;
   };
+  const terminalEvidence = (
+    state: import("@otk/protocol").EntityState | undefined,
+  ) =>
+    state && ({
+      terminal: state.terminal,
+      outcome: state.outcome,
+      unseen: state.counts.unseen > 0,
+      terminalOrigin: state.terminalOrigin,
+      terminalFailure: state.evidence?.failure,
+    });
   const projection = (id: string): AttentionProjection => {
     let owner = projections.get(id);
     if (!owner) {
       owner = createAttentionProjection({
         entry: (sessionID) => entry(id, sessionID),
         ids: () => o.index.ids(id),
-        children: (sessionID) => o.index.children(id, sessionID),
+        entity: (sessionID) =>
+          inbox(id).entities.isStale
+            ? undefined
+            : inbox(id).entities.get(entityKey("session", sessionID)),
         completions: true,
         factory,
       });
@@ -500,7 +503,9 @@ export function createServerResources(o: {
       for (
         const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
       ) {
-        const supervision = inbox(id).state.inbox.supervision?.[session];
+        const supervision = terminalEvidence(
+          inbox(id).entities.get(entityKey("session", session)),
+        );
         owner.finished(
           session,
           time,
@@ -511,91 +516,17 @@ export function createServerResources(o: {
         );
       }
     }
-    const model = approvals(id);
-    owner.configure(
-      model.state.snapshot.enabled,
-      linked(id) && model.state.ready,
-    );
     return owner;
-  };
-  const attention = (id: string): ApprovalAttention => {
-    const current = approvals(id).attention(linked(id));
-    const owner = projection(id);
-    return {
-      ...current,
-      entries: (entries) =>
-        entries.map((entry) => {
-          const projected = owner.get(entry.id);
-          return projected && projected.attention !== entry.attention
-            ? { ...entry, attention: projected.attention }
-            : entry;
-        }),
-    };
-  };
-  const operationAttention = (id: string) => {
-    const rpc = sidecars.connection(id).rpc;
-    if (!requestObservers.has(id) && !stopped) {
-      requestObservers.set(
-        id,
-        rpc.requests.subscribe(() => {
-          const previous = operationCache.get(id);
-          operationCache.delete(id);
-          refreshOperations(id, previous);
-          requestClock.update((state) => {
-            state.keys[id] = (state.keys[id] ?? 0) + 1;
-          });
-        }),
-      );
-    }
-    void requestClock.state.keys[id];
-    let value = operationCache.get(id);
-    if (value) return value;
-    value = requestAttention(
-      rpc.requests.operations(),
-      rpc.metadata,
-      (sessionID) => o.index.getMetadata(id, sessionID),
-      inbox(id).state.inbox.tasks,
-    );
-    operationCache.set(id, value);
-    return value;
-  };
-  const refreshOperations = (
-    id: string,
-    previous?: ReturnType<typeof requestAttention>,
-  ) => {
-    const owner = projectOwners.get(id);
-    if (!owner) return;
-    const next = operationAttention(id);
-    owner.update(
-      new Set([...previous?.sessions.keys() ?? [], ...next.sessions.keys()]),
-    );
   };
   const projectOwner = (id: string) => {
     let owner = projectOwners.get(id);
     if (owner) return owner;
-    const decorated = new WeakMap<MergedMetadata, MergedMetadata>();
     owner = createProjectProjection({
       factory,
       membership: nameMembership,
       inbox: () => inbox(id).state.inbox,
       entities: () => inbox(id).entities,
-      taskActivity: () => operationAttention(id).tasks,
-      entry: (sessionID) => {
-        const raw = o.index.getMetadata(id, sessionID);
-        if (!raw) return undefined;
-        const attention = projection(id).get(sessionID)?.attention ??
-          raw.attention;
-        const operationStatus = operationAttention(id).sessions.get(sessionID);
-        if (attention === raw.attention && !operationStatus) return raw;
-        const previous = decorated.get(raw);
-        if (
-          previous?.attention === attention &&
-          previous.operationStatus === operationStatus
-        ) return previous;
-        const value = { ...raw, attention, operationStatus };
-        decorated.set(raw, value);
-        return value;
-      },
+      entry: (sessionID) => o.index.getMetadata(id, sessionID),
     });
     projectOwners.set(id, owner);
     owner.inbox(inbox(id).state.inbox);
@@ -605,23 +536,16 @@ export function createServerResources(o: {
         owner!.update(changes.changes.map((c) => c.id))
       ),
       inbox(id).observeChanges((changes) => {
-        const previous = operationCache.get(id);
-        if (changes.tasks) operationCache.delete(id);
         owner!.inbox(inbox(id).state.inbox, changes);
         if (changes.baseline || changes.entities) {
           owner!.entities(changes.baseline ? "all" : changes.entities!);
         }
-        if (changes.tasks) refreshOperations(id, previous);
       }),
     ]);
     return owner;
   };
   const entries = (): MergedEntry[] =>
-    sidecars.state.list.flatMap((s) =>
-      operationAttention(s.id).entries(
-        attention(s.id).entries(o.index.partition(s.id)),
-      )
-    );
+    sidecars.state.list.flatMap((s) => [...o.index.partition(s.id)]);
   const inbox = (id: string): InboxModel => {
     live();
     let model = inboxes.get(id);
@@ -631,7 +555,6 @@ export function createServerResources(o: {
         factory,
         o.error,
         () => sidecars.connection(id).viewEpoch,
-        (request) => sidecars.connection(id).attention.arrival(request),
         () => connected(id),
       );
       inboxes.set(id, model);
@@ -659,15 +582,22 @@ export function createServerResources(o: {
         }
         const owner = projections.get(id);
         if (!owner) return;
+        const prefix = entityKey("session", "");
+        const entitySessions = changes.entities?.filter((key) =>
+          key.startsWith(prefix)
+        ).map((key) => key.slice(prefix.length)) ?? [];
+        owner.update(entitySessions, changes.baseline);
         const finishes = current.state.inbox.finishes;
         for (
           const session of changes.baseline
             ? new Set([...Object.keys(finishes), ...o.index.ids(id)])
-            : changes.sessions
+            : new Set([...changes.sessions, ...entitySessions])
         ) {
           if (changes.baseline || finishes[session] !== undefined) {
             const time = finishes[session] ?? 0;
-            const supervision = current.state.inbox.supervision?.[session];
+            const supervision = terminalEvidence(
+              current.entities.get(entityKey("session", session)),
+            );
             const outcome = supervision?.terminal === time
               ? supervision.outcome
               : undefined;
@@ -854,8 +784,6 @@ export function createServerResources(o: {
         requests(id).retireSessions((session) =>
           !!o.index.get(id, session)?.deleted
         );
-        const previous = operationCache.get(id);
-        if (o.index.changes(id)!.metadata.length) operationCache.delete(id);
         projection(id).update(
           o.index.changes(id)!.ids,
           frame.t === "index.snapshot",
@@ -875,7 +803,6 @@ export function createServerResources(o: {
           }
         }
         if (o.index.changes(id)!.metadata.length) {
-          refreshOperations(id, previous);
           if (
             selected?.sidecarId === id &&
             o.index.changes(id)!.metadata.includes(selected.sessionID)
@@ -931,7 +858,6 @@ export function createServerResources(o: {
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
-    operationAttention,
     progress: (id, directory) => {
       const owner = progressOwner(id),
         label = "Indexing sessions";
@@ -1031,7 +957,6 @@ export function createServerResources(o: {
     linked,
     declares,
     advertised,
-    attention,
     projected: (id, sessionID) => projection(id).get(sessionID),
     projectedProject: (id, directory) => {
       const owner = projection(id);
@@ -1071,13 +996,10 @@ export function createServerResources(o: {
       sidecars.state.list.some((s) => advertised(s.id, capability)),
     connectionKey: (id) => server(id)?.connectionVersion,
     projectEntries: (p) =>
-      operationAttention(p.sidecarId).entries(
-        attention(p.sidecarId).entries(
-          projectOwner(p.sidecarId).input(p.directory).entries.map((entry) =>
-            o.index.get(p.sidecarId, entry.id)!
-          ).filter(Boolean),
-        ),
-      ),
+      projectOwner(p.sidecarId).input(p.directory).entries.flatMap((entry) => {
+        const row = o.index.get(p.sidecarId, entry.id);
+        return row ? [row] : [];
+      }),
     projectRow: (p, now) =>
       projectOwner(p.sidecarId).row(
         projectOwner(p.sidecarId).resolve(p.directory),
@@ -1201,13 +1123,10 @@ export function createServerResources(o: {
       for (const [key, cache] of tabInputs) {
         if (cache.server === id) tabInputs.delete(key);
       }
-      operationCache.delete(id);
       catalogs.get(id)?.stop();
       catalogs.delete(id);
       frecencies.get(id)?.stop();
       frecencies.delete(id);
-      requestObservers.get(id)?.();
-      requestObservers.delete(id);
       o.index.remove(id);
       for (const observer of observers) observer.removed?.(id);
       inboxes.get(id)?.stop();
@@ -1270,7 +1189,6 @@ export function createServerResources(o: {
       projectReleases.clear();
       projectOwners.clear();
       tabInputs.clear();
-      operationCache.clear();
       visibleCatalog?.stopReady?.();
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
@@ -1279,8 +1197,6 @@ export function createServerResources(o: {
       for (const owner of frecencies.values()) owner.stop();
       catalogs.clear();
       frecencies.clear();
-      for (const release of requestObservers.values()) release();
-      requestObservers.clear();
       for (const model of approvalModels.values()) model.stop();
       for (const model of tabModels.values()) model.stop();
       approvalModels.clear();

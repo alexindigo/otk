@@ -164,7 +164,6 @@ export default function Sidebar(
                                 state={lamp(
                                   entities(entry().sidecarId),
                                   entityKey("session", entry().id),
-                                  { now: performance.now() },
                                 )}
                                 event={entry().timeUpdated}
                               />
@@ -172,7 +171,6 @@ export default function Sidebar(
                                 lamp(
                                   entities(entry().sidecarId),
                                   entityKey("session", entry().id),
-                                  { now: performance.now() },
                                 ),
                               )}
                             </ChromeMeta>

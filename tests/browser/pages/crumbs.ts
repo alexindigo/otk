@@ -2,7 +2,7 @@
 import { expect, type Page } from "@playwright/test";
 
 export const subagents = (page: Page) =>
-  page.getByRole("button", { name: "Subagents", exact: true });
+  page.getByRole("button", { name: /^Subagents:/ });
 
 export const subagent = (page: Page, id: string) =>
   page.locator(`.otk-subagents [data-subagent=${JSON.stringify(id)}]`);

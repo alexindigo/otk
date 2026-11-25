@@ -26,7 +26,7 @@ test("sessions.tab-groups-disjoint-phantoms-ancestor-links-more-and-reload", {
     await page.locator(`[data-tab="${root}"]`).click();
     // D67: the ancestry stays separate from the composer's D66 inventory.
     await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
-    await page.getByRole("button", { name: "Subagents", exact: true }).click();
+    await page.getByRole("button", { name: /^Subagents:/ }).click();
     await expect(page.locator(`[data-subagent="${a}"]`)).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);

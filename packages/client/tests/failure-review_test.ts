@@ -14,6 +14,7 @@ import {
 } from "@otk/client";
 import { latestTerminal, type SupervisionEvidence } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
+import { sessionEntity } from "./supervision-fixture.ts";
 
 Deno.test("failed completion and failure facts merge into one session-outcome note in either arrival order", () => {
   for (const factsFirst of [true, false]) {
@@ -267,7 +268,7 @@ Deno.test("terminal replacement clears an older outcome when composed with retai
   assertEquals(merged.outcome, undefined);
 });
 
-Deno.test("supervision's paired outcome reaches finish notifications before index activity", () => {
+Deno.test("the session entity's paired outcome reaches finish notifications before index activity", () => {
   const f = shellFixture(), notes: Note[] = [];
   const trigger = new NotificationTriggers(
     (note) => notes.push(note),
@@ -302,14 +303,13 @@ Deno.test("supervision's paired outcome reaches finish notifications before inde
       revision: 2,
       ops: [
         {
-          op: "supervision",
-          sessionID: "root",
-          value: {
-            state: "finishedUnseen",
+          op: "entity.upsert",
+          value: sessionEntity("root", {
+            state: "needsYou",
             terminal: 20,
             unseen: true,
             outcome: "failed",
-          },
+          }),
         },
         { op: "finish", sessionID: "root", time: 20 },
       ],
