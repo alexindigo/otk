@@ -102,3 +102,6 @@
 .otk-sidebar-row.is-compact .otk-sidebar-lamp {
   justify-content: center;
 }
+.otk-sidebar-tree {
+  --tree-height: var(--row-project);
+}

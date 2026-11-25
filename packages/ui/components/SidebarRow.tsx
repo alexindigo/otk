@@ -3,6 +3,7 @@ import { type Element, Show } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
+import { selection } from "./selection.ts";
 import "./SidebarRow.css" with { type: "text" };
 
 /** Tree owns disclosure/depth. Every row borrows these remaining fixed tracks,
@@ -16,8 +17,15 @@ export default function SidebarRow(props: {
   compact?: boolean;
   detailedMeta?: boolean;
   action?: Omit<ComponentProps<"button">, "children">;
+  frame?: {
+    selected: boolean;
+    class: string;
+    ref?: (el: HTMLElement) => void;
+    attributes?: Record<string, unknown>;
+  };
 }): Element {
   const native = nativeAttributes(() => props.action ?? {});
+  const frameNative = nativeAttributes(() => props.frame?.attributes ?? {});
   function Main() {
     return (
       <>
@@ -36,7 +44,7 @@ export default function SidebarRow(props: {
       </>
     );
   }
-  return (
+  const row = () => (
     <span
       class={["otk-sidebar-row", {
         "is-compact": props.compact,
@@ -68,5 +76,27 @@ export default function SidebarRow(props: {
         </Show>
       </span>
     </span>
+  );
+  return (
+    <Show when={props.frame} fallback={row()}>
+      {(frame) => (
+        <div
+          ref={(el) => {
+            frameNative.ref(el);
+            frame().ref?.(el);
+          }}
+          {...selection({
+            class: frame().class,
+            kind: "current",
+            selected: frame().selected,
+          })}
+          data-otk-selection="vertical"
+          data-otk-selection-mark="external"
+          {...frameNative.attributes}
+        >
+          {row()}
+        </div>
+      )}
+    </Show>
   );
 }

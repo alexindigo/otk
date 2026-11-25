@@ -15,7 +15,6 @@ import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
-import { selection } from "./selection.ts";
 import SidebarRow from "./SidebarRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
@@ -449,156 +448,150 @@ export default function ProjectInbox(props: {
     const entities = () => props.entities?.(project().sidecarId);
     const lampLabel = () => stateLabel(project().status);
     return (
-      <div
-        ref={contextTarget(target)}
-        {...selection({
+      <SidebarRow
+        frame={{
+          ref: contextTarget(target),
           class: `otk-project-row otk-sidebar-selection${
             project().depth ? " is-subproject" : ""
           }`,
-          kind: "current",
           selected: props.selected?.sidecarId === project().sidecarId &&
             props.selected?.directory === project().directory,
-        })}
-        data-otk-selection="vertical"
-        data-otk-selection-mark="external"
-        data-project={project().directory}
-        data-server={project().sidecarId}
-        data-project-sessions={project().sessionIDs}
-        data-inactive={project().inactive ? "true" : "false"}
-        data-source={project().source}
-        data-group={projectGroup(project())}
-        data-rollup={project().status}
-        data-summary-authority={project().summary?.authority}
-        data-project-parent={project().topology?.parentDirectory}
-        data-project-repo={project().topology?.repoID}
-        data-project-availability={project().availability}
-        data-project-archived={project().archived ? "true" : "false"}
-      >
-        <SidebarRow
-          compact={collapsed()}
-          detailedMeta={!!project().annotation ||
-            (project().visit?.parts.length ?? 0) > 1}
-          lamp={
-            <TreeIcon class="otk-project-marker">
-              <button
-                type="button"
-                class="otk-project-attention"
-                aria-label={project().status === "none"
-                  ? `Open project ${name()}`
-                  : `${lampLabel()}: open session in ${name()}`}
-                title={project().status === "none"
-                  ? `Open project ${project().directory}`
-                  : `${lampLabel()}: open session in ${project().directory}`}
-                onClick={() =>
-                  void (project().status === "none"
-                    ? open(project())
-                    : openAttention(project()))}
-              >
-                <StatusLight
-                  state={entities() ? lamp(entities()!, key()) : "none"}
-                  dependencies={project().dependencies}
-                />
-              </button>
-            </TreeIcon>
-          }
-          action={{
-            class: "otk-project-open",
-            "aria-label": `Open project ${name()}${
-              project().parentLabel ? ` in ${project().parentLabel}` : ""
-            }${duplicate() ? ` on ${project().label}` : ""}${
-              project().annotation ? `, ${project().annotation}` : ""
-            }`,
-            title: `${metaList([project().directory, project().label])}${
-              projectGroup(project()) === "discovered"
-                ? ""
-                : ` - ${
-                  project().status === "none"
-                    ? "No known activity"
-                    : lampLabel()
-                }`
-            }${project().annotation ? `, ${project().annotation}` : ""}`,
-            onClick: () => void open(project()),
-          }}
-          avatar={project().artwork === "avatar" &&
-              (project().summary?.presentation?.name ||
-                project().summary?.presentation?.color)
-            ? { name: name(), color: project().summary?.presentation?.color }
-            : undefined}
-          label={
-            <span class="otk-project-name-line">
-              <span
-                class="otk-project-name"
-                data-unread={project().unread ? "true" : "false"}
-              >
-                {name()}
-              </span>
-              <Show when={project().inactive && project().parentLabel}>
-                <ChromeMeta
-                  class="otk-project-parent otk-control-label otk-control-grow"
-                  title={project().topology?.canonicalRoot}
-                >
-                  {project().parentLabel}
-                </ChromeMeta>
-              </Show>
-              <Show when={duplicate()}>
-                <ChromeMeta
-                  class="otk-project-machine otk-control-label otk-control-grow"
-                  title={project().label}
-                >
-                  {project().label}
-                </ChromeMeta>
-              </Show>
+          attributes: {
+            "data-project": project().directory,
+            "data-server": project().sidecarId,
+            "data-project-sessions": project().sessionIDs,
+            "data-inactive": project().inactive ? "true" : "false",
+            "data-source": project().source,
+            "data-group": projectGroup(project()),
+            "data-rollup": project().status,
+            "data-summary-authority": project().summary?.authority,
+            "data-project-parent": project().topology?.parentDirectory,
+            "data-project-repo": project().topology?.repoID,
+            "data-project-availability": project().availability,
+            "data-project-archived": project().archived ? "true" : "false",
+          },
+        }}
+        compact={collapsed()}
+        detailedMeta={!!project().annotation ||
+          (project().visit?.parts.length ?? 0) > 1}
+        lamp={
+          <TreeIcon class="otk-project-marker">
+            <button
+              type="button"
+              class="otk-project-attention"
+              aria-label={project().status === "none"
+                ? `Open project ${name()}`
+                : `${lampLabel()}: open session in ${name()}`}
+              title={project().status === "none"
+                ? `Open project ${project().directory}`
+                : `${lampLabel()}: open session in ${project().directory}`}
+              onClick={() =>
+                void (project().status === "none"
+                  ? open(project())
+                  : openAttention(project()))}
+            >
+              <StatusLight
+                state={entities() ? lamp(entities()!, key()) : "none"}
+                dependencies={project().dependencies}
+              />
+            </button>
+          </TreeIcon>
+        }
+        action={{
+          class: "otk-project-open",
+          "aria-label": `Open project ${name()}${
+            project().parentLabel ? ` in ${project().parentLabel}` : ""
+          }${duplicate() ? ` on ${project().label}` : ""}${
+            project().annotation ? `, ${project().annotation}` : ""
+          }`,
+          title: `${metaList([project().directory, project().label])}${
+            projectGroup(project()) === "discovered"
+              ? ""
+              : ` - ${
+                project().status === "none" ? "No known activity" : lampLabel()
+              }`
+          }${project().annotation ? `, ${project().annotation}` : ""}`,
+          onClick: () => void open(project()),
+        }}
+        avatar={project().artwork === "avatar" &&
+            (project().summary?.presentation?.name ||
+              project().summary?.presentation?.color)
+          ? { name: name(), color: project().summary?.presentation?.color }
+          : undefined}
+        label={
+          <span class="otk-project-name-line">
+            <span
+              class="otk-project-name"
+              data-unread={project().unread ? "true" : "false"}
+            >
+              {name()}
             </span>
-          }
-          meta={
-            <Show when={!collapsed()}>
-              <div class="otk-project-trailing">
-                <Show when={(project().source ?? "tracked") === "tracked"}>
-                  <ChromeMeta
-                    class="otk-project-visit"
-                    title="Availability and time since last visit"
-                  >
-                    <Show
-                      when={project().annotation}
-                      fallback={
-                        <Show when={project().visit}>
-                          {(visit) => <TimeText time={visit()} />}
-                        </Show>
-                      }
-                    >
-                      <span class="otk-project-availability">
-                        <MetaText
-                          items={[project().annotation, project().visit]}
-                        />
-                      </span>
-                    </Show>
-                  </ChromeMeta>
-                </Show>
-                <CommandMenu
-                  class="otk-project-menu"
-                  triggerClass="otk-project-menu-trigger"
-                  label={`Project menu for ${name()}`}
-                  trigger="⋯"
-                  targets={() => [target()]}
-                  beforeRun={() => setRowError("")}
-                  onError={setRowError}
-                  feedbackID={rowErrorID}
-                />
-              </div>
-            </Show>
-          }
-          feedback={
-            <Show when={rowError()}>
-              <div
-                id={rowErrorID}
-                class="otk-project-error"
+            <Show when={project().inactive && project().parentLabel}>
+              <ChromeMeta
+                class="otk-project-parent otk-control-label otk-control-grow"
+                title={project().topology?.canonicalRoot}
               >
-                <FeedbackStatus compact feedback={errorFeedback(rowError())} />
-              </div>
+                {project().parentLabel}
+              </ChromeMeta>
             </Show>
-          }
-        />
-      </div>
+            <Show when={duplicate()}>
+              <ChromeMeta
+                class="otk-project-machine otk-control-label otk-control-grow"
+                title={project().label}
+              >
+                {project().label}
+              </ChromeMeta>
+            </Show>
+          </span>
+        }
+        meta={
+          <Show when={!collapsed()}>
+            <div class="otk-project-trailing">
+              <Show when={(project().source ?? "tracked") === "tracked"}>
+                <ChromeMeta
+                  class="otk-project-visit"
+                  title="Availability and time since last visit"
+                >
+                  <Show
+                    when={project().annotation}
+                    fallback={
+                      <Show when={project().visit}>
+                        {(visit) => <TimeText time={visit()} />}
+                      </Show>
+                    }
+                  >
+                    <span class="otk-project-availability">
+                      <MetaText
+                        items={[project().annotation, project().visit]}
+                      />
+                    </span>
+                  </Show>
+                </ChromeMeta>
+              </Show>
+              <CommandMenu
+                class="otk-project-menu"
+                triggerClass="otk-project-menu-trigger"
+                label={`Project menu for ${name()}`}
+                trigger="⋯"
+                targets={() => [target()]}
+                beforeRun={() => setRowError("")}
+                onError={setRowError}
+                feedbackID={rowErrorID}
+              />
+            </div>
+          </Show>
+        }
+        feedback={
+          <Show when={rowError()}>
+            <div
+              id={rowErrorID}
+              class="otk-project-error"
+            >
+              <FeedbackStatus compact feedback={errorFeedback(rowError())} />
+            </div>
+          </Show>
+        }
+      />
     );
   }
   const rootContext = contextTarget(() => ({
