@@ -191,6 +191,7 @@ export function SectionHeader(props: {
   metaClass?: string;
   compact?: boolean;
   sidebar?: boolean;
+  path?: readonly boolean[];
   leading?(): Element;
   attributes?: Record<string, unknown>;
   body?(): Element;
@@ -205,6 +206,7 @@ export function SectionHeader(props: {
   return (
     <TreeNode
       compact={props.compact}
+      path={props.path}
       leadingRow={props.sidebar}
       toggleHeader={!props.compact || !!props.leading}
       class={[

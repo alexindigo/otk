@@ -75,20 +75,29 @@ function Junction(
   );
 }
 
-/** Flat virtual hierarchies borrow the same junction cells without owning rows. */
-export function TreeGuide(props: { path: readonly boolean[] }): Element {
+function TreeRails(
+  props: { path: readonly boolean[]; tip?: boolean },
+): Element {
   return (
-    <span class="otk-tree-guide" aria-hidden="true">
+    <span
+      class={["otk-tree-rails", { "is-guide": props.tip }]}
+      aria-hidden="true"
+    >
       <For each={props.path}>
         {(continues, index) => (
           <Junction
             through={continues}
-            tip={index() === props.path.length - 1}
+            tip={props.tip && index() === props.path.length - 1 || false}
           />
         )}
       </For>
     </span>
   );
+}
+
+/** Flat virtual hierarchies borrow the same junction cells without owning rows. */
+export function TreeGuide(props: { path: readonly boolean[] }): Element {
+  return <TreeRails path={props.path} tip />;
 }
 
 /** Supplies topology, never disclosure state. Safe across virtual row mounts. */
@@ -128,6 +137,9 @@ export function TreeNode(props: {
   compact?: boolean;
   selected?: boolean;
   leadingRow?: boolean;
+  /** Virtual row topology: ancestor continuation flags, then this row's flag.
+   * A root has an empty path. A flat row never renders a nested body. */
+  path?: readonly boolean[];
   header(connected: boolean, toggleID: string): Element;
   feedback?(): Element;
   body?(): Element;
@@ -136,14 +148,21 @@ export function TreeNode(props: {
   const headerID = createUniqueId();
   const toggleID = headerID + "-toggle";
   const direction = useContext(DirectionContext);
-  const outgoing = () => props.outgoing ?? branch?.outgoing ?? direction;
+  const flat = () => props.path !== undefined;
+  const connected = () => flat() ? !!props.path?.length : !!branch;
+  const last = () => flat() ? !props.path?.at(-1) : branch?.last ?? true;
+  const outgoing = () =>
+    !flat() && (props.outgoing ?? branch?.outgoing ?? direction);
   const visible = () =>
-    !!props.body && (props.bodyVisible ?? props.open ?? true);
+    !flat() && !!props.body && (props.bodyVisible ?? props.open ?? true);
+  const stem = () =>
+    flat() ? props.open !== false && !!props.hasChildren : visible();
   return (
     <section
       class={["otk-tree-node", props.class, {
-        "is-connected": !!branch,
-        "is-last": branch?.last ?? true,
+        "is-flat": flat(),
+        "is-connected": connected(),
+        "is-last": last(),
         "is-outgoing": outgoing(),
         "has-body": visible(),
         "has-header-toggle": props.toggleHeader,
@@ -165,13 +184,18 @@ export function TreeNode(props: {
           props.onOpen?.(event.key === "ArrowRight", event);
         }}
       >
+        <Show when={props.path}>
+          {(path) => <TreeRails path={path().slice(0, -1)} />}
+        </Show>
         <Show when={props.selected !== undefined}>
           <span class="otk-tree-selection" aria-hidden="true">
             <span class="otk-tree-selection-mark" />
           </span>
         </Show>
         <Junction
-          class={branch ? "otk-tree-own otk-tree-incoming" : "otk-tree-own"}
+          class={connected()
+            ? "otk-tree-own otk-tree-incoming"
+            : "otk-tree-own"}
           toggle={!!props.onOpen &&
             ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
         >
@@ -205,8 +229,10 @@ export function TreeNode(props: {
         <div class="otk-tree-label" id={headerID}>
           <BranchContext value={null}>
             <DirectionContext value={outgoing()}>
-              <IconStemContext value={visible}>
-                <ContentSlot content={() => props.header(!!branch, toggleID)} />
+              <IconStemContext value={stem}>
+                <ContentSlot
+                  content={() => props.header(connected(), toggleID)}
+                />
               </IconStemContext>
             </DirectionContext>
           </BranchContext>

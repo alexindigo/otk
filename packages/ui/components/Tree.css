@@ -6,12 +6,14 @@
   min-inline-size: 0;
   --tree-heading-flow: row;
 }
-.otk-tree-guide {
-  --tree-height: var(--row-compact);
-  --tree-row-height: var(--tree-height);
+.otk-tree-rails {
   display: flex;
+  grid-area: 1 / 1;
 }
-.otk-tree-guide > .otk-tree-junction {
+.otk-tree-rails.is-guide {
+  --tree-height: var(--row-compact);
+}
+.otk-tree-rails > .otk-tree-junction {
   inline-size: var(--tree-indent);
 }
 .otk-tree-heading {
@@ -59,8 +61,8 @@
 }
 .otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > :is(.otk-tree-upper, .otk-tree-lower),
 .otk-tree-node.is-last > .otk-tree-heading > .otk-tree-incoming > .otk-tree-lower,
-.otk-tree-guide .otk-tree-junction:not(.is-through):not(.is-tip) > .otk-tree-upper,
-.otk-tree-guide .otk-tree-junction:not(.is-through) > .otk-tree-lower {
+.otk-tree-rails .otk-tree-junction:not(.is-through):not(.is-tip) > .otk-tree-upper,
+.otk-tree-rails .otk-tree-junction:not(.is-through) > .otk-tree-lower {
   background-image: none;
 }
 .otk-tree-connector {
@@ -217,4 +219,13 @@
     2)) - var(--tree-junction-size,
     0px))
     / 2) var(--tree-junction-size, 0px) 1fr;
+}
+.otk-tree-node.is-flat > .otk-tree-heading {
+  grid-template-columns: auto var(--tree-indent) minmax(0, 1fr);
+}
+.otk-tree-node.is-flat > .otk-tree-heading > :is(.otk-tree-own, .otk-tree-selection) {
+  grid-column: 2;
+}
+.otk-tree-node.is-flat > .otk-tree-heading > .otk-tree-label {
+  grid-column: 3;
 }
