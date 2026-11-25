@@ -2,7 +2,7 @@
 import { expect, type Locator } from "@playwright/test";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { scrollTranscript } from "../../pages/transcript.ts";
+import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
 
 async function geometry(nodes: Locator) {
   const facts = await nodes.evaluateAll((nodes) =>
@@ -402,8 +402,11 @@ test.describe("outgoing tree", () => {
       '.otk-record-group-toggle[aria-expanded="false"]',
     );
     await expect(closed.first()).toBeVisible();
-    while (await closed.count()) await closed.first().click();
-    const outgoing = page.locator('[data-message="context"] .otk-tree-node');
+    // Open the target's published ancestry, not whichever other groups
+    // happen to be mounted. An unrelated user reveal can move this row away.
+    const selector = '[data-message="context"] .otk-tree-node';
+    await revealAcquired(page, selector);
+    const outgoing = page.locator(selector);
     await expect(outgoing.first()).toHaveClass(/is-outgoing/);
     await outgoing.first().locator(".otk-tree-toggle").first().click();
     await geometry(outgoing);

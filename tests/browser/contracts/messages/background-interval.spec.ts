@@ -89,7 +89,7 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
       .toHaveCount(7);
     await expect(
       interval.getByRole("button", {
-        name: "Open Open task session",
+        name: "Open task details",
         exact: true,
       }),
     ).toHaveCount(2);

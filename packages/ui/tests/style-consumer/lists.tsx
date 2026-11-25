@@ -133,6 +133,12 @@ export default function Scene() {
         },
       })
     );
+    releases.push(commands.register({
+      id: "list.open-helper",
+      title: "Open subagent",
+      category: "Probe",
+      run: () => undefined,
+    }));
     return () => releases.forEach((release) => release());
   });
   return (
@@ -166,10 +172,13 @@ export default function Scene() {
           return tabs.trail();
         })()}
         title={(id) => id}
-        onOpen={() => undefined}
-        onError={(error) => {
-          throw error;
-        }}
+        openAction={(id) =>
+          commands.control("list.open-helper", undefined, {
+            target: { label: id },
+            shown: () => true,
+            unshown: "The subagent did not open.",
+            recovery: "Choose the subagent again",
+          })}
       />
       <CommandMenu
         label="Reactive list menu"

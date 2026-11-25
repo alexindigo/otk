@@ -30,6 +30,7 @@ export { default as Code } from "./components/Code.tsx";
 export { default as Diff } from "./components/Diff.tsx";
 export { default as Message } from "./components/Message.tsx";
 export { default as EntityPill } from "./components/EntityPill.tsx";
+export { default as ActionButton } from "./components/ActionButton.tsx";
 export { default as ToolLine } from "./components/ToolLine.tsx";
 export { default as ToolFrame } from "./components/tools/ToolFrame.tsx";
 export { default as ToolOutput } from "./components/tools/ToolOutput.tsx";

@@ -8,8 +8,8 @@ export const scopedEntityFacts = (
   identity: EntityIdentity,
 ) =>
   ports?.entityFacts?.(identity) ?? entityFacts(identity, {
+    entities: ports?.entities?.(),
     session: (id) => ({
       title: ports?.entry(id)?.title,
-      status: ports?.status?.(id),
     }),
   });

@@ -586,12 +586,14 @@ async function revealMeasured(page: Page, selector: string, required: boolean) {
     state = await probe();
     while (state.disclosed) state = await probe();
   }
-  if (Math.abs(state.delta) >= 1) await wheelTranscript(page, state.delta);
   await expect.poll(async () => {
     state = await probe();
-    return state.delta === undefined
-      ? required ? Infinity : 0
-      : Math.abs(state.delta);
+    if (state.delta === undefined) return required ? Infinity : 0;
+    const remaining = Math.abs(state.delta);
+    // Publication can grow again after the first measurement. Reposition the
+    // same acquired identity using reader input, not an explicit reveal pin.
+    if (remaining >= 1) await wheelTranscript(page, state.delta);
+    return remaining;
   }).toBeLessThan(1).catch((cause) => {
     throw new Error(
       "Measured reveal did not settle: " + JSON.stringify(state),

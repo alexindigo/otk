@@ -32,6 +32,16 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`ActionButton` renders one client action control: live availability, pending
+state and in-flow refusal/failure feedback. It takes no independent handler or
+disabled input. Registry changes refresh mounted controls; teardown releases the
+subscription. Explicit entity, task and notification Open offers borrow the
+guarded session command and observe the selected server/session. Ancestry links
+retain native link semantics, while ordinary activation and Subagents menu
+actions use the same action control. LiveWork renders shell work only.
+Self-target offers are hidden as Already open; ordinary row re-selection remains
+available. The entity pill itself pins its details instead of navigating.
+
 Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. A
 component's stylesheet owns its internal classes; a consumer uses public props,
 class slots or its own grid track, never a selector reaching into a child. The
@@ -918,8 +928,13 @@ ancestor windows. The lease ends only after actual DOM size has been recorded,
 so a large code/diff body cannot be recycled using its earlier estimate while
 tail follow is positioning the root. Mounted row bounds supply geometry; absent
 rows use `createWindow`'s retained measurements/role estimates. A reveal settles
-on measured viewport-relative bounds even while preceding content grows, then
-retains that requested identity as its anchor.
+on measured viewport-relative bounds even while preceding content grows. Only an
+explicit user reveal retains the requested identity as a user pin. Trusted
+disclosure input reveals the opened frame through its nearest window; default,
+synthetic and retained-state changes only update disclosure state. Automatic
+positioning cannot replace a user pin or take over from following. Reader scroll
+replaces a pin with an ordinary reader anchor; reaching the tail or jumping to
+latest resumes following through the same owner.
 
 The root's revisioned geometry transaction joins keyed reconciliation, nested
 materialization, recorded sizes and position compensation before paint. Pending
@@ -1639,6 +1654,13 @@ does not establish a failed run or change its lamp. There is no idle or unknown
 lamp state. `LIGHT_STATES` owns the public state inventory and `LightState`
 derives from its keys; galleries enumerate that mapping instead of maintaining a
 second inventory.
+
+EntityPill borrows the live entity handle carried by the shared scoped-facts
+binding, including historical records and unleased sessions. TakeoverHeader
+receives the asking session/project key, not the selected parent's state.
+LiveWork reads owner evidence and paints its task trigger and own-session items
+through the same selector. The client owns `connectionState`; connection chrome
+only supplies labels and shapes for it.
 
 The shell's `AttentionProvider` binds the shared client grace owner to accepted
 permission evidence/content and system reduced motion plus Animations off.

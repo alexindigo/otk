@@ -98,6 +98,7 @@ export function createShellState(
           frecency: resources.frecencyCatalog(target.sidecarId, directory),
         }
         : undefined,
+    (id) => resources.inbox(id).entities,
   );
   const drafts = createDrafts(solidState);
   let tabStorage: Storage | null = null;

@@ -47,7 +47,8 @@ export interface ShellNavigation {
   navigate(selection: Selection): boolean;
   openProject(project: ProjectSelection): void;
   openAttention(project: ProjectSelection): void;
-  openChild(id: string): void;
+  /** False when the guarded navigation refused the transition. */
+  openChild(id: string): boolean;
   projectHome(): boolean;
   preview(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
@@ -498,9 +499,7 @@ export function createShellNavigation(o: {
         resolveProject(target);
       }
     },
-    openChild: (id) => {
-      navigate(actions.child(id));
-    },
+    openChild: (id) => navigate(actions.child(id)),
     projectHome: () =>
       !!store.state.project &&
       projectPage(store.state.project),

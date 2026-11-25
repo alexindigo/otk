@@ -69,6 +69,34 @@ const session = (
 });
 const S = entityKey("session", "s"), P = entityKey("project", "/p");
 
+Deno.test("evidence observers update without fabricating a lamp transition", () => {
+  const f = fixture(), evidence: unknown[] = [], transitions: unknown[] = [];
+  const stop = f.store.observeChanges((keys) => evidence.push(keys));
+  f.store.subscribe((value) => transitions.push(value));
+  try {
+    f.put(session("blocked", { cause: "question" }));
+    const count = transitions.length;
+    f.put(
+      session("blocked", {
+        cause: "question",
+        evidence: { ...sessionEvidence(f.store, S)!, work: false },
+      }),
+    );
+    assertEquals(transitions.length, count);
+    assertEquals(evidence.length, 2);
+    assertEquals(sessionEvidence(f.store, S)?.work, false);
+    f.store.stale(true);
+    assertEquals(evidence.at(-1), "all");
+    assertEquals(sessionEvidence(f.store, S), undefined);
+    stop();
+    const seen = evidence.length;
+    f.store.stale(false);
+    assertEquals(evidence.length, seen);
+  } finally {
+    f.store.stop();
+  }
+});
+
 Deno.test("session row observations borrow work and retry evidence independently of lamp priority", () => {
   const f = fixture();
   try {

@@ -100,7 +100,6 @@ export default function ToolFrame(props: {
                       ...entity(),
                       tool: props.call,
                     })}
-                    onOpen={props.onOpenChild}
                   />
                 )}
               </Show>

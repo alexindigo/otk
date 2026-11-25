@@ -2,8 +2,51 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { revealAcquired } from "../../pages/transcript.ts";
+import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-reading" });
+
+test("messages.work-log-reveal-holds-through-tail-growth", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.setViewportSize({ width: 1600, height: 980 });
+  await openSession(state, page, "tstv1-otk");
+  const work = page.locator(".otk-work-fold");
+  await expect(work).toHaveAttribute("aria-expanded", "false");
+  await expect(work).toBeInViewport();
+  const offset = () =>
+    work.evaluate((button) => {
+      const pane = button.closest(".otk-messages")!;
+      return button.getBoundingClientRect().top -
+        pane.getBoundingClientRect().top;
+    });
+  // Click the real hit point without Playwright auto-scrolling the control.
+  const box = (await work.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(work).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("[data-tool=read] .otk-tool-toggle"))
+    .toBeInViewport();
+  const before = await offset();
+  const pane = page.locator(".otk-messages");
+  const oldHeight = await pane.evaluate((root) => {
+    const height = root.scrollHeight;
+    const growth = document.createElement("div");
+    growth.style.height = `${root.clientHeight + 96}px`;
+    growth.style.flexShrink = "0";
+    root.querySelector(".otk-message-flow")!.append(growth);
+    return height;
+  });
+  await expect.poll(() => pane.evaluate((root) => root.scrollHeight))
+    .toBeGreaterThanOrEqual(oldHeight + 72);
+  // Cross the flow observer's rendering boundary before inspecting the hold.
+  await pane.evaluate(() =>
+    new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    )
+  );
+  expect(Math.abs(await offset() - before)).toBeLessThan(2);
+  await expect(work).toBeInViewport();
+});
+
 test("messages.reading-column-renderers-metadata-retry-tab-title", {
   tag: ["@messages", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
@@ -72,6 +115,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await expect(page.locator("[data-tool=edit] .otk-tool-target")).toHaveText(
     "source.ts",
   );
+  await scrollTranscript(page, true);
   await page.locator(".otk-copy-message").click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toContain("The reply is complete.");

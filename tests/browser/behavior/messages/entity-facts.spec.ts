@@ -31,6 +31,10 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   await expect(page.locator(".otk-entity-facts:visible").last()).not
     .toContainText("Completed");
   await page.keyboard.press("Escape");
+  // Use reader input: the viewport intentionally compensates raw scrollTop
+  // writes while following. Scrolling away acquires historical virtual rows.
+  await page.locator(".otk-messages").hover();
+  await page.mouse.wheel(0, -2000);
   const firstPill = replies.first().locator(".otk-entity-pill").first();
   await firstPill.focus();
   const card = page.locator(".otk-entity-facts").filter({
@@ -42,6 +46,15 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   await expect(card).toContainText("Completed");
   await expect(card).toContainText("Session now");
   await expect(card).toContainText("Working");
+  // The reply belongs to the session already on screen, not an Open target.
+  await expect(
+    page.locator(".otk-entity:has(.otk-entity-facts:visible)").getByRole(
+      "button",
+      { name: "Open", exact: true },
+    ),
+  ).toHaveCount(0);
+  await firstPill.click();
+  await expect(card).toBeVisible();
   const completed = await card.locator("time").getAttribute("datetime");
   await state.release(held.gate);
   await expect(card.locator("time")).toHaveAttribute("datetime", completed!);

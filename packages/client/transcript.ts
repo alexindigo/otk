@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID } from "@otk/protocol";
+import { entityKey, randomID } from "@otk/protocol";
+import { type EntityStateStore, sessionEvidence } from "./entity-state.ts";
 import {
   type ClockedContent,
   compareTranscriptVersion,
@@ -175,6 +176,7 @@ export function createTranscript(
   factory: StateFactory = createState,
   policy: () => MessagePolicy | undefined = () =>
     connection(target.sidecarId).messages,
+  entities?: EntityStateStore,
 ): TranscriptOwner {
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
@@ -930,7 +932,11 @@ export function createTranscript(
     const deleted = selection &&
       entry(selection.sidecarId, selection.sessionID);
     const nextView = deleted?.deleted ? "deleted" : "content";
-    projection.busy(!!deleted && deleted.status !== "idle");
+    projection.busy(
+      !!entities &&
+        !!sessionEvidence(entities, entityKey("session", target.sessionID))
+          ?.work,
+    );
     view = nextView;
     completed.clear();
     liveCompleted.clear();
@@ -1366,7 +1372,9 @@ export function createTranscript(
         requests.retireSessions((id) => !!entry(sidecarId, id)?.deleted);
         const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
-          known?.status !== undefined && known.status !== "idle",
+          !!entities &&
+            !!sessionEvidence(entities, entityKey("session", target.sessionID))
+              ?.work,
         );
         if (projection.helpers(helper) || busyChanged) {
           setState((draft) => {
@@ -1776,6 +1784,7 @@ export function createTranscript(
       return work;
     },
     stop(): void {
+      stopEntities?.();
       releaseRequests();
       snapshotLifetime.abort();
       readProgress.stop();
@@ -1784,5 +1793,24 @@ export function createTranscript(
       owner.temperature("cold");
     },
   };
+  const refreshWork = () => {
+    if (
+      projection.busy(
+        !!entities &&
+          !!sessionEvidence(entities, entityKey("session", target.sessionID))
+            ?.work,
+      )
+    ) {
+      setState((draft) => {
+        draft.content = attach(contentMetadata(draft.content));
+      });
+    }
+  };
+  const stopEntities = entities?.observeChanges((keys) => {
+    if (
+      keys === "all" || keys.includes(entityKey("session", target.sessionID))
+    ) refreshWork();
+  });
+  refreshWork();
   return owner;
 }

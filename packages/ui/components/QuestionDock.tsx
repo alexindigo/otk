@@ -326,6 +326,7 @@ function Request(
         collapsed={collapsed()}
         title={
           <TakeoverHeader
+            entityKey={`session:${props.request.sessionID}`}
             title="The agent asks"
             where={props.where}
             childTitle={props.childTitle}

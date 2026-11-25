@@ -2,10 +2,11 @@
 import { assertEquals } from "@std/assert";
 import { entityFacts } from "../entity-facts.ts";
 import type { ToolCall } from "@otk/protocol";
+import { createEntityStateStore, lamp } from "../entity-state.ts";
 
 Deno.test("reply facts use canonical work, never session age or helper endpoints", () => {
   const sources = {
-    session: () => ({ title: "18 day session", status: "working" as const }),
+    session: () => ({ title: "18 day session" }),
   };
   const facts = entityFacts({
     sessionID: "s",
@@ -25,10 +26,10 @@ Deno.test("reply facts use canonical work, never session age or helper endpoints
     final: true,
     active: false,
   });
-  assertEquals(facts.session.status, "working");
+  assertEquals(facts.session.title, "18 day session");
 });
 Deno.test("active and migrated reply facts never inherit a finished clock", () => {
-  const sources = { session: () => ({ status: "none" as const }) };
+  const sources = { session: () => ({ title: "Session" }) };
   const active = entityFacts({
     sessionID: "s",
     turnID: "turn",
@@ -49,9 +50,25 @@ Deno.test("active and migrated reply facts never inherit a finished clock", () =
   assertEquals(migrated.reply?.working.known, false);
   assertEquals(migrated.reply?.completed.known, false);
 });
-Deno.test("historical reply facts borrow current session supervision across reconnect", () => {
+Deno.test("historical reply facts borrow the current entity replica across reconnect", () => {
   let status: "none" | "working" = "none";
-  const source = { session: () => ({ status }) };
+  const entities = createEntityStateStore({
+    read: () => ({
+      "session:s": {
+        kind: "session",
+        id: "s",
+        state: status,
+        previous: "none",
+        counts: {
+          working: Number(status === "working"),
+          blocked: 0,
+          finished: 0,
+          unseen: 0,
+        },
+      },
+    }),
+  });
+  const source = { session: () => ({ title: "Session" }), entities };
   const identity = {
     sessionID: "s",
     turnID: "historical",
@@ -62,12 +79,17 @@ Deno.test("historical reply facts borrow current session supervision across reco
       source: "completed" as const,
     },
   };
-  assertEquals(entityFacts(identity, source).session.status, "none");
+  const state = () =>
+    lamp(entityFacts(identity, source).session.entities!, "session:s", {
+      now: 0,
+    });
+  assertEquals(state(), "none");
   status = "working";
-  assertEquals(entityFacts(identity, source).session.status, "working");
+  assertEquals(state(), "working");
   status = "none";
   assertEquals(entityFacts(identity, source).reply?.completed.value, 200);
-  assertEquals(entityFacts(identity, source).session.status, "none");
+  assertEquals(state(), "none");
+  entities.stop();
 });
 
 Deno.test("failure completion survives unavailable working time in entity facts", () => {

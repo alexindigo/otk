@@ -14,6 +14,7 @@ import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
 import ContentSlot from "./ContentSlot.tsx";
 import FailureSignal from "./FailureSignal.tsx";
+import { discloseInViewport } from "./viewport.ts";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -42,6 +43,14 @@ export default function ActivityGroup(props: {
     undefined,
     props.group.key,
   );
+  let frame: HTMLElement | undefined;
+  const change = (value: boolean, event: MouseEvent | KeyboardEvent) =>
+    discloseInViewport(
+      frame,
+      value,
+      setOpen,
+      event.isTrusted && value !== open(),
+    );
   const header = (toggleID: string) => (
     <FailureSignal
       as="div"
@@ -62,7 +71,6 @@ export default function ActivityGroup(props: {
           <EntityPill
             label={entity().label}
             facts={scopedEntityFacts(session, entity())}
-            onOpen={props.onOpenChild}
           />
         )}
       </Show>
@@ -81,7 +89,7 @@ export default function ActivityGroup(props: {
           type="button"
           class="otk-tool-toggle otk-record-group-toggle otk-tree-control"
           aria-expanded={open() ? "true" : "false"}
-          onClick={() => setOpen(!open())}
+          onClick={(event) => change(!open(), event)}
         >
           <Show
             when={props.label}
@@ -141,7 +149,6 @@ export default function ActivityGroup(props: {
         <EntityPill
           label={props.group.child!.label}
           facts={scopedEntityFacts(session, props.group.child!)}
-          onOpen={props.onOpenChild}
         />
       </Show>
       {props.trailing?.(open)}
@@ -150,6 +157,7 @@ export default function ActivityGroup(props: {
   return (
     <Show when={!props.group.silent || open()}>
       <section
+        ref={(element) => frame = element}
         class={["otk-tool-line otk-record-group", {
           "is-interval": props.group.interval,
         }]}
@@ -171,7 +179,7 @@ export default function ActivityGroup(props: {
                 : props.group.title || "Details")}
             outgoing={props.group.direction === "outgoing"}
             open={open()}
-            onOpen={props.collapsible === false ? undefined : setOpen}
+            onOpen={props.collapsible === false ? undefined : change}
             bodyVisible={props.collapsible !== false &&
               (open() || !!props.group.breakouts?.length)}
             header={(_connected, toggleID) =>
@@ -198,7 +206,7 @@ export default function ActivityGroup(props: {
 
 /** A normal completion borrows the footer, with no standalone status label. */
 export function CompletionToggle(
-  props: { group: Group; prefs: Preferences; onReveal?(): void },
+  props: { group: Group; prefs: Preferences; onReveal?(user: boolean): void },
 ): Element {
   const [open, setOpen] = retainedDisclosure(
     "records",
@@ -213,9 +221,9 @@ export function CompletionToggle(
       <TreeNode
         label="Completion details"
         open={open()}
-        onOpen={(open) => {
+        onOpen={(open, event) => {
           setOpen(open);
-          if (open) props.onReveal?.();
+          if (open) props.onReveal?.(event.isTrusted);
         }}
         hasChildren
         header={() => null}

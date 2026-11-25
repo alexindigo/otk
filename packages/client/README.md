@@ -51,19 +51,29 @@ follow; canonical append revisions expose new messages even near the tail.
 
 `entityFacts(identity, sources)` projects explicit session, turn and tool
 scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
-markers and never borrow session/helper clocks. Session-now status borrows live
-supervision, including when a metadata entry is not leased. `runningWork` reads
-helpers from the shared tabs working projection and shells only from fresh
-adapter inventory items whose identities remain in that inventory. Transcript
-paging is not an input. `createLiveWork` owns capability checks and joined stop
-admission across presentation lifetimes; elapsed labels describe running time,
-not working time.
+markers and never borrow session/helper clocks. Session-now presentation borrows
+the serving entity replica handle, including when a metadata entry is not
+leased. The same retained historical fact uses current state and permission
+grace instead of copying a status from its record. Every EntityPill producer
+uses that binding. `liveWork(session)` reads the owner's helper and shell
+inventory; helper labels may borrow acquired digest metadata, never its
+attention. Transcript paging is not an input. `createLiveWork` owns capability
+checks and joined stop admission across presentation lifetimes; elapsed labels
+describe running time, not working time.
 
 The helper inventory follows native ancestry and fresh positive work keys,
 independently of task/checkout boundaries and attention priority. Blocked
 helpers remain in the count with their own attention lamps. Cross-project
 routing keeps work facts for these demanded descendants while unrelated pending
-identities remain request-only.
+identities remain request-only. Helper title/work changes refresh only family
+ancestors even when the lamp counts do not change. The task entity supplies the
+work-chip lamp; each popover item uses its own session entity.
+
+`EntityStateStore.observeChanges` observes accepted evidence and staleness
+independently of `subscribe`'s notification transitions. Canonical transcripts
+borrow it for `evidence.work`, including when work starts/stops under a stable
+blocked lamp. Retry text borrows `evidence.retry`; missing retry time or message
+is not invented. Serving transport staleness clears these observations.
 
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
@@ -616,11 +626,11 @@ Helper updates preserve parent source/native completion clocks and unrelated
 reply identities; removal, cooling and replacement release the source-free link
 index. No helper RPC, child transcript cache or timer belongs to the view.
 
-`createTranscripts({connection, entry, factory?, clock?})` owns one canonical
-`createTranscript` per `sessionKey(server, session)`. `setDemand` replaces
-active scope/screen demand, `interact` refreshes that scope's clock, and
-`preload` gives an attention scope its temporary lease. Resources wait for an
-explicit/welcomed policy. One shared queue bounds page reads per server and
+`createTranscripts({connection, entry, entities?, factory?, clock?})` owns one
+canonical `createTranscript` per `sessionKey(server, session)`. `setDemand`
+replaces active scope/screen demand, `interact` refreshes that scope's clock,
+and `preload` gives an attention scope its temporary lease. Resources wait for
+an explicit/welcomed policy. One shared queue bounds page reads per server and
 prioritizes selection, attention and recently interacted scopes. Atomic body
 pushes can paint before scalar metadata, but the shared admission slot belongs
 to the full page request until coverage completes or it retires. Warm hydration
@@ -919,24 +929,26 @@ parts through their own registry and page through the original session owner.
 
 The canonical projection's `records` value owns one stable background interval
 between conversation messages, identical-fact folds, reveal ancestry and
-presentation revisions. The first background record mints its frame even while
-queued. Settlement changes child presentation, never the root partition. Folded
-frames show a client-worded failure count and only their chronological
-breakouts. They never partition successful stretches into additional disclosure
-rows; all children remain in the one frame's details. Pending, active, blocked,
-unknown and failed records break out inside that frame in source order, then
-rejoin its compact children when settled. Native plugins supply opaque summary
-kinds and singular/plural nouns; headings never classify records. Records
-without producer-owned summary facts remain visible breakouts. Producer-declared
-footer completions retain their original source and reveal paths. A success-only
-interval is silent until explicitly disclosed through the preceding reply footer
-or revealed; mixed intervals retain those completion facts in their original
-chronology, but not their summary. Failure counts do not borrow producer nouns
-and include failures without summary facts. The existing transcript interaction
-owner retains all disclosure choices and opens reveal ancestors. Measurements
-use presentation revisions separately from logical row identity, so a topology
-or streamed-content revision cannot borrow an old extent, including when an
-unmounted row was previously empty.
+presentation revisions. An interval needs admitted part content before offering
+a disclosure; headers alone retain their source rows. A populated interval keeps
+all its records, including empty breakouts. Its first record mints the frame
+even while queued. Settlement changes child presentation, never the root
+partition. Folded frames show a client-worded failure count and only their
+chronological breakouts. They never partition successful stretches into
+additional disclosure rows; all children remain in the one frame's details.
+Pending, active, blocked, unknown and failed records break out inside that frame
+in source order, then rejoin its compact children when settled. Native plugins
+supply opaque summary kinds and singular/plural nouns; headings never classify
+records. Records without producer-owned summary facts remain visible breakouts.
+Producer-declared footer completions retain their original source and reveal
+paths. A success-only interval is silent until explicitly disclosed through the
+preceding reply footer or revealed; mixed intervals retain those completion
+facts in their original chronology, but not their summary. Failure counts do not
+borrow producer nouns and include failures without summary facts. The existing
+transcript interaction owner retains all disclosure choices and opens reveal
+ancestors. Measurements use presentation revisions separately from logical row
+identity, so a topology or streamed-content revision cannot borrow an old
+extent, including when an unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
@@ -1586,6 +1598,18 @@ server removal retires only that server's values. Views can unmount and borrow
 the same interaction on return.
 
 ## Commands
+
+`CommandHub.control(id, args, {target, shown, unshown, recovery, active?})`
+binds an action's availability and effect to the same registered owner. Each
+activation rechecks availability, joins repeat activation while pending and
+resolves to `shown`, `refused` or `failed`. Success requires the injected
+consumer observation, not just a fulfilled effect. Failure wording is captured
+from the invoking registration before awaiting it. A borrowed `active` lifetime
+fences retired presentations. `subscribe` forwards registry changes without
+retaining the view. Existing direct command ports remain during M6 migration.
+`CommandContext.viewing` distinguishes a presented session from a retained
+selection behind Settings; navigation availability and its observation borrow
+that same input without dropping the selected command scope.
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A
 feature registers

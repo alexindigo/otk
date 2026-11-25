@@ -6,7 +6,7 @@ import type {
   TurnTiming,
 } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
-import type { InboxStatus } from "./inbox.ts";
+import type { EntityStateStore } from "./entity-state.ts";
 import { timingExplanation } from "./message-presentation.ts";
 
 export interface EntityIdentity {
@@ -22,7 +22,7 @@ export type EntityFact = {
   active: boolean;
 } & ({ known: true; value: number } | { known: false; value?: never });
 export interface EntityFacts {
-  session: { id?: string; title?: string; status?: InboxStatus };
+  session: { id?: string; title?: string; entities?: EntityStateStore };
   model?: ModelRef;
   reply?: {
     id: string;
@@ -33,7 +33,9 @@ export interface EntityFacts {
   tool?: { id: string; working: EntityFact; completed: EntityFact };
 }
 export interface EntityFactSources {
-  session(id: string): { title?: string; status?: InboxStatus };
+  session(id: string): { title?: string };
+  /** Borrow the serving replica; cards never manufacture a second state. */
+  entities?: EntityStateStore;
 }
 /** Scope is explicit. Missing turn/tool evidence cannot borrow a session clock. */
 export function entityFacts(
@@ -59,6 +61,7 @@ export function entityFacts(
   return {
     session: {
       id: identity.sessionID,
+      entities: sources?.entities,
       ...(identity.sessionID ? sources?.session(identity.sessionID) : {}),
     },
     model: identity.model,

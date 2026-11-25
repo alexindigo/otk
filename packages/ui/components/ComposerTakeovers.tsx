@@ -9,6 +9,7 @@ import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
 import Subagents from "./Subagents.tsx";
+import { sessionSelectionControl } from "./session-open.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
@@ -26,7 +27,8 @@ export default function ComposerTakeovers(
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
   const { commands } = useCommandPorts();
   const work = createMemo(() => session.runningWork?.() ?? []);
-  const fail = (error: unknown) => session.feedback?.fail(error);
+  const title = (id: string) =>
+    session.entry(id)?.title ?? "Session unavailable";
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -77,11 +79,12 @@ export default function ComposerTakeovers(
                     <Subagents
                       model={trail()}
                       owner={session.liveWork}
-                      onError={fail}
-                      title={(id) =>
-                        session.entry(id)?.title ?? "Session unavailable"}
-                      onOpen={(id) =>
-                        void commands.run("session.child", id).catch(fail)}
+                      title={title}
+                      openAction={(id) =>
+                        sessionSelectionControl(commands, {
+                          sidecarId: session.failureTarget?.().sidecarId ?? "",
+                          sessionID: id,
+                        }, title(id))}
                     />
                   )}
                 </Show>

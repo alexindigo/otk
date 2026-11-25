@@ -4,6 +4,8 @@ import type { AssistantMessage, Message } from "@otk/protocol";
 import { createTranscriptProjection } from "../transcript-projection.ts";
 import { createTranscript } from "../transcript.ts";
 import { SidecarConnection } from "../connection.ts";
+import { createEntityStateStore } from "../entity-state.ts";
+import type { EntityState } from "@otk/protocol";
 import {
   fixtureMessagePolicy,
   fixturePage,
@@ -21,6 +23,66 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   interrupted: false,
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
+});
+
+Deno.test("canonical transcript busy follows own work evidence even when the lamp stays blocked", () => {
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame() {},
+  });
+  const value: EntityState = {
+    kind: "session",
+    id: "tstv1-s",
+    state: "blocked",
+    cause: "question",
+    previous: "none",
+    counts: { working: 0, blocked: 1, finished: 0, unseen: 0 },
+    evidence: {
+      work: true,
+      permissions: 0,
+      questions: 1,
+      descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+    },
+  };
+  const entities = createEntityStateStore({
+    read: () => ({ "session:tstv1-s": value }),
+  });
+  const owner = createTranscript(
+    { sidecarId: "server", sessionID: "tstv1-s" },
+    () => connection,
+    () => undefined,
+    (read) => read(),
+    undefined,
+    undefined,
+    entities,
+  );
+  try {
+    assertEquals(
+      owner.projection.busy(true),
+      false,
+      "positive work reached the canonical projection",
+    );
+    value.evidence!.work = false;
+    entities.observe(["session:tstv1-s"], "live");
+    assertEquals(
+      owner.projection.busy(false),
+      false,
+      "unchanged blocked state cannot retain old work",
+    );
+    value.evidence!.work = true;
+    entities.observe(["session:tstv1-s"], "live");
+    assertEquals(owner.projection.busy(true), false);
+    entities.stale(true);
+    assertEquals(
+      owner.projection.busy(false),
+      false,
+      "stale serving transport clears busy evidence",
+    );
+  } finally {
+    owner.stop();
+    entities.stop();
+    connection.stop();
+  }
 });
 Deno.test("canonical append revision ignores older pages, updates and replacement baselines", () => {
   const projection = createTranscriptProjection();
