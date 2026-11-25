@@ -15,6 +15,7 @@ export interface DraftSendCapture {
 export interface DraftRecovery {
   readonly id: string;
   readonly kind: "uncertain" | "recoverable";
+  readonly cause?: "withdrawn" | "stop-unconfirmed";
   readonly draft: Draft;
   run(): void;
 }
@@ -176,11 +177,17 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
           if (vacancy !== undefined) write(clearDraft(owner.draft));
           const active = () =>
             values.get(key) === owner && owner.sends.get(id) === value;
-          const offer = (kind: DraftRecovery["kind"]) => {
-            if (value.recovery?.kind === kind) return;
+          const offer = (
+            kind: DraftRecovery["kind"],
+            cause?: DraftRecovery["cause"],
+          ) => {
+            if (
+              value.recovery?.kind === kind && value.recovery.cause === cause
+            ) return;
             const recovery: DraftRecovery = {
               id,
               kind,
+              cause,
               get draft() {
                 void store.state.revision;
                 return value.draft;
@@ -199,21 +206,28 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
             changed();
           };
           return (outcome) => {
-            if (!active() || value.recovery?.kind === "recoverable") return;
-            if (outcome.kind === "accepted") return;
-            if (outcome.kind === "committed") {
+            if (!active()) return;
+            if (outcome.kind === "accepted" || outcome.kind === "committed") {
+              return;
+            }
+            if (outcome.kind === "started") {
               owner.sends.delete(id);
               changed();
+            } else if (outcome.kind === "unconfirmed" && outcome.stop) {
+              offer("recoverable", "stop-unconfirmed");
             } else if (
               outcome.kind === "unconfirmed" ||
               outcome.kind === "failed" && outcome.certainty === "uncertain"
             ) {
-              offer("uncertain");
+              if (!value.recovery?.cause) offer("uncertain");
             } else if (owner.revision === vacancy) {
               owner.sends.delete(id);
               write(value.draft);
             } else {
-              offer("recoverable");
+              offer(
+                "recoverable",
+                outcome.kind === "withdrawn" ? "withdrawn" : undefined,
+              );
             }
           };
         },

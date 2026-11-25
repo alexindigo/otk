@@ -5,6 +5,28 @@ import { createState } from "../state.ts";
 import { serialize } from "../draft-content.ts";
 import { prepareAttachments } from "../attachment-batches.ts";
 
+Deno.test("committed custody survives until withdrawn or started", () => {
+  const drafts = createDrafts();
+  const write = drafts.writer("session");
+  const draft = write((value) => ({ ...value, input: "Kept until start" }));
+  const settle = drafts.captureSend("session", draft).take("send", () => {})!;
+  settle({ kind: "committed", messageID: "send" });
+  assertEquals(drafts.current("session").input, "");
+  settle(
+    { kind: "withdrawn", messageID: "send", native: "withdrawn" } as Parameters<
+      typeof settle
+    >[0],
+  );
+  assertEquals(drafts.current("session").input, "Kept until start");
+  write((value) => ({ ...value, input: "Newer" }));
+  settle(
+    { kind: "withdrawn", messageID: "send", native: "withdrawn" } as Parameters<
+      typeof settle
+    >[0],
+  );
+  assertEquals(drafts.current("session").input, "Newer");
+});
+
 Deno.test("draft writers retain session ownership, attachments and invocation-current identity across delayed painting", () => {
   const queued: (() => void)[] = [];
   const drafts = createDrafts((initial) => {

@@ -121,7 +121,7 @@ export type ToolCompletionSource = (
 ) => () => void;
 export interface TranscriptOwner {
   send?(value: import("./pending-send.ts").PendingSend): void;
-  cancelSend?(messageID: string): void;
+  cancelSend?(messageID: string, withdrawn?: boolean): void;
   readonly deliveryDiagnostics?: ContentDeliveryDiagnostics;
   progress?(): ProgressDisplay;
   state: TranscriptState;
@@ -1066,8 +1066,8 @@ export function createTranscript(
       projection.send(value);
       setState(() => {});
     },
-    cancelSend(messageID) {
-      projection.cancelSend(messageID);
+    cancelSend(messageID, withdrawn) {
+      projection.cancelSend(messageID, withdrawn);
       setState(() => {});
     },
     interaction,

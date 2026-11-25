@@ -6,6 +6,8 @@ import { presentFailure } from "./failure-features.ts";
 /** Native admission, refusal and observation never collapse into void success. */
 export type SendOutcome =
   | { kind: "committed"; messageID: string }
+  | { kind: "started"; messageID: string }
+  | { kind: "withdrawn"; messageID: string; native: "withdrawn" | "absent" }
   /** Native accepted a send whose pending transcript entry carries its
    * identity. That entry owns commitment in place or its bounded observation
    * failure with Retry (2.39). */
@@ -18,7 +20,12 @@ export type SendOutcome =
     retry(): void;
     failure?: PublicFailure;
   }
-  | { kind: "unconfirmed"; reason: string; failure?: PublicFailure };
+  | {
+    kind: "unconfirmed";
+    reason: string;
+    failure?: PublicFailure;
+    stop?: true;
+  };
 
 export function refusedSend(cause: unknown): SendOutcome {
   const failure = cause instanceof RequestFailure ? cause.failure : undefined;
@@ -32,7 +39,11 @@ export function refusedSend(cause: unknown): SendOutcome {
 
 /** Report non-success through the existing structured failure presenter. */
 export function requireCommittedSend(outcome: SendOutcome): void {
-  if (outcome.kind === "committed" || outcome.kind === "accepted") return;
+  if (
+    outcome.kind === "committed" || outcome.kind === "accepted" ||
+    outcome.kind === "started" || outcome.kind === "withdrawn" ||
+    outcome.kind === "unconfirmed" && outcome.stop
+  ) return;
   const uncertain = outcome.kind === "unconfirmed" ||
     outcome.kind === "failed" && outcome.certainty === "uncertain";
   const feedback = presentFailure(
