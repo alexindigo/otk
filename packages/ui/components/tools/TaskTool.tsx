@@ -15,7 +15,7 @@ import { countLabel } from "./count.ts";
 export function registerTaskTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "task",
-    (props) => <TaskTool call={props.call} />,
+    (props) => <TaskTool call={props.call} onOpenChild={props.onOpenChild} />,
     (call) => ({
       icon: DelegateIcon,
       verb: "Delegate",
@@ -29,7 +29,11 @@ export function registerTaskTool(tools: ToolRegistry): void {
   );
 }
 export default function TaskTool(
-  props: { call: TaskCall; open?: ActionControl },
+  props: {
+    call: TaskCall;
+    open?: ActionControl;
+    onOpenChild?(id: string): void;
+  },
 ) {
   const { commands } = useCommandPorts();
   const open = createMemo(() =>
@@ -38,6 +42,7 @@ export default function TaskTool(
         commands,
         props.call.childSessionID ?? "",
         props.call.description ?? "Task",
+        props.onOpenChild,
       )
   );
   const progress = () => {

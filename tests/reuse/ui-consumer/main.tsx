@@ -5,6 +5,7 @@ import {
   CommandHub,
   createDrafts,
   createSessionSubmission,
+  emptyDraft,
   NotificationHub,
   SidecarConnection,
 } from "@otk/client";
@@ -32,6 +33,7 @@ import {
   Prompt,
   registerGenericTool,
   registerOtkThemes,
+  registerTaskTool,
   registerToastChannel,
   registerToolPart,
   registerUnknownPart,
@@ -40,6 +42,7 @@ import {
   SelectionContent,
   type SessionPorts,
   SessionProvider,
+  SessionView,
   solidState,
   StatusLight,
   ThemeEngine,
@@ -254,6 +257,92 @@ function ActionToasts(): Element {
     </CommandProvider>
   );
 }
+function ChildNavigation(): Element {
+  const ui = createUiRegistries();
+  registerTaskTool(ui.tools);
+  registerUnknownPart(ui.parts);
+  const [opened, setOpened] = createSignal<string[]>([]);
+  const open = (id: string) => setOpened((items) => [...items, id]);
+  const ports: SessionPorts = {
+    supports: () => false,
+    rpc: () => Promise.reject(new Error("No RPC expected")),
+    sessionID: () => "root",
+    directory: () => Promise.resolve("/project"),
+    entry: () => undefined,
+    permissions: () => [],
+    questions: () => [],
+    prefs: () => DEFAULT_PREFS,
+    dirty() {},
+    act: (action) => action(),
+    submit: () => Promise.reject(new Error("No submission expected")),
+    history: () => Promise.resolve([]),
+    attachments: (parts) => Promise.resolve(parts),
+  };
+  return (
+    <UiProvider registries={ui}>
+      <output data-child-opens>{opened().join(", ")}</output>
+      <ToolLine
+        call={{
+          tool: "task",
+          callID: "task",
+          status: "completed",
+          time: { start: 1, end: 2 },
+          agent: "Task helper",
+          description: "Task child",
+          childSessionID: "task-child",
+        }}
+        prefs={DEFAULT_PREFS}
+        genericOutput
+        waiting={false}
+        onOpenChild={open}
+      />
+      <SessionProvider ports={ports}>
+        <SessionView
+          label="Consumer session"
+          prefs={{ ...DEFAULT_PREFS, expandRecords: true }}
+          messages={[1, 2].map((n) => ({
+            id: `record-${n}`,
+            sessionID: "root",
+            role: "context" as const,
+            time: { created: n },
+            parts: [{
+              kind: "external" as const,
+              id: `part-${n}`,
+              name: "record",
+              activity: {
+                kindLabel: "Record",
+                layout: "row" as const,
+                category: "record" as const,
+                title: "Child activity",
+                summary: { kind: "child", noun: "helper", plural: "helpers" },
+                tone: "normal" as const,
+                child: { label: "Activity helper", sessionID: "record-child" },
+              },
+            }],
+          }))}
+          onOpenChild={open}
+          draft={emptyDraft()}
+          onDraft={emptyDraft}
+          onPrompt={() => Promise.resolve()}
+          onStop={() => Promise.resolve()}
+          onOlder={() => Promise.resolve()}
+          onRetry={() => Promise.resolve()}
+          connected
+          exhausted
+          loading={false}
+          paging={false}
+          busy={false}
+          child={false}
+          activity={() => ({ unstarted: 0, running: false })}
+          permissions={[]}
+          siblings={[]}
+          revert={null}
+        />
+      </SessionProvider>
+    </UiProvider>
+  );
+}
+
 function Consumer(): Element {
   const commands = new CommandHub();
   const preferenceRegistry = createPreferences();
@@ -680,6 +769,8 @@ render(
     ? ScrollbarProbe
     : new URL(location.href).searchParams.has("source-ownership")
     ? SourceOwnership
+    : new URL(location.href).searchParams.has("child-navigation")
+    ? ChildNavigation
     : new URL(location.href).searchParams.has("picker-lifetime")
     ? PickerLifetime
     : new URL(location.href).searchParams.has("lazy-preview")
