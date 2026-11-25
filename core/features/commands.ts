@@ -10,15 +10,15 @@ import {
   readExecution,
 } from "../requests/policies.ts";
 import {
-  completionReceipt,
   selectionReceipt,
   skillReceipt,
+  submissionReceipt,
 } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.commands;
   if (!capability) return;
-  const receipt = completionReceipt("command-settled");
+  const receipt = submissionReceipt("command-settled");
   rpc.register("commands.list", {
     execution: readExecution((id: string) => ({ sessionID: id })),
     params: (p) => sessionID(p)!,
@@ -52,6 +52,9 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       }
       return {
         sessionID: sessionID(p)!,
+        ...(p.messageID === undefined
+          ? {}
+          : { messageID: text(p, "messageID")! }),
         command: text(p, "command")!,
         ...(skill
           ? {
@@ -73,9 +76,10 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       };
     },
     handler: (ctx, input) =>
-      nativeEffect(ctx, async (operation) => {
-        await capability.command(input, operation);
-        return null;
-      }, receipt),
+      nativeEffect(
+        ctx,
+        (operation) => capability.command(input, operation),
+        receipt,
+      ),
   });
 }

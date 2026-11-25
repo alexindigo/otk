@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
+import { requireCommittedSend } from "@otk/client";
 export function registerShellPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "shell",
@@ -31,15 +32,18 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
       return {
         async submit(draft, parts, selection) {
           if (draft.mode !== "shell") return false;
-          await ctx.submit((options) =>
-            ctx.rpc("session.shell", {
+          const outcome = await ctx.submit((options, dispatch, messageID) => {
+            dispatch();
+            return ctx.rpc("session.shell", {
               sessionID: ctx.sessionID(),
+              messageID,
               command: parts.filter((p) => p.kind === "text").map((p) => p.text)
                 .join("\n"),
               agent: selection.agent,
               model: selection.model,
-            }, options)
-          );
+            }, options);
+          });
+          requireCommittedSend(outcome);
           return true;
         },
         enabled: () =>

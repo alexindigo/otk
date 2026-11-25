@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import { createSubmissionIntent, FailurePresenter } from "@otk/client";
+import {
+  createSubmissionIntent,
+  FailurePresenter,
+  type RequestFailure,
+} from "@otk/client";
 
 for (
   const boundary of [
@@ -183,3 +187,46 @@ for (const mode of ["normal", "shell", "command"] as const) {
     ]);
   });
 }
+
+Deno.test("a refusal citing the captured send retires when that send settles, never earlier", async () => {
+  const retired: string[] = [], ready: { reason?: string } = {};
+  const intent = createSubmissionIntent<{ text: string }>({
+    capture: structuredClone,
+    presenter: new FailurePresenter(),
+    unavailable: () => ready.reason,
+    retire: (id) => retired.push(id),
+  });
+  const held = Promise.withResolvers<void>(),
+    entered = Promise.withResolvers<void>();
+  const first = intent.submit(
+    () => Promise.resolve({ text: "first" }),
+    async () => {
+      entered.resolve();
+      await held.promise;
+    },
+  );
+  await entered.promise;
+  for (let turn = 0; turn < 8; turn++) await Promise.resolve();
+  const refused = await intent.submit(
+    () => Promise.resolve({ text: "second" }),
+    () => Promise.reject(new Error("A refused send cannot dispatch")),
+  ).then(() => undefined, (cause) => cause as RequestFailure);
+  assertEquals(
+    refused?.failure.facts?.reason,
+    "Another message is still being sent",
+  );
+  assertEquals(retired, []);
+  held.resolve();
+  await first;
+  assertEquals(retired, [refused!.failure.diagnosticID]);
+  // Readiness refusal does not cite a captured send; it stays the user's to resolve.
+  ready.reason = "Reconnect first";
+  await assertRejects(() =>
+    intent.submit(
+      () => Promise.resolve({ text: "third" }),
+      () => Promise.resolve(),
+    )
+  );
+  await Promise.resolve();
+  assertEquals(retired, [refused!.failure.diagnosticID]);
+});

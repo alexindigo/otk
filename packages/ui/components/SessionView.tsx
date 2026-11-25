@@ -1099,9 +1099,6 @@ export default function SessionView(props: {
             <ComposerTakeovers
               focusNotice={() => noticeControl?.focus()}
               notice={noticed() ? notice : undefined}
-              noticeFlow={!!props.branchHistory?.state.permanence ||
-                !!props.branchHistory?.state.choice ||
-                copyRecovery()}
               readOnly={props.child}
             >
               {(active) => (

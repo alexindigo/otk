@@ -95,8 +95,18 @@ for (const mode of ["prompt", "command"] as const) {
           await state.queue(["Every attachment received."]);
           await page.locator(".otk-prompt button[type=submit]").click();
           await reply(state, page, session.id, "Every attachment received.");
-          await expect(prompt(page)).toHaveValue("");
-          await expect(chips(page)).toHaveCount(0);
+          if (
+            mode === "command" &&
+            state.controller.info!.version.startsWith("2.")
+          ) {
+            expect(await readDraft()).toEqual(original);
+            await expect(page.locator(".otk-composer-notice")).toContainText(
+              "did not provide a way to confirm its message",
+            );
+          } else {
+            await expect(prompt(page)).toHaveValue("");
+            await expect(chips(page)).toHaveCount(0);
+          }
           const requests =
             (await state.observe<{ requests: { messages: unknown }[] }>())
               .requests;

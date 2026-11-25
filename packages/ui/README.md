@@ -726,20 +726,20 @@ state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome uses structural tracks: helper presence uses a reserved control-height
-track; runtime feedback uses the dock's independent notice slot above that
-track, so arrival cannot resize the transcript. Explicit user-owned Send/draft
-choices opt into normal flow through `noticeFlow`, while overflowing takeovers
-keep their bounded presentation. Revert records belong to the transcript, not a
-composer overlay. Breadcrumbs stay in one measured row and fold optional
-controls under pressure. RecordList owns record spacing and supplies topology to
-the shared Tree; views borrow canonical span identities and retained disclosure
-state rather than regrouping mounted neighbours. Background intervals share one
-outer conversation gap and compact internal record rhythm, including actionable
-breakouts. Their folded line is plain muted meta text with producer-owned counts
-and client-owned failure wording, no Activity prefix or time range.
-Footer-borrowed successful completions never add a title count. Successful
-completion-only intervals borrow a footer junction instead of adding a status
-row; direct reveal opens the same retained interval. Read-only helper
+track, and every composer notice occupies normal flow above the input. Notice
+arrival resizes the transcript instead of covering its newest records; the
+existing viewport owner keeps a following transcript at its tail. Overflowing
+takeovers keep their bounded presentation. Revert records belong to the
+transcript, not a composer overlay. Breadcrumbs stay in one measured row and
+fold optional controls under pressure. RecordList owns record spacing and
+supplies topology to the shared Tree; views borrow canonical span identities and
+retained disclosure state rather than regrouping mounted neighbours. Background
+intervals share one outer conversation gap and compact internal record rhythm,
+including actionable breakouts. Their folded line is plain muted meta text with
+producer-owned counts and client-owned failure wording, no Activity prefix or
+time range. Footer-borrowed successful completions never add a title count.
+Successful completion-only intervals borrow a footer junction instead of adding
+a status row; direct reveal opens the same retained interval. Read-only helper
 transcripts mount those same attention owners; only prompt submission is
 unavailable. With no active takeover, helpers mount no empty composer. That same
 owner provides composer availability to takeover headers, so draft-kept copy
@@ -867,10 +867,12 @@ reply segments, part/block collections and diff lines use that same geometry
 without nested scroll boxes. Shared CSS roles estimate unmeasured rows; retained
 numeric measurements and identity anchors correct them. Initial nested mounts
 measure without moving their parent. Content is constructed once per keyed
-lifetime, with live data in nested bindings. `control.reveal(key, options)`
-waits for mounted, stable measured geometry and invokes its injected focus
-callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
-expose source-free navigation without consumer DOM access.
+lifetime through the shared ContentSlot, including record frames and borrowed
+ContentWindows, with live data in nested bindings.
+`control.reveal(key, options)` waits for mounted, stable measured geometry and
+invokes its injected focus callback before releasing its measurement pin.
+`anchor()` / `restore(anchor)` expose source-free navigation without consumer
+DOM access.
 
 Windowing preserves inline footprint as well as block extent. A zero-block-size
 normal-flow sizing track retains the largest measured row width even after its

@@ -124,7 +124,10 @@ export class Rpc {
     const clearFailure = () => {
       if (owner && this.metadata.get(method)?.kind === "mutation") {
         this.requests.forgetFailures(owner, method);
-        this.#feedback.get(owner)?.clear();
+        // Secondary bookkeeping cannot spend the originating Send's outcome.
+        if (this.metadata.get(method)?.presentation !== "bookkeeping") {
+          this.#feedback.get(owner)?.clear();
+        }
       }
     };
     const intent = options.intent ?? this.intent();

@@ -121,7 +121,15 @@ export async function expandTool(
   else await revealTool(page, selector);
   const toggle = page.locator(selector + " .otk-tool-toggle");
   await expect(toggle).toBeAttached();
+  await openDisclosure(page, toggle, selector + " .otk-tool-toggle");
+}
+
+/** Pointer auto-scroll is not reader intent. Acquire the exact control, leave
+ * tail-follow with native upward input, then retain ordinary click failures. */
+async function openDisclosure(page: Page, toggle: Locator, selector: string) {
   if (await toggle.getAttribute("aria-expanded") !== "true") {
+    await revealAcquired(page, selector);
+    await wheelTranscript(page, -1, toggle);
     await toggle.click();
   }
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -166,7 +174,11 @@ export async function showFileChanges(state: TestState, page: Page) {
 }
 
 /** One native gesture; scrollend is armed before dispatch, never guessed by a delay. */
-export async function wheelTranscript(page: Page, deltaY: number) {
+export async function wheelTranscript(
+  page: Page,
+  deltaY: number,
+  target?: Locator,
+) {
   const pane = page.locator(".otk-messages");
   await pane.evaluate((element, delta) => {
     const globals = globalThis as typeof globalThis & {
@@ -184,7 +196,9 @@ export async function wheelTranscript(page: Page, deltaY: number) {
       );
     }
   }, deltaY);
-  await pane.hover();
+  // A disclosure header belongs to this scroll scope, unlike a nested output
+  // scroller that can consume a wheel aimed at the pane's geometric center.
+  await (target ?? pane).hover();
   await page.mouse.wheel(0, deltaY);
   await expect.poll(() =>
     page.evaluate(() =>
@@ -638,10 +652,17 @@ export function shellOutput(
 export async function openRecord(page: Page, selector: string) {
   await revealAcquired(page, selector);
   const toggle = recordToggle(page.locator(selector).first());
-  if (await toggle.getAttribute("aria-expanded") !== "true") {
-    await toggle.click();
-  }
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await openDisclosure(
+    page,
+    toggle,
+    selector + " .otk-tool-state > .otk-tool-toggle",
+  );
+}
+
+/** Opening a header is not acquisition of its lazily windowed prose body. */
+export async function readRecordBody(page: Page, selector: string) {
+  await openRecord(page, selector);
+  await revealAcquired(page, selector + " .otk-tool-body > .otk-text");
 }
 
 /** A record owns its state control; tree labels do not own disclosure. */
@@ -723,7 +744,7 @@ export async function expectCompactionSummary(
     return messageID;
   }, { timeout }).toBeTruthy();
   const record = `[data-message=${JSON.stringify(messageID)}] ${selector}`;
-  await openRecord(page, record);
+  await readRecordBody(page, record);
   await expect(page.locator(record)).toContainText(text, { timeout });
 }
 

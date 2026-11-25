@@ -2890,25 +2890,30 @@ export class Transcript {
         } else this.#repairHistory(id);
         return;
       }
+      // Mirror the native message-updater's lifecycle shapes, including absent
+      // metadata. A terminal record replaces streamed state; it cannot retain
+      // fields the native terminal schema dropped or invent an empty object.
+      const previous = known?.id === nativeID ? known : undefined;
       const raw = {
-        ...(known?.id === nativeID ? known : {}),
         id: nativeID,
         type: "compaction",
         status,
         reason: d.reason ?? "manual",
-        summary: text(d.text) ?? "",
-        ...(d.error ? { error: d.error } : {}),
-        ...(d.model ? { model: d.model } : {}),
-        ...(d.native ? { native: d.native } : {}),
+        ...(status === "failed" ? { error: d.error } : {
+          summary: status === "running" ? "" : text(d.text) ?? "",
+          ...(d.model ? { model: d.model } : {}),
+          ...(d.native ? { native: d.native } : {}),
+        }),
         ...(d.cost !== undefined ? { cost: d.cost } : {}),
         ...(d.tokens ? { tokens: d.tokens } : {}),
-        metadata: {
-          ...(known?.id === nativeID ? known.metadata : {}),
-          ...event.metadata,
-        },
-        time: known?.id === nativeID
-          ? known.time
-          : { created: event.created ?? Date.now() },
+        metadata: status === "running"
+          ? event.metadata
+          : status === "failed"
+          ? previous?.metadata ?? event.metadata
+          : event.metadata
+          ? { ...previous?.metadata, ...event.metadata }
+          : previous?.metadata,
+        time: previous?.time ?? { created: event.created ?? Date.now() },
       } as Extract<NativeMessage, { type: "compaction" }>;
       this.#compactions.set(id, structuredClone(raw));
       const message = this.#map(

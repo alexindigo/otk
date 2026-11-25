@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { copyText } from "../clipboard.ts";
-import { createModelRecency } from "@otk/client";
+import { createModelRecency, requireCommittedSend } from "@otk/client";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
@@ -862,7 +862,9 @@ export default function Shell(
                               onRetry={() => commands.run("session.retry")}
                               onDraft={drafts.writer(draftKey())}
                               onPrompt={(parts, _mode, selection) =>
-                                actions.prompt(parts, selection)}
+                                actions.prompt(parts, selection).then(
+                                  requireCommittedSend,
+                                )}
                               onAbort={actions.abort}
                             />
                           </SessionProvider>

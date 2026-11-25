@@ -110,8 +110,8 @@ for (
         await page.locator("textarea[name=prompt]").press("Enter");
         const choice = page.locator(".otk-permanence-choice");
         await expect(choice).toBeVisible();
-        // An explicit Send choice grows in flow, unlike asynchronous runtime
-        // feedback. Its composer still begins exactly at the transcript edge.
+        // Every composer notice, including this explicit Send choice, grows in
+        // flow. Its dock still begins exactly at the transcript edge.
         await expect(page.locator(".otk-composer-feedback")).toHaveCSS(
           "position",
           "relative",
