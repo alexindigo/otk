@@ -397,6 +397,51 @@ Deno.test("review: sparse hierarchy cannot create absent phantoms but keeps rese
   assertEquals(reserved.groups.map((group) => group.members), [["P", "C"]]);
 });
 
+Deno.test("explicit helper tasks cannot cut a cross-checkout subtree out of its human root's tab", () => {
+  const rows = [
+    entry("R"),
+    entry("H", "R", "/other"),
+    entry("G", "H", "/third"),
+  ];
+  const root = task("root", ["R"]);
+  const conflict = task("conflict", ["H"], "/other");
+  const saved = [conflict, root];
+  const wire = projectSessionHierarchy(rows, saved, { followParent: true });
+  const sparse = new Map(wire);
+  sparse.delete("R");
+  for (
+    const [catalog, hierarchy] of [[rows, undefined], [rows, wire], [
+      rows.slice(1),
+      sparse,
+    ]] as const
+  ) {
+    const groups = projectTabGroups(catalog, saved, {
+      directory: "/p",
+      followParent: true,
+      hierarchy,
+    });
+    assertEquals(groups.groups.map((group) => [group.id, group.members]), [
+      ["root", ["R", "H", "G"]],
+    ]);
+    assertEquals(groups.owners.get("H"), groups.owners.get("R"));
+    assertEquals(groups.owners.get("G"), groups.owners.get("R"));
+  }
+  const tabs = model();
+  try {
+    tabs.update({
+      directory: "/p",
+      entries: [rows[0]],
+      context: rows,
+      followParent: true,
+      inbox: inbox(saved),
+    });
+    tabs.select({ kind: "task", id: "root" });
+    assertEquals(tabs.belongsToTab("root", "H"), true);
+  } finally {
+    tabs.stop();
+  }
+});
+
 Deno.test("review: reserved parent inheritance survives populated hierarchy and checkout scoping", () => {
   const rows = [entry("C", "P")];
   for (const directory of [undefined, "/p"]) {
