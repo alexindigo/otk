@@ -117,8 +117,8 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  // WP2: saved reply facts live on its scoped identity, not an absent footer.
-  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+  // Saved replies borrow the same sole footer clock as live replies.
+  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,
@@ -148,7 +148,7 @@ test("revert.saved-branch-survives-send-and-reload", {
     .click();
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
-  await expect(saved.locator(".otk-reply-start > .otk-chrome-meta > time"))
+  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,
@@ -320,3 +320,208 @@ test(
     ).toBe(false);
   },
 );
+
+test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
+  tag: ["@revert", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Restore copy recovery",
+  });
+  await openSession(state, page, source.id);
+  await state.queue(["Retained native reply."]);
+  await prompt(page, "Retained original prompt");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Retained native reply.",
+  );
+  await expect(page.locator(`[data-session="${source.id}"]`)).toHaveAttribute(
+    "data-status",
+    "idle",
+  );
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Reflect.set(globalThis, "restoreCopyStorage", () => {
+      Storage.prototype.setItem = original;
+    });
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith("otk.branch-history")) {
+        throw new DOMException("full", "QuotaExceededError");
+      }
+      original.call(this, key, value);
+    };
+  });
+  await page.locator(".otk-user-bubble").focus();
+  await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  const group = page.locator(".otk-revert-group");
+  await expect(group).toContainText("localStorage is full");
+  await expect(group).not.toContainText("replacement was not sent");
+  const input = page.locator("textarea[name=prompt]");
+  await input.fill("Keep this edited replacement");
+  await page.getByRole("button", { name: "Restore conversation", exact: true })
+    .click();
+  await expect(group).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".otk-composer-notice")).toContainText(
+    "Saving a copy after Restore",
+  );
+  await expect(page.locator(".otk-composer-notice")).not.toContainText(
+    "replacement was not sent",
+  );
+  await expect(input).toHaveValue("Keep this edited replacement");
+  for (
+    const [theme, id] of [["dark", "otk-dark"], ["linen", "otk-light"], [
+      "stone",
+      "otk-light-stone",
+    ]]
+  ) {
+    await state.product("prefs.set", { key: "theme", value: id });
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", id);
+    const geometry = await page.evaluate(() => {
+      const messages = document.querySelector(".otk-messages")!
+        .getBoundingClientRect();
+      const notice = document.querySelector(".otk-composer-notice")!
+        .getBoundingClientRect();
+      const prompt = document.querySelector(".otk-prompt")!
+        .getBoundingClientRect();
+      const controls = Array.from(
+        document.querySelectorAll(".otk-composer-notice button"),
+      )
+        .filter((button) =>
+          ["Retry", "Keep without a saved copy"].includes(
+            button.textContent!.trim(),
+          )
+        )
+        .map((button) => button.getBoundingClientRect());
+      return {
+        transcriptGap: notice.top - messages.bottom,
+        promptGap: prompt.top - notice.bottom,
+        centers: controls.map((box) => box.y + box.height / 2),
+      };
+    });
+    expect(geometry.transcriptGap).toBeGreaterThanOrEqual(-1);
+    expect(geometry.promptGap).toBeGreaterThanOrEqual(-1);
+    expect(geometry.centers).toHaveLength(2);
+    expect(Math.abs(geometry.centers[0] - geometry.centers[1])).toBeLessThan(
+      0.5,
+    );
+    await page.screenshot({
+      path: test.info().outputPath(`restore-copy-failure-${theme}.png`),
+      fullPage: true,
+    });
+  }
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", {
+    name: "Keep without a saved copy",
+    exact: true,
+  }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(input).toHaveValue("Keep this edited replacement");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Retained native reply.",
+  );
+  await page.locator(".otk-user-bubble").focus();
+  await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  await expect(group).toContainText("localStorage is full");
+  await input.fill("Keep this edited replacement");
+  await page.getByRole("button", { name: "Restore conversation", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.evaluate(() => Reflect.get(globalThis, "restoreCopyStorage")());
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(input).toHaveValue("Keep this edited replacement");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Retained native reply.",
+  );
+});
+
+test("revert.dismissed-background-failure-keeps-recovery-and-send-consent", {
+  tag: ["@revert", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const source = await state.native<{ id: string }>("/session", "POST", {
+    title: "Background copy recovery",
+  });
+  await openSession(state, page, source.id);
+  await state.queue(["The earlier reply is retained."]);
+  await prompt(page, "The earlier prompt is retained");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "The earlier reply is retained.",
+  );
+  await expect(page.locator(`[data-session="${source.id}"]`)).toHaveAttribute(
+    "data-status",
+    "idle",
+  );
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith("otk.branch-history")) {
+        throw new DOMException("full", "QuotaExceededError");
+      }
+      original.call(this, key, value);
+    };
+  });
+  await page.locator(".otk-user-bubble").focus();
+  await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-phase",
+    "failed",
+  );
+  await page.getByRole("button", { name: "Dismiss revert", exact: true })
+    .click();
+  const notice = page.locator(".otk-composer-notice");
+  await expect(notice.getByRole("button", { name: "Retry", exact: true }))
+    .toBeVisible();
+  await expect(
+    notice.getByRole("button", {
+      name: "Keep without a saved copy",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(notice).toContainText("localStorage is full");
+  await expect(notice).not.toContainText("replacement was not sent");
+  await notice.getByRole("button", {
+    name: "Keep without a saved copy",
+    exact: true,
+  }).click();
+  expect((await state.product("session.get", { sessionID: source.id })).revert)
+    .toBeTruthy();
+  const input = page.locator("textarea[name=prompt]");
+  await input.fill("Explicit consent is still required");
+  await input.press("Enter");
+  const choice = page.locator(".otk-permanence-choice");
+  await expect(choice.getByRole("button", { name: "Send anyway", exact: true }))
+    .toBeVisible();
+  await choice.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(input).toHaveValue("Explicit consent is still required");
+});

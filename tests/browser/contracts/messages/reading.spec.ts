@@ -10,7 +10,8 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await page.setViewportSize({ width: 2000, height: 1100 });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await openSession(state, page, "tstv1-otk");
-  await expect(page.locator(".otk-message-footer")).toHaveCount(1);
+  await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+    .toHaveCount(1);
   await expect(page).toHaveTitle("Execution — otk — OTK");
   await expect(page.locator(".otk-work-fold")).toHaveCount(1);
   await expect(page.locator(".otk-user-bubble")).toBeVisible();
@@ -88,7 +89,10 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       "interrupted",
       "76 tokens · $0.25",
     ]
-  ) await expect(page.locator(".otk-message-footer")).toContainText(value);
+  ) {
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toContainText(value);
+  }
   await expect(page.locator(".otk-reply-start .otk-entity-pill")).toHaveText([
     "build",
     "build",
@@ -131,7 +135,9 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       ),
       border: s.borderTopWidth,
       radius: s.borderRadius,
-      font: getComputedStyle(document.querySelector(".otk-message-footer")!)
+      font: getComputedStyle(
+        document.querySelector("[data-role=assistant] .otk-message-footer")!,
+      )
         .fontFamily,
       hints: /Enter to send|Shift\+Enter for newline|1 \/ 2 \/ 3|j\/k select/
         .test(

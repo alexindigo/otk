@@ -32,6 +32,7 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
     await composer(page).press("Enter");
   } else {
     // V1 step boundaries are qualified native records.
+    await state.product("prefs.set", { key: "expandStepMarkers", value: true });
     await toolScript(state, "bash", {
       command: "echo native-source",
       description: "Source fixture",

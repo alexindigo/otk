@@ -287,7 +287,9 @@ export async function usage(
             if (name === "unreported") {
               await expect(trigger).toContainText("Tokens unavailable");
               if (cost) await expect(trigger).toContainText("Cost unavailable");
-              await expect(page.locator(".otk-message-footer")).not
+              await expect(
+                page.locator("[data-role=assistant] .otk-message-footer"),
+              ).not
                 .toContainText("$0.00");
             }
             const g = await page.locator(".otk-turn-usage :popover-open")

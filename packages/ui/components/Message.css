@@ -27,47 +27,7 @@
   justify-self: stretch;
 }
 .otk-user-meta {
-  display: flex;
-  min-block-size: var(--control-size);
-  align-items: center;
-  gap: var(--space-3);
-  padding-inline: var(--space-2);
-  font-size: var(--text-meta);
-  color: var(--otk-fg-3);
   max-width: 100%;
-}
-.otk-created-time {
-  color: var(--otk-fg-3);
-  visibility: hidden;
-}
-.otk-time-always .otk-created-time,
-.otk-user-message:has(.otk-created-trigger:is(:hover,:focus-visible)) .otk-created-time {
-  visibility: visible;
-}
-.otk-message-footer {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: var(--space-2) var(--space-4);
-  margin-top: var(--space-1);
-  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
-  color: var(--otk-fg-3);
-  font-variant-numeric: tabular-nums;
-}
-.otk-message-details,
-.otk-user-details {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  flex-wrap: nowrap;
-  gap: var(--space-2) var(--space-4);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.otk-message-details > *,
-.otk-user-details > * {
-  flex: none;
 }
 .otk-response-recovery {
   display: flex;
@@ -79,7 +39,7 @@
 }
 .otk-reply-start {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-2);

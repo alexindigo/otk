@@ -7,10 +7,46 @@ import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
+import { messageHeaderClockErrors } from "./message-clocks.ts";
+import { foldRecords } from "../../packages/client/record-folds.ts";
+import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
+import { registerTranscriptPreferences } from "../../packages/protocol/preferences/transcript.ts";
 import {
   codeSeparatorErrors,
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
+
+Deno.test("UI convention: folded record counts are neutral metadata, not per-kind hidden rows", async () => {
+  const source = await Deno.readTextFile(
+    "packages/ui/components/RecordKinds.tsx",
+  );
+  assert(source.includes("<ChromeMeta>{fold.label}</ChromeMeta>"));
+  assert(source.includes("<DisclosureToggle"));
+  assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
+  const values = foldRecords([1, 2], () => ({
+    kindLabel: "fixture",
+    title: "Unrelated producer",
+    layout: "row",
+    tone: "normal",
+    category: "record",
+    fold: true,
+    summary: { kind: "fixture", noun: "fact", plural: "facts" },
+  }), () => false);
+  assertEquals(values.visible, []);
+  assertEquals(values.folds[0].label, "2 facts");
+});
+
+Deno.test("UI convention: transcript disclosure defaults name their action", () => {
+  const registry = new PreferenceRegistry();
+  registerTranscriptPreferences(registry);
+  assertEquals(
+    registry.settings("transcript").filter((entry) =>
+      entry.key !== "expandCompaction" &&
+      !/^Expand .+ by default$/.test(entry.label)
+    ).map((entry) => entry.key),
+    [],
+  );
+});
 
 Deno.test("UI convention: component styles never target another component's internals, including every disclosure caller", async () => {
   const files = new Map(
@@ -187,7 +223,8 @@ type Rule =
   | "presentation"
   | "settings-name"
   | "list-order"
-  | "sidebar-row";
+  | "sidebar-row"
+  | "message-footer";
 const owners: Record<Rule, string> = {
   clock:
     "Local date/time formatting belongs to Clock (including precise records)",
@@ -218,6 +255,8 @@ const owners: Record<Rule, string> = {
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
   "sidebar-row":
     "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
+  "message-footer":
+    "D21: MessageFooter owns persistent time/actions; message metadata is never hover-only",
 };
 const containsStringType = (node: t.Node): boolean => {
   if (node.type === "TSStringKeyword") return true;
@@ -346,6 +385,13 @@ export function conventionErrors(
   if (path.endsWith(".css")) {
     for (const { selector, declarations: d } of rules(text)) {
       if (
+        rule === "message-footer" &&
+        /otk-(?:message-(?:footer|details|action)|user-meta|created-time|timeline-(?:clock|actions))/
+          .test(selector) &&
+        (d.get("visibility") === "hidden" || d.get("display") === "none" ||
+          /^(?:0|0\.0+)$/.test(d.get("opacity") ?? ""))
+      ) fail(selector);
+      if (
         rule === "sidebar-row" &&
         /otk-(?:sidebar-(?:row|slot|lamp|icon|label|selection)|project-(?:row|open|name-line|marker|attention))/
           .test(selector)
@@ -448,6 +494,26 @@ export function conventionErrors(
       ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
         .slice(1)
       : specifier;
+  if (rule === "message-footer") {
+    errors.push(...messageHeaderClockErrors(new Map([[path, text]])));
+    for (const node of source.all) {
+      if (node.type !== "JSXOpeningElement" || !source.live(node)) continue;
+      const imported = source.imported(node.name);
+      if (
+        source.attr(node, "data-message-command") &&
+        path !== "packages/ui/components/MessageActions.tsx"
+      ) fail("handwritten message action control");
+      if (
+        modulePath(imported?.module ?? "").endsWith("/MessageActions.tsx") &&
+        path !== "packages/ui/components/MessageFooter.tsx"
+      ) fail("message actions outside MessageFooter");
+      if (
+        source.string(source.attr(node, "class"))?.includes(
+          "otk-message-footer",
+        ) && path !== "packages/ui/components/MessageFooter.tsx"
+      ) fail("handwritten message footer");
+    }
+  }
   if (rule === "sidebar-row") {
     const openings = source.all.filter((node): node is t.JSXOpeningElement =>
       node.type === "JSXOpeningElement" && source.live(node)
@@ -940,6 +1006,103 @@ Deno.test("UI convention: list ordering rejects activity/state keys and accepts 
       text,
     );
   }
+});
+
+Deno.test("UI convention: message footer rejects concealed metadata and independent action owners", () => {
+  assert(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/ExtractedHeader.tsx",
+      'import Instant from "./Clock.tsx"; export const Header=()=> <header data-message-header><Instant at={1}/></header>;',
+    ).length > 0,
+    "an extracted message header escapes the clock owner",
+  );
+  for (const path of ["Message.tsx", "Timeline.tsx", "MovedHeader.tsx"]) {
+    assert(
+      conventionErrors(
+        "message-footer",
+        `packages/ui/components/${path}`,
+        'import Instant from "./Clock.tsx"; const view=<header data-message-header><Instant at={1} /></header>;',
+      ).length > 0,
+    );
+  }
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/MessageFooter.tsx",
+      'import Instant from "./Clock.tsx"; const view=<Instant at={1} />;',
+    ),
+    [],
+  );
+  for (
+    const text of [
+      ".otk-message-actions {opacity: 0}",
+      ".otk-created-time {visibility: hidden}",
+      ".otk-user-meta {display:none}",
+      ".otk-timeline-clock {visibility:hidden}",
+    ]
+  ) {
+    assert(conventionErrors("message-footer", "Fixture.css", text).length > 0);
+  }
+  assert(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/Message.tsx",
+      'import Actions from "./MessageActions.tsx"; const view=<Actions />;',
+    ).length > 0,
+  );
+  assert(
+    conventionErrors(
+      "message-footer",
+      "Fixture.tsx",
+      '<button data-message-command="prompt.copy"><CopyIcon /></button>',
+    ).length > 0,
+  );
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "Fixture.css",
+      ".otk-message-actions {color: var(--otk-fg-3)} .otk-message-actions:hover {color: inherit}",
+    ),
+    [],
+  );
+  assertEquals(
+    conventionErrors(
+      "message-footer",
+      "packages/ui/components/MessageFooter.tsx",
+      'import Actions from "./MessageActions.tsx"; const view=<Actions />;',
+    ),
+    [],
+  );
+});
+
+Deno.test("UI convention: header clock ownership follows component roles and extracted renderers", async () => {
+  assertEquals(messageHeaderClockErrors(await productionSources()), []);
+  const wrapper = new Map([
+    [
+      "views/Frame.tsx",
+      'import Band from "./Renamed.tsx"; const view=<header data-message-header><Band /></header>;',
+    ],
+    [
+      "views/Renamed.tsx",
+      'import Instant from "../Clock.tsx"; export default function Band(){return <span><Instant at={1}/></span>}',
+    ],
+  ]);
+  assert(messageHeaderClockErrors(wrapper).length > 0);
+  wrapper.set(
+    "views/Renamed.tsx",
+    'import Preview from "../Popover.tsx"; import Instant from "../Clock.tsx"; export default function Band(){return <Preview><Instant at={1}/></Preview>}',
+  );
+  assertEquals(messageHeaderClockErrors(wrapper), []);
+  assertEquals(
+    messageHeaderClockErrors(
+      new Map([[
+        "records/History.tsx",
+        'import Instant from "../Clock.tsx"; const view=<header class="record-heading"><Instant at={1}/></header>;',
+      ]]),
+    ),
+    [],
+  );
 });
 
 /** Positive data flow into fixture consumers, not a token-presence obligation. */

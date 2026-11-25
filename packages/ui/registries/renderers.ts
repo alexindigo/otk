@@ -5,6 +5,8 @@ export interface WorkTime {
   end?: number;
 }
 export interface PartPresentation {
+  /** Neutral record facts supplied by the part owner for enclosing-frame folds. */
+  activity?: import("@otk/protocol").Activity;
   /** Ordinary answer prose, eligible for its source's reply-start boundary. */
   prose?: boolean;
   work?: WorkTime;

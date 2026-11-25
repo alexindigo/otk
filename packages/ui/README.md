@@ -405,14 +405,13 @@ and available Retry response callback after a checkpoint failure. The canonical
 client resource owns this state. It does not alter supervision lights, disable
 controls or add a loading overlay.
 
-Each prose-bearing assistant source starts with one quiet agent/local-time band,
-kept in the first prose group's virtual item. Continuations within a grouped
-reply add a rule and a larger reply gap. Source clocks use their own last output
-or creation time, independent of the grouped reply's metadata. Work-only sources
-stay in their existing work groups. Work uses compact, intrinsic-width
-disclosure labels with shared tree junctions, not the full-width compaction
-boundary treatment. Blocks owns paragraph, heading and compact list rhythm
-across virtual wrappers.
+Each prose-bearing assistant source starts with one quiet agent band, kept in
+the first prose group's virtual item. Continuations within a grouped reply add a
+rule and a larger reply gap. Message clocks render only through MessageFooter,
+never in a ReplyStart header. Work-only sources stay in their existing work
+groups. Work uses compact, intrinsic-width disclosure labels with shared tree
+junctions, not the full-width compaction boundary treatment. Blocks owns
+paragraph, heading and compact list rhythm across virtual wrappers.
 
 Agent labels share `EntityPill` across reply sources, delegate tools and
 activity records/groups. Producers carry the entity and remaining title
@@ -426,17 +425,19 @@ uses the same guarded navigation as the existing Open task action.
 
 Reply footers show outcome instants independently of working-duration
 availability. A native `outcomeTime` is shown in local time for success, failure
-and interruption; an unknown instant states that no native time was recorded and
-retains its reason. Reply footers also show model-call count, charged turn
-tokens and backend-reported cost after working time. Footers and opened detail
-bind the adapter's whole-turn result. Work-log headers pass their own
-contributed part clocks to the same timing owner for a busy-union-minus-waits
-result, never the turn total. Missing segment evidence leaves the plain Work log
-label. Busy clocks belong to each group; wait clocks come from the complete
-reply, including nonwork/hidden parts. The cached layout rechecks dependent
-durations when a wait witness changes, preserving unchanged groups and never
-turning absent busy evidence into zero. There is no loaded-page turn timing
-fallback; missing turn evidence says Time unknown, with the adapter's
+and interruption; an unknown instant uses Time unknown with its explanation on
+hover. Unfinished or undigested timing uses TimeValue's italic counting... cue,
+retaining positive measured numbers but never presenting a provisional zero as
+Worked for 0s. Only explicit unknown evidence uses the shared unknown label.
+Reply footers also show model-call count, charged turn tokens and
+backend-reported cost after working time. Footers and opened detail bind the
+adapter's whole-turn result. The footer alone presents reply working time;
+work-log headers always say Work log and show category counts, never a second
+duration or counting cue. Entity previews and usage tables pass the same client
+timing presentation through TimeValue unchanged; Time columns request the
+presenter's bare-value form rather than stripping the fact's wording. There is
+no loaded-page turn timing fallback; missing turn evidence stays counting until
+digested; explicit unknown timing says Time unknown with the adapter's
 explanation on hover. The shared Popover's hover/focus preview reveals an
 ordered per-call table: existing tool labels or answered, full prompt Context,
 five token categories, reported cost and time. New input is the uncached part; a
@@ -817,10 +818,10 @@ No panel reads another component's DOM or maintains a second transcript store.
 
 Sessions and Timeline use the same `ListRow` frame: shared 30px height,
 selection pointer, highlight bounds, padding and leading/label/trailing slots.
-Consumers inject content and callbacks. Timeline's trailing clock/actions share
-one grid area; visibility switches on hover intent, keyboard focus or selection
-while the cell keeps the larger intrinsic width. Action hit targets do not move,
-and the label has no independent inset hover highlight.
+Consumers inject content and callbacks. Timeline's trailing slot borrows the
+same persistent MessageFooter as the transcript, with no clock/action hover
+swap. Action hit targets do not move, and the label has no independent inset
+hover highlight.
 
 ListRow's `--list-row-height` is also its editing control track. Primary
 leading, input and trailing slots share that track while validation prose wraps
@@ -841,6 +842,17 @@ lifetime, with live data in nested bindings. `control.reveal(key, options)`
 waits for mounted, stable measured geometry and invokes its injected focus
 callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
 expose source-free navigation without consumer DOM access.
+
+Windowing preserves inline footprint as well as block extent. A zero-block-size
+normal-flow sizing track retains the largest measured row width even after its
+content retires. Intrinsically sized consumers, including message bubbles, keep
+their complete acquired footprint instead of sizing to whichever nested rows are
+currently visible. Content revisions, viewport width and font metrics renew that
+footprint by remeasuring acquired rows through the same measurement leases;
+scrolling alone never revokes it. Short and image-only content stays intrinsic.
+The content boundary declares intrinsic sizing, inherited by nested windows.
+Constrained reading lanes retain normal range-only materialization; acquiring
+source for Copy never eagerly renders their offscreen reply segments.
 
 One root-shared position owner in `viewport.ts` alone writes the viewport's
 scroll position. Every borrowed window registers identity geometry from
@@ -1113,6 +1125,20 @@ that same owner. Project metadata borrows SidebarRow's intrinsic metadata slot
 and reflows below the label under pressure. Counts and annotations have no
 parentheses. The hierarchy projection supplies artwork eligibility, never
 section-local depth.
+
+Producer-declared low-signal bookkeeping folds into its work-log or background
+interval header's plain muted category count. MetaRow owns the single-line gap
+track shared with MessageFooter. Work and interval frames both borrow that row.
+Its measured optional controls retain intrinsic width and are hidden and inert
+as whole items when they cannot fit; the primary label truncates first.
+Measurement frames are inert and hidden from accessibility. RecordKinds borrows
+the meta DisclosureToggle variant: no button padding, ChromeMeta weight and
+shared +/- artwork for its open/closed state. `RecordKinds` borrows the client's
+`foldRecords` projection and the transcript's retained category choices. Folding
+changes only rendered membership: native identities, chronology, details and
+Source remain intact. The count reveals every record; Settings supplies each
+category's default independently of explicit choices and record-body disclosure.
+Failure, pending and active facts remain visible.
 
 ## Example
 
@@ -1410,13 +1436,16 @@ Close keeps ordinary drafts, while successful native deletion drops the family
 drafts.
 
 The session-action owner also contributes Fork session to session targets and
-the palette, and Fork from here to completed replies. `MessageActions` renders
-available command IDs only, sharing `hoverIntent` with Popover (500ms rest,
-150ms leave, immediate focus). Prompt Copy and reply Fork/Copy reserve their
-metadata-row space while concealed. Message contributes no commands; the shared
-transcript feature owns Copy source projection. Fork results open with a joined
-`ComposerNotice` / `ForkNote` above the input; Dismiss and the first successful
-submission clear the note through the framework-free client owner.
+the palette, and Fork from here to completed replies. `MessageFooter` owns the
+shared persistent Clock, duration, metadata and action track for prompts and
+replies, also borrowed by Timeline. `MessageActions` renders available command
+IDs only, always visible in quiet metadata paint; hover/focus may raise contrast
+but never reveal hidden controls. The old timestamps preference remains
+stored/API-compatible without a redundant Display toggle. Message contributes no
+commands; the shared transcript feature owns Copy source projection. Fork
+results open with a joined `ComposerNotice` / `ForkNote` above the input;
+Dismiss and the first successful submission clear the note through the
+framework-free client owner.
 
 `registerCompactPrompt` contributes Compact while a root composer with a known
 next-prompt model is mounted. The command is shared by that session's context

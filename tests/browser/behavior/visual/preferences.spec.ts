@@ -55,7 +55,7 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
   await expect(page.locator("input[name=thinking]")).not.toBeChecked();
   await page.locator("input[name=thinking]").click();
   await expect(page.locator("input[name=thinking]")).toBeChecked();
-  await page.locator("input[name=timestamps]").click();
+  await expect(page.locator("input[name=timestamps]")).toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-user-meta time").evaluate((el) =>
       getComputedStyle(el).visibility
@@ -82,7 +82,6 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
   ).toEqual([
     { key: "models.recent", value: [{ provider: "fake", model: "scripted" }] },
     { key: "thinking", value: "show" },
-    { key: "timestamps", value: true },
     { key: "thinking", value: "hide" },
   ]);
   expect(errors).toEqual([]);

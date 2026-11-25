@@ -12,6 +12,8 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
   createTranscriptInteraction,
   type NativeSourceOwner,
+  recordKindDisclosure,
+  recordKindKey,
   type TranscriptInteraction,
 } from "@otk/client";
 import type { DisclosureCategory, Preferences } from "@otk/protocol";
@@ -144,6 +146,34 @@ const key = (identity: ContentIdentity) =>
     identity.partID,
     identity.callID,
   ]);
+/** Category choices share the transcript interaction lifetime, never the DOM. */
+export function retainedRecordKinds(owner: () => string) {
+  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
+  const [revision, setRevision] = createSignal(0);
+  const subscriptions = new Map<string, () => void>();
+  onCleanup(() => {
+    for (const release of subscriptions.values()) release();
+  });
+  const choice = (category: DisclosureCategory) => {
+    const id = recordKindKey(owner(), category);
+    if (!subscriptions.has(id)) {
+      subscriptions.set(
+        id,
+        interaction.subscribe(() => setRevision((n) => n + 1), id),
+      );
+    }
+    return recordKindDisclosure(interaction, owner(), category);
+  };
+  return {
+    expanded(category: DisclosureCategory, prefs: Partial<Preferences>) {
+      revision();
+      return choice(category).expanded(category, prefs);
+    },
+    set(category: DisclosureCategory, open: boolean) {
+      choice(category).set(open);
+    },
+  };
+}
 export function ContentIdentityProvider(
   props: { value: ContentIdentity; children: Element },
 ): Element {

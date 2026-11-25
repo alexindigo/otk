@@ -7,6 +7,10 @@
   font-weight: 400;
   line-height: var(--line-meta);
 }
+.otk-chrome-meta.is-truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .otk-section-tree {
   --tree-height: var(--row-project);
 }
@@ -33,4 +37,50 @@
   align-items: center;
   gap: var(--space-1);
   min-inline-size: 0;
+}
+.otk-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+  color: var(--otk-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.otk-meta-row.has-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-meta-fit {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  min-inline-size: 0;
+  flex-direction: var(--tree-heading-flow, row);
+}
+.otk-meta-primary {
+  flex: 0 1 auto;
+  min-inline-size: 6ch;
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+.otk-meta-control {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.otk-meta-control[hidden] {
+  display: none;
+}
+.otk-meta-measure {
+  grid-area: 1 / 1;
+  inline-size: 0;
+  block-size: 0;
+  visibility: hidden;
+  display: flex;
+  pointer-events: none;
 }

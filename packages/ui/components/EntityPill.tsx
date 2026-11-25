@@ -2,7 +2,8 @@
 import "./EntityPill.css" with { type: "text" };
 import Clock from "./Clock.tsx";
 import { Show } from "solid-js";
-import { duration, type EntityFacts } from "@otk/client";
+import { type EntityFacts, entityTimeValue } from "@otk/client";
+import TimeValue from "./TimeValue.tsx";
 import Popover from "./surface/Popover.tsx";
 import StatusLight from "./StatusLight.tsx";
 import { LIGHT_STATES } from "./status-light.ts";
@@ -47,14 +48,13 @@ export default function EntityPill(props: {
           {(value) => (
             <>
               <dt>{props.facts.reply ? "This reply" : "This tool"}</dt>
-              <dd title={props.facts.reply?.explanation}>
-                {value().working.known
-                  ? `Working time: ${duration(value().working.value!)}`
-                  : "Time unknown"}
-                <Show when={value().working.known && !value().working.final}>
-                  {" "}
-                  <em>counting...</em>
-                </Show>
+              <dd>
+                <TimeValue
+                  value={entityTimeValue(
+                    value().working,
+                    props.facts.reply?.explanation,
+                  )}
+                />
               </dd>
               <Show when={value().completed.known}>
                 {

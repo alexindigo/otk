@@ -17,6 +17,8 @@ export interface TranscriptPreferences {
   expandRecords: boolean;
   expandSource: boolean;
   expandCompaction: boolean;
+  expandStepMarkers: boolean;
+  expandSnapshots: boolean;
 }
 export function registerTranscriptPreferences(
   registry: PreferenceRegistry,
@@ -45,10 +47,10 @@ export function registerTranscriptPreferences(
   });
   registry.register({
     key: "timestamps",
+    // Retain stored/API compatibility; D21 makes message clocks unconditional.
     default: false,
     validate: booleanPreference,
     label: "Always show timestamps",
-    display: { order: 1, control: { kind: "toggle" } },
   });
   registry.register({
     key: "toolDetails",
@@ -114,6 +116,8 @@ export function registerTranscriptPreferences(
       ["expandRecords", "Expand other native records by default", 8],
       ["expandSource", "Expand native source by default", 9],
       ["expandCompaction", "Always keep session compaction expanded", 10],
+      ["expandStepMarkers", "Expand step markers by default", 11],
+      ["expandSnapshots", "Expand snapshots by default", 12],
     ] as const
   ) {
     registry.register({

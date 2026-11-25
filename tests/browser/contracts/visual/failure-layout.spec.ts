@@ -301,11 +301,13 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           ),
         ).toHaveCount(1);
         await expect(page.locator(".otk-failure-time")).toHaveCount(0);
-        await expect(page.locator(".otk-message-footer time")).toHaveText([
+        await expect(
+          page.locator("[data-role=assistant] .otk-message-footer time"),
+        ).toHaveText([
           "1:16 AM",
           "1:23 AM",
         ]);
-        await expect(page.getByText("No time recorded", { exact: true }))
+        await expect(page.getByText("Time unknown", { exact: true }))
           .toBeVisible();
       }
       if (surface === "send") {

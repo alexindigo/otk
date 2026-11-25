@@ -60,6 +60,12 @@ test.describe("actual tool forms", () => {
     }
     // Virtualization changes the first mounted row; explicit choice belongs to one stable record.
     // V1 owns qualified step records (NT4); V2 steps are the neutral step part.
+    if (!state.controller.info!.version.startsWith("2.")) {
+      await state.product("prefs.set", {
+        key: "expandStepMarkers",
+        value: true,
+      });
+    }
     const steps = state.controller.info!.version.startsWith("2.")
       ? "[data-native-record=step]"
       : '[data-native-record^="opencode-v1/step-"]';

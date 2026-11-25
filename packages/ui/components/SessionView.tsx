@@ -25,6 +25,8 @@ import type {
 import Message, { type MessageControl } from "./Message.tsx";
 import ActivityGroup, { CompletionToggle } from "./ActivityGroup.tsx";
 import RecordList from "./RecordList.tsx";
+import RecordKinds from "./RecordKinds.tsx";
+import { recordKindDisclosure } from "@otk/client";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
@@ -205,9 +207,10 @@ export default function SessionView(props: {
   const renderRecords = (
     group: () => import("@otk/client").ActivityGroup,
     one: (key: string) => Element,
+    children = () => group().children ?? [],
   ): Element => (
     <RecordList
-      items={group().children ?? []}
+      items={children()}
       key={(child) => child.key}
       scope={group().key}
       control={(control) => recordWindow(group().key, control)}
@@ -244,22 +247,41 @@ export default function SessionView(props: {
       fallback={
         <Show when={recordGroups().groups[key]} fallback={one(key)}>
           {(group) => (
-            <ActivityGroup
-              group={group()}
-              onOpenChild={props.onOpenChild}
+            <RecordKinds
+              items={group().children ?? []}
+              identity={group().key}
+              count={(child) => child.members.length}
               prefs={props.prefs}
-              breakouts={() => (
-                <RecordList
-                  items={group().breakouts ?? []}
-                  key={(id) => id}
-                  scope={group().key}
-                  control={(control) => recordWindow(group().key, control)}
-                  revision={(id) => projection().repliesByID[id]?.revision ?? 0}
-                  outgoing={group().direction === "outgoing"}
-                  render={(id) => one(id())}
+              activity={(child) => {
+                const reply = projection().repliesByID[child.members[0]];
+                const part = reply?.message.parts[0];
+                return reply?.message.parts.length === 1 && !reply.pending &&
+                    part?.kind === "external" &&
+                    !part.failure
+                  ? part.activity
+                  : undefined;
+              }}
+              render={(visible, meta) => (
+                <ActivityGroup
+                  group={group()}
+                  onOpenChild={props.onOpenChild}
+                  prefs={props.prefs}
+                  meta={meta}
+                  breakouts={() => (
+                    <RecordList
+                      items={group().breakouts ?? []}
+                      key={(id) => id}
+                      scope={group().key}
+                      control={(control) => recordWindow(group().key, control)}
+                      revision={(id) =>
+                        projection().repliesByID[id]?.revision ?? 0}
+                      outgoing={group().direction === "outgoing"}
+                      render={(id) => one(id())}
+                    />
+                  )}
+                  body={() => renderRecords(group, one, visible)}
                 />
               )}
-              body={() => renderRecords(group, one)}
             />
           )}
         </Show>
@@ -299,9 +321,13 @@ export default function SessionView(props: {
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
+  const copyRecovery = () =>
+    !!props.branchHistory?.state.recovery &&
+    (!rollbackState().record || !!rollbackState().dismissed);
   const noticed = () =>
     !!props.forkNote || !!feedback() ||
     !!props.branchHistory?.state.permanence ||
+    copyRecovery() ||
     !!props.branchHistory?.state.choice ||
     !!props.branchHistory?.state.error && !rollbackState().record ||
     !!props.branchHistory?.state.branches.some((branch) =>
@@ -320,7 +346,10 @@ export default function SessionView(props: {
             <RevertSendChoice owner={owner()} />
             <SavedBranchNotice
               owner={owner()}
-              failureVisible={branchFailureVisible() && !rollbackState().record}
+              failureVisible={branchFailureVisible() &&
+                !owner().state.permanence &&
+                (!rollbackState().record || !!rollbackState().dismissed)}
+              recoveryVisible={copyRecovery()}
               statusVisible={false}
             />
           </>
@@ -469,6 +498,12 @@ export default function SessionView(props: {
         projection().repliesByID[replyKey(message)];
       const key = reply?.key ?? replyKey(message);
       const ancestors = recordGroups().parents[key] ?? [];
+      const part = message.parts[0];
+      const recordOwner = recordGroups().owners[key];
+      if (recordOwner && part?.kind === "external" && part.activity?.fold) {
+        recordKindDisclosure(interaction, recordOwner, part.activity.category)
+          .set(true);
+      }
       interaction.reveal(ancestors);
       const focus = () => {
         const control = controls.get(reply?.message.id ?? target.messageID);
@@ -1058,7 +1093,8 @@ export default function SessionView(props: {
               focusNotice={() => noticeControl?.focus()}
               notice={noticed() ? notice : undefined}
               noticeFlow={!!props.branchHistory?.state.permanence ||
-                !!props.branchHistory?.state.choice}
+                !!props.branchHistory?.state.choice ||
+                copyRecovery()}
               readOnly={props.child}
             >
               {(active) => (
