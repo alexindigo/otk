@@ -224,6 +224,8 @@ export interface Commands {
       | "summarize"
       | "tabs-pin"
       | "delivery-helpers"
+      | "header-shells"
+      | "helper-dispositions"
       | "trail-decisions"
       | "trail-delivery"
       | "trail-overflow";
@@ -439,6 +441,8 @@ export function request(value: unknown): ControlRequest {
           "summarize",
           "tabs-pin",
           "delivery-helpers",
+          "header-shells",
+          "helper-dispositions",
           "trail-decisions",
           "trail-delivery",
           "trail-overflow",

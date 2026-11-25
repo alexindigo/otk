@@ -658,6 +658,43 @@ export async function sessionsScenario(profile: Profile) {
             });
             return null;
           }
+          if (frame.params.target === "header-shells") {
+            if (
+              profile !== "contract-sessions-default" ||
+              (action !== "hold" && action !== "release")
+            ) throw new Error("Unsupported sessions scenario action");
+            // Native-shaped shell inventory on the open session; release ends both shells.
+            const entry = f.entries.find((e) => e.id === base.id)!;
+            const items = action === "hold"
+              ? [
+                {
+                  id: "sh-header-build",
+                  kind: "shell" as const,
+                  label: "Shell",
+                  title: "deno task build",
+                  startedAt: Date.now() - 90_000,
+                },
+                {
+                  id: "sh-header-sleep",
+                  kind: "shell" as const,
+                  label: "Shell",
+                  title: "sleep 120",
+                  startedAt: Date.now() - 30_000,
+                },
+              ]
+              : [];
+            f.update(base.id, {
+              activity: {
+                ...entry.activity,
+                work: {
+                  fresh: true,
+                  keys: items.map((item) => item.id),
+                  items,
+                },
+              },
+            });
+            return null;
+          }
           if (
             profile === "contract-sessions-tab-groups" &&
             frame.params.target === "trail-decisions"
@@ -793,6 +830,72 @@ export async function sessionsScenario(profile: Profile) {
               name: "Split helper task",
               sessions: ["tstv1-delivery-helper-2"],
             });
+            return null;
+          }
+          if (frame.params.target === "helper-dispositions") {
+            if (
+              profile !== "contract-sessions-hierarchy" || action !== "hold"
+            ) {
+              throw new Error("Unsupported sessions scenario action");
+            }
+            const now = Date.now();
+            for (let n = 0; n < 7; n++) {
+              const id = `tstv1-disp-${n}`;
+              const parentID = n === 6 ? "tstv1-disp-0" : base.id;
+              const title = `Disposition helper ${n + 1}`;
+              f.add({
+                ...base,
+                id,
+                parentID,
+                directory: n === 1
+                  ? join(root, "helper-checkout")
+                  : base.directory,
+                title,
+                timeCreated: base.timeCreated + n,
+              });
+              if (n === 0 || n === 1 || n === 3) {
+                f.update(id, {
+                  status: "busy",
+                  activity: {
+                    work: {
+                      fresh: true,
+                      keys: [id],
+                      items: [{
+                        id,
+                        kind: "execution",
+                        label: "Execution",
+                        title,
+                        startedAt: now - (7 - n) * 60_000,
+                      }],
+                    },
+                  },
+                });
+              }
+              if (n === 2) {
+                f.update(id, {
+                  status: "busy",
+                  attention: { ...base.attention, questions: 1 },
+                });
+              } else if (n >= 3) {
+                const terminal = now - (7 - n) * 1000;
+                f.update(id, {
+                  status: "idle",
+                  activity: {
+                    terminal,
+                    outcome: "succeeded",
+                    ...(n === 5
+                      ? {
+                        delivered: {
+                          parentID,
+                          receipt: `result:${id}`,
+                          terminal,
+                        },
+                      }
+                      : {}),
+                  },
+                });
+              }
+            }
             return null;
           }
           if (
