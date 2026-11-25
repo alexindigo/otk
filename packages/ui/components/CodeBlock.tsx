@@ -9,6 +9,7 @@ import MessageActions from "./MessageActions.tsx";
 
 export default function CodeBlock(props: {
   source: CodeBlockSource;
+  mark?: { start: number; end?: number };
   frame?: "own" | "inherit";
   textClass?: string;
   reveal?: boolean;
@@ -41,6 +42,7 @@ export default function CodeBlock(props: {
             <div class="otk-code-block-body">
               <Code
                 text={source().text}
+                mark={props.mark}
                 lang={source().lang}
                 streaming={(source() as Extract<
                   CodeBlockSource,

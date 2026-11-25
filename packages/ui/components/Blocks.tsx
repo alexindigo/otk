@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Blocks.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
-import { For, Match, Show, Switch } from "solid-js";
+import { createMemo, For, Match, Show, Switch, useContext } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
+import { hrefPath, pathSegments, textRuns } from "@otk/client";
 import CodeBlock from "./CodeBlock.tsx";
 import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
+import PathLink, { PathContext } from "./PathLink.tsx";
+import { usePathSemantics } from "./PathProvider.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
 const inlineOf = <K extends Inline["i"]>(inline: Inline, kind: K) =>
@@ -23,18 +26,47 @@ function safeHref(href: string): string | undefined {
   }
 }
 export function Inlines(props: { items: Inline[] }) {
+  const context = useContext(PathContext);
   return (
-    <For each={props.items} keyed={false}>
+    <For
+      each={context && !context.inLink ? textRuns(props.items) : props.items}
+      keyed={false}
+    >
       {(item) => <InlineView item={item()} />}
     </For>
   );
 }
 type InlineProps<K extends Inline["i"]> = { item: Inline & { i: K } };
 function TextInline(props: InlineProps<"text">) {
-  return <>{props.item.text}</>;
+  const context = useContext(PathContext);
+  if (!context || context.inLink) return <>{props.item.text}</>;
+  return (
+    <For
+      each={pathSegments(props.item.text, "prose", context.style)}
+      keyed={false}
+    >
+      {(segment) => (
+        <Show when={segment().mention} fallback={segment().text}>
+          {(mention) => (
+            <PathLink mention={mention()}>{segment().text}</PathLink>
+          )}
+        </Show>
+      )}
+    </For>
+  );
 }
 function CodeInline(props: InlineProps<"code">) {
-  return <code class="otk-prose-code">{props.item.text}</code>;
+  const context = useContext(PathContext);
+  const code = () => <code class="otk-prose-code">{props.item.text}</code>;
+  return (
+    <Show
+      when={context && !context.inLink &&
+        pathSegments(props.item.text, "code", context.style)[0]?.mention}
+      fallback={code()}
+    >
+      {(mention) => <PathLink mention={mention()}>{code()}</PathLink>}
+    </Show>
+  );
 }
 function StrongInline(props: InlineProps<"strong">) {
   return (
@@ -58,15 +90,36 @@ function DelInline(props: InlineProps<"del">) {
   );
 }
 function LinkInline(props: InlineProps<"link">) {
-  return (
-    <a
-      class="otk-prose-link"
-      href={safeHref(props.item.href)}
-      target="_blank"
-      rel="noopener noreferrer"
+  const context = useContext(PathContext);
+  const label = () => (
+    <PathContext
+      value={{
+        get streaming() {
+          return !!context?.streaming;
+        },
+        inLink: true,
+      }}
     >
       <Inlines items={props.item.inline} />
-    </a>
+    </PathContext>
+  );
+  return (
+    <Show
+      when={context && !context.inLink &&
+        hrefPath(props.item.href, context.style)}
+      fallback={
+        <a
+          class="otk-prose-link"
+          href={safeHref(props.item.href)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {label()}
+        </a>
+      }
+    >
+      {(mention) => <PathLink mention={mention()}>{label()}</PathLink>}
+    </Show>
   );
 }
 function ImageInline(props: InlineProps<"image">) {
@@ -281,6 +334,7 @@ export default function Blocks(props: {
   conceal?: boolean;
   compact?: boolean;
 }): import("solid-js").Element {
+  const paths = usePathSemantics();
   return (
     <div
       class={["otk-text", {
@@ -292,21 +346,36 @@ export default function Blocks(props: {
         items={props.blocks.map((block, index) => ({ block, index }))}
         key={(row) => String(row.index)}
         label="Source blocks"
-        render={(row) => (
-          <div
-            class={["otk-prose-block", {
-              "is-compact-start": row().index === 0,
-              "is-compact-end": row().index === props.blocks.length - 1,
-            }]}
-          >
-            <BlockView
-              block={row().block}
-              streaming={props.streaming &&
-                row().index === props.blocks.length - 1}
-              conceal={props.conceal}
-            />
-          </div>
-        )}
+        render={(row) => {
+          const streaming = createMemo(() =>
+            !!props.streaming && row().index === props.blocks.length - 1
+          );
+          return (
+            <div
+              class={["otk-prose-block", {
+                "is-compact-start": row().index === 0,
+                "is-compact-end": row().index === props.blocks.length - 1,
+              }]}
+            >
+              <PathContext
+                value={{
+                  get streaming() {
+                    return streaming();
+                  },
+                  get style() {
+                    return paths()?.style;
+                  },
+                }}
+              >
+                <BlockView
+                  block={row().block}
+                  streaming={streaming()}
+                  conceal={props.conceal}
+                />
+              </PathContext>
+            </div>
+          );
+        }}
       />
     </div>
   );

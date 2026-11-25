@@ -2,6 +2,18 @@
 const exact = new Intl.NumberFormat("en-US");
 /** Exact audit counts; compact labels remain the usage formatter's concern. */
 export const exactCount = (value: number): string => exact.format(value);
+export function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let index = 0;
+  while (bytes >= 1024 && index < units.length - 1) {
+    bytes /= 1024;
+    index++;
+  }
+  const value = index && bytes < 10
+    ? Math.round(bytes * 10) / 10
+    : Math.round(bytes);
+  return `${value} ${units[index]}`;
+}
 export type TimeUnit = "d" | "h" | "m" | "s";
 export interface TimePart {
   readonly value: string;

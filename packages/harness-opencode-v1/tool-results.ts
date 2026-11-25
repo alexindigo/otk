@@ -2,7 +2,7 @@
 import type { ToolResult } from "@otk/protocol";
 import type { RawPart } from "./types.ts";
 import { markdown } from "@otk/content";
-import { fileLanguage } from "./language.ts";
+import { fileLanguage } from "@otk/content";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 
 const record = (value: unknown): Record<string, unknown> =>

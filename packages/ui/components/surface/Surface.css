@@ -38,6 +38,9 @@
   margin: 0;
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
 }
+.otk-surface.is-dialog .otk-surface-title {
+  flex-wrap: nowrap;
+}
 .otk-surface .otk-surface-body {
   flex: 1 1 auto;
   display: flex;

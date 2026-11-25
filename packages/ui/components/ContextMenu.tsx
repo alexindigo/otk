@@ -14,7 +14,10 @@ import type { PopoverControl, PopoverOpenReason } from "./surface/Popover.tsx";
 
 /** One listener owner per shell. Targets declare data; commands own behavior. */
 export default function ContextMenu(
-  props: { root: HTMLElement },
+  props: {
+    root: HTMLElement;
+    control?(openFor: (element: HTMLElement) => void): void;
+  },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   let targets: ContextTarget[] = [];
@@ -58,8 +61,34 @@ export default function ContextMenu(
     );
     menu.open({ x, y, width, height, origin, focus: returnFocus }, reason);
   };
+  const openFor = (
+    origin: HTMLElement,
+    focused: HTMLElement | null = origin,
+  ) => {
+    if (!props.root.contains(origin)) return;
+    const path: HTMLElement[] = [];
+    for (
+      let node: HTMLElement | null = origin;
+      node;
+      node = node.parentElement
+    ) {
+      path.push(node);
+      if (node === props.root) break;
+    }
+    const rect = origin.getBoundingClientRect();
+    open(
+      path,
+      rect.left,
+      rect.top,
+      focused,
+      "keyboard",
+      origin === props.root ? 0 : rect.width,
+      origin === props.root ? 0 : rect.height,
+    );
+  };
   onSettled(() => {
     const root = props.root;
+    props.control?.(openFor);
     let rightPressed = false, pending: (() => void) | undefined;
     let opening: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
@@ -126,16 +155,7 @@ export default function ContextMenu(
       pending = undefined;
       clearTimeout(opening);
       const origin = focused && focused !== document.body ? focused : root;
-      const rect = origin.getBoundingClientRect();
-      open(
-        origin === root ? [root] : event.composedPath(),
-        rect.left,
-        rect.top,
-        focused,
-        "keyboard",
-        origin === root ? 0 : rect.width,
-        origin === root ? 0 : rect.height,
-      );
+      openFor(origin, focused);
     };
     const cancel = () => {
       rightPressed = false;
