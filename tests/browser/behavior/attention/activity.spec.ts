@@ -50,8 +50,11 @@ test(
     await page.getByRole("button", { name: "Open right panel", exact: true })
       .click();
     await expect(activity.locator("[data-activity]")).toHaveCount(100);
-    await expect(activity.locator("[role=status]:not([aria-hidden=true])"))
-      .toHaveCount(0);
+    // Decision 65: records own their individual statuses. The journal pane
+    // must not retain a separate loading status once the inventory is ready.
+    await expect(activity.locator(
+      "[role=status]:not([aria-hidden=true],[data-activity] *)",
+    )).toHaveCount(0);
     expect(reads()).toBe(2);
     await state.controller.call("scenario", {
       lease: state.lease.lease,
