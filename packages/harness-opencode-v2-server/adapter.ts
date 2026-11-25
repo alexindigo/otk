@@ -996,20 +996,13 @@ export class OpencodeV2ServerAdapter implements Harness {
   }
   #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
     busy ||= this.#shells.busy(raw.id);
-    const mapped = session(raw);
+    const mapped = metadata(raw);
     return {
-      id: mapped.id,
-      parentID: mapped.parentID,
-      directory: mapped.directory,
-      projectID: mapped.projectID,
-      title: mapped.title,
-      timeCreated: mapped.time.created,
-      timeUpdated: mapped.time.updated,
-      archived: mapped.archived,
+      ...mapped,
       status: busy ? "busy" : "idle",
       activityAuthority: "current",
       activity: {
-        ...metadata(raw).activity,
+        ...mapped.activity,
         // The running token can be observation-time fallback. Only the native
         // busy clock establishes this run's start for elapsed presentation.
         work: {

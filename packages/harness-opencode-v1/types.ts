@@ -7,6 +7,7 @@ export interface Session {
   projectID: string;
   directory: string;
   title: string;
+  agent?: string | null;
   time: { created: number; updated: number; archived?: number };
   revert?: { messageID: string; diff?: string };
   summary?: { diffs?: RawDiff[] };

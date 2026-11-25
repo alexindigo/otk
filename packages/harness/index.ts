@@ -162,6 +162,10 @@ export class SessionIndex {
     Reflect.deleteProperty(metadata, "deleted");
     return immutable({
       ...metadata,
+      // Sparse activity and cached digest metadata cannot retract a native agent.
+      ...(metadata.agent == null && previous?.agent != null
+        ? { agent: previous.agent }
+        : {}),
       digest: previous?.digest ??
         { state: "digesting", revision: 0, turns: {} },
       ...(previous?.deleted ? { deleted: previous.deleted } : {}),
