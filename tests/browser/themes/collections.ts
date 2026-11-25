@@ -1209,8 +1209,12 @@ export async function collections456(input: Inputs) {
             r = row.getBoundingClientRect(),
             t = text.getBoundingClientRect(),
             i = icon?.getBoundingClientRect(),
-            n = el.getBoundingClientRect(),
+            n = el.closest(".otk-composer-feedback")!.getBoundingClientRect(),
             frame = document.querySelector(".otk-composer-frame")!
+              .getBoundingClientRect(),
+            input = document.querySelector(".otk-prompt-input")!
+              .getBoundingClientRect(),
+            send = document.querySelector(".otk-send-button")!
               .getBoundingClientRect(),
             destination = document.querySelector(".otk-composer-activity-slot")!
               .getBoundingClientRect(),
@@ -1218,16 +1222,21 @@ export async function collections456(input: Inputs) {
               .getBoundingClientRect();
           return {
             row: r.height,
-            notice: n.height,
+            notice: el.getBoundingClientRect().height,
             icon: i ? [i.width, i.height] : [],
             text: Math.abs(t.top + t.height / 2 - r.top - r.height / 2),
             iconOffset: i ? i.top + i.height / 2 - r.top - r.height / 2 : null,
             // Approved M1 notice flow: transcript, destination, notice, input.
-            // The outer input frame still owns the joined notice's width.
+            // 2.76: "The transparent header/notice frame uses the composer's
+            // same border track". Match frames and the actual content edges.
             joined: n.left === frame.left && n.right === frame.right &&
               Math.abs(n.bottom - frame.top) <= 1 &&
               n.top >= destination.bottom - 1 &&
               n.top >= transcript.bottom - 1,
+            contentInset: Math.max(
+              Math.abs(r.left - input.left),
+              Math.abs(r.right - send.right),
+            ),
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
@@ -1291,7 +1300,9 @@ export async function collections456(input: Inputs) {
           expect(g.iconOffset).toBe(0);
         }
         expect(g.text).toBeLessThanOrEqual(.5);
-        expect(g.joined).toBe(true);
+        expect(g.joined, `${theme.id}/${mode} joined frames`).toBe(true);
+        expect(g.contentInset, `${theme.id}/${mode} shared content inset`)
+          .toBeLessThanOrEqual(1);
         await expectRuleThree(page);
         if (mode === "notice-pending") {
           await expect(page.locator(".otk-composer-notice [role=status]"))
