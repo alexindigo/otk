@@ -217,3 +217,44 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   await expect(page).toHaveURL(new RegExp(`${b.id}$`));
   await expect(done).toHaveCount(0);
 });
+
+test("attention.toast-hover-and-focus-hold-one-expiry", {
+  tag: ["@attention", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const current = await seed(state, "Current conversation");
+  const background = await seed(state, "Background conversation");
+  await openSession(state, page, current.id);
+  await focusNotifications(page);
+  await page.clock.install();
+  await state.queue(["Review complete"]);
+  await state.product("session.prompt", {
+    sessionID: background.id,
+    mode: "normal",
+    parts: [{ kind: "text", text: "Complete a background review" }],
+  });
+  const note = page.locator(toast(background.id));
+  const name = note.getByRole("button", {
+    name: "Background conversation",
+    exact: true,
+  });
+  const close = note.getByRole("button", {
+    name: "Dismiss notification",
+    exact: true,
+  });
+  await expect(note).toContainText("Session done");
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+  await name.hover();
+  await page.clock.fastForward(7000);
+  await expect(note).toBeVisible();
+  await name.focus();
+  await page.mouse.move(1, 1);
+  await page.keyboard.press("Tab");
+  await expect(close).toBeFocused();
+  await page.clock.fastForward(7000);
+  await expect(note).toBeVisible();
+  await close.blur();
+  await page.clock.fastForward(5999);
+  await expect(note).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(note).toHaveCount(0);
+});

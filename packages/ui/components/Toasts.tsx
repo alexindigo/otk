@@ -130,6 +130,7 @@ export default function Toasts(
               kind={note().kind}
               lead={!!(session() || failure())}
               signal={signal()}
+              onHold={(held) => props.model.hold(note().id, held)}
             >
               <div class="otk-toast-row">
                 <Show when={session()}>

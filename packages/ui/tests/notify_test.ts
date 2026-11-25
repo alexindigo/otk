@@ -3,6 +3,48 @@ import { assertEquals } from "@std/assert";
 import { NotificationHub } from "@otk/client";
 import { ManualClock } from "../../../tests/support/manual-clock.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
+
+Deno.test("toast hold preserves a transient and restarts a full six seconds", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
+  const advance = (ms: number) => clock.advanceTo(clock.now() + ms);
+  const hub = new NotificationHub(
+    () => ({ channels: ["toast"] }),
+    async () => {},
+    (error) => {
+      throw error;
+    },
+  );
+  const toast = registerToastChannel(hub);
+  const { model } = toast;
+  try {
+    hub.publish({ id: "done", kind: "done", title: "Done", actions: [] });
+    advance(3000);
+    model.hold("done", true);
+    advance(7000);
+    assertEquals(model.state.items.map(({ note }) => note.id), ["done"]);
+    model.hold("done", false);
+    advance(5999);
+    assertEquals(model.state.items.length, 1);
+    advance(1);
+    assertEquals(model.state.items.length, 0);
+    model.hold("done", false);
+    hub.publish({
+      id: "permission",
+      kind: "permission",
+      title: "Permission",
+      actions: [],
+    });
+    model.hold("permission", true);
+    model.hold("permission", false);
+    assertEquals(clock.pending, 0);
+    advance(7000);
+    assertEquals(model.state.items.map(({ note }) => note.id), ["permission"]);
+  } finally {
+    toast.stop();
+    hub.stop();
+  }
+});
 Deno.test("toast consumer keeps keyed active/error replacements past old transient deadlines and expires information at six seconds", () => {
   const clock = new ManualClock();
   using _timers = clock.install();
