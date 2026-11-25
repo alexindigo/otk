@@ -8,7 +8,7 @@ import { contextMenu, sessionContext } from "../../pages/sessions.ts";
 test(
   "sessions.native-summaries-lazy-detail-tombstone-retained-task-metadata-only",
   { tag: ["@sessions"] },
-  async ({ state, page }) => {
+  async ({ state, page }, info) => {
     const s = await state.native<{ id: string; nativeID: string }>(
       "/session",
       "POST",
@@ -40,6 +40,10 @@ test(
     await hoverCompletedUsage(page);
     await expect(page.locator(".otk-usage-breakdown tbody tr").first())
       .toBeVisible();
+    await info.attach("usage-acquisition", {
+      body: JSON.stringify(frames),
+      contentType: "application/json",
+    });
     expect(frames.sent.filter(({ frame }) => frame.method === "usage.get"))
       .toHaveLength(1);
     await page.keyboard.press("Escape");

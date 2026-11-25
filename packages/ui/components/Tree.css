@@ -192,6 +192,9 @@
   inline-size: calc(3 * var(--otk-unit));
   block-size: calc(14 * var(--otk-unit));
   border-radius: 2px;
+  background: transparent;
+}
+.otk-tree-node.has-selection > .otk-tree-heading > .otk-tree-selection > .otk-tree-selection-mark {
   background: var(--otk-fg);
 }
 .otk-tree-node.is-compact > .otk-tree-heading {

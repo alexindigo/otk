@@ -76,7 +76,7 @@ test("bootstrap DB degrades on missing schema without creating a missing databas
   degraded.close();
 });
 
-test("revert scalar reports unavailable optional SQL without writing or hiding identity errors", async () => {
+test("revert identities need no optional body columns and never write native data", async () => {
   const file = await fixture(), db = new DatabaseSync(file);
   db.exec(
     "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
@@ -84,8 +84,7 @@ test("revert scalar reports unavailable optional SQL without writing or hiding i
   db.close();
   const before = await Deno.readFile(file), reader = new BootstrapDb(file);
   try {
-    assertEquals(reader.revertedUserCount("opcv1-s", "m"), undefined);
-    assertEquals(reader.revertedPrompts("opcv1-s", "m", 10), undefined);
+    assertEquals(reader.revertedMessageIDs("opcv1-s", "m"), []);
     assertEquals(reader.nextMessageID("opcv1-s", "m"), null);
   } finally {
     reader.close();

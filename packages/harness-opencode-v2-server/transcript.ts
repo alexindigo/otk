@@ -1373,8 +1373,106 @@ export class Transcript {
     id: string,
     before?: string,
     signal: AbortSignal = new AbortController().signal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<MessagePage> {
+    if (scope) return this.#own(this.#snapshotIDs(id, scope, signal));
     return this.#own(this.#page(id, before, signal, undefined, true));
+  }
+  async #snapshotIDs(
+    id: string,
+    scope: import("@otk/protocol").MessageSnapshotScope,
+    signal: AbortSignal,
+  ): Promise<MessagePage> {
+    ids.decode(id);
+    signal.throwIfAborted();
+    const owner = await this.#baseline(id, signal);
+    const from = this.replay.clock(id),
+      revisions = this.replay.revisions(id, scope.messageIDs);
+    const items: Message[] = [];
+    if (!scope.validate) {
+      const facts = await this.#facts({
+        sessionID: id,
+        messages: scope.messageIDs,
+      }, signal);
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const retained = await this.requests.get(id, messageID);
+        if (retained?.outcome) {
+          const order = retained.position && positionOrder(retained.position);
+          items.push({
+            ...retained.outcome,
+            ...(order === undefined ? {} : { sourceOrder: order }),
+          });
+          continue;
+        }
+        const raw = await this.reader.get(id, messageID, signal),
+          context = facts.contexts[messageID];
+        if (!context) {
+          throw new HarnessError(
+            "capture-stale",
+            "Message metadata changed during archive capture",
+          );
+        }
+        const mapped = raw.type === "idle" && raw.outcome === "failed"
+          ? (await this.#executionFailureValue(
+            id,
+            raw.id,
+            raw.error,
+            millis(raw.time.created),
+            context,
+            owner.raw.title,
+            facts.source.startsWith("sql") ? context.order : undefined,
+            signal,
+          )).message
+          : mapMessage(raw, id, context);
+        if (!mapped) {
+          throw new HarnessError(
+            "capture-stale",
+            "A captured record is no longer available",
+          );
+        }
+        items.push({ ...mapped, id: messageID });
+      }
+    }
+    signal.throwIfAborted();
+    const session = owner.presentation ??= await revertSession(
+      this.options.client(),
+      owner.raw,
+      signal,
+    );
+    const clock = this.replay.clock(id);
+    if (clock.epoch !== from.epoch) {
+      throw new HarnessError("capture-stale", "Archive epoch changed");
+    }
+    const turns = [
+      ...new Set(
+        items.map((m) => m.role === "assistant" ? m.replyTo ?? m.id : m.id),
+      ),
+    ];
+    const summaries = this.options.summaries?.(id, turns) ?? {};
+    return {
+      sessionID: id,
+      session,
+      items,
+      from,
+      clock,
+      revisions: scope.validate
+        ? this.replay.revisions(id, scope.messageIDs)
+        : revisions,
+      version: this.replay.version(id),
+      older: null,
+      catchup: [],
+      helpers: {},
+      recovering: [],
+      turns: Object.fromEntries(
+        turns.map((
+          turnID,
+        ) => [turnID, {
+          boundary: { turnID, complete: true },
+          summary: summaries[turnID],
+        }]),
+      ),
+    };
   }
   async #page(
     id: string,

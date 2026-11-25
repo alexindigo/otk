@@ -629,7 +629,7 @@ export class OpencodeV2ServerAdapter implements Harness {
         );
       },
       snapshotMessages: (id, input, signal) =>
-        this.transcript.snapshot(id, input.before, signal),
+        this.transcript.snapshot(id, input.before, signal, input.scope),
       createSession: async (input, operation) => {
         const client = this.stream.client;
         const parentID = input.parentID === undefined

@@ -89,6 +89,7 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
         unseen: true,
         terminal,
         outcome: "succeeded",
+        terminalOrigin: "historical",
       });
     }
   }));
@@ -124,8 +125,8 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       return sessions.filter((session) => session.id !== parent.id);
     }, (rows) => rows.length > 0);
     const child = children[0];
-    // Acknowledged helpers leave mandatory routing. Retain only their metadata
-    // to inspect outcome history without acquiring a transcript.
+    // A parent receiving a failed result does not acknowledge it for the human.
+    // Inspect mandatory failure attention without acquiring a transcript.
     client.lease({
       directory: native.directory,
       crumbs: [],
@@ -135,18 +136,18 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       async () => (await client.rpc<InboxBaseline>("inbox.get", {})).inbox,
       (inbox) =>
         inbox.supervision?.[parent.id]?.state === "finishedUnseen" &&
-        inbox.supervision?.[child.id]?.state ===
-          (v2 ? "none" : "finishedUnseen"),
+        inbox.supervision?.[child.id]?.state === "needsYou",
     );
     for (const id of [parent.id, child.id]) {
       assert(value.supervision![id].terminal > 0);
       assertEquals(
         value.supervision![id].state,
-        id === child.id && v2 ? "none" : "finishedUnseen",
+        id === child.id ? "needsYou" : "finishedUnseen",
       );
+      assertEquals(value.supervision![id].unseen, true);
       assertEquals(value.supervision![id].outcome, "failed");
     }
-    assertEquals(value.summaries?.[native.directory]?.status, "finished");
+    assertEquals(value.summaries?.[native.directory]?.status, "blocked");
   }));
 
 Deno.test({

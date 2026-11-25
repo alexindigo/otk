@@ -83,12 +83,19 @@
 .otk-composer.is-suspended {
   visibility: hidden;
 }
-.otk-composer-notice-layer {
-  position: absolute;
-  inset-inline: var(--lane-gutter);
-  inset-block-end: 100%;
+.otk-composer-feedback {
+  position: relative;
   max-inline-size: var(--lane-width);
   margin-inline: auto;
+  inline-size: 100%;
+  min-block-size: 0;
+  flex: 0 1 auto;
+}
+.otk-composer-feedback.is-independent {
+  position: absolute;
+  inline-size: auto;
+  inset-inline: var(--lane-gutter);
+  inset-block-end: 100%;
   max-block-size: max(0px, calc(100cqh - 100%));
 }
 .otk-composer-frame {

@@ -56,6 +56,7 @@ export function createShellState(
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
     promptBlocks?(text: string): import("@otk/protocol").Block[];
+    promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   },
 ): ShellState {
   const index = createIndex();
@@ -109,10 +110,12 @@ export function createShellState(
   });
   const actions = createSessionActions({
     promptBlocks: o.promptBlocks,
+    promptCommitted: o.promptCommitted,
     resources,
     session,
     current,
     branchHistory,
+    revertReady: (target) => revert.ready(target),
     factory: solidState,
     submitted: (target, action) =>
       forkNotes.submission(
@@ -130,6 +133,11 @@ export function createShellState(
     session,
     actions,
     drafts,
+    branchHistory,
+    storage,
+    server: (target) =>
+      new URL(resources.server(target.sidecarId)?.baseUrl || o.api.href, o.api)
+        .href,
     status: {
       working: actions.working,
       subscribe: (listener) =>

@@ -193,3 +193,20 @@ Runtime-neutral heap analysis is shared with the remaining legacy consumers;
 only diagnostic heap/GC/worker-target traffic uses Playwright CDPSession. The
 old driver's internal geometry/click-count regression stays in Deno's driver
 unit group until T4 retires that driver.
+
+## Style7 contract witnesses
+
+The approved source is `~/Documents/otk/notes/2026-11-21-style7fix.md` (merge
+`62ae5bf4`), with decisions in
+`~/Documents/otk/plans/test-ride-architecture/decisions.md`. Retargeted tests
+retain their behavior and exact geometry assertions at the component that owns
+the value, rather than at retired private markup.
+
+| # | Witness                        | Contract and decision                                                                                                                                                                                                                                                                            |
+| - | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 | Navigation and Sessions titles | Shared component ownership (style7 findings 1/2/5); decisions 3/54. Use the Search commands action and ListRow's session title slot.                                                                                                                                                             |
+| 2 | Composer destination           | Separate task/destination labels (finding 3); decision 3. Both stay single-line; the task yields before the actual destination.                                                                                                                                                                  |
+| 3 | Folded breadcrumbs             | Hidden frames are inert; More has independent controls (finding 7); decisions 3/54. Omitted identities retain navigation and context actions. More's first control-height track stays fixed through editor blur and required-row reflow; exact geometry assertions guard the product correction. |
+| 4 | Selection marks                | External Tree track (finding 5); decisions 33/54. Keep permanent real paint geometry, exact selected/ARIA state and reduced-colour coverage.                                                                                                                                                     |
+| 5 | Runtime header                 | Required controls reflow instead of clipping (finding 7, spatial review rows 2/3); decision 3 and AXIOMS section 1. Measure the exact viewport track relative to that header; all active helpers stay visible and composer chrome cannot move its boundary.                                      |
+| 6 | Catalog pending choice         | Decision 34 and `2026-11-21-fx-green5.md` Send-latency correction: Send depends only on what the prompt references. Plain text submits while unrelated discovery is held; a later explicit choice belongs to the next send.                                                                      |

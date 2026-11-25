@@ -43,6 +43,8 @@ export function createSessionDelivery(input: {
   target: Selection;
   title(): string | undefined;
   transcript(): TranscriptOwner | undefined;
+  /** The canonical native prompt once its applied model is known, never speculative input. */
+  committed?(message: import("@otk/protocol").UserMessage): void;
   factory?: StateFactory;
   clock?: {
     set(run: () => void, ms: number): unknown;
@@ -68,6 +70,9 @@ export function createSessionDelivery(input: {
     };
   const timers = new Map<string, unknown>(),
     pins = new Map<string, () => void>();
+  // Native queue/admission can precede applied selection metadata. Presentation
+  // releases the visible receipt, not this identity-only bookkeeping obligation.
+  const applied = new Set<string>();
   let transcript: TranscriptOwner | undefined,
     release: (() => void) | undefined,
     stopped = false;
@@ -99,6 +104,7 @@ export function createSessionDelivery(input: {
           r.clock = transcript?.state.clock;
           r.feedback = undefined;
         });
+        if (input.committed) applied.add(message.id);
       }
       if (visible.has(receipt.messageID)) {
         clear(receipt.id);
@@ -106,6 +112,20 @@ export function createSessionDelivery(input: {
           s.last = { ...receipt, phase: "presented", feedback: undefined };
           s.receipts = s.receipts.filter((r) => r.id !== receipt.id);
         });
+      }
+    }
+    for (const id of applied) {
+      const message = transcript?.projection.state.messagesByID[id];
+      if (
+        message?.sessionID !== input.target.sessionID ||
+        message.role !== "user" || !message.model ||
+        !transcript?.projection.committed(id)
+      ) continue;
+      applied.delete(id);
+      try {
+        input.committed?.(message);
+      } catch (cause) {
+        console.error("Prompt admission bookkeeping diagnostic", cause);
       }
     }
   };
@@ -327,6 +347,7 @@ export function createSessionDelivery(input: {
       release?.();
       release = undefined;
       visible.clear();
+      applied.clear();
       for (const receipt of store.state.receipts) clear(receipt.id);
     },
   };

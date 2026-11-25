@@ -155,8 +155,9 @@ for (const picker of [false, true]) {
           lease: state.lease.lease,
           action: "release",
         });
-        await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-          "1 prompt rolled back",
+        await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+          "data-boundary",
+          "user",
         );
       }
     });

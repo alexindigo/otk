@@ -228,8 +228,10 @@ for (const mode of ["SQL", "API"] as const) {
     };
     try {
       assertEquals(
-        (await adapter.core.getSession("opcv1-parent")).revert?.messageCount,
-        351,
+        (await adapter.core.getSession("opcv1-parent")).revert?.messageIDs,
+        messages.filter((m) => m.info.id >= session.revert!.messageID).map((
+          m,
+        ) => m.info.id),
       );
       // Directory resolution for native @-agent completion must not fetch transcript content.
       const before = reads.length;

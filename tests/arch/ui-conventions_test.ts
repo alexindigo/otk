@@ -6,6 +6,7 @@ import { runningWorkElapsed } from "../../packages/client/live-work.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
+import { composerInTranscriptErrors } from "./composer-placement.ts";
 import {
   codeSeparatorErrors,
   styleBoundaryErrors,
@@ -18,6 +19,56 @@ Deno.test("UI convention: component styles never target another component's inte
     ),
   );
   assertEquals(styleBoundaryErrors(files), []);
+});
+
+Deno.test("UI convention: composer-owned content never mounts in the transcript flow", async () => {
+  const files = await productionSources();
+  assertEquals(composerInTranscriptErrors(files), []);
+  const fixture = (body: string) =>
+    new Map([
+      [
+        "Notice.tsx",
+        "export function Notice(){return <ComposerNoticeRow>Copy</ComposerNoticeRow>}",
+      ],
+      [
+        "View.tsx",
+        `import {Notice as CopyNotice} from "./Notice.tsx"; const view=${body};`,
+      ],
+    ]);
+  assert(
+    composerInTranscriptErrors(
+      fixture('<div class="otk-message-flow"><CopyNotice /></div>'),
+    ).length > 0,
+  );
+  assert(
+    composerInTranscriptErrors(
+      fixture('<div class="otk-message-flow"><ComposerNotice /></div>'),
+    ).length > 0,
+  );
+  assertEquals(
+    composerInTranscriptErrors(
+      fixture('<div class="otk-composer-dock"><CopyNotice /></div>'),
+    ),
+    [],
+  );
+  assertEquals(
+    composerInTranscriptErrors(
+      fixture('<div class="otk-message-flow"><ActivityGroup /></div>'),
+    ),
+    [],
+  );
+});
+
+Deno.test("UI convention: global failure notifications do not add a layout-pushing banner", async () => {
+  const source = new Source(
+    await Deno.readTextFile("packages/ui/shell/Shell.tsx"),
+  );
+  const banners = source.all.filter((node) =>
+    node.type === "JSXAttribute" &&
+    node.name.name === "class" &&
+    /\botk-global-error\b/.test(source.string(node.value) ?? "")
+  );
+  assertEquals(banners, []);
 });
 
 Deno.test("UI convention: separators built in ports, templates and code use the presentation owner", async () => {
@@ -248,6 +299,35 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
     css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
   assertEquals(label.get("min-inline-size"), "0");
   assertEquals(label.get("flex"), "1");
+});
+
+Deno.test("UI convention: overflow More keeps the first control track when required items reflow", async () => {
+  const anchored = (text: string) => {
+    const more = rules(text).find((rule) =>
+      rule.selector === ".otk-overflow-more"
+    )?.declarations;
+    return more?.get("align-self") === "start" &&
+      more.get("min-block-size") === "var(--row-compact)" &&
+      more.get("align-items") === "center";
+  };
+  assert(
+    !anchored(".otk-overflow-more { display: flex; align-items: center; }"),
+  );
+  assert(
+    anchored(
+      ".otk-overflow-more { display: flex; align-items: center; align-self: start; min-block-size: var(--row-compact); }",
+    ),
+  );
+  assert(
+    anchored(
+      await Deno.readTextFile(
+        new URL(
+          "../../packages/ui/components/OverflowRow.css",
+          import.meta.url,
+        ),
+      ),
+    ),
+  );
 });
 
 /** Syntax-aware checks are exported so their reject/accept cases stay executable.

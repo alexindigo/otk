@@ -32,25 +32,42 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
       const row = label.parentElement!;
       const work = row.querySelector(".otk-live-work-trigger")!;
       const l = label.getBoundingClientRect(), w = work.getBoundingClientRect();
-      const css = getComputedStyle(label);
+      // Style7 finding 3: task and destination have separate label ownership.
+      // notes/2026-11-21-style7fix.md; decision 3 keeps the actual open session named.
+      const labels = Array.from(
+        label.querySelectorAll<HTMLElement>(".otk-control-label"),
+      ).map((item) => ({
+        text: item.textContent,
+        whiteSpace: getComputedStyle(item).whiteSpace,
+        overflow: getComputedStyle(item).textOverflow,
+        centerDrift: Math.abs(
+          (item.getBoundingClientRect().top +
+            item.getBoundingClientRect().bottom - w.top - w.bottom) / 2,
+        ),
+        truncated: item.scrollWidth > item.clientWidth,
+      }));
       return {
         display: getComputedStyle(row).display,
         left: l.left,
         right: l.right,
         workLeft: w.left,
         centerDrift: Math.abs((l.top + l.bottom - w.top - w.bottom) / 2),
-        whiteSpace: css.whiteSpace,
-        overflow: css.textOverflow,
+        labels,
         title: label.getAttribute("title"),
-        text: label.textContent,
-        truncated: label.scrollWidth > label.clientWidth,
+        text: labels.map((item) => item.text).join(": "),
+        truncated: labels[0].truncated,
       };
     });
     expect(box.display).toBe("flex");
     expect(box.right).toBeLessThanOrEqual(box.workLeft);
     expect(box.centerDrift).toBeLessThanOrEqual(0.5);
-    expect(box.whiteSpace).toBe("nowrap");
-    expect(box.overflow).toBe("ellipsis");
+    expect(box.labels).toHaveLength(2);
+    for (const label of box.labels) {
+      expect(label.whiteSpace).toBe("nowrap");
+      expect(label.overflow).toBe("ellipsis");
+      expect(label.centerDrift).toBeLessThanOrEqual(0.5);
+    }
+    expect(box.labels[1].truncated).toBe(false);
     expect(box.title).toBe(box.text);
     return box;
   };

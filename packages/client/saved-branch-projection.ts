@@ -12,7 +12,7 @@ import {
 
 /** All saved-view presentation is admitted here, never through live inference. */
 export function savedBranchProjection(
-  branch?: SavedBranch,
+  branch?: Pick<SavedBranch, "messages" | "turns">,
   showCost = true,
 ): TranscriptProjectionState & {
   presentations: Record<string, MessagePresentation>;

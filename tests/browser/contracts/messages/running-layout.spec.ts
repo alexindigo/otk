@@ -18,30 +18,47 @@ const scenario = (
   });
 
 test.use({ profile: "contract-messages-running-layout" });
-async function geometry(page: Page) {
-  return await page.locator(".otk-messages").evaluate((pane: HTMLElement) => {
-    const rect = (element: Element | null) => {
-      if (!element) return null;
-      const b = element.getBoundingClientRect();
-      return [b.x, b.y, b.width, b.height];
-    };
-    return {
-      viewport: rect(pane),
-      top: pane.scrollTop,
-      extent: pane.scrollHeight,
-      footer: rect(pane.querySelector(".otk-message-footer")),
-      work: rect(pane.querySelector(".otk-work-fold")),
-      execution: rect(pane.querySelector(".otk-tool-line")),
-      thumb: rect(
-        pane.parentElement!.querySelector(
-          ".otk-scroll-track-y > .otk-scroll-thumb",
+async function geometry(page: Page, responsiveHeader = false) {
+  return await page.locator(".otk-messages").evaluate(
+    (pane: HTMLElement, responsiveHeader) => {
+      const rect = (element: Element | null) => {
+        if (!element) return null;
+        const b = element.getBoundingClientRect();
+        return [b.x, b.y, b.width, b.height];
+      };
+      const viewport = rect(pane)!;
+      // Style7 finding 7: required breadcrumb controls reflow instead of clipping
+      // (notes/2026-11-21-style7fix.md:72-74; decision 3, AXIOMS section 1).
+      // Keep the exact rectangle relative to that independently measured header;
+      // composer/notices/takeovers still cannot move either trailing edge.
+      const header = responsiveHeader
+        ? document.querySelector(".otk-project-tabs")!.getBoundingClientRect()
+          .height
+        : 0;
+      return {
+        viewport: [
+          viewport[0],
+          viewport[1] - header,
+          viewport[2],
+          viewport[3] + header,
+        ],
+        top: pane.scrollTop,
+        extent: pane.scrollHeight,
+        footer: rect(pane.querySelector(".otk-message-footer")),
+        work: rect(pane.querySelector(".otk-work-fold")),
+        execution: rect(pane.querySelector(".otk-tool-line")),
+        thumb: rect(
+          pane.parentElement!.querySelector(
+            ".otk-scroll-track-y > .otk-scroll-thumb",
+          ),
         ),
-      ),
-    };
-  });
+      };
+    },
+    responsiveHeader,
+  );
 }
-async function frameProbe(page: Page) {
-  await page.evaluate(() => {
+async function frameProbe(page: Page, responsiveHeader = false) {
+  await page.evaluate((responsiveHeader) => {
     const g = globalThis as typeof globalThis & {
       wp1Frames: number[][];
       wp1Sampling: boolean;
@@ -52,11 +69,15 @@ async function frameProbe(page: Page) {
       if (!g.wp1Sampling) return;
       const pane = document.querySelector<HTMLElement>(".otk-messages")!,
         b = pane.getBoundingClientRect();
-      g.wp1Frames.push([b.x, b.y, b.width, b.height]);
+      const header = responsiveHeader
+        ? document.querySelector(".otk-project-tabs")!.getBoundingClientRect()
+          .height
+        : 0;
+      g.wp1Frames.push([b.x, b.y - header, b.width, b.height + header]);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  });
+  }, responsiveHeader);
   return async () =>
     await page.evaluate(() => {
       const g = globalThis as typeof globalThis & {
@@ -127,13 +148,23 @@ test(
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator(".otk-response-progress")).toBeVisible();
     await throughDuration(300, async () => {});
-    const before = await geometry(page), stop = await frameProbe(page);
+    const before = await geometry(page, true),
+      stop = await frameProbe(page, true);
     for (let n = 0; n < 3; n++) {
       await scenario(state, "succeed");
+      const helpers = page.locator(
+        '.otk-task-crumbs [data-helper="true"]:visible',
+      );
+      await expect(helpers).toHaveCount([1, 4, 0][n]);
+      for (const helper of await helpers.all()) {
+        await expect(helper).toBeInViewport();
+      }
       await throughDuration(
         180,
         async () =>
-          expect((await geometry(page)).viewport).toEqual(before.viewport),
+          expect((await geometry(page, true)).viewport).toEqual(
+            before.viewport,
+          ),
       );
     }
     await scenario(state, "fail");
@@ -144,13 +175,24 @@ test(
       .boundingBox();
     const chipBounds = await page.locator(".otk-live-work-trigger")
       .boundingBox();
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`runtime-notice-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
     expect(noticeBounds!.y + noticeBounds!.height).toBeLessThanOrEqual(
       chipBounds!.y + 1,
     );
-    expect((await geometry(page)).viewport).toEqual(before.viewport);
+    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
     await scenario(state, "hold", session);
     await expect(page.locator(".otk-permission-dock")).toBeVisible();
-    expect((await geometry(page)).viewport).toEqual(before.viewport);
+    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
     await scenario(state, "stop");
     await scenario(state, "freeze", session);
     await expect(
@@ -159,7 +201,7 @@ test(
       .toBeVisible();
     await page.getByRole("region", { name: "Pending question", exact: true })
       .getByRole("button", { name: /Keep working/ }).click();
-    expect((await geometry(page)).viewport).toEqual(before.viewport);
+    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
     await scenario(state, "stop");
     await scenario(state, "thaw");
     await expect(page.getByText("Runtime form", { exact: true })).toBeVisible();
@@ -180,13 +222,13 @@ test(
         { name: "Send answers", exact: true },
       ),
     ).toBeVisible();
-    expect((await geometry(page)).viewport).toEqual(before.viewport);
+    expect((await geometry(page, true)).viewport).toEqual(before.viewport);
     await scenario(state, "stop");
     await scenario(state, "disconnect");
     await throughDuration(
       180,
       async () =>
-        expect((await geometry(page)).viewport).toEqual(before.viewport),
+        expect((await geometry(page, true)).viewport).toEqual(before.viewport),
     );
     await scenario(state, "stop");
     const frames = await stop();

@@ -15,7 +15,10 @@ test("menus.palette-project-and-slash-share-native-create-command", {
   });
   const frames = await wire(page);
   await openSession(state, page, seed.id);
-  await page.locator(".otk-sidebar-commands button").first().click();
+  // Style7 moved shipped navigation into ProjectInbox; its action name is stable.
+  // notes/2026-11-21-style7fix.md, component ownership; decision 54.
+  await page.getByRole("button", { name: "Search commands", exact: true })
+    .click();
   await expect(page.locator(palette)).toBeVisible();
   await page.locator("input[name=command-search]").fill("New session");
   await page.locator('[data-command="session.new"]').click();

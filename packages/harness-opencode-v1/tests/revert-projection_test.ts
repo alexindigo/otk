@@ -8,7 +8,7 @@ import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 for (const mode of ["SQL", "API", "incompatible SQL"]) {
   const sql = mode === "SQL";
-  test(`revert projection bounds oldest previews and shares metadata-only history mapping (${mode})`, async () => {
+  test(`revert projection fixes native message identities at stage (${mode})`, async () => {
     const db = join(await tempDir("revert-projection-"), "native.db");
     const messages = Array.from({ length: 55 }, (_, i) => {
       const id = `msg_${String(i).padStart(4, "0")}`;
@@ -127,24 +127,21 @@ for (const mode of ["SQL", "API", "incompatible SQL"]) {
     );
     try {
       const revert = (await adapter.core.getSession("opcv1-source")).revert!;
-      assertEquals(revert.messageCount, 55);
-      assertEquals(revert.prompts?.length, 50);
-      assertEquals(revert.prompts?.[0].messageID, "msg_0000");
+      assertEquals(Reflect.get(revert, "boundaryID"), "msg_0000");
       assertEquals(
-        revert.prompts?.[0].preview,
-        ("Boundary prompt " + "x".repeat(250)).slice(0, 200),
+        Reflect.get(revert, "messageIDs"),
+        messages.map((m) => m.info.id),
       );
-      assertEquals(revert.prompts?.at(-1)?.preview, "Prompt 49");
-      assertEquals(revert.prompt?.input, messages[0].parts[0].text);
-      assertEquals(revert.prompt?.parts[1], {
-        kind: "file",
-        source: "history",
-        name: "image.png",
-        mime: "image/png",
-        size: 3,
-        messageID: "msg_0000",
-        partID: "part_0b",
+      assertEquals(Object.hasOwn(revert, "messageCount"), false);
+      assertEquals(Object.hasOwn(revert, "prompts"), false);
+      messages.push({
+        ...messages[1],
+        info: { ...messages[1].info, id: "msg_later" },
       });
+      assertEquals(
+        (await adapter.core.getSession("opcv1-source")).revert,
+        revert,
+      );
       assertEquals(JSON.stringify(revert).includes("YWJj"), false);
       if (sql) assertEquals(pages, 0);
     } finally {

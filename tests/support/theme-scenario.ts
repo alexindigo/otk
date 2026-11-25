@@ -229,8 +229,8 @@ export async function themeScenario() {
       ? {
         ...session,
         revert: {
-          messageID: "prompt",
-          messageCount: 1,
+          boundaryID: "prompt",
+          messageIDs: ["prompt"],
           files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
         },
       }

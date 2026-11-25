@@ -14,11 +14,6 @@
   display: flex;
   flex-direction: column;
 }
-.otk-global-error {
-  padding: var(--space-3) var(--space-6);
-  margin: 0;
-  background: var(--panel);
-}
 .otk-selection-notice {
   display: flex;
   min-inline-size: 0;

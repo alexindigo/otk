@@ -414,7 +414,8 @@ refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.
 
 Usage refreshes during a held read retain only the latest demand, clearing an
-obsolete successor when demand returns to its admitted witness.
+obsolete successor when demand returns to its admitted witness. Summary equality
+uses canonical JSON values, never a producer's property insertion order.
 
 ## Public API
 
@@ -576,7 +577,10 @@ index. No helper RPC, child transcript cache or timer belongs to the view.
 active scope/screen demand, `interact` refreshes that scope's clock, and
 `preload` gives an attention scope its temporary lease. Resources wait for an
 explicit/welcomed policy. One shared queue bounds page reads per server and
-prioritizes selection, attention and recently interacted scopes. Hydration
+prioritizes selection, attention and recently interacted scopes. Atomic body
+pushes can paint before scalar metadata, but the shared admission slot belongs
+to the full page request until coverage completes or it retires. Warm hydration
+cannot turn early painting into unbounded unfinished metadata. Hydration
 publishes newest10 before acquiring next10. `viewport({first,last})` uses native
 message identities to refill at `MESSAGE_ADMISSION_WATERMARK` (20), with a
 ten-message reserve; `ensure(id)` follows the same cursor chain and `pin(ids)`
@@ -594,17 +598,27 @@ Cancellation releases only the caller's wait, not canonical recovery or other
 consumers. Readiness also requires the serving transport's current `connected`
 fact and a linked native source; retained bodies do not certify either link.
 
-`snapshotPage(target,before?,signal?)` uses that canonical transcript's bounded
-admission queue for retained `history.messages` pages, without reducing them
-into the live view or opening Source folds. Native continuations distinguish
-retained archive reads from visible pages. BranchHistory owns one keyed,
-cancellable background capture after reversible Revert; its page-local
+`snapshotPage(target,before?,signal?,scope?)` uses that canonical transcript's
+bounded admission queue for retained `history.messages` pages, without reducing
+them into the live view or opening Source folds. Native continuations
+distinguish retained archive reads from visible pages. BranchHistory owns one
+keyed, cancellable background capture after reversible Revert; its page-local
 source/prompt workers use configured message concurrency and preserve exact
 payload order. Every committing submission and Compact joins preservation before
 native admission. Restore does not wait for capture and fences late saves. A
 staged session after reload reacquires its missing browser copy before
 committing. Failed saves retain FP1 action, target, reason and recovery by
 target across selection changes.
+
+A staged capture passes its fixed `messageIDs` as the snapshot scope. Each
+harness reads those native identities directly, without scanning older bodies.
+The existing replay owner supplies per-ID revision witnesses in the same epoch;
+witness-only validation acquires no bodies. Unrelated sequence advances are
+irrelevant. A changed captured identity alone is read and materialized again.
+Transient reads and changing records retry with bounded exponential backoff;
+Retry starts a fresh capture after a final failure. New archives contain exactly
+the staged identity set. Older, larger archives still count as preserved when
+they contain every identity in the record.
 
 Archive updates load the current stored branch after asynchronous reads before
 merging drafts or native bookkeeping. Reuse and explicit draft choices made
@@ -725,7 +739,14 @@ and focus stay with the UI adapter. `historyDraft` and `PromptHistory` expose
 the metadata-only projection and cursor for independent consumers.
 
 `recordRecentModel(recent, sentModel)` returns a deduplicated most-recent-first
-list (max 10) after a successful send, using the submission's captured model.
+list (max 10) after a successful send. The shipped shell's `createModelRecency`
+serializes preference writes from its own canonical native prompt admissions,
+using the model actually applied by the backend. Unknown pre-send defaults never
+require catalog waits or lose recency. The delivery owner fences admission by
+the captured native identity and reports its applied model once, independently
+of composer replacement or receipt presentation. Native queue/admission may
+precede model metadata; an identity-only bookkeeping obligation survives until
+that metadata arrives. Historical and unrelated prompts do not record recency.
 `toggleFavouriteModel(favourites, model)` toggles exact provider/model pairs,
 putting additions first (max 50; a full list keeps existing favourites). These
 helpers own no persistence: callers save `models.recent` and `models.favourite`
@@ -1060,23 +1081,39 @@ retain the whole grouped reply.
 `compact(target, model)` captures the session/server and explicit next-prompt
 model through the same non-submitting `act` owner, without task promotion.
 
+Revert state is identified by `boundaryID` and its fixed native `messageIDs`,
+never a prompt count. The reducer admits a context-only boundary. Legacy saved
+browser archives normalize their real record identities only on read, without
+rewriting stored data.
+
 `revert(target, messageID)` and `restore(target)` use the same captured-target
 `act` owner. `createSessionRevert({session, actions, drafts, status, factory?})`
-serializes selected-session revert/restore/undo/redo intents, exposes
-pending/error and projects the authoritative `content.revert` into the composer
-strip. Selection changes retire late results and errors; no RPC result
-optimistically mutates session content. `dispose` releases its subscription. No
-file-overlap confirmation is added.
+owns a boundary-keyed flow per session: confirming, staging, staged, saving,
+saved, failed and restoring. Revert and Undo first publish the actual message
+identities for confirmation. Only Confirm starts a native mutation; Cancel sends
+nothing. A changed preview requires confirmation again. The authoritative native
+publication still settles the action, never its RPC result alone. The same owner
+ingests reverts staged by another client. Dismissal is a separate browser-stored
+choice per server, session and boundary, with no native effect; clear or commit
+retires the record. `dispose` releases its subscriptions. The owner's published
+phase gives an active native mutation priority over background archive outcomes
+until authoritative reconciliation settles. A late save success or failure
+cannot replace an ongoing Restore with saved/failed UI. Its target-bound `ready`
+port joins authoritative publication and draft settlement, not merely native RPC
+completion. SessionActions borrows that wait and joins its own in-flight native
+boundary changes before any committing submission or Compact.
 
-Undo targets the last visible prompt, interrupts a working captured session,
-then remains pending until authoritative idle before reverting. `Drafts.reverts`
-owns one browser-lifetime transaction per server/session, capturing the complete
-pre-revert draft before asynchronous work, including attachment bytes, mention
-coordinates, choices, own-undefined Default and editor buffer. Repeated pending
-boundaries keep that first snapshot. Its history refill preserves prompt choices
-and replaces only empty or transaction-owned content, never edits made during
-the operation. Restore and Redo share exact pre-revert restoration when the
-draft is unchanged. Selection and operation-owner replacement do not retire
+After confirmation, Undo targets the last visible prompt, interrupts a working
+captured session, then remains pending until authoritative idle before
+reverting. `Drafts.reverts` owns one browser-lifetime transaction per
+server/session, capturing the complete pre-revert draft before asynchronous
+work, including attachment bytes, mention coordinates, choices, own-undefined
+Default and editor buffer. Repeated pending boundaries keep that first snapshot.
+After authoritative staging, every revert kind refills from the boundary prompt,
+preserving prompt choices and retaining the displaced draft for Restore. Edits
+made during the operation still win. Only then does the revert owner start the
+earlier-branch capture. Restore and Redo share exact pre-revert restoration when
+the draft is unchanged. Selection and operation-owner replacement do not retire
 completed provenance. Newer text, attachments, choices and editors remain
 untouched; `reverts.get(key)` retains the old/current pair for the
 branch-history owner's saved/current choice. Drafts remains in memory; the
@@ -1089,25 +1126,36 @@ target for that same owner.
 
 `createBranchHistory` owns browser-local earlier branches, separately from live
 transcripts and Drafts. On a history-capable server, OTK-initiated revert
-captures every ordinary cursor page before staging the native boundary,
-including unloaded messages. `connectBranchHistory` composes its ports in the
-client. Detached archive pages use the canonical transcript owner's admission
-queue and lifetime cancellation, without changing the live paging boundary or
-projection. This precedes prompt/command, Compact and version-specific native
-commit paths. Exact selected prompts come from the plugin's `history.prompt`
-reader, independently of the 50-entry recall window; attachment references are
-resolved before deletion. Plugin-owned bounded Source previews are materialized
-too; saved Source folds never query the live native transcript. Common
-submission and Compact admission retain the current draft before dispatch. The
-archive is not native history and never restores files. Operations initiated
-elsewhere cannot recover content this browser never captured.
+captures exactly the staged identities after authoritative settlement, including
+unloaded messages. `connectBranchHistory` composes its ports in the client.
+Detached archive pages use the canonical transcript owner's admission queue and
+lifetime cancellation, without changing the live paging boundary or projection.
+Per-ID revision witnesses tolerate unrelated sequence advances and retry only
+changed captured records. This precedes prompt/command, Compact and
+version-specific native commit paths. Exact selected prompts come from the
+plugin's `history.prompt` reader, independently of the 50-entry recall window;
+attachment references are resolved before deletion. Plugin-owned bounded Source
+previews are materialized too; saved Source folds never query the live native
+transcript. Common submission and Compact admission retain the current draft
+before dispatch. The archive is not native history and never restores files.
+Operations initiated elsewhere cannot recover content this browser never
+captured.
 
 Prompt-history absence is a separate capability result, not an exception-based
-fallback. Revert and sending still proceed without archive reads or writes,
-while `preservationWarning()` supplies the visible pre-send strip notice. The
-notice is derived from the selected server's capability and the native revert
-strip, so it survives reload. A failed advertised reader or storage write still
-blocks the destructive action with its normal failure feedback.
+fallback. Revert still proceeds without archive reads or writes, while
+`preservationWarning()` supplies the visible in-flow limitation after reload.
+Before Send enters SessionDelivery, `beforeSend` captures the target, draft and
+staged boundary/IDs. An unsaved stage presents Save copy, Send anyway or Cancel.
+Save copy retries preservation; only Send anyway grants explicit discard
+consent. The invocation-scoped BranchSendPermit is revalidated after attachment
+preparation, including continued copy existence unless discard was explicitly
+chosen. Restore cancels a waiting Send. Failed saving keeps both the draft and
+choice.
+
+Pre-publication Send admission borrows an acquired, connected transcript
+baseline instead of adding an unconditional native read before the local pending
+entry. Native state and exact permit identities are still revalidated at
+dispatch.
 
 Entries are kept in this browser's localStorage, keyed by exact server URL and
 session plus a branch ID, across reloads until explicit per-branch Delete. No

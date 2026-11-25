@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID, REQUEST_WINDOW_EXPIRED_FACTS } from "@otk/protocol";
+import {
+  isCancellation,
+  randomID,
+  REQUEST_WINDOW_EXPIRED_FACTS,
+} from "@otk/protocol";
 import {
   contextualFailure,
   failureFeedback,
@@ -67,6 +71,10 @@ export function createFailurePresenter(): FailurePresenter {
     kind: "info",
     text: notice.facts?.reason ??
       "This feature isn't available on this server.",
+  }));
+  presenter.register("revert.permanence", () => ({
+    kind: "info",
+    text: "Sending makes the revert permanent",
   }));
   presenter.register(
     "storage.recovered",
@@ -212,7 +220,7 @@ export function failureNote(
   cause: unknown,
   context?: FailureFacts,
 ): Note | undefined {
-  if (cause instanceof RequestReleased) return;
+  if (cause instanceof RequestReleased || isCancellation(cause)) return;
   if (isFeedback(cause) && cause.failure) {
     cause = new RequestFailure(cause.failure.value);
   }

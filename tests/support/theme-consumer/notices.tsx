@@ -21,11 +21,27 @@ export default function Notices(props: { prefs: Preferences }) {
   const [mode, setMode] = createSignal("strip");
   const drafts = createDrafts(solidState),
     write = drafts.writer("theme-notice");
-  const operation = solidState<SessionRevertState>({});
+  const record = {
+    boundaryID: "prompt",
+    messageIDs: ["prompt"],
+    files: [],
+    prompt: {
+      input: "Captured prompt",
+      mode: "normal" as const,
+      parts: [],
+      time: 1,
+    },
+  };
+  const operation = solidState<SessionRevertState>({ phase: "saved", record });
   const commands = new CommandHub();
   const rollback: SessionRevert = {
     state: operation.state,
     matches: () => true,
+    ready: () => undefined,
+    confirm: () => Promise.resolve(),
+    cancel() {},
+    retry: () => Promise.resolve(),
+    dismiss() {},
     revertTo: () => Promise.resolve(),
     restore: () => Promise.resolve(),
     undo: () => Promise.resolve(),
@@ -54,6 +70,12 @@ export default function Notices(props: { prefs: Preferences }) {
     setMode(value);
     operation.update((state) => {
       state.pending = value === "pending" ? "revert" : undefined;
+      state.record = value === "fork" ? undefined : record;
+      state.phase = value === "pending"
+        ? "staging"
+        : value === "error"
+        ? "failed"
+        : "saved";
       state.error = value === "error"
         ? errorFeedback("The requested rollback is no longer available", {
           actionLabel: "Rolling back conversation",
@@ -114,14 +136,9 @@ export default function Notices(props: { prefs: Preferences }) {
             rollback={rollback}
             strip={mode() === "strip"
               ? {
-                count: 1,
+                boundaryID: "prompt",
+                messageIDs: ["prompt"],
                 preview: "Captured prompt",
-                prompts: [{
-                  messageID: "prompt",
-                  preview: "Captured prompt",
-                  time: 1,
-                }],
-                more: 0,
                 files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
               }
               : undefined}

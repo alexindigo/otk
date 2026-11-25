@@ -208,7 +208,21 @@ test(
 test(
   "visual.native-editor-blur-retains-more-anchor-and-independent-navigation",
   { tag: ["@visual"] },
-  async ({ state, page }) => {
+  async ({ state, page }, info) => {
+    const capture = async (stage: string) => {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await page.screenshot({
+          path: info.outputPath(`more-${stage}-${theme}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+    };
     const ids: string[] = [];
     for (let i = 0; i < 10; i++) {
       ids.push(
@@ -256,12 +270,22 @@ test(
       rightCollapsed: true,
     });
     await page.setViewportSize({ width: 800, height: 800 });
-    await page.locator(`[data-crumb="${ids[0]}"]`).click({ button: "right" });
+    // Style7 finding 7 retains hidden/inert frames; More owns independent,
+    // reachable controls (style7fix note; decisions 3/54). Rename the same ID
+    // through that control, not its deliberately hidden original frame.
+    await page.getByRole("button", { name: "More task sessions", exact: true })
+      .click();
+    await page.locator(`[data-overflow-target="${ids[0]}"]`).click({
+      button: "right",
+    });
     await page.locator(
       '.otk-context-menu [data-context-command="session.rename"]',
     ).click();
     await expect(page.locator(".otk-title-editor input")).toBeFocused();
     const more = page.locator(".otk-folded-crumbs > button");
+    // The independent overflow menu remains open after its context action.
+    // The first trigger gesture blurs the editor and closes that same menu.
+    await expect(more).toHaveAttribute("aria-expanded", "true");
     // Join font/layout settlement on the actual gesture target, after the
     // neighboring digest consumer has painted its authoritative value.
     await expect.poll(() =>
@@ -280,8 +304,20 @@ test(
         return true;
       })
     ).toBe(true);
+    await capture("editing");
     const before = (await more.boundingBox())!;
     await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".otk-title-editor input")).toHaveCount(0);
+    const afterBlur = (await more.boundingBox())!;
+    for (const k of ["x", "y", "width", "height"] as const) {
+      expect(
+        Math.abs(before[k] - afterBlur[k]),
+        JSON.stringify({ before, afterBlur, axis: k }),
+      ).toBeLessThanOrEqual(1);
+    }
+    await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
     await expect(
       page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
     ).toBeVisible();
@@ -292,6 +328,7 @@ test(
         JSON.stringify({ before, after, axis: k }),
       ).toBeLessThanOrEqual(1);
     }
+    await capture("opened");
     await page.keyboard.press("ArrowDown");
     await expect(
       page.locator(".otk-folded-crumbs [data-overflow-target]:focus"),

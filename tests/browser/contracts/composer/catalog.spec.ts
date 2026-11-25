@@ -47,18 +47,36 @@ for (
         }
         if (kind === "pending-choice") {
           await expect(page.locator(".otk-agent-picker")).toBeVisible();
+          await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
+          await expect.poll(async () => (await observe()).calls).toBe(1);
+          // Decision 34 and fx-green5's Send-latency requirement: only prompt
+          // references join readiness. This plain text references no held model.
           await prompt(page).fill("Capture the choice made during readiness");
           await prompt(page).press("Enter");
+          await expect.poll(async () => (await observe()).sent).toHaveLength(1);
+          const first = (await observe()).sent[0];
+          expect({
+            agent: first.agent,
+            model: first.model,
+            variant: first.variant,
+          }).toEqual({ agent: "build", model: undefined, variant: undefined });
+          expect(first.parts).toEqual([{
+            kind: "text",
+            text: "Capture the choice made during readiness",
+          }]);
+          await expect(prompt(page)).toHaveValue("");
           await page.locator(".otk-agent-picker > button").click();
           await page.locator('.otk-agent-picker [data-picker-key="review"]')
             .click();
           await expect(page.locator(".otk-composer-agent")).toHaveText(
             "Review",
           );
-          expect((await observe()).sent).toHaveLength(0);
+          expect((await observe()).sent).toHaveLength(1);
           await scenario("release");
-          await expect.poll(async () => (await observe()).sent).toHaveLength(1);
-          const sent = (await observe()).sent[0];
+          await prompt(page).fill("Send the later explicit choice");
+          await prompt(page).press("Enter");
+          await expect.poll(async () => (await observe()).sent).toHaveLength(2);
+          const sent = (await observe()).sent[1];
           expect({
             agent: sent.agent,
             model: sent.model,
@@ -70,8 +88,9 @@ for (
           });
           expect(sent.parts).toEqual([{
             kind: "text",
-            text: "Capture the choice made during readiness",
+            text: "Send the later explicit choice",
           }]);
+          expect((await observe()).sent[0]).toEqual(first);
           await expect(prompt(page)).toHaveValue("");
           return;
         }

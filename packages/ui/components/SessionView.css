@@ -53,6 +53,7 @@
 }
 .otk-transcript-viewport {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   flex: 1;

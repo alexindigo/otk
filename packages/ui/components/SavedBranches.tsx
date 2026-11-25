@@ -19,9 +19,60 @@ import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
+export function RevertSendChoice(
+  props: { owner: BranchHistory },
+): import("solid-js").Element {
+  const choice = () => props.owner.state.permanence;
+  const perform = (action: () => Promise<void>) => {
+    void action().catch((cause) => props.owner.fail(cause));
+  };
+  return (
+    <Show when={choice()}>
+      {(pending) => (
+        <div class="otk-permanence-choice">
+          <OperationFeedback feedback={errorFeedback(pending().error)!} />
+          <ComposerNoticeRow>
+            <div class="otk-control-row">
+              <button
+                type="button"
+                class="otk-pill"
+                disabled={pending().saving ||
+                  !!props.owner.preservationWarning()}
+                title={props.owner.preservationWarning()}
+                onClick={() => perform(() => props.owner.saveCopy())}
+              >
+                {pending().saving ? "Saving copy..." : "Save copy"}
+              </button>
+              <button
+                type="button"
+                class="otk-pill"
+                disabled={pending().saving}
+                onClick={() => perform(() => props.owner.sendAnyway())}
+              >
+                Send anyway
+              </button>
+              <button
+                type="button"
+                class="otk-pill"
+                onClick={() => props.owner.cancelSend()}
+              >
+                Cancel
+              </button>
+            </div>
+          </ComposerNoticeRow>
+        </div>
+      )}
+    </Show>
+  );
+}
 
 export function SavedBranchNotice(
-  props: { owner: BranchHistory; failureVisible?: boolean },
+  props: {
+    owner: BranchHistory;
+    failureVisible?: boolean;
+    statusVisible?: boolean;
+    navigationVisible?: boolean;
+  },
 ) {
   const state = () => props.owner.state;
   const perform = (action: () => void) => {
@@ -36,22 +87,26 @@ export function SavedBranchNotice(
       <Show when={props.failureVisible !== false && state().error}>
         <OperationFeedback feedback={errorFeedback(state().error)!} />
       </Show>
-      <Show when={state().pending}>
+      <Show when={props.statusVisible !== false && state().pending}>
         <ComposerNoticeRow icon={RevertIcon} role="status">
           Saving earlier branch...
         </ComposerNoticeRow>
       </Show>
-      <Show when={state().branches.length}>
-        <ComposerNoticeRow icon={RevertIcon}>
-          <button
-            type="button"
-            class="otk-pill"
-            onClick={() => props.owner.open(state().branches[0].id)}
-          >
-            Unrevert: {state().branches.length} saved earlier{" "}
-            {state().branches.length === 1 ? "branch" : "branches"}
-          </button>
-        </ComposerNoticeRow>
+      <Show
+        when={props.navigationVisible !== false &&
+          state().branches.find((branch) => !branch.pending && branch.replaced)}
+      >
+        {(branch) => (
+          <ComposerNoticeRow icon={RevertIcon}>
+            <button
+              type="button"
+              class="otk-pill"
+              onClick={() => props.owner.open(branch().id)}
+            >
+              Saved earlier branches
+            </button>
+          </ComposerNoticeRow>
+        )}
       </Show>
       <Show when={state().choice}>
         {(choice) => (

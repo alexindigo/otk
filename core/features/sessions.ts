@@ -373,7 +373,9 @@ export function register(
     })),
     params(p) {
       if (
-        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+        Object.keys(p).some((key) =>
+          key !== "sessionID" && key !== "before" && key !== "scope"
+        )
       ) {
         throw new HarnessError("params", "Unknown history page parameter");
       }
@@ -384,7 +386,25 @@ export function register(
       ) {
         throw new HarnessError("params", "Invalid history cursor length");
       }
-      return { sessionID: sessionID(p)!, before };
+      const scope = p.scope;
+      if (
+        scope !== undefined && (!scope || typeof scope !== "object" ||
+          !Array.isArray(Reflect.get(scope, "messageIDs")) ||
+          !Reflect.get(scope, "messageIDs").every((id: unknown) =>
+            typeof id === "string" && id.length > 0
+          ) ||
+          (Reflect.get(scope, "validate") !== undefined &&
+            typeof Reflect.get(scope, "validate") !== "boolean"))
+      ) {
+        throw new HarnessError("params", "Expected archive message identities");
+      }
+      return {
+        sessionID: sessionID(p)!,
+        before,
+        scope: scope as
+          | import("@otk/protocol").MessageSnapshotScope
+          | undefined,
+      };
     },
     handler(ctx, p) {
       const read = ctx.harness.core.snapshotMessages;
@@ -397,7 +417,7 @@ export function register(
       return read.call(
         ctx.harness.core,
         p.sessionID,
-        { before: p.before },
+        { before: p.before, ...(p.scope ? { scope: p.scope } : {}) },
         ctx.execution?.signal,
       );
     },

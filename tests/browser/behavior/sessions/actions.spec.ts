@@ -33,8 +33,9 @@ async function deletedDetails(page: Page, id: string, title: string) {
     "aria-label",
     new RegExp("^Deleted session, "),
   );
-  await expect(row.locator(".otk-row-title")).toHaveText(title);
-  await expect(row.locator(".otk-row-title")).toHaveCSS(
+  // Style7 shared ListRow label slot (style7fix note; decision 3).
+  await expect(row.locator(".otk-session-title")).toHaveText(title);
+  await expect(row.locator(".otk-session-title")).toHaveCSS(
     "text-decoration-line",
     /line-through/,
   );
@@ -126,11 +127,35 @@ test("sessions.compact-real-duration-queued-behind-current-work", {
   );
   const requests =
     (await state.observe<{ requests: unknown[] }>()).requests.length;
+  const queuedKind = /data-native-record="([^"]+)"/.exec(compaction.queued)![1];
+  const boundaryIDs = () =>
+    page.evaluate(({ name, sessionID }) => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication?: Map<string, import("@otk/protocol").Message>;
+      }).transcriptPublication;
+      return [...messages?.values() ?? []].filter((message) =>
+        message.sessionID === sessionID &&
+        message.parts.some((part) =>
+          part.kind === "external" && part.name === name
+        )
+      ).map((message) => message.id);
+    }, { name: queuedKind, sessionID: s.id });
+  const priorBoundaries = await boundaryIDs();
   await sessionContext(page, `[data-session="${s.id}"]`, "session.compact");
+  // Both V1 markers have the same native label. Bind the new boundary identity,
+  // never the first matching label or the already-completed compaction.
+  let queuedBoundary: string | undefined;
+  await expect.poll(async () => {
+    const ids = await boundaryIDs();
+    const added = ids.filter((id) => !priorBoundaries.includes(id));
+    queuedBoundary = added.length === 1 ? added[0] : undefined;
+    return added.length;
+  }).toBe(1);
   await expect(
-    page.locator(compaction.queued).filter({
-      hasText: new RegExp(`^${compaction.queuedLabel}$`),
-    }),
+    page.locator(`[data-virtual-key=${JSON.stringify(queuedBoundary)}]`)
+      .locator(compaction.queued).filter({
+        hasText: new RegExp(`^${compaction.queuedLabel}$`),
+      }),
   ).toBeVisible();
   // One progress per active turn, even with the next compaction queued.
   await expect(page.locator(".otk-response-progress")).toHaveCount(1);
@@ -231,7 +256,7 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
 test(
   "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork",
   { tag: ["@sessions", "@isolated"] },
-  async ({ isolatedState: state, page, context }) => {
+  async ({ isolatedState: state, page, context }, info) => {
     const original = await state.native<{ id: string }>("/session", "POST", {
       title: "Fork source",
     });
@@ -330,6 +355,37 @@ test(
       String(await nativeHistoryCount(state, fullFork)),
     );
     await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
+    // The viewport's scrollbar belongs below the independent dock feedback.
+    // Its local z-order must not intercept the notice's real pointer target.
+    const dismiss = page.getByRole("button", {
+      name: "Dismiss fork note",
+      exact: true,
+    });
+    const feedbackBox = await page.locator(".otk-composer-feedback")
+      .boundingBox();
+    const inputBox = await page.locator(".otk-composer-frame").boundingBox();
+    expect(feedbackBox!.x).toBe(inputBox!.x);
+    expect(feedbackBox!.width).toBe(inputBox!.width);
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await info.attach(`fork-notice-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+      expect(
+        await dismiss.evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          return button.contains(document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          ));
+        }),
+      ).toBe(true);
+    }
     await page.getByRole("button", { name: "Dismiss fork note", exact: true })
       .click();
     await expect(page.locator(".otk-fork-note")).toHaveCount(0);
@@ -379,7 +435,7 @@ test(
       await page.keyboard.insertText(`Renamed from ${origin}`);
       await page.keyboard.press("Enter");
       await expect(editor).toHaveCount(0);
-      await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+      await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
         .toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
@@ -417,10 +473,10 @@ test(
     await page.locator(".otk-title-editor input").fill("Committed on blur");
     await page.locator("textarea[name=prompt]").click();
     await expect(page.locator(".otk-title-editor")).toHaveCount(0);
-    await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
       .toHaveText("Committed on blur");
     await page.reload();
-    await expect(page.locator(`[data-session="${s.id}"] .otk-row-title`))
+    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
       .toHaveText("Committed on blur");
   },
 );

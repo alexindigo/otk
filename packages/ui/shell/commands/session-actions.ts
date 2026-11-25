@@ -31,7 +31,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
 }): () => void {
   const rollback = commands.register({
     id: "prompt.revert",
-    title: "Revert to here",
+    title: "Revert from here",
     category: "Transcript",
     arguments: {
       type: "object",

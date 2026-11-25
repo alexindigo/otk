@@ -10,7 +10,7 @@ import type { PromptReceipt, UserMessage } from "@otk/protocol";
 import { RequestFailure } from "../failures.ts";
 import { pendingMessage } from "../pending-send.ts";
 
-function fixture() {
+function fixture(committed?: (message: UserMessage) => void) {
   const projection = createTranscriptProjection();
   const listeners = new Set<() => void>(),
     timers = new Map<number, () => void>();
@@ -49,6 +49,7 @@ function fixture() {
     target: { sidecarId: "server", sessionID: "opcv2-root" },
     title: () => "Captured session",
     transcript: () => transcript,
+    committed,
     clock: {
       set(run, ms) {
         assertEquals(ms, SEND_OBSERVATION_MS);
@@ -63,13 +64,14 @@ function fixture() {
   return {
     owner,
     projection,
-    message(id: string) {
+    message(id: string, model?: UserMessage["model"]) {
       const message: UserMessage = {
         id,
         sessionID: "opcv2-root",
         role: "user",
         time: { created: 1 },
         parts: [],
+        ...(model ? { model } : {}),
       };
       projection.merge([message]);
       for (const listener of listeners) listener();
@@ -88,6 +90,61 @@ function fixture() {
     }),
   };
 }
+
+Deno.test("send bookkeeping observes only its canonical native identity once, including admission before acknowledgement", async () => {
+  const seen: UserMessage[] = [], f = fixture((message) => seen.push(message));
+  const acknowledgement = Promise.withResolvers<PromptReceipt>();
+  const pending = f.owner.send(() => acknowledgement.promise, {
+    intent: { clientID: "tab", key: "own-send" },
+    message: pendingMessage("sent", "opcv2-root", [{
+      kind: "text",
+      text: "No catalog default yet",
+    }]),
+    phase: "pending",
+  });
+  assertEquals(seen, []);
+  f.message("unrelated", { provider: "other", model: "other" });
+  assertEquals(seen, []);
+  f.message("sent", { provider: "native", model: "applied-default" });
+  assertEquals(seen.map((message) => message.model), [{
+    provider: "native",
+    model: "applied-default",
+  }]);
+  acknowledgement.resolve({ messageID: "sent", state: "accepted" });
+  await pending;
+  f.message("sent", { provider: "native", model: "applied-default" });
+  f.owner.presented(["sent"]);
+  assertEquals(seen.length, 1);
+  f.owner.stop();
+});
+
+Deno.test("applied prompt bookkeeping survives presentation before native model metadata", async () => {
+  const seen: UserMessage[] = [], f = fixture((message) => seen.push(message));
+  await f.owner.send(
+    () => Promise.resolve({ messageID: "sent", state: "accepted" }),
+    {
+      intent: { clientID: "tab", key: "metadata-later" },
+      message: pendingMessage("sent", "opcv2-root", [{
+        kind: "text",
+        text: "Send",
+      }]),
+      phase: "pending",
+    },
+  );
+  f.message("sent");
+  assertEquals(seen, []);
+  f.owner.presented(["sent"]);
+  assertEquals(f.owner.state.receipts, []);
+  f.message("unrelated", { provider: "other", model: "other" });
+  assertEquals(seen, []);
+  f.message("sent", { provider: "native", model: "applied-later" });
+  f.message("sent", { provider: "native", model: "applied-later" });
+  assertEquals(seen.map((message) => message.model), [{
+    provider: "native",
+    model: "applied-later",
+  }]);
+  f.owner.stop();
+});
 
 Deno.test("accepted send is not admitted or presented by RPC success, deadline or another identity", async () => {
   const f = fixture();

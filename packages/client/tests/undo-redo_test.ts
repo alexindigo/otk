@@ -72,8 +72,8 @@ function fixture() {
             {
               ...info(),
               revert: {
-                messageID: id,
-                messageCount: 1,
+                boundaryID: id,
+                messageIDs: [id],
                 files: [],
                 prompt: history(id),
               },
@@ -95,8 +95,8 @@ function fixture() {
         : { id: id === "p2" ? "p1" : "p2" };
       state.content.revert = id
         ? {
-          messageID: id,
-          messageCount: id === "p1" ? 2 : 1,
+          boundaryID: id,
+          messageIDs: id === "p1" ? ["p1", "p2"] : [id],
           files: [],
           prompt: history(id),
         }
@@ -117,7 +117,8 @@ function fixture() {
     owner,
     publish,
     async undo(id: string) {
-      const work = owner.undo();
+      await owner.undo();
+      const work = owner.confirm();
       publish(id);
       await work;
     },
@@ -144,7 +145,7 @@ Deno.test("undo recalls only into empty/owned drafts and redo clears only owned 
     assertEquals(f.drafts.current("local/a").input, "p2");
     assertEquals(f.drafts.current("local/a").chips[0].part.kind, "file");
     assertEquals(
-      f.session.state.content.revert?.messageID,
+      f.session.state.content.revert?.boundaryID,
       "p2",
       "The fixture publishes authoritative rollback separately from its RPC",
     );
@@ -174,7 +175,8 @@ Deno.test("undo and redo preserve newer edits, unsaved editors and retired draft
       held = Promise.withResolvers<ContentSession>();
     try {
       f.result(held.promise);
-      const pending = f.owner.undo();
+      await f.owner.undo();
+      const pending = f.owner.confirm();
       if (kind === "edit") {
         write((draft) => ({ ...draft, input: "Newer input" }));
       }
@@ -191,8 +193,8 @@ Deno.test("undo and redo preserve newer edits, unsaved editors and retired draft
         {
           ...info(),
           revert: {
-            messageID: "p2",
-            messageCount: 1,
+            boundaryID: "p2",
+            messageIDs: ["p2"],
             files: [],
             prompt: history("p2"),
           },
@@ -235,7 +237,8 @@ Deno.test("undo aborts its captured working session and waits for authoritative 
     state.working = true;
   });
   try {
-    const pending = f.owner.undo();
+    await f.owner.undo();
+    const pending = f.owner.confirm();
     await Promise.resolve();
     await Promise.resolve();
     assertEquals(f.calls, [["abort", { sidecarId: "local", sessionID: "a" }]]);
@@ -261,7 +264,8 @@ Deno.test("selection retirement cancels an idle wait without reverting or writin
     state.working = true;
   });
   try {
-    const pending = f.owner.undo();
+    await f.owner.undo();
+    const pending = f.owner.confirm();
     await Promise.resolve();
     f.session.update((state) => {
       state.selection = { sidecarId: "local", sessionID: "b" };
@@ -283,7 +287,8 @@ Deno.test("undo remains pending without a failure deadline and never reverts unt
     state.working = true;
   });
   try {
-    const work = f.owner.undo();
+    await f.owner.undo();
+    const work = f.owner.confirm();
     await Promise.resolve();
     await Promise.resolve();
     assertEquals(f.owner.state.error, undefined);

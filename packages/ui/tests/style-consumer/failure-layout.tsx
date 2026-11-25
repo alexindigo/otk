@@ -14,7 +14,7 @@ import Reasoning from "../../components/Reasoning.tsx";
 import NativeSource from "../../components/parts/NativeSource.tsx";
 import Timeline from "../../components/Timeline.tsx";
 import Sidebar from "../../components/Sidebar.tsx";
-import RolledBackStrip from "../../components/RolledBackStrip.tsx";
+import RevertGroup from "../../components/RevertGroup.tsx";
 import StatusLight from "../../components/StatusLight.tsx";
 import ConnectionLight from "../../components/ConnectionLight.tsx";
 import { useUiRegistries } from "../../registries/context.tsx";
@@ -245,18 +245,28 @@ export default function FailureLayout() {
           onOlder={() => Promise.resolve()}
           onReveal={() => Promise.resolve()}
         />
-        <RolledBackStrip
-          state={{}}
-          strip={{
-            count: 1,
-            preview: "Earlier prompt",
-            prompts: [{
-              messageID: "earlier",
-              preview: "Earlier prompt",
-              time: at - 60000,
-            }],
-            more: 0,
-            files: [],
+        <RevertGroup
+          group={{
+            key: "revert:earlier",
+            title: "Reverted",
+            members: [],
+            revision: 0,
+          }}
+          prefs={DEFAULT_PREFS}
+          onOpenChild={() => {}}
+          state={{
+            phase: "saved",
+            record: {
+              boundaryID: "earlier",
+              messageIDs: ["earlier"],
+              prompt: {
+                input: "Earlier prompt",
+                mode: "normal",
+                parts: [],
+                time: 1,
+              },
+              files: [],
+            },
           }}
         />
         <h3>Indicator artwork</h3>

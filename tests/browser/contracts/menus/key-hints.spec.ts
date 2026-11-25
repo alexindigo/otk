@@ -38,7 +38,14 @@ test.describe("live hints", () => {
       await expect(page.locator('[data-binding="prompt.submit"] kbd'))
         .toHaveText("Ctrl+Enter");
       await expect(button).toHaveAttribute("title", reboundTitle);
-      await expect(page.locator(".otk-sidebar-commands button").first())
+      // Style7 ProjectInbox owns navigation (style7fix note; decision 54).
+      await expect(
+        page.getByRole("button", {
+          name: "Search commands",
+          exact: true,
+          includeHidden: true,
+        }),
+      )
         .toHaveAttribute("title", "Search commands (Ctrl+j)");
       await page.keyboard.press("Escape");
       await page.reload();

@@ -256,7 +256,7 @@ Deno.test({
       });
       await waitFor(
         () => a.value.core.getSession(forkID),
-        (s) => s.revert?.messageID === boundary.id,
+        (s) => s.revert?.boundaryID === boundary.id,
       );
       const visible = await a.value.core.listMessages(forkID, {});
       assert(!body(visible.items).includes("prompt-4"));

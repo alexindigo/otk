@@ -418,7 +418,6 @@ export interface AssistantMessage {
 /** A native action boundary, independent of prompt/recall/queue identity. */
 export interface RevertBoundary {
   messageID: string;
-  affected: { messages: number; prompts: number };
 }
 export interface ContextMessage {
   id: string;
@@ -469,11 +468,10 @@ export interface RevertedPrompt {
   preview: string;
 }
 export interface RevertInfo {
-  messageID: string;
-  messageCount: number;
+  boundaryID: string;
+  /** Fixed in native order when the boundary is staged. Never a live tail scan. */
+  messageIDs: string[];
   files: { path?: string; additions: number; deletions: number }[];
-  /** Oldest first, at most 50, whitespace collapsed and at most 200 characters. */
-  prompts?: RevertedPrompt[];
   /** Boundary prompt content; attachments retain metadata-only history refs. */
   prompt?: HistoryEntry;
 }
@@ -522,10 +520,9 @@ export type ContentOp =
   | { op: "form.remove"; requestID: string }
   | {
     op: "session.revert";
-    messageID?: string;
-    messageCount: number;
+    boundaryID?: string;
+    messageIDs: string[];
     files: RevertInfo["files"];
-    prompts?: RevertedPrompt[];
     prompt?: HistoryEntry;
   }
   | {

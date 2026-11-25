@@ -145,14 +145,30 @@ for (const order of ["forward", "reverse"]) {
             "Held contamination prompt",
           );
           await second.locator("textarea[name=prompt]").press("Enter");
-          const assistant = second.locator("[data-role=assistant]");
-          await expect(assistant).toHaveCount(1);
-          const identity = await assistant.getAttribute("data-message");
+          // Expanded native selection records may virtualize the reply. Acquire
+          // its canonical identity before asserting the same rendered stream.
+          let identities: string[] = [];
+          await expect.poll(async () => {
+            identities = await second.evaluate(() => {
+              const messages = (globalThis as typeof globalThis & {
+                transcriptPublication?: Map<
+                  string,
+                  import("@otk/protocol").Message
+                >;
+              }).transcriptPublication;
+              return [...messages?.values() ?? []].filter((message) =>
+                message.role === "assistant"
+              ).map((message) => message.id);
+            });
+            return identities.length;
+          }).toBe(1);
+          const identity = identities[0];
           expect(identity).toBeTruthy();
           await revealAcquired(
             second,
             `[data-message="${identity}"] .otk-text`,
           );
+          await expect(second.locator("[data-role=assistant]")).toHaveCount(1);
           await expect(second.locator("[data-role=assistant] .otk-text"))
             .toHaveText("Held contaminator");
           await expect.poll(() =>

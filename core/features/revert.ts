@@ -21,7 +21,7 @@ function execution<P extends { sessionID: string }>(
     receipt: (session) =>
       boundaryReceipt.encode({
         sessionID: session.id,
-        messageID: session.revert?.messageID ?? null,
+        messageID: session.revert?.boundaryID ?? null,
         ...(mode ? { mode } : {}),
       }),
     checkpoint: (receipt) =>
@@ -59,7 +59,7 @@ function execution<P extends { sessionID: string }>(
         if (
           complete ||
           !mode && !expected.mode &&
-            (current.revert?.messageID ?? null) === expected.messageID
+            (current.revert?.boundaryID ?? null) === expected.messageID
         ) return { state: "complete", result: current };
       }
       return {
@@ -75,7 +75,7 @@ const receipt = (mode?: Mode) => ({
   encode: (session: ContentSession) =>
     boundaryReceipt.encode({
       sessionID: session.id,
-      messageID: session.revert?.messageID ?? null,
+      messageID: session.revert?.boundaryID ?? null,
       ...(mode ? { mode } : {}),
     }),
   restore: () => {

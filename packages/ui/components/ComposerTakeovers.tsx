@@ -15,6 +15,8 @@ export default function ComposerTakeovers(
   props: {
     children?: (active: () => boolean) => Element;
     notice?: () => Element;
+    /** User-owned choices may grow the input track; runtime feedback may not. */
+    noticeFlow?: boolean;
     focusNotice?(): void;
     /** Read-only transcripts still expose their registered attention actions. */
     readOnly?: boolean;
@@ -77,7 +79,9 @@ export default function ComposerTakeovers(
             </div>
           </div>
           <ScrollRegion
-            frameClass="otk-composer-notice-layer"
+            frameClass={props.noticeFlow
+              ? "otk-composer-feedback"
+              : "otk-composer-feedback is-independent"}
             hidden={!hasComposer() || active()}
           >
             <ContentSlot content={!active() ? props.notice : undefined} />

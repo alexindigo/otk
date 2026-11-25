@@ -35,7 +35,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await page.keyboard.press("Escape");
     await page.locator(".otk-user-bubble").click({ button: "right" });
     await expect(
-      page.getByRole("menuitem", { name: "Revert to here", exact: true }),
+      page.getByRole("menuitem", { name: "Revert from here", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("menuitem", { name: "Revert code changes", exact: true }),
@@ -79,11 +79,14 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       name: "Revert code changes",
       exact: true,
     }).click();
+    await page.getByRole("button", { name: "Confirm revert", exact: true })
+      .click();
     await expect.poll(async () =>
       (await state.observe<{ calls: unknown[] }>()).calls
     ).toContainEqual(["code", "tstv1-core", "prompt-v4"]);
-    await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-      "1 prompt rolled back",
+    await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+      "data-boundary",
+      "prompt-v4",
     );
     await expect.poll(async () =>
       (await state.observe<{ calls: unknown[][] }>()).calls.some((call) =>
@@ -91,9 +94,9 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       )
     ).toBe(true);
     await expect(
-      page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ }),
+      page.getByRole("button", { name: "Open copy", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".otk-rollback-preservation-warning"))
+    await expect(page.locator(".otk-revert-warning"))
       .toHaveCount(0);
   });
 }

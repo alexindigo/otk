@@ -113,7 +113,10 @@ export {
   default as ComposerNotice,
 } from "./components/ComposerNotice.tsx";
 export { ForkFact } from "./components/ForkNote.tsx";
-export { RolledBackContent } from "./components/RolledBackStrip.tsx";
+export {
+  default as RevertGroup,
+  RevertConfirmation,
+} from "./components/RevertGroup.tsx";
 export {
   default as PermissionDock,
   registerPermissionDock,

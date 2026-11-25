@@ -70,19 +70,23 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
   expect(requests.length).toBeGreaterThanOrEqual(1);
   expect(requests.every(({ frame }) => !("limit" in frame.params!))).toBe(true);
   await prompt(page, "/undo");
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Boundary prompt outside newest ten",
   );
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-boundary",
+    newest.prompt!.id,
   );
-  await page.locator(".otk-rollback-disclosure").click();
-  await expect(page.locator(".otk-rollback-disclosure")).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
-  await page.locator(".otk-rollback-footer button").click();
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await expect(page.locator(".otk-revert-group .otk-record-group-toggle"))
+    .toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  await page.locator(".otk-revert-restore").click();
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(page.locator(".otk-message-flow")).toContainText(
     "The cursor keeps every earlier step.",
   );
