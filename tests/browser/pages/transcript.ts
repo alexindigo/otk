@@ -69,44 +69,40 @@ export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
     '.otk-work-fold[aria-expanded="false"], .otk-record-group-toggle[aria-expanded="false"]',
   );
   while (true) {
-    // Expanding a predecessor can leave the next fold mounted only for its
-    // pending measurement. Reveal its source through the native viewport before
-    // clicking, rather than asking Playwright to scroll a retiring DOM node.
+    // Work segments are repartitioned as native work settles. Reveal the next
+    // closed control in its stable message, not a retiring virtual segment key.
     const selector = await closed.evaluateAll((buttons) => {
       const button = buttons[0];
       if (!button) return;
-      const message = button.closest("[data-message]"),
-        row = button.closest("[data-virtual-key]")!;
+      const message = button.closest("[data-message]");
       return (message
         ? `[data-message=${
           JSON.stringify(message.getAttribute("data-message"))
         }] `
         : "") +
-        `[data-virtual-key=${
-          JSON.stringify(row.getAttribute("data-virtual-key"))
-        }] ${
+        `${
           button.matches(".otk-work-fold")
             ? ".otk-work-fold"
             : ".otk-record-group-toggle"
-        }`;
+        }[aria-expanded="false"]`;
     });
     if (!selector) break;
     await revealAcquired(page, selector);
-    // The virtual list may retire this row after its reveal. Click it in the
-    // same page task that finds it; if it is gone, reacquire the next closed
-    // fold instead of waiting on a retired identity.
-    await page.evaluate((selector) => {
-      (document.querySelector(selector) as HTMLElement | null)?.click();
-    }, selector);
-    // Settled when this fold is open or retired; a retired one is reacquired.
-    await expect.poll(() =>
-      page.evaluate(
-        (selector) =>
-          document.querySelector(selector)?.getAttribute("aria-expanded") !==
-            "false",
-        selector,
-      )
-    ).toBe(true);
+    // Once acquired, settlement belongs to this exact control. Re-querying a
+    // closed-control selector would observe its successor instead of the click.
+    const control = await page.locator(selector).first().elementHandle();
+    if (!control) continue;
+    try {
+      await control.evaluate((button) => (button as HTMLElement).click());
+      await expect.poll(() =>
+        control.evaluate((button) =>
+          !button.isConnected ||
+          button.getAttribute("aria-expanded") !== "false"
+        )
+      ).toBe(true);
+    } finally {
+      await control.dispose();
+    }
   }
 }
 
@@ -690,15 +686,28 @@ export async function expectCompactionSummary(
   timeout?: number,
 ) {
   const { selector } = compactionBoundary(state);
+  const name = /data-native-record="([^"]+)"/.exec(selector)![1];
+  let messageID: string | undefined;
+  // Select the published source identity, not the first mounted compaction.
+  // An earlier summary can stay mounted while the requested one is virtualized.
   await expect.poll(async () => {
-    for (const row of await page.locator(selector).all()) {
-      const toggle = recordToggle(row);
-      if (await toggle.getAttribute("aria-expanded") !== "true") {
-        await toggle.click();
-      }
-    }
-    return await page.locator(selector).filter({ hasText: text }).count();
-  }, { timeout }).toBeGreaterThan(0);
+    messageID = await page.evaluate(({ name, text }) => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication?: Map<string, import("@otk/protocol").Message>;
+      }).transcriptPublication;
+      return [...messages?.values() ?? []].reverse().find((message) =>
+        message.parts.some((part) =>
+          part.kind === "external" && part.name === name &&
+          (part.source?.payload?.includes(text) ||
+            JSON.stringify(part.activity?.body ?? []).includes(text))
+        )
+      )?.id;
+    }, { name, text });
+    return messageID;
+  }, { timeout }).toBeTruthy();
+  const record = `[data-message=${JSON.stringify(messageID)}] ${selector}`;
+  await openRecord(page, record);
+  await expect(page.locator(record)).toContainText(text, { timeout });
 }
 
 /** Restored prompts by acquired-message authority, each revealed in the DOM. */

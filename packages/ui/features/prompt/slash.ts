@@ -95,8 +95,11 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
       });
       return {
         async ready() {
+          if (
+            ctx.props.value.mode !== "normal" ||
+            !parseCommand(ctx.props.value.input)
+          ) return;
           await ctx.directoryCatalog?.ready("commands");
-          await ctx.directoryCatalog?.ready("skills");
           catalog();
         },
         source: {
@@ -141,6 +144,8 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             ? parseCommand(draft.input)
             : undefined;
           if (!parsed) return false;
+          await ctx.directoryCatalog?.ready("commands");
+          catalog();
           let invocation;
           try {
             invocation = ctx.commands.parse(parsed.command, parsed.arguments);

@@ -226,12 +226,18 @@ export class MessageRecovery {
   }
   snapshot(
     session: string,
-  ): { messageID: string; partID: string; generation: number }[] {
+  ): {
+    messageID: string;
+    partID: string;
+    generation: number;
+    state?: "unavailable";
+  }[] {
     return [...this.#sessions.get(session)?.values() ?? []].flatMap((owner) =>
       [...owner.parts].map((partID) => ({
         messageID: owner.message,
         partID,
         generation: owner.generation,
+        ...(owner.failed ? { state: "unavailable" as const } : {}),
       }))
     );
   }

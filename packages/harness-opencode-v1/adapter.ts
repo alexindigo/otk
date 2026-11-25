@@ -467,7 +467,6 @@ export class OpencodeV1Adapter implements Harness {
       },
       recovering: (id) => this.#recovery.snapshot(id),
       scopedRecovery: (id) => this.#recovery.scoped(id),
-      retryRecovery: (id) => this.#recovery.retry(id),
       reconciled: (id, messageID, partID) => {
         if (partID === undefined) this.#recovery.message(messageID, id);
         else this.#recovery.part(messageID, partID, id);
@@ -573,6 +572,7 @@ export class OpencodeV1Adapter implements Harness {
     );
     const listMessages = this.core.listMessages.bind(this.core);
     this.core.listMessages = async (id, input, signal) => {
+      if (input.retryRecovery) this.#recovery.retry(id);
       await this.#errors.retryHistory(id);
       return await listMessages(id, input, signal);
     };

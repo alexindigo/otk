@@ -12,6 +12,7 @@ import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
 import ListPicker, {
   type ListPickerControl,
+  PickerStatus,
 } from "../../components/ListPicker.tsx";
 import { StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
@@ -128,10 +129,10 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       ) => (
         <>
           <Show when={catalog.loading}>
-            <p class="otk-picker-status" role="status">Loading...</p>
+            <PickerStatus role="status">Loading...</PickerStatus>
           </Show>
           <Show when={catalog.error}>
-            <div class="otk-picker-status">
+            <PickerStatus>
               <FeedbackStatus
                 feedback={catalog.error
                   ? {
@@ -140,20 +141,19 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   }
                   : undefined}
               />
-            </div>
+            </PickerStatus>
           </Show>
           <Show when={!catalog.loading && !catalog.error}>
-            <div class="otk-picker-status">
+            <PickerStatus>
               <button type="button" onClick={() => void retry()}>
                 Refresh
               </button>
-            </div>
+            </PickerStatus>
           </Show>
         </>
       );
       return {
         selection,
-        ready: owner.ready,
         pending: () => owner.state.pending,
         submitted: (draft, sent, handled) =>
           owner.recordSent(sent, draft.mode, handled).catch(ctx.fail),
@@ -219,7 +219,6 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
               fallback={
                 <PromptSetting applied={!!applied(selection().model)}>
                   <ModelLabel
-                    class="otk-prompt-model-label"
                     provider={selection().model.providerName}
                     name={selection().model.name}
                   />
@@ -275,11 +274,11 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 error={owner.state.models.error}
                 header={
                   <Show when={selection().model.unavailable}>
-                    <p class="otk-picker-status">
+                    <PickerStatus>
                       {selection().model.providerName}/{selection().model.name}
                       {" "}
                       — unavailable
-                    </p>
+                    </PickerStatus>
                   </Show>
                 }
                 control={(control) => {

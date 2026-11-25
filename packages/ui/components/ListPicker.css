@@ -65,6 +65,10 @@
 .otk-picker-row.is-unavailable .otk-picker-option {
   color: var(--otk-fg-2);
 }
+.otk-picker-estimate::before {
+  content: "";
+  height: var(--line-ui);
+}
 .otk-picker-heading {
   margin: 0;
   padding: var(--item-inset);
@@ -72,9 +76,14 @@
   font-size: var(--text-ui);
   font-weight: 500;
 }
-.otk-picker-estimate::before {
-  content: "";
-  height: var(--line-ui);
+.otk-picker-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-1) var(--item-inset);
+  color: var(--otk-fg-2);
+  font-size: var(--text-meta);
 }
 .otk-picker-estimate {
   display: flex;

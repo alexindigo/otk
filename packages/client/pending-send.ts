@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Block, Part, PromptPart, UserMessage } from "@otk/protocol";
+import {
+  ascendingID,
+  type Block,
+  type Part,
+  type PromptPart,
+  type UserMessage,
+} from "@otk/protocol";
 import type { Feedback } from "./failures.ts";
 import type { ClientIntent } from "./requests.ts";
 
@@ -13,10 +19,8 @@ export interface PendingSend {
 }
 
 /** Native-compatible sortable identity, captured alongside the request identity. */
-export function pendingMessageID(intent: ClientIntent): string {
-  return `msg_${(BigInt(Date.now()) * 0x1000n).toString(16).slice(-12)}${
-    intent.key.replaceAll(/[^a-zA-Z0-9]/g, "").slice(-14).padEnd(14, "0")
-  }`;
+export function pendingMessageID(_intent: ClientIntent): string {
+  return ascendingID("msg");
 }
 
 export function pendingMessage(

@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.sidebar-row-scene {
+  display: flex;
+  block-size: 850px;
+}
+.sidebar-row-context {
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--space-5);
+}

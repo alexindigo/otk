@@ -40,10 +40,6 @@
   display: flex;
   flex-direction: column;
 }
-.otk-popover-panel > .otk-surface {
-  min-height: 0;
-  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
-}
 .otk-popover-wide {
   --popover-inline-start: var(--popover-gutter);
   justify-self: center;

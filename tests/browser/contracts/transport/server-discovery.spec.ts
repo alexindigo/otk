@@ -150,7 +150,10 @@ test("transport.server-discovery-outcomes-and-cancel", {
       ).toHaveCount(0);
       expect(
         await steps.locator("li").evaluateAll((rows) =>
-          rows.every((row) => row.querySelectorAll("p").length === 1)
+          rows.every((row) =>
+            row.querySelectorAll(":scope > p, :scope > .otk-feedback-status")
+              .length === 1
+          )
         ),
       ).toBe(true);
       await info.attach(`discovery-${name}`, {
@@ -201,7 +204,10 @@ test("transport.server-discovery-outcomes-and-cancel", {
     await password.getByLabel("Username", { exact: true }).fill("tester");
     await password.getByLabel("Password", { exact: true }).fill("secret");
     await password.getByRole("button", { name: "Log in", exact: true }).click();
-    await expect(password.locator("[data-connection]")).toHaveText("connected");
+    await expect(password.locator("[data-connection]")).toHaveAttribute(
+      "title",
+      /^password: connected;/,
+    );
     // Full Settings frames use existing primitives, not the pending MK3 visual design.
     await capture("sign-in-result");
     await info.attach("discovery-results", {
@@ -227,8 +233,9 @@ test("transport.server-discovery-outcomes-and-cancel", {
       "OTK accepted sign-in, but this page is still not authenticated",
     );
     await expect(crossSite.getByRole("alert")).toContainText("cookie settings");
-    await expect(crossSite.locator("[data-connection]")).toHaveText(
-      "login required",
+    await expect(crossSite.locator("[data-connection]")).toHaveAttribute(
+      "title",
+      /^cross-site: login required;/,
     );
   } finally {
     await page.close();
@@ -320,7 +327,10 @@ test(
       const card = page.locator(".otk-sidecar-card").filter({
         has: page.getByRole("heading", { name: "Saved remote", exact: true }),
       });
-      await expect(card.locator("[data-connection]")).toHaveText("connected");
+      await expect(card.locator("[data-connection]")).toHaveAttribute(
+        "title",
+        /^Saved remote: connected;/,
+      );
       expect(reads).toBeGreaterThanOrEqual(2);
     } finally {
       await page.close();
@@ -357,8 +367,9 @@ test(
           exact: true,
         }),
       });
-      await expect(card.locator("[data-connection]")).toHaveText(
-        "login required",
+      await expect(card.locator("[data-connection]")).toHaveAttribute(
+        "title",
+        /^Follow-up failure: login required;/,
       );
       await page.route(e.password + "/api/session", async (route) => {
         if (!fail) return await route.continue();
@@ -398,8 +409,9 @@ test(
         "OTK accepted sign-in, but this page is still not authenticated",
       );
       expect(trace.join("\n")).not.toContain("cookie settings");
-      await expect(card.locator("[data-connection]")).toHaveText(
-        "reconnecting",
+      await expect(card.locator("[data-connection]")).toHaveAttribute(
+        "title",
+        /^Follow-up failure: reconnecting;/,
       );
       await expect(card).not.toContainText(
         "OTK accepted sign-in, but this page is still not authenticated",
@@ -407,7 +419,10 @@ test(
       await expect(card).not.toContainText("cookie settings");
       fail = false;
       release();
-      await expect(card.locator("[data-connection]")).toHaveText("connected");
+      await expect(card.locator("[data-connection]")).toHaveAttribute(
+        "title",
+        /^Follow-up failure: connected;/,
+      );
     } finally {
       release();
       await page.close();

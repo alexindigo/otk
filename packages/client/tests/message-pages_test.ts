@@ -6,7 +6,12 @@ import {
 } from "../../../tests/support/request-wire.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createSession, SidecarConnection } from "../mod.ts";
-import type { ContentClock, ContentOp, MessagePage } from "@otk/protocol";
+import type {
+  ContentClock,
+  ContentOp,
+  MessagePage,
+  MessagePageInput,
+} from "@otk/protocol";
 
 const policy = {
   coolms: 300000,
@@ -102,6 +107,79 @@ Deno.test("selected page installs coordinated metadata and latest prompt outside
     assertEquals(f.owner.latestPrompt()?.id, "outside-page");
     await f.owner.older();
     assertEquals(f.frames, []);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("only an explicit transcript refresh carries recovery retry intent", async () => {
+  const f = fixture();
+  const request = () =>
+    f.frames.find((frame) => frame.method === "session.messages")!
+      .params as MessagePageInput;
+  try {
+    f.owner.open({ sidecarId: "server", sessionID: "opcv1-s" });
+    assertEquals(request().retryRecovery, undefined);
+    f.reply(page());
+    await f.settle();
+    f.event({ op: "stream.reconcile" }, { ...clock, seq: 1 });
+    while (!f.frames.some((frame) => frame.method === "session.messages")) {
+      await f.settle();
+    }
+    assertEquals(request().retryRecovery, undefined);
+    f.reply({
+      ...page(),
+      clock: { ...clock, seq: 1 },
+      from: { ...clock, seq: 1 },
+    });
+    await f.settle();
+    const refresh = f.owner.refetch();
+    assertEquals(request().retryRecovery, true);
+    f.reply({
+      ...page(),
+      clock: { ...clock, seq: 1 },
+      from: { ...clock, seq: 1 },
+    });
+    await refresh;
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("newest and older pages preserve unavailable native recovery state", async () => {
+  const f = fixture();
+  try {
+    f.owner.open({ sidecarId: "server", sessionID: "opcv1-s" });
+    f.reply({
+      ...page("older"),
+      recovering: [{
+        messageID: "m0",
+        partID: "text",
+        generation: 1,
+        state: "unavailable",
+      }],
+    });
+    await f.settle();
+    assertEquals(f.owner.state.content.recovering?.[0].state, "unavailable");
+    const older = f.owner.older();
+    await f.settle();
+    f.reply({
+      ...page(),
+      items: [{ ...page().items[0], id: "older", time: { created: -1 } }],
+      recovering: [{
+        messageID: "older",
+        partID: "text",
+        generation: 2,
+        state: "unavailable",
+      }],
+    });
+    await older;
+    assertEquals(
+      f.owner.state.content.recovering?.find((item) =>
+        item.messageID === "older"
+      )?.state,
+      "unavailable",
+    );
   } finally {
     f.stop();
   }

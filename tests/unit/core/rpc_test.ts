@@ -406,6 +406,11 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         { sessionID: "tstv1-s", limit: 1.5 },
         "Unknown message page parameter",
       ],
+      [
+        "session.messages",
+        { sessionID: "tstv1-s", retryRecovery: "true" },
+        "Invalid response retry intent",
+      ],
       ["session.create", { directory: "" }, "Expected directory string"],
       ["session.prompt", { parts: [] }, "parts required"],
       ["session.prompt", {

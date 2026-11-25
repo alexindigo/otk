@@ -4,7 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-default" });
-test("sessions.project-default-attention-human-root-and-newest-root", {
+test("sessions.project-memory-precedes-attention-and-defaults-are-visible", {
   tag: ["@sessions", "@attention", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
   const directory = state.directory;
@@ -33,17 +33,17 @@ test("sessions.project-default-attention-human-root-and-newest-root", {
   await activity(state, "tstv1-urgent-child", "freeze");
   // A cold project route and reload use the same default as a click.
   await page.goto(projectURL);
-  await selected("tstv1-otk");
+  await selected("tstv1-remembered-child");
   await page.goto(projectURL);
   await page.reload();
-  await selected("tstv1-otk");
+  await selected("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "release");
   await expect.poll(() =>
     state.product("navigation.default", {
       directory,
       preferred: "tstv1-remembered-child",
     })
-  ).toBe("tstv1-otk");
+  ).toBe("tstv1-remembered-child");
   // Record real viewing, rather than racing an external preference write against
   // the currently open session's own last-viewed bookkeeping.
   await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-remembered-child`);
@@ -60,21 +60,21 @@ test("sessions.project-default-attention-human-root-and-newest-root", {
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
-  await selected("tstv1-otk");
-  // Same-project clicks must not bypass the resolver with the current selection.
+  await selected("tstv1-remembered-child");
+  // Same-project clicks must keep the accepted selection despite new attention.
   await activity(state, "tstv1-urgent-child", "freeze");
   await expect.poll(() =>
     state.product("navigation.default", {
       directory,
       preferred: "tstv1-remembered-child",
     })
-  ).toBe("tstv1-otk");
+  ).toBe("tstv1-remembered-child");
   await page.locator(
     `.otk-project-row[data-project=${
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
-  await selected("tstv1-otk");
+  await selected("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "release");
   await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-remembered-child`);
   await selected("tstv1-remembered-child");
@@ -97,11 +97,21 @@ test("sessions.project-default-attention-human-root-and-newest-root", {
   await page.goto(`${state.url}/#/local/tstv1-atmosphera`);
   await selected("tstv1-atmosphera");
   await remember();
+  // Seed persisted state for a fresh owner. A bookkeeping broadcast must not
+  // replace this tab's own accepted destination while it is still alive.
+  await page.goto("about:blank");
   await page.goto(projectURL);
   await selected("tstv1-newest-root");
+  await expect(page.locator(".otk-selection-notice")).toContainText(
+    "No remembered session",
+  );
   await page.goto(`${state.url}/#/local/tstv1-atmosphera`);
   await selected("tstv1-atmosphera");
   await remember("tstv1-missing");
+  await page.goto("about:blank");
   await page.goto(projectURL);
   await selected("tstv1-newest-root");
+  await expect(page.locator(".otk-selection-notice")).toContainText(
+    "no longer available",
+  );
 });

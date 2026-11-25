@@ -13,7 +13,7 @@
   font-weight: 600;
   color: var(--fg);
 }
-.otk-project-inbox .otk-sidebar-commands {
+.otk-inbox-commands {
   padding: 0 var(--space-2) var(--chrome-inset);
 }
 .otk-inbox-search {
@@ -35,23 +35,10 @@
   padding: 0 var(--space-2);
 }
 .otk-project-row {
-  --selection-inset: 0px;
-  --selection-pointer-inset: 0px;
-  display: flex;
-  align-items: center;
   min-height: var(--row-project);
   color: var(--otk-fg-2);
 }
 .otk-project-open {
-  display: flex;
-  align-items: center;
-  gap: var(--project-gap);
-  flex: 1;
-  min-width: 0;
-  height: var(--row-project);
-  padding: 0 var(--chrome-inset) 0 var(--project-gap);
-  border: 0;
-  text-align: left;
   color: inherit;
 }
 .otk-project-open:hover {
@@ -64,10 +51,6 @@
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
-}
-.otk-project-content {
-  gap: 0;
-  flex-wrap: wrap;
 }
 .otk-project-error {
   flex-basis: 100%;
@@ -90,7 +73,7 @@
   align-items: center;
   justify-items: end;
   flex: none;
-  min-width: var(--control-size);
+  min-inline-size: 0;
 }
 .otk-project-trailing > * {
   grid-area: 1 / 1;
@@ -143,7 +126,7 @@
 .otk-server-connection {
   min-inline-size: 0;
 }
-.otk-server-connections:has(.otk-connection-status) {
+.otk-server-connections.has-status {
   flex-basis: 100%;
   margin-inline: 0;
   min-inline-size: 0;
@@ -171,9 +154,6 @@
 .otk-project-inbox[data-collapsed=true] .otk-inbox-scroll {
   padding: 0 var(--space-1);
 }
-.otk-project-inbox[data-collapsed=true] .otk-project-open {
-  display: none;
-}
 .otk-project-inbox[data-collapsed=true] .otk-inbox-footer {
   padding: var(--space-2) var(--space-1);
   flex-direction: column;
@@ -184,13 +164,7 @@
 .otk-project-inbox[data-collapsed=true] .otk-keys-entry {
   display: none;
 }
-.otk-project-inbox[data-collapsed=true] .otk-project-row {
-  padding-inline-end: var(--project-inset);
-}
-.otk-project-inbox[data-collapsed=true] .otk-project-content {
-  justify-content: center;
-}
-.otk-project-inbox[data-collapsed=true] .otk-sidebar-commands {
+.otk-project-inbox[data-collapsed=true] .otk-inbox-commands {
   padding-inline: var(--space-1);
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-search {
@@ -211,12 +185,6 @@
   outline: 2px solid var(--control-focus);
   outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-row);
-}
-.otk-project-row::before {
-  grid-area: 1 / 1;
-}
-.otk-project-row > .otk-project-content {
-  grid-area: 1 / 1 / 2 / -1;
 }
 .otk-project-attention {
   display: grid;

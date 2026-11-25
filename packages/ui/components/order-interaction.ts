@@ -22,14 +22,13 @@ export function orderInteraction(
       if (!element) return;
       let release: (() => void) | undefined;
       const retained = new Set<() => void>();
-      let pointer = false, pressed = false, engaged = false, alive = true;
+      let pointer = false, pressed = false, alive = true;
+      let activated = false, tabbing = false;
       const update = () => {
         if (!alive) return;
         const focused = element.contains(document.activeElement);
-        const local = pointer || pressed || focused;
-        const portal = retained.size > 0 || engaged &&
-            !!document.querySelector("dialog[open]");
-        engaged = local || portal;
+        const local = !activated && (pointer || pressed || focused);
+        const engaged = local || retained.size > 0;
         if (engaged && !release) release = hold();
         else if (!engaged && release) {
           release();
@@ -45,6 +44,7 @@ export function orderInteraction(
         update();
       };
       const down = () => {
+        activated = false;
         pressed = true;
         update();
       };
@@ -53,9 +53,42 @@ export function orderInteraction(
         update();
       };
       const later = () => queueMicrotask(update);
+      // A hold protects a target while the reader chooses, not after an
+      // explicit intent changes selection, query or membership. Focus return
+      // from that intent must not resurrect the preceding interaction.
+      const activate = (portalled = false) => {
+        activated = true;
+        if (portalled) { for (const done of [...retained]) done(); }
+        update();
+      };
+      const input = () => activate();
+      const resume = () => {
+        activated = false;
+        update();
+      };
+      const keyboard = (event: KeyboardEvent) => {
+        tabbing = event.key === "Tab";
+        queueMicrotask(() => tabbing = false);
+        if (event.target instanceof Node && element.contains(event.target)) {
+          resume();
+        }
+      };
+      const focus = () => tabbing ? resume() : update();
+      const layer = (event: Event) => {
+        // A native modal takes interaction away from the underlying inert
+        // document. Its focus return is not a new choice in that document.
+        if (
+          event.target instanceof HTMLDialogElement && event.target.open &&
+          event.target.matches(":modal")
+        ) activate(true);
+        else later();
+      };
       const retain: EventListener = (event) => {
-        const releases = (event as CustomEvent<{ release: (() => void)[] }>)
-          .detail?.release;
+        const detail = (event as CustomEvent<{
+          release: (() => void)[];
+          activate?: (() => void)[];
+        }>).detail;
+        const releases = detail?.release;
         if (!releases) return;
         const held = hold();
         const done = () => {
@@ -65,17 +98,22 @@ export function orderInteraction(
         };
         retained.add(done);
         releases.push(done);
+        detail.activate?.push(() => activate(true));
         update();
       };
       element.addEventListener("pointerenter", enter);
       element.addEventListener("pointerleave", leave);
       element.addEventListener("pointerdown", down);
+      element.addEventListener("pointermove", resume);
+      element.addEventListener("click", input);
+      element.addEventListener("input", input);
+      document.addEventListener("keydown", keyboard, true);
       document.addEventListener("pointerup", up, true);
       document.addEventListener("pointercancel", up, true);
-      element.addEventListener("focusin", update);
+      element.addEventListener("focusin", focus);
       element.addEventListener("focusout", later);
       element.addEventListener("otk-context-retain", retain);
-      document.addEventListener("toggle", later, true);
+      document.addEventListener("toggle", layer, true);
       document.addEventListener("close", later, true);
       pointer = element.matches(":hover");
       update();
@@ -84,12 +122,16 @@ export function orderInteraction(
         element.removeEventListener("pointerenter", enter);
         element.removeEventListener("pointerleave", leave);
         element.removeEventListener("pointerdown", down);
+        element.removeEventListener("pointermove", resume);
+        element.removeEventListener("click", input);
+        element.removeEventListener("input", input);
+        document.removeEventListener("keydown", keyboard, true);
         document.removeEventListener("pointerup", up, true);
         document.removeEventListener("pointercancel", up, true);
-        element.removeEventListener("focusin", update);
+        element.removeEventListener("focusin", focus);
         element.removeEventListener("focusout", later);
         element.removeEventListener("otk-context-retain", retain);
-        document.removeEventListener("toggle", later, true);
+        document.removeEventListener("toggle", layer, true);
         document.removeEventListener("close", later, true);
         release?.();
         release = undefined;

@@ -8,6 +8,8 @@ import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import LiveWork from "./LiveWork.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
+import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
 export default function ComposerTakeovers(
   props: {
@@ -28,6 +30,12 @@ export default function ComposerTakeovers(
   const first = () =>
     available().find((item) => item.active?.(session) ?? true)?.id;
   const hasComposer = () => !props.readOnly;
+  const target = () =>
+    session.composerTarget?.() ??
+      {
+        session: session.entry(session.sessionID())?.title ??
+          session.sessionID(),
+      };
   return (
     <ComposerProvider available={hasComposer}>
       <Show when={hasComposer() || active() || work().length}>
@@ -36,8 +44,28 @@ export default function ComposerTakeovers(
           data-read-only={props.readOnly ? "true" : "false"}
         >
           <div class="otk-composer-activity-slot">
-            <Show when={work().length}>
-              <div class="otk-composer-activity">
+            <div class="otk-composer-activity" aria-label="Message destination">
+              <span
+                class="otk-composer-target"
+                title={[target().task, target().session].filter(Boolean).join(
+                  ": ",
+                )}
+              >
+                <Show when={target().task}>
+                  {(task) => (
+                    <>
+                      <ChromeMeta class="otk-composer-task otk-control-label">
+                        {task()}
+                      </ChromeMeta>
+                      <ChevronIcon class="otk-composer-chevron" />
+                    </>
+                  )}
+                </Show>
+                <ChromeMeta class="otk-composer-destination otk-control-label">
+                  {target().session}
+                </ChromeMeta>
+              </span>
+              <span class="otk-composer-live-slot">
                 <LiveWork
                   items={work()}
                   owner={session.liveWork}
@@ -45,8 +73,8 @@ export default function ComposerTakeovers(
                     void commands.run("session.child", id).catch(fail)}
                   onError={fail}
                 />
-              </div>
-            </Show>
+              </span>
+            </div>
           </div>
           <ScrollRegion
             frameClass="otk-composer-notice-layer"

@@ -235,11 +235,6 @@ p {
 }
 input[type=radio] {
   accent-color: var(--otk-fg-2);
-  inline-size: var(--text-ui);
-  block-size: var(--text-ui);
-  flex: none;
-  margin: var(--space-1) calc(3 * var(--otk-unit)) calc(3 * var(--otk-unit))
-    var(--space-1);
 }
 code,
 pre,
@@ -361,6 +356,12 @@ small {
   flex: 1;
   min-width: 0;
   gap: calc(8 * var(--otk-unit));
+}
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item::before {
+  content: none;
 }
 :root [data-otk-selection=horizontal].otk-selection-item {
   display: grid;

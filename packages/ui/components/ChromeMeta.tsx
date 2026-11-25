@@ -2,6 +2,7 @@
 import { type Element, Show } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
 import { TreeNode } from "./Tree.tsx";
+import SidebarRow from "./SidebarRow.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import "./ChromeMeta.css" with { type: "text" };
 
@@ -49,6 +50,7 @@ export function SectionHeader(props: {
   headerClass?: string;
   metaClass?: string;
   compact?: boolean;
+  sidebar?: boolean;
   leading?(): Element;
   attributes?: Record<string, unknown>;
   body?(): Element;
@@ -62,8 +64,14 @@ export function SectionHeader(props: {
         : `${props.label}, ${props.count}`);
   return (
     <TreeNode
+      compact={props.compact}
+      leadingRow={props.sidebar}
       toggleHeader={!props.compact || !!props.leading}
-      class={["otk-section-tree", props.class].filter(Boolean).join(" ")}
+      class={[
+        "otk-section-tree",
+        props.sidebar ? "otk-sidebar-tree" : "",
+        props.class,
+      ].filter(Boolean).join(" ")}
       label={description()}
       open={props.open}
       hasChildren
@@ -84,14 +92,36 @@ export function SectionHeader(props: {
             onClick={() =>
               props.onOpen(!props.open)}
           >
-            {props.leading?.()}
-            <Show when={!props.compact}>
-              <SectionHeaderMeta
-                label={props.label}
-                count={props.count}
-                metaClass={props.metaClass}
+            <Show
+              when={props.sidebar}
+              fallback={
+                <>
+                  {props.leading?.()}
+                  <Show when={!props.compact}>
+                    <SectionHeaderMeta
+                      label={props.label}
+                      count={props.count}
+                      metaClass={props.metaClass}
+                    />
+                    <span class="otk-section-header-rule" aria-hidden="true" />
+                  </Show>
+                </>
+              }
+            >
+              <SidebarRow
+                compact={props.compact}
+                lamp={props.leading?.()}
+                label={
+                  <span class="otk-section-row-label">
+                    <SectionHeaderMeta
+                      label={props.label}
+                      count={props.count}
+                      metaClass={props.metaClass}
+                    />
+                    <span class="otk-section-header-rule" aria-hidden="true" />
+                  </span>
+                }
               />
-              <span class="otk-section-header-rule" aria-hidden="true" />
             </Show>
           </button>
         </Show>

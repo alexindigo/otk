@@ -129,6 +129,7 @@ export default function CommandMenu(props: {
     setPending(item.key);
     const facts = commandFailureFacts(action);
     props.beforeRun?.();
+    menu.activateOrigin?.();
     const origin = document.activeElement;
     onSettled(() => {
       // A command may hand focus to its consumer synchronously. Pending paint
@@ -179,6 +180,7 @@ export default function CommandMenu(props: {
             clear();
           },
           contains: control.contains,
+          activateOrigin: control.activateOrigin,
         });
       }}
       onOpen={() => {
@@ -189,6 +191,7 @@ export default function CommandMenu(props: {
       status={
         <Show when={error() && !props.onError}>
           <FeedbackStatus
+            class="otk-command-menu-feedback"
             id={errorId}
             compact
             feedback={errorFeedback(error()!.value)}
@@ -242,7 +245,7 @@ export default function CommandMenu(props: {
                             : undefined}
                           class={[
                             "otk-command-menu-button",
-                            action().destructive ? "otk-menu-destructive" : "",
+                            action().destructive ? "is-destructive" : "",
                             armed()?.key === action().key ? "is-armed" : "",
                           ].filter(Boolean).join(" ")}
                           onClick={() =>

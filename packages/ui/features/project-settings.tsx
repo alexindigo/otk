@@ -18,7 +18,7 @@ export function registerProjectSettings(dialogs: DialogRegistry): void {
     id: "project-settings",
     size: "editor",
     title: (input) =>
-      `${input.editor.state.values.name || input.name} / Project settings`,
+      `Project settings: ${input.editor.state.values.name || input.name}`,
     dismiss: (input, close) => {
       if (input.editor.dismiss()) close();
     },
@@ -70,6 +70,7 @@ function ProjectSettingsPage(props: DialogProps<ProjectSettingsInput>) {
       </Show>
       <Show when={editor.state.fields.length}>
         <Form
+          spacious
           title="Project settings"
           submitLabel="Save changes"
           pendingLabel={editor.state.reading
@@ -95,6 +96,7 @@ function ProjectSettingsPage(props: DialogProps<ProjectSettingsInput>) {
               <span class="otk-control-label">Icon</span>
               <div class="otk-control-row">
                 <ProjectAvatar
+                  size="control"
                   name={editor.state.values.name || props.input.name}
                   icon={editor.state.values.icon || (!editor.state.values.color
                     ? editor.state.iconSource

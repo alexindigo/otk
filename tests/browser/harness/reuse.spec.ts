@@ -6,6 +6,7 @@ import type { TestState } from "../fixtures/test-state.ts";
 import type { Page } from "@playwright/test";
 import type { Preferences } from "@otk/protocol";
 import { receivedPrompt } from "../fixtures/provider.ts";
+import { revealAcquired } from "../pages/transcript.ts";
 
 async function observer(state: TestState, page: Page) {
   expect(await state.product("prefs.get", {})).toEqual(state.lease.baseline);
@@ -144,6 +145,14 @@ for (const order of ["forward", "reverse"]) {
             "Held contamination prompt",
           );
           await second.locator("textarea[name=prompt]").press("Enter");
+          const assistant = second.locator("[data-role=assistant]");
+          await expect(assistant).toHaveCount(1);
+          const identity = await assistant.getAttribute("data-message");
+          expect(identity).toBeTruthy();
+          await revealAcquired(
+            second,
+            `[data-message="${identity}"] .otk-text`,
+          );
           await expect(second.locator("[data-role=assistant] .otk-text"))
             .toHaveText("Held contaminator");
           await expect.poll(() =>

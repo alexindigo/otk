@@ -5,6 +5,8 @@ import { skillChoices } from "@otk/client";
 import type { SkillOption } from "@otk/protocol";
 import ListPicker, {
   type ListPickerControl,
+  PickerHeading,
+  PickerStatus,
 } from "../../components/ListPicker.tsx";
 import { ownedCommand } from "../../keyboard/context.tsx";
 import type { PromptContext, PromptRegistry } from "../../registries/prompt.ts";
@@ -25,7 +27,6 @@ export function registerSkillsPrompt(prompt: PromptRegistry): void {
       );
       return {
         overlay: picker,
-        ready: () => ctx.directoryCatalog?.ready("skills") ?? Promise.resolve(),
       };
     },
   });
@@ -107,7 +108,7 @@ export function createSkillPicker(
       <ListPicker<SkillOption>
         label="Skills"
         class="otk-skills-picker"
-        header={<h3 class="otk-picker-heading otk-control-label">Skills</h3>}
+        header={<PickerHeading>Skills</PickerHeading>}
         search="Search skills"
         groups={[{
           key: "skills",
@@ -129,14 +130,14 @@ export function createSkillPicker(
               when={!values()?.skills ||
                 values()?.skills?.state === "digesting"}
             >
-              <p class="otk-picker-status" role="status">Loading skills...</p>
+              <PickerStatus role="status">Loading skills...</PickerStatus>
             </Show>
             <Show when={values()?.skills?.state === "unavailable"}>
-              <p class="otk-picker-status" role="alert">
+              <PickerStatus role="alert">
                 Skills are unavailable
-              </p>
+              </PickerStatus>
             </Show>
-            <div class="otk-picker-status">
+            <PickerStatus>
               <button
                 type="button"
                 onClick={() =>
@@ -146,7 +147,7 @@ export function createSkillPicker(
               >
                 Refresh
               </button>
-            </div>
+            </PickerStatus>
           </>
         }
         onOpen={() => {

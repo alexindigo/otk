@@ -2,8 +2,50 @@
 import { assert } from "@std/assert";
 import { conventionErrors } from "./ui-conventions_test.ts";
 
+Deno.test("sidebar layout accepts owner tracks and injected row content", () => {
+  for (
+    const [path, text] of [
+      [
+        "packages/ui/components/SidebarRow.css",
+        ".otk-sidebar-row { grid-template-columns: 20px 28px minmax(0, 1fr) 28px }",
+      ],
+      [
+        "packages/ui/components/ProjectInbox.tsx",
+        'import SidebarRow from "./SidebarRow.tsx"; import {SectionHeader} from "./ChromeMeta.tsx"; const row = <><SidebarRow label={name}/><SectionHeader sidebar /></>',
+      ],
+      ["Fixture.css", ".otk-project-open { color: inherit }"],
+    ]
+  ) assert(conventionErrors("sidebar-row", path, text).length === 0);
+});
+
 /** Independent passing counterexamples from style review 5, not just old spellings. */
 const cases: [Parameters<typeof conventionErrors>[0], string, string][] = [
+  [
+    "sidebar-row",
+    "Fixture.css",
+    ".otk-project-marker { position: absolute; left: 0 }",
+  ],
+  ["sidebar-row", "Fixture.css", ".otk-sidebar-label { margin-left: -8px }"],
+  [
+    "sidebar-row",
+    "Fixture.css",
+    ".otk-sidebar-row { grid-template-columns: auto 1fr }",
+  ],
+  [
+    "sidebar-row",
+    "Fixture.tsx",
+    'const row = <span class="otk-sidebar-row" />',
+  ],
+  [
+    "sidebar-row",
+    "packages/ui/components/ProjectInbox.tsx",
+    'import {SectionHeader} from "./ChromeMeta.tsx"; const row = <SectionHeader />',
+  ],
+  [
+    "sidebar-row",
+    "packages/ui/components/ProjectInbox.tsx",
+    'import Fake from "./other/SidebarRow.tsx"; const row = <Fake />',
+  ],
   [
     "clock",
     "Fixture.tsx",
@@ -88,9 +130,9 @@ const cases: [Parameters<typeof conventionErrors>[0], string, string][] = [
   [
     "disclosure",
     "Fixture.css",
-    ".otk-permission-scope { grid-template-columns: 19px auto; gap: 0 }",
+    ".otk-disclosure-toggle { grid-template-columns: 19px auto; gap: 0 }",
   ],
-  ["disclosure", "Fixture.css", ".otk-failure-details { padding-left: 8px }"],
+  ["disclosure", "Fixture.css", ".otk-disclosure-icon { padding-left: 8px }"],
   [
     "duration",
     "Fixture.tsx",

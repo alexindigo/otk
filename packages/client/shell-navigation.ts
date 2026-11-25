@@ -29,6 +29,7 @@ import { LOCAL_SIDECAR } from "./sidecars.ts";
 
 export interface ShellNavigationState {
   project?: ProjectSelection;
+  selectionNotice?: string;
   settings: boolean;
   error: FailureValue;
 }
@@ -119,21 +120,42 @@ export function createShellNavigation(o: {
     directory: resources.projectDirectory?.(p.sidecarId, p.directory, repoID) ??
       p.directory,
   });
-  const pendingLocations = new Map<string, ProjectLocation>();
+  // This browser's accepted choices remain authoritative across older preference
+  // broadcasts, RPC completion and reconnect. Persistence restores them on reload.
+  const acceptedLocations = new Map<string, {
+    location: ProjectLocation;
+    persistence: "pending" | "saved" | "failed";
+  }>();
   const locationKey = (p: ProjectSelection) =>
     JSON.stringify([p.sidecarId, presentation(p).directory]);
+  const persistedLocation = (p: ProjectSelection) =>
+    locations.toReversed().find((location) =>
+      location.sidecarId === p.sidecarId &&
+      presentation(location).directory === presentation(p).directory
+    );
   const lastLocation = (p: ProjectSelection) =>
-    pendingLocations.get(locationKey(p)) ??
-      locations.toReversed().find((location) =>
-        location.sidecarId === p.sidecarId &&
-        presentation(location).directory === presentation(p).directory
-      );
+    acceptedLocations.get(locationKey(p))?.location ?? persistedLocation(p);
   const remember = (p: ProjectSelection, sessionID?: string) => {
-    if (lastLocation(p)?.sessionID === sessionID) return;
     const key = locationKey(p), location = { ...p, sessionID };
-    pendingLocations.set(key, location);
-    void resources.rememberLocation(location).catch(fail).finally(() => {
-      if (pendingLocations.get(key) === location) pendingLocations.delete(key);
+    const previous = acceptedLocations.get(key);
+    if (
+      previous && previous.location.sessionID === sessionID &&
+      previous.persistence !== "failed"
+    ) return;
+    const record = {
+      location,
+      persistence: "pending" as "pending" | "saved" | "failed",
+    };
+    acceptedLocations.set(key, record);
+    if (persistedLocation(p)?.sessionID === sessionID) {
+      record.persistence = "saved";
+      return;
+    }
+    void resources.rememberLocation(location).then(() => {
+      record.persistence = "saved";
+    }).catch((error) => {
+      record.persistence = "failed";
+      fail(error);
     });
   };
   const releaseLocations = resources.observe({
@@ -141,6 +163,13 @@ export function createShellNavigation(o: {
       if (id === LOCAL_SIDECAR && frame.t === "prefs") {
         locations = frame.prefs.shellLayout.projectLocations ?? [];
         locationsReady = true;
+      }
+      if (id === LOCAL_SIDECAR && frame.t === "welcome") {
+        for (const record of acceptedLocations.values()) {
+          if (record.persistence === "failed") {
+            remember(record.location, record.location.sessionID);
+          }
+        }
       }
       if (frame.t === "prefs" || frame.t === "welcome") resolveProject();
     },
@@ -175,6 +204,9 @@ export function createShellNavigation(o: {
       revision++;
     },
     apply(hash) {
+      store.update((draft) => {
+        delete draft.selectionNotice;
+      });
       projectOnly = false;
       projectDefault = false;
       const target = route(hash),
@@ -216,6 +248,14 @@ export function createShellNavigation(o: {
               }
               : undefined),
         );
+        const directory = target &&
+          resources.entry(target.sidecarId, target.sessionID)?.directory;
+        if (target && directory) {
+          remember(
+            { sidecarId: target.sidecarId, directory },
+            target.sessionID,
+          );
+        }
         if (projectTarget) {
           observeProject(
             projectTarget,
@@ -280,16 +320,35 @@ export function createShellNavigation(o: {
       outcome: "pending",
     };
     resolution = attempt;
+    const preferred = lastLocation(target)?.sessionID;
+    const explicitAttention = projectIntent?.attention;
     void resources.projectSession(
       target,
-      lastLocation(target)?.sessionID,
-      projectIntent?.attention,
+      preferred,
+      explicitAttention,
     ).then(
       (id) => {
         attempt.outcome = "complete";
         if (revision === attempt.at) {
           clearError();
-          if (id) navigate({ sidecarId: target.sidecarId, sessionID: id });
+          if (id) {
+            if (
+              navigate({ sidecarId: target.sidecarId, sessionID: id }) &&
+              !explicitAttention && id !== preferred
+            ) {
+              const title = resources.entry(target.sidecarId, id)?.title ?? id;
+              store.update((draft) => {
+                draft.selectionNotice = preferred
+                  ? `The remembered session is no longer available. Selected "${title}".`
+                  : `No remembered session for this project. Selected "${title}".`;
+              });
+            }
+          } else if (preferred && !explicitAttention) {
+            store.update((draft) => {
+              draft.selectionNotice =
+                "The remembered session is no longer available. Choose a session.";
+            });
+          }
         }
       },
     ).catch((error) => {
@@ -513,6 +572,12 @@ export function createShellNavigation(o: {
       return true;
     },
     observeView(value) {
+      // View effects may publish late. Only the accepted route can own memory.
+      if (
+        value.selected &&
+        (value.selected.sidecarId !== session.state.selection?.sidecarId ||
+          value.selected.sessionID !== session.state.selection?.sessionID)
+      ) return;
       if (!value.selected) {
         const target = store.state.project;
         if (
@@ -539,6 +604,10 @@ export function createShellNavigation(o: {
             indexed?.projectID,
           ),
         );
+        remember(
+          { sidecarId: value.selected.sidecarId, directory },
+          value.selected.sessionID,
+        );
       }
       if (
         !value.directory || value.loading ||
@@ -548,10 +617,6 @@ export function createShellNavigation(o: {
       }
       const target = value.selected,
         key = sessionKey(target.sidecarId, target.sessionID);
-      remember(
-        { sidecarId: target.sidecarId, directory: value.directory },
-        target.sessionID,
-      );
       if (viewed !== key) {
         viewed = key;
         viewedFinish = value.finish;
@@ -576,7 +641,7 @@ export function createShellNavigation(o: {
       revision++;
       navigation.stop();
       releaseLocations();
-      pendingLocations.clear();
+      acceptedLocations.clear();
     },
   };
 }

@@ -5,6 +5,7 @@ import { test as workerTest } from "./stack.ts";
 import { Controller } from "./protocol.ts";
 import type { RpcMethod, RpcParams, RpcResult } from "@otk/protocol";
 import type { Browser, BrowserContext, TestInfo } from "@playwright/test";
+import { observeTranscript } from "./transcript-publication.ts";
 
 export class TestState {
   readonly #contexts: BrowserContext[] = [];
@@ -32,6 +33,7 @@ export class TestState {
   async newContext(browser: Browser): Promise<BrowserContext> {
     const context = await browser.newContext();
     this.#contexts.push(context);
+    await observeTranscript(context);
     return context;
   }
   product<M extends RpcMethod>(

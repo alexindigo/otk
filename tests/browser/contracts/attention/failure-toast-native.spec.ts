@@ -42,8 +42,11 @@ test("attention.native-failure-toast-identifies-the-background-session", {
       exact: true,
     }),
   ).toHaveAttribute("href", `#/local/${failed.id}`);
-  // This native failure supplies a reason, not an owner-authored recovery step.
-  await expect(toast.locator(".otk-failure-recovery")).toHaveCount(0);
+  // Running-session notifications supply their own inspection step; the native
+  // reason and that owner-authored step remain separate facts.
+  await expect(toast.locator(".otk-failure-recovery")).toHaveText(
+    "Open the session to inspect the provider response before sending a new prompt.",
+  );
   await expect(page.locator('.otk-toast[data-kind="done"]')).toHaveCount(0);
   await expect(page.locator('.otk-toast[data-kind="error"]')).toHaveCount(1);
   // A failed native execution can also produce a legitimate unseen finish.

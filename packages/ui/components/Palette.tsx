@@ -98,7 +98,7 @@ export default function Palette(
                     </span>
                     <small>{row().cmd.category}</small>
                   </span>
-                  <kbd>{row().keys.join(" / ")}</kbd>
+                  <kbd>{row().keys.join(" or ")}</kbd>
                 </SelectionContent>
               </button>
             </li>

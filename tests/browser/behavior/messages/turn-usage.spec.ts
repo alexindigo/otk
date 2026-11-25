@@ -179,7 +179,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   expect(segmentMs).toBeDefined();
   await expect(page.locator(".otk-work-fold .otk-work-label").first())
     .toHaveText(
-      `Worked for ${(segmentMs! / 1000).toFixed(1)}s`,
+      `Worked for ${Number((segmentMs! / 1000).toFixed(1))}s`,
     );
   // Bookkeeping after the answer has no segment clock, even with a known turn.
   await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");

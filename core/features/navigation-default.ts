@@ -73,12 +73,9 @@ export class NavigationDefault {
       return proven(id);
     };
     signal?.throwIfAborted();
-    const urgent = attention();
-    if (urgent) {
-      const root = await human(urgent);
-      if (root && proven(urgent) === root) return root;
-    }
-    if (!urgent && input.preferred) {
+    // Remembered selection is an explicit destination, not a default candidate.
+    // Attention, new helpers and recency must never replace it on project return.
+    if (input.preferred && !input.attention) {
       const rows = await core.identities([input.preferred], signal);
       await hierarchy.prepare(
         rows,
@@ -86,18 +83,14 @@ export class NavigationDefault {
         signal,
       );
       signal?.throwIfAborted();
-      const urgent = attention();
-      if (urgent) {
-        const root = await human(urgent);
-        if (root && proven(urgent) === root) return root;
+      if (rows.some((row) => row.id === input.preferred && eligible(row))) {
+        return input.preferred;
       }
-      if (
-        !urgent &&
-        rows.some((row) => row.id === input.preferred && eligible(row))
-      ) {
-        const root = await human(input.preferred);
-        if (root && proven(input.preferred) === root) return root;
-      }
+    }
+    const urgent = attention();
+    if (urgent) {
+      const root = await human(urgent);
+      if (root && proven(urgent) === root) return root;
     }
     const candidates: SessionMetadata[] = [];
     for (const scope of scopes) {

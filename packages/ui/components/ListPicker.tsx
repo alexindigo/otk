@@ -19,6 +19,16 @@ import SelectionContent from "./SelectionContent.tsx";
 import ControlValue from "./ControlValue.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
 
+export function PickerHeading(props: { children: Element }) {
+  return <h3 class="otk-picker-heading otk-control-label">{props.children}</h3>;
+}
+export function PickerStatus(
+  props: { children: Element; role?: "status" | "alert" },
+) {
+  return <div class="otk-picker-status" role={props.role}>{props.children}
+  </div>;
+}
+
 export interface PickerItem<T = string> {
   key: string;
   value: T;

@@ -16,21 +16,11 @@
 .otk-form-label {
   font-weight: 600;
 }
-.otk-form-control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.otk-form-control input:not([type=checkbox]),
 .otk-form-decline input {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
-.otk-form-custom,
-.otk-form-boolean,
-.otk-form-external,
 .otk-form-hidden,
 .otk-form-decline {
   display: flex;
@@ -38,14 +28,10 @@
   gap: var(--space-2);
   min-width: 0;
 }
-.otk-form-custom input,
 .otk-form-decline input,
 .otk-form-hidden span {
   flex: 1;
   min-width: 0;
-}
-.otk-form-external {
-  flex-wrap: wrap;
 }
 .otk-form-review {
   margin: 0;

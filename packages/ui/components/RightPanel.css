@@ -62,7 +62,7 @@
   gap: var(--chrome-gap);
   padding: 0 var(--space-1);
 }
-.otk-panel-rail-icons .otk-icon-button {
+.otk-panel-rail-button {
   --control-height: var(--row-project);
   width: var(--control-height);
   height: var(--control-height);

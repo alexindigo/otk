@@ -120,7 +120,27 @@ export async function composerError(
         )
       ),
     ).toEqual(arrival);
-    await expect(page.locator(".otk-session-error")).toHaveCount(0);
+    const composerOwnsPointer = current.observations.some((report) =>
+      !report.cleared && report.failure?.facts?.origin === "composer"
+    );
+    const pointer = page.locator(".otk-session-error");
+    await expect(pointer).toHaveCount(composerOwnsPointer ? 0 : 1);
+    if (!composerOwnsPointer) {
+      await expect(pointer).toHaveAttribute(
+        "data-error-revision",
+        String(current.revision),
+      );
+      await expect(
+        pointer.getByRole("button", {
+          name: "See the session error",
+          exact: true,
+        }),
+      )
+        .toBeVisible();
+      await expect(pointer).not.toContainText(
+        observation.failure?.facts?.reason ?? observation.message,
+      );
+    }
   } else {
     await expect(page.locator(".otk-session-error")).toHaveAttribute(
       "data-error-revision",
@@ -130,10 +150,7 @@ export async function composerError(
   await expect(sink).toContainText(
     observation.failure?.facts?.reason ?? observation.message,
   );
-  await expect(sink.locator("a")).toHaveAttribute(
-    "href",
-    `#/local/${id}`,
-  );
+  await expect(sink.locator(`a[href="#/local/${id}"]`)).toHaveCount(0);
   await expect.poll(() =>
     frames.received.some((frame) => {
       const event = frame.event as {

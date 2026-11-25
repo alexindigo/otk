@@ -35,6 +35,14 @@
   background: var(--project-color);
   color: var(--otk-accent-on);
 }
+.otk-project-avatar.is-control-size {
+  width: var(--form-control-size);
+  height: var(--form-control-size);
+}
+.otk-project-avatar.is-compact-size {
+  width: calc(14 * var(--otk-unit));
+  height: calc(14 * var(--otk-unit));
+}
 .otk-project-avatar img {
   width: 100%;
   height: 100%;

@@ -63,7 +63,11 @@ export function createAttentionProjection(o: {
   const values = new Map<string, IndexEntry>();
   const finishClocks = new Map<
     string,
-    TerminalEvidence & { unseen?: boolean }
+    TerminalEvidence & {
+      unseen?: boolean;
+      seeded: boolean;
+      observedLive: boolean;
+    }
   >();
   const completed = new Map<string, TerminalEvidence & { unseen?: boolean }>();
   const covered = new Set<string>();
@@ -225,11 +229,14 @@ export function createAttentionProjection(o: {
             (!outcome || outcome === previous.outcome) &&
             unseen === previous.unseen &&
             JSON.stringify(evidence?.terminalFailure) ===
-              JSON.stringify(previous.terminalFailure))
+              JSON.stringify(previous.terminalFailure) &&
+            (evidence?.terminalOrigin !== "live" || previous.observedLive ||
+              previous.seeded))
     ) return;
+    const same = previous?.terminal === time;
     const replay = baseline || admitted ||
       evidence?.terminalOrigin === "historical" ||
-      previous?.terminal === time;
+      same && (previous.observedLive || previous.seeded);
     const value = {
       terminal: time,
       ...(outcome ? { outcome } : {}),
@@ -239,7 +246,11 @@ export function createAttentionProjection(o: {
         ? { terminalFailure: evidence.terminalFailure }
         : {}),
     };
-    finishClocks.set(id, value);
+    finishClocks.set(id, {
+      ...value,
+      seeded: baseline || admitted || same && previous.seeded,
+      observedLive: !replay || same && previous.observedLive,
+    });
     completed.set(id, value);
     update([id], false, false, true);
   };

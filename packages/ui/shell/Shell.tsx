@@ -7,6 +7,7 @@ import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
 import { clockTitle } from "../components/Clock.tsx";
 import "./Shell.css" with { type: "text" };
+import ChromeMeta from "../components/ChromeMeta.tsx";
 import ScrollRegion from "../components/ScrollRegion.tsx";
 import {
   createEffect,
@@ -565,6 +566,16 @@ export default function Shell(
               onProjectCollapse={resources.projectCollapse}
             />
             <main class="otk-main">
+              <Show when={navigation.state.selectionNotice}>
+                <div class="otk-selection-notice" role="status">
+                  <ChromeMeta
+                    title={navigation.state.selectionNotice}
+                    class="otk-control-label"
+                  >
+                    {navigation.state.selectionNotice}
+                  </ChromeMeta>
+                </div>
+              </Show>
               <Show when={error()}>
                 <FeedbackStatus
                   class="otk-global-error"

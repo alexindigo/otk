@@ -19,6 +19,11 @@
   margin: 0;
   background: var(--panel);
 }
+.otk-selection-notice {
+  display: flex;
+  min-inline-size: 0;
+  padding: var(--space-2) var(--lane-gutter);
+}
 .otk-welcome {
   display: grid;
   flex: 1;

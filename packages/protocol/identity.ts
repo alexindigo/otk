@@ -1,4 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+const alphabet =
+  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+let ascendingClock = 0n;
+
+/** Six-byte time/counter plus fourteen base62 characters, with a caller prefix.
+ * Matches Identifier.ascending's encoding; one clock owns all record kinds.
+ * Carry the counter on overflow or clock rollback rather than reverse order.
+ */
+export function ascendingID(prefix: string): string {
+  const now = BigInt(Date.now()) * 0x1000n + 1n;
+  ascendingClock = now > ascendingClock ? now : ascendingClock + 1n;
+  const time = BigInt.asUintN(48, ascendingClock).toString(16).padStart(
+    12,
+    "0",
+  );
+  const bytes = crypto.getRandomValues(new Uint8Array(14));
+  return `${prefix}_${time}${
+    Array.from(bytes, (byte) => alphabet[byte % 62]).join("")
+  }`;
+}
+
 /** RFC 4122 v4, including on plain HTTP. Never substitute non-random IDs. */
 export function randomID(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));

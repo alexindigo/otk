@@ -140,6 +140,14 @@ test(
     await page.goto(
       `${state.url}/#project/local/${encodeURIComponent(state.directory)}`,
     );
+    // Cold project entry resolves its default session (decisions 7/56).
+    await expect(page).toHaveURL(`${state.url}/#/local/${s.id}`);
+    await expect(pane).toHaveAttribute("data-prompt-count", "105");
+    await page.keyboard.press("Control+k");
+    await page.locator('[data-command="session.close"]').click();
+    await expect(page).toHaveURL(
+      `${state.url}/#project/local/${encodeURIComponent(state.directory)}`,
+    );
     await expect(pane).toContainText("Open a session to see its prompts.");
     await expect(page.locator("[data-timeline-prompt]")).toHaveCount(0);
   },

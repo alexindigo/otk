@@ -62,6 +62,7 @@ import { breadcrumbRows } from "./list-presentation.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
 import { orderInteraction } from "./order-interaction.ts";
+import { metaList } from "./ChromeMeta.tsx";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -547,6 +548,9 @@ export default function ProjectTabs(props: {
           <OverflowRow
             items={breadcrumbRows(crumbs())}
             required={required()}
+            minimumItemSize={(item) => item.first
+              ? "var(--crumb-minimum)"
+              : "calc(var(--crumb-minimum) + var(--icon-compact) + var(--space-1))"}
             preferred={overflowPreference(
               crumbs().map((c) => c.id),
               props.model.state.sessionID,
@@ -649,9 +653,10 @@ export default function ProjectTabs(props: {
                               props.model.state.sessionID === crumb().id,
                           })}
                           data-otk-selection="horizontal"
-                          title={`${
-                            title(crumb().id)
-                          } · ${props.project.directory}`}
+                          title={metaList([
+                            title(crumb().id),
+                            props.project.directory,
+                          ])}
                           data-helper={String(crumb().helper)}
                           data-depth={crumb().depth}
                           data-crumb={crumb().id}
@@ -762,10 +767,12 @@ export default function ProjectTabs(props: {
         </output>
       </div>
       <Show
-        when={crumbs().some((crumb) => props.rename?.matches({
-          sidecarId: props.project.sidecarId,
-          sessionID: crumb.id,
-        }, "chip"))}
+        when={crumbs().some((crumb) =>
+          props.rename?.matches({
+            sidecarId: props.project.sidecarId,
+            sessionID: crumb.id,
+          }, "chip")
+        )}
       >
         <div class="otk-crumb-feedback">
           <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />

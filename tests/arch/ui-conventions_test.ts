@@ -6,6 +6,120 @@ import { runningWorkElapsed } from "../../packages/client/live-work.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 import { rules } from "./styles.ts";
+import {
+  codeSeparatorErrors,
+  styleBoundaryErrors,
+} from "./style-boundaries.ts";
+
+Deno.test("UI convention: component styles never target another component's internals, including every disclosure caller", async () => {
+  const files = new Map(
+    [...(await productionSources())].filter(([p]) =>
+      /^(?:packages\/ui\/|web\/src\/)/.test(p)
+    ),
+  );
+  assertEquals(styleBoundaryErrors(files), []);
+});
+
+Deno.test("UI convention: separators built in ports, templates and code use the presentation owner", async () => {
+  const failures: string[] = [];
+  for (const [path, text] of await productionSources()) {
+    if (
+      /^(?:packages\/(?:client|ui)\/|web\/src\/)/.test(path) &&
+      /\.tsx?$/.test(path)
+    ) failures.push(...codeSeparatorErrors(path, text));
+  }
+  assertEquals(failures, []);
+});
+
+Deno.test("UI convention: style isolation follows native emitters, aliases, all disclosure callers and public slots", () => {
+  const base = new Map([
+    [
+      "A.tsx",
+      'import "./A.css"; export const A = () => <div class="a"><Child class="slot" /></div>;',
+    ],
+    [
+      "B.tsx",
+      'import "./B.css"; export const B = () => <div class="b"><span class="b-icon" /></div>;',
+    ],
+    ["B.css", ".b { display: grid } .b-icon { width: 1em }"],
+    ["A.css", ".a { display: grid } .slot { grid-column: 2 }"],
+  ]);
+  assertEquals(styleBoundaryErrors(base), []);
+  for (
+    const selector of [
+      ".a .b-icon",
+      ".b",
+      ":is(.b-icon,.b)",
+      ".a { & > .b-icon",
+    ]
+  ) {
+    const changed = new Map(base);
+    changed.set(
+      "A.css",
+      selector.includes("{")
+        ? `${selector} { padding: 0 } }`
+        : `${selector} { padding: 0 }`,
+    );
+    assert(styleBoundaryErrors(changed).length > 0, selector);
+  }
+  for (const classInput of ['"custom"', "{borrowed}"]) {
+    for (
+      const declaration of [
+        "grid-template-columns: 1fr",
+        "padding-inline: 2px",
+        "gap: 0",
+        "display: flex",
+      ]
+    ) {
+      const changed = new Map(base);
+      changed.set(
+        "A.tsx",
+        `import Toggle from "./DisclosureToggle.tsx"; import "./A.css"; const borrowed="custom"; const view=<Toggle class=${classInput} />;`,
+      );
+      changed.set("A.css", `.custom { ${declaration} }`);
+      assert(
+        styleBoundaryErrors(changed).length > 0,
+        `${classInput}: ${declaration}`,
+      );
+    }
+  }
+  const disclosure = new Map(base);
+  disclosure.set(
+    "packages/ui/components/DisclosureToggle.tsx",
+    'import "./DisclosureToggle.css"; const toggle = <button class="otk-disclosure-toggle otk-tree-toggle" />;',
+  );
+  disclosure.set(
+    "packages/ui/components/DisclosureToggle.css",
+    ".otk-disclosure-toggle.otk-tree-toggle { padding: 0 }",
+  );
+  assertEquals(styleBoundaryErrors(disclosure), []);
+  disclosure.set("A.css", ".otk-tree-toggle { padding: 0 }");
+  assert(styleBoundaryErrors(disclosure).length > 0);
+  disclosure.set("A.css", ".a { display: grid }");
+  disclosure.set(
+    "packages/ui/theme.css",
+    ".otk-disclosure-icon { padding: 0 }",
+  );
+  assert(styleBoundaryErrors(disclosure).length > 0);
+});
+
+Deno.test("UI convention: code separator rejection includes templates, concatenation and joins, not file paths", () => {
+  for (
+    const code of [
+      "const value = `${task} / ${session}`;",
+      'const value = task + " / " + session;',
+      'const value = values.join(" / ");',
+      "const value = `${agent} · ${time}`;",
+    ]
+  ) assert(codeSeparatorErrors("port.ts", code).length > 0, code);
+  for (
+    const code of [
+      "const value = `${directory}/${file}`;",
+      "const value = metaList([agent, time]);",
+      "const value = {task, session};",
+    ]
+  ) assertEquals(codeSeparatorErrors("port.ts", code), []);
+});
 
 type Rule =
   | "clock"
@@ -21,7 +135,8 @@ type Rule =
   | "failure-signal"
   | "presentation"
   | "settings-name"
-  | "list-order";
+  | "list-order"
+  | "sidebar-row";
 const owners: Record<Rule, string> = {
   clock:
     "Local date/time formatting belongs to Clock (including precise records)",
@@ -50,6 +165,8 @@ const owners: Record<Rule, string> = {
     "One surface name: navigation says Settings / servers, matching Settings",
   "list-order":
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
+  "sidebar-row":
+    "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
 };
 const containsStringType = (node: t.Node): boolean => {
   if (node.type === "TSStringKeyword") return true;
@@ -62,6 +179,76 @@ const containsStringType = (node: t.Node): boolean => {
 };
 const elementName = (node: t.JSXOpeningElement) =>
   node.name.type === "JSXIdentifier" ? node.name.name : "";
+
+Deno.test("UI convention: unowned compact controls retain native geometry", async () => {
+  const geometry = (css: string) =>
+    rules(css).flatMap((rule) =>
+      /^input\[type=["']?(?:checkbox|radio|range|color|file|button|submit|reset|image)\b/i
+          .test(rule.selector)
+        ? [...rule.declarations.keys()].filter((key) =>
+          /^(?:inline-size|block-size|width|height|flex|margin|padding)(?:-|$)/
+            .test(key)
+        )
+        : []
+    );
+  assertEquals(geometry("input[type=radio] { accent-color: red; }"), []);
+  assertEquals(geometry("input[type=radio] { margin: 4px 3px 3px 4px; }"), [
+    "margin",
+  ]);
+  assertEquals(geometry(".otk-control input[type=radio] { margin: 0; }"), []);
+  assertEquals(
+    geometry(
+      await Deno.readTextFile(
+        new URL("../../packages/ui/theme.css", import.meta.url),
+      ),
+    ),
+    [],
+  );
+});
+
+Deno.test("UI convention: one composer destination row uses muted nonwrapping metadata and structural alignment", async () => {
+  const source = await Deno.readTextFile(
+    new URL(
+      "../../packages/ui/components/ComposerTakeovers.tsx",
+      import.meta.url,
+    ),
+  );
+  const syntax = new Source(source, "ComposerTakeovers.tsx");
+  const target = syntax.all.find((node) =>
+    node.type === "JSXOpeningElement" &&
+    elementName(node) === "span" && node.attributes.some((attr) =>
+      attr.type === "JSXAttribute" &&
+      property(attr.name) === "class" && attr.value?.type === "StringLiteral" &&
+      attr.value.value.includes("otk-composer-target")
+    )
+  );
+  assert(target?.type === "JSXOpeningElement");
+  for (const part of ["otk-composer-task", "otk-composer-destination"]) {
+    assert(source.includes(`class="${part} otk-control-label"`));
+  }
+  assert(
+    target.attributes.some((attr) =>
+      attr.type === "JSXAttribute" && property(attr.name) === "title"
+    ),
+  );
+  const css = rules(
+    await Deno.readTextFile(
+      new URL(
+        "../../packages/ui/components/ComposerTakeovers.css",
+        import.meta.url,
+      ),
+    ),
+  );
+  const row = css.find((rule) => rule.selector === ".otk-composer-activity")!
+    .declarations;
+  assertEquals(row.get("display"), "flex");
+  assertEquals(row.get("align-items"), "center");
+  assertEquals(row.get("justify-content"), "space-between");
+  const label =
+    css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
+  assertEquals(label.get("min-inline-size"), "0");
+  assertEquals(label.get("flex"), "1");
+});
 
 /** Syntax-aware checks are exported so their reject/accept cases stay executable.
  * Owner exceptions name real responsibilities, never individual violations. */
@@ -78,6 +265,33 @@ export function conventionErrors(
   }
   if (path.endsWith(".css")) {
     for (const { selector, declarations: d } of rules(text)) {
+      if (
+        rule === "sidebar-row" &&
+        /otk-(?:sidebar-(?:row|slot|lamp|icon|label|selection)|project-(?:row|open|name-line|marker|attention))/
+          .test(selector)
+      ) {
+        if (
+          [...d].some(([key, value]) =>
+            key === "position" && ["absolute", "fixed"].includes(value) ||
+            /^(?:margin|inset|top|left|right|bottom)/.test(key) &&
+              /(^|[\s(])-\d/.test(value)
+          )
+        ) fail(selector);
+        if (
+          path !== "packages/ui/components/SidebarRow.css" &&
+          (d.has("grid-template-columns") ||
+            /otk-project-(?:row|open)\b/.test(selector) &&
+              [...d.keys()].some((key) =>
+                /^(?:padding(?:-.+)?|margin(?:-.+)?|gap|column-gap|display)$/
+                  .test(key)
+              ) ||
+            /sidebar-(?:row|slot|lamp|icon|label)/.test(selector) &&
+              [...d.keys()].some((key) =>
+                /^(?:width|inline-size|min-width|min-inline-size|padding|gap|column-gap|display)$/
+                  .test(key)
+              ))
+        ) fail(selector);
+      }
       if (
         rule === "ellipsis" &&
         [...d.values()].some((value) => value.includes("\u2026"))
@@ -134,10 +348,8 @@ export function conventionErrors(
       ) fail(selector);
       if (
         rule === "disclosure" &&
-        /failure-details|permission-scope/.test(selector) &&
-        [...d.keys()].some((key) =>
-          /^(?:grid-template-columns|column-gap|gap|padding(?:-.+)?)$/.test(key)
-        )
+        path !== "packages/ui/components/DisclosureToggle.css" &&
+        /\.otk-disclosure-[\w-]+/.test(selector)
       ) fail(selector);
       if (
         rule === "failure-signal" &&
@@ -156,6 +368,46 @@ export function conventionErrors(
       ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
         .slice(1)
       : specifier;
+  if (rule === "sidebar-row") {
+    const openings = source.all.filter((node): node is t.JSXOpeningElement =>
+      node.type === "JSXOpeningElement" && source.live(node)
+    );
+    if (path === "packages/ui/components/ProjectInbox.tsx") {
+      if (
+        !openings.some((node) =>
+          modulePath(source.imported(node.name)?.module ?? "") ===
+            "packages/ui/components/SidebarRow.tsx"
+        )
+      ) fail("project rows bypass SidebarRow");
+      for (
+        const node of openings.filter((node) =>
+          source.imported(node.name)?.name === "SectionHeader"
+        )
+      ) {
+        if (
+          !node.attributes.some((attr) =>
+            attr.type === "JSXAttribute" && property(attr.name) === "sidebar" &&
+            attr.value === null
+          )
+        ) fail("section header bypasses sidebar tracks");
+      }
+    }
+    if (path !== "packages/ui/components/SidebarRow.tsx") {
+      for (const node of openings) {
+        if (
+          node.attributes.some((attr) =>
+            attr.type === "JSXAttribute" &&
+            ["class", "className"].includes(property(attr.name) ?? "") &&
+            /\botk-sidebar-(?:row|slot|lamp|icon|label)\b/.test(
+              source.string(attr.value) ?? "",
+            )
+          )
+        ) {
+          fail("handwritten sidebar slot");
+        }
+      }
+    }
+  }
   const iconFunctions = new Set<t.Node>();
   for (const node of source.all) {
     const value =
@@ -896,7 +1148,7 @@ Deno.test("UI convention gates distinguish artwork, numeric locales and intrinsi
     [
       "disclosure",
       "Fixture.css",
-      ".otk-failure-details { grid-template-columns: 19px auto }",
+      ".otk-disclosure-toggle { grid-template-columns: 19px auto }",
     ],
     ["meta-list", "Fixture.tsx", "<ChromeMeta>·</ChromeMeta>"],
   ];

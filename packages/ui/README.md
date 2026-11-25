@@ -21,13 +21,34 @@ imports and knows no native backend.
 
 ## Composition and API
 
-Every style fix adds its check to `tests/arch/ui-conventions_test.ts`.
-Conventions are executable owner contracts, not a one-time grep sweep: Clock
-owns instants, the client duration formatter owns elapsed text, icon slots take
-components, FailurePresenter owns targets and outcome tone, and shared controls
-own their geometry. Include reject and accept fixtures so a gate catches the
-problem class without banning legitimate numeric formatting or intrinsic layout.
-Style scenes build failures through the same production presenters as the app.
+Every style fix adds its check to `tests/arch/ui-conventions_test.ts`. A
+component's stylesheet owns its internal classes; a consumer uses public props,
+class slots or its own grid track, never a selector reaching into a child. The
+syntax-aware style-boundary check inventories native classes, state bindings and
+every DisclosureToggle caller, rather than naming a few consumers.
+DisclosureToggle's `tree` variant owns the compact box; Tree positions its slot.
+Surface likewise owns its fill/popover layout and signal variants.
+
+Project inbox rows and section headers borrow `SidebarRow`: scaled lamp/artwork
+tracks, a shrinkable single-line label and intrinsic metadata. Empty metadata
+consumes no track. Narrow rows reflow the metadata as a whole beneath the label;
+availability stays with visit metadata, not inside the shrinking name. Missing
+artwork retains its slot. `Tree` alone owns disclosure, nesting and compact
+flattening; its selected heading paints the mark outside the row highlight in
+both column and rail. The real-app geometry contract uses the removed/sidebar/
+catalog profiles at 200/298px and 100/125% text in all three themes. It measures
+painted SVGs and lamp bodies, full section names and at least 6ch of project
+names, in addition to the same shared contract on the style scene. The composer
+destination port returns task/session facts separately; the view borrows
+ChevronIcon and ChromeMeta, yielding the task name before the destination
+session. Per-kind offsets, absolute row positioning and replacement row tracks
+are rejected. Conventions are executable owner contracts, not a one-time grep
+sweep: Clock owns instants, the client duration formatter owns elapsed text,
+icon slots take components, FailurePresenter owns targets and outcome tone, and
+shared controls own their geometry. Include reject and accept fixtures so a gate
+catches the problem class without banning legitimate numeric formatting or
+intrinsic layout. Style scenes build failures through the same production
+presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
@@ -96,9 +117,11 @@ their current measured width; other values use their inert measurement frames.
 More occupies a separate trailing grid track, so editor blur cannot move its
 pointer target between press and release as the live chip width changes.
 ResizeObserver and font completion belong to this component. The client owns
-`fitOverflow` and ancestry preference. Breadcrumbs retain single-line
-required-frame shrinking. Task tabs instead use the horizontal `ScrollRegion`:
-one chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
+`fitOverflow` and ancestry preference. A consumer-supplied item minimum belongs
+to the frame; required frames reflow as whole controls rather than clipping
+their readable labels. Breadcrumb metadata yields to its own line under
+pressure. Task tabs instead use the horizontal `ScrollRegion`: one
+chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
 labels and a thin hover scrollbar. Vertical wheel deltas scroll horizontally
 unless Ctrl/Meta is held. Selection and lane resize reveal the active tab.
 `EdgeTriangle` owns a centred control-height slot and renders only available
@@ -552,12 +575,15 @@ Features may contribute `settings()` content to the existing footer and one
 `selection(draft)` projection. `PromptContext.nextSelection()` reads that shared
 projection (or the client fallback for smaller compositions). Prompt captures
 `{agent, model, variant}` from the mode-aware client projection after
-contributed `ready()` work and pre-submit hooks, re-reading the current draft
-before capture, then passes it to every `submit(draft, parts, selection)` hook,
-and to the third argument of `PromptProps.onSubmit(parts, mode, selection)`.
-Successful completion clears only the identical submitted draft through
-`clearDraft`; `submitted` receives the captured selection and whether a feature
-handled the send.
+input-referenced readiness and pre-submit hooks, then passes it to every
+`submit(draft, parts, selection)` hook, and to the third argument of
+`PromptProps.onSubmit(parts, mode, selection)`. Ordinary Send does not join
+unrelated catalog readiness. A parsed slash input acquires its commands through
+that feature's readiness/pre-submit hooks; pickers retain their own readiness
+work. Unknown catalog metadata preserves current selections. Successful
+completion clears only the identical submitted draft through `clearDraft`;
+`submitted` receives the captured selection and whether a feature handled the
+send.
 
 `registerComposerPickers` renders and binds the framework-free client composer
 owner through `solidState`, common typed session ports and the host preference
@@ -914,6 +940,16 @@ event's release callbacks. No session action or overlay is implemented by the
 viewport. Session rows retain named group context and their position/set-size
 semantics even when adjacent rows or headings are unmounted.
 
+Ordering holds protect the preceding pointer/focus choice, not the effects of an
+explicit activation. Native click/input retires that local ordering interaction;
+menu activation uses the same origin event's activation callbacks. A native
+modal takes the interaction from the underlying inert document, retiring its
+ordering holds too. The surface still retains its viewport pin until dismissal.
+Programmatic focus return cannot revive the old ordering hold; a new pointer or
+keyboard intent starts another. Selection, search and membership can therefore
+change without retaining stale interactive rows, while automatic changes remain
+held during a live choice.
+
 `SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
 corner reservation, leading controls, scrolling body and optional footer. The
 shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
@@ -1068,9 +1104,10 @@ TreeNode disclosure and SectionHeaderMeta's adjacent label/count slots, with the
 rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
 `--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
 record summaries/counts, running-work elapsed time and project annotations use
-that same owner. Project metadata borrows the elastic label slot, yielding
-before the project name. Counts and annotations have no parentheses. The
-hierarchy projection supplies artwork eligibility, never section-local depth.
+that same owner. Project metadata borrows SidebarRow's intrinsic metadata slot
+and reflows below the label under pressure. Counts and annotations have no
+parentheses. The hierarchy projection supplies artwork eligibility, never
+section-local depth.
 
 ## Example
 

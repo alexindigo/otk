@@ -16,6 +16,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
+  /** Readable content floor; required items reflow instead of clipping it. */
+  minimumItemSize?(item: T): string;
   measure(item: T): Element;
   children(item: () => T): Element;
   more(keys: () => readonly string[]): Element;
@@ -150,6 +152,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
                 class="otk-overflow-item"
                 data-overflow-key={key}
                 data-pinned={props.required.includes(key) ? "true" : undefined}
+                style={{ "min-inline-size": props.minimumItemSize?.(item()) }}
                 hidden={!visible()}
                 inert={!visible()}
                 ref={(element) => {
