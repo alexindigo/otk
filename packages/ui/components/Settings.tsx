@@ -5,12 +5,13 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import {
   type DiscoveryState,
-  duration,
+  elapsed,
   errorFeedback,
   LOCAL_SIDECAR,
   type SidecarState,
 } from "@otk/client";
 import Form, { FormInput } from "./Form.tsx";
+import TimeText from "./TimeText.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
@@ -181,7 +182,7 @@ export default function Settings(props: {
                   {(step) => (
                     <li data-discovery-step={step().key}>
                       <strong>{step().label}</strong>{" "}
-                      <span>{duration(step().elapsedMs)}</span>
+                      <TimeText time={elapsed(step().elapsedMs)} />
                       <Show when={step().result}>
                         <Show
                           when={step().result?.kind === "error"}

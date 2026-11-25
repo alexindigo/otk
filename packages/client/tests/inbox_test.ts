@@ -7,8 +7,8 @@ import {
   inboxStatus,
   rollup,
   unread,
-  visitTime,
 } from "./supervision-fixture.ts";
+import { age } from "../format.ts";
 import { DEFAULT_PREFS, isPreference } from "@otk/protocol";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 function entry(id: string, status: IndexEntry["status"] = "idle"): IndexEntry {
@@ -178,8 +178,8 @@ Deno.test("visit labels use the injected clock and the stored ageing preference 
       [27 * h, "1d 3h"],
       [48 * h, "2d"],
     ] as const
-  ) assertEquals(visitTime(last, last + elapsed), text);
-  assertEquals(visitTime(last, 0), "now");
+  ) assertEquals(age(last, last + elapsed).text, text);
+  assertEquals(age(last, 0).text, "now");
   assertEquals(DEFAULT_PREFS.projectAgeing, [2 * h, 8 * h, 24 * h]);
   assert(isPreference("projectAgeing", [10, 20, 30]));
   for (
@@ -209,7 +209,7 @@ Deno.test("project projections keep stored order, freeze inactive visits and exp
   assertEquals(inboxProjects([idle], inbox, 120_000).map((p) => p.directory), [
     "/p",
   ]);
-  assertEquals(inboxProjects([idle], inbox, 120_000)[0].visitText, "1m");
+  assertEquals(inboxProjects([idle], inbox, 120_000)[0].visit?.text, "1m");
   for (
     const active of [entry("s", "busy"), {
       ...entry("s"),

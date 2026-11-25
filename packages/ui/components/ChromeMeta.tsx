@@ -9,6 +9,8 @@ import {
   Show,
 } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
+import { META_SEPARATOR, metaParts, type TimeText as Time } from "@otk/client";
+import TimeText from "./TimeText.tsx";
 import { TreeNode } from "./Tree.tsx";
 import SidebarRow from "./SidebarRow.tsx";
 import ContentSlot from "./ContentSlot.tsx";
@@ -17,6 +19,22 @@ import "./ChromeMeta.css" with { type: "text" };
 
 /** A metadata sentence is one text flow, not spaced flex-item separators. */
 export { metaList } from "@otk/client";
+
+/** The same metadata flow, with structured values rendered by their presenter. */
+export function MetaText(
+  props: { items: readonly (string | Time | undefined | false)[] },
+): Element {
+  return (
+    <For each={metaParts(props.items)}>
+      {(item, index) => (
+        <>
+          {index() ? META_SEPARATOR : ""}
+          {typeof item === "string" ? item : <TimeText time={item} />}
+        </>
+      )}
+    </For>
+  );
+}
 
 export interface MetaControl {
   key: string;

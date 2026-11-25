@@ -302,7 +302,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveCount(1);
         await expect(page.locator(".otk-failure-time")).toHaveCount(0);
         await expect(
-          page.locator("[data-role=assistant] .otk-message-footer time"),
+          page.locator("[data-role=assistant] .otk-message-footer time[title]"),
         ).toHaveText([
           "1:16 AM",
           "1:23 AM",

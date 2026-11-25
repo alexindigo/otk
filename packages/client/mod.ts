@@ -17,7 +17,6 @@ export {
   type LiveWorkOwner,
   type RunningWork,
   runningWork,
-  runningWorkElapsed,
   runningWorkLabel,
 } from "./live-work.ts";
 export {

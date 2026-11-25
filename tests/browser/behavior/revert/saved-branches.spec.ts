@@ -173,7 +173,9 @@ test("revert.saved-branch-survives-send-and-reload", {
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
   // Saved replies borrow the same sole footer clock as live replies.
-  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
+  await expect(
+    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
+  )
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,
@@ -207,7 +209,9 @@ test("revert.saved-branch-survives-send-and-reload", {
   // metadata window through the saved pane, not the live transcript.
   await saved.locator(".otk-saved-messages").hover();
   await page.mouse.wheel(0, 2_000);
-  await expect(saved.locator("[data-role=assistant] .otk-message-footer time"))
+  await expect(
+    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
+  )
     .toHaveAttribute(
       "datetime",
       /\d{4}-/,

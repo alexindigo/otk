@@ -151,12 +151,7 @@ export default function Toasts(
                   <CloseIcon />
                 </button>
               </header>
-              <Show when={item().note.context}>
-                <RequestAge
-                  class="otk-toast-age"
-                  label={item().note.context!}
-                />
-              </Show>
+              <RequestAge class="otk-toast-age" value={item().note.context} />
               {props.detail?.(item().note)}
               <div class="otk-toast-actions">
                 <For each={item().note.actions}>

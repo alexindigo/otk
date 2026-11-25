@@ -48,7 +48,6 @@
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
   opacity: 0;
-  font-variant-numeric: tabular-nums;
 }
 .otk-tool-line:is(:hover,:focus-within) .otk-tool-duration {
   opacity: 1;

@@ -47,7 +47,9 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   });
   await prompt(page, "Show timestamp behavior");
   // The agent band never owns a second clock, including while streaming.
-  const time = page.locator("[data-role=assistant] .otk-message-footer time");
+  const time = page.locator(
+    "[data-role=assistant] .otk-message-footer time[title]",
+  );
   await expect.soft(page.locator(".otk-reply-start time")).toHaveCount(0);
   await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
     "first output",
@@ -90,7 +92,7 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
         "[data-role=assistant] .otk-message-footer",
       )!,
       time = footer.querySelector<HTMLTimeElement>(
-        "time",
+        "time[title]",
       )!,
       action = footer.querySelector("[data-message-command]")!,
       f = footer.getBoundingClientRect(),
@@ -125,7 +127,7 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   await page.mouse.move(10, 10);
   for (const role of ["user"]) {
     const created = page.locator(
-      `[data-role=${role}] .otk-message-footer time`,
+      `[data-role=${role}] .otk-message-footer time[title]`,
     );
     await expect(created).toHaveCSS("visibility", "visible");
     await page.locator(`[data-role=${role}] .otk-user-bubble`).hover();

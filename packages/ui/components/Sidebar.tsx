@@ -6,13 +6,13 @@ import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import {
+  age,
   createEntityStateStore,
   type EntityStateStore,
   label as stateLabel,
   lamp,
   type MergedEntry,
   projectGroups,
-  relativeTime,
   sessionKey,
   sessionWorkStatus,
   type SidecarState,
@@ -20,6 +20,7 @@ import {
 import ConnectionBadge from "./ConnectionBadge.tsx";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import TimeText from "./TimeText.tsx";
 import { entityKey } from "@otk/protocol";
 import SessionStateMeta from "./SessionStateMeta.tsx";
 import { onCleanup } from "solid-js";
@@ -154,12 +155,9 @@ export default function Sidebar(
                           <SelectionContent class="otk-sidebar-session-content">
                             <span class="otk-row-title">{entry().title}</span>
                             <ChromeMeta>
-                              <time
-                                datetime={new Date(entry().timeUpdated)
-                                  .toISOString()}
-                              >
-                                {relativeTime(entry().timeUpdated, now())}
-                              </time>
+                              <TimeText
+                                time={age(entry().timeUpdated, now())}
+                              />
                             </ChromeMeta>
                             <ChromeMeta class="otk-row-status">
                               <StatusLight

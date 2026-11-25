@@ -57,7 +57,12 @@ import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
-import ChromeMeta, { metaList, SectionHeader } from "./ChromeMeta.tsx";
+import ChromeMeta, {
+  metaList,
+  MetaText,
+  SectionHeader,
+} from "./ChromeMeta.tsx";
+import TimeText from "./TimeText.tsx";
 import { solidState } from "../state/binding.ts";
 import { orderInteraction } from "./order-interaction.ts";
 import { connectionFeedback } from "./connection-light.ts";
@@ -558,10 +563,16 @@ export default function ProjectInbox(props: {
                   >
                     <Show
                       when={project().annotation}
-                      fallback={<time>{project().visitText}</time>}
+                      fallback={
+                        <Show when={project().visit}>
+                          {(visit) => <TimeText time={visit()} />}
+                        </Show>
+                      }
                     >
                       <span class="otk-project-availability">
-                        {metaList([project().annotation, project().visitText])}
+                        <MetaText
+                          items={[project().annotation, project().visit]}
+                        />
                       </span>
                     </Show>
                   </ChromeMeta>

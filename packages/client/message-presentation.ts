@@ -10,13 +10,13 @@ import type {
 import { countLabel } from "./count.ts";
 import { usageCost, usageTokens } from "./usage.ts";
 import { reportedTokens } from "./session-summary.ts";
-import { duration } from "./format.ts";
+import { elapsed, type TimeText } from "./format.ts";
 import type { EntityFact } from "./entity-facts.ts";
 
 export const UNKNOWN_TIME = "Time unknown";
 export type TimeValue =
-  | { state: "known"; text: string }
-  | { state: "counting"; text?: string }
+  | { state: "known"; lead?: string; time: TimeText }
+  | { state: "counting"; lead?: string; time?: TimeText }
   | { state: "unknown"; explanation: string };
 export function unknownTime(explanation?: string): TimeValue {
   return {
@@ -34,46 +34,30 @@ export const timingExplanation = (
         : "The recorded timing evidence is incomplete.")
     : undefined;
 
-export function workingTime(
-  timing: TurnTiming | number | undefined,
-  form: "fact" | "column" = "fact",
-): string | undefined {
-  const value = typeof timing === "number"
-    ? timing
-    : timing?.state === "known" || timing?.state === "active"
-    ? timing.workingMs
-    : undefined;
-  return value !== undefined
-    ? `${form === "fact" ? "Worked for " : ""}${duration(value)}`
-    : typeof timing !== "number" && timing?.state === "unknown"
-    ? UNKNOWN_TIME
-    : undefined;
-}
 export function workingTimeValue(
   timing: TurnTiming | number | undefined,
   pending = timing === undefined ||
     typeof timing !== "number" && timing.state === "active",
   form: "fact" | "column" = "fact",
 ): TimeValue {
+  const value = typeof timing === "number"
+    ? timing
+    : timing?.state === "known" || timing?.state === "active"
+    ? timing.workingMs
+    : undefined;
+  const lead = form === "fact" ? "Worked for" : undefined;
+  const wording = lead ? { lead } : {};
+  const time = value === undefined ? undefined : elapsed(value);
   if (pending) {
-    const value = typeof timing === "number"
-      ? timing
-      : timing?.state === "known" || timing?.state === "active"
-      ? timing.workingMs
-      : undefined;
-    return {
-      state: "counting",
-      ...(value !== undefined && duration(value) !== "0s"
-        ? { text: workingTime(value, form) }
-        : {}),
-    };
+    const zero = time?.parts.length === 1 && time.parts[0].unit === "s" &&
+      time.parts[0].value === "0";
+    return time && !zero
+      ? { state: "counting", ...wording, time }
+      : { state: "counting" };
   }
-  return timing === undefined ||
-      typeof timing !== "number" && timing.state === "unknown"
-    ? unknownTime(
-      typeof timing === "number" ? undefined : timingExplanation(timing),
-    )
-    : { state: "known", text: workingTime(timing, form)! };
+  return time ? { state: "known", ...wording, time } : unknownTime(
+    typeof timing === "number" ? undefined : timingExplanation(timing),
+  );
 }
 /** Entity scopes use the same wording and finality presenter as message facts. */
 export function entityTimeValue(

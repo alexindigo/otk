@@ -337,7 +337,7 @@ export async function remainder(
       await reply.locator(".otk-message-footer").evaluate((footer) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
-          b = footer.querySelector("time")!.parentElement!
+          b = footer.querySelector("time[title]")!.parentElement!
             .getBoundingClientRect();
         return b.right <= a.left &&
           Math.abs(b.y + b.height / 2 - a.y - a.height / 2) < .5;
@@ -412,8 +412,11 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
-      await revealAcquired(page, replyMessage + " .otk-message-footer time");
-      const clock = reply.locator(".otk-message-footer time").first();
+      await revealAcquired(
+        page,
+        replyMessage + " .otk-message-footer time[title]",
+      );
+      const clock = reply.locator(".otk-message-footer time[title]").first();
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
       await expect(clock).toHaveCSS("visibility", "visible");
@@ -445,10 +448,10 @@ export async function remainder(
         await revealAcquired(
           page,
           (role === "user" ? promptMessage : replyMessage) +
-            " .otk-message-footer time",
+            " .otk-message-footer time[title]",
         );
         const created = page.locator(
-          `[data-role=${role}] .otk-message-footer time`,
+          `[data-role=${role}] .otk-message-footer time[title]`,
         )
           .first();
         await created.scrollIntoViewIfNeeded();
@@ -504,7 +507,7 @@ export async function remainder(
         if (action === "hover") await control.hover();
         if (action === "leave") await page.mouse.move(1, 1);
         await expect.poll(() =>
-          reply.locator(".otk-message-footer time").evaluate((el) =>
+          reply.locator(".otk-message-footer time[title]").evaluate((el) =>
             getComputedStyle(el).visibility === "visible"
           )
         ).toBe(true);
@@ -529,7 +532,7 @@ export async function remainder(
       expect(await ownedBounds(copy, ".otk-message-footer")).toEqual(slot);
       await state.product("prefs.set", { key: "timestamps", value: true });
       await expect.poll(() =>
-        page.locator(".otk-message-footer time").evaluateAll((els) =>
+        page.locator(".otk-message-footer time[title]").evaluateAll((els) =>
           els.length > 0 &&
           els.every((el) => getComputedStyle(el).visibility === "visible")
         )
