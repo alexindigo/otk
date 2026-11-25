@@ -11,6 +11,7 @@ import {
   expectPrimaryBlocked,
   expectRuleThree,
 } from "../pages/primary-action.ts";
+import { revealAcquired as reveal } from "../pages/transcript.ts";
 
 interface Theme {
   id: string;
@@ -35,60 +36,6 @@ async function frames(page: Page) {
       )
     )
   );
-}
-/** Reveal through reader scroll intents, including source outside the live range. */
-export async function reveal(page: Page, selector: string) {
-  const pane = page.locator(".otk-messages");
-  const wheel = async (deltaY: number) => {
-    if (Math.abs(deltaY) < 1) return;
-    const p = await pane.boundingBox();
-    await page.mouse.move(p!.x + p!.width / 2, p!.y + p!.height / 2);
-    await page.evaluate(() => {
-      const el = document.querySelector(".otk-messages")!;
-      el.setAttribute("data-theme-scroll", "pending");
-      el.addEventListener(
-        "scrollend",
-        () => el.setAttribute("data-theme-scroll", "settled"),
-        { once: true },
-      );
-    });
-    await page.mouse.wheel(0, deltaY);
-    await expect(pane).toHaveAttribute("data-theme-scroll", "settled");
-    await frames(page);
-  };
-  const measure = () =>
-    pane.evaluate((el, selector) => {
-      const target = el.querySelector(selector),
-        a = el.getBoundingClientRect(),
-        b = target?.getBoundingClientRect();
-      return {
-        top: el.scrollTop,
-        end: el.scrollHeight - el.clientHeight,
-        height: el.clientHeight,
-        delta: b
-          ? b.top >= a.top && b.bottom <= a.bottom
-            ? 0
-            : b.top + Math.min(b.height, el.clientHeight) / 2 - a.top -
-              el.clientHeight / 2
-          : null,
-      };
-    }, selector);
-  await frames(page);
-  let g = await measure();
-  if (g.delta === null && g.top > 0) {
-    await wheel(-g.end);
-    g = await measure();
-  }
-  while (g.delta === null) {
-    expect(g.top, `Acquired source unavailable: ${selector}`).toBeLessThan(
-      g.end,
-    );
-    await wheel(Math.min(g.height, g.end - g.top));
-    g = await measure();
-  }
-  if (g.delta !== 0) {
-    await wheel(Math.max(-g.top, Math.min(g.delta, g.end - g.top)));
-  }
 }
 export async function composerAccessories(
   page: Page,
@@ -350,6 +297,14 @@ export async function collections456(input: Inputs) {
     );
     for (const theme of themes) {
       await test.step(theme.id, async () => {
+        // Reload preserves draft choices. Give each theme a fresh session so
+        // its configured defaults cannot inherit the previous theme's edits.
+        const composer = await state.native<{ id: string }>(
+          "/session",
+          "POST",
+          { title: `Composer theme ${theme.id}` },
+        );
+        await nativePage(composer.id);
         // Every theme starts in the same full-label lane. Responsive pressure
         // later in this iteration must not leak into the next theme's baseline.
         await state.product("layout.patch", {
@@ -847,7 +802,7 @@ export async function collections456(input: Inputs) {
           image,
           shot,
         });
-        await nativePage(native.emptyID);
+        await nativePage(composer.id);
         await prompt.fill("");
         await prompt.press("!");
         await page.keyboard.insertText("printf shell-source");
@@ -856,12 +811,13 @@ export async function collections456(input: Inputs) {
         await prompt.press("Escape");
         await expect(prompt).toHaveAccessibleName("Prompt");
         await prompt.fill("");
-        // Reset choices through native session remount, retaining the same stack.
-        await nativePage(native.emptyID, true);
-        await expect(variant).toHaveAttribute(
-          "aria-label",
-          "Variant: High, agent default",
-        );
+        // A same-tab reload keeps the explicitly selected variant, even
+        // when its value is identical to the agent default.
+        await nativePage(composer.id, true);
+        await expect(variant).toHaveAttribute("aria-label", "Variant: High");
+        await expect(variant).not.toHaveClass(/is-applied/);
+        await expect(page.locator(".otk-agent-picker > button"))
+          .toHaveAttribute("aria-label", "Agent: Reviewer");
         for (
           const [agent, label, choice] of [["plan", "Plan", "Low"], [
             "build",
@@ -907,8 +863,6 @@ export async function collections456(input: Inputs) {
           }),
         ).toBe(true);
         await shot(`composer-restored-${theme.id}-1280`);
-        await nativePage(native.emptyID);
-        await nativePage(native.emptyID, true);
       });
     }
   });
@@ -1202,8 +1156,12 @@ export async function collections456(input: Inputs) {
             r = row.getBoundingClientRect(),
             t = text.getBoundingClientRect(),
             i = icon?.getBoundingClientRect(),
-            n = el.getBoundingClientRect(),
+            n = el.closest(".otk-composer-feedback")!.getBoundingClientRect(),
             frame = document.querySelector(".otk-composer-frame")!
+              .getBoundingClientRect(),
+            input = document.querySelector(".otk-prompt-input")!
+              .getBoundingClientRect(),
+            send = document.querySelector(".otk-send-button")!
               .getBoundingClientRect(),
             destination = document.querySelector(".otk-composer-activity-slot")!
               .getBoundingClientRect(),
@@ -1211,16 +1169,21 @@ export async function collections456(input: Inputs) {
               .getBoundingClientRect();
           return {
             row: r.height,
-            notice: n.height,
+            notice: el.getBoundingClientRect().height,
             icon: i ? [i.width, i.height] : [],
             text: Math.abs(t.top + t.height / 2 - r.top - r.height / 2),
             iconOffset: i ? i.top + i.height / 2 - r.top - r.height / 2 : null,
             // Approved M1 notice flow: transcript, destination, notice, input.
-            // The outer input frame still owns the joined notice's width.
+            // 2.76: "The transparent header/notice frame uses the composer's
+            // same border track". Match frames and the actual content edges.
             joined: n.left === frame.left && n.right === frame.right &&
               Math.abs(n.bottom - frame.top) <= 1 &&
               n.top >= destination.bottom - 1 &&
               n.top >= transcript.bottom - 1,
+            contentInset: Math.max(
+              Math.abs(r.left - input.left),
+              Math.abs(r.right - send.right),
+            ),
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
@@ -1284,7 +1247,9 @@ export async function collections456(input: Inputs) {
           expect(g.iconOffset).toBe(0);
         }
         expect(g.text).toBeLessThanOrEqual(.5);
-        expect(g.joined).toBe(true);
+        expect(g.joined, `${theme.id}/${mode} joined frames`).toBe(true);
+        expect(g.contentInset, `${theme.id}/${mode} shared content inset`)
+          .toBeLessThanOrEqual(1);
         await expectRuleThree(page);
         if (mode === "notice-pending") {
           await expect(page.locator(".otk-composer-notice [role=status]"))
@@ -1713,22 +1678,37 @@ export async function collections456(input: Inputs) {
             );
           }
           if (name === "reading") {
+            const bubble = ".otk-user-bubble";
+            const prose = "[data-message=reading] .otk-text p";
+            const code = "[data-message=reading] .otk-code";
+            // The transcript and its nested blocks have zero overscan. Compare
+            // inline geometry after acquiring each row, not at one scrollTop.
+            const bounds = async (selector: string) => {
+              await reveal(page, selector);
+              return await page.locator(selector).evaluate((el) => {
+                const { left, right, width } = el.getBoundingClientRect();
+                return { left, right, width };
+              });
+            };
             for (const width of [1280, 1600, 2000]) {
               await page.setViewportSize({ width, height: 1100 });
-              await frames(page);
+              const bubbleBox = await bounds(bubble);
+              const proseBox = await bounds(prose);
+              const typography = await page.locator(prose).evaluate((el) => {
+                const p = getComputedStyle(el);
+                return {
+                  font: p.fontFamily,
+                  prose: [p.fontSize, p.lineHeight],
+                };
+              });
+              const codeBox = await bounds(code);
               const g = await page.evaluate(() => {
                 const el = (s: string) => document.querySelector(s)!,
                   rect = (s: string) => el(s).getBoundingClientRect(),
                   lane = rect(".otk-message-flow"),
                   scroll = rect(".otk-messages"),
-                  bubble = rect(".otk-user-bubble"),
                   composer = rect(".otk-composer"),
-                  prose = rect("[data-message=reading] .otk-text p"),
-                  code = rect("[data-message=reading] .otk-code"),
-                  s = getComputedStyle(el(".otk-messages")),
-                  p = getComputedStyle(
-                    el("[data-message=reading] .otk-text p"),
-                  );
+                  s = getComputedStyle(el(".otk-messages"));
                 return {
                   lane: [lane.left, lane.right, lane.width],
                   expected: Math.min(
@@ -1740,14 +1720,6 @@ export async function collections456(input: Inputs) {
                     lane.left + lane.right - scroll.left - scroll.right,
                   ),
                   composer: [composer.left, composer.right],
-                  bubble: bubble.width <= lane.width * .8 + .5 &&
-                    Math.abs(bubble.right - lane.right) < .5,
-                  aligned: [
-                    Math.abs(prose.width - code.width),
-                    Math.abs(prose.left - code.left),
-                  ],
-                  font: p.fontFamily,
-                  prose: [p.fontSize, p.lineHeight],
                   border: getComputedStyle(el(".otk-composer")).borderTopWidth,
                   radius: getComputedStyle(el(".otk-composer")).borderRadius,
                 };
@@ -1760,9 +1732,13 @@ export async function collections456(input: Inputs) {
               expect(Math.abs(g.lane[1] - g.composer[1])).toBeLessThanOrEqual(
                 .5,
               );
-              expect(g.bubble).toBe(true);
-              for (const d of g.aligned) expect(d).toBeLessThanOrEqual(.5);
-              expect(g.font).toContain("IBM Plex Sans");
+              expect(bubbleBox.width).toBeLessThanOrEqual(g.lane[2] * .8 + .5);
+              expect(Math.abs(bubbleBox.right - g.lane[1])).toBeLessThan(.5);
+              expect(Math.abs(proseBox.width - codeBox.width))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(proseBox.left - codeBox.left))
+                .toBeLessThanOrEqual(.5);
+              expect(typography.font).toContain("IBM Plex Sans");
               expect(
                 await page.locator(".otk-message-footer").first().evaluate((
                   el,
@@ -1772,7 +1748,7 @@ export async function collections456(input: Inputs) {
                 .toMatch(
                   /Enter to send|Shift\+Enter for newline|1 \/ 2 \/ 3|j\/k select/,
                 );
-              expect(g.prose).toEqual(["14px", "24px"]);
+              expect(typography.prose).toEqual(["14px", "24px"]);
               expect([g.border, g.radius]).toEqual(["1px", "20px"]);
               await expect(page.locator(".otk-role-label")).toHaveCount(0);
               await shot(`reading-${theme.id}-${width}`);

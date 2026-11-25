@@ -5,7 +5,7 @@ import type { TestState } from "../fixtures/test-state.ts";
 import { accessoryGeometry } from "../../support/control-geometry.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
-import { reveal } from "./collections.ts";
+import { revealAcquired as reveal } from "../pages/transcript.ts";
 import { restoreViewport } from "./capture.ts";
 import { diffHunk, expectDiffHunk } from "../pages/diff.ts";
 import { clipboard, copied, pick } from "../pages/menus.ts";
@@ -947,7 +947,10 @@ export async function lights(
           expect(lamp.color).toBe(lamp.token);
           expect(lamp.token).toMatch(/^#[\da-f]{6}$/i);
           expect(lamp.body).toBe(reduced ? "none" : "block");
-          expect(lamp.shape).toBe(reduced ? "block" : "none");
+          // The terminal dependency diamond identifies the state in both modes.
+          expect(lamp.shape).toBe(
+            reduced || lamp.state === "dependencies" ? "block" : "none",
+          );
           if (!reduced) {
             expect(lamp.border).toBe("0px");
             expect(lamp.rim).toContain("0px 0px 0px 1px");

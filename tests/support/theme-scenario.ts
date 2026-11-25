@@ -210,6 +210,7 @@ export async function themeScenario() {
   const base = f.entries[0];
   const corpus = await themeContent(base.directory);
   let contentState: keyof typeof corpus.collections = "reading";
+  let contentVisit = 0;
   const usage = themeUsage(corpus.sessionID);
   let usageSeeded = false;
   const usageLedger = () => {
@@ -305,7 +306,7 @@ export async function themeScenario() {
               (contentState.startsWith("permission") ||
                 contentState === "labels-permission")
               ? [{
-                id: "permission",
+                id: `permission-${contentVisit}`,
                 sessionID: id,
                 kind: contentState === "permission-read"
                   ? "read"
@@ -367,7 +368,7 @@ export async function themeScenario() {
               (contentState === "question" ||
                 contentState === "labels-question")
               ? [{
-                id: "question",
+                id: `question-${contentVisit}`,
                 sessionID: id,
                 questions: [
                   {
@@ -665,6 +666,8 @@ export async function themeScenario() {
               throw new Error("Unknown fixed theme content");
             }
             contentState = name as keyof typeof corpus.collections;
+            // A new scene presents a new request, not a retired one revived.
+            contentVisit++;
             contentCapabilities();
             response.resolve();
             response = Promise.withResolvers<void>();
