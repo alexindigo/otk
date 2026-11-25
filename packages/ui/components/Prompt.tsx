@@ -25,15 +25,19 @@ import {
 } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
-import { SendIcon } from "./ChromeIcons.tsx";
+import { SendIcon, StopIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
+  canStop,
+  composerLabel,
+  composerMode,
   createFailurePresenter,
   createPrimaryAction,
   createSubmissionIntent,
   effectiveSelection,
   type Feedback,
   promptUnavailable,
+  stopUnavailable,
 } from "@otk/client";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
@@ -85,7 +89,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     const interrupt = hints.keys("session.interrupt");
     if (armed() && interrupt) return `${interrupt} again to interrupt`;
     return [
-      hints.title("prompt.submit", "Send"),
+      hints.title("prompt.submit", composerLabel("send")),
       newline && `${newline} for newline`,
       interrupt && `${interrupt} twice to interrupt`,
     ].filter(Boolean).join("; ");
@@ -165,7 +169,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     intent.require();
     session?.feedback?.clear();
     setFeedback(undefined);
-    input.focus();
     // Feature readiness follows this input's references, not every catalog.
     await ctx.ready();
     intent.require();
@@ -211,12 +214,23 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       ctx.fail(cause);
     }
   };
+  const mode = () =>
+    composerMode({
+      ...props.activity(),
+      blank: !hasDraftContent(props.value) && !props.value.chips.length,
+    });
+  const stopReason = () =>
+    stopUnavailable({ ...facts(), supported: ctx.supports("prompt") });
   const primary = createPrimaryAction({
-    label: () => "Send",
-    unavailable,
-    pending,
-    pendingReason: "Sending",
-    run: submitInput,
+    mode,
+    label: () => composerLabel(mode()),
+    unavailable: () => mode() === "stop" ? stopReason() : unavailable(),
+    pending: () => mode() === "send" ? pending() : !!props.activity().stopping,
+    pendingReason: (mode) => mode === "stop" ? "Stopping" : "Sending",
+    run: (_input, mode) =>
+      mode === "stop"
+        ? ports.commands.run("session.interrupt").then(() => {})
+        : submitInput(),
   });
   const primaryState = bindPrimaryAction(primary);
   const send = ownedCommand(ports, {
@@ -251,7 +265,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     enabled: composerReady,
     // Input commands can prepare while a captured send is still settling.
     // The submission intent, not this input route, admits the next effect.
-    run: submitInput,
+    run: () => mode() === "send" ? submitInput() : undefined,
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -268,6 +282,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   });
   ownedCommand(ports, {
     id: "session.interrupt",
+    name: "interrupt",
     arguments: {
       type: "object",
       optional: true,
@@ -276,16 +291,16 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     title: "Interrupt session",
     category: "Session",
     enabled: () =>
-      !props.suspended && props.connected && ctx.supports("prompt") &&
-      props.busy !== false,
+      !props.activity().stopping && stopReason() === undefined &&
+      canStop(props.activity()),
     run: async (_context, args?: { confirm?: boolean }) => {
-      if (!args?.confirm) return await props.onAbort();
+      if (!args?.confirm) return await props.onStop();
       if (Date.now() < deadline) {
         deadline = 0;
         clearTimeout(timer);
         setArmed(false);
         try {
-          await props.onAbort();
+          await props.onStop();
         } catch (error) {
           ctx.fail(error);
         }
@@ -375,7 +390,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        void primary.invoke().catch(ctx.fail);
+        if (mode() === "send") void primary.invoke().catch(ctx.fail);
       }}
     >
       <Show when={!session?.feedback && (pending() || feedback())}>
@@ -458,13 +473,20 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         </Show>
         <div class="otk-prompt-send-slot">
           <PrimaryAction
-            type="submit"
+            type={primaryState().mode === "stop" ? "button" : "submit"}
             state={primaryState()}
             class="otk-primary otk-send-button"
-            title={submitTitle()}
+            title={primaryState().mode === "stop"
+              ? primaryState().label
+              : submitTitle()}
+            description={primaryState().mode === "stop"
+              ? (props.activity().unstarted
+                ? "Stop and return the message to the composer"
+                : "Stop the response")
+              : undefined}
             onInvoke={() => void primary.invoke().catch(ctx.fail)}
           >
-            <SendIcon />
+            {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
           </PrimaryAction>
         </div>
       </div>

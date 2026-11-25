@@ -175,7 +175,8 @@ export default function Notices(props: { prefs: Preferences }) {
             draft={drafts.get("theme-notice")}
             onDraft={write}
             onPrompt={() => Promise.resolve()}
-            onAbort={() => Promise.resolve()}
+            activity={() => ({ running: false, unstarted: 0 })}
+            onStop={() => Promise.resolve()}
             onOlder={() => Promise.resolve()}
             onRetry={() => Promise.resolve()}
             rollback={rollback}

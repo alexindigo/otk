@@ -27,6 +27,19 @@ Deno.test("committed custody survives until withdrawn or started", () => {
   assertEquals(drafts.current("session").input, "Newer");
 });
 
+Deno.test("a late start does not retire newer input parked by Recover draft", () => {
+  const drafts = createDrafts();
+  const write = drafts.writer("session");
+  const draft = write((value) => ({ ...value, input: "Original" }));
+  const settle = drafts.captureSend("session", draft).take("send", () => {})!;
+  settle({ kind: "unconfirmed", reason: "Not confirmed", stop: true });
+  write((value) => ({ ...value, input: "Newer" }));
+  drafts.recoveries("session")[0].run();
+  settle({ kind: "started", messageID: "send" });
+  assertEquals(drafts.current("session").input, "Original");
+  assertEquals(drafts.recoveries("session")[0].draft.input, "Newer");
+});
+
 Deno.test("draft writers retain session ownership, attachments and invocation-current identity across delayed painting", () => {
   const queued: (() => void)[] = [];
   const drafts = createDrafts((initial) => {

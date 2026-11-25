@@ -9,7 +9,7 @@ export interface DraftSendCapture {
   take(
     messageID: string,
     check: () => void,
-  ): ((outcome: SendOutcome) => void) | undefined;
+  ): ((outcome: SendOutcome) => boolean | void) | undefined;
 }
 
 export interface DraftRecovery {
@@ -177,6 +177,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
           if (vacancy !== undefined) write(clearDraft(owner.draft));
           const active = () =>
             values.get(key) === owner && owner.sends.get(id) === value;
+          let exchanged = false;
           const offer = (
             kind: DraftRecovery["kind"],
             cause?: DraftRecovery["cause"],
@@ -199,6 +200,15 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
                 // that parked draft has no outstanding native send.
                 const recovered = value.draft;
                 value.draft = owner.draft;
+                if (cause === "stop-unconfirmed") {
+                  // Late evidence concerns the submitted draft, not the newer
+                  // draft parked by this exchange.
+                  exchanged = true;
+                  value.recovery = undefined;
+                  if (value.draft.input.trim() || value.draft.chips.length) {
+                    offer("recoverable");
+                  } else owner.sends.delete(id);
+                }
                 write(recovered);
               },
             };
@@ -206,7 +216,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
             changed();
           };
           return (outcome) => {
-            if (!active()) return;
+            if (!active() || exchanged) return;
             if (outcome.kind === "accepted" || outcome.kind === "committed") {
               return;
             }
@@ -223,6 +233,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
             } else if (owner.revision === vacancy) {
               owner.sends.delete(id);
               write(value.draft);
+              return true;
             } else {
               offer(
                 "recoverable",

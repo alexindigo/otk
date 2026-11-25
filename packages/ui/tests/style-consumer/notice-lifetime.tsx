@@ -193,7 +193,8 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
           onRetry={() => Promise.resolve()}
           onDraft={write}
           onPrompt={() => Promise.resolve()}
-          onAbort={() => Promise.resolve()}
+          activity={() => ({ running: false, unstarted: 0 })}
+          onStop={() => Promise.resolve()}
         />
       </SessionProvider>
     </div>

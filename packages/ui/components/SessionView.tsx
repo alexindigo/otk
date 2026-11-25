@@ -148,7 +148,8 @@ export default function SessionView(props: {
   captureSend?: PromptProps["captureSend"];
   draftRecoveries?: readonly import("@otk/client").DraftRecovery[];
   onPrompt: PromptProps["onSubmit"];
-  onAbort(): Promise<void>;
+  activity: PromptProps["activity"];
+  onStop: PromptProps["onStop"];
 }): Element {
   const writeDraft = props.onDraft;
   const sessionPorts = useSessionPorts();
@@ -373,9 +374,15 @@ export default function SessionView(props: {
           <OperationFeedback
             feedback={{
               kind: "info",
-              text: recovery.kind === "uncertain"
+              text: recovery.cause === "stop-unconfirmed"
+                ? "Couldn't confirm the stop; your message is kept."
+                : recovery.kind === "uncertain"
                 ? "Send not confirmed. The submitted draft is kept separately."
-                : `Draft kept separately: ${
+                : `${
+                  recovery.cause === "withdrawn"
+                    ? "Stopped before it started. "
+                    : ""
+                }Draft kept separately: ${
                   recovery.draft.input.trim() ||
                   recovery.draft.chips.map((chip) => chip.label).join(", ") ||
                   "Empty draft"
@@ -1136,13 +1143,13 @@ export default function SessionView(props: {
                     <Prompt
                       suspended={active()}
                       context={props.latestPrompt}
-                      busy={props.busy}
+                      activity={props.activity}
                       value={props.draft}
                       connected={props.connected}
                       onChange={writeDraft}
                       captureSend={props.captureSend}
                       onSubmit={props.onPrompt}
-                      onAbort={() => props.onAbort()}
+                      onStop={props.onStop}
                     />
                   </div>
                 </div>

@@ -184,6 +184,46 @@ Deno.test("a native reply retires the unstarted send but not its unsettled submi
   assertEquals(finished, true);
 });
 
+Deno.test("an unconfirmed Stop keeps custody recoverable without using a guessed ID", async () => {
+  const calls: string[] = [];
+  const { owner } = fixture(undefined, (id) => {
+    calls.push(id);
+    return Promise.resolve({ state: "withdrawn" });
+  });
+  const drafts = createDrafts();
+  const write = drafts.writer("target");
+  const draft = write((value) => ({ ...value, input: "/native argument" }));
+  const capture = drafts.captureSend("target", draft);
+  let outcome: ReturnType<typeof capture.take>;
+  const result = await owner.send(
+    (dispatch) => {
+      dispatch();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "The command did not return a native ID.",
+      });
+    },
+    undefined,
+    "browser-id",
+    {
+      admit(id, check) {
+        outcome = capture.take(id, check);
+      },
+      outcome(value) {
+        return outcome?.(value);
+      },
+    },
+  );
+  assertEquals(result.kind, "unconfirmed");
+  assertEquals((await owner.withdraw())[0].state, "unconfirmed");
+  assertEquals(calls, []);
+  assertEquals(drafts.current("target").input, "");
+  const [recovery] = drafts.recoveries("target");
+  assertEquals(recovery.cause, "stop-unconfirmed");
+  recovery.run();
+  assertEquals(drafts.current("target").input, "/native argument");
+});
+
 for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
   Deno.test(`reload reattaches ${outcome} input to the existing send lifecycle`, async () => {
     const f = fixture();
@@ -259,7 +299,11 @@ Deno.test("send custody sees live commitment while the dispatch promise is held"
     },
     undefined,
     "native-send",
-    { outcome: (value) => seen.push(value) },
+    {
+      outcome: (value) => {
+        seen.push(value);
+      },
+    },
   );
   try {
     f.message("unrelated");
@@ -287,7 +331,11 @@ Deno.test("send custody stays correlated after an unconfirmed receipt disappears
       },
       undefined,
       "native-send",
-      { outcome: (value) => seen.push(value) },
+      {
+        outcome: (value) => {
+          seen.push(value);
+        },
+      },
     );
     assertEquals(f.owner.state.receipts, []);
     f.message("native-send");

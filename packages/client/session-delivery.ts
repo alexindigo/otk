@@ -32,7 +32,7 @@ export interface DeliveryReceipt {
 }
 export interface SendCustody {
   admit?(messageID: string, check: () => void): void;
-  outcome(value: SendOutcome): void;
+  outcome(value: SendOutcome): boolean | void;
 }
 export interface SessionDelivery {
   readonly state: {
@@ -58,6 +58,7 @@ export interface SessionDelivery {
       messageID: string;
       state: WithdrawReceipt["state"];
       custody: boolean;
+      restored?: true;
     }[]
   >;
   stop(): void;
@@ -68,6 +69,7 @@ export function createSessionDelivery(input: {
   title(): string | undefined;
   transcript(): TranscriptOwner | undefined;
   withdraw?(messageID: string): Promise<WithdrawReceipt>;
+  interruptLateStart?(): void;
   /** The canonical native prompt once its applied model is known, never speculative input. */
   committed?(message: import("@otk/protocol").UserMessage): void;
   factory?: StateFactory;
@@ -111,6 +113,7 @@ export function createSessionDelivery(input: {
     retired?: boolean;
     rejected?: boolean;
     committed?: boolean;
+    stopUnconfirmed?: boolean;
   };
   const watches = new Map<string, Watch>();
   const observe = (id: string, outcome: SendOutcome) => {
@@ -125,15 +128,16 @@ export function createSessionDelivery(input: {
       watch.retired = true;
       commit(() => {});
     }
-    watch.custody?.outcome(outcome);
+    return watch.custody?.outcome(outcome);
   };
   const finish = (id: string, outcome: SendOutcome) => {
-    observe(id, outcome);
+    const restored = observe(id, outcome);
     const pending = outcomes.get(id);
-    if (!pending) return;
+    if (!pending) return restored;
     outcomes.delete(id);
     pending.resolve(outcome);
     update(id, (receipt) => receipt.outcome = outcome);
+    return restored;
   };
   // Native queue/admission can precede applied selection metadata. Presentation
   // releases the visible receipt, not this identity-only bookkeeping obligation.
@@ -162,15 +166,18 @@ export function createSessionDelivery(input: {
   };
   const inspect = () => {
     if (stopped) return;
-    for (const [id, { messageID }] of watches) {
-      const watch = watches.get(id)!;
+    for (const [id, watch] of watches) {
+      const { messageID, entry, result } = watch;
+      const known = result?.state !== "unconfirmed" && !!(entry || result);
       if (
         !watch.stopping && committedMessage(messageID) &&
         transcript?.projection.started(messageID)
       ) {
+        if (watch.stopUnconfirmed && !known) continue;
         // Start ends withdrawal eligibility and draft custody. It does not
         // settle the captured submission while its RPC is still in flight.
         observe(id, { kind: "started", messageID });
+        if (watch.stopUnconfirmed) input.interruptLateStart?.();
       } else if (!watch.committed && committedMessage(messageID)) {
         watch.committed = true;
         observe(id, { kind: "committed", messageID });
@@ -680,7 +687,10 @@ export function createSessionDelivery(input: {
                 transcript.projection.started(watch.messageID)
             ) state = "started";
             else if (watch.rejected) state = "absent";
-            else if (watch.result?.state === "unconfirmed" || !input.withdraw) {
+            else if (
+              watch.result?.state === "unconfirmed" ||
+              (!watch.result && !watch.entry) || !input.withdraw
+            ) {
               state = "unconfirmed";
             } else {
               state = (await input.withdraw(watch.messageID)).state;
@@ -696,7 +706,9 @@ export function createSessionDelivery(input: {
           }
         }
         const { messageID } = watch;
+        let restored: boolean | void = undefined;
         if (state === "unconfirmed") {
+          watch.stopUnconfirmed = true;
           watch.stopping = false;
           finish(id, {
             kind: "unconfirmed",
@@ -709,7 +721,7 @@ export function createSessionDelivery(input: {
           const outcome: SendOutcome = state === "started"
             ? { kind: "started", messageID }
             : { kind: "withdrawn", messageID, native: state };
-          finish(id, outcome);
+          restored = finish(id, outcome);
           if (state !== "started") {
             if (watch.custody || !watch.dispatched) {
               transcript?.cancelSend?.(messageID, watch.dispatched);
@@ -730,7 +742,12 @@ export function createSessionDelivery(input: {
             });
           }
         }
-        return { messageID, state, custody: !!watch.custody };
+        return {
+          messageID,
+          state,
+          custody: !!watch.custody,
+          ...(restored ? { restored: true as const } : {}),
+        };
       }));
     },
     presented(ids) {

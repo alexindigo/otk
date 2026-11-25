@@ -163,7 +163,7 @@ Deno.test("a permanence choice waits before pending-send publication and capture
   await sending;
   const call = f.calls.find((call) => call[1] === "session.prompt")!;
   assertEquals((call[2] as { sessionID: string }).sessionID, "selected");
-  actions.stop();
+  actions.dispose();
   f.resources.stop();
 });
 
@@ -231,7 +231,7 @@ Deno.test("Retry publishes an early refusal once without another native Send", a
     );
   } finally {
     release();
-    actions.stop();
+    actions.dispose();
     f.resources.stop();
   }
 });
@@ -277,7 +277,7 @@ for (const kind of ["revert", "restore"] as const) {
     await changing;
     await sending;
     assertEquals(preserving, true);
-    actions.stop();
+    actions.dispose();
     f.resources.stop();
     assertEquals(beforeSettlement, false);
     assertEquals(receipts, []);
@@ -313,7 +313,7 @@ Deno.test("Send joins the revert owner's publication wait before checking preser
   const admittedEarly = preserving;
   ready.resolve();
   await sending;
-  actions.stop();
+  actions.dispose();
   f.resources.stop();
   assertEquals(admittedEarly, false);
   assertEquals(preserving, true);
@@ -550,6 +550,62 @@ Deno.test("session removal aborts a working captured target before delete and re
     ["remote", "session.delete", { sessionID: "busy" }],
     ["remote", "projects.visit", { directory: "/busy", active: true }],
   ]);
+  f.resources.stop();
+});
+
+Deno.test("Stop interrupts a run that appears while its submission receipt is pending", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  f.entries("local", [shellEntry("selected")]);
+  const target = { sidecarId: "local", sessionID: "selected" };
+  const interrupted = Promise.withResolvers<void>();
+  const closing = Promise.withResolvers<null>();
+  f.reply((_sidecar, method) => {
+    if (method === "session.abort") interrupted.resolve();
+    return Promise.resolve(null);
+  });
+  const sending = actions.delivery(target).send(
+    (dispatch) => {
+      dispatch();
+      return closing.promise;
+    },
+    undefined,
+    "no-native-identity",
+  );
+  const stopping = actions.stop(target);
+  const counts = { working: 1, blocked: 0, finished: 0, unseen: 0 };
+  f.resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "run",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      ...f.resources.inbox("local").state.inbox,
+      entities: {
+        [entityKey("session", "selected")]: {
+          id: "selected",
+          kind: "session",
+          state: "working",
+          previous: "none",
+          counts,
+          evidence: {
+            work: true,
+            permissions: 0,
+            questions: 0,
+            descendants: { ...counts, working: 0 },
+          },
+        },
+      },
+    },
+  });
+  await interrupted.promise;
+  closing.resolve(null);
+  await stopping;
+  assertEquals((await sending).kind, "unconfirmed");
+  assertEquals(
+    f.calls.filter(([, method]) => method === "session.withdraw"),
+    [],
+  );
+  actions.dispose();
   f.resources.stop();
 });
 

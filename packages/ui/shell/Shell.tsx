@@ -868,7 +868,8 @@ export default function Shell(
                                 actions.prompt(parts, selection, capture).then(
                                   requireCommittedSend,
                                 )}
-                              onAbort={actions.abort}
+                              activity={() => actions.activity()}
+                              onStop={() => actions.stop()}
                             />
                           </SessionProvider>
                         </Show>

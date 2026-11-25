@@ -334,7 +334,8 @@ function Consumer() {
                   onOlder={() => current.older()}
                   onRetry={() => current.refetch()}
                   onPrompt={() => Promise.resolve()}
-                  onAbort={() => Promise.resolve()}
+                  activity={() => ({ running: false, unstarted: 0 })}
+                  onStop={() => Promise.resolve()}
                 />
               </SessionProvider>
             );
