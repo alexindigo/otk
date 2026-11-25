@@ -15,7 +15,16 @@ function fixture() {
     selection: { sidecarId: "local", sessionID: "a" },
     latestPrompt: { id: "old-prompt" },
     clock: { epoch: "initial", seq: 0 },
-    content: emptyContent(),
+    content: {
+      ...emptyContent(),
+      messages: [{
+        id: "old-prompt",
+        sessionID: "a",
+        role: "user",
+        time: { created: 1 },
+        parts: [],
+      }],
+    },
     siblings: [],
     loading: false,
     paging: false,

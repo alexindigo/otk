@@ -27,7 +27,7 @@ const record = (id = "p"): RevertInfo => ({
     parts: [{ kind: "text", text: "Reverted prompt" }],
   },
 });
-function fixture() {
+function fixture(ensure?: (id: string) => Promise<void>) {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
     content: { ...emptyContent(), messages: [prompt("p"), prompt("reply")] },
@@ -63,7 +63,10 @@ function fixture() {
   };
   const create = () =>
     createSessionRevert({
-      session,
+      session: {
+        ...session,
+        ...(ensure && { transcripts: { get: () => ({ ensure }) } }),
+      },
       drafts,
       storage,
       status: { working: () => false, subscribe: () => () => {} },
@@ -210,6 +213,46 @@ Deno.test("deleting a copy does not suppress preservation for a different locall
     assertEquals(f.events, ["capture", "stage", "capture"]);
     assertEquals(owner.state.copyRemoved, undefined);
     assertEquals(f.copies.branches[0].boundary, "new");
+  } finally {
+    owner.dispose();
+  }
+});
+
+Deno.test("an older transcript acquisition cannot replace a newer confirmation", async () => {
+  const acquired = Promise.withResolvers<void>();
+  const f = fixture(() => acquired.promise), owner = f.create();
+  try {
+    const first = owner.revertTo("older");
+    await owner.revertTo("p");
+    f.session.update((state) => {
+      state.content.messages.unshift(prompt("older"));
+    });
+    acquired.resolve();
+    await first;
+    assertEquals(owner.state.confirmation?.messageID, "p");
+    assertEquals(f.events, []);
+  } finally {
+    owner.dispose();
+  }
+});
+
+Deno.test("a missing preview boundary cannot authorize a native Revert", async () => {
+  const f = fixture(), owner = f.create();
+  // If a native call is incorrectly made, make it settle rather than hang.
+  f.refused();
+  try {
+    await owner.revertTo("missing");
+    await owner.confirm();
+    assertEquals(f.events, []);
+    assertEquals(owner.state.confirmation, undefined);
+
+    await owner.revertTo("p");
+    f.session.update((state) => {
+      state.content.messages = [prompt("reply")];
+    });
+    await owner.confirm();
+    await owner.confirm();
+    assertEquals(f.events, []);
   } finally {
     owner.dispose();
   }
