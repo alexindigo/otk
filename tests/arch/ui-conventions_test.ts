@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { FailurePresenter } from "../../packages/client/failures.ts";
-import { duration, humanDuration } from "../../packages/client/format.ts";
-import { runningWorkElapsed } from "../../packages/client/live-work.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
-import { property, type t } from "./syntax.ts";
+import { nodes, property, type t } from "./syntax.ts";
 import { outOfFlow, rules, selectorAlternatives } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
@@ -49,7 +47,7 @@ Deno.test("UI convention: breadcrumb trails use one compact overflow row", async
     "packages/ui/components/Subagents.tsx",
   );
   assert(subagents.includes("props.model.helpers"));
-  assert(subagents.includes("runningWorkElapsed"));
+  assert(subagents.includes("<TimeText"));
   assert(subagents.includes("<Menu"));
 });
 
@@ -436,6 +434,7 @@ type Rule =
   | "alignment"
   | "disclosure"
   | "duration"
+  | "time-text"
   | "meta-list"
   | "failure-signal"
   | "presentation"
@@ -462,6 +461,8 @@ const owners: Record<Rule, string> = {
     "DisclosureToggle owns tracks, gap and padding; consumers supply only its gutter input",
   duration:
     "One duration format: use the client duration owner, never a local elapsed formatter",
+  "time-text":
+    "Time values render through TimeText; attributes may use the owner's text",
   "meta-list":
     "One metadata join: use ChromeMeta's metaList, not separate flex-item separators",
   "failure-signal":
@@ -606,6 +607,11 @@ export function conventionErrors(
   if (path.endsWith(".css")) {
     for (const { selector, declarations: d } of rules(text)) {
       if (
+        rule === "time-text" &&
+        path !== "packages/ui/components/TimeText.css" &&
+        timeClass.test(selector)
+      ) fail(selector);
+      if (
         rule === "message-footer" &&
         /otk-(?:message-(?:footer|details|action)|user-meta|created-time|timeline-(?:clock|actions))/
           .test(selector) &&
@@ -710,6 +716,39 @@ export function conventionErrors(
     return errors;
   }
   const source = new Source(text, path);
+  if (rule === "duration" || rule === "time-text") {
+    if (path !== "packages/client/format.ts") {
+      for (const node of source.all) {
+        if (legacyTimeBinding(node, rule === "time-text")) {
+          fail(`retired time formatter on line ${node.loc?.start.line}`);
+        }
+      }
+    }
+    if (rule === "duration" && path !== "packages/client/format.ts") {
+      for (const node of localDurations(source)) {
+        fail(`local duration on line ${node.loc?.start.line}`);
+      }
+    }
+    if (rule === "time-text") {
+      for (const node of source.all) {
+        if (
+          path !== "packages/ui/components/TimeText.tsx" &&
+          ((node.type === "StringLiteral" && timeClass.test(node.value)) ||
+            (node.type === "TemplateElement" && timeClass.test(node.value.raw)))
+        ) {
+          fail(`presenter-owned class on line ${node.loc?.start.line}`);
+        }
+        if (
+          path.startsWith("packages/ui/") && path.endsWith(".tsx") &&
+          node.type === "JSXExpressionContainer" && jsxChild(source, node) &&
+          showsTime(source, node.expression)
+        ) {
+          fail(`unpresented time on line ${node.loc?.start.line}`);
+        }
+      }
+    }
+    return errors;
+  }
   const modulePath = (specifier: string) =>
     specifier.startsWith(".")
       ? new URL(specifier, new URL(path, "https://otk.invalid/")).pathname
@@ -1152,29 +1191,9 @@ export function conventionErrors(
       }
     }
     if (
-      rule === "duration" && path !== "packages/client/format.ts" &&
-      ["FunctionDeclaration", "ArrowFunctionExpression", "FunctionExpression"]
-        .includes(node.type) &&
-      source.all.some((child) =>
-        child.start! > node.start! && child.end! < node.end! &&
-        child.type === "BinaryExpression" && child.operator === "/" &&
-        (() => {
-          const divisor = source.value(child.right);
-          return divisor?.type === "NumericLiteral" &&
-            [1000, 60000, 3600000].includes(divisor.value);
-        })()
-      ) && source.all.some((child) =>
-        child.start! > node.start! && child.end! < node.end! &&
-        (child.type === "TemplateElement" &&
-            /\b(?:s|sec|seconds|ms|min|h)\b/.test(child.value.raw) ||
-          child.type === "StringLiteral" &&
-            /^(?:s|sec|seconds|ms|min|h)$/.test(child.value.trim()))
-      )
-    ) {
-      fail(`local duration on line ${node.loc?.start.line}`);
-    }
-    if (
-      rule === "meta-list" && node.type === "JSXElement" &&
+      rule === "meta-list" &&
+      path !== "packages/ui/components/ChromeMeta.tsx" &&
+      node.type === "JSXElement" &&
       (source.name(node.openingElement.name) === "ChromeMeta" ||
         source.string(source.attr(node.openingElement, "class"))?.includes(
           "otk-chrome-meta",
@@ -1186,9 +1205,8 @@ export function conventionErrors(
           child.type === "JSXExpressionContainer" && (() => {
               const value = source.value(child.expression);
               return source.string(value)?.trim() === "·" ||
-                value?.type === "TemplateLiteral" && value.quasis.some((q) =>
-                    q.value.raw.includes("·")
-                  );
+                value?.type === "TemplateLiteral" &&
+                  value.quasis.some((q) => q.value.raw.includes("·"));
             })())
       )
     ) {
@@ -1196,6 +1214,7 @@ export function conventionErrors(
     }
     if (
       rule === "meta-list" && path !== "packages/client/format.ts" &&
+      path !== "packages/ui/components/ChromeMeta.tsx" &&
       node.type === "CallExpression" &&
       node.callee.type === "MemberExpression" &&
       property(node.callee.property) === "join" &&
@@ -1204,13 +1223,194 @@ export function conventionErrors(
       fail(`local metadata join on line ${node.loc?.start.line}`);
     }
   }
-  if (
-    rule === "duration" && path.endsWith("/format.ts") &&
-    /export function humanDuration/.test(text) &&
-    /return `\$\{Math\.floor\(elapsed \/ 1000\)\} s`/.test(text)
-  ) fail("humanDuration formats seconds separately from duration");
   return errors;
 }
+
+const retiredTimeNames = new Set([
+  "duration",
+  "humanDuration",
+  "relativeTime",
+  "visitTime",
+  "runningWorkElapsed",
+]);
+const timeFormatters = new Set(["elapsed", "age", "remaining"]);
+const timeClass = /(?:^|[^\w-])otk-time(?:-(?:part|value|unit))?(?![\w-])/;
+function legacyTimeBinding(node: t.Node, checkImports: boolean): boolean {
+  const retired = (name: t.Node | null | undefined) =>
+    !!name && retiredTimeNames.has(property(name) ?? "");
+  if (node.type === "ImportDeclaration" && checkImports) {
+    return node.specifiers.some((spec) =>
+      retired(spec.local) ||
+      spec.type === "ImportSpecifier" && retired(spec.imported)
+    );
+  }
+  if (node.type !== "ExportNamedDeclaration") return false;
+  const declaration = node.declaration;
+  return node.specifiers.some((spec) =>
+    retired(spec.exported) ||
+    spec.type === "ExportSpecifier" && retired(spec.local)
+  ) ||
+    (declaration?.type === "VariableDeclaration" &&
+      declaration.declarations.some(({ id }) => retired(id))) ||
+    (declaration?.type === "FunctionDeclaration" && retired(declaration.id));
+}
+
+const unitText = /^(?:d|h|m|s|ms|sec|seconds|min|minutes|hours|days)\b/;
+function jsxChild(source: Source, node: t.Node): boolean {
+  const parent = source.parent.get(node);
+  return parent?.type === "JSXElement" || parent?.type === "JSXFragment";
+}
+function* localDurations(source: Source) {
+  const converted = (input: t.Node) =>
+    [...nodes(source.value(input) ?? input)].some((node) => {
+      if (
+        node.type === "CallExpression" &&
+        node.callee.type === "MemberExpression" &&
+        property(node.callee.property) === "toFixed"
+      ) return true;
+      if (node.type !== "BinaryExpression" || node.operator !== "/") {
+        return false;
+      }
+      const divisor = source.value(node.right);
+      return divisor?.type === "NumericLiteral" &&
+        [1000, 60_000, 3_600_000, 86_400_000].includes(divisor.value);
+    });
+  for (const node of source.all) {
+    if (
+      node.type === "TemplateLiteral" &&
+      node.expressions.some((expr, i) =>
+        unitText.test(node.quasis[i + 1].value.raw.trimStart()) &&
+        converted(expr)
+      )
+    ) yield node;
+    if (
+      node.type === "BinaryExpression" && node.operator === "+" &&
+      unitText.test(source.string(node.right)?.trimStart() ?? "") &&
+      converted(node.left)
+    ) yield node;
+    if (
+      node.type === "JSXExpressionContainer" && jsxChild(source, node) &&
+      converted(node.expression)
+    ) {
+      const parent = source.parent.get(node) as t.JSXElement | t.JSXFragment;
+      const next = parent.children[parent.children.indexOf(node) + 1];
+      if (next?.type === "JSXText" && unitText.test(next.value.trimStart())) {
+        yield node;
+      }
+    }
+  }
+}
+
+function showsTime(source: Source, input: t.Node): boolean {
+  const namesTime = (node: t.Node) => {
+    const imported = source.imported(node);
+    return imported
+      ? timeFormatters.has(imported.name)
+      : node.type === "Identifier" &&
+        !source.access(node) && timeFormatters.has(node.name);
+  };
+  const typedTime = (node: t.Node): boolean => {
+    const annotation = node.type === "Identifier" && node.typeAnnotation;
+    if (!annotation || annotation.type !== "TSTypeAnnotation") return false;
+    const type = annotation.typeAnnotation;
+    return type.type === "TSTypeReference" &&
+      (source.imported(type.typeName)?.name === "TimeText" ||
+        property(type.typeName) === "TimeText" ||
+        property(type.typeName) === "ReturnType" &&
+          !!type.typeParameters?.params.some((param) =>
+            param.type === "TSTypeQuery" && namesTime(param.exprName)
+          ));
+  };
+  const isTime = (expr: t.Node) => {
+    const binding = source.access(expr)?.binding;
+    const node = source.value(expr);
+    return node?.type === "CallExpression" && namesTime(node.callee) ||
+      !!binding &&
+        source.all.some((id) =>
+          id.type === "Identifier" && typedTime(id) &&
+          source.binding(id.name, id) === binding
+        );
+  };
+  const value = source.value(input) ?? input;
+  if (isTime(value)) return true;
+  if (
+    value.type === "MemberExpression" ||
+    value.type === "OptionalMemberExpression"
+  ) {
+    return (value.computed
+          ? source.string(value.property)
+          : property(value.property)) === "text" && isTime(value.object);
+  }
+  if (value.type === "ConditionalExpression") {
+    return showsTime(source, value.consequent) ||
+      showsTime(source, value.alternate);
+  }
+  if (value.type === "LogicalExpression") {
+    return showsTime(source, value.right) ||
+      (value.operator !== "&&" && showsTime(source, value.left));
+  }
+  return false;
+}
+
+Deno.test("UI convention: duration catches JSX suffixes, rounding and renamed helpers", () => {
+  for (
+    const [path, text] of [
+      [
+        "packages/ui/Fixture.tsx",
+        "<span>Next attempt in {Math.max(0, Math.ceil((next - now) / 1000))}s</span>",
+      ],
+      [
+        "packages/client/Fixture.ts",
+        "export const runningWorkElapsed = elapsed;",
+      ],
+      [
+        "packages/client/Fixture.ts",
+        'const format = (x: number) => x.toFixed(1) + "s";',
+      ],
+      [
+        "core/Fixture.ts",
+        "const format = (x: number) => `${Math.round(x / 86_400_000)} days`;",
+      ],
+    ]
+  ) assert(conventionErrors("duration", path, text).length, text);
+  assertEquals(
+    conventionErrors(
+      "duration",
+      "core/Fixture.ts",
+      "const seconds = (ms: number) => Math.ceil(ms / 1000);",
+    ),
+    [],
+  );
+});
+
+Deno.test("UI convention: TimeText owns time value markup, not attribute prose", () => {
+  const path = "packages/ui/Fixture.tsx";
+  for (
+    const text of [
+      "<span>{elapsed(x).text}</span>",
+      "<span>{age(at, now)}</span>",
+      'import { elapsed as format } from "@otk/client"; const time = format(x); const view = <span>{time.text}</span>;',
+      'import { elapsed } from "@otk/client"; function View(time: ReturnType<typeof elapsed>) { return <span>{time.text}</span>; }',
+      'export { elapsed as duration } from "@otk/client";',
+      'import { relativeTime as age } from "@otk/client";',
+      '<span class={["meta", "otk-time-unit"]} />',
+    ]
+  ) assert(conventionErrors("time-text", path, text).length, text);
+  assert(
+    conventionErrors(
+      "time-text",
+      "packages/ui/Fixture.css",
+      ".otk-time { color: inherit; }",
+    ).length,
+  );
+  for (
+    const text of [
+      "<span title={elapsed(x).text} />",
+      "<TimeText time={elapsed(x)} />",
+      "<span>{note.text}</span>",
+    ]
+  ) assertEquals(conventionErrors("time-text", path, text), [], text);
+});
 
 function staticText(source: Source, node: t.Node): string | undefined {
   const value = source.value(node);
@@ -1449,7 +1649,11 @@ for (const rule of Object.keys(owners) as Rule[]) {
   Deno.test(`UI convention: ${owners[rule]}`, async () => {
     const failures: string[] = [];
     for (const [path, text] of await productionSources()) {
-      if (/^(?:packages\/(?:client|ui)\/|web\/src\/)/.test(path)) {
+      if (
+        (rule === "duration" || rule === "time-text")
+          ? /^(?:packages|core)\//.test(path)
+          : /^(?:packages\/(?:client|ui)\/|web\/src\/)/.test(path)
+      ) {
         failures.push(...conventionErrors(rule, path, text));
       }
     }
@@ -1461,20 +1665,6 @@ for (const rule of Object.keys(owners) as Rule[]) {
       }
     }
     assertEquals(failures, [], failures.join("\n"));
-    if (rule === "duration") {
-      for (const elapsed of [0, 1234, 65000]) {
-        assertEquals(
-          humanDuration(elapsed),
-          duration(elapsed),
-          owners.duration,
-        );
-        assertEquals(
-          runningWorkElapsed(elapsed),
-          duration(elapsed),
-          owners.duration,
-        );
-      }
-    }
     if (rule === "meta-tone") {
       const meta = rules(
         await Deno.readTextFile(

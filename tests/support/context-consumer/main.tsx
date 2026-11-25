@@ -2,6 +2,7 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import {
+  age,
   type CommandDefinition,
   CommandHub,
   SidecarConnection,
@@ -149,7 +150,7 @@ function ProjectProbe() {
           lastVisit: 0,
           status: "none",
           unread: false,
-          visitText: "now",
+          visit: age(0, 0),
           ageing: 0,
           sessionIDs: "",
           sessionCount: 0,

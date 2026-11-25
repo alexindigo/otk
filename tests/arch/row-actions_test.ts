@@ -73,7 +73,7 @@ Deno.test("tab chrome has no menus and project row actions share an in-flow trai
     new URL("components/ProjectInbox.tsx", ui),
   );
   assert(
-    /class="otk-project-trailing"[\s\S]*?<time\b[\s\S]*?<CommandMenu\b[\s\S]*?\/\>\s*<\/div>/
+    /class="otk-project-trailing"[\s\S]*?class="otk-project-visit"[\s\S]*?<TimeText\b[\s\S]*?<CommandMenu\b[\s\S]*?\/\>\s*<\/div>/
       .test(row),
   );
   assertEquals(

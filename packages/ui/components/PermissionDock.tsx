@@ -393,9 +393,7 @@ function RequestDock(
           </div>
         )}
       >
-        <Show when={props.activity}>
-          {(activity) => <RequestAge label={activity().label} />}
-        </Show>
+        <RequestAge value={props.activity?.lead ? props.activity : undefined} />
         <PermissionSummary request={props.request} />
         <Show when={error()}>
           <FeedbackStatus feedback={errorFeedback(error())} />

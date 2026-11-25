@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
+import { age } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import ProjectInbox, {
   type ProjectRow,
@@ -17,7 +18,7 @@ const project = (
   sessionCount: 0,
   status: "finished",
   unread: false,
-  visitText: "1h",
+  visit: age(0, 3_600_000),
   ageing: 0,
   inactive: false,
   added: true,

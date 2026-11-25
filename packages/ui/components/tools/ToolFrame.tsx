@@ -2,7 +2,7 @@
 import "./ToolFrame.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { Preferences, ToolCall } from "@otk/protocol";
-import { errorFeedback, toolFailure } from "@otk/client";
+import { elapsed, errorFeedback, toolFailure } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import { ToolIcon } from "../ChromeIcons.tsx";
@@ -12,7 +12,7 @@ import { useOptionalSessionPorts } from "../../registries/session.tsx";
 import { scopedEntityFacts } from "../../entity-facts.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 import type { ToolPresentation } from "../../registries/renderers.ts";
-import { elapsed } from "../work-log.ts";
+import TimeText from "../TimeText.tsx";
 import { contextTarget } from "../context-target.ts";
 import {
   ContentIdentityProvider,
@@ -165,9 +165,12 @@ export default function ToolFrame(props: {
                   when={props.call.time.start !== undefined &&
                     props.call.time.end !== undefined}
                 >
-                  <span class="otk-tool-duration">
-                    {elapsed(props.call.time.start!, props.call.time.end!)}
-                  </span>
+                  <TimeText
+                    class="otk-tool-duration"
+                    time={elapsed(
+                      props.call.time.end! - props.call.time.start!,
+                    )}
+                  />
                 </Show>
               </button>
             </header>

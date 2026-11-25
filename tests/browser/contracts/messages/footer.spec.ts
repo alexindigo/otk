@@ -15,7 +15,9 @@ test.describe("shared message footer", () => {
       const footers = page.locator(".otk-message .otk-message-footer");
       await expect(footers).toHaveCount(2);
       for (const message of await page.locator(".otk-message").all()) {
-        await expect.soft(message.locator("time:visible")).toHaveCount(1);
+        await expect.soft(message.locator("time[title]:visible")).toHaveCount(
+          1,
+        );
       }
       const actionGaps = await footers.evaluateAll((elements) =>
         elements.map((footer) => {
@@ -37,7 +39,7 @@ test.describe("shared message footer", () => {
       }
       const check = async () => {
         for (const footer of await footers.all()) {
-          await expect(footer.locator("time")).toBeVisible();
+          await expect(footer.locator("time[title]")).toBeVisible();
           await expect(footer.locator("[data-message-command]").first())
             .toBeVisible();
           expect(
@@ -59,7 +61,7 @@ test.describe("shared message footer", () => {
           ).toBe(true);
           expect(
             await footer.evaluate((element) => {
-              const clock = element.querySelector("time")!.parentElement!
+              const clock = element.querySelector("time[title]")!.parentElement!
                 .getBoundingClientRect();
               const action = element.querySelector("[data-message-command]")!
                 .getBoundingClientRect();

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { entityTimeValue, workingTimeValue } from "../message-presentation.ts";
+import { elapsed } from "../format.ts";
 
 Deno.test("working durations share wording across turn, entity and ledger facts", () => {
   for (const milliseconds of [0, 2500, 62000]) {
@@ -25,14 +26,20 @@ Deno.test("working durations share wording across turn, entity and ledger facts"
   }
   assertEquals(workingTimeValue(2500, false, "column"), {
     state: "known",
-    text: "2.5s",
+    time: elapsed(2500),
   });
   assertEquals(workingTimeValue(2500, true, "column"), {
     state: "counting",
-    text: "2.5s",
+    time: elapsed(2500),
   });
   assertEquals(workingTimeValue(undefined, true, "column"), {
     state: "counting",
+  });
+  assertEquals(workingTimeValue(49, true), { state: "counting" });
+  assertEquals(workingTimeValue(50, true), {
+    state: "counting",
+    lead: "Worked for",
+    time: elapsed(50),
   });
   assertEquals(entityTimeValue({ known: false, final: false, active: false }), {
     state: "counting",

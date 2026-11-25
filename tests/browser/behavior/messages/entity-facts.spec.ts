@@ -55,9 +55,10 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   ).toHaveCount(0);
   await firstPill.click();
   await expect(card).toBeVisible();
-  const completed = await card.locator("time").getAttribute("datetime");
+  const clock = card.locator('dt:text-is("Completed") + dd time');
+  const completed = await clock.getAttribute("datetime");
   await state.release(held.gate);
-  await expect(card.locator("time")).toHaveAttribute("datetime", completed!);
+  await expect(clock).toHaveAttribute("datetime", completed!);
   await expect(card.locator(".otk-entity-status")).not.toContainText("Working");
   await state.product("prefs.set", { key: "animationsOff", value: true });
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {

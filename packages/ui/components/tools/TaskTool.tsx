@@ -4,7 +4,8 @@ import "./TaskTool.css" with { type: "text" };
 import { createMemo, Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import { derivedValue } from "@otk/protocol";
-import { type ActionControl, duration, metaList } from "@otk/client";
+import { type ActionControl, elapsed } from "@otk/client";
+import { MetaText } from "../ChromeMeta.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { useCommandPorts } from "../../keyboard/context.tsx";
 import ActionButton from "../ActionButton.tsx";
@@ -51,10 +52,14 @@ export default function TaskTool(
       return `${value.current.name} ${value.current.title ?? ""}`.trim();
     }
     const time = value.time;
-    return metaList([
-      countLabel(value.toolCount!, "tool call"),
-      time?.end !== undefined && duration(time.end - time.start),
-    ]);
+    return (
+      <MetaText
+        items={[
+          countLabel(value.toolCount!, "tool call"),
+          time?.end !== undefined && elapsed(time.end - time.start),
+        ]}
+      />
+    );
   };
   return (
     <>

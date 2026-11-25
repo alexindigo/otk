@@ -163,7 +163,9 @@ test(
       "Retain this draft",
     );
     await page.keyboard.press("Escape");
-    await expect(page.locator("[data-role=assistant] .otk-message-footer time"))
+    await expect(
+      page.locator("[data-role=assistant] .otk-message-footer time[title]"),
+    )
       .toBeVisible();
     await page.keyboard.press("Control+k");
     await page.locator("input[name=command-search]").fill("Settings");

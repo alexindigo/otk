@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { age } from "../format.ts";
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import { createProjectDisclosure } from "../project-disclosure.ts";
 import { projectHierarchy } from "../inbox.ts";
@@ -86,7 +87,7 @@ function row(
     order: 0,
     lastVisit: 0,
     unread: false,
-    visitText: "now",
+    visit: age(0, 0),
     ageing: 0,
     topology: {
       repoID: "repo",

@@ -25,7 +25,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
-import { relativeTime } from "./format.ts";
+import { age, type TimeText } from "./format.ts";
 import {
   type ProjectPlacement,
   projectPlacement,
@@ -92,9 +92,6 @@ export function archiveAttention(
       : rows.reduce((sum, row) => sum + row.unseenCount!, 0),
   };
 }
-export function visitTime(lastVisit: number, now: number): string {
-  return relativeTime(lastVisit, now);
-}
 export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   topology?: ProjectTopology;
   availability?: ProjectSummary["availability"];
@@ -112,7 +109,8 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   status: InboxStatus;
   unread: boolean;
   unseenCount?: number | null;
-  visitText: string;
+  visit?: TimeText;
+  visitText?: string;
   /** Unused: names are not tinted by visit age (S4). Optional only so
    * standalone fixtures that still name it keep type-checking. */
   ageing?: number;
@@ -290,7 +288,7 @@ export function inboxProjects(
         status,
         unread: (inbox.summaries?.[project.directory]?.unseenCount ?? 0) > 0 ||
           sessions.some((s) => unread(s, inbox)),
-        visitText: visitTime(project.lastVisit, clock),
+        visit: age(project.lastVisit, clock, inactive ? "inactive" : "now"),
       };
     },
   );
@@ -324,7 +322,6 @@ export function inboxProjects(
       status: statusFor(directory, sessions),
       unread: (inbox.summaries?.[directory]?.unseenCount ?? 0) > 0 ||
         sessions.some((s) => unread(s, inbox)),
-      visitText: "",
     };
   });
   const templates = [
@@ -340,7 +337,6 @@ export function inboxProjects(
       lastVisit: 0,
       status: "none",
       unread: false,
-      visitText: "",
     }));
   return projectHierarchy(
     [...tracked, ...discovered, ...templates].map((row) => {
