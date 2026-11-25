@@ -90,6 +90,22 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
+test("terminal dependencies stay independent of freshness and session lamps", () => {
+  const o = owner();
+  let running = 2;
+  o.states.terminalOwners(() => running);
+  o.supervision.freshness(false);
+  const native = o.put(base);
+  assertEquals(native.state, "none");
+  assertEquals(o.get(base.id)?.state, "none");
+  assertEquals(o.get(base.id)?.dependencies, 2);
+  o.put({ ...base, deleted: { at: 1, how: "provider" } });
+  assertEquals(o.get(base.id), undefined);
+  running = 0;
+  o.put(base);
+  assertEquals(o.get(base.id)?.dependencies, undefined);
+});
+
 test("D66: parent delivery and native run clocks survive human seen independently", () => {
   const o = owner();
   const entry = { ...base, parentID: "root" };

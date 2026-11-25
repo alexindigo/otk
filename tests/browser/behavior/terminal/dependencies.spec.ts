@@ -2,6 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
 import type { Page } from "@playwright/test";
 
@@ -422,7 +423,7 @@ test("terminal.shared-selection-is-submitted-to-the-viewer-not-the-owner", {
       exact: true,
     }).click();
     await state.queue(["Shared terminal received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, viewer.id)).filter((row) =>
         row.info.role === "user"

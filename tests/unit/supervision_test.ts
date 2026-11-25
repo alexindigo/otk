@@ -149,20 +149,3 @@ Deno.test("unacknowledged helper failure owns needs-you lamps and the project ro
   assertEquals(owner.session(row, seen).state, "none");
   assertEquals(summaries.values.get("/fixture")?.status, "none");
 });
-Deno.test("terminal dependencies stay independent of freshness and session lamps", () => {
-  const owner = new SessionSupervision();
-  let running = 2;
-  owner.dependencies(() => running);
-  owner.freshness(false);
-  const value = owner.session(entry(), 0);
-  assertEquals(value.state, "none");
-  assertEquals(value.dependencies, { running: 2 });
-  assertEquals(owner.status(value), "none");
-  assertEquals(
-    owner.session({ ...entry(), deleted: { at: 1, how: "provider" } }, 0)
-      .dependencies,
-    undefined,
-  );
-  running = 0;
-  assertEquals(owner.session(entry(), 0).dependencies, undefined);
-});

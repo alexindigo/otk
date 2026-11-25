@@ -610,7 +610,7 @@ export class InboxFeature implements FrameSource {
     source: Pick<TerminalTracking, "counts" | "listen" | "owners">,
   ): void {
     this.#terminalSource = source;
-    this.supervision.dependencies((id) => source.counts.sessions.get(id) ?? 0);
+    this.states.terminalOwners((id) => source.counts.sessions.get(id) ?? 0);
     const changed = (change: TerminalChange) => {
       if (this.#closed || this.#dependencyAbort.signal.aborted) return;
       if (change.changedCheckouts.length) {
@@ -1270,13 +1270,15 @@ export class InboxFeature implements FrameSource {
       !entry.deleted && terminal &&
       terminal > (this.#finishes.get(entry.id) ?? 0)
     ) s.finishes.observe(entry.id, terminal, tx);
-    this.states.session(
+    const supervision = this.states.session(
       entry,
       this.#seen.get(this.user)?.get(entry.id) ?? 0,
       this.#finishes.get(entry.id),
     );
-    const state = this.states.get(entityKey("session", entry.id))?.state;
-    const active = state === "working" || state === "blocked";
+    // Persist activity policy from supervision, not the temporary entity lamp
+    // (which also includes received operations such as closing a terminal).
+    const active = supervision.state === "working" ||
+      supervision.state === "needsYou";
     const unseen = [...new Set([...this.#seen.keys(), this.user])].some((
       user,
     ) => this.#unseen(entry.id, user));
