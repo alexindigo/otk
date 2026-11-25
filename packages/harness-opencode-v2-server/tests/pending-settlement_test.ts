@@ -1,9 +1,76 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import type { ContentOp } from "@otk/protocol";
+import { OperationFailure } from "@otk/protocol";
 import type { V2Client } from "../client.ts";
 import { V2Pending } from "../pending.ts";
 import { emptyContent, reduce } from "@otk/client";
+
+for (const kind of ["permission", "form", "question"] as const) {
+  Deno.test(`a retired ${kind} route does not confirm settlement while a reply is in flight`, async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let dispatches = 0;
+    const client = {
+      effect: async () => {
+        dispatches++;
+        entered.resolve();
+        await release.promise;
+      },
+    } as unknown as V2Client;
+    const owner = new V2Pending(() => client, () => undefined, () => {});
+    const location = { directory: "/repo" };
+    const permission = {
+      id: "req",
+      sessionID: "ses_one",
+      action: "read",
+      resources: ["README.md"],
+    };
+    const form = {
+      id: "req",
+      sessionID: "ses_one",
+      metadata: { kind: "question" },
+      fields: [{ key: "q0", type: "string" }],
+    };
+    const accept = () =>
+      kind === "permission"
+        ? owner.acceptPermission(location, permission)
+        : owner.acceptForm(location, form);
+    const reply = () =>
+      kind === "permission"
+        ? owner.permissions.replyPermission({
+          sessionID: "opcv2-ses_one",
+          requestID: "req",
+          reply: "once",
+        })
+        : kind === "form"
+        ? owner.forms.reply("req", { q0: "yes" })
+        : owner.questions.answerQuestion("req", [["yes"]]);
+    assertEquals(accept(), true);
+    const inFlight = reply();
+    try {
+      await entered.promise;
+      owner.retainLocations(new Set());
+      const error = await assertRejects(reply, OperationFailure);
+      assertEquals(error.outcome, "unavailable");
+      assertEquals(accept(), true, "Native can rediscover the same request");
+    } finally {
+      release.resolve();
+      await inFlight;
+    }
+    assertEquals(
+      owner.settled(kind === "permission" ? kind : "form", "req"),
+      true,
+    );
+    assertEquals(
+      accept(),
+      false,
+      "Stale replay cannot undo confirmed settlement",
+    );
+    await reply();
+    assertEquals(dispatches, 1);
+  });
+}
 
 Deno.test("a permission retirement cannot expire behind newer request settlements", async () => {
   const owner = new V2Pending(() => undefined!, () => undefined, () => {});

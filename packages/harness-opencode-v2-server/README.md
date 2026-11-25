@@ -81,10 +81,11 @@ acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
 Permission-not-found/already-settled tags and definite permission HTTP 404s
-retire the same pending identity as settled elsewhere. Later callers do not
-dispatch retired or unknown identities. Settlement barriers last for the pending
-owner's lifetime; stale inventories and events cannot resurrect them after a
-fixed number of newer settlements.
+retire the same pending identity as settled elsewhere. A later reply is a no-op
+only for a confirmed settlement. If no route is available and settlement is
+unproven, the reply fails without dispatch. Settlement barriers last for the
+pending owner's lifetime; stale inventories and events cannot resurrect them
+after a fixed number of newer settlements.
 
 Each successful kind/location inventory owns only its own absence facts. Failed
 inventories retain known unresolved identities and payloads for still-loaded

@@ -84,7 +84,9 @@ export class V2Pending {
       },
       replyPermission: async (input, operation) => {
         const pending = this.#permissions.get(input.requestID);
-        if (!pending) return; // Retirement owns dispatch, including late callers.
+        if (!pending) {
+          return this.#requireSettlement("permission", input.requestID);
+        }
         // The caller may display a root, but the request's asking identity is authoritative.
         const asking = pending.request.sessionID;
         // In native V2, feedback converts a decline into a model correction.
@@ -155,7 +157,7 @@ export class V2Pending {
       },
       answerQuestion: async (id, answers, operation) => {
         const pending = this.#forms.get(id);
-        if (!pending?.question) return;
+        if (!pending?.question) return this.#requireSettlement("form", id);
         if (answers === undefined) {
           return await this.forms.cancel(id, undefined, operation);
         }
@@ -245,7 +247,7 @@ export class V2Pending {
     operation?: import("@otk/protocol").OperationContext,
   ): Promise<void> {
     const pending = this.#forms.get(id);
-    if (!pending) return; // Already converged by a successful inventory or settlement event.
+    if (!pending) return this.#requireSettlement("form", id);
     const target = { sessionID: pending.native, formID: id };
     const options = pending.native === "global"
       ? {
@@ -282,6 +284,17 @@ export class V2Pending {
       if (rows.data.some((row) => row.id === id)) throw error;
     }
     this.settle("form", id, pending.native);
+  }
+  #requireSettlement(kind: "permission" | "form", id: string): void {
+    if (this.settled(kind, id)) return;
+    const reason =
+      "The pending request is not currently available. No reply was sent.";
+    throw new OperationFailure(
+      "unavailable",
+      "pending-input.unavailable",
+      new Error(reason),
+      { reason },
+    );
   }
   /** Explicit native settlement does not depend on the availability of another inventory. */
   settle(kind: "permission" | "form", id: string, native: string): void {
