@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { wire } from "../../fixtures/wire.ts";
+import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/composer.ts";
 import type { PromptInput } from "@otk/protocol";
+import { expectPrimaryBlocked, send } from "../../pages/primary-action.ts";
 
 for (
   const kind of [
@@ -206,3 +207,54 @@ for (
     );
   });
 }
+
+test.describe("input-referenced catalog", () => {
+  test.use({ profile: "composer-commands" });
+  test("composer.catalog-referenced-command-waits-for-choice", {
+    tag: ["@composer", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Referenced command readiness",
+    });
+    const frames = await wire(page);
+    frames.hold((frame) =>
+      frame.t === "catalog.chunk" && frame.kind === "commands"
+    );
+    try {
+      await openSession(state, page, session.id);
+      await expect.poll(() => frames.held.length).toBeGreaterThan(0);
+      const text = "/probe held catalog choice";
+      // The argument bypasses autocomplete activation: this is a real Send
+      // whose own input references the held command catalog (decision 34).
+      await prompt(page).fill(text);
+      await send(page).click();
+      await expect(page.locator(".otk-prompt")).toHaveAttribute(
+        "aria-description",
+        "Preparing or sending prompt...",
+      );
+      await expectPrimaryBlocked(send(page), "Sending");
+      await expect(prompt(page)).toHaveValue(text);
+      const submissions = () =>
+        frames.sent.filter(({ frame }) =>
+          ["session.prompt", "session.command", "session.shell"].includes(
+            frame.method ?? "",
+          )
+        );
+      expect(submissions()).toHaveLength(0);
+      await state.queue(["Referenced command delivered."]);
+      frames.release();
+      await expect(page.locator("[data-role=assistant] .otk-text"))
+        .toHaveText("Referenced command delivered.");
+      await expect(prompt(page)).toHaveValue("");
+      expect(submissions()).toHaveLength(1);
+      expect(submissions()[0].frame.method).toBe("session.command");
+      expect(submissions()[0].frame.params).toMatchObject({
+        sessionID: session.id,
+        command: "probe",
+        arguments: "held catalog choice",
+      });
+    } finally {
+      frames.release();
+    }
+  });
+});

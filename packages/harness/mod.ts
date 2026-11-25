@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export type { PluginStorage } from "./plugin-storage.ts";
+export { CheckoutRepositories } from "./checkout-repositories.ts";
 export { catalogFileCodec, catalogModelCodec } from "./catalog-reads.ts";
 export type * from "./catalog-reads.ts";
 export { arrayReadCodec } from "./provider-reads.ts";

@@ -5,6 +5,7 @@ import {
   type ProjectSummary,
   type ProjectTopology,
   ROLLUP_PRIORITY,
+  UNKNOWN_REPOSITORY,
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
 import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
@@ -129,7 +130,11 @@ export class ProjectSummaries {
       const leaves = this.#leaves.get(topology.canonicalRoot) ?? new Set();
       leaves.add(topology.leafDirectory);
       this.#leaves.set(topology.canonicalRoot, leaves);
-      if (!this.#topology.has(topology.canonicalRoot)) {
+      // An unknown repository is a placement, never a fabricated project row.
+      if (
+        topology.canonicalRoot !== UNKNOWN_REPOSITORY &&
+        !this.#topology.has(topology.canonicalRoot)
+      ) {
         this.#topology.set(topology.canonicalRoot, {
           ...topology,
           leafDirectory: topology.canonicalRoot,

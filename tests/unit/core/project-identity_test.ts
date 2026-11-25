@@ -3,6 +3,177 @@ import { assertEquals } from "@std/assert";
 import type { ProjectSeed } from "@otk/harness";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 
+type Evidence = NonNullable<
+  NonNullable<ProjectSeed["identities"]>[number]["repository"]
+>;
+const UNKNOWN = "otk:unknown-repository";
+/** A native that claims a removed checkout is its own, still present, project. */
+function selfClaim(
+  directory: string,
+  repoID: string,
+  repository?: Omit<Evidence, "checkout">,
+): ProjectSeed {
+  return {
+    directory,
+    sessionCount: 2,
+    lastActivity: 1,
+    authority: "current",
+    identities: [{
+      source: "native",
+      repoID,
+      canonicalRoot: directory,
+      recordedRoot: directory,
+      inventory: [{ directory, kind: "checkout" }],
+      ...(repository
+        ? { repository: { checkout: directory, ...repository } }
+        : {}),
+    }],
+  };
+}
+const gone = (
+  evidence: Evidence["evidence"],
+  root: string | null = null,
+) => ({ root, present: false, evidence });
+
+Deno.test("a discovered repository survives removal, restart and the native's stale self-claim", () => {
+  let rows: import("@otk/store").CheckoutRecord[] = [];
+  const history = { list: () => rows, save: () => {} };
+  const owner = new ProjectIdentity(history);
+  owner.learn([selfClaim("/repo.review", "obsolete", {
+    root: "/repo",
+    present: true,
+    evidence: "git",
+  })]);
+  assertEquals(owner.topology("/repo.review")?.parentDirectory, "/repo");
+  assertEquals(owner.archived("/repo.review"), false);
+  rows = owner.records();
+  const cold = new ProjectIdentity(history);
+  // Before new evidence arrives the recorded repository already places it.
+  assertEquals(cold.topology("/repo.review")?.canonicalRoot, "/repo");
+  cold.learn([selfClaim("/repo.review", "obsolete")]);
+  assertEquals(cold.topology("/repo.review")?.canonicalRoot, "/repo");
+  // Removed and unregistered: the recorded repository is not re-derived.
+  cold.learn([selfClaim("/repo.review", "obsolete", gone("none"))]);
+  assertEquals(cold.topology("/repo.review")?.parentDirectory, "/repo");
+  assertEquals(cold.availability("/repo.review"), "removed");
+  assertEquals(cold.archived("/repo.review"), true);
+  assertEquals(cold.memberships("/repo.review")[0].repoID, "obsolete");
+});
+
+Deno.test("already lost affiliation is recovered from retained Git registration first", () => {
+  const owner = new ProjectIdentity();
+  owner.learn([selfClaim("/repo.review", "obsolete")]);
+  assertEquals(owner.topology("/repo.review")?.parentDirectory, undefined);
+  owner.learn([
+    selfClaim("/repo.review", "obsolete", gone("worktree-metadata", "/repo")),
+  ]);
+  assertEquals(owner.topology("/repo.review")?.parentDirectory, "/repo");
+  assertEquals(owner.archived("/repo.review"), true);
+  assertEquals(owner.records()[0].repository, "/repo");
+});
+
+Deno.test("stored affiliation outranks naming, and naming applies only as a last resort", () => {
+  const owner = new ProjectIdentity();
+  const claimed: ProjectSeed = {
+    directory: "/other.run",
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    identities: [{
+      source: "native",
+      repoID: "repo",
+      canonicalRoot: "/repo",
+      recordedRoot: "/other.run",
+      inventory: [{ directory: "/other.run", kind: "worktree" }],
+    }],
+  };
+  owner.learn([claimed]);
+  owner.learn([{
+    ...claimed,
+    identities: [{
+      ...claimed.identities![0],
+      repository: { checkout: "/other.run", ...gone("name", "/other") },
+    }],
+  }]);
+  assertEquals(owner.topology("/other.run")?.canonicalRoot, "/repo");
+  const named = new ProjectIdentity();
+  named.learn([selfClaim("/repo.review", "obsolete", gone("name", "/repo"))]);
+  assertEquals(named.topology("/repo.review")?.parentDirectory, "/repo");
+  assertEquals(named.archived("/repo.review"), true);
+});
+
+Deno.test("an undeterminable removed checkout is placed under unknown repository, never as a project", () => {
+  const owner = new ProjectIdentity();
+  owner.learn([selfClaim("/lost", "lost", gone("none"))]);
+  const topology = owner.topology("/lost")!;
+  assertEquals(topology.canonicalRoot, UNKNOWN);
+  assertEquals(topology.parentDirectory, undefined);
+  assertEquals(owner.archived("/lost"), true);
+  // Unknown is not final: later recovery evidence still resolves it.
+  owner.learn([selfClaim("/lost", "lost", gone("name", "/lo"))]);
+  assertEquals(owner.topology("/lost")?.canonicalRoot, "/lo");
+});
+
+Deno.test("a later batch's stale native inventory does not revive a removed checkout", () => {
+  const owner = new ProjectIdentity();
+  const root = (inventory: string[]): ProjectSeed => ({
+    directory: "/repo",
+    sessionCount: 1,
+    lastActivity: 1,
+    authority: "current",
+    identities: [{
+      source: "native",
+      repoID: "repo",
+      canonicalRoot: "/repo",
+      recordedRoot: "/repo",
+      inventory: inventory.map((directory) => ({
+        directory,
+        kind: directory === "/repo" ? "checkout" : "worktree",
+      })),
+    }],
+  });
+  const stale = ["/repo", "/repo.a"];
+  owner.learn([{
+    ...root(stale),
+    directory: "/repo.a",
+    identities: [{
+      ...root(stale).identities![0],
+      recordedRoot: "/repo.a",
+      repository: {
+        checkout: "/repo.a",
+        ...gone("worktree-metadata", "/repo"),
+      },
+    }],
+  }]);
+  assertEquals(owner.availability("/repo.a"), "removed");
+  owner.learn([root(stale)]);
+  assertEquals(owner.availability("/repo.a"), "removed");
+  assertEquals(owner.archived("/repo.a"), true);
+});
+
+Deno.test("checkouts of one repository share its topology across native project IDs", () => {
+  const owner = new ProjectIdentity();
+  owner.learn([
+    selfClaim("/repo", "main", {
+      root: "/repo",
+      present: true,
+      evidence: "git",
+    }),
+    selfClaim("/repo.a", "other", {
+      root: "/repo",
+      present: true,
+      evidence: "git",
+    }),
+  ]);
+  assertEquals(owner.topology("/repo.a"), {
+    repoID: "main",
+    canonicalRoot: "/repo",
+    leafDirectory: "/repo.a",
+    parentDirectory: "/repo",
+  });
+  assertEquals(owner.topology("/repo")?.repoID, "main");
+});
+
 Deno.test("removal requires recorded worktree kind and current inventory, not unequal paths", () => {
   for (const kind of ["checkout", "worktree", "unknown"] as const) {
     const owner = new ProjectIdentity();

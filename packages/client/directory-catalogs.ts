@@ -196,10 +196,19 @@ export function createDirectoryCatalogs(o: {
       if (current && current.revision > (old?.revision ?? -1)) {
         r.staging.delete(kind);
       }
-      if (current && current.value === undefined && old?.value !== undefined) {
+      if (current && current.value === undefined) {
+        // Native readiness and delivery of a complete value are different
+        // boundaries. A header cannot admit a consumer before its chunks, or
+        // certify the last-good value as the replacement's complete revision.
+        const complete = previous?.generation === catalog.generation &&
+          old?.state === "ready" && old.revision === current.revision &&
+          old.value !== undefined;
         (values as Record<string, CatalogValue<unknown>>)[kind] = {
           ...current,
-          value: old.value,
+          state: current.state === "ready" && !complete
+            ? "digesting"
+            : current.state,
+          ...(old?.value === undefined ? {} : { value: old.value }),
         };
       }
     }

@@ -29,9 +29,9 @@ export async function nativeStates({
       (await state.observe<{ native: { automaticReplying: boolean } }>()).native
         .automaticReplying
     ).toBe(true);
-    await expect(page.locator(".otk-auto-approving")).toHaveText(
-      "Auto-approving...",
-    );
+    // 9937b571 keeps policy on the shield and retained records, not a transient
+    // composer paragraph. The held native reply and shield below still prove it.
+    await expect(page.locator(".otk-auto-approving")).toHaveCount(0);
     for (const theme of themes) {
       await paint(theme);
       await expect(
@@ -68,7 +68,7 @@ export async function nativeStates({
       .toContainText(
         "Quiet automatic reply completed",
       );
-    await page.locator('[data-panel-view="activity"]').click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
     await expect(page.locator(".otk-permission-activity")).toContainText(
       "quiet-auto.txt",
     );
@@ -95,7 +95,7 @@ export async function nativeStates({
     }
     // Sidebar measurements own the Sessions projection, never the Activity
     // projection deliberately left by the persisted activity scenes above.
-    await page.locator('[data-panel-view="sessions"]').click();
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.locator(`[data-session="${native.automaticID}"]`))
       .toBeVisible();
     for (const enabled of [false, true]) {

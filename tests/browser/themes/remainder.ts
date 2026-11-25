@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import {
@@ -11,6 +11,7 @@ import { labels } from "./labels.ts";
 import { fixedContent } from "./content.ts";
 import { readyMenuBox } from "../pages/menus.ts";
 import { expandedFailure } from "../pages/failure-geometry.ts";
+import { revealAcquired } from "../pages/transcript.ts";
 interface Inputs {
   state: TestState;
   page: Page;
@@ -24,6 +25,7 @@ interface Checkboxes {
   controls: {
     width: number;
     height: number;
+    line: number;
     padding: number;
     right: number;
     parentRight: number;
@@ -58,6 +60,13 @@ const bounds = async (page: Page, selector: string) =>
     const r = el.getBoundingClientRect();
     return [r.x, r.y, r.width, r.height];
   });
+/** Layout stays relative to its owner while native input may scroll the viewport. */
+const ownedBounds = (locator: Locator, owner: string) =>
+  locator.evaluate((el, owner) => {
+    const r = el.getBoundingClientRect();
+    const origin = el.closest(owner)!.getBoundingClientRect();
+    return [r.x - origin.x, r.y - origin.y, r.width, r.height];
+  }, owner);
 export async function remainder(
   { state, page, themes, scenes, content, paint, shot }: Inputs,
 ) {
@@ -278,9 +287,17 @@ export async function remainder(
               row = el.closest("[data-project]")!.getBoundingClientRect(),
               action = el.closest("[data-project]")!.querySelector(
                 ".otk-project-open",
-              )!.getBoundingClientRect();
-            return r.top >= action.bottom && r.bottom <= row.bottom &&
-              r.left >= action.left && r.right <= row.right;
+              )!.getBoundingClientRect(),
+              track = el.closest(".otk-sidebar-row-feedback")!
+                .getBoundingClientRect(),
+              grid = el.closest(".otk-sidebar-row-grid")!
+                .getBoundingClientRect();
+            // SidebarRow owns one full-width feedback track below its action.
+            return track.top >= action.bottom && track.bottom <= row.bottom &&
+              Math.abs(track.left - grid.left) <= .5 &&
+              Math.abs(track.right - grid.right) <= .5 &&
+              r.top >= track.top && r.bottom <= track.bottom &&
+              r.left >= track.left && r.right <= track.right;
           },
         ),
       ).toBe(true);
@@ -297,18 +314,25 @@ export async function remainder(
       rightView: "sessions",
     });
     await page.goto(state.url + "/#/local/" + content.sessionID);
+    const promptMessage = '[data-message="prompt"]';
+    const replyMessage = '[data-message="reading"]';
+    await revealAcquired(page, replyMessage);
     await page.locator(
       "[data-role=assistant] .otk-reply-agent .otk-entity-pill",
     ).first()
       .scrollIntoViewIfNeeded();
+    await revealAcquired(page, replyMessage + " .otk-message-footer");
     await page.mouse.move(1, 1);
     const reply = page.locator("[data-role=assistant]").first();
     await expect(reply.locator(".otk-message-actions")).toHaveCSS(
       "opacity",
       "1",
     );
-    const fixed = await bounds(page, "[data-role=assistant]");
-    await reply.locator(".otk-message-content").hover();
+    // Pointer actionability may scroll the viewport. Compare the article in its
+    // owning flow so that exact equality measures layout, not reader position.
+    const replyBounds = () => ownedBounds(reply, ".otk-message-flow");
+    const fixed = await replyBounds();
+    await reply.locator(".otk-message-footer").hover();
     expect(
       await reply.locator(".otk-message-footer").evaluate((footer) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
@@ -325,16 +349,18 @@ export async function remainder(
       "opacity",
       "1",
     );
-    expect(await bounds(page, "[data-role=assistant]")).toEqual(fixed);
+    expect(await replyBounds()).toEqual(fixed);
     for (const theme of themes) {
       await paint(theme);
+      await revealAcquired(page, replyMessage + " .otk-code pre");
       const selectors = [
         "html",
         ".otk-project-name",
         ".otk-text",
         ".otk-code pre",
         ".otk-prompt textarea",
-        ".otk-server-connection",
+        // The visit label borrows ChromeMeta; connection frames aren't metadata.
+        ".otk-project-visit",
       ];
       const read = () =>
         page.evaluate((selectors) =>
@@ -386,6 +412,7 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
+      await revealAcquired(page, replyMessage + " .otk-message-footer time");
       const clock = reply.locator(".otk-message-footer time").first();
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
@@ -415,6 +442,11 @@ export async function remainder(
       expect(Math.abs(g.width - rect!.width)).toBeLessThan(.5);
       await shot(`timestamps-hover-${theme.id}`);
       for (const role of ["user", "assistant"]) {
+        await revealAcquired(
+          page,
+          (role === "user" ? promptMessage : replyMessage) +
+            " .otk-message-footer time",
+        );
         const created = page.locator(
           `[data-role=${role}] .otk-message-footer time`,
         )
@@ -426,6 +458,7 @@ export async function remainder(
         await page.mouse.move(1, 1);
         await expect(created).toHaveCSS("visibility", "visible");
       }
+      await revealAcquired(page, promptMessage + " .otk-message-footer time");
       const ink = await page.evaluate(() => {
         const canvas = document.createElement("canvas");
         canvas.width = canvas.height = 1;
@@ -452,8 +485,9 @@ export async function remainder(
       });
       if (theme.id === "otk-dark") expect(ink[0]).toBeLessThan(ink[1]);
       else expect(ink[0]).toBeGreaterThan(ink[1]);
+      await revealAcquired(page, replyMessage + " .otk-message-footer");
       const fork = reply.locator('[data-message-command="reply.fork"]');
-      const forkBox = await fork.boundingBox();
+      const forkBox = await ownedBounds(fork, ".otk-message-footer");
       await page.keyboard.press("Tab");
       for (const action of ["focus", "blur", "hover", "leave"]) {
         const control = reply.locator('[data-message-command="reply.copy"]');
@@ -474,24 +508,25 @@ export async function remainder(
             getComputedStyle(el).visibility === "visible"
           )
         ).toBe(true);
-        expect(await fork.boundingBox()).toEqual(forkBox);
+        expect(await ownedBounds(fork, ".otk-message-footer")).toEqual(forkBox);
       }
+      await revealAcquired(page, promptMessage);
       const copy = page.locator(
         '[data-role=user] [data-message-command="prompt.copy"]',
       ).first();
       await page.locator(".otk-user-bubble").first().scrollIntoViewIfNeeded();
-      const slot = await copy.boundingBox();
+      const slot = await ownedBounds(copy, ".otk-message-footer");
       await page.locator(".otk-user-bubble").first().focus();
       await expect(
         page.locator("[data-role=user] .otk-message-actions").first(),
       ).toHaveCSS("opacity", "1");
-      expect(await copy.boundingBox()).toEqual(slot);
+      expect(await ownedBounds(copy, ".otk-message-footer")).toEqual(slot);
       await page.context().grantPermissions([
         "clipboard-read",
         "clipboard-write",
       ]);
       await copy.click();
-      expect(await copy.boundingBox()).toEqual(slot);
+      expect(await ownedBounds(copy, ".otk-message-footer")).toEqual(slot);
       await state.product("prefs.set", { key: "timestamps", value: true });
       await expect.poll(() =>
         page.locator(".otk-message-footer time").evaluateAll((els) =>
@@ -856,21 +891,20 @@ export async function remainder(
       await paint(theme);
       await page.locator(".otk-display-menu > button").click();
       const g = await page.evaluate<Checkboxes>(
-        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:(${taskMarkerGeometry})()};})()`,
+        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),label=el.closest('label'),p=label.getBoundingClientRect();return {width:r.width,height:r.height,line:parseFloat(getComputedStyle(label).lineHeight),padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),t=el.closest('label').querySelector('.otk-control-label').getBoundingClientRect(),p=el.closest('label').getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu .otk-select')].map(el=>{const trigger=el.querySelector('button'),r=trigger.getBoundingClientRect(),row=el.closest('.otk-preference-control'),t=row.querySelector(':scope > .otk-control-label').getBoundingClientRect(),p=row.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(trigger).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.querySelector('input[type=hidden]').value};}),tasks:(${taskMarkerGeometry})()};})()`,
       );
       expect(g.controls.length).toBe(g.labels.length);
       expect(g.labels.length).toBeGreaterThan(0);
       for (const c of g.controls) {
         expect(c.width).toBeGreaterThan(0);
-        expect(c.width).toBeLessThanOrEqual(18);
+        expect(c.width).toBe(c.line);
         expect(c.height).toBeGreaterThan(0);
-        expect(c.height).toBeLessThanOrEqual(18);
+        expect(c.height).toBe(c.line);
         expect(c.padding).toBe(0);
         expect(c.right).toBeLessThanOrEqual(c.parentRight);
       }
       for (const l of g.labels) {
-        expect(l.gap).toBeGreaterThanOrEqual(9.05);
-        expect(l.gap).toBeLessThanOrEqual(15);
+        expect(Math.abs(l.gap - 8)).toBeLessThanOrEqual(.05);
         expect(l.centers).toBeLessThanOrEqual(.5);
         expect(l.right).toBeLessThanOrEqual(l.parentRight + .5);
       }
@@ -932,12 +966,13 @@ export async function remainder(
           name: string;
           width: number;
           height: number;
+          line: number;
           padding: number;
           gap: number;
           centers: number;
           fits: boolean;
         }[]
-      >(`(()=>{const textBounds=${labelTextBounds};return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=textBounds(el),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),fits:s.right<=p.right+.5}})})()`);
+      >(`(()=>{return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const label=el.closest('label'),r=el.getBoundingClientRect(),s=label.querySelector('.otk-control-label').getBoundingClientRect(),p=label.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,line:parseFloat(getComputedStyle(label).lineHeight),padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),fits:s.right<=p.right+.5}})})()`);
       expect(notifications.map((c) => c.name)).toEqual([
         "notify.toast",
         "notify.os",
@@ -946,12 +981,11 @@ export async function remainder(
       ]);
       for (const c of notifications) {
         expect(c.width).toBeGreaterThan(0);
-        expect(c.width).toBeLessThanOrEqual(18);
+        expect(c.width).toBe(c.line);
         expect(c.height).toBeGreaterThan(0);
-        expect(c.height).toBeLessThanOrEqual(18);
+        expect(c.height).toBe(c.line);
         expect(c.padding).toBe(0);
-        expect(c.gap).toBeGreaterThanOrEqual(9.7);
-        expect(c.gap).toBeLessThanOrEqual(15);
+        expect(Math.abs(c.gap - 8)).toBeLessThanOrEqual(.05);
         expect(c.centers).toBeLessThanOrEqual(.5);
         expect(c.fits).toBe(true);
       }

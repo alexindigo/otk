@@ -28,6 +28,10 @@ import { bounded, resources, tempDir, test } from "../../support/resources.ts";
 import { ownedProcess } from "../../support/process.ts";
 import { waitFor } from "../../support/opencode.ts";
 import {
+  type ReleasedPort,
+  releasedPort,
+} from "../../support/listener-ownership.ts";
+import {
   type Command,
   type Commands,
   request,
@@ -390,6 +394,7 @@ v1Test(
       await resources().observe(
         "snapshot controller ownership proof",
         async () => {
+          const ports: ReleasedPort[] = [];
           for (const stack of stacks) {
             for (const pid of stack.pids) {
               const result = await new Deno.Command("/usr/bin/kill", {
@@ -399,24 +404,13 @@ v1Test(
               assert(!result.success, `Snapshot-owned PID survived: ${pid}`);
             }
             for (const port of stack.ports) {
-              try {
-                const connection = await Deno.connect({
-                  hostname: "127.0.0.1",
-                  port,
-                });
-                connection.close();
-                throw new Error(`Snapshot-owned port survived: ${port}`);
-              } catch (error) {
-                if (
-                  !(error instanceof Deno.errors.ConnectionRefused)
-                ) throw error;
-              }
+              ports.push(await releasedPort(port, unit));
             }
           }
           await Deno.writeTextFile(
             join(root, "controller-cleanup.json"),
             JSON.stringify(
-              { unit, stacks, processesGone: true, portsClosed: true },
+              { unit, stacks, processesGone: true, ports, portsReleased: true },
               null,
               2,
             ),

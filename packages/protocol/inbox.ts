@@ -72,9 +72,15 @@ export function urgentStatus(
 ): ProjectStatus {
   return URGENCY_PRIORITY.find((state) => states.includes(state)) ?? "none";
 }
+/**
+ * Reserved `canonicalRoot` of a removed checkout whose repository cannot be
+ * determined. Not a path, so it can never name a project row.
+ */
+export const UNKNOWN_REPOSITORY = "otk:unknown-repository";
 /** Connection-local repository identity; checkout roots are explicit native facts. */
 export interface ProjectTopology {
   repoID: string;
+  /** The checkout's repository root, or `UNKNOWN_REPOSITORY`. */
   canonicalRoot: string;
   leafDirectory: string;
   /** Absent for the canonical checkout's direct leaf. */
