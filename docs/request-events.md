@@ -63,7 +63,10 @@ OTK and stock opencode do not share a transaction. An unconfirmed native effect
 can remain **Checking whether this finished** until identity-specific evidence
 establishes an outcome. Generic idle activity, elapsed time, a matching title or
 the disappearance of an approval is not evidence that this particular action
-succeeded or failed. There is no repeat-effect Retry action for this state.
+succeeded or failed. There is no repeat-effect Retry action for this state. When
+a newer durable intent makes mutable evidence ambiguous, the older unconfirmed
+change closes with an unknown outcome, not success or a retry. An
+already-confirmed receipt stays authoritative.
 
 Prompt submission completes when the native async endpoint confirms it was sent;
 the agent's subsequent reply has its own lifecycle. Shell, command and
