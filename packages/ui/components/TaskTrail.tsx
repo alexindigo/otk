@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { Show } from "solid-js";
+import { type Element, Show } from "solid-js";
 import {
   type ActionControl,
   type ContextTarget,
@@ -11,10 +11,9 @@ import {
 import type { SessionContextTarget } from "../features/session-context.ts";
 import OverflowRow from "./OverflowRow.tsx";
 import StatusLight from "./StatusLight.tsx";
-import SelectionContent from "./SelectionContent.tsx";
 import TitleEditor from "./TitleEditor.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
-import { selection } from "./selection.ts";
+import { location } from "./selection.ts";
 import { contextTarget } from "./context-target.ts";
 import ActionButton from "./ActionButton.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -63,6 +62,44 @@ export default function TaskTrail(props: {
       </span>
     </Show>
   );
+  const place = (row: TrailCrumb) =>
+    location({
+      class: "otk-trail-session otk-session-crumb",
+      current: row.id === props.selected,
+    });
+  const crumbContent = (row: () => TrailCrumb, title: Element) => (
+    <>
+      <StatusLight small state={row().status} />
+      {title}
+    </>
+  );
+  // Keep reads inside the mounted label: the fit snapshot can refresh during
+  // a pointer gesture without replacing the browser's pressed text node.
+  const label = (
+    row: () => TrailCrumb,
+    compact: () => boolean,
+    measure = false,
+  ) =>
+    crumbContent(
+      row,
+      <span class="otk-trail-title otk-crumb-title">
+        <Show when={compact()} fallback={props.title(row().id)}>
+          {compactTitle(props.title(row().id), measure)}
+        </Show>
+      </span>,
+    );
+  const measure = (row: TrailCrumb & { first: boolean }, compact: boolean) => {
+    const readRow = () => row;
+    const readCompact = () => compact;
+    return (
+      <span class="otk-trail-measure">
+        {separator(row.first)}
+        <span class={place(row).class}>
+          {label(readRow, readCompact, true)}
+        </span>
+      </span>
+    );
+  };
   return (
     <div class="otk-trail">
       <OverflowRow<TrailCrumb & { key: string; first: boolean }>
@@ -73,48 +110,13 @@ export default function TaskTrail(props: {
         uncompacted={rows().filter((row) => editing(row.id)).map((row) =>
           row.id
         )}
-        measure={(row: TrailCrumb & { first: boolean }) => (
-          <span class="otk-trail-measure">
-            {separator(row.first)}
-            <span
-              class="otk-trail-session otk-selection-item"
-              data-otk-selection="horizontal"
-            >
-              <SelectionContent
-                leading={<StatusLight small state={row.status} />}
-              >
-                {props.title(row.id)}
-              </SelectionContent>
-            </span>
-          </span>
-        )}
-        compactMeasure={(row: TrailCrumb & { first: boolean }) => (
-          <span class="otk-trail-measure">
-            {separator(row.first)}
-            <span
-              class="otk-trail-session otk-selection-item"
-              data-otk-selection="horizontal"
-            >
-              <SelectionContent
-                leading={<StatusLight small state={row.status} />}
-              >
-                {compactTitle(props.title(row.id), true)}
-              </SelectionContent>
-            </span>
-          </span>
-        )}
+        measure={(row) => measure(row, false)}
+        compactMeasure={(row) => measure(row, true)}
         more={() => null}
       >
         {(row: () => TrailCrumb & { key: string; first: boolean }, compact) => {
           const target = contextTarget(() => props.target(row().id));
-          const current = () =>
-            selection({
-              class: "otk-trail-session otk-session-crumb",
-              kind: "current",
-              selected: row().id === props.selected,
-            });
           const attributes = () => ({
-            "data-otk-selection": "horizontal",
             "data-crumb": row().id,
             "data-depth": row().depth,
             "data-helper": String(row().helper),
@@ -122,9 +124,8 @@ export default function TaskTrail(props: {
           });
           const native = nativeAttributes(() => ({
             ...attributes(),
-            ...current(),
+            ...place(row()),
           }));
-          const lamp = () => <StatusLight small state={row().status} />;
           return (
             <span class="otk-trail-link">
               {separator(row().first)}
@@ -138,18 +139,12 @@ export default function TaskTrail(props: {
                       sessionID: row().id,
                     })}
                     ref={target}
-                    selection={current()}
+                    location={place(row())}
                     attributes={attributes()}
                     title={props.tooltip(row().id)}
                     label={props.title(row().id)}
                   >
-                    <SelectionContent leading={lamp()}>
-                      <span class="otk-trail-title otk-crumb-title">
-                        <Show when={compact()} fallback={props.title(row().id)}>
-                          {compactTitle(props.title(row().id))}
-                        </Show>
-                      </span>
-                    </SelectionContent>
+                    {label(row, compact)}
                   </ActionButton>
                 }
               >
@@ -159,12 +154,13 @@ export default function TaskTrail(props: {
                   title={props.tooltip(row().id)}
                   aria-label={props.title(row().id)}
                 >
-                  <SelectionContent leading={lamp()}>
+                  {crumbContent(
+                    row,
                     <TitleEditor
                       owner={props.rename!}
                       feedbackID={props.feedbackID}
-                    />
-                  </SelectionContent>
+                    />,
+                  )}
                 </div>
               </Show>
             </span>
