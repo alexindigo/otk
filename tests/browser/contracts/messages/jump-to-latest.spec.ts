@@ -312,7 +312,9 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
-  await expect(subagents(page)).toHaveText("1 subagent");
+  await expect(subagents(page)).toHaveAccessibleName(
+    "Subagents: 1 not returned",
+  );
   const activity = page.locator(".otk-composer-activity-slot");
   await expect(activity).toBeVisible();
   const rect = await pane.boundingBox();

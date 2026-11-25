@@ -290,8 +290,8 @@ test(
       '.otk-context-menu [data-context-command="session.rename"]',
     ).click();
     await expect(page.locator(".otk-title-editor input")).toBeFocused();
-    const more = page.getByRole("button", { name: "Subagents", exact: true });
-    await expect(more).toHaveText("1 subagent");
+    const more = page.getByRole("button", { name: /^Subagents:/ });
+    await expect(more).toHaveAccessibleName("Subagents: 1 running");
     await expect(more).toHaveAttribute("aria-expanded", "false");
     // Join font/layout settlement on the actual gesture target, after the
     // neighboring digest consumer has painted its authoritative value.

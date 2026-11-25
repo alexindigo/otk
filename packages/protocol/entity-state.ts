@@ -38,6 +38,8 @@ export interface SessionEvidence {
   /** D66: a proven helper terminal not covered by its parent's result receipt. */
   awaitingDelivery?: boolean;
   helper?: HelperDisposition;
+  /** Wall-clock time when the entity owner first observed this needs-you interval. */
+  waitingSince?: number;
   /** Positive native execution clock, retained across its terminal transition. */
   run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */

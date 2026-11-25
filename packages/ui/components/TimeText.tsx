@@ -5,7 +5,7 @@ import "./TimeText.css" with { type: "text" };
 
 /** The only renderer of time text: structured parts, natural accessible name. */
 export default function TimeText(
-  props: { time: Value; class?: string; title?: string },
+  props: { time: Value; class?: string; title?: string; suffix?: string },
 ): Element {
   return (
     <time
@@ -36,6 +36,9 @@ export default function TimeText(
         }
       >
         <span class="otk-time-value">{props.time.word}</span>
+      </Show>
+      <Show when={props.suffix}>
+        {(suffix) => <span aria-hidden="true">{` ${suffix()}`}</span>}
       </Show>
     </time>
   );

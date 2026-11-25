@@ -30,10 +30,7 @@ test(
     await viewByUrl(state, page, root);
     const crumb = (id: string) => page.locator(`[data-crumb="${id}"]`);
     const agent = (id: string) => page.locator(`[data-subagent="${id}"]`);
-    const inventory = page.getByRole("button", {
-      name: "Subagents",
-      exact: true,
-    });
+    const inventory = page.getByRole("button", { name: /^Subagents:/ });
     await expect(crumb(helper)).toHaveCount(0);
     await expect(crumb(nested)).toHaveCount(0);
     await inventory.click();
