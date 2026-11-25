@@ -93,6 +93,7 @@ export class V2NativeDb {
       sessionRecencySql(this.columns, this.messageClocks) +
       " AS activity_time," +
       (this.columns.has("path") ? "s.path," : "NULL AS path,") +
+      (this.columns.has("agent") ? "s.agent," : "NULL AS agent,") +
       (this.columns.has("title") ? "s.title" : "NULL AS title") + "," +
       (this.columns.has("time_archived")
         ? "s.time_archived"
@@ -170,6 +171,7 @@ export class V2NativeDb {
         ? {}
         : { parentID: ids.encode(String(row.parent_id)) }),
       title: row.title == null ? "Untitled session" : String(row.title),
+      ...(row.agent == null ? {} : { agent: String(row.agent) }),
       timeCreated: Number(row.time_created),
       timeUpdated: Number(row.activity_time),
       archived: row.time_archived != null,
@@ -224,6 +226,7 @@ export class V2NativeDb {
         location: { directory: String(row.directory) },
         ...(typeof row.path === "string" ? { subpath: row.path } : {}),
         ...(row.title == null ? {} : { title: String(row.title) }),
+        ...(row.agent == null ? {} : { agent: String(row.agent) }),
         ...(row.parent_id == null ? {} : { parentID: String(row.parent_id) }),
         time: {
           created: Number(row.time_created),

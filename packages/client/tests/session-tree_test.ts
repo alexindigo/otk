@@ -195,11 +195,13 @@ Deno.test("index partitions and hierarchy identity survive summary/status change
   const keys = index.ids("s", "/project"), other = index.ids("s", "/other");
   const tree = createSessionTree();
   const first = tree.rows(index.partition("s", "/project"), [], "/project");
+  const helper = { ...entry("one"), status: "busy" as const, agent: "explore" };
   index.receive("s", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: { ...entry("one"), status: "busy" } }],
+    ops: [{ op: "upsert", entry: helper }],
   });
+  assertEquals(Reflect.get(index.get("s", "one")!, "agent"), "explore");
   assertEquals(index.ids("s", "/project") === keys, true);
   assertEquals(index.ids("s", "/other") === other, true);
   assertEquals(

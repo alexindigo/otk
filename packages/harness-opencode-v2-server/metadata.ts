@@ -22,6 +22,7 @@ export type SessionFacts = Pick<
   | "location"
   | "projectID"
   | "title"
+  | "agent"
   | "parentID"
   | "time"
   | "outcome"
@@ -105,6 +106,7 @@ export function metadata(raw: SessionFacts): SessionMetadata {
       ? {}
       : { checkoutRoot: recordedCheckout(mapped.directory, raw.subpath) }),
     title: mapped.title,
+    ...(raw.agent ? { agent: raw.agent } : {}),
     parentID: mapped.parentID,
     archived: mapped.archived,
     timeCreated: mapped.time.created,

@@ -11,6 +11,8 @@ export interface SessionMetadata {
   /** Application-owned family/task/visibility projection, independent of leases. */
   hierarchy?: import("./session-hierarchy.ts").SessionHierarchyNode;
   title: string;
+  /** The native session's agent (V2 Session.Info.agent, V1 session.agent); absent when the native recorded none. */
+  agent?: string;
   timeCreated: number;
   timeUpdated: number;
   archived: boolean;

@@ -99,11 +99,40 @@ Deno.test("V2 scalar DB proves projects, groups population and reads keyed ances
         parentID: "ses_000",
         time: { created: 1, updated: 101 },
       }]);
+      assertEquals(Object.hasOwn(page[0], "agent"), false);
       assertEquals(db.upgrade(["ses_000", "ses_001", "ses_absent"]), [
         "ses_000",
       ]);
       assertThrows(() => db.db.prepare("DELETE FROM session_v2").run());
       assertEquals(reads.some((op) => /message|part|header/.test(op)), false);
+    } finally {
+      db.close();
+    }
+  } finally {
+    writer.close();
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
+Deno.test("V2 DB and live metadata project the native session agent, not a default", () => {
+  const root = Deno.makeTempDirSync({ prefix: "v2-session-agent-" });
+  const file = root + "/native.db";
+  const writer = new DatabaseSync(file);
+  try {
+    writer.exec(
+      `CREATE TABLE project(id TEXT,worktree TEXT);
+       CREATE TABLE session_v2(id TEXT,project_id TEXT,directory TEXT,parent_id TEXT,time_created INTEGER,time_updated INTEGER,agent TEXT);
+       INSERT INTO session_v2 VALUES('ses_helper','p','/repo',NULL,1,1,'junior'),('ses_unknown','p','/repo',NULL,1,1,NULL)`,
+    );
+    const db = new V2NativeDb(file);
+    try {
+      const ids = ["opcv2-ses_helper", "opcv2-ses_unknown"];
+      for (const rows of [db.lookup(ids), db.facts(ids).map(metadata)]) {
+        assertEquals(Reflect.get(rows[0], "agent"), "junior");
+        assertEquals(Object.hasOwn(rows[1], "agent"), false);
+      }
+      const withAgent = { ...db.facts(ids)[1], agent: "explore" };
+      assertEquals(Reflect.get(metadata(withAgent), "agent"), "explore");
     } finally {
       db.close();
     }

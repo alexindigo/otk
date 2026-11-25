@@ -41,6 +41,7 @@ export function mapIndex(session: Session): SessionMetadata {
     projectID: session.projectID,
     directory: session.directory,
     title: session.title,
+    ...(session.agent ? { agent: session.agent } : {}),
     timeCreated: session.time.created,
     timeUpdated: session.time.updated,
     archived: session.time.archived !== undefined,
