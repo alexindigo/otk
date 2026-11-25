@@ -31,17 +31,15 @@ export class CheckoutRepositories {
         for await (const row of Deno.readDir(join(common, "worktrees"))) {
           if (!row.isDirectory) continue;
           const file = join(common, "worktrees", row.name, "gitdir");
-          let gitdir: string;
-          try {
-            gitdir = (await Deno.readTextFile(file)).trim();
-          } catch (error) {
-            if (error instanceof Deno.errors.NotFound) continue;
-            throw error;
-          }
-          owner.#registered.set(dirname(resolve(dirname(file), gitdir)), root);
+          const gitdir = await Deno.readTextFile(file).catch(() => undefined);
+          if (!gitdir?.trim()) continue;
+          owner.#registered.set(
+            dirname(resolve(dirname(file), gitdir.trim())),
+            root,
+          );
         }
-      } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) throw error;
+      } catch {
+        // The registration inventory is supplementary; keep the facts read so far.
       }
     }
     return owner;
@@ -56,7 +54,8 @@ export class CheckoutRepositories {
       // An existing non-Git scope keeps its native contract.
       return;
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error;
+      // An inaccessible checkout is not evidence of removal.
+      if (!(error instanceof Deno.errors.NotFound)) return;
     }
     const registered = this.#registered.get(checkout);
     if (registered) {
@@ -135,11 +134,8 @@ async function gitRepository(
       root: basename(common) === ".git" ? dirname(common) : directory,
       common,
     };
-  } catch (error) {
-    if (
-      error instanceof Deno.errors.NotFound ||
-      error instanceof Deno.errors.NotADirectory
-    ) return;
-    throw error;
+  } catch {
+    // Failure to read supplementary Git evidence must not block native inventory.
+    return;
   }
 }
