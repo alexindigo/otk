@@ -4,3 +4,4 @@ export { blocks, inline, lex, markdown } from "./markdown.ts";
 export { parseDiff } from "./diff.ts";
 export { StreamingMarkdown } from "./stream.ts";
 export { StreamBuffers } from "./buffers.ts";
+export { fileLanguage } from "./language.ts";

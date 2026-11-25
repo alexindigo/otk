@@ -4,7 +4,7 @@ import type { FileDiff, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { NativeMessage } from "./messages.ts";
 import { optionalSessionID } from "./ids.ts";
-import { fileLanguage } from "./language.ts";
+import { fileLanguage } from "@otk/content";
 import { toolContent } from "./tool-results.ts";
 import { nativeSource } from "./native-source.ts";
 
