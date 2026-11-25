@@ -992,15 +992,17 @@ export class OpencodeV1Adapter implements Harness {
       const delivered = published
         ? published.activity?.delivered
         : entry.activity?.delivered;
-      const terminal = this.#terminals.get(entry.id)?.terminal ?? 0;
+      const terminal = this.#terminals.get(entry.id);
       if (
-        entry.parentID && terminal > (delivered?.terminal ?? 0)
+        entry.parentID && (terminal?.terminal ?? 0) > (delivered?.terminal ?? 0)
       ) this.#deliveryJoin?.request([entry.id]);
       return ({
         ...entry,
         activity: {
-          ...this.#terminals.get(entry.id),
-          ...(entry.activity?.terminalOrigin === "historical"
+          ...terminal,
+          ...(terminal?.terminal !== undefined &&
+              entry.activity?.terminal === terminal.terminal &&
+              entry.activity.terminalOrigin === "historical"
             ? { terminalOrigin: "historical" as const }
             : {}),
           delivered,
