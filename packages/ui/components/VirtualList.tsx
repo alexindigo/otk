@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./VirtualList.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
+import ContentSlot from "./ContentSlot.tsx";
 import { isCancellation } from "@otk/protocol";
 import { createWindow, type WindowAnchor } from "@otk/client";
 import {
@@ -74,7 +75,7 @@ export function ContentWindow<T>(props: {
       when={viewport}
       fallback={
         <For each={props.items} keyed={props.key}>
-          {(value) => props.render(value)}
+          {(value) => <ContentSlot content={() => props.render(value)} />}
         </For>
       }
     >
@@ -100,7 +101,7 @@ export function ContentWindow<T>(props: {
           : undefined}
         render={(key) => (
           <Show when={indexed().get(key)}>
-            {(value) => props.render(value)}
+            {(value) => <ContentSlot content={() => props.render(value)} />}
           </Show>
         )}
       />
