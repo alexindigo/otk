@@ -41,7 +41,7 @@ test("a disconnected notice recipient cannot veto storage recovery or another re
   const source = new StorageFeature(owner, 60_000, () => {
     recovered++;
   });
-  const unregister = owner.register("notice-test", () => {});
+  const notice = owner.register("notice-test", () => {});
   source.listen(() => {
     throw new Error("Recipient disconnected");
   });
@@ -49,14 +49,16 @@ test("a disconnected notice recipient cannot veto storage recovery or another re
     received++;
   });
   try {
-    owner.failed(new StorageFailure("full", "notice-test", "write", undefined));
+    notice.failed(
+      new StorageFailure("full", "notice-test", "write", undefined),
+    );
     owner.probe();
     assertEquals(recovered, 1);
     assertEquals(received, 2);
     assertEquals(owner.status().degraded, false);
   } finally {
     source.close();
-    unregister();
+    notice.close();
   }
 });
 

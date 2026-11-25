@@ -12,6 +12,46 @@ import {
 import { test } from "../../../tests/support/resources.ts";
 import { fixture } from "./support.ts";
 
+test("same-path connections recover only their own failures and close only their own probes", async () => {
+  const availability = new StorageAvailability(), root = await fixture();
+  const connections = new Set<OtkDb>();
+  const open = () => {
+    const db = new OtkDb(root, [], { busyms: 0, availability });
+    connections.add(db);
+    return db;
+  };
+  const close = (db: OtkDb) => {
+    connections.delete(db);
+    db.close();
+  };
+  const first = open(), second = open(), unrelated = open();
+  try {
+    const exhaust = (db: OtkDb) => {
+      const pages =
+        db.connection.prepare("PRAGMA page_count").get()!.page_count;
+      db.connection.exec(`PRAGMA max_page_count=${pages}`);
+      assertThrows(() => db.probe(), StorageFailure);
+    };
+    exhaust(first);
+    exhaust(second);
+    close(unrelated);
+    assertEquals(availability.status(), {
+      degraded: true,
+      problem: "full",
+      gap: 1,
+    });
+    first.connection.exec("PRAGMA max_page_count=1073741823");
+    first.probe();
+    assertEquals(availability.status().degraded, true);
+    close(first);
+    second.connection.exec("PRAGMA max_page_count=1073741823");
+    availability.probe();
+    assertEquals(availability.status(), { degraded: false, gap: 1 });
+  } finally {
+    for (const db of connections) close(db);
+  }
+});
+
 test("SQLITE_FULL preserves the primary cause after automatic rollback and publishes no commit", async () => {
   const db = new OtkDb(await fixture(), [pluginStorageMigrations], {
     busyms: 0,
@@ -89,12 +129,14 @@ test("storage availability clears only after every affected connection commits a
     }
     // Failed probes and ordinary SELECTs never establish recovery.
     let blocked = true;
-    const unregister = owner.register("probe-fault", () => {
+    const connection = owner.register("probe-fault", () => {
       if (blocked) {
         throw new StorageFailure("full", "probe-fault", "probe", undefined);
       }
     });
-    owner.failed(new StorageFailure("full", "probe-fault", "write", undefined));
+    connection.failed(
+      new StorageFailure("full", "probe-fault", "write", undefined),
+    );
     metadata.connection.prepare("SELECT 1").get();
     owner.probe();
     assertEquals(owner.status().degraded, true);
@@ -102,7 +144,7 @@ test("storage availability clears only after every affected connection commits a
     owner.probe();
     assertEquals(owner.status(), { degraded: false, gap: 1 });
     assertEquals(statuses.filter((degraded) => !degraded).length, 1);
-    unregister();
+    connection.close();
     metadata.connection.exec("PRAGMA max_page_count=1073741823");
     new PluginStore(metadata).scope("recovery").set("saved", "after full");
     assertEquals(

@@ -54,6 +54,7 @@ interface Entry {
   work?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
   turn?: { ready: Promise<void>; release(): void };
+  target?: string;
   waiting: number;
   view?: ViewLease;
 }
@@ -99,7 +100,8 @@ export class RequestCoordinator {
   // This orders admission only; execution/readiness remains independently scoped.
   #admissions = new Map<string, Promise<void>>();
   // Semantic effect ordering is distinct from the yielded executing turn.
-  #effects = new Map<string, Promise<void>>();
+  #nativeEffects = new Map<string, Promise<void>>();
+  #targets = new Map<string, Set<Entry>>();
   #run = crypto.randomUUID();
   #started = false;
   #stopped = false;
@@ -259,6 +261,27 @@ export class RequestCoordinator {
         waiting: 0,
       };
       this.#entries.set(id, entry);
+      // Admission (including startup replay) is in durable receipt order.
+      // Keep this claim even when an earlier write lacks input or storage.
+      if (
+        !terminal(record) && policy.priority !== "interrupt" &&
+        policy.ordering === "target" &&
+        (policy.kind === "local" || policy.kind === "prepared-local")
+      ) {
+        const target = record.scope_resource
+          ? ["resource", record.scope_resource]
+          : record.scope_session
+          ? ["session", record.scope_session, record.method]
+          : record.scope_directory
+          ? ["directory", record.scope_directory, record.method]
+          : undefined;
+        if (target) {
+          entry.target = JSON.stringify([record.principal, target]);
+          const queue = this.#targets.get(entry.target) ?? new Set();
+          queue.add(entry);
+          this.#targets.set(entry.target, queue);
+        }
+      }
     }
     this.#observe(entry);
     return entry;
@@ -271,8 +294,10 @@ export class RequestCoordinator {
     );
     this.#observe(entry);
   }
-  #refresh(entry: Entry): boolean {
-    const current = this.options.receipts.get(entry.record);
+  #refresh(
+    entry: Entry,
+    current = this.options.receipts.get(entry.record),
+  ): boolean {
     if (!current || current.seq === entry.record.seq) return false;
     entry.record = current;
     this.#observe(entry);
@@ -751,7 +776,10 @@ export class RequestCoordinator {
     };
   }
   #schedule(entry: Entry, recover: boolean): void {
-    if (entry.work || this.#stopped) return;
+    if (entry.work || this.#stopped || this.#storagePending.has(entry)) return;
+    if (entry.target && !terminal(entry.record)) {
+      if (!entry.prepared || this.#targetHead(entry.target) !== entry) return;
+    }
     const scope = entry.record.scope_session;
     // Read/lease lifetimes never acquire an effect turn. A readiness wait yields
     // that turn, while native effects retain their independent I/O ordering.
@@ -762,23 +790,11 @@ export class RequestCoordinator {
         entry.policy.priority !== "interrupt"
       ? JSON.stringify([entry.record.principal, scope])
       : undefined;
-    const metadata = entry.policy.kind === "local" ||
-      entry.policy.kind === "prepared-local";
-    const target = entry.record.scope_resource
-      ? ["resource", entry.record.scope_resource]
-      : scope
-      ? ["session", scope, entry.record.method]
-      : entry.record.scope_directory
-      ? ["directory", entry.record.scope_directory, entry.record.method]
+    const order = entry.policy.kind === "native" && scope &&
+        entry.policy.priority !== "interrupt"
+      ? JSON.stringify([entry.record.principal, scope])
       : undefined;
-    const order = entry.policy.priority === "interrupt"
-      ? undefined
-      : entry.policy.kind === "native" && scope
-      ? JSON.stringify([entry.record.principal, "native", scope])
-      : metadata && entry.policy.ordering === "target" && target
-      ? JSON.stringify([entry.record.principal, "metadata", target])
-      : undefined;
-    const predecessor = order ? this.#effects.get(order) : undefined;
+    const predecessor = order ? this.#nativeEffects.get(order) : undefined;
     // Reserve ready work in admission order, but never reserve a turn while
     // waiting for another effect's semantic ordering permission.
     const admitted = predecessor ? undefined : this.#acquire(entry, queue);
@@ -944,7 +960,7 @@ export class RequestCoordinator {
     entry.work = work;
     this.#jobs.add(work);
     if (order) {
-      this.#effects.set(order, work);
+      this.#nativeEffects.set(order, work);
     }
     const finish = () => {
       if (cancelled) {
@@ -952,12 +968,27 @@ export class RequestCoordinator {
       }
       this.#jobs.delete(work);
       entry.work = undefined;
-      if (order && this.#effects.get(order) === work) {
-        this.#effects.delete(order);
+      if (order && this.#nativeEffects.get(order) === work) {
+        this.#nativeEffects.delete(order);
       }
+      this.#releaseTarget(entry);
       this.#retire(entry);
     };
     void work.then(finish, finish);
+  }
+  #targetHead(target: string): Entry | undefined {
+    return this.#targets.get(target)?.values().next().value;
+  }
+  #releaseTarget(entry: Entry): void {
+    const target = entry.target;
+    if (!target || !terminal(entry.record)) return;
+    const queue = this.#targets.get(target)!;
+    const wasFirst = this.#targetHead(target) === entry;
+    queue.delete(entry);
+    entry.target = undefined;
+    if (!queue.size) this.#targets.delete(target);
+    const next = wasFirst ? this.#targetHead(target) : undefined;
+    if (next) this.#schedule(next, false);
   }
   #complete(entry: Entry, result: unknown): void {
     if (!terminal(entry.record)) {
@@ -1063,20 +1094,44 @@ export class RequestCoordinator {
     while (this.#jobs.size) await Promise.all([...this.#jobs]);
   }
   storageRecovered(): void {
+    if (this.#stopped) return;
     for (const entry of [...this.#storagePending]) {
       if (entry.work) continue;
+      try {
+        const current = this.options.receipts.get(entry.record);
+        if (!current) {
+          throw new Error("Missing receipt during storage recovery");
+        }
+        this.#refresh(entry, current);
+      } catch (error) {
+        // One failed read cannot authorize execution or retire this retry.
+        // Continue to any other receipts that can be refreshed this time.
+        try {
+          this.options.diagnostic?.(crypto.randomUUID(), error);
+        } catch { /* Diagnostics do not own recovery. */ }
+        continue;
+      }
       this.#storagePending.delete(entry);
-      const current = this.options.receipts.get(entry.record);
-      if (current) {
-        entry.record = current;
-        this.#observe(entry);
+      this.#releaseTarget(entry);
+      if (
+        !terminal(entry.record) ||
+        entry.record.state === "succeeded" && !entry.result &&
+          entry.recipients.size
+      ) {
+        this.#schedule(
+          entry,
+          entry.record.dispatched_at !== null || terminal(entry.record),
+        );
       }
-      if (!terminal(entry.record) && !this.#stopped) {
-        this.#schedule(entry, entry.record.dispatched_at !== null);
-      }
+      this.#retire(entry);
     }
   }
   maintenance(): number {
+    // The recovery edge may arrive while a job is still unwinding, or a
+    // receipt read can fail without producing another availability edge.
+    if (!this.options.registry.context.store.availability.status().degraded) {
+      this.storageRecovered();
+    }
     const now = this.#now(), limit = this.options.policy.sweepbatch;
     this.#maintenance ??= this.#entries.values();
     for (let count = 0; count < limit; count++) {
@@ -1118,6 +1173,7 @@ export class RequestCoordinator {
     }
     await this.idle();
     this.#entries.clear();
+    this.#targets.clear();
     this.#operations.clear();
     this.#storagePending.clear();
     this.#resultBytes = 0;

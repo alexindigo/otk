@@ -13,7 +13,7 @@ export class StorageFeature implements FrameSource {
   constructor(
     readonly owner: StorageAvailability,
     retryms: number,
-    recovered: () => void = () => {},
+    ...recovered: (() => void)[]
   ) {
     const state = (): StorageState => {
       const status = owner.status();
@@ -40,7 +40,15 @@ export class StorageFeature implements FrameSource {
           console.error("Storage notice delivery failed", error);
         }
       }
-      if (previous.degraded && !this.#state.degraded) recovered();
+      if (previous.degraded && !this.#state.degraded) {
+        for (const observer of recovered) {
+          try {
+            observer();
+          } catch (error) {
+            console.error("Storage recovery observer failed", error);
+          }
+        }
+      }
     });
     this.#timer = setInterval(() => {
       if (owner.status().degraded) owner.probe();

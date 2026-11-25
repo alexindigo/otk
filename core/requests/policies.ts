@@ -1,9 +1,28 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ReceiptData, RequestReceipts } from "@otk/protocol";
-import type { RequestRecord, StoreWrite } from "@otk/store";
+import { type RequestRecord, Requests, type StoreWrite } from "@otk/store";
 import type { RpcContext } from "../ws/registry.ts";
 import type { RpcExecutionPolicy } from "./types.ts";
 import type { OperationContext } from "@otk/protocol";
+import { ExecutionFailure } from "./failures.ts";
+
+/** An unconfirmed intent cannot borrow a later intent's mutable evidence. */
+export function assertUncontestedRecovery(
+  ctx: RpcContext,
+  record: RequestRecord,
+): void {
+  if (new Requests(ctx.store).superseded(record)) {
+    throw new ExecutionFailure({
+      code: "request.superseded",
+      retry: "none",
+      facts: {
+        outcome: "unknown",
+        reason:
+          "A newer change superseded this action before its outcome could be confirmed.",
+      },
+    });
+  }
+}
 
 type Scope<P> = RpcExecutionPolicy<P, never>["scope"];
 
