@@ -94,14 +94,16 @@ async function centers(page: Page, selector: string, a: string, b: string) {
 async function marks(
   page: Page,
   cdp: CDPSession,
-  selector: string,
-  minimum: number,
+  targets: readonly string[],
 ) {
+  for (const target of targets) {
+    await expect(page.locator(target)).toBeVisible();
+  }
   const items = await selectionGeometry({
     send: (method, params = {}) =>
       cdp.send(method as Parameters<CDPSession["send"]>[0], params),
-  }, selector);
-  expect(items.length).toBeGreaterThanOrEqual(minimum);
+  }, targets.join(","));
+  expect(items).toHaveLength(targets.length);
   for (const item of items) {
     expect(item.shift).toBe(0);
     expect(item.position).toBe("static");
@@ -470,14 +472,24 @@ test(
                         .toBeLessThanOrEqual(.5)
                     )
                   );
-                  const ys = await page.locator(
-                    ".otk-project-row[data-inactive=false] .otk-status-light,.otk-inbox-search",
-                  ).evaluateAll((els) =>
-                    els.map((el) => {
-                      const r = el.getBoundingClientRect();
-                      return r.y + r.height / 2;
-                    })
-                  );
+                  const ys = await page.locator(".otk-project-inbox")
+                    .evaluate((inbox) => {
+                      const centre = (el: Element) => {
+                        const r = el.getBoundingClientRect();
+                        return r.y + r.height / 2;
+                      };
+                      // D71 stacks history ahead of the search control in the
+                      // narrow rail. That moves the section, not its row grid.
+                      const origin = centre(
+                        inbox.querySelector(".otk-inbox-search")!,
+                      );
+                      return Array.from(
+                        inbox.querySelectorAll(
+                          ".otk-project-row[data-inactive=false] .otk-status-light",
+                        ),
+                        (lamp) => centre(lamp) - origin,
+                      );
+                    });
                   lights ??= ys;
                   expect(ys).toEqual(lights);
                   expect(
@@ -582,12 +594,19 @@ test(
                       return opacity;
                     }),
                   ).toBe(1);
-                  await marks(
-                    page,
-                    cdp,
-                    "[data-otk-selection].is-selected",
-                    right ? 3 : 5,
-                  );
+                  // The selected session is marked in the Sessions panel,
+                  // not a second time in its ancestry trail or closed menu.
+                  const activeMark = "[data-otk-selection].is-selected";
+                  await marks(page, cdp, [
+                    `.otk-project-row[data-project$="/projects/otk"]${activeMark}`,
+                    `[data-tab="${task.id}"][data-open-session="tstv1-child"]${activeMark}`,
+                    `${
+                      right ? ".otk-right-rail" : ".otk-panel-icons"
+                    } [data-panel-view="sessions"]${activeMark}`,
+                    ...(right ? [] : [
+                      `.otk-project-sessions [data-session="tstv1-child"]${activeMark}`,
+                    ]),
+                  ]);
                   expect(
                     await page.evaluate(() =>
                       !!document.querySelector(
@@ -1188,9 +1207,12 @@ test(
             await page.setViewportSize({ width: 1280, height: 900 });
             await page.setViewportSize({ width: 800, height: 800 });
             await settled(page);
-            await page.locator(".otk-subagents > button").click();
+            await page.getByRole("button", { name: /^Subagents:/ }).click();
+            const inventoryRows = page.locator(
+              ".otk-subagents .otk-subagent-row[data-subagent]",
+            );
             await expect(
-              page.locator(".otk-subagents [data-subagent]").first(),
+              inventoryRows.first(),
             ).toBeVisible();
             const shown = await page.locator("[data-crumb]").evaluateAll((
               els,
@@ -1199,18 +1221,16 @@ test(
                 el.getAttribute("data-crumb")!
               )
             );
-            const omitted = await page.locator(
-              ".otk-subagents [data-subagent]",
-            ).evaluateAll((els) =>
+            const omitted = await inventoryRows.evaluateAll((els) =>
               els.map((el) => el.getAttribute("data-subagent")!)
             );
             assertCrumbCoverage(
               ids,
               shown,
-              omitted,
-              // The active fixture family includes the selected helper and
-              // its existing child as well as the synthetic working ancestors.
-              [...ids.slice(1), "tstv1-child"],
+              omitted.sort(),
+              // D67 checks coverage here, not ancestry order in a menu that
+              // groups sessions by disposition. A duplicate still fails.
+              [...ids.slice(1), "tstv1-child"].sort(),
             );
             await shot(`more-${theme.id}-800`);
             await page.keyboard.press("Escape");
