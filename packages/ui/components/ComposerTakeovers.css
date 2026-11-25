@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-composer-dock {
-  --composer-bottom-inset: 20px;
+  --composer-bottom-inset: calc(20 * var(--otk-unit));
   position: relative;
   flex: 0 1 auto;
   min-height: 0;
@@ -35,11 +35,11 @@
   inline-size: 100%;
   max-inline-size: var(--lane-width);
   margin-inline: auto;
-  padding-block-end: 8px;
+  padding-block-end: var(--space-2);
   flex: none;
 }
 .otk-composer-activity-slot {
-  block-size: calc(var(--control-size) + 8px);
+  block-size: calc(var(--control-size) + var(--space-2));
   flex: none;
 }
 .otk-composer-takeover-layer {

@@ -15,7 +15,7 @@
 .otk-control-value-label {
   display: block;
   min-inline-size: 0;
-  padding-inline-start: 8px;
+  padding-inline-start: var(--space-2);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

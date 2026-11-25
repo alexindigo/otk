@@ -25,7 +25,10 @@ for (const scenario of ["lifetime", "source"] as const) {
     const row = (name: string) =>
       page.locator(`[data-native-record="${name}"]`);
     const toggle = (name: string) =>
-      row(name).locator(":scope > header > button");
+      row(name).getByRole("button", {
+        name: `Unsupported part: ${name}`,
+        exact: true,
+      });
     const counts = () =>
       page.evaluate(() =>
         (window as unknown as { previewEncodes: Record<string, number> })
@@ -38,7 +41,7 @@ for (const scenario of ["lifetime", "source"] as const) {
     expect(await counts()).toEqual({});
     await expect(row("absent").getByRole("button")).toHaveCount(0);
     if (scenario === "source") {
-      await row("explicit").getByRole("button").click();
+      await toggle("explicit").click();
       await expect(row("explicit").locator("pre")).toHaveText(
         "OTK_LAZY_PREVIEW_explicit:",
       );
@@ -46,7 +49,7 @@ for (const scenario of ["lifetime", "source"] as const) {
         "90000 bytes - Preview truncated",
       );
       expect(await counts()).toEqual({ explicit: 1 });
-      await row("empty").getByRole("button").click();
+      await toggle("empty").click();
       await expect(row("empty").locator("pre")).toHaveJSProperty(
         "textContent",
         "",

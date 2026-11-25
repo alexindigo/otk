@@ -4,39 +4,4 @@
   --tool-line-gap: 0px;
   display: flex;
   flex-direction: column;
-  margin-inline-start: 12px;
-  border-inline-start: 1px dotted var(--otk-border);
-}
-.otk-record-list-row {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  align-items: start;
-}
-.otk-record-list-connector {
-  block-size: 26px;
-  display: grid;
-  align-items: center;
-}
-.otk-record-list-connector::before {
-  content: "";
-  border-block-start: 1px dotted var(--otk-border);
-}
-.otk-record-list-content {
-  min-inline-size: 0;
-}
-.otk-record-list.is-outgoing {
-  margin-inline: 0 12px;
-  border-inline-start: 0;
-  border-inline-end: 1px dotted var(--otk-border);
-}
-.otk-record-list-row.is-outgoing {
-  grid-template-columns: minmax(0, 1fr) 12px;
-}
-.otk-record-list-row.is-outgoing > .otk-record-list-connector {
-  grid-column: 2;
-  grid-row: 1;
-}
-.otk-record-list-row.is-outgoing > .otk-record-list-content {
-  grid-column: 1;
-  grid-row: 1;
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
+import { cssLength } from "../../pages/css-length.ts";
 import {
   captureParagraph,
   paragraphTop,
@@ -101,6 +102,7 @@ test(
         "data-otk-theme",
         theme,
       );
+      const inset = await cssLength(jump.locator(".."), "--jump-bottom-inset");
       const geometry = await jump.evaluate((button) => {
         const control = button.getBoundingClientRect();
         const icon = button.querySelector("svg")!.getBoundingClientRect();
@@ -109,10 +111,6 @@ test(
           .getBoundingClientRect();
         const viewport = document.querySelector(".otk-messages")!
           .getBoundingClientRect();
-        const inset = parseFloat(
-          getComputedStyle(button.parentElement!)
-            .getPropertyValue("--jump-bottom-inset"),
-        );
         const reference = document.createElement("span");
         Object.assign(reference.style, {
           position: "fixed",
@@ -142,7 +140,6 @@ test(
           footer,
           composer,
           viewport,
-          inset,
           actualPaint,
           expectedPaint,
         };
@@ -157,7 +154,7 @@ test(
       );
       expect(
         Math.abs(
-          geometry.footer.bottom - geometry.viewport.bottom + geometry.inset,
+          geometry.footer.bottom - geometry.viewport.bottom + inset,
         ),
       ).toBeLessThanOrEqual(.5);
       expect(
@@ -329,16 +326,13 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   });
   await expect(jump).toBeVisible();
   expect(await pane.boundingBox()).toEqual(rect);
+  const inset = await cssLength(jump.locator(".."), "--jump-bottom-inset");
   const geometry = await jump.evaluate((button) => ({
     footer: button.parentElement!.getBoundingClientRect().bottom,
     session:
       button.closest(".otk-session-view")!.getBoundingClientRect().bottom,
-    inset: parseFloat(
-      getComputedStyle(button.parentElement!)
-        .getPropertyValue("--jump-bottom-inset"),
-    ),
   }));
-  expect(Math.abs(geometry.footer - geometry.session + geometry.inset))
+  expect(Math.abs(geometry.footer - geometry.session + inset))
     .toBeLessThanOrEqual(.5);
   await page.screenshot({ path: info.outputPath("child-jump.png") });
   await jump.click();

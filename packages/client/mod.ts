@@ -156,3 +156,9 @@ export * from "./http-requests.ts";
 export { createSessionTree, type SessionListRow } from "./session-tree.ts";
 export * from "./forms.ts";
 export * from "./request-lifetime.ts";
+export {
+  type ProjectBranch,
+  projectTree,
+  projectTreeKey,
+} from "./project-tree.ts";
+export { treePaths } from "./tree-paths.ts";

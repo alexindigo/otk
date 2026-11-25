@@ -2,7 +2,7 @@
 .otk-composer-model {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .otk-composer-model > span {
@@ -21,7 +21,7 @@
 .otk-prompt-setting {
   min-width: 0;
   border-radius: var(--radius-control);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-weight: 500;
 }
 .otk-prompt-setting:hover {

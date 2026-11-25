@@ -10,7 +10,7 @@
 .otk-messages {
   flex: 1;
   min-height: 0;
-  padding: 24px var(--lane-gutter);
+  padding: var(--space-6) var(--lane-gutter);
   overflow-anchor: none;
 }
 .otk-message-flow {
@@ -20,13 +20,13 @@
 }
 .otk-load-older {
   display: block;
-  margin: 0 auto 20px;
+  margin: 0 auto var(--space-5);
 }
 .otk-retry-banner {
   background: var(--otk-surface);
   border-radius: var(--radius-card);
-  padding: 12px;
-  margin-bottom: 16px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
   color: var(--otk-fg-2);
 }
 .otk-retry-banner > span,

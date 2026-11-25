@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-activity-indicator {
-  --activity-size: 10px;
+  --activity-size: calc(10 * var(--otk-unit));
   display: inline-grid;
   place-items: center;
   width: var(--activity-size);
@@ -9,7 +9,7 @@
   vertical-align: middle;
 }
 .otk-activity-indicator[data-small] {
-  --activity-size: 8px;
+  --activity-size: calc(8 * var(--otk-unit));
 }
 .otk-activity-spinner {
   width: 100%;

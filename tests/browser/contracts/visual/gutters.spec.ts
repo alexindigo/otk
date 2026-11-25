@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { cssLength } from "../../pages/css-length.ts";
 
 const tags = { tag: ["@visual", "@menus", "@contracts"] };
 async function gutters(page: Page) {
@@ -15,13 +16,11 @@ async function gutters(page: Page) {
       )
     )
   );
+  const gutter = await cssLength(panel, "--popover-gutter");
   const g = await panel.evaluate((el) => {
     const r = el.getBoundingClientRect(),
       s = el.querySelector(".otk-surface")!.getBoundingClientRect();
     return {
-      gutter: parseFloat(
-        getComputedStyle(el).getPropertyValue("--popover-gutter"),
-      ),
       edges: [r.left, r.top, innerWidth - r.right, innerHeight - r.bottom],
       paint: [
         s.left - r.left,
@@ -34,12 +33,12 @@ async function gutters(page: Page) {
   });
   expect(g.size.every((n) => n > 0), JSON.stringify(g)).toBe(true);
   for (const edge of g.edges) {
-    expect(edge, JSON.stringify(g)).toBeGreaterThanOrEqual(g.gutter - .5);
+    expect(edge, JSON.stringify(g)).toBeGreaterThanOrEqual(gutter - .5);
   }
   for (const delta of g.paint) {
     expect(Math.abs(delta), JSON.stringify(g)).toBeLessThanOrEqual(.5);
   }
-  return g.gutter;
+  return gutter;
 }
 async function close(page: Page) {
   await page.keyboard.press("Escape");

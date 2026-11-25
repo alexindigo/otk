@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-status-light {
-  --lamp-size: 10px;
+  --lamp-size: calc(10 * var(--otk-unit));
   /* Construction stays local; semantic gel paint comes from the active theme. */
   --lamp-color: var(--status-light-none);
   display: inline-grid;
@@ -12,7 +12,7 @@
   vertical-align: middle;
 }
 .otk-status-light[data-small] {
-  --lamp-size: 8px;
+  --lamp-size: calc(8 * var(--otk-unit));
 }
 .otk-status-light[data-state=blocked] {
   --lamp-color: var(--status-light-blocked);

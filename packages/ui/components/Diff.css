@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-diff {
   border-radius: var(--radius-card);
-  margin: 8px 0;
+  margin: var(--space-2) 0;
   border: 1px solid var(--otk-border-code);
   background: var(--otk-bg-code);
   overflow: hidden;
@@ -10,15 +10,15 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px;
+  gap: var(--space-2);
+  padding: var(--space-2);
 }
 .otk-diff-content {
   font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
 }
 .otk-hunk-header {
   color: var(--secondary);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   background: var(--otk-bg-code);
 }
 .otk-diff-split-row {

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-jump-slot {
-  --jump-bottom-inset: 8px;
+  --jump-bottom-inset: calc(8 * var(--otk-unit));
   position: absolute;
   inset-inline: 0;
   bottom: var(--jump-bottom-inset);

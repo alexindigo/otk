@@ -1,16 +1,16 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-notification-settings {
   border: 1px solid var(--otk-border);
-  padding: 16px;
-  margin-bottom: 20px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
   border-radius: var(--radius-card);
 }
 .otk-notification-settings h2 {
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
 }
 .otk-notification-settings > p {
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   line-height: 1.5;
 }
 .otk-notification-browser {

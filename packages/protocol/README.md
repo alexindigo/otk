@@ -229,12 +229,16 @@ presentations validate and freeze the same control contract. Toggles may declare
 `onValue`/`offValue` to preserve a legacy stored representation while checked
 means on; absent mappings use true/false. UI and command consumers share
 `preferenceToggleValue`, so neither surface coerces or rewrites saved values.
-Theme IDs are bounded, nonempty identifier strings, independent of installed
-palettes; missing palettes resolve to the consumer's dark base at paint time,
-without changing the saved ID. System retains OS-mode base selection. The
-shipped contract uses interface inheritance rather than library-internal module
-augmentation, which JSR's publication graph does not support. The composition
-names owners only, never individual keys or validators.
+The visual feature contributes `textSize` as one of `90`, `100`, `110`, `125` or
+`150` (percentage strings), default `100`. Its settings-only segmented control
+uses the same validated registry, storage and broadcast contract; it does not
+contribute a second Display command or browser-local preference. Theme IDs are
+bounded, nonempty identifier strings, independent of installed palettes; missing
+palettes resolve to the consumer's dark base at paint time, without changing the
+saved ID. System retains OS-mode base selection. The shipped contract uses
+interface inheritance rather than library-internal module augmentation, which
+JSR's publication graph does not support. The composition names owners only,
+never individual keys or validators.
 
 The layout preference owner exports immutable `SHELL_WIDTHS` data for each
 column's minimum, maximum and default. Preference defaults/validation and UI

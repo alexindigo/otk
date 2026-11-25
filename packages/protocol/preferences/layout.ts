@@ -4,6 +4,11 @@ export const layoutRequestMetadata: Readonly<Record<string, RequestMetadata>> =
   {
     "navigation.default": { kind: "read", pending: "Opening project" },
     "layout.patch": { kind: "mutation", pending: "Saving layout" },
+    "layout.project": {
+      kind: "mutation",
+      pending: "Saving project tree",
+      presentation: "bookkeeping",
+    },
     "layout.location": {
       kind: "mutation",
       pending: "Saving location",
@@ -23,6 +28,12 @@ export interface ProjectLocation {
   directory: string;
   sessionID?: string;
 }
+/** Shared identity for persisted project-view state and client tree branches. */
+export function projectLayoutKey(
+  project: { sidecarId?: string; directory: string },
+): string {
+  return JSON.stringify([project.sidecarId, project.directory]);
+}
 export interface ShellLayout {
   leftWidth: number;
   leftCollapsed: boolean;
@@ -30,6 +41,7 @@ export interface ShellLayout {
   rightWidth?: number;
   rightView?: string;
   discoveredCollapsed?: boolean;
+  projectCollapsed?: Record<string, boolean>;
   projectLocations?: ProjectLocation[];
 }
 export interface LayoutPreferences {
@@ -41,6 +53,10 @@ export interface LayoutRpcMethods {
     result: string | null;
   };
   "layout.patch": { params: Partial<ShellLayout>; result: Preferences };
+  "layout.project": {
+    params: { sidecarId: string; directory: string; collapsed: boolean };
+    result: Preferences;
+  };
   "layout.location": { params: ProjectLocation; result: Preferences };
 }
 export function isProjectLocation(value: unknown): value is ProjectLocation {
@@ -77,6 +93,7 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
           "rightWidth",
           "rightView",
           "discoveredCollapsed",
+          "projectCollapsed",
           "projectLocations",
         ].includes(key)
       ) &&
@@ -93,13 +110,18 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
             layout.rightWidth <= SHELL_WIDTHS.right.max)) &&
         (layout.discoveredCollapsed === undefined ||
           typeof layout.discoveredCollapsed === "boolean") &&
+        (layout.projectCollapsed === undefined ||
+          (!!layout.projectCollapsed &&
+            typeof layout.projectCollapsed === "object" &&
+            !Array.isArray(layout.projectCollapsed) &&
+            Object.values(layout.projectCollapsed).every((value) =>
+              typeof value === "boolean"
+            ))) &&
         (layout.projectLocations === undefined ||
           (Array.isArray(layout.projectLocations) &&
             layout.projectLocations.every(isProjectLocation) &&
             new Set(
-                layout.projectLocations.map((p) =>
-                  JSON.stringify([p.sidecarId, p.directory])
-                ),
+                layout.projectLocations.map((p) => projectLayoutKey(p)),
               ).size === layout.projectLocations.length)) &&
         (layout.rightView === undefined ||
           (typeof layout.rightView === "string" &&

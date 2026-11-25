@@ -1,16 +1,16 @@
 .otk-keys-list {
   display: grid;
   min-height: 0;
-  gap: 8px;
-  margin: 12px 0;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
 }
 .otk-keys-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   border-bottom: 1px solid var(--muted);
-  padding-bottom: 8px;
+  padding-bottom: var(--space-2);
 }
 .otk-keys-row small {
   display: block;
