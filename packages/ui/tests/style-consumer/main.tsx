@@ -64,6 +64,7 @@ const scenes = {
   siblings: () => import("./siblings.tsx"),
   chrome: () => import("./chrome.tsx"),
   lists: () => import("./lists.tsx"),
+  "record-lifetime": () => import("./record-lifetime.tsx"),
   requests: () => import("./requests.tsx"),
   forms: () => import("./forms.tsx"),
   "feedback-owners": () => import("./feedback-owners.tsx"),

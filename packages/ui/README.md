@@ -867,10 +867,12 @@ reply segments, part/block collections and diff lines use that same geometry
 without nested scroll boxes. Shared CSS roles estimate unmeasured rows; retained
 numeric measurements and identity anchors correct them. Initial nested mounts
 measure without moving their parent. Content is constructed once per keyed
-lifetime, with live data in nested bindings. `control.reveal(key, options)`
-waits for mounted, stable measured geometry and invokes its injected focus
-callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
-expose source-free navigation without consumer DOM access.
+lifetime through the shared ContentSlot, including record frames and borrowed
+ContentWindows, with live data in nested bindings.
+`control.reveal(key, options)` waits for mounted, stable measured geometry and
+invokes its injected focus callback before releasing its measurement pin.
+`anchor()` / `restore(anchor)` expose source-free navigation without consumer
+DOM access.
 
 Windowing preserves inline footprint as well as block extent. A zero-block-size
 normal-flow sizing track retains the largest measured row width even after its

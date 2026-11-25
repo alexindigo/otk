@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RecordList.css" with { type: "text" };
 import { type Element, onCleanup } from "solid-js";
+import ContentSlot from "./ContentSlot.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import { TreeItem } from "./Tree.tsx";
 
@@ -37,7 +38,7 @@ export default function RecordList<T>(props: {
             connected={!props.outgoingItem ||
               props.outgoingItem(item()) === !!props.outgoing}
           >
-            {props.render(item)}
+            <ContentSlot content={() => props.render(item)} />
           </TreeItem>
         )}
       />
