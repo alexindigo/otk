@@ -5,7 +5,7 @@ import type { TestState } from "../fixtures/test-state.ts";
 import { accessoryGeometry } from "../../support/control-geometry.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
-import { reveal } from "./collections.ts";
+import { revealAcquired as reveal } from "../pages/transcript.ts";
 import { restoreViewport } from "./capture.ts";
 import { diffHunk, expectDiffHunk } from "../pages/diff.ts";
 import { clipboard, copied, pick } from "../pages/menus.ts";

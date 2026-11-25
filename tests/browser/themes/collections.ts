@@ -11,6 +11,7 @@ import {
   expectPrimaryBlocked,
   expectRuleThree,
 } from "../pages/primary-action.ts";
+import { revealAcquired as reveal } from "../pages/transcript.ts";
 
 interface Theme {
   id: string;
@@ -35,60 +36,6 @@ async function frames(page: Page) {
       )
     )
   );
-}
-/** Reveal through reader scroll intents, including source outside the live range. */
-export async function reveal(page: Page, selector: string) {
-  const pane = page.locator(".otk-messages");
-  const wheel = async (deltaY: number) => {
-    if (Math.abs(deltaY) < 1) return;
-    const p = await pane.boundingBox();
-    await page.mouse.move(p!.x + p!.width / 2, p!.y + p!.height / 2);
-    await page.evaluate(() => {
-      const el = document.querySelector(".otk-messages")!;
-      el.setAttribute("data-theme-scroll", "pending");
-      el.addEventListener(
-        "scrollend",
-        () => el.setAttribute("data-theme-scroll", "settled"),
-        { once: true },
-      );
-    });
-    await page.mouse.wheel(0, deltaY);
-    await expect(pane).toHaveAttribute("data-theme-scroll", "settled");
-    await frames(page);
-  };
-  const measure = () =>
-    pane.evaluate((el, selector) => {
-      const target = el.querySelector(selector),
-        a = el.getBoundingClientRect(),
-        b = target?.getBoundingClientRect();
-      return {
-        top: el.scrollTop,
-        end: el.scrollHeight - el.clientHeight,
-        height: el.clientHeight,
-        delta: b
-          ? b.top >= a.top && b.bottom <= a.bottom
-            ? 0
-            : b.top + Math.min(b.height, el.clientHeight) / 2 - a.top -
-              el.clientHeight / 2
-          : null,
-      };
-    }, selector);
-  await frames(page);
-  let g = await measure();
-  if (g.delta === null && g.top > 0) {
-    await wheel(-g.end);
-    g = await measure();
-  }
-  while (g.delta === null) {
-    expect(g.top, `Acquired source unavailable: ${selector}`).toBeLessThan(
-      g.end,
-    );
-    await wheel(Math.min(g.height, g.end - g.top));
-    g = await measure();
-  }
-  if (g.delta !== 0) {
-    await wheel(Math.max(-g.top, Math.min(g.delta, g.end - g.top)));
-  }
 }
 export async function composerAccessories(
   page: Page,
