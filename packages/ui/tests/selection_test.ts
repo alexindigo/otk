@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertMatch } from "@std/assert";
-import { selection } from "../components/selection.ts";
+import { location, selection } from "../components/selection.ts";
+
+Deno.test("location marks the current place without selection classes", () => {
+  assertEquals(location({ current: true, class: "crumb" }), {
+    class: "crumb is-current",
+    "aria-current": "page",
+  });
+  assertEquals(location({ current: false, class: "crumb" }), {
+    class: "crumb",
+    "aria-current": undefined,
+  });
+});
 
 Deno.test("selection has one shared pointer/underline owner for selected, current and pressed semantics", async () => {
   const css = await Deno.readTextFile(new URL("../theme.css", import.meta.url));

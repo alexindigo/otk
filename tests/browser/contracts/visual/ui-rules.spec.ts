@@ -43,7 +43,7 @@ async function shot(page: Page, info: TestInfo, name: string) {
 
 /** Measure the actual consumer, including the indicator track, not a guessed inset. */
 async function lamps(page: Page) {
-  return await page.locator(".otk-tab-open:visible,.otk-session-crumb:visible")
+  return await page.locator(".otk-tab-open:visible")
     .evaluateAll((controls) =>
       controls.map((control) => {
         const c = control.getBoundingClientRect(),
@@ -53,8 +53,7 @@ async function lamps(page: Page) {
           s = slot.getBoundingClientRect(),
           css = getComputedStyle(slot);
         return {
-          id: control.getAttribute("data-tab") ??
-            control.getAttribute("data-crumb"),
+          id: control.getAttribute("data-tab"),
           gaps: [r.left - c.left, r.top - c.top, c.bottom - r.bottom],
           controlHeight: c.height,
           slot: [s.width, s.height],
@@ -299,7 +298,7 @@ test.describe("task and session chrome", () => {
     "visual.ui-rules-control-height-lamp-slots",
     tags,
     async ({ isolatedState: state, page }, info) => {
-      await state.product("tasks.create", {
+      const task = await state.product("tasks.create", {
         directory: state.directory,
         name: "Execution",
         sessions: ["tstv1-otk", "tstv1-visual-1"],
@@ -319,8 +318,8 @@ test.describe("task and session chrome", () => {
           await settle(page);
           const values = await lamps(page);
           await record(info, `lamp-slots-${theme}-${size}`, values);
-          expect(values.some((v) => v.selected)).toBe(true);
-          expect(values.some((v) => v.id === "tstv1-otk")).toBe(true);
+          // Issue 2.91: tabs identify tasks, not sessions in the trail.
+          expect(values.find((v) => v.id === task.id)?.selected).toBe(true);
           if (size === 28) await shot(page, info, "chrome-" + theme);
           for (const v of values) {
             expect.soft(
