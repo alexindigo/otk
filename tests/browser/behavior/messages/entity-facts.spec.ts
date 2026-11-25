@@ -40,9 +40,9 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
   const card = page.locator(".otk-entity-facts").filter({
     hasText: "This reply",
   }).first();
-  await expect(card).toContainText(
-    await replies.first().locator(".otk-turn-time").innerText(),
-  );
+  const turnTime = replies.first().locator(".otk-turn-time time");
+  await expect(card.locator('dt:text-is("This reply") + dd time'))
+    .toHaveText(await turnTime.textContent() ?? "");
   await expect(card).toContainText("Completed");
   await expect(card).toContainText("Session now");
   await expect(card).toContainText("Working");

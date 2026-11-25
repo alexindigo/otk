@@ -475,7 +475,8 @@ export default function ProjectInbox(props: {
       >
         <SidebarRow
           compact={collapsed()}
-          detailedMeta={!!project().annotation}
+          detailedMeta={!!project().annotation ||
+            (project().visit?.parts.length ?? 0) > 1}
           lamp={
             <TreeIcon class="otk-project-marker">
               <button
