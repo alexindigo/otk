@@ -15,12 +15,18 @@ const session: ContentSession = {
 };
 type Scope = { messageIDs: string[]; validate?: boolean };
 function fixture(
-  options: { change?: boolean; fail?: boolean; quota?: boolean } = {},
+  options: {
+    change?: boolean;
+    fail?: boolean;
+    quota?: boolean;
+    witnessRead?: (validation: number) => void;
+    waitForBody?: (ids: string[]) => Promise<void> | undefined;
+  } = {},
 ) {
   const storage = new Map<string, string>(),
     reads: string[] = [],
     prompts: string[] = [];
-  let seq = 0, revision = 0, failed = false, changed = false;
+  let seq = 0, validations = 0, revision = 0, failed = false, changed = false;
   let quota = !!options.quota, restored = false;
   const drafts = createDrafts();
   const message = (id: string): Message => ({
@@ -50,7 +56,7 @@ function fixture(
     drafts,
     session: () =>
       Promise.resolve(restored ? { ...session, revert: undefined } : session),
-    page: (
+    page: async (
       _target: typeof target,
       _before?: string,
       _signal?: AbortSignal,
@@ -59,11 +65,20 @@ function fixture(
       if (!scope?.validate) {
         if (options.fail && !failed) {
           failed = true;
-          return Promise.reject(new Error("transient read failure"));
+          throw new Error("transient read failure");
         }
         reads.push(...scope?.messageIDs ?? ["old", "p", "r", "later"]);
+        const wait = options.waitForBody?.(scope?.messageIDs ?? []);
+        if (wait) await wait;
       }
-      return Promise.resolve({
+      const validation = scope?.validate ? ++validations : undefined;
+      const revisions = Object.fromEntries(
+        (scope?.messageIDs ?? []).map((id) => [
+          id,
+          id === "r" ? revision : 0,
+        ]),
+      );
+      return {
         sessionID: "session",
         session: restored ? { ...session, revert: undefined } : session,
         items: scope?.validate
@@ -71,18 +86,17 @@ function fixture(
           : (scope?.messageIDs ?? ["old", "p", "r", "later"]).map(message),
         clock: { epoch: "fixed", seq: ++seq },
         from: { epoch: "fixed", seq },
-        revisions: Object.fromEntries(
-          (scope?.messageIDs ?? []).map((
-            id,
-          ) => [id, id === "r" ? revision : 0]),
-        ),
+        get revisions() {
+          if (validation) options.witnessRead?.(validation);
+          return revisions;
+        },
         version: { generation: 0, revision: 0 },
         older: null,
         helpers: {},
         recovering: [],
         catchup: [],
         turns: {},
-      });
+      };
     },
     source: (_target, ref) => {
       if (options.change && ref === "r" && !changed) {
@@ -105,6 +119,7 @@ function fixture(
   owner.select(target);
   return {
     owner,
+    storage,
     reads,
     prompts,
     drafts,
@@ -121,6 +136,40 @@ Deno.test("revert capture saves only staged IDs despite unrelated sequence advan
   await f.owner.prepare(target, "p", session.revert!);
   assertEquals(f.reads, ["p", "r"]);
   assertEquals(f.owner.state.branches[0].messages.map((m) => m.id), ["p", "r"]);
+});
+
+Deno.test("a replacement after the final witness read retires the old archive write", async () => {
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let retiring = false, replacement: Promise<void> | undefined;
+  const f = fixture({
+    witnessRead(validation) {
+      // Queue retirement while the second (pre-write) validation is finishing.
+      if (validation === 2 && !retiring) {
+        retiring = true;
+        queueMicrotask(() => {
+          replacement = f.owner.prepare(target, "p", {
+            ...session.revert!,
+            messageIDs: ["p"],
+          });
+        });
+      }
+    },
+    waitForBody(ids) {
+      if (ids.length !== 1) return;
+      entered.resolve();
+      return release.promise;
+    },
+  });
+  try {
+    await f.owner.prepare(target, "p", session.revert!);
+    await entered.promise;
+    assertEquals(f.storage.size, 0);
+  } finally {
+    release.resolve();
+    await replacement;
+  }
+  assertEquals(f.owner.state.branches[0].messages.map((m) => m.id), ["p"]);
 });
 Deno.test("revert capture rereads only an identity changed while its source was acquired", async () => {
   const f = fixture({ change: true });

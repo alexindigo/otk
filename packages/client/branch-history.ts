@@ -771,8 +771,8 @@ export function createBranchHistory(options: {
           await materialize(drafts.restored.current),
         );
       }
-      signal.throwIfAborted();
       await refreshCapture?.();
+      signal.throwIfAborted();
       save(t, branch, false, true, drafts.restored ? "restore" : undefined);
       clearRecovery(t);
       if (
