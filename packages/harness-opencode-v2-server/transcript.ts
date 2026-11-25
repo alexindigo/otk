@@ -118,13 +118,16 @@ interface LiveShell {
 interface HistoryCheck {
   pending?: boolean;
   anchor?: string;
+  /** Scan progress; only coveredSeq can suppress delayed body events. */
   head?: NativeHead;
+  coveredSeq?: number;
   checkpoint?: NativeHead;
   controller: AbortController;
   task?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
   dirty: boolean;
   targets: Set<string>;
+  deferred: Set<string>;
 }
 /** API snapshots and staged events describe the same boundary, including file mode. */
 function boundaryKey(revert: unknown): string {
@@ -360,6 +363,7 @@ export class Transcript {
         controller: new AbortController(),
         dirty: false,
         targets: new Set(),
+        deferred: new Set(),
       };
       this.#history.set(id, work);
     }
@@ -432,10 +436,18 @@ export class Transcript {
             if (work.anchor) this.invalidate(id);
             return;
           }
-          if (
-            !forced && work.head &&
-            JSON.stringify(work.head) === JSON.stringify(head)
-          ) continue;
+          const unchanged = JSON.stringify(work.head) === JSON.stringify(head);
+          const deferred = [...work.deferred].filter((message) =>
+            !this.recovery.owns(id, message)
+          );
+          if (!forced && unchanged && !deferred.length) continue;
+          // The scan can advance past a point owned by fine recovery, but its
+          // identity must survive until a canonical body covers it.
+          const defer = (message: string) => {
+            if (!this.recovery.owns(id, message)) return false;
+            work.deferred.add(message);
+            return true;
+          };
           const publish = async (rows: NativeMessage[]) => {
             const facts = await this.#facts({
               sessionID: id,
@@ -447,7 +459,7 @@ export class Transcript {
             for (const raw of rows) {
               // Fine replacement owns its missing source, including failed
               // checkpoints. History discovery cannot become an implicit Retry.
-              if (this.recovery.owns(id, raw.id)) continue;
+              if (defer(raw.id)) continue;
               const context = facts.contexts[raw.id];
               if (!context) {
                 throw new HarnessError(
@@ -472,30 +484,36 @@ export class Transcript {
                   this.#publish(id, { op: "message.upsert", message });
                 }
               }
+              work.deferred.delete(raw.id);
             }
           };
-          // In-place changes may target an older, acquired native identity.
-          for (const target of targets) {
+          const points = new Set([
+            ...targets.filter((target) => baseline.contexts.has(target)),
+            ...deferred,
+          ]);
+          const anchor = work.anchor;
+          const scan = forced || !unchanged;
+          if (scan && anchor && !points.has(anchor)) {
+            // A checkpoint only witnesses that exact head. A new head says
+            // nothing about edits to the previous anchor.
             if (
-              baseline.contexts.has(target) && !this.recovery.owns(id, target)
+              JSON.stringify(work.checkpoint) === JSON.stringify(head) &&
+              anchor === head.id
             ) {
-              await publish([
-                await this.reader.get(id, target, signal),
-              ]);
-            }
+              if (!defer(anchor)) work.deferred.delete(anchor);
+            } else points.add(anchor);
           }
-          let anchor: NativeMessage | undefined;
           try {
-            anchor = !work.anchor
-              ? undefined
-              : last?.id === work.anchor
-              ? last
-              : this.recovery.owns(id, work.anchor) ||
-                  work.checkpoint?.id === work.anchor &&
-                    (head.id !== work.anchor ||
-                      JSON.stringify(work.checkpoint) === JSON.stringify(head))
-              ? undefined
-              : await this.reader.get(id, work.anchor, signal);
+            // In-place changes may target an older, acquired native identity.
+            for (const point of points) {
+              if (!defer(point)) {
+                await publish([
+                  last?.id === point
+                    ? last
+                    : await this.reader.get(id, point, signal),
+                ]);
+              }
+            }
           } catch (error) {
             if (errorTag(error) !== "MessageNotFoundError") throw error;
             // Removal/revert changes the acquisition boundary too. Its canonical
@@ -503,10 +521,10 @@ export class Transcript {
             this.invalidate(id);
             return;
           }
-          if (anchor) await publish([anchor]);
           if (
-            !work.anchor ||
-            (this.#client ?? this.options.client()).service.version !== "2.2.6"
+            scan && (!anchor ||
+              (this.#client ?? this.options.client()).service.version !==
+                "2.2.6")
           ) {
             let cursor: string | undefined = cutoff
               ? nativeCursor(cutoff)
@@ -518,7 +536,7 @@ export class Transcript {
                 cursor,
                 signal,
               );
-              const at = page.items.findIndex((r) => r.id === anchor?.id);
+              const at = page.items.findIndex((r) => r.id === anchor);
               await publish(at < 0 ? page.items : page.items.slice(at + 1));
               if (at >= 0 || !page.next) break;
               if (page.next === cursor) {
@@ -530,8 +548,8 @@ export class Transcript {
               cursor = page.next;
               await new Promise<void>((resolve) => setTimeout(resolve, 0));
             } while (true);
-          } else if (work.anchor !== head.id) {
-            let cursor: string | undefined = nativeForwardCursor(work.anchor);
+          } else if (scan && anchor && anchor !== head.id) {
+            let cursor: string | undefined = nativeForwardCursor(anchor);
             do {
               const page = await this.reader.forward(id, cursor, signal);
               const end = page.items.findIndex((r) => r.id === head.id);
@@ -554,6 +572,7 @@ export class Transcript {
           signal.throwIfAborted();
           work.anchor = head.id;
           work.head = head;
+          if (!work.deferred.size) work.coveredSeq = head.seq;
           retryTargets = [];
         } while (work.dirty);
       })().catch((error) => {
@@ -643,6 +662,10 @@ export class Transcript {
         prefetchbytes: options.policy.prefetchbytes,
       });
     }
+    const witnesses = new WeakMap<
+      NativeMessage,
+      { work: HistoryCheck; head: NativeHead }
+    >();
     this.recovery = new MessageRecovery({
       concurrency: options.policy.recoveryconcurrency,
       pending: options.policy.recoverypending,
@@ -665,8 +688,8 @@ export class Transcript {
         }
         const raw = await this.reader.get(id, message, signal);
         signal.throwIfAborted();
-        if (work && this.#history.get(id) === work && witness?.id === message) {
-          work.checkpoint = witness;
+        if (work && witness?.id === message) {
+          witnesses.set(raw, { work, head: witness });
         }
         return raw;
       },
@@ -689,6 +712,10 @@ export class Transcript {
         const mapped = this.#map(raw, id, context, terminal, true);
         if (mapped) {
           this.#publish(id, { op: "message.upsert", message: mapped });
+          const witness = witnesses.get(raw);
+          if (witness && this.#history.get(id) === witness.work) {
+            witness.work.checkpoint = witness.head;
+          }
         }
       },
       state: (id, messageID, partID, generation, state) =>
@@ -1517,6 +1544,7 @@ export class Transcript {
         controller: new AbortController(),
         dirty: false,
         targets: new Set(),
+        deferred: new Set(),
       });
     }
     try {
@@ -2692,7 +2720,7 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
-    const covered = this.#history.get(id)?.head?.seq;
+    const covered = this.#history.get(id)?.coveredSeq;
     if (
       covered !== undefined && event.durable?.aggregateID === sid &&
       event.durable.seq <= covered && knownSessionEvent(event.type)
